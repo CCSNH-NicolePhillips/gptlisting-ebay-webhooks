@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 
 export const handler: Handler = async (event) => {
   const VERIFICATION_TOKEN = process.env.EBAY_VERIFICATION_TOKEN;
-  const ENDPOINT = process.env.EBAY_ENDPOINT_URL;
+  let ENDPOINT = process.env.EBAY_ENDPOINT_URL;
 
   // Some callers (or platforms) may send a HEAD or OPTIONS probe before POSTing.
   if (event.httpMethod === "HEAD") {
@@ -30,10 +30,32 @@ export const handler: Handler = async (event) => {
 
   if (event.httpMethod === "GET") {
     const challengeCode = event.queryStringParameters?.challenge_code;
+    // Derive ENDPOINT from the request if not provided via env
+    if (!ENDPOINT) {
+      try {
+        if ((event as any).rawUrl) {
+          const u = new URL((event as any).rawUrl as string);
+          ENDPOINT = `${u.origin}${u.pathname}`;
+        } else {
+          const proto = event.headers?.["x-forwarded-proto"] || "https";
+          const host = event.headers?.["x-forwarded-host"] || event.headers?.host;
+          if (host && event.path) {
+            ENDPOINT = `${proto}://${host}${event.path}`;
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
     if (!challengeCode || !VERIFICATION_TOKEN || !ENDPOINT) {
+      const missing = {
+        challenge_code: !challengeCode,
+        verification_token: !VERIFICATION_TOKEN,
+        endpoint: !ENDPOINT,
+      };
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: "missing challenge inputs" }),
+        body: JSON.stringify({ error: "missing challenge inputs", missing }),
         headers: {
           "Content-Type": "application/json; charset=utf-8",
           "Allow": "GET,POST,HEAD,OPTIONS",
