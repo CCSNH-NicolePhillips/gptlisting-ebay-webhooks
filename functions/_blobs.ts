@@ -1,14 +1,18 @@
 import { getStore } from "@netlify/blobs";
 
-// Returns a Blobs store named "tokens". If running outside Netlify's
-// managed environment (e.g., local dev without netlify dev), provide
-// BLOBS_SITE_ID and BLOBS_TOKEN to configure access.
+// Returns a Blobs store named "tokens".
+// Uses Netlify's managed credentials by default.
+// If not available (e.g., local or custom env), you can supply either
+// NETLIFY_BLOBS_SITE_ID/TOKEN or BLOBS_SITE_ID/TOKEN env vars.
 export function tokensStore() {
-  const siteID = process.env.BLOBS_SITE_ID;
-  const token = process.env.BLOBS_TOKEN;
+  const siteID =
+    process.env.NETLIFY_BLOBS_SITE_ID || process.env.BLOBS_SITE_ID || undefined;
+  const token =
+    process.env.NETLIFY_BLOBS_TOKEN || process.env.BLOBS_TOKEN || undefined;
   if (siteID && token) {
-    // @ts-ignore: options shape is supported by @netlify/blobs at runtime
-    return getStore("tokens", { siteID, token });
+    // Official object form with explicit credentials
+    return getStore({ name: "tokens", siteID, token });
   }
+  // Default: use Netlify-provisioned credentials in production
   return getStore("tokens");
 }
