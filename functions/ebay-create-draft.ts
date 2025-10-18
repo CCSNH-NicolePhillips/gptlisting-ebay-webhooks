@@ -10,7 +10,7 @@ import { tokensStore } from "./_blobs.js";
 export const handler: Handler = async (event) => {
   try {
     if (event.httpMethod !== "POST") {
-      return { statusCode: 405, body: JSON.stringify({ error: "method not allowed" }) };
+      return { statusCode: 405, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "method not allowed" }) };
     }
 
     const body = event.body ? JSON.parse(event.body) as any : {};
@@ -25,7 +25,7 @@ export const handler: Handler = async (event) => {
 
     const primaryImage = image || images?.[0];
     if (!sku || !title || !primaryImage || !Number.isFinite(price)) {
-      return { statusCode: 400, body: JSON.stringify({ error: "Missing sku|title|price|image" }) };
+      return { statusCode: 400, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "Missing sku|title|price|image" }) };
     }
 
     // Use the connected user's stored refresh token
@@ -51,8 +51,9 @@ export const handler: Handler = async (event) => {
       body: JSON.stringify(invPayload),
     });
     if (!r.ok) {
-      const t = await r.text();
-      return { statusCode: r.status, body: `inventory put failed: ${t}` };
+      let detail: any = undefined;
+      try { detail = await r.json(); } catch { detail = await r.text(); }
+      return { statusCode: r.status, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "inventory put failed", detail }) };
     }
 
     // 2) Use first available business policies
@@ -67,7 +68,7 @@ export const handler: Handler = async (event) => {
     const returnPolicyId = await pickFirst("/sell/account/v1/return_policy");
 
     if (!fulfillmentPolicyId || !paymentPolicyId || !returnPolicyId) {
-      return { statusCode: 400, body: JSON.stringify({ error: "No business policies found. Create payment/fulfillment/return policies first." }) };
+      return { statusCode: 400, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "No business policies found. Create payment/fulfillment/return policies first." }) };
     }
 
     // 3) Create Offer (DRAFT)
@@ -90,10 +91,10 @@ export const handler: Handler = async (event) => {
       body: JSON.stringify(offerPayload),
     });
     const offerRes = await r.json();
-    if (!r.ok) return { statusCode: r.status, headers: { "Content-Type": "application/json" }, body: JSON.stringify(offerRes) };
+  if (!r.ok) return { statusCode: r.status, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "offer create failed", detail: offerRes }) };
 
     return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ok: true, draftOffer: offerRes }) };
   } catch (e: any) {
-    return { statusCode: 500, body: `create-draft error: ${e.message}` };
+    return { statusCode: 500, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "create-draft error", detail: e?.message || String(e) }) };
   }
 };

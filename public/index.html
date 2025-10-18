@@ -159,7 +159,8 @@
         msg.textContent = 'Creating draft…';
         try {
           const r = await fetch('/.netlify/functions/ebay-create-draft', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-          const data = await r.json();
+          let data;
+          try { data = await r.json(); } catch { data = { error: await r.text() }; }
           if (!r.ok || !data.ok) {
             msg.textContent = 'Error: ' + (data.error || JSON.stringify(data));
           } else {
