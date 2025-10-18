@@ -77,7 +77,19 @@ export const handler: Handler = async (event) => {
     const returnPolicyId = await pickFirst("/sell/account/v1/return_policy");
 
     if (!fulfillmentPolicyId || !paymentPolicyId || !returnPolicyId) {
-      return { statusCode: 400, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "No business policies found. Create payment/fulfillment/return policies first." }) };
+      const hint = {
+        message:
+          "No business policies available. This account may not be opted into Business Policies or none exist for the selected marketplace.",
+        nextSteps: [
+          "Open https://www.ebay.com/sh/str/selling-policies and opt in to Business policies",
+          `Create Payment, Return, and Shipping policies for marketplace ${MARKETPLACE_ID}`,
+        ],
+      };
+      return {
+        statusCode: 400,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ error: "missing-policies", detail: hint, marketplaceId: MARKETPLACE_ID }),
+      };
     }
 
     // 3) Create Offer (DRAFT)

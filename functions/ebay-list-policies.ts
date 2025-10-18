@@ -33,6 +33,11 @@ export const handler: Handler = async () => {
       getJson(`/sell/account/v1/return_policy?marketplace_id=${MARKETPLACE_ID}`),
     ]);
 
+    const hasNotEligible = [fulfillment, payment, returns].some((r) => {
+      const errs = (r?.json as any)?.errors as any[] | undefined;
+      return Array.isArray(errs) && errs.some((e) => e?.errorId === 20403);
+    });
+
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
@@ -40,6 +45,14 @@ export const handler: Handler = async () => {
         fulfillment,
         payment,
         returns,
+        eligibility: hasNotEligible
+          ? {
+              businessPoliciesEligible: false,
+              hint:
+                "This eBay account is not opted into Business Policies. Opt in at https://www.ebay.com/sh/str/selling-policies (Account settings > Selling > Business policies), then create Payment/Return/Shipping policies for EBAY_US.",
+              marketplaceId: MARKETPLACE_ID,
+            }
+          : { businessPoliciesEligible: true, marketplaceId: MARKETPLACE_ID },
       }),
     };
   } catch (e: any) {
