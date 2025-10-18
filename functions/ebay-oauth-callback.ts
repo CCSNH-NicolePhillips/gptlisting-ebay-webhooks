@@ -1,4 +1,5 @@
 import type { Handler } from "@netlify/functions";
+import { getStore } from "@netlify/blobs";
 
 export const handler: Handler = async (event) => {
   try {
@@ -14,7 +15,7 @@ export const handler: Handler = async (event) => {
     const body = new URLSearchParams({
       grant_type: "authorization_code",
       code,
-      redirect_uri: process.env.EBAY_RUNAME!,
+      redirect_uri: (process.env.EBAY_RUNAME || process.env.EBAY_RU_NAME)!,
     });
 
     const res = await fetch(`${tokenHost}/identity/v1/oauth2/token`, {
@@ -32,16 +33,11 @@ export const handler: Handler = async (event) => {
       has_access: !!data.access_token,
     });
 
-    // TODO: persist refresh_token per user (Netlify Blobs/DB)
-    return {
-      statusCode: 200,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ok: true,
-        note: "Store refresh_token server-side for this user",
-        expires_in: data.expires_in,
-      }),
-    };
+    if (data.refresh_token) {
+      const tokens = getStore("tokens");
+      await tokens.setJSON("ebay.json", { refresh_token: data.refresh_token });
+    }
+    return { statusCode: 302, headers: { Location: "/" } };
   } catch (e: any) {
     return { statusCode: 500, body: `OAuth error: ${e.message}` };
   }

@@ -2,7 +2,8 @@ import type { Handler } from "@netlify/functions";
 
 export const handler: Handler = async () => {
   const clientId = process.env.EBAY_CLIENT_ID!;
-  const runame = process.env.EBAY_RUNAME!;
+  const runame = process.env.EBAY_RUNAME || process.env.EBAY_RU_NAME;
+  if (!runame) return { statusCode: 500, body: "Missing EBAY_RUNAME/EBAY_RU_NAME" };
   const env = process.env.EBAY_ENV || "PROD";
   const state = encodeURIComponent(
     Buffer.from(JSON.stringify({ t: Date.now() })).toString("base64")

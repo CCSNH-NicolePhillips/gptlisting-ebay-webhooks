@@ -2,6 +2,9 @@
   node_bundler = "esbuild"
   directory = "functions"
 
+[build]
+  publish = "public"
+
 [[headers]]
   for = "/.netlify/functions/*"
   [headers.values]
