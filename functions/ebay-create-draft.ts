@@ -37,7 +37,7 @@ export const handler: Handler = async (event) => {
 
     const { apiHost } = tokenHosts(process.env.EBAY_ENV);
     const mlk = process.env.EBAY_MERCHANT_LOCATION_KEY || "default-loc";
-    const MARKETPLACE_ID = "EBAY_US";
+  const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || "EBAY_US";
     const commonHeaders = {
       Authorization: `Bearer ${access_token}`,
       "Content-Type": "application/json",
@@ -66,7 +66,8 @@ export const handler: Handler = async (event) => {
 
     // 2) Use first available business policies
     async function pickFirst(path: string): Promise<string | null> {
-      const res = await fetch(`${apiHost}${path}`, { headers: commonHeaders });
+      const url = `${apiHost}${path}?marketplace_id=${MARKETPLACE_ID}`;
+      const res = await fetch(url, { headers: commonHeaders });
       const json = (await res.json()) as any;
       const list = json.fulfillmentPolicies || json.paymentPolicies || json.returnPolicies || [];
       return list.length ? list[0].id : null;
