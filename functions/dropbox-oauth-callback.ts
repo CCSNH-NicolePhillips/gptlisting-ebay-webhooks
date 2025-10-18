@@ -1,5 +1,5 @@
 import type { Handler } from "@netlify/functions";
-import { getStore } from "@netlify/blobs";
+import { tokensStore } from "./_blobs.js";
 
 export const handler: Handler = async (event) => {
   try {
@@ -36,7 +36,7 @@ export const handler: Handler = async (event) => {
     }
 
   // Store for single-tenant demo; for multi-user, key by user id
-  const tokens = getStore("tokens");
+  const tokens = tokensStore();
   await tokens.setJSON("dropbox.json", { refresh_token: refreshToken });
 
     return { statusCode: 302, headers: { Location: "/" } };

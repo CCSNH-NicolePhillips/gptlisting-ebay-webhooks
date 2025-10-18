@@ -1,5 +1,5 @@
 import type { Handler } from "@netlify/functions";
-import { getStore } from "@netlify/blobs";
+import { tokensStore } from "./_blobs.js";
 
 export const handler: Handler = async (event) => {
   try {
@@ -34,7 +34,7 @@ export const handler: Handler = async (event) => {
     });
 
     if (data.refresh_token) {
-      const tokens = getStore("tokens");
+  const tokens = tokensStore();
       await tokens.setJSON("ebay.json", { refresh_token: data.refresh_token });
     }
     return { statusCode: 302, headers: { Location: "/" } };
