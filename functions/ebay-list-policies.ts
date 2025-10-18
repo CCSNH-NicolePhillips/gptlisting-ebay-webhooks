@@ -11,12 +11,14 @@ export const handler: Handler = async () => {
 
     const { access_token } = await accessTokenFromRefresh(refresh);
     const { apiHost } = tokenHosts(process.env.EBAY_ENV);
+    const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || "EBAY_US";
 
     const headers = {
       Authorization: `Bearer ${access_token}`,
       "Content-Type": "application/json",
       "Accept-Language": "en-US",
       "Content-Language": "en-US",
+      "X-EBAY-C-MARKETPLACE-ID": MARKETPLACE_ID,
     } as Record<string, string>;
 
     async function getJson(path: string) {
@@ -26,9 +28,9 @@ export const handler: Handler = async () => {
     }
 
     const [fulfillment, payment, returns] = await Promise.all([
-      getJson('/sell/account/v1/fulfillment_policy'),
-      getJson('/sell/account/v1/payment_policy'),
-      getJson('/sell/account/v1/return_policy'),
+      getJson(`/sell/account/v1/fulfillment_policy?marketplace_id=${MARKETPLACE_ID}`),
+      getJson(`/sell/account/v1/payment_policy?marketplace_id=${MARKETPLACE_ID}`),
+      getJson(`/sell/account/v1/return_policy?marketplace_id=${MARKETPLACE_ID}`),
     ]);
 
     return {
