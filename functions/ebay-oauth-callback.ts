@@ -27,17 +27,54 @@ export const handler: Handler = async (event) => {
       body,
     });
 
-    const data = (await res.json()) as any;
+    const text = await res.text();
+    let data: any = {};
+    try { data = JSON.parse(text); } catch { data = { raw: text }; }
+
+    if (!res.ok) {
+      console.error("eBay token exchange failed", {
+        status: res.status,
+        env,
+        tokenHost,
+        has_error: !!data.error || !!data.error_description,
+        data,
+      });
+      const jsonHeaders = { "Content-Type": "application/json; charset=utf-8" } as Record<string, string>;
+      return {
+        statusCode: 400,
+        headers: jsonHeaders,
+        body: JSON.stringify({
+          error: "eBay token error",
+          status: res.status,
+          detail: data,
+          hint: "Ensure EBAY_ENV=PROD matches your RUName (Production) and the RUName's redirect URL points to /.netlify/functions/ebay-oauth-callback",
+        }),
+      };
+    }
+
     console.log("OAuth tokens:", {
       has_refresh: !!data.refresh_token,
       has_access: !!data.access_token,
     });
 
-    if (data.refresh_token) {
-  const tokens = tokensStore();
-      await tokens.setJSON("ebay.json", { refresh_token: data.refresh_token });
+    if (!data.refresh_token) {
+      // Surface a helpful error so we can correct ENV/RUName/scopes
+      const jsonHeaders = { "Content-Type": "application/json; charset=utf-8" } as Record<string, string>;
+      return {
+        statusCode: 400,
+        headers: jsonHeaders,
+        body: JSON.stringify({
+          error: "No refresh_token returned",
+          hint: "Confirm EBAY_RUNAME is Production RUName with redirect to /.netlify/functions/ebay-oauth-callback, EBAY_ENV=PROD, and scopes include sell.account and sell.inventory",
+          data,
+        }),
+      };
     }
-    return { statusCode: 302, headers: { Location: "/" } };
+
+    const tokens = tokensStore();
+    await tokens.setJSON("ebay.json", { refresh_token: data.refresh_token });
+    const redirectHeaders = { Location: "/" } as Record<string, string>;
+    return { statusCode: 302, headers: redirectHeaders };
   } catch (e: any) {
     return { statusCode: 500, body: `OAuth error: ${e.message}` };
   }
