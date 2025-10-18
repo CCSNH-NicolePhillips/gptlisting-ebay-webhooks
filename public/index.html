@@ -162,7 +162,8 @@
           let data;
           try { data = await r.json(); } catch { data = { error: await r.text() }; }
           if (!r.ok || !data.ok) {
-            msg.textContent = 'Error: ' + (data.error || JSON.stringify(data));
+            const detail = data.detail ? (typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)) : '';
+            msg.textContent = 'Error: ' + (data.error || JSON.stringify(data)) + (detail ? ' | ' + detail : '');
           } else {
             msg.textContent = 'Draft created: offerId ' + (data.draftOffer?.offerId || '(unknown)');
           }

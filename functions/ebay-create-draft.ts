@@ -37,6 +37,14 @@ export const handler: Handler = async (event) => {
 
     const { apiHost } = tokenHosts(process.env.EBAY_ENV);
     const mlk = process.env.EBAY_MERCHANT_LOCATION_KEY || "default-loc";
+    const MARKETPLACE_ID = "EBAY_US";
+    const commonHeaders = {
+      Authorization: `Bearer ${access_token}`,
+      "Content-Type": "application/json",
+      "Accept-Language": "en-US",
+      "Content-Language": "en-US",
+      "X-EBAY-C-MARKETPLACE-ID": MARKETPLACE_ID,
+    } as Record<string, string>;
 
     // 1) Upsert Inventory Item
     const invPayload = {
@@ -47,7 +55,7 @@ export const handler: Handler = async (event) => {
 
     let r = await fetch(`${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`, {
       method: "PUT",
-      headers: { Authorization: `Bearer ${access_token}`, "Content-Type": "application/json" },
+      headers: commonHeaders,
       body: JSON.stringify(invPayload),
     });
     if (!r.ok) {
@@ -58,7 +66,7 @@ export const handler: Handler = async (event) => {
 
     // 2) Use first available business policies
     async function pickFirst(path: string): Promise<string | null> {
-      const res = await fetch(`${apiHost}${path}`, { headers: { Authorization: `Bearer ${access_token}` } });
+      const res = await fetch(`${apiHost}${path}`, { headers: commonHeaders });
       const json = (await res.json()) as any;
       const list = json.fulfillmentPolicies || json.paymentPolicies || json.returnPolicies || [];
       return list.length ? list[0].id : null;
@@ -74,7 +82,7 @@ export const handler: Handler = async (event) => {
     // 3) Create Offer (DRAFT)
     const offerPayload = {
       sku,
-      marketplaceId: "EBAY_US",
+  marketplaceId: MARKETPLACE_ID,
       format: "FIXED_PRICE",
       availableQuantity: qty,
       categoryId: categoryId || "31413",
@@ -87,7 +95,7 @@ export const handler: Handler = async (event) => {
 
     r = await fetch(`${apiHost}/sell/inventory/v1/offer`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${access_token}`, "Content-Type": "application/json" },
+      headers: commonHeaders,
       body: JSON.stringify(offerPayload),
     });
     const offerRes = await r.json();
