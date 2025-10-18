@@ -1,9 +1,12 @@
-# eBay + Dropbox Uploader (Scaffold)
+# eBay + Dropbox Uploader + Netlify Webhooks
 
-A minimal, multi-user scaffold to ingest product photos from **Dropbox**, compute pricing, and create **eBay Inventory/Offer** listings as **drafts** or **post now**, with room for Promoted Listings and Markdown promotions.
+A complete eBay-Dropbox integration with:
+- **Local app** for processing Dropbox photos → eBay draft/published listings
+- **Netlify serverless functions** for eBay webhooks (MAD) and OAuth
 
 ## Features
 
+### Local App (Express + TypeScript)
 - Per-user **Connect Dropbox** (OAuth; offline access / refresh tokens)
 - Per-user **Connect eBay Seller** (OAuth; refresh tokens)
 - Groups files by prefix (`xx_01`, `xx_02`, `xx_price`) in a chosen folder
@@ -16,7 +19,15 @@ A minimal, multi-user scaffold to ingest product photos from **Dropbox**, comput
   - `draft` → create Inventory + Offer only
   - `post` → create + publish via Inventory API
   - `legacy-post` → (placeholder) use Trading API AddFixedPriceItem
-- Clean services layer: `dropbox`, `ebay`, `pricing`, `grouping`, `ocr`
+- Category mapping support per SKU
+- Offer management endpoints (view/update/publish)
+
+### Netlify Functions
+- **MAD webhook** (`/.netlify/functions/ebay-mad`) - Marketplace Account Deletion (required by eBay)
+- **Platform Notifications** (`/.netlify/functions/ebay-platform`) - optional Trading API push
+- **OAuth flow** (`/.netlify/functions/ebay-oauth-start`, `ebay-oauth-callback`)
+- **Inventory setup** (`/.netlify/functions/ebay-init-location`)
+- **Draft creation** (`/.netlify/functions/ebay-create-draft`)
 
 ## Quickstart
 
@@ -58,6 +69,32 @@ A minimal, multi-user scaffold to ingest product photos from **Dropbox**, comput
 - `folderPath`: Dropbox path or stored folder id (the scaffold accepts a string path for simplicity)
 - You can also omit and rely on the server's defaults.
 
+## Netlify Deployment
+
+### Setup
+
+1. **Create a new site on Netlify** and connect this repo, or deploy via CLI.
+
+2. **Environment variables** (Site settings → Environment variables):
+   - `EBAY_VERIFICATION_TOKEN`: 32–80 chars `[A-Za-z0-9_-]` (save this value—you'll also paste it in eBay's console)
+   - `EBAY_ENDPOINT_URL`: exact MAD URL you'll paste into eBay (e.g., `https://<yoursite>.netlify.app/.netlify/functions/ebay-mad`)
+   - `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET`, `EBAY_RUNAME` (production credentials)
+   - `EBAY_ENV=PROD`
+   - See `prod.env` for complete list
+
+3. **Deploy**:  
+   ```bash
+   npm run deploy  # deploy via CLI after login
+   ```
+
+### eBay Console (Production)
+
+- Go to **Alerts & Notifications** → **Production** → **Marketplace Account Deletion**.
+- **Endpoint**: paste the MAD URL above.
+- **Verification token**: the exact `EBAY_VERIFICATION_TOKEN` value.
+- **Save** → eBay will GET `?challenge_code=...` → your function responds with `{ "challengeResponse": "<hex>" }`.
+- Use **Send Test Notification** to send a test POST (your function logs will show it).
+
 ### Security
 
 - **Do not** store refresh tokens unencrypted in production. Use a DB + KMS (e.g., AWS KMS) to encrypt at rest.
@@ -68,5 +105,7 @@ A minimal, multi-user scaffold to ingest product photos from **Dropbox**, comput
 - OCR is stubbed—wire `tesseract` or your preferred provider.
 - Promoted Listings and Markdown promotions API calls are sketched in `services/ebay.ts` as TODOs.
 - Trading API (`legacy-post`) is left as a placeholder function to keep the scaffold small.
+- **Webhooks**: Respond with 2xx quickly (≤3s). Do heavy work asynchronously.
+- **MAD webhook hash**: Must be built with `challengeCode + verificationToken + endpointURL` in that order.
 
 Have fun. PRs welcome.
