@@ -1,0 +1,8 @@
+[functions]
+  node_bundler = "esbuild"
+  directory = "functions"
+
+[[headers]]
+  for = "/.netlify/functions/*"
+  [headers.values]
+    Content-Type = "application/json; charset=utf-8"
