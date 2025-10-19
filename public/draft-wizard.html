@@ -39,9 +39,9 @@
       <div class="row" style="margin-top:-.25rem">
         <div class="col"><button id="btnBrowse" class="secondary">Browse categories</button></div>
       </div>
-      <div id="browseModal" class="hide" style="position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999">
-        <div style="background:#141a33;border:1px solid #2a335c;border-radius:12px;max-width:900px;width:92%;padding:1rem 1.25rem;max-height:80vh;overflow:auto">
-          <div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:.2rem 0">Browse categories</h3><button id="browseClose" class="secondary">Close</button></div>
+      <div id="browseModal" class="hide" style="position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999" role="dialog" aria-modal="true">
+        <div id="browsePanel" style="background:#141a33;border:1px solid #2a335c;border-radius:12px;max-width:900px;width:92%;padding:1rem 1.25rem;max-height:80vh;overflow:auto">
+          <div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:.2rem 0">Browse categories</h3><button id="browseClose" type="button" class="secondary">Close</button></div>
           <div id="crumbs" class="muted" style="margin:.4rem 0 .6rem"></div>
           <div id="browseList" class="row"></div>
         </div>
@@ -99,10 +99,11 @@
       const conditionSel = $('condition');
       const locationSel = $('location');
       const modal = $('browseModal');
-      const browseBtn = $('btnBrowse');
+  const browseBtn = $('btnBrowse');
       const browseClose = $('browseClose');
       const browseList = $('browseList');
       const crumbs = $('crumbs');
+  const browsePanel = $('browsePanel');
 
       async function fetchJSON(url, opts) { const r = await fetch(url, opts); let j; try { j = await r.json(); } catch { j = { raw: await r.text() }; } if (!r.ok) throw Object.assign(new Error('HTTP '+r.status), { response:j, status:r.status }); return j; }
       const applyOptions = (list) => { datalist.innerHTML = ''; (list||[]).slice(0,80).forEach(item => { const opt = document.createElement('option'); opt.value = `${item.categoryId} — ${item.categoryName}`; opt.setAttribute('data-id', item.categoryId); opt.setAttribute('data-path', item.categoryPath || item.categoryName); datalist.appendChild(opt); }); };
@@ -264,8 +265,13 @@
         } catch(e){ crumbs.textContent = 'Browse error: ' + (e.response?.error || e.message); }
       }
 
-      if (browseBtn) browseBtn.onclick = () => { modal.classList.remove('hide'); browse(); };
-      if (browseClose) browseClose.onclick = () => { modal.classList.add('hide'); };
+  if (browseBtn) browseBtn.onclick = () => { modal.classList.remove('hide'); browse(); };
+  if (browseClose) browseClose.onclick = () => { modal.classList.add('hide'); setTimeout(()=>{ try{ browseBtn?.focus(); }catch{} }, 0); };
+  // Backdrop click closes
+  if (modal) modal.addEventListener('click', (e) => { if (e.target === modal) { modal.classList.add('hide'); setTimeout(()=>{ try{ browseBtn?.focus(); }catch{} }, 0); } });
+  if (browsePanel) browsePanel.addEventListener('click', (e)=> e.stopPropagation());
+  // Escape key closes
+  window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modal.classList.contains('hide')) { modal.classList.add('hide'); setTimeout(()=>{ try{ browseBtn?.focus(); }catch{} }, 0); } });
     </script>
   </body>
   </html>
