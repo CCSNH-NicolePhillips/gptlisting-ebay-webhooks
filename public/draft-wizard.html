@@ -36,6 +36,16 @@
         <div class="col"><label>Category<input id="categoryPicker" list="categoryOptions" placeholder="Start typing or pick a suggestion" /><datalist id="categoryOptions"></datalist></label><div id="categoryPreview" class="muted" style="margin-top:.25rem"></div></div>
         <div class="col"><label>Category ID<input id="categoryId" placeholder="e.g., 31413"/></label></div>
       </div>
+      <div class="row" style="margin-top:-.25rem">
+        <div class="col"><button id="btnBrowse" class="secondary">Browse categories</button></div>
+      </div>
+      <div id="browseModal" class="hide" style="position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999">
+        <div style="background:#141a33;border:1px solid #2a335c;border-radius:12px;max-width:900px;width:92%;padding:1rem 1.25rem;max-height:80vh;overflow:auto">
+          <div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:.2rem 0">Browse categories</h3><button id="browseClose" class="secondary">Close</button></div>
+          <div id="crumbs" class="muted" style="margin:.4rem 0 .6rem"></div>
+          <div id="browseList" class="row"></div>
+        </div>
+      </div>
       <div style="margin:.5rem 0">
         <button id="btnNext" disabled>Next →</button>
         <span id="msg1" class="muted"></span>
@@ -88,6 +98,11 @@
       const msg1 = $('msg1');
       const conditionSel = $('condition');
       const locationSel = $('location');
+      const modal = $('browseModal');
+      const browseBtn = $('btnBrowse');
+      const browseClose = $('browseClose');
+      const browseList = $('browseList');
+      const crumbs = $('crumbs');
 
       async function fetchJSON(url, opts) { const r = await fetch(url, opts); let j; try { j = await r.json(); } catch { j = { raw: await r.text() }; } if (!r.ok) throw Object.assign(new Error('HTTP '+r.status), { response:j, status:r.status }); return j; }
       const applyOptions = (list) => { datalist.innerHTML = ''; (list||[]).slice(0,80).forEach(item => { const opt = document.createElement('option'); opt.value = `${item.categoryId} — ${item.categoryName}`; opt.setAttribute('data-id', item.categoryId); opt.setAttribute('data-path', item.categoryPath || item.categoryName); datalist.appendChild(opt); }); };
@@ -98,7 +113,7 @@
       if (searchEl) searchEl.addEventListener('input', (e)=> suggest(e.target.value));
       const photoEl = $('photo');
       if (photoEl) photoEl.addEventListener('change', () => { const f = photoEl.files && photoEl.files[0]; if (!f) return; const name = (f.name||'').replace(/\.[^.]+$/, '').replace(/[_-]+/g,' '); if (name) { titleEl.value = titleEl.value||name; suggest(name); } });
-      if (picker) picker.addEventListener('input', () => { const val = picker.value; const opt = Array.from(datalist.options).find(o=>o.value===val); updatePreview(opt); const id = opt ? opt.getAttribute('data-id') : ''; if (id) { categoryIdEl.value = id; nextBtn.disabled = false; } else nextBtn.disabled = !categoryIdEl.value.trim(); });
+      
       if (categoryIdEl) categoryIdEl.addEventListener('input', () => { nextBtn.disabled = !categoryIdEl.value.trim(); });
 
       async function loadLocations() {
@@ -109,14 +124,23 @@
         const wrap = document.createElement('div'); wrap.className='col';
         const id = 'asp_'+(aspect.localizedAspectName||aspect.aspectName).replace(/\s+/g,'_');
         const label = document.createElement('label'); label.textContent = (aspect.localizedAspectName||aspect.aspectName) + (required?' *':'');
-        const inp = document.createElement('input'); inp.id = id; inp.setAttribute('data-aspect', aspect.aspectName||aspect.localizedAspectName);
-        // Provide datalist of recommended values if present
-        if (Array.isArray(aspect.aspectValues) && aspect.aspectValues.length) {
-          const listId = id+'_list'; const dl = document.createElement('datalist'); dl.id = listId;
-          aspect.aspectValues.slice(0,50).forEach(v=>{ const o=document.createElement('option'); o.value = v.localizedValue || v.value || v; dl.appendChild(o); });
-          inp.setAttribute('list', listId); wrap.appendChild(dl);
+        const name = aspect.aspectName || aspect.localizedAspectName;
+        const values = Array.isArray(aspect.aspectValues) ? aspect.aspectValues : [];
+        const cardinality = aspect.aspectConstraint?.itemToAspectCardinality || 'SINGLE';
+        const isEnum = values.length > 0;
+        const isMulti = cardinality === 'MULTI';
+        let field;
+        if (isEnum) {
+          const sel = document.createElement('select'); sel.id = id; sel.setAttribute('data-aspect', name);
+          if (isMulti) sel.multiple = true;
+          // optional empty for optional fields
+          if (!required && !isMulti) { const o=document.createElement('option'); o.value=''; o.textContent='—'; sel.appendChild(o); }
+          values.slice(0,200).forEach(v => { const o=document.createElement('option'); const val = v.localizedValue || v.value || v; o.value = val; o.textContent = val; sel.appendChild(o); });
+          field = sel;
+        } else {
+          const inp = document.createElement('input'); inp.id = id; inp.setAttribute('data-aspect', name); field = inp;
         }
-        wrap.appendChild(label); wrap.appendChild(inp);
+        wrap.appendChild(label); wrap.appendChild(field);
         $(containerId).appendChild(wrap);
       }
 
@@ -146,7 +170,16 @@
       function collectAspects(){
         const map = {};
         document.querySelectorAll('[id^="asp_"]').forEach((el)=>{
-          const name = el.getAttribute('data-aspect'); const val = el.value.trim(); if (!name || !val) return; map[name] = val; });
+          const name = el.getAttribute('data-aspect');
+          if (!name) return;
+          if (el.tagName === 'SELECT' && el.multiple) {
+            const vals = Array.from(el.selectedOptions).map(o=>o.value).filter(Boolean);
+            if (vals.length) map[name] = vals;
+          } else {
+            const val = (el.value || '').trim();
+            if (val) map[name] = val;
+          }
+        });
         return map;
       }
 
@@ -189,6 +222,50 @@
           }
         }
       });
+
+      async function browse(categoryId){
+        try {
+          const url = '/.netlify/functions/ebay-category-browse' + (categoryId ? ('?categoryId='+encodeURIComponent(categoryId)) : '');
+          const j = await fetchJSON(url);
+          // crumbs (clickable)
+          const bc = j.breadcrumbs||[];
+          const parts = [];
+          // Root link
+          const rootA = document.createElement('a'); rootA.href = '#'; rootA.textContent = 'Root'; rootA.onclick = (e)=>{ e.preventDefault(); browse(); };
+          parts.push(rootA);
+          bc.forEach((b, idx) => {
+            const sep = document.createElement('span'); sep.textContent = ' > ';
+            parts.push(sep);
+            const a = document.createElement('a'); a.href='#'; a.textContent = b.name; a.onclick = (e)=>{ e.preventDefault(); browse(b.id); };
+            parts.push(a);
+          });
+          crumbs.innerHTML=''; parts.forEach(el=>crumbs.appendChild(el));
+          // list
+          browseList.innerHTML='';
+          (j.children||[]).forEach((n)=>{
+            const wrap = document.createElement('div'); wrap.className='col'; wrap.style.minWidth='260px';
+            const btn = document.createElement('button'); btn.className='secondary'; btn.style.width='100%';
+            btn.textContent = (n.leaf? '📄 ' : '📁 ') + n.name;
+            btn.title = n.path;
+            btn.onclick = () => {
+              if (n.leaf) {
+                picker.value = `${n.id} — ${n.name}`;
+                categoryIdEl.value = n.id;
+                catPreview.textContent = n.path;
+                nextBtn.disabled = false;
+                modal.classList.add('hide');
+              } else {
+                browse(n.id);
+              }
+            };
+            wrap.appendChild(btn);
+            browseList.appendChild(wrap);
+          });
+        } catch(e){ crumbs.textContent = 'Browse error: ' + (e.response?.error || e.message); }
+      }
+
+      if (browseBtn) browseBtn.onclick = () => { modal.classList.remove('hide'); browse(); };
+      if (browseClose) browseClose.onclick = () => { modal.classList.add('hide'); };
     </script>
   </body>
   </html>
