@@ -106,14 +106,78 @@
       const browseList = $('browseList');
       const crumbs = $('crumbs');
   const browsePanel = $('browsePanel');
+  // Category CSV data (if available)
+  let CAT_ROWS = null; // Array of {categoryId, categoryName, categoryPath}
+  let CAT_TREE = null; // Tree built from CSV paths
 
       async function fetchJSON(url, opts) { const r = await fetch(url, opts); let j; try { j = await r.json(); } catch { j = { raw: await r.text() }; } if (!r.ok) throw Object.assign(new Error('HTTP '+r.status), { response:j, status:r.status }); return j; }
       const applyOptions = (list) => { datalist.innerHTML = ''; (list||[]).slice(0,80).forEach(item => { const opt = document.createElement('option'); opt.value = `${item.categoryId} — ${item.categoryName}`; opt.setAttribute('data-id', item.categoryId); opt.setAttribute('data-path', item.categoryPath || item.categoryName); datalist.appendChild(opt); }); };
       const updatePreview = (opt) => { catPreview.textContent = opt ? (opt.getAttribute('data-path')||'') : ''; };
       const debounce = (fn, ms=300) => { let t; return (...a) => { clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; };
-      const suggest = debounce(async (q) => { if (!q) return; try { const j = await fetchJSON('/.netlify/functions/ebay-category-suggestions?q='+encodeURIComponent(q)); applyOptions(j.suggestions||[]); } catch(e){ msg1.textContent = 'Suggest error'; } }, 350);
-      if (titleEl) titleEl.addEventListener('input', (e)=> suggest(e.target.value));
-      if (searchEl) searchEl.addEventListener('input', (e)=> suggest(e.target.value));
+      async function loadCategoriesCsv(){
+        if (CAT_ROWS) return CAT_ROWS;
+        const tryUrls = [
+          '/taxonomy-categories-EBAY_US.csv',
+          '/public/taxonomy-categories-EBAY_US.csv'
+        ];
+        let text = null;
+        for (const url of tryUrls){
+          try { const r = await fetch(url); if (r.ok) { text = await r.text(); break; } } catch {}
+        }
+        if (!text) return null;
+        // parse CSV (3 columns: categoryId,categoryName,categoryPath), quoted
+        const lines = text.split(/\r?\n/).filter(Boolean);
+        const rows = [];
+        for (let i=1;i<lines.length;i++){
+          const line = lines[i];
+          const cols = [];
+          let cur=''; let inQ=false;
+          for (let j=0;j<line.length;j++){
+            const ch = line[j];
+            if (ch==='"'){
+              if (inQ && line[j+1]==='"'){ cur+='"'; j++; }
+              else inQ = !inQ;
+            } else if (ch===',' && !inQ){ cols.push(cur); cur=''; }
+            else cur+=ch;
+          }
+          cols.push(cur);
+          if (cols.length>=3){
+            const [categoryId, categoryName, categoryPath] = cols;
+            if (categoryId && categoryName) rows.push({ categoryId, categoryName, categoryPath: categoryPath||categoryName });
+          }
+        }
+        CAT_ROWS = rows;
+        // build tree
+        const root = { name:'Root', children: new Map(), path: '', leaf:false };
+        rows.forEach(r=>{
+          const parts = (r.categoryPath||r.categoryName).split(' > ').filter(Boolean);
+          let node = root; let pathAcc=[];
+          for (let idx=0; idx<parts.length; idx++){
+            const part = parts[idx]; pathAcc.push(part);
+            if (!node.children.has(part)) node.children.set(part, { name: part, children: new Map(), path: pathAcc.join(' > '), leaf:false });
+            node = node.children.get(part);
+          }
+          // mark leaf and attach id
+          node.leaf = true; node.id = r.categoryId; node.path = r.categoryPath || pathAcc.join(' > ');
+        });
+        CAT_TREE = root;
+        return rows;
+      }
+
+      const localSuggest = debounce(async (q) => {
+        if (!q) return;
+        const rows = CAT_ROWS || await loadCategoriesCsv();
+        if (!rows) { msg1.textContent = 'No local category CSV found'; return; }
+        const qq = q.toLowerCase();
+        const matches = rows.filter(r => (r.categoryName||'').toLowerCase().includes(qq) || (r.categoryPath||'').toLowerCase().includes(qq)).slice(0,100)
+          .map(r => ({ categoryId: r.categoryId, categoryName: r.categoryName, categoryPath: r.categoryPath }));
+        applyOptions(matches);
+      }, 250);
+
+      // Fallback remote suggestions if CSV unavailable
+      const remoteSuggest = debounce(async (q) => { if (!q) return; try { const j = await fetchJSON('/.netlify/functions/ebay-category-suggestions?q='+encodeURIComponent(q)); applyOptions(j.suggestions||[]); } catch(e){ msg1.textContent = 'Suggest error'; } }, 350);
+  if (titleEl) titleEl.addEventListener('input', async (e)=> { const rows = CAT_ROWS || await loadCategoriesCsv(); if (rows) localSuggest(e.target.value); else remoteSuggest(e.target.value); });
+  if (searchEl) searchEl.addEventListener('input', async (e)=> { const rows = CAT_ROWS || await loadCategoriesCsv(); if (rows) localSuggest(e.target.value); else remoteSuggest(e.target.value); });
       const photoEl = $('photo');
       if (photoEl) photoEl.addEventListener('change', () => { const f = photoEl.files && photoEl.files[0]; if (!f) return; const name = (f.name||'').replace(/\.[^.]+$/, '').replace(/[_-]+/g,' '); if (name) { titleEl.value = titleEl.value||name; suggest(name); } });
       
@@ -217,53 +281,65 @@
         if (id) { categoryIdEl.value = id; nextBtn.disabled = false; return; }
         nextBtn.disabled = !categoryIdEl.value.trim();
         if (val.length >= 2) {
-          try {
-            const j = await fetchJSON('/.netlify/functions/ebay-category-suggestions?q='+encodeURIComponent(val));
-            applyOptions(j.suggestions||[]);
-          } catch(e) {
-            msg1.textContent = 'Suggest error: ' + (e.response?.error || e.message || '');
+          const rows = CAT_ROWS || await loadCategoriesCsv();
+          if (rows) { localSuggest(val); }
+          else {
+            try { const j = await fetchJSON('/.netlify/functions/ebay-category-suggestions?q='+encodeURIComponent(val)); applyOptions(j.suggestions||[]); }
+            catch(e){ msg1.textContent = 'Suggest error: ' + (e.response?.error || e.message || ''); }
           }
         }
       });
 
+      function renderBrowseLocal(node, trail){
+        // breadcrumbs
+        const parts=[]; const rootA=document.createElement('a'); rootA.href='#'; rootA.textContent='Root'; rootA.onclick=(e)=>{e.preventDefault(); renderBrowseLocal(CAT_TREE, []);}; parts.push(rootA);
+        trail.forEach((n)=>{ const sep=document.createElement('span'); sep.textContent=' > '; parts.push(sep); const a=document.createElement('a'); a.href='#'; a.textContent=n.name; a.onclick=(e)=>{e.preventDefault(); const idx=trail.indexOf(n); renderBrowseLocal(idx>=0? trail[idx]:CAT_TREE, trail.slice(0, idx+1));}; parts.push(a); });
+        crumbs.innerHTML=''; parts.forEach(x=>crumbs.appendChild(x));
+        // list
+        browseList.innerHTML='';
+        const entries = Array.from(node.children?.entries?.() || []);
+        entries.forEach(([name, child])=>{
+          const wrap = document.createElement('div'); wrap.className='col'; wrap.style.minWidth='260px';
+          const btn = document.createElement('button'); btn.className='secondary'; btn.style.width='100%';
+          const isLeaf = !!child.leaf && (!child.children || child.children.size===0);
+          btn.textContent = (isLeaf? '📄 ' : '📁 ') + name;
+          btn.title = child.path;
+          btn.onclick = () => {
+            if (isLeaf && child.id){
+              picker.value = `${child.id} — ${name}`;
+              categoryIdEl.value = child.id;
+              catPreview.textContent = child.path;
+              nextBtn.disabled = false;
+              modal.classList.add('hide');
+            } else {
+              renderBrowseLocal(child, [...trail, child]);
+            }
+          };
+          wrap.appendChild(btn);
+          browseList.appendChild(wrap);
+        });
+      }
+
       async function browse(categoryId){
+        const rows = CAT_ROWS || await loadCategoriesCsv();
+        if (rows && CAT_TREE) {
+          renderBrowseLocal(CAT_TREE, []);
+          return;
+        }
+        // fallback to remote
         try {
           const url = '/.netlify/functions/ebay-category-browse' + (categoryId ? ('?categoryId='+encodeURIComponent(categoryId)) : '');
           const j = await fetchJSON(url);
           // crumbs (clickable)
           const bc = j.breadcrumbs||[];
           const parts = [];
-          // Root link
           const rootA = document.createElement('a'); rootA.href = '#'; rootA.textContent = 'Root'; rootA.onclick = (e)=>{ e.preventDefault(); browse(); };
           parts.push(rootA);
-          bc.forEach((b, idx) => {
-            const sep = document.createElement('span'); sep.textContent = ' > ';
-            parts.push(sep);
-            const a = document.createElement('a'); a.href='#'; a.textContent = b.name; a.onclick = (e)=>{ e.preventDefault(); browse(b.id); };
-            parts.push(a);
-          });
+          bc.forEach((b, idx) => { const sep = document.createElement('span'); sep.textContent = ' > '; parts.push(sep); const a = document.createElement('a'); a.href='#'; a.textContent = b.name; a.onclick = (e)=>{ e.preventDefault(); browse(b.id); }; parts.push(a); });
           crumbs.innerHTML=''; parts.forEach(el=>crumbs.appendChild(el));
           // list
           browseList.innerHTML='';
-          (j.children||[]).forEach((n)=>{
-            const wrap = document.createElement('div'); wrap.className='col'; wrap.style.minWidth='260px';
-            const btn = document.createElement('button'); btn.className='secondary'; btn.style.width='100%';
-            btn.textContent = (n.leaf? '📄 ' : '📁 ') + n.name;
-            btn.title = n.path;
-            btn.onclick = () => {
-              if (n.leaf) {
-                picker.value = `${n.id} — ${n.name}`;
-                categoryIdEl.value = n.id;
-                catPreview.textContent = n.path;
-                nextBtn.disabled = false;
-                modal.classList.add('hide');
-              } else {
-                browse(n.id);
-              }
-            };
-            wrap.appendChild(btn);
-            browseList.appendChild(wrap);
-          });
+          (j.children||[]).forEach((n)=>{ const wrap = document.createElement('div'); wrap.className='col'; wrap.style.minWidth='260px'; const btn = document.createElement('button'); btn.className='secondary'; btn.style.width='100%'; btn.textContent = (n.leaf? '📄 ' : '📁 ') + n.name; btn.title = n.path; btn.onclick = () => { if (n.leaf) { picker.value = `${n.id} — ${n.name}`; categoryIdEl.value = n.id; catPreview.textContent = n.path; nextBtn.disabled = false; modal.classList.add('hide'); } else { browse(n.id); } }; wrap.appendChild(btn); browseList.appendChild(wrap); });
         } catch(e){ crumbs.textContent = 'Browse error: ' + (e.response?.error || e.message); }
       }
 
