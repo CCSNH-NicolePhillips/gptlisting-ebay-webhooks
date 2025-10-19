@@ -1,6 +1,6 @@
 import type { Handler } from "@netlify/functions";
-import { tokenHosts, appAccessToken } from "./_common.js";
-import { cacheStore } from "./_blobs.js";
+import { tokenHosts, appAccessToken, accessTokenFromRefresh } from "./_common.js";
+import { cacheStore, tokensStore } from "./_blobs.js";
 
 type FlatCategory = { categoryId: string; categoryName: string; categoryPath: string };
 
@@ -17,11 +17,28 @@ export const handler: Handler = async (event) => {
     const jsonOutKey = `taxonomy-categories-${MARKETPLACE_ID}.json`;
     const csvOutKey = `taxonomy-categories-${MARKETPLACE_ID}.csv`;
 
+    // Helper to get token (prefer app, fallback to user refresh token if invalid_scope)
+    async function getAnyToken(): Promise<string> {
+      try {
+        const a = await appAccessToken(["https://api.ebay.com/oauth/api_scope"]);
+        return a.access_token;
+      } catch (e: any) {
+        const msg = String(e?.message || e);
+        if (msg.includes('invalid_scope')) {
+          const tstore = tokensStore();
+          const saved = (await tstore.get('ebay.json', { type: 'json' })) as any;
+          const refresh = saved?.refresh_token as string | undefined;
+          if (!refresh) throw new Error('app token invalid_scope and no stored user refresh token; connect eBay first');
+          const u = await accessTokenFromRefresh(refresh);
+          return u.access_token;
+        }
+        throw e;
+      }
+    }
+
     // Helper to fetch and flatten taxonomy tree
     async function fetchAndFlatten(): Promise<{ treeId: string; categories: FlatCategory[] }>{
-      const { access_token } = await appAccessToken([
-        "https://api.ebay.com/oauth/api_scope",
-      ]);
+      const access_token = await getAnyToken();
       const headers = {
         Authorization: `Bearer ${access_token}`,
         Accept: "application/json",
