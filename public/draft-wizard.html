@@ -302,7 +302,12 @@
         if (val.length >= 1) {
           const rows = CAT_ROWS || await loadCategoriesCsv();
           if (rows) { localSuggest(val); }
-          else { datalist.innerHTML=''; msg1.textContent = 'Category index unavailable. Use Browse.'; }
+          else {
+            // CSV not available: don't spam an error if a category ID is already chosen (e.g., via Browse)
+            datalist.innerHTML='';
+            if (!categoryIdEl.value.trim()) { msg1.textContent = 'Category index unavailable. Use Browse.'; }
+            else { msg1.textContent = ''; }
+          }
         }
       });
 
@@ -329,6 +334,7 @@
                 categoryIdEl.value = child.id;
                 catPreview.textContent = child.path;
                 nextBtn.disabled = false;
+                msg1.textContent = '';
                 modal.classList.add('hide');
               } else {
                 renderBrowseLocal(child, [...trail, child]);
@@ -374,7 +380,7 @@
               const wrap = document.createElement('div'); wrap.className='col'; wrap.style.minWidth='260px';
               const btn = document.createElement('button'); btn.className='secondary'; btn.style.width='100%';
               btn.textContent = (n.leaf? '📄 ' : '📁 ') + n.name; btn.title = n.path;
-              btn.onclick = () => { if (n.leaf) { picker.value = `${n.id} — ${n.name}`; categoryIdEl.value = n.id; catPreview.textContent = n.path; nextBtn.disabled = false; modal.classList.add('hide'); } else { browse(n.id); } };
+              btn.onclick = () => { if (n.leaf) { picker.value = `${n.id} — ${n.name}`; categoryIdEl.value = n.id; catPreview.textContent = n.path; nextBtn.disabled = false; msg1.textContent = ''; modal.classList.add('hide'); } else { browse(n.id); } };
               wrap.appendChild(btn); frag.appendChild(wrap);
             }
             browseList.appendChild(frag);
