@@ -64,7 +64,23 @@ export const handler: Handler = async (event) => {
       return { statusCode: r.status, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "inventory put failed", detail }) };
     }
 
-    // 2) Use first available business policies
+    // 2) Verify Inventory Location exists
+    const locRes = await fetch(`${apiHost}/sell/inventory/v1/location/${encodeURIComponent(mlk)}`, { headers: commonHeaders });
+    if (locRes.status === 404) {
+      return {
+        statusCode: 400,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          error: "missing-location",
+          detail: {
+            message: `Inventory location '${mlk}' not found. Initialize it before creating offers.`,
+            initUrl: "/.netlify/functions/ebay-init-location",
+          },
+        }),
+      };
+    }
+
+    // 3) Use first available business policies
     async function pickPolicy(path: string, preferNames?: string[]): Promise<string | null> {
       const url = `${apiHost}${path}?marketplace_id=${MARKETPLACE_ID}`;
       const res = await fetch(url, { headers: commonHeaders });
@@ -104,7 +120,7 @@ export const handler: Handler = async (event) => {
       };
     }
 
-    // 3) Create Offer (DRAFT)
+  // 4) Create Offer (DRAFT)
     const offerPayload = {
       sku,
   marketplaceId: MARKETPLACE_ID,
