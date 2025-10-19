@@ -65,16 +65,21 @@ export const handler: Handler = async (event) => {
     }
 
     // 2) Use first available business policies
-    async function pickFirst(path: string): Promise<string | null> {
+    async function pickPolicy(path: string, preferName?: string): Promise<string | null> {
       const url = `${apiHost}${path}?marketplace_id=${MARKETPLACE_ID}`;
       const res = await fetch(url, { headers: commonHeaders });
       const json = (await res.json()) as any;
       const list = json.fulfillmentPolicies || json.paymentPolicies || json.returnPolicies || [];
-      return list.length ? list[0].id : null;
+      if (!Array.isArray(list) || list.length === 0) return null;
+      if (preferName) {
+        const found = list.find((p: any) => (p?.name || "").toLowerCase() === preferName.toLowerCase());
+        if (found?.id) return found.id;
+      }
+      return list[0].id || null;
     }
-    const fulfillmentPolicyId = await pickFirst("/sell/account/v1/fulfillment_policy");
-    const paymentPolicyId = await pickFirst("/sell/account/v1/payment_policy");
-    const returnPolicyId = await pickFirst("/sell/account/v1/return_policy");
+    const fulfillmentPolicyId = await pickPolicy("/sell/account/v1/fulfillment_policy", "Default Shipping (Auto)");
+    const paymentPolicyId = await pickPolicy("/sell/account/v1/payment_policy", "Default Payment (Auto)");
+    const returnPolicyId = await pickPolicy("/sell/account/v1/return_policy", "Default Returns (Auto)");
 
     if (!fulfillmentPolicyId || !paymentPolicyId || !returnPolicyId) {
       const hint = {
