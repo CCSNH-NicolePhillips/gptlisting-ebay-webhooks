@@ -6,11 +6,11 @@
     <title>Create draft · Wizard</title>
     <style>
       body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; padding: 2rem; background:#0b1020; color:#f4f6fb; }
-      .card { max-width: 920px; margin: 0 auto 1rem; background: #141a33; border: 1px solid #2a335c; border-radius: 12px; padding: 1rem 1.25rem; }
-      .row { display:flex; gap:.75rem; flex-wrap:wrap }
+      .card { max-width: 920px; margin: 0 auto 1rem; background: #141a33; border: 1px solid #2a335c; border-radius: 12px; padding: 1.25rem 1.5rem; }
+      .row { display:flex; gap:1rem; flex-wrap:wrap; margin-bottom: .75rem; }
       .col { flex:1 1 260px }
-      label { display:block; margin:.35rem 0 }
-      input, textarea, select { background: #0f1530; color: #f4f6fb; border: 1px solid #26305a; border-radius: 8px; padding: .55rem; width:100% }
+      label { display:block; margin:.4rem 0 .25rem }
+      input, textarea, select { background: #0f1530; color: #f4f6fb; border: 1px solid #26305a; border-radius: 8px; padding: .6rem .7rem; width:100% }
       button { background: #4f7cff; color: white; border: none; border-radius: 8px; padding: .7rem 1rem; cursor: pointer; font-weight: 600; }
       button.secondary { background: transparent; color: #cbd5ff; border: 1px solid #3d4a86; }
       .muted { color: #a2a9c8; }
@@ -172,27 +172,21 @@
         } catch(e){ msg.textContent='Error: '+e.message; }
       });
 
-      async function loadCategoryList(q) {
-        try {
-          const url = '/.netlify/functions/ebay-category-tree' + (q ? ('?q='+encodeURIComponent(q)) : '');
-          const j = await fetchJSON(url);
-          applyOptions(j.results || []);
-          if (!q) { msg1.textContent = `Loaded ${j.count||0} categories (showing ${j.results?.length||0})`; }
-        } catch(e) { msg1.textContent = 'Category load error'; }
-      }
-      // Initial pre-load of dropdown options (top slice)
-      loadCategoryList('vitamin'); // seed with a common word to limit initial size
-      // As the user types in the category picker, we can refine
-      if (picker) picker.addEventListener('input', () => {
+      // As the user types in the category picker, fetch suggestions and fill dropdown
+      if (picker) picker.addEventListener('input', async () => {
         const val = picker.value.trim();
         const opt = Array.from(datalist.options).find(o=>o.value===val);
         updatePreview(opt);
         const id = opt ? opt.getAttribute('data-id') : '';
-        if (id) { categoryIdEl.value = id; nextBtn.disabled = false; }
-        else {
-          nextBtn.disabled = !categoryIdEl.value.trim();
-          // If user typed text that doesn't match an option, try to fetch filtered list
-          if (val && !opt) loadCategoryList(val);
+        if (id) { categoryIdEl.value = id; nextBtn.disabled = false; return; }
+        nextBtn.disabled = !categoryIdEl.value.trim();
+        if (val.length >= 2) {
+          try {
+            const j = await fetchJSON('/.netlify/functions/ebay-category-suggestions?q='+encodeURIComponent(val));
+            applyOptions(j.suggestions||[]);
+          } catch(e) {
+            msg1.textContent = 'Suggest error: ' + (e.response?.error || e.message || '');
+          }
         }
       });
     </script>
