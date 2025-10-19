@@ -225,10 +225,20 @@
       }
 
       async function enterStep2(){
-        const cid = categoryIdEl.value.trim(); if (!cid) return;
+        const cid = categoryIdEl.value.trim(); if (!cid) { msg1.textContent = 'Select a category first.'; return; }
         nextBtn.disabled = true; msg1.textContent = 'Loading requirements…';
         try {
-          const req = await fetchJSON('/.netlify/functions/ebay-category-requirements?categoryId='+encodeURIComponent(cid));
+          // Resolve taxonomy treeId first for reliability
+          let treeId = '0';
+          try { const t = await fetchJSON('/.netlify/functions/ebay-taxonomy-tree-id'); treeId = String(t.categoryTreeId || '0'); } catch {}
+          // Call requirements with treeId and retry once on transient 502
+          let req;
+          try {
+            req = await fetchJSON(`/.netlify/functions/ebay-category-requirements?treeId=${encodeURIComponent(treeId)}&categoryId=${encodeURIComponent(cid)}`);
+          } catch (e) {
+            if (e?.status === 502) { await new Promise(r=>setTimeout(r, 400)); req = await fetchJSON(`/.netlify/functions/ebay-category-requirements?treeId=${encodeURIComponent(treeId)}&categoryId=${encodeURIComponent(cid)}`); }
+            else throw e;
+          }
           // render path and condition
           $('catPath').textContent = 'Category '+cid;
           conditionSel.innerHTML='';
@@ -241,9 +251,13 @@
           (req.optionalAspects||[]).forEach(a=>renderAspect('optAspects', a, false));
           await loadLocations();
           step2.classList.remove('hide');
+          msg1.textContent = '';
           window.scrollTo({ top: step2.offsetTop - 10, behavior: 'smooth' });
-  } catch(e){ msg1.textContent = 'Requirements error: ' + (e.response?.error || e.message) + '. If this persists, pick a leaf category via Browse.'; }
-        finally { nextBtn.disabled = false; }
+        } catch(e){
+          const detail = e?.response?.errorId || e?.response?.message || e?.message || String(e);
+          msg1.textContent = 'Requirements error: ' + detail + '. If this persists, pick a leaf category via Browse.';
+          console.error('requirements error', e);
+        } finally { nextBtn.disabled = false; }
       }
       nextBtn.addEventListener('click', enterStep2);
 
@@ -303,10 +317,8 @@
           const rows = CAT_ROWS || await loadCategoriesCsv();
           if (rows) { localSuggest(val); }
           else {
-            // CSV not available: don't spam an error if a category ID is already chosen (e.g., via Browse)
+            // CSV not available: keep quiet during typing; user can open Browse to pick.
             datalist.innerHTML='';
-            if (!categoryIdEl.value.trim()) { msg1.textContent = 'Category index unavailable. Use Browse.'; }
-            else { msg1.textContent = ''; }
           }
         }
       });

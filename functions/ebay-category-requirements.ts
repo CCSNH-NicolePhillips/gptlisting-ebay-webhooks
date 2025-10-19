@@ -5,12 +5,16 @@ import { tokensStore } from "./_blobs.js";
 export const handler: Handler = async (event) => {
   try {
     const categoryId = event.queryStringParameters?.categoryId;
-    if (!categoryId) return { statusCode: 400, body: JSON.stringify({ error: "missing categoryId" }) };
+    if (!categoryId) return { statusCode: 400, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "missing categoryId" }) };
+    const qTreeId = (event.queryStringParameters?.treeId || "").trim();
     const { apiHost } = tokenHosts(process.env.EBAY_ENV);
     const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || "EBAY_US";
+
     async function getToken(): Promise<string> {
+      // Prefer app token; if scope issues, fallback to user refresh token
       try {
-        const a = await appAccessToken(["https://api.ebay.com/oauth/api_scope"]);
+        // Use taxonomy readonly scope for best compatibility
+        const a = await appAccessToken(["https://api.ebay.com/oauth/api_scope/commerce.taxonomy.readonly"]);
         return a.access_token;
       } catch (e: any) {
         const msg = String(e?.message || e);
@@ -25,6 +29,31 @@ export const handler: Handler = async (event) => {
         throw e;
       }
     }
+
+    async function fetchJsonWithRetry(url: string, headers: Record<string, string>, label: string, retries = 1): Promise<any> {
+      let lastErr: any;
+      for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+          const r = await fetch(url, { headers });
+          const text = await r.text();
+          const data = text ? (JSON.parse(text) as any) : {};
+          if (!r.ok) {
+            if (r.status === 502 || r.status === 503) {
+              lastErr = new Error(`${label} upstream ${r.status}`);
+              if (attempt < retries) { await new Promise(res => setTimeout(res, 350)); continue; }
+            }
+            const err = new Error(`${label} ${r.status}`);
+            (err as any).status = r.status; (err as any).response = data; throw err;
+          }
+          return data;
+        } catch (e: any) {
+          lastErr = e;
+          if (attempt < retries) { await new Promise(res => setTimeout(res, 350)); continue; }
+        }
+      }
+      throw lastErr;
+    }
+
     const bearer = await getToken();
     const headers = {
       Authorization: `Bearer ${bearer}`,
@@ -34,20 +63,21 @@ export const handler: Handler = async (event) => {
       "X-EBAY-C-MARKETPLACE-ID": MARKETPLACE_ID,
     } as Record<string, string>;
 
-    // 1) Get allowed item conditions for the category
+    // 1) Fetch conditions and treeId concurrently (if treeId not provided)
     const condUrl = `${apiHost}/sell/metadata/v1/marketplace/${MARKETPLACE_ID}/get_item_condition_policies?category_id=${encodeURIComponent(categoryId)}`;
-  const condRes = await fetch(condUrl, { headers });
-    const condJson = await condRes.json().catch(() => ({}));
+    const condPromise = fetchJsonWithRetry(condUrl, headers, "conditions", 1).catch((e) => { console.error("conditions fetch error", e); return {}; });
+    const treePromise = (async () => {
+      if (qTreeId) return { categoryTreeId: qTreeId } as any;
+      const tUrl = `${apiHost}/commerce/taxonomy/v1/get_default_category_tree_id?marketplace_id=${MARKETPLACE_ID}`;
+      return fetchJsonWithRetry(tUrl, headers, "treeId", 1);
+    })();
 
-  // 2) Resolve default taxonomy tree id for this marketplace
-  const treeIdRes = await fetch(`${apiHost}/commerce/taxonomy/v1/get_default_category_tree_id?marketplace_id=${MARKETPLACE_ID}`, { headers });
-  const treeJson = await treeIdRes.json().catch(() => ({}));
-  const treeId = treeJson?.categoryTreeId ?? '0';
+    const [condJson, treeJson] = await Promise.all([condPromise, treePromise]);
+    const treeId = String((treeJson?.categoryTreeId ?? qTreeId ?? "0") || "0");
 
-  // 3) Get required and optional aspects for the category using the resolved tree id
-  const taxUrl = `${apiHost}/commerce/taxonomy/v1/category_tree/${encodeURIComponent(treeId)}/get_item_aspects_for_category?category_id=${encodeURIComponent(categoryId)}`;
-  const taxRes = await fetch(taxUrl, { headers });
-    const taxJson = await taxRes.json().catch(() => ({}));
+    // 2) Fetch taxonomy aspects for the category (retry once on 502/503)
+    const taxUrl = `${apiHost}/commerce/taxonomy/v1/category_tree/${encodeURIComponent(treeId)}/get_item_aspects_for_category?category_id=${encodeURIComponent(categoryId)}`;
+    const taxJson = await fetchJsonWithRetry(taxUrl, headers, "taxonomy", 1).catch((e) => { console.error("taxonomy fetch error", e); return {}; });
 
     // Normalize output
     const allowedConditions = condJson?.itemConditionPolicies?.[0]?.itemConditions || [];
@@ -62,6 +92,7 @@ export const handler: Handler = async (event) => {
         ok: true,
         marketplaceId: MARKETPLACE_ID,
         categoryId,
+        treeId,
         allowedConditions,
         requiredAspects,
         optionalAspects,
@@ -69,6 +100,9 @@ export const handler: Handler = async (event) => {
       }),
     };
   } catch (e: any) {
-    return { statusCode: 500, body: JSON.stringify({ error: "category-requirements error", detail: e?.message || String(e) }) };
+    const detail = e?.response || e?.message || String(e);
+    console.error('category-requirements error:', detail);
+    const status = (e && typeof e.status === 'number') ? e.status : 500;
+    return { statusCode: status, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "category-requirements error", detail }) };
   }
 };
