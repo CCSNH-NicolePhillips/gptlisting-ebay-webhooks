@@ -116,10 +116,7 @@
       const debounce = (fn, ms=300) => { let t; return (...a) => { clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; };
       async function loadCategoriesCsv(){
         if (CAT_ROWS) return CAT_ROWS;
-        const tryUrls = [
-          '/taxonomy-categories-EBAY_US.csv',
-          '/public/taxonomy-categories-EBAY_US.csv'
-        ];
+        const tryUrls = [ '/taxonomy-categories-EBAY_US.csv' ];
         let text = null;
         for (const url of tryUrls){
           try { const r = await fetch(url); if (r.ok) { text = await r.text(); break; } } catch {}
@@ -165,14 +162,22 @@
       }
 
       const localSuggest = debounce(async (q) => {
-        if (!q) return;
         const rows = CAT_ROWS || await loadCategoriesCsv();
-        if (!rows) { msg1.textContent = 'No local category CSV found'; return; }
-        const qq = q.toLowerCase();
-        const matches = rows.filter(r => (r.categoryName||'').toLowerCase().includes(qq) || (r.categoryPath||'').toLowerCase().includes(qq)).slice(0,100)
-          .map(r => ({ categoryId: r.categoryId, categoryName: r.categoryName, categoryPath: r.categoryPath }));
+        if (!rows) { return; }
+        const qq = (q || '').toLowerCase();
+        if (!qq) { datalist.innerHTML=''; return; }
+        const matches = [];
+        for (const r of rows) {
+          const nameLC = (r.categoryName||'').toLowerCase();
+          const lastSeg = (r.categoryPath||r.categoryName||'').split(' > ').pop() || '';
+          const lastLC = lastSeg.toLowerCase();
+          if (nameLC.startsWith(qq) || lastLC.startsWith(qq)) {
+            matches.push({ categoryId: r.categoryId, categoryName: r.categoryName, categoryPath: r.categoryPath });
+            if (matches.length >= 150) break;
+          }
+        }
         applyOptions(matches);
-      }, 250);
+      }, 150);
 
       // Fallback remote suggestions if CSV unavailable
       const remoteSuggest = debounce(async (q) => { if (!q) return; try { const j = await fetchJSON('/.netlify/functions/ebay-category-suggestions?q='+encodeURIComponent(q)); applyOptions(j.suggestions||[]); } catch(e){ msg1.textContent = 'Suggest error'; } }, 350);
@@ -280,7 +285,7 @@
         const id = opt ? opt.getAttribute('data-id') : '';
         if (id) { categoryIdEl.value = id; nextBtn.disabled = false; return; }
         nextBtn.disabled = !categoryIdEl.value.trim();
-        if (val.length >= 2) {
+        if (val.length >= 1) {
           const rows = CAT_ROWS || await loadCategoriesCsv();
           if (rows) { localSuggest(val); }
           else {
