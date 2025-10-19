@@ -171,6 +171,30 @@
           else msg.textContent = 'Error: ' + (data.error || JSON.stringify(data));
         } catch(e){ msg.textContent='Error: '+e.message; }
       });
+
+      async function loadCategoryList(q) {
+        try {
+          const url = '/.netlify/functions/ebay-category-tree' + (q ? ('?q='+encodeURIComponent(q)) : '');
+          const j = await fetchJSON(url);
+          applyOptions(j.results || []);
+          if (!q) { msg1.textContent = `Loaded ${j.count||0} categories (showing ${j.results?.length||0})`; }
+        } catch(e) { msg1.textContent = 'Category load error'; }
+      }
+      // Initial pre-load of dropdown options (top slice)
+      loadCategoryList('vitamin'); // seed with a common word to limit initial size
+      // As the user types in the category picker, we can refine
+      if (picker) picker.addEventListener('input', () => {
+        const val = picker.value.trim();
+        const opt = Array.from(datalist.options).find(o=>o.value===val);
+        updatePreview(opt);
+        const id = opt ? opt.getAttribute('data-id') : '';
+        if (id) { categoryIdEl.value = id; nextBtn.disabled = false; }
+        else {
+          nextBtn.disabled = !categoryIdEl.value.trim();
+          // If user typed text that doesn't match an option, try to fetch filtered list
+          if (val && !opt) loadCategoryList(val);
+        }
+      });
     </script>
   </body>
   </html>
