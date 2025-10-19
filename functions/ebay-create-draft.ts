@@ -65,21 +65,28 @@ export const handler: Handler = async (event) => {
     }
 
     // 2) Use first available business policies
-    async function pickPolicy(path: string, preferName?: string): Promise<string | null> {
+    async function pickPolicy(path: string, preferNames?: string[]): Promise<string | null> {
       const url = `${apiHost}${path}?marketplace_id=${MARKETPLACE_ID}`;
       const res = await fetch(url, { headers: commonHeaders });
       const json = (await res.json()) as any;
       const list = json.fulfillmentPolicies || json.paymentPolicies || json.returnPolicies || [];
       if (!Array.isArray(list) || list.length === 0) return null;
-      if (preferName) {
-        const found = list.find((p: any) => (p?.name || "").toLowerCase() === preferName.toLowerCase());
-        if (found?.id) return found.id;
+      if (preferNames && preferNames.length) {
+        for (const nm of preferNames) {
+          const found = list.find((p: any) => (p?.name || "").toLowerCase() === nm.toLowerCase());
+          if (found) {
+            const pid = found.id || found.fulfillmentPolicyId || found.paymentPolicyId || found.returnPolicyId;
+            if (pid) return pid as string;
+          }
+        }
       }
-      return list[0].id || null;
+      const first = list[0];
+      const pid = first?.id || first?.fulfillmentPolicyId || first?.paymentPolicyId || first?.returnPolicyId;
+      return pid || null;
     }
-    const fulfillmentPolicyId = await pickPolicy("/sell/account/v1/fulfillment_policy", "Default Shipping (Auto)");
-    const paymentPolicyId = await pickPolicy("/sell/account/v1/payment_policy", "Default Payment (Auto)");
-    const returnPolicyId = await pickPolicy("/sell/account/v1/return_policy", "Default Returns (Auto)");
+    const fulfillmentPolicyId = await pickPolicy("/sell/account/v1/fulfillment_policy", ["Default Shipping (Auto)"]);
+    const paymentPolicyId = await pickPolicy("/sell/account/v1/payment_policy", ["Default Payment (Auto)"]);
+    const returnPolicyId = await pickPolicy("/sell/account/v1/return_policy", ["No Returns (Auto)", "Default Returns (Auto)"]);
 
     if (!fulfillmentPolicyId || !paymentPolicyId || !returnPolicyId) {
       const hint = {
