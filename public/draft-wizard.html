@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Create draft · Wizard</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; padding: 2rem; background:#0b1020; color:#f4f6fb; }
+      .card { max-width: 920px; margin: 0 auto 1rem; background: #141a33; border: 1px solid #2a335c; border-radius: 12px; padding: 1rem 1.25rem; }
+      .row { display:flex; gap:.75rem; flex-wrap:wrap }
+      .col { flex:1 1 260px }
+      label { display:block; margin:.35rem 0 }
+      input, textarea, select { background: #0f1530; color: #f4f6fb; border: 1px solid #26305a; border-radius: 8px; padding: .55rem; width:100% }
+      button { background: #4f7cff; color: white; border: none; border-radius: 8px; padding: .7rem 1rem; cursor: pointer; font-weight: 600; }
+      button.secondary { background: transparent; color: #cbd5ff; border: 1px solid #3d4a86; }
+      .muted { color: #a2a9c8; }
+      .inline { display:inline-block }
+      .hide { display:none }
+      details { border: 1px dashed #2a335c; padding:.4rem .6rem; border-radius: 8px; }
+      .hr { margin: .8rem 0; border:none; border-top:1px solid #2a335c }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <a class="secondary" href="/">← Back</a>
+      <h2>Create draft – Step 1: Pick category</h2>
+      <p class="muted">Start with a category so we can populate the right required and optional fields.</p>
+      <div class="row">
+        <div class="col"><label>Title<input id="title" placeholder="Type your listing title"/></label></div>
+        <div class="col"><label>Search categories<input id="catSearch" placeholder="Type keywords e.g., supplements, jeans"/></label></div>
+      </div>
+      <div class="row">
+        <div class="col"><label>Or choose a photo (optional)<input id="photo" type="file" accept="image/*" /></label><small class="muted">We use the file name text for suggestions.</small></div>
+      </div>
+      <div class="row">
+        <div class="col"><label>Category<input id="categoryPicker" list="categoryOptions" placeholder="Start typing or pick a suggestion" /><datalist id="categoryOptions"></datalist></label><div id="categoryPreview" class="muted" style="margin-top:.25rem"></div></div>
+        <div class="col"><label>Category ID<input id="categoryId" placeholder="e.g., 31413"/></label></div>
+      </div>
+      <div style="margin:.5rem 0">
+        <button id="btnNext" disabled>Next →</button>
+        <span id="msg1" class="muted"></span>
+      </div>
+    </div>
+
+    <div id="step2" class="card hide">
+      <h2>Step 2: Details and create</h2>
+      <p id="catPath" class="muted"></p>
+      <div class="row">
+        <div class="col"><label>SKU<input id="sku" placeholder="SKU-123"/></label></div>
+        <div class="col"><label>Price USD<input id="price" type="number" min="0" step="0.01" placeholder="19.99"/></label></div>
+        <div class="col"><label>Qty<input id="qty" type="number" min="1" value="1"/></label></div>
+      </div>
+      <div class="row">
+        <div class="col"><label>Image URLs (comma-separated)<input id="images" placeholder="https://...jpg, https://...png"/></label></div>
+      </div>
+      <div class="row">
+        <div class="col"><label>Description<textarea id="description" rows="3" placeholder="Describe the item, ingredients, material, etc."></textarea></label></div>
+      </div>
+      <div class="row">
+        <div class="col"><label>Condition<select id="condition"></select></label></div>
+        <div class="col"><label>Location<select id="location"></select></label></div>
+      </div>
+      <div class="hr"></div>
+      <div>
+        <h3 style="margin:.2rem 0">Required specifics</h3>
+        <div id="reqAspects" class="row"></div>
+      </div>
+      <details style="margin-top:.6rem">
+        <summary>Optional specifics</summary>
+        <div id="optAspects" class="row" style="margin-top:.4rem"></div>
+      </details>
+      <div style="margin:.8rem 0 .2rem">
+        <button id="btnCreate">Create draft</button>
+        <span id="msg2" class="muted"></span>
+      </div>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const datalist = $('categoryOptions');
+      const picker = $('categoryPicker');
+      const categoryIdEl = $('categoryId');
+      const catPreview = $('categoryPreview');
+      const titleEl = $('title');
+      const searchEl = $('catSearch');
+      const nextBtn = $('btnNext');
+      const step2 = $('step2');
+      const msg1 = $('msg1');
+      const conditionSel = $('condition');
+      const locationSel = $('location');
+
+      async function fetchJSON(url, opts) { const r = await fetch(url, opts); let j; try { j = await r.json(); } catch { j = { raw: await r.text() }; } if (!r.ok) throw Object.assign(new Error('HTTP '+r.status), { response:j, status:r.status }); return j; }
+      const applyOptions = (list) => { datalist.innerHTML = ''; (list||[]).slice(0,80).forEach(item => { const opt = document.createElement('option'); opt.value = `${item.categoryId} — ${item.categoryName}`; opt.setAttribute('data-id', item.categoryId); opt.setAttribute('data-path', item.categoryPath || item.categoryName); datalist.appendChild(opt); }); };
+      const updatePreview = (opt) => { catPreview.textContent = opt ? (opt.getAttribute('data-path')||'') : ''; };
+      const debounce = (fn, ms=300) => { let t; return (...a) => { clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; };
+      const suggest = debounce(async (q) => { if (!q) return; try { const j = await fetchJSON('/.netlify/functions/ebay-category-suggestions?q='+encodeURIComponent(q)); applyOptions(j.suggestions||[]); } catch(e){ msg1.textContent = 'Suggest error'; } }, 350);
+      if (titleEl) titleEl.addEventListener('input', (e)=> suggest(e.target.value));
+      if (searchEl) searchEl.addEventListener('input', (e)=> suggest(e.target.value));
+      const photoEl = $('photo');
+      if (photoEl) photoEl.addEventListener('change', () => { const f = photoEl.files && photoEl.files[0]; if (!f) return; const name = (f.name||'').replace(/\.[^.]+$/, '').replace(/[_-]+/g,' '); if (name) { titleEl.value = titleEl.value||name; suggest(name); } });
+      if (picker) picker.addEventListener('input', () => { const val = picker.value; const opt = Array.from(datalist.options).find(o=>o.value===val); updatePreview(opt); const id = opt ? opt.getAttribute('data-id') : ''; if (id) { categoryIdEl.value = id; nextBtn.disabled = false; } else nextBtn.disabled = !categoryIdEl.value.trim(); });
+      if (categoryIdEl) categoryIdEl.addEventListener('input', () => { nextBtn.disabled = !categoryIdEl.value.trim(); });
+
+      async function loadLocations() {
+        try { const j = await fetchJSON('/.netlify/functions/ebay-list-locations'); const list = j.locations||[]; locationSel.innerHTML=''; list.forEach(loc=>{ const o=document.createElement('option'); o.value = loc.merchantLocationKey; o.textContent = loc.merchantLocationKey + (loc.location?.name? (' — '+loc.location.name):''); locationSel.appendChild(o); }); } catch(e){ locationSel.innerHTML=''; const o=document.createElement('option'); o.value=''; o.textContent='No locations found'; locationSel.appendChild(o); }
+      }
+
+      function renderAspect(containerId, aspect, required){
+        const wrap = document.createElement('div'); wrap.className='col';
+        const id = 'asp_'+(aspect.localizedAspectName||aspect.aspectName).replace(/\s+/g,'_');
+        const label = document.createElement('label'); label.textContent = (aspect.localizedAspectName||aspect.aspectName) + (required?' *':'');
+        const inp = document.createElement('input'); inp.id = id; inp.setAttribute('data-aspect', aspect.aspectName||aspect.localizedAspectName);
+        // Provide datalist of recommended values if present
+        if (Array.isArray(aspect.aspectValues) && aspect.aspectValues.length) {
+          const listId = id+'_list'; const dl = document.createElement('datalist'); dl.id = listId;
+          aspect.aspectValues.slice(0,50).forEach(v=>{ const o=document.createElement('option'); o.value = v.localizedValue || v.value || v; dl.appendChild(o); });
+          inp.setAttribute('list', listId); wrap.appendChild(dl);
+        }
+        wrap.appendChild(label); wrap.appendChild(inp);
+        $(containerId).appendChild(wrap);
+      }
+
+      async function enterStep2(){
+        const cid = categoryIdEl.value.trim(); if (!cid) return;
+        nextBtn.disabled = true; msg1.textContent = 'Loading requirements…';
+        try {
+          const req = await fetchJSON('/.netlify/functions/ebay-category-requirements?categoryId='+encodeURIComponent(cid));
+          // render path and condition
+          $('catPath').textContent = 'Category '+cid;
+          conditionSel.innerHTML='';
+          const conds = req.allowedConditions||[];
+          if (conds.length) conds.forEach(c=>{ const o=document.createElement('option'); o.value=c.conditionId; o.textContent = `${c.conditionId} — ${c.conditionDescription}`; conditionSel.appendChild(o); });
+          else { const o=document.createElement('option'); o.value=''; o.textContent='(none)'; conditionSel.appendChild(o); }
+          // render aspects
+          $('reqAspects').innerHTML=''; $('optAspects').innerHTML='';
+          (req.requiredAspects||[]).forEach(a=>renderAspect('reqAspects', a, true));
+          (req.optionalAspects||[]).forEach(a=>renderAspect('optAspects', a, false));
+          await loadLocations();
+          step2.classList.remove('hide');
+          window.scrollTo({ top: step2.offsetTop - 10, behavior: 'smooth' });
+        } catch(e){ msg1.textContent = 'Requirements error: ' + (e.response?.error || e.message); }
+        finally { nextBtn.disabled = false; }
+      }
+      nextBtn.addEventListener('click', enterStep2);
+
+      function collectAspects(){
+        const map = {};
+        document.querySelectorAll('[id^="asp_"]').forEach((el)=>{
+          const name = el.getAttribute('data-aspect'); const val = el.value.trim(); if (!name || !val) return; map[name] = val; });
+        return map;
+      }
+
+      $('btnCreate').addEventListener('click', async () => {
+        const msg = $('msg2'); msg.textContent='Submitting…';
+        const sku = ($('sku')||{value:''}).value.trim();
+        const title = (titleEl||{value:''}).value.trim();
+        const price = parseFloat(($('price')||{value:''}).value);
+        const qty = parseInt(($('qty')||{value:'1'}).value, 10) || 1;
+        const imagesRaw = ($('images')||{value:''}).value.trim();
+        const images = imagesRaw ? imagesRaw.split(',').map(s=>s.trim()).filter(Boolean) : [];
+        const description = ($('description')||{value:''}).value.trim();
+        const merchantLocationKey = (locationSel||{value:''}).value.trim();
+        const categoryId = (categoryIdEl||{value:''}).value.trim();
+        const condition = (conditionSel||{value:''}).value.trim();
+        if (!sku || !title || !Number.isFinite(price) || !images.length) { msg.textContent='Please provide SKU, title, price, and at least one image URL.'; return; }
+        const aspects = collectAspects();
+        try {
+          const r = await fetch('/.netlify/functions/ebay-create-draft', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sku, title, price, qty, images, merchantLocationKey, categoryId, description: description||undefined, condition: condition||undefined, aspects: Object.keys(aspects).length? aspects: undefined }) });
+          const data = await r.json();
+          if (r.ok && data.ok) { msg.textContent = 'Draft created: ' + (data.draftOffer?.offerId||'unknown'); }
+          else msg.textContent = 'Error: ' + (data.error || JSON.stringify(data));
+        } catch(e){ msg.textContent='Error: '+e.message; }
+      });
+    </script>
+  </body>
+  </html>
