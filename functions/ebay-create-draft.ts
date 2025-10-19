@@ -41,6 +41,7 @@ export const handler: Handler = async (event) => {
     const commonHeaders = {
       Authorization: `Bearer ${access_token}`,
       "Content-Type": "application/json",
+      Accept: "application/json",
       "Accept-Language": "en-US",
       "Content-Language": "en-US",
       "X-EBAY-C-MARKETPLACE-ID": MARKETPLACE_ID,
@@ -53,7 +54,8 @@ export const handler: Handler = async (event) => {
       availability: { shipToLocationAvailability: { quantity: qty } },
     } as any;
 
-    let r = await fetch(`${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`, {
+    const invUrl = `${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
+    let r = await fetch(invUrl, {
       method: "PUT",
       headers: commonHeaders,
       body: JSON.stringify(invPayload),
@@ -61,11 +63,12 @@ export const handler: Handler = async (event) => {
     if (!r.ok) {
       let detail: any = undefined;
       try { detail = await r.json(); } catch { detail = await r.text(); }
-      return { statusCode: r.status, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "inventory put failed", detail }) };
+      return { statusCode: r.status, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "inventory put failed", url: invUrl, detail }) };
     }
 
     // 2) Verify Inventory Location exists
-    const locRes = await fetch(`${apiHost}/sell/inventory/v1/location/${encodeURIComponent(mlk)}`, { headers: commonHeaders });
+    const locUrl = `${apiHost}/sell/inventory/v1/location/${encodeURIComponent(mlk)}`;
+    const locRes = await fetch(locUrl, { headers: commonHeaders });
     if (locRes.status === 404) {
       return {
         statusCode: 400,
@@ -75,6 +78,7 @@ export const handler: Handler = async (event) => {
           detail: {
             message: `Inventory location '${mlk}' not found. Initialize it before creating offers.`,
             initUrl: "/.netlify/functions/ebay-init-location",
+            checkUrl: locUrl,
           },
         }),
       };
@@ -131,16 +135,16 @@ export const handler: Handler = async (event) => {
       pricingSummary: { price: { currency: "USD", value: price.toFixed(2) } },
       listingPolicies: { fulfillmentPolicyId, paymentPolicyId, returnPolicyId },
       merchantLocationKey: mlk,
-      tax: { applyTax: false },
     };
 
-    r = await fetch(`${apiHost}/sell/inventory/v1/offer`, {
+    const offerUrl = `${apiHost}/sell/inventory/v1/offer`;
+    r = await fetch(offerUrl, {
       method: "POST",
       headers: commonHeaders,
       body: JSON.stringify(offerPayload),
     });
     const offerRes = await r.json();
-  if (!r.ok) return { statusCode: r.status, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "offer create failed", detail: offerRes }) };
+  if (!r.ok) return { statusCode: r.status, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "offer create failed", url: offerUrl, payload: offerPayload, detail: offerRes }) };
 
     return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ok: true, draftOffer: offerRes }) };
   } catch (e: any) {
