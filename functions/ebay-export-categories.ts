@@ -20,7 +20,7 @@ export const handler: Handler = async (event) => {
     // Helper to fetch and flatten taxonomy tree
     async function fetchAndFlatten(): Promise<{ treeId: string; categories: FlatCategory[] }>{
       const { access_token } = await appAccessToken([
-        "https://api.ebay.com/oauth/api_scope/commerce.taxonomy.readonly",
+        "https://api.ebay.com/oauth/api_scope",
       ]);
       const headers = {
         Authorization: `Bearer ${access_token}`,
