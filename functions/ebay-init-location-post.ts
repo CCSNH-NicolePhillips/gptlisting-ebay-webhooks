@@ -25,8 +25,13 @@ export const handler: Handler = async (event) => {
     const stateOrProvince = (qs["state"] || process.env.SHIP_STATE || "ST").toString();
     const postalCode = (qs["postal"] || process.env.SHIP_POSTAL || "00000").toString();
     const country = ((qs["country"] || process.env.SHIP_COUNTRY || "US") as string).toUpperCase();
-    const phone = (qs["phone"] || process.env.SHIP_PHONE || "6038511950").toString();
+  const phone = (qs["phone"] || process.env.SHIP_PHONE || "6038511950").toString();
+  const lat = qs["lat"] ? parseFloat(qs["lat"]) : undefined;
+  const lng = qs["lng"] ? parseFloat(qs["lng"]) : undefined;
     const omitTypes = String(qs["omitTypes"] || "false").toLowerCase() === "true";
+  const minimal = String(qs["minimal"] || "false").toLowerCase() === "true";
+  const noPhone = String(qs["noPhone"] || "false").toLowerCase() === "true";
+  const noHours = String(qs["noHours"] || "false").toLowerCase() === "true";
 
     const payload: any = {
       name,
@@ -40,14 +45,19 @@ export const handler: Handler = async (event) => {
           postalCode,
           country,
         },
-        phone,
-        operatingHours: [
-          { dayOfWeekEnum: "MONDAY",    interval: [{ open: "09:00:00", close: "17:00:00" }] },
-          { dayOfWeekEnum: "TUESDAY",   interval: [{ open: "09:00:00", close: "17:00:00" }] },
-          { dayOfWeekEnum: "WEDNESDAY", interval: [{ open: "09:00:00", close: "17:00:00" }] },
-          { dayOfWeekEnum: "THURSDAY",  interval: [{ open: "09:00:00", close: "17:00:00" }] },
-          { dayOfWeekEnum: "FRIDAY",    interval: [{ open: "09:00:00", close: "17:00:00" }] },
-        ],
+        ...(lat !== undefined && lng !== undefined ? { geoCoordinates: { latitude: lat, longitude: lng } } : {}),
+        ...(!minimal && !noPhone ? { phone } : {}),
+        ...(!minimal && !noHours
+          ? {
+              operatingHours: [
+                { dayOfWeekEnum: "MONDAY",    interval: [{ open: "09:00:00", close: "17:00:00" }] },
+                { dayOfWeekEnum: "TUESDAY",   interval: [{ open: "09:00:00", close: "17:00:00" }] },
+                { dayOfWeekEnum: "WEDNESDAY", interval: [{ open: "09:00:00", close: "17:00:00" }] },
+                { dayOfWeekEnum: "THURSDAY",  interval: [{ open: "09:00:00", close: "17:00:00" }] },
+                { dayOfWeekEnum: "FRIDAY",    interval: [{ open: "09:00:00", close: "17:00:00" }] },
+              ],
+            }
+          : {}),
       },
     };
     if (!omitTypes) payload.locationTypes = ["WAREHOUSE"];
