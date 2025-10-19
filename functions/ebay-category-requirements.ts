@@ -24,9 +24,14 @@ export const handler: Handler = async (event) => {
     const condRes = await fetch(condUrl, { headers });
     const condJson = await condRes.json().catch(() => ({}));
 
-    // 2) Get required and optional aspects for the category
-    const taxUrl = `${apiHost}/commerce/taxonomy/v1/category_tree/0/get_item_aspects_for_category?category_id=${encodeURIComponent(categoryId)}`;
-    const taxRes = await fetch(taxUrl, { headers });
+  // 2) Resolve default taxonomy tree id for this marketplace
+  const treeIdRes = await fetch(`${apiHost}/commerce/taxonomy/v1/get_default_category_tree_id?marketplace_id=${MARKETPLACE_ID}`, { headers });
+  const treeJson = await treeIdRes.json().catch(() => ({}));
+  const treeId = treeJson?.categoryTreeId ?? '0';
+
+  // 3) Get required and optional aspects for the category using the resolved tree id
+  const taxUrl = `${apiHost}/commerce/taxonomy/v1/category_tree/${encodeURIComponent(treeId)}/get_item_aspects_for_category?category_id=${encodeURIComponent(categoryId)}`;
+  const taxRes = await fetch(taxUrl, { headers });
     const taxJson = await taxRes.json().catch(() => ({}));
 
     // Normalize output
@@ -45,7 +50,7 @@ export const handler: Handler = async (event) => {
         allowedConditions,
         requiredAspects,
         optionalAspects,
-        raw: { conditions: condJson, taxonomy: taxJson },
+        raw: { conditions: condJson, taxonomy: taxJson, tree: treeJson },
       }),
     };
   } catch (e: any) {
