@@ -4,7 +4,7 @@ import { tokensStore } from "./_blobs.js";
 
 function tryJson(t: string) { try { return JSON.parse(t); } catch { return t; } }
 
-export const handler: Handler = async () => {
+export const handler: Handler = async (event) => {
   try {
     // Prefer stored user token; fallback to env diagnostic token
     const store = tokensStore();
@@ -15,22 +15,32 @@ export const handler: Handler = async () => {
     const { access_token } = await accessTokenFromRefresh(refresh);
   const { apiHost } = tokenHosts(process.env.EBAY_ENV);
   const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || "EBAY_US";
-    const key = process.env.EBAY_MERCHANT_LOCATION_KEY || "default-loc";
+    const qs = (event?.queryStringParameters || {}) as Record<string, string>;
+    const keyRaw = qs["key"] || process.env.EBAY_MERCHANT_LOCATION_KEY || "default-loc";
+    const key = String(keyRaw).trim().replace(/\s+/g, "-");
 
-    const payload = {
-      name: process.env.SHIP_NAME || "Home",
+    const name = (qs["name"] || process.env.SHIP_NAME || "Home").toString();
+    const addressLine1 = (qs["address1"] || process.env.SHIP_ADDRESS1 || "Address line 1").toString();
+    const city = (qs["city"] || process.env.SHIP_CITY || "City").toString();
+    const stateOrProvince = (qs["state"] || process.env.SHIP_STATE || "ST").toString();
+    const postalCode = (qs["postal"] || process.env.SHIP_POSTAL || "00000").toString();
+    const country = ((qs["country"] || process.env.SHIP_COUNTRY || "US") as string).toUpperCase();
+    const phone = (qs["phone"] || process.env.SHIP_PHONE || "6038511950").toString();
+    const omitTypes = String(qs["omitTypes"] || "false").toLowerCase() === "true";
+
+    const payload: any = {
+      name,
       merchantLocationStatus: "ENABLED",
       merchantLocationKey: key,
-      locationTypes: ["WAREHOUSE"],
       location: {
         address: {
-          addressLine1: process.env.SHIP_ADDRESS1 || "Address line 1",
-          city: process.env.SHIP_CITY || "City",
-          stateOrProvince: process.env.SHIP_STATE || "ST",
-          postalCode: process.env.SHIP_POSTAL || "00000",
-          country: process.env.SHIP_COUNTRY || "US",
+          addressLine1,
+          city,
+          stateOrProvince,
+          postalCode,
+          country,
         },
-        phone: process.env.SHIP_PHONE || "6038511950",
+        phone,
         operatingHours: [
           { dayOfWeekEnum: "MONDAY",    interval: [{ open: "09:00:00", close: "17:00:00" }] },
           { dayOfWeekEnum: "TUESDAY",   interval: [{ open: "09:00:00", close: "17:00:00" }] },
@@ -40,9 +50,10 @@ export const handler: Handler = async () => {
         ],
       },
     };
+    if (!omitTypes) payload.locationTypes = ["WAREHOUSE"];
 
     const url = `${apiHost}/sell/inventory/v1/location`;
-    const resp = await fetch(url, {
+    let resp = await fetch(url, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${access_token}`,
@@ -58,8 +69,32 @@ export const handler: Handler = async () => {
     if (resp.status === 201 || resp.status === 409) {
       return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ok: true, key, status: resp.status, methodUsed: "POST /location" }) };
     }
-    const text = await resp.text();
-  return { statusCode: resp.status, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "post-location failed", status: resp.status, url, marketplaceId: MARKETPLACE_ID, payload, response: tryJson(text) }) };
+    let text = await resp.text();
+    let parsed = tryJson(text);
+    // Fallback: try PUT /location/{key} if POST got a generic 2004
+    const shouldFallback = resp.status === 400 && parsed?.errors?.[0]?.errorId === 2004;
+    if (shouldFallback) {
+      const putUrl = `${apiHost}/sell/inventory/v1/location/${encodeURIComponent(key)}`;
+      resp = await fetch(putUrl, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${access_token}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          "Accept-Language": "en-US",
+          "Content-Language": "en-US",
+          "X-EBAY-C-MARKETPLACE-ID": MARKETPLACE_ID,
+        },
+        body: JSON.stringify(payload),
+      });
+      if ([200, 201, 204, 409].includes(resp.status)) {
+        return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ok: true, key, status: resp.status, methodUsed: "PUT /location/{key}" }) };
+      }
+      text = await resp.text();
+      parsed = tryJson(text);
+      return { statusCode: resp.status, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "both-post-and-put-failed", postUrl: url, putUrl, status: resp.status, marketplaceId: MARKETPLACE_ID, payload, response: parsed }) };
+    }
+    return { statusCode: resp.status, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "post-location failed", status: resp.status, url, marketplaceId: MARKETPLACE_ID, payload, response: parsed }) };
   } catch (e: any) {
     return { statusCode: 500, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: `init-location error: ${e.message}` }) };
   }
