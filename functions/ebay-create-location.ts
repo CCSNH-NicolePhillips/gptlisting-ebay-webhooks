@@ -16,7 +16,8 @@ export const handler: Handler = async (event) => {
       };
     const { access_token } = await accessTokenFromRefresh(refresh);
 
-    const { apiHost } = tokenHosts(process.env.EBAY_ENV);
+  const { apiHost } = tokenHosts(process.env.EBAY_ENV);
+  const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || "EBAY_US";
     const qs = (event?.queryStringParameters || {}) as Record<string, string>;
     const keyRaw = qs["key"] || process.env.EBAY_MERCHANT_LOCATION_KEY || "default-loc";
     const key = String(keyRaw).trim().replace(/\s+/g, "-");
@@ -46,13 +47,14 @@ export const handler: Handler = async (event) => {
       if (zipMatch) postalCode = zipMatch[2] ? `${zipMatch[1]}-${zipMatch[2]}` : zipMatch[1];
     }
 
-    const payload = {
+    const payload: any = {
       name,
       merchantLocationStatus: "ENABLED",
       location: { address: { addressLine1, city, stateOrProvince, postalCode, country } },
       merchantLocationKey: key,
-      locationTypes: ["WAREHOUSE"],
     };
+    const omitTypes = String(qs["omitTypes"] || "false").toLowerCase() === "true";
+    if (!omitTypes) payload.locationTypes = ["WAREHOUSE"];
 
     const url = `${apiHost}/sell/inventory/v1/location`;
     const resp = await fetch(url, {
@@ -63,6 +65,7 @@ export const handler: Handler = async (event) => {
         Accept: "application/json",
         "Accept-Language": "en-US",
         "Content-Language": "en-US",
+        "X-EBAY-C-MARKETPLACE-ID": MARKETPLACE_ID,
       },
       body: JSON.stringify(payload),
     });
@@ -78,7 +81,7 @@ export const handler: Handler = async (event) => {
     return {
       statusCode: resp.status,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ error: "post-location failed", status: resp.status, url, payload, response: json }),
+      body: JSON.stringify({ error: "post-location failed", status: resp.status, url, marketplaceId: MARKETPLACE_ID, payload, response: json }),
     };
   } catch (e: any) {
     return { statusCode: 500, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "create-location error", detail: e?.message || String(e) }) };
