@@ -11,8 +11,10 @@
       .row { display: flex; gap: 1rem; flex-wrap: wrap; }
       .col { flex: 1 1 280px; background: #0f1530; border: 1px solid #26305a; padding: 1rem; border-radius: 10px; }
       .status { font-size: .9rem; opacity: .9; }
-      button { background: #4f7cff; color: white; border: none; border-radius: 8px; padding: .7rem 1rem; cursor: pointer; font-weight: 600; }
+  button { background: #4f7cff; color: white; border: none; border-radius: 8px; padding: .7rem 1rem; cursor: pointer; font-weight: 600; }
+  .btn { background: #4f7cff; color: white; border-radius: 8px; padding: .7rem 1rem; cursor: pointer; font-weight: 600; text-decoration: none; display: inline-block; }
       button.secondary { background: transparent; color: #cbd5ff; border: 1px solid #3d4a86; }
+  .btn.secondary { background: transparent; color: #cbd5ff; border: 1px solid #3d4a86; }
       button:disabled { opacity: .5; cursor: not-allowed; }
       a { color: #a8c1ff; }
       .small { font-size: .85rem; opacity: .8; }
@@ -29,7 +31,7 @@
           <h3>Dropbox</h3>
           <p class="status" id="dbxStatus">Loading…</p>
           <div>
-            <button id="dbxConnect">Connect Dropbox</button>
+            <a id="dbxConnect" class="btn" href="/.netlify/functions/dropbox-oauth-start">Connect Dropbox</a>
             <button id="dbxDisconnect" class="secondary">Disconnect</button>
           </div>
         </div>
@@ -37,7 +39,7 @@
           <h3>eBay (Production)</h3>
           <p class="status" id="ebayStatus">Loading…</p>
           <div>
-            <button id="ebayConnect">Connect eBay</button>
+            <a id="ebayConnect" class="btn" href="/.netlify/functions/ebay-oauth-start">Connect eBay</a>
             <button id="ebayDisconnect" class="secondary">Disconnect</button>
           </div>
         </div>
@@ -82,12 +84,7 @@
         return connected;
       }
 
-      document.getElementById('dbxConnect').onclick = () => {
-        window.location.href='/.netlify/functions/dropbox-oauth-start';
-      };
-      document.getElementById('ebayConnect').onclick = () => {
-        window.location.href='/.netlify/functions/ebay-oauth-start';
-      };
+      // Connect links now navigate directly via anchor hrefs above
       document.getElementById('dbxDisconnect').onclick = async () => {
         await fetch('/.netlify/functions/status?dropbox=disconnect', { method: 'POST' });
         refreshStatus();
