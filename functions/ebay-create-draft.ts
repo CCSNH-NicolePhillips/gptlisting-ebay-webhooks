@@ -17,11 +17,15 @@ export const handler: Handler = async (event) => {
     const sku = body.sku as string | undefined;
     const title = body.title as string | undefined;
     const price = typeof body.price === "number" ? body.price : parseFloat(body.price);
-    const image = body.image as string | undefined;
+  const image = body.image as string | undefined;
     const images = (Array.isArray(body.images) ? body.images : undefined) as string[] | undefined;
     const qty = body.qty ? Number(body.qty) : 1;
     const categoryId = body.categoryId as string | undefined;
     const description = (body.description as string | undefined) || title;
+  const overrideFulfillment = (body.fulfillmentPolicyId as string | undefined) || undefined;
+  const overridePayment = (body.paymentPolicyId as string | undefined) || undefined;
+  const overrideReturns = (body.returnPolicyId as string | undefined) || undefined;
+  const overrideLocationKey = (body.merchantLocationKey as string | undefined) || undefined;
 
     const primaryImage = image || images?.[0];
     if (!sku || !title || !primaryImage || !Number.isFinite(price)) {
@@ -36,7 +40,7 @@ export const handler: Handler = async (event) => {
     const { access_token } = await accessTokenFromRefresh(refresh);
 
     const { apiHost } = tokenHosts(process.env.EBAY_ENV);
-    const mlk = process.env.EBAY_MERCHANT_LOCATION_KEY || "default-loc";
+  const mlk = overrideLocationKey || process.env.EBAY_MERCHANT_LOCATION_KEY || "default-loc";
   const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || "EBAY_US";
     const commonHeaders = {
       Authorization: `Bearer ${access_token}`,
