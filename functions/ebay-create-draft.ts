@@ -18,7 +18,9 @@ export const handler: Handler = async (event) => {
     const image = (body.image ?? qs["image"]) as string | undefined;
     const images = (Array.isArray(body.images) ? body.images : (qs["images"] ? String(qs["images"]).split(",") : undefined)) as string[] | undefined;
     const qty = body.qty ? Number(body.qty) : (qs["qty"] ? Number(qs["qty"]) : 1);
-    const categoryId = (body.categoryId ?? qs["categoryId"]) as string | undefined;
+  const categoryId = (body.categoryId ?? qs["categoryId"]) as string | undefined;
+  const condition = (body.condition ?? qs["condition"]) as string | number | undefined;
+  const aspects = (body.aspects ?? (qs["aspects"] ? JSON.parse(qs["aspects"]) : undefined)) as Record<string, string | string[]> | undefined;
     const description = ((body.description as string | undefined) ?? qs["description"] ?? title) as string | undefined;
     const overrideFulfillment = ((body.fulfillmentPolicyId as string | undefined) ?? (qs["fulfillmentPolicyId"] as string | undefined)) || undefined;
     const overridePayment = ((body.paymentPolicyId as string | undefined) ?? (qs["paymentPolicyId"] as string | undefined)) || undefined;
@@ -56,7 +58,12 @@ export const handler: Handler = async (event) => {
       sku,
       product: { title, description, imageUrls: images ?? [primaryImage] },
       availability: { shipToLocationAvailability: { quantity: qty } },
+      condition: condition !== undefined ? (typeof condition === 'string' ? condition : Number(condition)) : undefined,
+      aspects: undefined,
     } as any;
+    if (aspects && typeof aspects === 'object') {
+      invPayload.product.aspects = aspects; // inventory_item product.aspects
+    }
 
     const invUrl = `${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
     let r = await fetch(invUrl, {
@@ -145,6 +152,10 @@ export const handler: Handler = async (event) => {
       listingPolicies: { fulfillmentPolicyId: overrideFulfillment || fulfillmentPolicyId, paymentPolicyId: overridePayment || paymentPolicyId, returnPolicyId: overrideReturns || returnPolicyId },
       merchantLocationKey: mlk,
     };
+    // Include condition on offer if provided
+    if (condition !== undefined) {
+      (offerPayload as any).condition = typeof condition === 'string' ? condition : Number(condition);
+    }
 
     const offerUrl = `${apiHost}/sell/inventory/v1/offer`;
     r = await fetch(offerUrl, {
