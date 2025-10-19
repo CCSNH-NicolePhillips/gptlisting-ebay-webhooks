@@ -16,8 +16,14 @@ export async function accessTokenFromRefresh(refreshToken: string) {
   const body = new URLSearchParams({
     grant_type: "refresh_token",
     refresh_token: refreshToken,
-    scope:
-      "https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/sell.account",
+    scope: [
+      "https://api.ebay.com/oauth/api_scope", // base
+      "https://api.ebay.com/oauth/api_scope/sell.account",
+      "https://api.ebay.com/oauth/api_scope/sell.inventory",
+      // read-only scopes for taxonomy/metadata lookups
+      "https://api.ebay.com/oauth/api_scope/commerce.taxonomy.readonly",
+      "https://api.ebay.com/oauth/api_scope/sell.metadata.readonly",
+    ].join(" "),
   });
 
   const res = await fetch(`${tokenHost}/identity/v1/oauth2/token`, {
