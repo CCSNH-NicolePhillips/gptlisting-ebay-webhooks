@@ -64,16 +64,13 @@ export const handler: Handler = async (event) => {
       (payload as any).locationTypes = ["WAREHOUSE"]; // eBay allowed values: WAREHOUSE, STORE
     }
 
-    const url = `${apiHost}/sell/inventory/v1/location/${encodeURIComponent(key)}`;
+    // CREATE the location (POST)
+    const url = `${apiHost}/sell/inventory/v1/location`;
     const r = await fetch(url, {
-      method: "PUT",
+      method: "POST",
       headers: {
         Authorization: `Bearer ${access_token}`,
         "Content-Type": "application/json",
-        Accept: "application/json",
-        "Accept-Language": "en-US",
-        "Content-Language": "en-US",
-        "X-EBAY-C-MARKETPLACE-ID": MARKETPLACE_ID,
       },
       body: JSON.stringify(payload),
     });
@@ -81,29 +78,20 @@ export const handler: Handler = async (event) => {
     const text = await r.text();
     let json: any;
     try { json = JSON.parse(text); } catch { json = { raw: text }; }
-    // Treat 200, 201, 204, 409 as success to be idempotent
-    if ([200, 201, 204, 409].includes(r.status)) {
+    // Treat 201 Created or 409 Already Exists as success
+    if (r.status === 201 || r.status === 409) {
       return {
         statusCode: 200,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ok: true, key, status: r.status, url }),
+        body: JSON.stringify({ ok: true, key }),
       };
     }
-    if (!r.ok) {
-      return {
-        statusCode: r.status,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          error: "init-location failed",
-          step: "put-location",
-          url,
-          status: r.status,
-          payload,
-          response: json,
-        }),
-      };
-    }
-    return { statusCode: r.status, headers: { "Content-Type": "application/json" }, body: JSON.stringify(json) };
+    // Otherwise, return detailed diagnostics
+    return {
+      statusCode: r.status,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ error: "create-location failed", status: r.status, url, payload, response: json }),
+    };
   } catch (e: any) {
     return { statusCode: 500, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: `init-location error: ${e.message}` }) };
   }
