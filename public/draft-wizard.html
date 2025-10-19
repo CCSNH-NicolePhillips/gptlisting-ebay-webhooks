@@ -113,6 +113,7 @@
   // Category CSV data (if available)
   let CAT_ROWS = null; // Array of {categoryId, categoryName, categoryPath}
   let CAT_TREE = null; // Tree built from CSV paths
+  let ID_INDEX = null; // Map of id -> { leaf, path, name }
 
       async function fetchJSON(url, opts) { const r = await fetch(url, opts); let j; try { j = await r.json(); } catch { j = { raw: await r.text() }; } if (!r.ok) throw Object.assign(new Error('HTTP '+r.status), { response:j, status:r.status }); return j; }
       const applyOptions = (list) => { datalist.innerHTML = ''; (list||[]).slice(0,80).forEach(item => { const opt = document.createElement('option'); opt.value = `${item.categoryId} — ${item.categoryName}`; opt.setAttribute('data-id', item.categoryId); opt.setAttribute('data-path', item.categoryPath || item.categoryName); datalist.appendChild(opt); }); };
@@ -120,7 +121,8 @@
       const debounce = (fn, ms=300) => { let t; return (...a) => { clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; };
       async function loadCategoriesCsv(){
         if (CAT_ROWS) return CAT_ROWS;
-        const tryUrls = [ '/taxonomy-categories-EBAY_US.csv' ];
+        // Prefer relative (served from public/) then absolute
+        const tryUrls = [ 'taxonomy-categories-EBAY_US.csv', '/taxonomy-categories-EBAY_US.csv' ];
         let text = null;
         for (const url of tryUrls){
           try { const r = await fetch(url); if (r.ok) { text = await r.text(); break; } } catch {}
@@ -150,6 +152,7 @@
         CAT_ROWS = rows;
         // build tree
         const root = { name:'Root', children: new Map(), path: '', leaf:false };
+        const idIndex = new Map();
         rows.forEach(r=>{
           const parts = (r.categoryPath||r.categoryName).split(' > ').filter(Boolean);
           let node = root; let pathAcc=[];
@@ -160,8 +163,9 @@
           }
           // mark leaf and attach id
           node.leaf = true; node.id = r.categoryId; node.path = r.categoryPath || pathAcc.join(' > ');
+          idIndex.set(String(r.categoryId), { leaf: true, path: node.path, name: parts[parts.length-1] || r.categoryName });
         });
-        CAT_TREE = root;
+        CAT_TREE = root; ID_INDEX = idIndex;
         return rows;
       }
 
@@ -290,7 +294,13 @@
         const opt = Array.from(datalist.options).find(o=>o.value===val);
         updatePreview(opt);
         const id = opt ? opt.getAttribute('data-id') : '';
-        if (id) { categoryIdEl.value = id; nextBtn.disabled = false; return; }
+        if (id) {
+          categoryIdEl.value = id;
+          // If we have CSV index, enforce leaf-only choice
+          if (ID_INDEX && ID_INDEX.get(String(id))?.leaf) { nextBtn.disabled = false; msg1.textContent = ''; }
+          else { nextBtn.disabled = true; msg1.textContent = 'Please pick a subcategory (leaf) via Browse or refine your search.'; }
+          return;
+        }
         nextBtn.disabled = !categoryIdEl.value.trim();
         if (val.length >= 1) {
           const rows = CAT_ROWS || await loadCategoriesCsv();

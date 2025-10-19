@@ -1,18 +1,33 @@
 import type { Handler } from "@netlify/functions";
-import { tokenHosts, appAccessToken } from "./_common.js";
+import { tokenHosts, appAccessToken, accessTokenFromRefresh } from "./_common.js";
+import { tokensStore } from "./_blobs.js";
 
 export const handler: Handler = async (event) => {
   try {
     const categoryId = event.queryStringParameters?.categoryId;
     if (!categoryId) return { statusCode: 400, body: JSON.stringify({ error: "missing categoryId" }) };
-    const { access_token } = await appAccessToken([
-      "https://api.ebay.com/oauth/api_scope/commerce.taxonomy.readonly",
-      "https://api.ebay.com/oauth/api_scope/sell.metadata.readonly",
-    ]);
     const { apiHost } = tokenHosts(process.env.EBAY_ENV);
     const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || "EBAY_US";
+    async function getToken(): Promise<string> {
+      try {
+        const a = await appAccessToken(["https://api.ebay.com/oauth/api_scope"]);
+        return a.access_token;
+      } catch (e: any) {
+        const msg = String(e?.message || e);
+        if (msg.includes("invalid_scope")) {
+          const store = tokensStore();
+          const saved = (await store.get("ebay.json", { type: "json" })) as any;
+          const refresh = saved?.refresh_token as string | undefined;
+          if (!refresh) throw new Error("invalid_scope and no user refresh token; connect eBay first");
+          const u = await accessTokenFromRefresh(refresh);
+          return u.access_token;
+        }
+        throw e;
+      }
+    }
+    const bearer = await getToken();
     const headers = {
-      Authorization: `Bearer ${access_token}`,
+      Authorization: `Bearer ${bearer}`,
       Accept: "application/json",
       "Accept-Language": "en-US",
       "Content-Language": "en-US",
@@ -21,7 +36,7 @@ export const handler: Handler = async (event) => {
 
     // 1) Get allowed item conditions for the category
     const condUrl = `${apiHost}/sell/metadata/v1/marketplace/${MARKETPLACE_ID}/get_item_condition_policies?category_id=${encodeURIComponent(categoryId)}`;
-    const condRes = await fetch(condUrl, { headers });
+  const condRes = await fetch(condUrl, { headers });
     const condJson = await condRes.json().catch(() => ({}));
 
   // 2) Resolve default taxonomy tree id for this marketplace
