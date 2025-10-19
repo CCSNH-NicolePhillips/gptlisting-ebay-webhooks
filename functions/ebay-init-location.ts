@@ -90,6 +90,15 @@ export const handler: Handler = async (event) => {
         body: JSON.stringify({ ok: true, key }),
       };
     }
+    // Some accounts return 400 with errorId 25803 when the key already exists
+    const errId = json?.errors?.[0]?.errorId;
+    if (r.status === 400 && errId === 25803) {
+      return {
+        statusCode: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ok: true, key, exists: true, status: 409 }),
+      };
+    }
     // Otherwise, return detailed diagnostics
     return {
       statusCode: r.status,
