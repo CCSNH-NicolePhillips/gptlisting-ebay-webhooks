@@ -48,6 +48,51 @@
       </div>
 
       <hr style="margin:1.5rem 0; border:none; border-top:1px solid #2a335c"/>
+      <h2>Onboarding</h2>
+      <p class="muted">Once connected, set your ship-from location and create default business policies. You can customize or select policies per listing.</p>
+      <div class="row">
+        <div class="col">
+          <h3>Ship-from address</h3>
+          <div class="row">
+            <div class="col"><label>Location Key<br/><input id="locKey" placeholder="home" style="width:100%"/></label></div>
+            <div class="col"><label>Name<br/><input id="locName" placeholder="Home" style="width:100%"/></label></div>
+          </div>
+          <div class="row">
+            <div class="col"><label>Address 1<br/><input id="locAddr1" placeholder="123 Main St" style="width:100%"/></label></div>
+            <div class="col"><label>City<br/><input id="locCity" placeholder="City" style="width:100%"/></label></div>
+          </div>
+          <div class="row">
+            <div class="col"><label>State/Prov<br/><input id="locState" placeholder="NH" style="width:100%"/></label></div>
+            <div class="col"><label>Postal<br/><input id="locPostal" placeholder="03101" style="width:100%"/></label></div>
+          </div>
+          <div class="row">
+            <div class="col"><label>Country<br/><input id="locCountry" placeholder="US" style="width:100%"/></label></div>
+          </div>
+          <div><button id="initLocationBtn" class="secondary" disabled>Initialize location</button> <span id="initLocationMsg" class="small"></span></div>
+        </div>
+        <div class="col">
+          <h3>Policies</h3>
+          <div class="row">
+            <div class="col"><label>Returns preference<br/>
+              <select id="returnsPref" style="width:100%">
+                <option value="default" selected>30-day returns (buyer pays)</option>
+                <option value="no-returns">No returns</option>
+              </select>
+            </label></div>
+          </div>
+          <div><button id="provisionPoliciesBtn" class="secondary" disabled>Create default policies</button> <span id="provisionMsg" class="small"></span></div>
+          <div style="margin-top:.75rem" class="small muted">After provisioning, the dropdowns below will populate for per-listing selection.</div>
+          <div class="row" style="margin-top:.5rem">
+            <div class="col"><label>Fulfillment policy<br/><select id="selFulfillment" style="width:100%"></select></label></div>
+            <div class="col"><label>Payment policy<br/><select id="selPayment" style="width:100%"></select></label></div>
+          </div>
+          <div class="row">
+            <div class="col"><label>Return policy<br/><select id="selReturn" style="width:100%"></select></label></div>
+          </div>
+        </div>
+      </div>
+
+      <hr style="margin:1.5rem 0; border:none; border-top:1px solid #2a335c"/>
       <h2>Create draft listing (manual)</h2>
       <p class="muted">Quick form to create a single draft: provide SKU, title, price, and at least one image URL. Category is optional.</p>
       <form id="draftForm" class="col" style="background:#0f1530">
@@ -155,7 +200,24 @@
           msg.textContent = 'Please provide SKU, title, price, and at least one image URL.';
           return;
         }
-        const payload = { sku, title, price, qty, images, categoryId: categoryId || undefined, description: description || undefined, conditionNote: conditionNote || undefined };
+  const selFulfillmentEl = document.getElementById('selFulfillment');
+  const selPaymentEl = document.getElementById('selPayment');
+  const selReturnEl = document.getElementById('selReturn');
+  const locKeyEl = document.getElementById('locKey');
+  const selFulfillment = selFulfillmentEl && 'value' in selFulfillmentEl ? selFulfillmentEl.value : '';
+  const selPayment = selPaymentEl && 'value' in selPaymentEl ? selPaymentEl.value : '';
+  const selReturn = selReturnEl && 'value' in selReturnEl ? selReturnEl.value : '';
+  const locKey = locKeyEl && 'value' in locKeyEl ? locKeyEl.value : '';
+        const payload = {
+          sku, title, price, qty, images,
+          categoryId: categoryId || undefined,
+          description: description || undefined,
+          conditionNote: conditionNote || undefined,
+          fulfillmentPolicyId: selFulfillment || undefined,
+          paymentPolicyId: selPayment || undefined,
+          returnPolicyId: selReturn || undefined,
+          merchantLocationKey: locKey || undefined,
+        };
         msg.textContent = 'Creating draft…';
         try {
           const r = await fetch('/.netlify/functions/ebay-create-draft', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -172,7 +234,66 @@
         }
       });
 
-      refreshStatus();
+      async function loadPoliciesIntoDropdowns() {
+        const res = await fetch('/.netlify/functions/ebay-list-policies');
+        const data = await res.json();
+        function fill(id, list, idKey) {
+          const el = document.getElementById(id);
+          if (!el) return;
+          el.innerHTML = '';
+          const opt0 = document.createElement('option'); opt0.value=''; opt0.textContent='(auto-select)'; el.appendChild(opt0);
+          (list||[]).forEach(p => {
+            const o = document.createElement('option');
+            const pid = p[idKey] || p.id; const name = p.name || pid;
+            o.value = pid; o.textContent = name; el.appendChild(o);
+          });
+        }
+        fill('selFulfillment', data.fulfillment?.json?.fulfillmentPolicies, 'fulfillmentPolicyId');
+        fill('selPayment', data.payment?.json?.paymentPolicies, 'paymentPolicyId');
+        fill('selReturn', data.returns?.json?.returnPolicies, 'returnPolicyId');
+      }
+
+      async function refreshStatusPlus() {
+        await refreshStatus();
+        const s = await (await fetch('/.netlify/functions/status')).json();
+        const enableOnConnected = s.ebay?.connected;
+        document.getElementById('initLocationBtn').disabled = !enableOnConnected;
+        document.getElementById('provisionPoliciesBtn').disabled = !enableOnConnected;
+        if (enableOnConnected) loadPoliciesIntoDropdowns();
+      }
+
+      document.getElementById('initLocationBtn').onclick = async () => {
+        const msg = document.getElementById('initLocationMsg');
+        msg.textContent = 'Saving…';
+  const key = (document.getElementById('locKey') || { value: '' }).value.trim() || 'default-loc';
+  const name = (document.getElementById('locName') || { value: '' }).value.trim() || 'Home';
+  const a1 = (document.getElementById('locAddr1') || { value: '' }).value.trim();
+  const city = (document.getElementById('locCity') || { value: '' }).value.trim();
+  const st = (document.getElementById('locState') || { value: '' }).value.trim();
+  const pc = (document.getElementById('locPostal') || { value: '' }).value.trim();
+  const ctry = (document.getElementById('locCountry') || { value: '' }).value.trim() || 'US';
+        const url = `/.netlify/functions/ebay-init-location?key=${encodeURIComponent(key)}&name=${encodeURIComponent(name)}&address1=${encodeURIComponent(a1)}&city=${encodeURIComponent(city)}&state=${encodeURIComponent(st)}&postal=${encodeURIComponent(pc)}&country=${encodeURIComponent(ctry)}`;
+        try {
+          const r = await fetch(url);
+          const data = await r.json();
+          msg.textContent = r.ok ? 'Location saved' : ('Error: ' + (data.error || JSON.stringify(data)));
+        } catch (e) { msg.textContent = 'Error: ' + e.message; }
+      };
+
+      document.getElementById('provisionPoliciesBtn').onclick = async () => {
+        const msg = document.getElementById('provisionMsg');
+        msg.textContent = 'Provisioning…';
+  const returnsPref = (document.getElementById('returnsPref') || { value: 'default' }).value;
+        const qs = returnsPref === 'no-returns' ? '?returns=false' : '';
+        try {
+          const r = await fetch('/.netlify/functions/ebay-provision-policies' + qs);
+          const data = await r.json();
+          msg.textContent = r.ok ? 'Policies ready' : ('Error: ' + (data.error || JSON.stringify(data)));
+          if (r.ok) loadPoliciesIntoDropdowns();
+        } catch (e) { msg.textContent = 'Error: ' + e.message; }
+      };
+
+      refreshStatusPlus();
     </script>
   </body>
 </html>
