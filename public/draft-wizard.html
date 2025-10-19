@@ -7,9 +7,10 @@
     <style>
       body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; padding: 2rem; background:#0b1020; color:#f4f6fb; }
       .card { max-width: 920px; margin: 0 auto 1rem; background: #141a33; border: 1px solid #2a335c; border-radius: 12px; padding: 1.25rem 1.5rem; }
-      .row { display:flex; gap:1rem; flex-wrap:wrap; margin-bottom: .75rem; }
-  .col { flex:1 1 260px; min-width:0 }
-  .col.title { flex:2 1 420px }
+      /* Responsive grid to prevent field collisions */
+      .row { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); margin-bottom: .75rem; }
+      .col { min-width: 0; }
+      .col.title { grid-column: span 2; }
       label { display:block; margin:.4rem 0 .25rem }
       input, textarea, select { background: #0f1530; color: #f4f6fb; border: 1px solid #26305a; border-radius: 8px; padding: .6rem .7rem; width:100% }
       button { background: #4f7cff; color: white; border: none; border-radius: 8px; padding: .7rem 1rem; cursor: pointer; font-weight: 600; }
@@ -19,7 +20,7 @@
       .hide { display:none !important }
       details { border: 1px dashed #2a335c; padding:.4rem .6rem; border-radius: 8px; }
       .hr { margin: .8rem 0; border:none; border-top:1px solid #2a335c }
-      /* Modal layout: keep display control in CSS, not inline */
+      /* Modal layout */
       .modal { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:9999; background:rgba(0,0,0,.6); }
     </style>
   </head>
@@ -30,7 +31,6 @@
       <p class="muted">Start with a category so we can populate the right required and optional fields.</p>
       <div class="row">
         <div class="col title"><label>Title<input id="title" placeholder="Type your listing title"/></label></div>
-        <div class="col"><label>Search categories<input id="catSearch" placeholder="Type keywords e.g., supplements, jeans" list="categoryOptions"/></label></div>
       </div>
       <div class="row">
         <div class="col"><label>Or choose a photo (optional)<input id="photo" type="file" accept="image/*" /></label><small class="muted">We use the file name text for suggestions.</small></div>
@@ -98,7 +98,7 @@
       const categoryIdEl = $('categoryId');
       const catPreview = $('categoryPreview');
       const titleEl = $('title');
-      const searchEl = $('catSearch');
+  // removed search input
       const nextBtn = $('btnNext');
       const step2 = $('step2');
       const msg1 = $('msg1');
@@ -116,7 +116,7 @@
   let ID_INDEX = null; // Map of id -> { leaf, path, name }
 
       async function fetchJSON(url, opts) { const r = await fetch(url, opts); let j; try { j = await r.json(); } catch { j = { raw: await r.text() }; } if (!r.ok) throw Object.assign(new Error('HTTP '+r.status), { response:j, status:r.status }); return j; }
-      const applyOptions = (list) => { datalist.innerHTML = ''; (list||[]).slice(0,80).forEach(item => { const opt = document.createElement('option'); opt.value = `${item.categoryId} — ${item.categoryName}`; opt.setAttribute('data-id', item.categoryId); opt.setAttribute('data-path', item.categoryPath || item.categoryName); datalist.appendChild(opt); }); };
+  const applyOptions = (list) => { datalist.innerHTML = ''; (list||[]).slice(0,80).forEach(item => { const opt = document.createElement('option'); opt.value = `${item.categoryId} — ${item.categoryName}`; opt.setAttribute('data-id', item.categoryId); opt.setAttribute('data-path', item.categoryPath || item.categoryName); datalist.appendChild(opt); }); };
       const updatePreview = (opt) => { catPreview.textContent = opt ? (opt.getAttribute('data-path')||'') : ''; };
       const debounce = (fn, ms=300) => { let t; return (...a) => { clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; };
       async function loadCategoriesCsv(){
@@ -186,16 +186,13 @@
         }
         applyOptions(matches);
       }, 150);
-
-      // Fallback remote suggestions if CSV unavailable
-      const remoteSuggest = debounce(async (q) => { if (!q) return; try { const j = await fetchJSON('/.netlify/functions/ebay-category-suggestions?q='+encodeURIComponent(q)); applyOptions(j.suggestions||[]); } catch(e){ msg1.textContent = 'Suggest error'; } }, 350);
-  if (titleEl) titleEl.addEventListener('input', async (e)=> { const rows = CAT_ROWS || await loadCategoriesCsv(); if (rows) localSuggest(e.target.value); else remoteSuggest(e.target.value); });
-  if (searchEl) searchEl.addEventListener('input', async (e)=> { const rows = CAT_ROWS || await loadCategoriesCsv(); if (rows) localSuggest(e.target.value); else remoteSuggest(e.target.value); });
+      
+      // Do not trigger network-based suggestions. Only local CSV filtering when user types in the category field.
+      // No suggestions triggered on Title typing to avoid UX errors.
       const photoEl = $('photo');
-      if (photoEl) photoEl.addEventListener('change', () => { const f = photoEl.files && photoEl.files[0]; if (!f) return; const name = (f.name||'').replace(/\.[^.]+$/, '').replace(/[_-]+/g,' '); if (name) { titleEl.value = titleEl.value||name; suggest(name); } });
+  if (photoEl) photoEl.addEventListener('change', () => { const f = photoEl.files && photoEl.files[0]; if (!f) return; const name = (f.name||'').replace(/\.[^.]+$/, '').replace(/[_-]+/g,' '); if (name) { titleEl.value = titleEl.value||name; } });
       const photoUrlEl = $('photoUrl');
-      if (photoUrlEl) photoUrlEl.addEventListener('input', () => { const url = photoUrlEl.value.trim(); if (!url) return; try { const last = url.split('?')[0].split('#')[0].split('/').pop()||''; const base = last.replace(/\.[^.]+$/, '').replace(/[_-]+/g,' '); if (base) { titleEl.value = titleEl.value||base; }
-        const rows = CAT_ROWS; if (rows) localSuggest(base); else remoteSuggest(base); } catch {} });
+      if (photoUrlEl) photoUrlEl.addEventListener('input', () => { const url = photoUrlEl.value.trim(); if (!url) return; try { const last = url.split('?')[0].split('#')[0].split('/').pop()||''; const base = last.replace(/\.[^.]+$/, '').replace(/[_-]+/g,' '); if (base) { titleEl.value = titleEl.value||base; } } catch {} });
       
       if (categoryIdEl) categoryIdEl.addEventListener('input', () => { nextBtn.disabled = !categoryIdEl.value.trim(); });
 
@@ -305,10 +302,7 @@
         if (val.length >= 1) {
           const rows = CAT_ROWS || await loadCategoriesCsv();
           if (rows) { localSuggest(val); }
-          else {
-            try { const j = await fetchJSON('/.netlify/functions/ebay-category-suggestions?q='+encodeURIComponent(val)); applyOptions(j.suggestions||[]); }
-            catch(e){ msg1.textContent = 'Suggest error: ' + (e.response?.error || e.message || ''); }
-          }
+          else { datalist.innerHTML=''; msg1.textContent = 'Category index unavailable. Use Browse.'; }
         }
       });
 
@@ -317,29 +311,40 @@
         const parts=[]; const rootA=document.createElement('a'); rootA.href='#'; rootA.textContent='Root'; rootA.onclick=(e)=>{e.preventDefault(); renderBrowseLocal(CAT_TREE, []);}; parts.push(rootA);
         trail.forEach((n)=>{ const sep=document.createElement('span'); sep.textContent=' > '; parts.push(sep); const a=document.createElement('a'); a.href='#'; a.textContent=n.name; a.onclick=(e)=>{e.preventDefault(); const idx=trail.indexOf(n); renderBrowseLocal(idx>=0? trail[idx]:CAT_TREE, trail.slice(0, idx+1));}; parts.push(a); });
         crumbs.innerHTML=''; parts.forEach(x=>crumbs.appendChild(x));
-        // list
+        // list (chunked render to reduce lag)
         browseList.innerHTML='';
         const entries = Array.from(node.children?.entries?.() || []);
-        entries.forEach(([name, child])=>{
-          const wrap = document.createElement('div'); wrap.className='col'; wrap.style.minWidth='260px';
-          const btn = document.createElement('button'); btn.className='secondary'; btn.style.width='100%';
-          const isLeaf = !!child.leaf && (!child.children || child.children.size===0);
-          btn.textContent = (isLeaf? '📄 ' : '📁 ') + name;
-          btn.title = child.path;
-          btn.onclick = () => {
-            if (isLeaf && child.id){
-              picker.value = `${child.id} — ${name}`;
-              categoryIdEl.value = child.id;
-              catPreview.textContent = child.path;
-              nextBtn.disabled = false;
-              modal.classList.add('hide');
-            } else {
-              renderBrowseLocal(child, [...trail, child]);
-            }
-          };
-          wrap.appendChild(btn);
-          browseList.appendChild(wrap);
-        });
+        const step = 60;
+        function renderChunk(start){
+          const frag = document.createDocumentFragment();
+          for (const [name, child] of entries.slice(start, start+step)){
+            const wrap = document.createElement('div'); wrap.className='col'; wrap.style.minWidth='260px';
+            const btn = document.createElement('button'); btn.className='secondary'; btn.style.width='100%';
+            const isLeaf = !!child.leaf && (!child.children || child.children.size===0);
+            btn.textContent = (isLeaf? '📄 ' : '📁 ') + name;
+            btn.title = child.path;
+            btn.onclick = () => {
+              if (isLeaf && child.id){
+                picker.value = `${child.id} — ${name}`;
+                categoryIdEl.value = child.id;
+                catPreview.textContent = child.path;
+                nextBtn.disabled = false;
+                modal.classList.add('hide');
+              } else {
+                renderBrowseLocal(child, [...trail, child]);
+              }
+            };
+            wrap.appendChild(btn);
+            frag.appendChild(wrap);
+          }
+          browseList.appendChild(frag);
+          if (start + step < entries.length){
+            const more = document.createElement('button'); more.type='button'; more.className='secondary'; more.textContent = `Load more (${entries.length - (start+step)})`;
+            more.onclick = () => { more.remove(); renderChunk(start+step); };
+            browseList.appendChild(more);
+          }
+        }
+        renderChunk(0);
       }
 
       async function browse(categoryId){
@@ -361,7 +366,25 @@
           crumbs.innerHTML=''; parts.forEach(el=>crumbs.appendChild(el));
           // list
           browseList.innerHTML='';
-          (j.children||[]).forEach((n)=>{ const wrap = document.createElement('div'); wrap.className='col'; wrap.style.minWidth='260px'; const btn = document.createElement('button'); btn.className='secondary'; btn.style.width='100%'; btn.textContent = (n.leaf? '📄 ' : '📁 ') + n.name; btn.title = n.path; btn.onclick = () => { if (n.leaf) { picker.value = `${n.id} — ${n.name}`; categoryIdEl.value = n.id; catPreview.textContent = n.path; nextBtn.disabled = false; modal.classList.add('hide'); } else { browse(n.id); } }; wrap.appendChild(btn); browseList.appendChild(wrap); });
+          const children = j.children || [];
+          const step = 60;
+          function renderChunk(start){
+            const frag = document.createDocumentFragment();
+            for (const n of children.slice(start, start+step)){
+              const wrap = document.createElement('div'); wrap.className='col'; wrap.style.minWidth='260px';
+              const btn = document.createElement('button'); btn.className='secondary'; btn.style.width='100%';
+              btn.textContent = (n.leaf? '📄 ' : '📁 ') + n.name; btn.title = n.path;
+              btn.onclick = () => { if (n.leaf) { picker.value = `${n.id} — ${n.name}`; categoryIdEl.value = n.id; catPreview.textContent = n.path; nextBtn.disabled = false; modal.classList.add('hide'); } else { browse(n.id); } };
+              wrap.appendChild(btn); frag.appendChild(wrap);
+            }
+            browseList.appendChild(frag);
+            if (start + step < children.length){
+              const more = document.createElement('button'); more.type='button'; more.className='secondary'; more.textContent = `Load more (${children.length - (start+step)})`;
+              more.onclick = () => { more.remove(); renderChunk(start+step); };
+              browseList.appendChild(more);
+            }
+          }
+          renderChunk(0);
         } catch(e){ crumbs.textContent = 'Browse error: ' + (e.response?.error || e.message); }
       }
 
