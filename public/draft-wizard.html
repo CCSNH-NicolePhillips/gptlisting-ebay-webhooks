@@ -127,7 +127,11 @@
         for (const url of tryUrls){
           try { const r = await fetch(url); if (r.ok) { text = await r.text(); break; } } catch {}
         }
-        if (!text) return null;
+        if (!text) {
+          // one-time hint: allow typing, but encourage Browse
+          if (msg1 && !msg1.dataset.csvHint) { msg1.dataset.csvHint = '1'; msg1.textContent = 'Tip: use Browse to pick a leaf category.'; }
+          return null;
+        }
         // parse CSV (3 columns: categoryId,categoryName,categoryPath), quoted
         const lines = text.split(/\r?\n/).filter(Boolean);
         const rows = [];
@@ -187,7 +191,7 @@
         applyOptions(matches);
       }, 150);
       
-      // Do not trigger network-based suggestions. Only local CSV filtering when user types in the category field.
+  // Do not trigger network-based suggestions. Only local CSV filtering when user types in the category field.
       // No suggestions triggered on Title typing to avoid UX errors.
       const photoEl = $('photo');
   if (photoEl) photoEl.addEventListener('change', () => { const f = photoEl.files && photoEl.files[0]; if (!f) return; const name = (f.name||'').replace(/\.[^.]+$/, '').replace(/[_-]+/g,' '); if (name) { titleEl.value = titleEl.value||name; } });
