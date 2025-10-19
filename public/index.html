@@ -109,7 +109,9 @@
         } finally { btn.disabled = false; }
       };
 
-      document.getElementById('draftForm').addEventListener('submit', async (e) => {
+      // Optional legacy handler (guarded) – keep page JS from crashing if form isn't present
+      const draftFormEl = document.getElementById('draftForm');
+      if (draftFormEl && 'addEventListener' in draftFormEl) draftFormEl.addEventListener('submit', async (e) => {
         e.preventDefault();
         const msg = document.getElementById('createDraftMsg');
         msg.textContent = '';
