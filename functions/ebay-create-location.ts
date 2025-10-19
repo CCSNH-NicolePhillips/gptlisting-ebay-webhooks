@@ -98,6 +98,11 @@ export const handler: Handler = async (event) => {
       return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ok: true, key }) };
     }
 
+    // Treat 25803 (already exists) as success to be idempotent
+    const errId = json?.errors?.[0]?.errorId;
+    if (resp.status === 400 && errId === 25803) {
+      return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ok: true, key, exists: true, status: 409 }) };
+    }
     return {
       statusCode: resp.status,
       headers: { "Content-Type": "application/json" },
