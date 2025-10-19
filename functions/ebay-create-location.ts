@@ -76,7 +76,7 @@ export const handler: Handler = async (event) => {
       ];
     }
 
-    const url = `${apiHost}/sell/inventory/v1/location`;
+    const url = `${apiHost}/sell/inventory/v1/location/${encodeURIComponent(key)}`;
     const resp = await fetch(url, {
       method: "POST",
       headers: {

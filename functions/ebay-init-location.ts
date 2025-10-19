@@ -64,13 +64,16 @@ export const handler: Handler = async (event) => {
       (payload as any).locationTypes = ["WAREHOUSE"]; // eBay allowed values: WAREHOUSE, STORE
     }
 
-    // CREATE the location (POST)
-    const url = `${apiHost}/sell/inventory/v1/location`;
+    // CREATE the location (POST /location/{merchantLocationKey})
+    const url = `${apiHost}/sell/inventory/v1/location/${encodeURIComponent(key)}`;
     const r = await fetch(url, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${access_token}`,
         "Content-Type": "application/json",
+        Accept: "application/json",
+        "Accept-Language": "en-US",
+        "Content-Language": "en-US",
         "X-EBAY-C-MARKETPLACE-ID": MARKETPLACE_ID,
       },
       body: JSON.stringify(payload),

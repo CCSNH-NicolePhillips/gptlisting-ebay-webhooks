@@ -63,7 +63,9 @@ export const handler: Handler = async (event) => {
     if (!omitTypes) payload.locationTypes = ["WAREHOUSE"];
 
     const url = `${apiHost}/sell/inventory/v1/location`;
-    let resp = await fetch(url, {
+    // Prefer POST /location/{key} per eBay docs
+    const postUrl = `${apiHost}/sell/inventory/v1/location/${encodeURIComponent(key)}`;
+    let resp = await fetch(postUrl, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${access_token}`,
@@ -84,7 +86,7 @@ export const handler: Handler = async (event) => {
     // Fallback: try PUT /location/{key} if POST got a generic 2004
     const shouldFallback = resp.status === 400 && parsed?.errors?.[0]?.errorId === 2004;
     if (shouldFallback) {
-      const putUrl = `${apiHost}/sell/inventory/v1/location/${encodeURIComponent(key)}`;
+  const putUrl = `${apiHost}/sell/inventory/v1/location/${encodeURIComponent(key)}`;
       resp = await fetch(putUrl, {
         method: "PUT",
         headers: {
@@ -102,9 +104,9 @@ export const handler: Handler = async (event) => {
       }
       text = await resp.text();
       parsed = tryJson(text);
-      return { statusCode: resp.status, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "both-post-and-put-failed", postUrl: url, putUrl, status: resp.status, marketplaceId: MARKETPLACE_ID, payload, response: parsed }) };
+      return { statusCode: resp.status, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "both-post-and-put-failed", postUrl, putUrl, status: resp.status, marketplaceId: MARKETPLACE_ID, payload, response: parsed }) };
     }
-    return { statusCode: resp.status, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "post-location failed", status: resp.status, url, marketplaceId: MARKETPLACE_ID, payload, response: parsed }) };
+    return { statusCode: resp.status, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "post-location failed", status: resp.status, url: postUrl, marketplaceId: MARKETPLACE_ID, payload, response: parsed }) };
   } catch (e: any) {
     return { statusCode: 500, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: `init-location error: ${e.message}` }) };
   }
