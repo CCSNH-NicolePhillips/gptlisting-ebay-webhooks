@@ -9,23 +9,21 @@ import { tokensStore } from "./_blobs.js";
  */
 export const handler: Handler = async (event) => {
   try {
-    if (event.httpMethod !== "POST") {
-      return { statusCode: 405, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "method not allowed" }) };
-    }
-
-    const body = event.body ? JSON.parse(event.body) as any : {};
-    const sku = body.sku as string | undefined;
-    const title = body.title as string | undefined;
-    const price = typeof body.price === "number" ? body.price : parseFloat(body.price);
-  const image = body.image as string | undefined;
-    const images = (Array.isArray(body.images) ? body.images : undefined) as string[] | undefined;
-    const qty = body.qty ? Number(body.qty) : 1;
-    const categoryId = body.categoryId as string | undefined;
-    const description = (body.description as string | undefined) || title;
-  const overrideFulfillment = (body.fulfillmentPolicyId as string | undefined) || undefined;
-  const overridePayment = (body.paymentPolicyId as string | undefined) || undefined;
-  const overrideReturns = (body.returnPolicyId as string | undefined) || undefined;
-  const overrideLocationKey = (body.merchantLocationKey as string | undefined) || undefined;
+    // Accept GET query for quick testing; POST body is canonical
+    const qs = (event.queryStringParameters || {}) as Record<string, string>;
+    const body = event.body ? (JSON.parse(event.body) as any) : {};
+    const sku = (body.sku ?? qs["sku"]) as string | undefined;
+    const title = (body.title ?? qs["title"]) as string | undefined;
+    const price = body.price !== undefined ? (typeof body.price === "number" ? body.price : parseFloat(body.price)) : (qs["price"] ? parseFloat(qs["price"]) : undefined);
+    const image = (body.image ?? qs["image"]) as string | undefined;
+    const images = (Array.isArray(body.images) ? body.images : (qs["images"] ? String(qs["images"]).split(",") : undefined)) as string[] | undefined;
+    const qty = body.qty ? Number(body.qty) : (qs["qty"] ? Number(qs["qty"]) : 1);
+    const categoryId = (body.categoryId ?? qs["categoryId"]) as string | undefined;
+    const description = ((body.description as string | undefined) ?? qs["description"] ?? title) as string | undefined;
+    const overrideFulfillment = ((body.fulfillmentPolicyId as string | undefined) ?? (qs["fulfillmentPolicyId"] as string | undefined)) || undefined;
+    const overridePayment = ((body.paymentPolicyId as string | undefined) ?? (qs["paymentPolicyId"] as string | undefined)) || undefined;
+    const overrideReturns = ((body.returnPolicyId as string | undefined) ?? (qs["returnPolicyId"] as string | undefined)) || undefined;
+    const overrideLocationKey = ((body.merchantLocationKey as string | undefined) ?? (qs["merchantLocationKey"] as string | undefined)) || undefined;
 
     const primaryImage = image || images?.[0];
     if (!sku || !title || !primaryImage || !Number.isFinite(price)) {
@@ -40,7 +38,9 @@ export const handler: Handler = async (event) => {
     const { access_token } = await accessTokenFromRefresh(refresh);
 
     const { apiHost } = tokenHosts(process.env.EBAY_ENV);
-  const mlk = overrideLocationKey || process.env.EBAY_MERCHANT_LOCATION_KEY || "default-loc";
+    // Normalize and pick merchant location key
+    const mlkRaw = overrideLocationKey || process.env.EBAY_MERCHANT_LOCATION_KEY || "default-loc";
+    const mlk = String(mlkRaw).trim().replace(/\s+/g, "-");
   const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || "EBAY_US";
     const commonHeaders = {
       Authorization: `Bearer ${access_token}`,
@@ -67,7 +67,7 @@ export const handler: Handler = async (event) => {
     if (!r.ok) {
       let detail: any = undefined;
       try { detail = await r.json(); } catch { detail = await r.text(); }
-      return { statusCode: r.status, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "inventory put failed", url: invUrl, detail }) };
+      return { statusCode: r.status, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "inventory put failed", step: "put-inventory-item", url: invUrl, status: r.status, payload: invPayload, detail }) };
     }
 
     // 2) Verify Inventory Location exists
@@ -86,6 +86,11 @@ export const handler: Handler = async (event) => {
           },
         }),
       };
+    }
+    if (!locRes.ok) {
+      let ldetail: any = undefined;
+      try { ldetail = await locRes.json(); } catch { ldetail = await locRes.text(); }
+      return { statusCode: locRes.status, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "location check failed", step: "get-location", url: locUrl, status: locRes.status, detail: ldetail }) };
     }
 
     // 3) Use first available business policies
@@ -131,13 +136,13 @@ export const handler: Handler = async (event) => {
   // 4) Create Offer (DRAFT)
     const offerPayload = {
       sku,
-  marketplaceId: MARKETPLACE_ID,
+      marketplaceId: MARKETPLACE_ID,
       format: "FIXED_PRICE",
       availableQuantity: qty,
       categoryId: categoryId || "31413",
       listingDescription: description,
       pricingSummary: { price: { currency: "USD", value: price.toFixed(2) } },
-      listingPolicies: { fulfillmentPolicyId, paymentPolicyId, returnPolicyId },
+      listingPolicies: { fulfillmentPolicyId: overrideFulfillment || fulfillmentPolicyId, paymentPolicyId: overridePayment || paymentPolicyId, returnPolicyId: overrideReturns || returnPolicyId },
       merchantLocationKey: mlk,
     };
 
@@ -147,8 +152,10 @@ export const handler: Handler = async (event) => {
       headers: commonHeaders,
       body: JSON.stringify(offerPayload),
     });
-    const offerRes = await r.json();
-  if (!r.ok) return { statusCode: r.status, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "offer create failed", url: offerUrl, payload: offerPayload, detail: offerRes }) };
+    const offerText = await r.text();
+    let offerRes: any;
+    try { offerRes = JSON.parse(offerText); } catch { offerRes = { raw: offerText }; }
+    if (!r.ok) return { statusCode: r.status, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "offer create failed", step: "post-offer", url: offerUrl, status: r.status, payload: offerPayload, detail: offerRes }) };
 
     return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ok: true, draftOffer: offerRes }) };
   } catch (e: any) {
