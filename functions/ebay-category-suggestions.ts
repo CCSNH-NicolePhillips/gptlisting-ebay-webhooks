@@ -1,16 +1,13 @@
 import type { Handler } from "@netlify/functions";
-import { tokensStore } from "./_blobs.js";
-import { accessTokenFromRefresh, tokenHosts } from "./_common.js";
+import { tokenHosts, appAccessToken } from "./_common.js";
 
 export const handler: Handler = async (event) => {
   try {
     const q = (event.queryStringParameters?.q || "").trim();
     if (!q) return { statusCode: 400, body: JSON.stringify({ error: "missing q" }) };
-    const store = tokensStore();
-    const saved = (await store.get("ebay.json", { type: "json" })) as any;
-    const refresh = saved?.refresh_token as string | undefined;
-    if (!refresh) return { statusCode: 400, body: JSON.stringify({ error: "Connect eBay first" }) };
-    const { access_token } = await accessTokenFromRefresh(refresh);
+    const { access_token } = await appAccessToken([
+      "https://api.ebay.com/oauth/api_scope/commerce.taxonomy.readonly",
+    ]);
     const { apiHost } = tokenHosts(process.env.EBAY_ENV);
     const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || "EBAY_US";
     const headers = {

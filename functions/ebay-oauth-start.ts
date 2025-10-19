@@ -17,9 +17,6 @@ export const handler: Handler = async () => {
     "https://api.ebay.com/oauth/api_scope/sell.fulfillment",
     "https://api.ebay.com/oauth/api_scope/sell.marketing",
     "https://api.ebay.com/oauth/api_scope/commerce.identity.readonly",
-    // Added to support category/aspect metadata
-    "https://api.ebay.com/oauth/api_scope/commerce.taxonomy.readonly",
-    "https://api.ebay.com/oauth/api_scope/sell.metadata.readonly",
   ].join(" ");
 
   const url =
