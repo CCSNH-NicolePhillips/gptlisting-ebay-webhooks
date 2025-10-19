@@ -37,6 +37,19 @@
       <div style="margin-top:1rem"><a class="secondary" href="/">← Back to landing</a></div>
     </div>
 
+    <div class="card" style="margin-top:1rem">
+      <h3>Verify or publish</h3>
+      <div class="row">
+        <div class="col"><label>Offer ID<input id="offerId" placeholder="e.g., 78557260011"/></label></div>
+      </div>
+      <div style="margin:.5rem 0">
+        <button id="btnGetOffer" class="secondary">Get offer</button>
+        <button id="btnListOffers" class="secondary">List my DRAFTs</button>
+        <button id="btnPublish">Publish offer</button>
+      </div>
+      <pre id="offerOut" class="muted" style="white-space:pre-wrap"></pre>
+    </div>
+
     <script>
       document.getElementById('submit').onclick = async () => {
         const msg = document.getElementById('msg'); msg.textContent='Submitting…';
@@ -55,6 +68,32 @@
           else msg.textContent = 'Error: ' + (data.error || JSON.stringify(data));
         } catch(e){ msg.textContent='Error: '+e.message; }
       };
+
+      (function() {
+        const out = document.getElementById('offerOut');
+        const asJson = (o) => JSON.stringify(o, null, 2);
+        const offerIdEl = document.getElementById('offerId');
+        const setOut = (o) => out && (out.textContent = typeof o === 'string' ? o : asJson(o));
+        const getId = () => (offerIdEl && offerIdEl.value.trim()) || '';
+
+        const btnGet = document.getElementById('btnGetOffer');
+        if (btnGet) btnGet.onclick = async () => {
+          const id = getId(); if (!id) return setOut('Enter an Offer ID');
+          const r = await fetch('/.netlify/functions/ebay-get-offer?offerId=' + encodeURIComponent(id));
+          setOut(await r.json());
+        };
+        const btnList = document.getElementById('btnListOffers');
+        if (btnList) btnList.onclick = async () => {
+          const r = await fetch('/.netlify/functions/ebay-list-offers?status=DRAFT&limit=10');
+          setOut(await r.json());
+        };
+        const btnPub = document.getElementById('btnPublish');
+        if (btnPub) btnPub.onclick = async () => {
+          const id = getId(); if (!id) return setOut('Enter an Offer ID');
+          const r = await fetch('/.netlify/functions/ebay-publish-offer', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ offerId: id }) });
+          setOut(await r.json());
+        };
+      })();
     </script>
   </body>
   </html>
