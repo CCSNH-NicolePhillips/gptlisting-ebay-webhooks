@@ -71,6 +71,7 @@ export const handler: Handler = async (event) => {
       headers: {
         Authorization: `Bearer ${access_token}`,
         "Content-Type": "application/json",
+        "X-EBAY-C-MARKETPLACE-ID": MARKETPLACE_ID,
       },
       body: JSON.stringify(payload),
     });
