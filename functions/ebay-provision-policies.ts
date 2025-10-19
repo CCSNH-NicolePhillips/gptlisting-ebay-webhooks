@@ -4,7 +4,7 @@ import { accessTokenFromRefresh, tokenHosts } from "./_common.js";
 
 type JsonRes = { status: number; json: any };
 
-export const handler: Handler = async () => {
+export const handler: Handler = async (event) => {
   try {
     const store = tokensStore();
     const saved = (await store.get("ebay.json", { type: "json" })) as any;
@@ -103,22 +103,32 @@ export const handler: Handler = async () => {
       results.payment = { status: "exists" };
     }
 
-    // Create Return Policy if none by our default name
-    const defaultReturnName = "Default Returns (Auto)";
-    const hasReturn = existing.returns.some((p) => p.name === defaultReturnName);
+    // Create Return Policy if none by our preferred name
+    const qs = event?.queryStringParameters || {} as Record<string, string>;
+    const envReturns = (process.env.EBAY_RETURNS_ACCEPTED || "").toLowerCase();
+    const qsReturns = (qs["returnsAccepted"] || qs["returns"] || "").toLowerCase();
+    const wantsNoReturns = qsReturns === "false" || qsReturns === "none" || envReturns === "false" || envReturns === "none";
+    const returnPolicyName = wantsNoReturns ? "No Returns (Auto)" : "Default Returns (Auto)";
+    const hasReturn = existing.returns.some((p) => p.name === returnPolicyName);
     if (!hasReturn) {
-      const payload = {
-        name: defaultReturnName,
-        marketplaceId: MARKETPLACE_ID,
-        returnsAccepted: true,
-        returnPeriod: { value: 30, unit: "DAY" },
-        returnShippingCostPayer: "BUYER",
-        refundMethod: "MONEY_BACK",
-      };
+      const payload = wantsNoReturns
+        ? {
+            name: returnPolicyName,
+            marketplaceId: MARKETPLACE_ID,
+            returnsAccepted: false,
+          }
+        : {
+            name: returnPolicyName,
+            marketplaceId: MARKETPLACE_ID,
+            returnsAccepted: true,
+            returnPeriod: { value: 30, unit: "DAY" },
+            returnShippingCostPayer: "BUYER",
+            refundMethod: "MONEY_BACK",
+          };
       const resp = await postJson("/sell/account/v1/return_policy", payload);
       results.returns = resp;
     } else {
-      results.returns = { status: "exists" };
+      results.returns = { status: "exists", name: returnPolicyName };
     }
 
     // Create Fulfillment Policy if none by our default name
