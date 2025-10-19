@@ -74,6 +74,31 @@
       <pre id="offerOut" class="muted" style="white-space:pre-wrap"></pre>
     </div>
 
+    <div class="card" style="margin-top:1rem">
+      <h3>Category suggestions</h3>
+      <div class="row">
+        <div class="col">
+          <label>Title suggestions
+            <input id="titleSuggest" placeholder="Type a title to see suggested categories"/>
+          </label>
+        </div>
+        <div class="col">
+          <label>Search categories
+            <input id="catSearch" placeholder="Type e.g., supplements, jeans"/>
+          </label>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col">
+          <label>Choose category
+            <input id="categoryPicker" list="categoryOptions" placeholder="Start typing to filter" />
+            <datalist id="categoryOptions"></datalist>
+          </label>
+          <div id="categoryPreview" class="muted" style="margin-top:.25rem"></div>
+        </div>
+      </div>
+    </div>
+
     <script>
       document.getElementById('submit').onclick = async () => {
         const msg = document.getElementById('msg'); msg.textContent='Submitting…';
@@ -138,6 +163,43 @@
           const r = await fetch('/.netlify/functions/ebay-publish-offer', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ offerId: id }) });
           setOut(await r.json());
         };
+      })();
+
+      (function CategorySuggest(){
+        const titleEl = document.getElementById('titleSuggest');
+        const searchEl = document.getElementById('catSearch');
+        const picker = document.getElementById('categoryPicker');
+        const datalist = document.getElementById('categoryOptions');
+        const catIdEl = document.getElementById('categoryId');
+        const preview = document.getElementById('categoryPreview');
+
+        const updatePreview = (opt) => { if (!opt) { preview.textContent = ''; return; } preview.textContent = opt.getAttribute('data-path') || ''; };
+        const applyOptions = (list) => {
+          datalist.innerHTML = '';
+          (list||[]).slice(0,50).forEach(item => {
+            const opt = document.createElement('option');
+            opt.value = `${item.categoryId} — ${item.categoryName}`;
+            opt.setAttribute('data-id', item.categoryId);
+            opt.setAttribute('data-path', item.categoryPath || item.categoryName);
+            datalist.appendChild(opt);
+          });
+        };
+        const fetchSuggest = async (q) => {
+          const r = await fetch('/.netlify/functions/ebay-category-suggestions?q=' + encodeURIComponent(q));
+          const j = await r.json();
+          if (r.ok) applyOptions(j.suggestions || []);
+        };
+        let tHandle; const debounce = (fn, ms=300) => (...a) => { clearTimeout(tHandle); tHandle=setTimeout(()=>fn(...a), ms); };
+        const onTitle = debounce(async () => { const v = (titleEl.value||'').trim(); if (v) await fetchSuggest(v); }, 350);
+        const onSearch = debounce(async () => { const v = (searchEl.value||'').trim(); if (v) await fetchSuggest(v); }, 350);
+        if (titleEl) titleEl.addEventListener('input', onTitle);
+        if (searchEl) searchEl.addEventListener('input', onSearch);
+        if (picker) picker.addEventListener('input', () => {
+          const val = picker.value; const opt = Array.from(datalist.options).find(o=>o.value===val);
+          updatePreview(opt);
+          const id = opt ? opt.getAttribute('data-id') : '';
+          if (id && catIdEl) catIdEl.value = id;
+        });
       })();
     </script>
   </body>
