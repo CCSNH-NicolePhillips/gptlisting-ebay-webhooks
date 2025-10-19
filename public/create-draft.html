@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Create draft · GPTListing</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; padding: 2rem; background:#0b1020; color:#f4f6fb; }
+      .card { max-width: 760px; margin: 0 auto; background: #141a33; border: 1px solid #2a335c; border-radius: 12px; padding: 1.5rem; }
+      .row { display:flex; gap:.75rem; flex-wrap:wrap }
+      .col { flex:1 1 240px }
+      label { display:block; margin:.35rem 0 }
+      input, textarea { background: #0f1530; color: #f4f6fb; border: 1px solid #26305a; border-radius: 8px; padding: .5rem; width:100% }
+      button { background: #4f7cff; color: white; border: none; border-radius: 8px; padding: .7rem 1rem; cursor: pointer; font-weight: 600; }
+      .muted { color: #a2a9c8; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h2>Create draft</h2>
+      <p class="muted">Enter the minimum fields to create a draft offer.</p>
+      <div class="row">
+        <div class="col"><label>SKU<input id="sku" placeholder="SKU-123"/></label></div>
+        <div class="col"><label>Title<input id="title" placeholder="Product title"/></label></div>
+      </div>
+      <div class="row">
+        <div class="col"><label>Price USD<input id="price" type="number" min="0" step="0.01" placeholder="19.99"/></label></div>
+        <div class="col"><label>Qty<input id="qty" type="number" min="1" value="1"/></label></div>
+      </div>
+      <div class="row">
+        <div class="col"><label>Image URLs (comma-separated)<input id="images" placeholder="https://...jpg, https://...png"/></label></div>
+      </div>
+      <div class="row">
+        <div class="col"><label>Location key<input id="locKey" placeholder="default-loc"/></label></div>
+      </div>
+      <div style="margin:.75rem 0"><button id="submit">Create draft</button> <span id="msg" class="muted"></span></div>
+      <div style="margin-top:1rem"><a class="secondary" href="/">← Back to landing</a></div>
+    </div>
+
+    <script>
+      document.getElementById('submit').onclick = async () => {
+        const msg = document.getElementById('msg'); msg.textContent='Submitting…';
+        const sku = (document.getElementById('sku')||{value:''}).value.trim();
+        const title = (document.getElementById('title')||{value:''}).value.trim();
+        const price = parseFloat((document.getElementById('price')||{value:''}).value);
+        const qty = parseInt((document.getElementById('qty')||{value:'1'}).value, 10) || 1;
+        const imagesRaw = (document.getElementById('images')||{value:''}).value.trim();
+        const images = imagesRaw ? imagesRaw.split(',').map(s=>s.trim()).filter(Boolean) : [];
+        const merchantLocationKey = (document.getElementById('locKey')||{value:''}).value.trim();
+        if (!sku || !title || !Number.isFinite(price) || !images.length) { msg.textContent='Please provide SKU, title, price, and at least one image URL.'; return; }
+        try {
+          const r = await fetch('/.netlify/functions/ebay-create-draft', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sku, title, price, qty, images, merchantLocationKey }) });
+          const data = await r.json();
+          if (r.ok && data.ok) { msg.textContent = 'Draft created: ' + (data.draftOffer?.offerId||'unknown'); }
+          else msg.textContent = 'Error: ' + (data.error || JSON.stringify(data));
+        } catch(e){ msg.textContent='Error: '+e.message; }
+      };
+    </script>
+  </body>
+  </html>
