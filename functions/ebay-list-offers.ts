@@ -38,6 +38,43 @@ export const handler: Handler = async (event) => {
       let json: any; try { json = JSON.parse(txt); } catch { json = { raw: txt }; }
       return { ok: r.ok, status: r.status, url, body: json };
     }
+
+    // Safe fallback: enumerate inventory items and fetch offers per valid SKU
+    async function safeAggregateByInventory(): Promise<{ offers: any[]; attempts: any[] }>{
+      const attempts: any[] = [];
+      const agg: any[] = [];
+      let pageOffset = 0;
+      const pageLimit = Math.min(Math.max(limit, 20), 200);
+      for (let pages = 0; pages < 10; pages++) { // cap pages to avoid runaway
+        const invParams = new URLSearchParams({ limit: String(pageLimit), offset: String(pageOffset) });
+        const invUrl = `${apiHost}/sell/inventory/v1/inventory_item?${invParams.toString()}`;
+        const invRes = await fetch(invUrl, { headers });
+        const invTxt = await invRes.text();
+        let invJson: any; try { invJson = JSON.parse(invTxt); } catch { invJson = { raw: invTxt }; }
+        attempts.push({ url: invUrl, status: invRes.status, body: invJson });
+        if (!invRes.ok) break;
+        const items = Array.isArray(invJson?.inventoryItems) ? invJson.inventoryItems : [];
+        if (!items.length) break;
+        for (const it of items) {
+          const s = it?.sku as string | undefined;
+          if (!SKU_OK(s || '')) continue; // skip invalid sku to avoid 400
+          const p = new URLSearchParams({ sku: s!, limit: '50' });
+          const url = `${apiHost}/sell/inventory/v1/offer?${p.toString()}`;
+          const r = await fetch(url, { headers });
+          const t = await r.text(); let j: any; try { j = JSON.parse(t); } catch { j = { raw: t }; }
+          attempts.push({ url, status: r.status, body: j });
+          if (!r.ok) continue;
+          const arr = Array.isArray(j?.offers) ? j.offers : [];
+          for (const o of arr) {
+            if (!status || String(o?.status||'').toUpperCase() === String(status).toUpperCase()) agg.push(o);
+          }
+          if (agg.length >= limit) break;
+        }
+        if (agg.length >= limit) break;
+        pageOffset += pageLimit;
+      }
+      return { offers: agg.slice(0, limit), attempts };
+    }
     const attempts: any[] = [];
 
     // 1) Try with status + marketplace
@@ -52,6 +89,14 @@ export const handler: Handler = async (event) => {
     }
 
     if (!res.ok) {
+      // If we hit the SKU 25707 issue, attempt safe aggregation
+      const code = Number((res.body?.errors && res.body.errors[0]?.errorId) || 0);
+      if (res.status === 400 && code === 25707) {
+        const safe = await safeAggregateByInventory();
+        if (safe.offers.length) {
+          return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ok: true, total: safe.offers.length, offers: safe.offers, attempts: [...attempts, ...safe.attempts], note: "safe-aggregate" }) };
+        }
+      }
       return { statusCode: res.status, body: JSON.stringify({ error: "list-offers failed", attempt: attempts }) };
     }
 
