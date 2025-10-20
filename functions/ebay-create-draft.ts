@@ -58,7 +58,8 @@ export const handler: Handler = async (event) => {
       sku,
       product: { title, description, imageUrls: images ?? [primaryImage] },
       availability: { shipToLocationAvailability: { quantity: qty } },
-      condition: condition !== undefined ? (typeof condition === 'string' ? condition : Number(condition)) : undefined,
+      // Do NOT set condition on inventory item; numeric ids from Metadata don't serialize here.
+      // We'll set condition on the Offer only.
       aspects: undefined,
     } as any;
     if (aspects && typeof aspects === 'object') {
