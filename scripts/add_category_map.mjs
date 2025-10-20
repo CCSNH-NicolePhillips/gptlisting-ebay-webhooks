@@ -10,8 +10,10 @@ if (args.length % 2 !== 0 || args.length === 0) {
   process.exit(2);
 }
 let map = {};
-if (fs.existsSync(mapPath)) map = JSON.parse(fs.readFileSync(mapPath,'utf8')||'{}');
-for (let i=0;i<args.length;i+=2){ map[args[i]] = args[i+1]; }
+if (fs.existsSync(mapPath)) map = JSON.parse(fs.readFileSync(mapPath, 'utf8') || '{}');
+for (let i = 0; i < args.length; i += 2) {
+  map[args[i]] = args[i + 1];
+}
 fs.mkdirSync(dataDir, { recursive: true });
 fs.writeFileSync(mapPath, JSON.stringify(map, null, 2));
 console.log('Updated', mapPath);

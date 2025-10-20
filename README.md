@@ -1,12 +1,14 @@
 # eBay + Dropbox Uploader + Netlify Webhooks
 
 A complete eBay-Dropbox integration with:
+
 - **Local app** for processing Dropbox photos → eBay draft/published listings
 - **Netlify serverless functions** for eBay webhooks (MAD) and OAuth
 
 ## Features
 
 ### Local App (Express + TypeScript)
+
 - Per-user **Connect Dropbox** (OAuth; offline access / refresh tokens)
 - Per-user **Connect eBay Seller** (OAuth; refresh tokens)
 - Groups files by prefix (`xx_01`, `xx_02`, `xx_price`) in a chosen folder
@@ -23,6 +25,7 @@ A complete eBay-Dropbox integration with:
 - Offer management endpoints (view/update/publish)
 
 ### Netlify Functions
+
 - **MAD webhook** (`/.netlify/functions/ebay-mad`) - Marketplace Account Deletion (required by eBay)
 - **Platform Notifications** (`/.netlify/functions/ebay-platform`) - optional Trading API push
 - **OAuth flow** (`/.netlify/functions/ebay-oauth-start`, `ebay-oauth-callback`)
@@ -32,6 +35,7 @@ A complete eBay-Dropbox integration with:
 ## Quickstart
 
 1. **Clone** and install deps
+
    ```bash
    npm i
    cp .env.example .env
@@ -42,6 +46,7 @@ A complete eBay-Dropbox integration with:
 3. **Create eBay app & RuName** → fill `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET`, `EBAY_RU_NAME`. Choose `EBAY_ENV` as `SANDBOX` to test.
 
 4. **Run dev server**
+
    ```bash
    npm run dev
    ```
@@ -58,7 +63,7 @@ A complete eBay-Dropbox integration with:
 ```json
 {
   "mode": "draft",
-  "folderPath": "/EBAY", 
+  "folderPath": "/EBAY",
   "quantityDefault": 1,
   "marketplaceId": "EBAY_US",
   "categoryId": "177011"
@@ -82,7 +87,7 @@ A complete eBay-Dropbox integration with:
    - `EBAY_ENV=PROD`
    - See `prod.env` for complete list
 
-3. **Deploy**:  
+3. **Deploy**:
    ```bash
    npm run deploy  # deploy via CLI after login
    ```

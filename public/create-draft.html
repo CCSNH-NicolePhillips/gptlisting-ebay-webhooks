@@ -5,14 +5,60 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Create draft · GPTListing</title>
     <style>
-      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; padding: 2rem; background:#0b1020; color:#f4f6fb; }
-      .card { max-width: 760px; margin: 0 auto; background: #141a33; border: 1px solid #2a335c; border-radius: 12px; padding: 1.5rem; }
-      .row { display:flex; gap:.75rem; flex-wrap:wrap }
-      .col { flex:1 1 240px }
-      label { display:block; margin:.35rem 0 }
-      input, textarea { background: #0f1530; color: #f4f6fb; border: 1px solid #26305a; border-radius: 8px; padding: .5rem; width:100% }
-      button { background: #4f7cff; color: white; border: none; border-radius: 8px; padding: .7rem 1rem; cursor: pointer; font-weight: 600; }
-      .muted { color: #a2a9c8; }
+      body {
+        font-family:
+          system-ui,
+          -apple-system,
+          Segoe UI,
+          Roboto,
+          Arial,
+          sans-serif;
+        margin: 0;
+        padding: 2rem;
+        background: #0b1020;
+        color: #f4f6fb;
+      }
+      .card {
+        max-width: 760px;
+        margin: 0 auto;
+        background: #141a33;
+        border: 1px solid #2a335c;
+        border-radius: 12px;
+        padding: 1.5rem;
+      }
+      .row {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+      }
+      .col {
+        flex: 1 1 240px;
+      }
+      label {
+        display: block;
+        margin: 0.35rem 0;
+      }
+      input,
+      textarea {
+        background: #0f1530;
+        color: #f4f6fb;
+        border: 1px solid #26305a;
+        border-radius: 8px;
+        padding: 0.5rem;
+        width: 100%;
+      }
+      button {
+        background: #4f7cff;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 0.7rem 1rem;
+        cursor: pointer;
+        font-weight: 600;
+      }
+      .muted {
+        color: #a2a9c8;
+      }
     </style>
   </head>
   <body>
@@ -20,126 +66,226 @@
       <h2>Create draft</h2>
       <p class="muted">Enter the minimum fields to create a draft offer.</p>
       <div class="row">
-        <div class="col"><label>SKU<input id="sku" placeholder="SKU-123"/></label></div>
-        <div class="col"><label>Title<input id="title" placeholder="Product title"/></label></div>
+        <div class="col">
+          <label>SKU<input id="sku" placeholder="SKU-123" /></label>
+        </div>
+        <div class="col">
+          <label>Title<input id="title" placeholder="Product title" /></label>
+        </div>
       </div>
       <div class="row">
-        <div class="col"><label>Price USD<input id="price" type="number" min="0" step="0.01" placeholder="19.99"/></label></div>
-        <div class="col"><label>Qty<input id="qty" type="number" min="1" value="1"/></label></div>
+        <div class="col">
+          <label
+            >Price USD<input id="price" type="number" min="0" step="0.01" placeholder="19.99"
+          /></label>
+        </div>
+        <div class="col">
+          <label>Qty<input id="qty" type="number" min="1" value="1" /></label>
+        </div>
       </div>
       <div class="row">
-        <div class="col"><label>Image URLs (comma-separated)<input id="images" placeholder="https://...jpg, https://...png"/></label></div>
+        <div class="col">
+          <label
+            >Image URLs (comma-separated)<input
+              id="images"
+              placeholder="https://...jpg, https://...png"
+          /></label>
+        </div>
       </div>
       <div class="row">
-        <div class="col"><label>Category ID<input id="categoryId" placeholder="e.g., 31413"/></label></div>
-        <div class="col"><label>Condition<input id="condition" placeholder="e.g., 1000 (New) or USED"/></label></div>
+        <div class="col">
+          <label>Category ID<input id="categoryId" placeholder="e.g., 31413" /></label>
+        </div>
+        <div class="col">
+          <label>Condition<input id="condition" placeholder="e.g., 1000 (New) or USED" /></label>
+        </div>
       </div>
       <div class="row">
-        <div class="col"><label>Description<textarea id="description" rows="3" placeholder="Describe the item, ingredients, material, etc."></textarea></label></div>
+        <div class="col">
+          <label
+            >Description<textarea
+              id="description"
+              rows="3"
+              placeholder="Describe the item, ingredients, material, etc."
+            ></textarea>
+          </label>
+        </div>
       </div>
-      <details class="muted" style="margin:.5rem 0"><summary>Item specifics (aspects)</summary>
+      <details class="muted" style="margin: 0.5rem 0">
+        <summary>Item specifics (aspects)</summary>
         <div class="row">
-          <div class="col"><label>Brand<input id="aspectBrand" placeholder="e.g., Acme"/></label></div>
-          <div class="col"><label>Size<input id="aspectSize" placeholder="e.g., M"/></label></div>
+          <div class="col">
+            <label>Brand<input id="aspectBrand" placeholder="e.g., Acme" /></label>
+          </div>
+          <div class="col">
+            <label>Size<input id="aspectSize" placeholder="e.g., M" /></label>
+          </div>
         </div>
         <div class="row">
-          <div class="col"><label>Color<input id="aspectColor" placeholder="e.g., Blue"/></label></div>
-          <div class="col"><label>Material<input id="aspectMaterial" placeholder="e.g., Cotton"/></label></div>
+          <div class="col">
+            <label>Color<input id="aspectColor" placeholder="e.g., Blue" /></label>
+          </div>
+          <div class="col">
+            <label>Material<input id="aspectMaterial" placeholder="e.g., Cotton" /></label>
+          </div>
         </div>
       </details>
       <div class="row">
-        <div class="col"><label>Location key<input id="locKey" placeholder="default-loc"/></label></div>
+        <div class="col">
+          <label>Location key<input id="locKey" placeholder="default-loc" /></label>
+        </div>
       </div>
-      <div style="margin:.4rem 0">
+      <div style="margin: 0.4rem 0">
         <button id="btnCategory">Get category requirements</button>
         <span id="catMsg" class="muted"></span>
       </div>
       <div class="row">
-        <div class="col"><label>Location key<input id="locKey" placeholder="default-loc"/></label></div>
+        <div class="col">
+          <label>Location key<input id="locKey" placeholder="default-loc" /></label>
+        </div>
       </div>
-      <div style="margin:.75rem 0"><button id="submit">Create draft</button> <span id="msg" class="muted"></span></div>
-      <div style="margin-top:1rem"><a class="secondary" href="/">← Back to landing</a></div>
+      <div style="margin: 0.75rem 0">
+        <button id="submit">Create draft</button> <span id="msg" class="muted"></span>
+      </div>
+      <div style="margin-top: 1rem"><a class="secondary" href="/">← Back to landing</a></div>
     </div>
 
-    <div class="card" style="margin-top:1rem">
+    <div class="card" style="margin-top: 1rem">
       <h3>Verify or publish</h3>
       <div class="row">
-        <div class="col"><label>Offer ID<input id="offerId" placeholder="e.g., 78557260011"/></label></div>
+        <div class="col">
+          <label>Offer ID<input id="offerId" placeholder="e.g., 78557260011" /></label>
+        </div>
       </div>
-      <div style="margin:.5rem 0">
+      <div style="margin: 0.5rem 0">
         <button id="btnGetOffer" class="secondary">Get offer</button>
         <button id="btnListOffers" class="secondary">List my DRAFTs</button>
         <button id="btnPublish">Publish offer</button>
       </div>
-      <pre id="offerOut" class="muted" style="white-space:pre-wrap"></pre>
+      <pre id="offerOut" class="muted" style="white-space: pre-wrap"></pre>
     </div>
 
-    <div class="card" style="margin-top:1rem">
+    <div class="card" style="margin-top: 1rem">
       <h3>Category suggestions</h3>
       <div class="row">
         <div class="col">
-          <label>Title suggestions
-            <input id="titleSuggest" placeholder="Type a title to see suggested categories"/>
+          <label
+            >Title suggestions
+            <input id="titleSuggest" placeholder="Type a title to see suggested categories" />
           </label>
         </div>
         <div class="col">
-          <label>Search categories
-            <input id="catSearch" placeholder="Type e.g., supplements, jeans"/>
+          <label
+            >Search categories
+            <input id="catSearch" placeholder="Type e.g., supplements, jeans" />
           </label>
         </div>
       </div>
       <div class="row">
         <div class="col">
-          <label>Choose category
-            <input id="categoryPicker" list="categoryOptions" placeholder="Start typing to filter" />
+          <label
+            >Choose category
+            <input
+              id="categoryPicker"
+              list="categoryOptions"
+              placeholder="Start typing to filter"
+            />
             <datalist id="categoryOptions"></datalist>
           </label>
-          <div id="categoryPreview" class="muted" style="margin-top:.25rem"></div>
+          <div id="categoryPreview" class="muted" style="margin-top: 0.25rem"></div>
         </div>
       </div>
     </div>
 
     <script>
       document.getElementById('submit').onclick = async () => {
-        const msg = document.getElementById('msg'); msg.textContent='Submitting…';
-        const sku = (document.getElementById('sku')||{value:''}).value.trim();
-        const title = (document.getElementById('title')||{value:''}).value.trim();
-        const price = parseFloat((document.getElementById('price')||{value:''}).value);
-        const qty = parseInt((document.getElementById('qty')||{value:'1'}).value, 10) || 1;
-        const imagesRaw = (document.getElementById('images')||{value:''}).value.trim();
-        const categoryId = (document.getElementById('categoryId')||{value:''}).value.trim();
-        const conditionRaw = (document.getElementById('condition')||{value:''}).value.trim();
-        const description = (document.getElementById('description')||{value:''}).value.trim();
-        const images = imagesRaw ? imagesRaw.split(',').map(s=>s.trim()).filter(Boolean) : [];
-        const merchantLocationKey = (document.getElementById('locKey')||{value:''}).value.trim();
-        if (!sku || !title || !Number.isFinite(price) || !images.length) { msg.textContent='Please provide SKU, title, price, and at least one image URL.'; return; }
+        const msg = document.getElementById('msg');
+        msg.textContent = 'Submitting…';
+        const sku = (document.getElementById('sku') || { value: '' }).value.trim();
+        const title = (document.getElementById('title') || { value: '' }).value.trim();
+        const price = parseFloat((document.getElementById('price') || { value: '' }).value);
+        const qty = parseInt((document.getElementById('qty') || { value: '1' }).value, 10) || 1;
+        const imagesRaw = (document.getElementById('images') || { value: '' }).value.trim();
+        const categoryId = (document.getElementById('categoryId') || { value: '' }).value.trim();
+        const conditionRaw = (document.getElementById('condition') || { value: '' }).value.trim();
+        const description = (document.getElementById('description') || { value: '' }).value.trim();
+        const images = imagesRaw
+          ? imagesRaw
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : [];
+        const merchantLocationKey = (
+          document.getElementById('locKey') || { value: '' }
+        ).value.trim();
+        if (!sku || !title || !Number.isFinite(price) || !images.length) {
+          msg.textContent = 'Please provide SKU, title, price, and at least one image URL.';
+          return;
+        }
         const aspects = {};
-        const br = (document.getElementById('aspectBrand')||{value:''}).value.trim(); if (br) aspects['Brand'] = br;
-        const sz = (document.getElementById('aspectSize')||{value:''}).value.trim(); if (sz) aspects['Size'] = sz;
-        const co = (document.getElementById('aspectColor')||{value:''}).value.trim(); if (co) aspects['Color'] = co;
-        const ma = (document.getElementById('aspectMaterial')||{value:''}).value.trim(); if (ma) aspects['Material'] = ma;
-        const condition = conditionRaw ? (isNaN(Number(conditionRaw)) ? conditionRaw : Number(conditionRaw)) : undefined;
+        const br = (document.getElementById('aspectBrand') || { value: '' }).value.trim();
+        if (br) aspects['Brand'] = br;
+        const sz = (document.getElementById('aspectSize') || { value: '' }).value.trim();
+        if (sz) aspects['Size'] = sz;
+        const co = (document.getElementById('aspectColor') || { value: '' }).value.trim();
+        if (co) aspects['Color'] = co;
+        const ma = (document.getElementById('aspectMaterial') || { value: '' }).value.trim();
+        if (ma) aspects['Material'] = ma;
+        const condition = conditionRaw
+          ? isNaN(Number(conditionRaw))
+            ? conditionRaw
+            : Number(conditionRaw)
+          : undefined;
         try {
-          const r = await fetch('/.netlify/functions/ebay-create-draft', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sku, title, price, qty, images, merchantLocationKey, categoryId: categoryId || undefined, description: description || undefined, condition, aspects: Object.keys(aspects).length ? aspects : undefined }) });
+          const r = await fetch('/.netlify/functions/ebay-create-draft', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sku,
+              title,
+              price,
+              qty,
+              images,
+              merchantLocationKey,
+              categoryId: categoryId || undefined,
+              description: description || undefined,
+              condition,
+              aspects: Object.keys(aspects).length ? aspects : undefined,
+            }),
+          });
           const data = await r.json();
-          if (r.ok && data.ok) { msg.textContent = 'Draft created: ' + (data.draftOffer?.offerId||'unknown'); }
-          else msg.textContent = 'Error: ' + (data.error || JSON.stringify(data));
-        } catch(e){ msg.textContent='Error: '+e.message; }
+          if (r.ok && data.ok) {
+            msg.textContent = 'Draft created: ' + (data.draftOffer?.offerId || 'unknown');
+          } else msg.textContent = 'Error: ' + (data.error || JSON.stringify(data));
+        } catch (e) {
+          msg.textContent = 'Error: ' + e.message;
+        }
       };
       document.getElementById('btnCategory').onclick = async () => {
         const catMsg = document.getElementById('catMsg');
-        const categoryId = (document.getElementById('categoryId')||{value:''}).value.trim();
-        if (!categoryId) { catMsg.textContent = 'Enter a categoryId first'; return; }
+        const categoryId = (document.getElementById('categoryId') || { value: '' }).value.trim();
+        if (!categoryId) {
+          catMsg.textContent = 'Enter a categoryId first';
+          return;
+        }
         catMsg.textContent = 'Fetching…';
         try {
-          const r = await fetch('/.netlify/functions/ebay-category-requirements?categoryId=' + encodeURIComponent(categoryId));
+          const r = await fetch(
+            '/.netlify/functions/ebay-category-requirements?categoryId=' +
+              encodeURIComponent(categoryId)
+          );
           const data = await r.json();
-          if (!r.ok) { catMsg.textContent = 'Error: ' + (data.error || r.status); return; }
-          catMsg.textContent = `Allowed conditions: ${(data.allowedConditions||[]).map((c)=>c.conditionId+"("+c.conditionDescription+")").join(', ') || '—'} | Required aspects: ${(data.requiredAspects||[]).map(a=>a.localizedAspectName).join(', ') || '—'}`;
-        } catch(e){ catMsg.textContent = 'Error: ' + e.message; }
+          if (!r.ok) {
+            catMsg.textContent = 'Error: ' + (data.error || r.status);
+            return;
+          }
+          catMsg.textContent = `Allowed conditions: ${(data.allowedConditions || []).map((c) => c.conditionId + '(' + c.conditionDescription + ')').join(', ') || '—'} | Required aspects: ${(data.requiredAspects || []).map((a) => a.localizedAspectName).join(', ') || '—'}`;
+        } catch (e) {
+          catMsg.textContent = 'Error: ' + e.message;
+        }
       };
 
-      (function() {
+      (function () {
         const out = document.getElementById('offerOut');
         const asJson = (o) => JSON.stringify(o, null, 2);
         const offerIdEl = document.getElementById('offerId');
@@ -147,25 +293,36 @@
         const getId = () => (offerIdEl && offerIdEl.value.trim()) || '';
 
         const btnGet = document.getElementById('btnGetOffer');
-        if (btnGet) btnGet.onclick = async () => {
-          const id = getId(); if (!id) return setOut('Enter an Offer ID');
-          const r = await fetch('/.netlify/functions/ebay-get-offer?offerId=' + encodeURIComponent(id));
-          setOut(await r.json());
-        };
+        if (btnGet)
+          btnGet.onclick = async () => {
+            const id = getId();
+            if (!id) return setOut('Enter an Offer ID');
+            const r = await fetch(
+              '/.netlify/functions/ebay-get-offer?offerId=' + encodeURIComponent(id)
+            );
+            setOut(await r.json());
+          };
         const btnList = document.getElementById('btnListOffers');
-        if (btnList) btnList.onclick = async () => {
-          const r = await fetch('/.netlify/functions/ebay-list-offers?status=DRAFT&limit=10');
-          setOut(await r.json());
-        };
+        if (btnList)
+          btnList.onclick = async () => {
+            const r = await fetch('/.netlify/functions/ebay-list-offers?status=DRAFT&limit=10');
+            setOut(await r.json());
+          };
         const btnPub = document.getElementById('btnPublish');
-        if (btnPub) btnPub.onclick = async () => {
-          const id = getId(); if (!id) return setOut('Enter an Offer ID');
-          const r = await fetch('/.netlify/functions/ebay-publish-offer', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ offerId: id }) });
-          setOut(await r.json());
-        };
+        if (btnPub)
+          btnPub.onclick = async () => {
+            const id = getId();
+            if (!id) return setOut('Enter an Offer ID');
+            const r = await fetch('/.netlify/functions/ebay-publish-offer', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ offerId: id }),
+            });
+            setOut(await r.json());
+          };
       })();
 
-      (function CategorySuggest(){
+      (function CategorySuggest() {
         const titleEl = document.getElementById('titleSuggest');
         const searchEl = document.getElementById('catSearch');
         const picker = document.getElementById('categoryPicker');
@@ -173,10 +330,16 @@
         const catIdEl = document.getElementById('categoryId');
         const preview = document.getElementById('categoryPreview');
 
-        const updatePreview = (opt) => { if (!opt) { preview.textContent = ''; return; } preview.textContent = opt.getAttribute('data-path') || ''; };
+        const updatePreview = (opt) => {
+          if (!opt) {
+            preview.textContent = '';
+            return;
+          }
+          preview.textContent = opt.getAttribute('data-path') || '';
+        };
         const applyOptions = (list) => {
           datalist.innerHTML = '';
-          (list||[]).slice(0,50).forEach(item => {
+          (list || []).slice(0, 50).forEach((item) => {
             const opt = document.createElement('option');
             opt.value = `${item.categoryId} — ${item.categoryName}`;
             opt.setAttribute('data-id', item.categoryId);
@@ -185,22 +348,38 @@
           });
         };
         const fetchSuggest = async (q) => {
-          const r = await fetch('/.netlify/functions/ebay-category-suggestions?q=' + encodeURIComponent(q));
+          const r = await fetch(
+            '/.netlify/functions/ebay-category-suggestions?q=' + encodeURIComponent(q)
+          );
           const j = await r.json();
           if (r.ok) applyOptions(j.suggestions || []);
         };
-        let tHandle; const debounce = (fn, ms=300) => (...a) => { clearTimeout(tHandle); tHandle=setTimeout(()=>fn(...a), ms); };
-        const onTitle = debounce(async () => { const v = (titleEl.value||'').trim(); if (v) await fetchSuggest(v); }, 350);
-        const onSearch = debounce(async () => { const v = (searchEl.value||'').trim(); if (v) await fetchSuggest(v); }, 350);
+        let tHandle;
+        const debounce =
+          (fn, ms = 300) =>
+          (...a) => {
+            clearTimeout(tHandle);
+            tHandle = setTimeout(() => fn(...a), ms);
+          };
+        const onTitle = debounce(async () => {
+          const v = (titleEl.value || '').trim();
+          if (v) await fetchSuggest(v);
+        }, 350);
+        const onSearch = debounce(async () => {
+          const v = (searchEl.value || '').trim();
+          if (v) await fetchSuggest(v);
+        }, 350);
         if (titleEl) titleEl.addEventListener('input', onTitle);
         if (searchEl) searchEl.addEventListener('input', onSearch);
-        if (picker) picker.addEventListener('input', () => {
-          const val = picker.value; const opt = Array.from(datalist.options).find(o=>o.value===val);
-          updatePreview(opt);
-          const id = opt ? opt.getAttribute('data-id') : '';
-          if (id && catIdEl) catIdEl.value = id;
-        });
+        if (picker)
+          picker.addEventListener('input', () => {
+            const val = picker.value;
+            const opt = Array.from(datalist.options).find((o) => o.value === val);
+            updatePreview(opt);
+            const id = opt ? opt.getAttribute('data-id') : '';
+            if (id && catIdEl) catIdEl.value = id;
+          });
       })();
     </script>
   </body>
-  </html>
+</html>

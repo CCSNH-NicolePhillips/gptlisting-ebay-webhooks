@@ -21,6 +21,5 @@ ebayAuthRouter.get('/auth/ebay/callback', async (req, res) => {
   if (!code) return res.status(400).send('Missing code');
   const tok = await exchangeAuthCode(code);
   await saveEbayTokens('demo', tok);
-  res.redirect('/connected/ebay');   // <— this line does the magic
+  res.redirect('/connected/ebay'); // <— this line does the magic
 });
-

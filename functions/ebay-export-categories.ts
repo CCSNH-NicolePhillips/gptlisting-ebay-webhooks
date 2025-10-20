@@ -1,15 +1,19 @@
-import type { Handler } from "@netlify/functions";
-import { tokenHosts, appAccessToken, accessTokenFromRefresh } from "./_common.js";
-import { cacheStore, tokensStore } from "./_blobs.js";
+import type { Handler } from '@netlify/functions';
+import { tokenHosts, appAccessToken, accessTokenFromRefresh } from './_common.js';
+import { cacheStore, tokensStore } from './_blobs.js';
 
 type FlatCategory = { categoryId: string; categoryName: string; categoryPath: string };
 
 export const handler: Handler = async (event) => {
   try {
-    const MARKETPLACE_ID = (event.queryStringParameters?.marketplaceId || process.env.EBAY_MARKETPLACE_ID || "EBAY_US").trim();
-    const format = (event.queryStringParameters?.format || "csv").toLowerCase(); // csv | json
-    const refresh = (event.queryStringParameters?.refresh || "").toLowerCase(); // "1" | "true"
-    const forceRefresh = refresh === "1" || refresh === "true";
+    const MARKETPLACE_ID = (
+      event.queryStringParameters?.marketplaceId ||
+      process.env.EBAY_MARKETPLACE_ID ||
+      'EBAY_US'
+    ).trim();
+    const format = (event.queryStringParameters?.format || 'csv').toLowerCase(); // csv | json
+    const refresh = (event.queryStringParameters?.refresh || '').toLowerCase(); // "1" | "true"
+    const forceRefresh = refresh === '1' || refresh === 'true';
 
     const { apiHost } = tokenHosts(process.env.EBAY_ENV);
     const store = cacheStore();
@@ -20,7 +24,7 @@ export const handler: Handler = async (event) => {
     // Helper to get token (prefer app, fallback to user refresh token if invalid_scope)
     async function getAnyToken(): Promise<string> {
       try {
-        const a = await appAccessToken(["https://api.ebay.com/oauth/api_scope"]);
+        const a = await appAccessToken(['https://api.ebay.com/oauth/api_scope']);
         return a.access_token;
       } catch (e: any) {
         const msg = String(e?.message || e);
@@ -28,7 +32,10 @@ export const handler: Handler = async (event) => {
           const tstore = tokensStore();
           const saved = (await tstore.get('ebay.json', { type: 'json' })) as any;
           const refresh = saved?.refresh_token as string | undefined;
-          if (!refresh) throw new Error('app token invalid_scope and no stored user refresh token; connect eBay first');
+          if (!refresh)
+            throw new Error(
+              'app token invalid_scope and no stored user refresh token; connect eBay first'
+            );
           const u = await accessTokenFromRefresh(refresh);
           return u.access_token;
         }
@@ -37,22 +44,27 @@ export const handler: Handler = async (event) => {
     }
 
     // Helper to fetch and flatten taxonomy tree
-    async function fetchAndFlatten(): Promise<{ treeId: string; categories: FlatCategory[] }>{
+    async function fetchAndFlatten(): Promise<{ treeId: string; categories: FlatCategory[] }> {
       const access_token = await getAnyToken();
       const headers = {
         Authorization: `Bearer ${access_token}`,
-        Accept: "application/json",
-        "Accept-Language": "en-US",
-        "Content-Language": "en-US",
-        "X-EBAY-C-MARKETPLACE-ID": MARKETPLACE_ID,
+        Accept: 'application/json',
+        'Accept-Language': 'en-US',
+        'Content-Language': 'en-US',
+        'X-EBAY-C-MARKETPLACE-ID': MARKETPLACE_ID,
       } as Record<string, string>;
 
-      const tRes = await fetch(`${apiHost}/commerce/taxonomy/v1/get_default_category_tree_id?marketplace_id=${MARKETPLACE_ID}`, { headers });
+      const tRes = await fetch(
+        `${apiHost}/commerce/taxonomy/v1/get_default_category_tree_id?marketplace_id=${MARKETPLACE_ID}`,
+        { headers }
+      );
       const tJson = await tRes.json();
       const treeId = tJson?.categoryTreeId;
-      if (!treeId) throw new Error("No taxonomy tree id for marketplace " + MARKETPLACE_ID);
+      if (!treeId) throw new Error('No taxonomy tree id for marketplace ' + MARKETPLACE_ID);
 
-      const res = await fetch(`${apiHost}/commerce/taxonomy/v1/category_tree/${treeId}`, { headers });
+      const res = await fetch(`${apiHost}/commerce/taxonomy/v1/category_tree/${treeId}`, {
+        headers,
+      });
       const full = await res.json();
       const root = full?.rootCategoryNode || full;
 
@@ -62,7 +74,16 @@ export const handler: Handler = async (event) => {
         const name: string | undefined = cat.categoryName || node.categoryName;
         const id: string | undefined = cat.categoryId || node.categoryId;
         const children = node.childCategoryTreeNodes || node.children || [];
-        const here = id && name ? [{ categoryId: String(id), categoryName: String(name), categoryPath: [...path, String(name)].join(" > ") }] : [];
+        const here =
+          id && name
+            ? [
+                {
+                  categoryId: String(id),
+                  categoryName: String(name),
+                  categoryPath: [...path, String(name)].join(' > '),
+                },
+              ]
+            : [];
         const nextPath = name ? [...path, String(name)] : path;
         const kids = children.flatMap((c: any) => flatten(c, nextPath));
         return [...here, ...kids];
@@ -73,13 +94,15 @@ export const handler: Handler = async (event) => {
     }
 
     // Try cache first (from prior runs or from ebay-category-tree function)
-    let cachedTree = await store.get(treeCacheKey, { type: "json" }) as any;
+    let cachedTree = (await store.get(treeCacheKey, { type: 'json' })) as any;
     let categories: FlatCategory[] | undefined = undefined;
     let treeId: string | undefined = cachedTree?.treeId;
 
     if (!forceRefresh) {
       // Use pre-computed categories if present
-      const preJson = (await store.get(jsonOutKey, { type: "json" }).catch(() => undefined)) as FlatCategory[] | undefined;
+      const preJson = (await store.get(jsonOutKey, { type: 'json' }).catch(() => undefined)) as
+        | FlatCategory[]
+        | undefined;
       if (preJson && Array.isArray(preJson)) {
         categories = preJson;
       }
@@ -95,7 +118,7 @@ export const handler: Handler = async (event) => {
       await store.setJSON(jsonOutKey, categories);
       // Also write CSV
       const csv = toCSV(categories);
-  await store.set(csvOutKey, csv);
+      await store.set(csvOutKey, csv);
     } else {
       // Ensure CSV exists alongside JSON for convenience
       const maybeCsv = await store.get(csvOutKey).catch(() => undefined);
@@ -106,14 +129,20 @@ export const handler: Handler = async (event) => {
     }
 
     // Respond with requested format
-    if (format === "json") {
+    if (format === 'json') {
       return {
         statusCode: 200,
         headers: {
-          "Content-Type": "application/json",
-          "Content-Disposition": `attachment; filename=taxonomy-categories-${MARKETPLACE_ID}.json`,
+          'Content-Type': 'application/json',
+          'Content-Disposition': `attachment; filename=taxonomy-categories-${MARKETPLACE_ID}.json`,
         } as Record<string, string>,
-        body: JSON.stringify({ ok: true, marketplaceId: MARKETPLACE_ID, treeId: treeId || "", count: categories.length, categories }),
+        body: JSON.stringify({
+          ok: true,
+          marketplaceId: MARKETPLACE_ID,
+          treeId: treeId || '',
+          count: categories.length,
+          categories,
+        }),
       };
     }
 
@@ -122,19 +151,25 @@ export const handler: Handler = async (event) => {
     return {
       statusCode: 200,
       headers: {
-        "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename=taxonomy-categories-${MARKETPLACE_ID}.csv`,
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename=taxonomy-categories-${MARKETPLACE_ID}.csv`,
       } as Record<string, string>,
       body: csv,
     };
   } catch (e: any) {
-    return { statusCode: 500, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "export-categories error", detail: e?.message || String(e) }) };
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'export-categories error', detail: e?.message || String(e) }),
+    };
   }
 };
 
 function toCSV(rows: FlatCategory[]): string {
   const escape = (s: string) => '"' + s.replace(/"/g, '""') + '"';
-  const header = ["categoryId", "categoryName", "categoryPath"].join(",");
-  const body = rows.map(r => [r.categoryId, r.categoryName, r.categoryPath].map(escape).join(",")).join("\n");
-  return header + "\n" + body + "\n";
+  const header = ['categoryId', 'categoryName', 'categoryPath'].join(',');
+  const body = rows
+    .map((r) => [r.categoryId, r.categoryName, r.categoryPath].map(escape).join(','))
+    .join('\n');
+  return header + '\n' + body + '\n';
 }

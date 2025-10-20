@@ -1,5 +1,5 @@
 // @ts-check
-import js from '@eslint/js'
+import js from '@eslint/js';
 
 /** @type {import('eslint').Linter.FlatConfig[]} */
 export default [
@@ -26,4 +26,4 @@ export default [
       'no-constant-condition': ['error', { checkLoops: false }],
     },
   },
-]
+];

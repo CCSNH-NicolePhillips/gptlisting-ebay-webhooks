@@ -5,33 +5,113 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>GPTListing – Connect</title>
     <style>
-      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; padding: 2rem; background:#0b1020; color:#f4f6fb; }
-      .card { max-width: 760px; margin: 0 auto; background: #141a33; border: 1px solid #2a335c; border-radius: 12px; padding: 1.5rem; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
-      h1 { margin-top: 0; font-weight: 700; letter-spacing: .2px; }
-      .row { display: flex; gap: 1rem; flex-wrap: wrap; }
-      .col { flex: 1 1 280px; background: #0f1530; border: 1px solid #26305a; padding: 1rem; border-radius: 10px; }
-      .status { font-size: .9rem; opacity: .9; }
-  button { background: #4f7cff; color: white; border: none; border-radius: 8px; padding: .7rem 1rem; cursor: pointer; font-weight: 600; }
-  .btn { background: #4f7cff; color: white; border-radius: 8px; padding: .7rem 1rem; cursor: pointer; font-weight: 600; text-decoration: none; display: inline-block; }
-      button.secondary { background: transparent; color: #cbd5ff; border: 1px solid #3d4a86; }
-  .btn.secondary { background: transparent; color: #cbd5ff; border: 1px solid #3d4a86; }
-      button:disabled { opacity: .5; cursor: not-allowed; }
-      a { color: #a8c1ff; }
-      .small { font-size: .85rem; opacity: .8; }
-      .muted { color: #a2a9c8; }
-      .footer { margin-top: 1rem; font-size: .85rem; color: #a2a9c8; }
+      body {
+        font-family:
+          system-ui,
+          -apple-system,
+          Segoe UI,
+          Roboto,
+          Arial,
+          sans-serif;
+        margin: 0;
+        padding: 2rem;
+        background: #0b1020;
+        color: #f4f6fb;
+      }
+      .card {
+        max-width: 760px;
+        margin: 0 auto;
+        background: #141a33;
+        border: 1px solid #2a335c;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+      }
+      h1 {
+        margin-top: 0;
+        font-weight: 700;
+        letter-spacing: 0.2px;
+      }
+      .row {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+      }
+      .col {
+        flex: 1 1 280px;
+        background: #0f1530;
+        border: 1px solid #26305a;
+        padding: 1rem;
+        border-radius: 10px;
+      }
+      .status {
+        font-size: 0.9rem;
+        opacity: 0.9;
+      }
+      button {
+        background: #4f7cff;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 0.7rem 1rem;
+        cursor: pointer;
+        font-weight: 600;
+      }
+      .btn {
+        background: #4f7cff;
+        color: white;
+        border-radius: 8px;
+        padding: 0.7rem 1rem;
+        cursor: pointer;
+        font-weight: 600;
+        text-decoration: none;
+        display: inline-block;
+      }
+      button.secondary {
+        background: transparent;
+        color: #cbd5ff;
+        border: 1px solid #3d4a86;
+      }
+      .btn.secondary {
+        background: transparent;
+        color: #cbd5ff;
+        border: 1px solid #3d4a86;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      a {
+        color: #a8c1ff;
+      }
+      .small {
+        font-size: 0.85rem;
+        opacity: 0.8;
+      }
+      .muted {
+        color: #a2a9c8;
+      }
+      .footer {
+        margin-top: 1rem;
+        font-size: 0.85rem;
+        color: #a2a9c8;
+      }
     </style>
   </head>
   <body>
     <div class="card">
       <h1>Connect your accounts</h1>
-      <p class="muted">Link Dropbox to read photos, and eBay to create draft listings in your production account.</p>
+      <p class="muted">
+        Link Dropbox to read photos, and eBay to create draft listings in your production account.
+      </p>
       <div class="row">
         <div class="col">
           <h3>Dropbox</h3>
           <p class="status" id="dbxStatus">Loading…</p>
           <div>
-            <a id="dbxConnect" class="btn" href="/.netlify/functions/dropbox-oauth-start">Connect Dropbox</a>
+            <a id="dbxConnect" class="btn" href="/.netlify/functions/dropbox-oauth-start"
+              >Connect Dropbox</a
+            >
             <button id="dbxDisconnect" class="secondary">Disconnect</button>
           </div>
         </div>
@@ -39,35 +119,43 @@
           <h3>eBay (Production)</h3>
           <p class="status" id="ebayStatus">Loading…</p>
           <div>
-            <a id="ebayConnect" class="btn" href="/.netlify/functions/ebay-oauth-start">Connect eBay</a>
+            <a id="ebayConnect" class="btn" href="/.netlify/functions/ebay-oauth-start"
+              >Connect eBay</a
+            >
             <button id="ebayDisconnect" class="secondary">Disconnect</button>
           </div>
         </div>
       </div>
-      <div style="margin-top:1rem">
+      <div style="margin-top: 1rem">
         <button id="process" disabled>Process folder → Drafts</button>
         <span id="processMsg" class="small"></span>
       </div>
 
-      <hr style="margin:1.5rem 0; border:none; border-top:1px solid #2a335c"/>
+      <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid #2a335c" />
       <h2>Setup checklist</h2>
-      <ul class="small" id="checklist" style="line-height:1.9">
+      <ul class="small" id="checklist" style="line-height: 1.9">
         <li id="chkDropbox">Dropbox: <span class="muted">Unknown</span></li>
         <li id="chkEbay">eBay: <span class="muted">Unknown</span></li>
-        <li id="chkPolicies">Business policies: <span class="muted">Checking…</span> <a href="/policies.html" id="policiesLink" style="display:none">Manage</a></li>
-        <li id="chkLocation">Inventory location: <span class="muted">Checking…</span> <a href="/location.html" id="locationLink" style="display:none">Manage</a></li>
+        <li id="chkPolicies">
+          Business policies: <span class="muted">Checking…</span>
+          <a href="/policies.html" id="policiesLink" style="display: none">Manage</a>
+        </li>
+        <li id="chkLocation">
+          Inventory location: <span class="muted">Checking…</span>
+          <a href="/location.html" id="locationLink" style="display: none">Manage</a>
+        </li>
       </ul>
 
-      <div style="margin-top:1rem">
-  <a id="goCreateDraft" href="/draft-wizard.html"><button id="goCreateDraftBtn" disabled>Create Draft</button></a>
+      <div style="margin-top: 1rem">
+        <a id="goCreateDraft" href="/draft-wizard.html"
+          ><button id="goCreateDraftBtn" disabled>Create Draft</button></a
+        >
         <span id="goCreateMsg" class="small"></span>
       </div>
-      <div style="margin-top:.75rem">
+      <div style="margin-top: 0.75rem">
         <a class="btn secondary" href="/drafts.html" id="viewDraftsBtn">View Drafts</a>
       </div>
-      <div class="footer">
-        Need help? See <a href="/privacy.html" target="_blank">Privacy</a>.
-      </div>
+      <div class="footer">Need help? See <a href="/privacy.html" target="_blank">Privacy</a>.</div>
     </div>
 
     <script>
@@ -80,7 +168,9 @@
         ebayStatus.textContent = s.ebay?.connected ? 'Connected' : 'Not connected';
         const chkDropbox = document.getElementById('chkDropbox');
         const chkEbay = document.getElementById('chkEbay');
-        chkDropbox.innerHTML = s.dropbox?.connected ? 'Dropbox: ✅ Connected' : 'Dropbox: ❌ Not connected';
+        chkDropbox.innerHTML = s.dropbox?.connected
+          ? 'Dropbox: ✅ Connected'
+          : 'Dropbox: ❌ Not connected';
         chkEbay.innerHTML = s.ebay?.connected ? 'eBay: ✅ Connected' : 'eBay: ❌ Not connected';
         const connected = !!(s.dropbox?.connected && s.ebay?.connected);
         document.getElementById('process').disabled = !connected;
@@ -99,68 +189,96 @@
       document.getElementById('process').onclick = async () => {
         const btn = document.getElementById('process');
         const msg = document.getElementById('processMsg');
-        btn.disabled = true; msg.textContent = 'Starting…';
+        btn.disabled = true;
+        msg.textContent = 'Starting…';
         try {
           const res = await fetch('/.netlify/functions/process', { method: 'POST' });
           const data = await res.json();
-          msg.textContent = data.ok ? `Created ${data.created || 0} drafts` : (data.error || 'Error');
-        } catch(e) {
+          msg.textContent = data.ok ? `Created ${data.created || 0} drafts` : data.error || 'Error';
+        } catch (e) {
           msg.textContent = 'Error: ' + e.message;
-        } finally { btn.disabled = false; }
+        } finally {
+          btn.disabled = false;
+        }
       };
 
       // Optional legacy handler (guarded) – keep page JS from crashing if form isn't present
       const draftFormEl = document.getElementById('draftForm');
-      if (draftFormEl && 'addEventListener' in draftFormEl) draftFormEl.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const msg = document.getElementById('createDraftMsg');
-        msg.textContent = '';
-        const sku = document.getElementById('sku').value.trim();
-        const title = document.getElementById('title').value.trim();
-        const price = parseFloat(document.getElementById('price').value);
-        const qty = parseInt(document.getElementById('qty').value || '1', 10);
-        const categoryId = document.getElementById('categoryId').value.trim();
-        const conditionNote = document.getElementById('conditionNote').value.trim();
-        const description = document.getElementById('description').value.trim();
-        const imagesRaw = document.getElementById('images').value.trim();
-        const images = imagesRaw ? imagesRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
-        if (!sku || !title || !Number.isFinite(price) || images.length === 0) {
-          msg.textContent = 'Please provide SKU, title, price, and at least one image URL.';
-          return;
-        }
-  const selFulfillmentEl = document.getElementById('selFulfillment');
-  const selPaymentEl = document.getElementById('selPayment');
-  const selReturnEl = document.getElementById('selReturn');
-  const locKeyEl = document.getElementById('locKey');
-  const selFulfillment = selFulfillmentEl && 'value' in selFulfillmentEl ? selFulfillmentEl.value : '';
-  const selPayment = selPaymentEl && 'value' in selPaymentEl ? selPaymentEl.value : '';
-  const selReturn = selReturnEl && 'value' in selReturnEl ? selReturnEl.value : '';
-  const locKey = locKeyEl && 'value' in locKeyEl ? locKeyEl.value : '';
-        const payload = {
-          sku, title, price, qty, images,
-          categoryId: categoryId || undefined,
-          description: description || undefined,
-          conditionNote: conditionNote || undefined,
-          fulfillmentPolicyId: selFulfillment || undefined,
-          paymentPolicyId: selPayment || undefined,
-          returnPolicyId: selReturn || undefined,
-          merchantLocationKey: locKey || undefined,
-        };
-        msg.textContent = 'Creating draft…';
-        try {
-          const r = await fetch('/.netlify/functions/ebay-create-draft', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-          let data;
-          try { data = await r.json(); } catch { data = { error: await r.text() }; }
-          if (!r.ok || !data.ok) {
-            const detail = data.detail ? (typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)) : '';
-            msg.textContent = 'Error: ' + (data.error || JSON.stringify(data)) + (detail ? ' | ' + detail : '');
-          } else {
-            msg.textContent = 'Draft created: offerId ' + (data.draftOffer?.offerId || '(unknown)');
+      if (draftFormEl && 'addEventListener' in draftFormEl)
+        draftFormEl.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const msg = document.getElementById('createDraftMsg');
+          msg.textContent = '';
+          const sku = document.getElementById('sku').value.trim();
+          const title = document.getElementById('title').value.trim();
+          const price = parseFloat(document.getElementById('price').value);
+          const qty = parseInt(document.getElementById('qty').value || '1', 10);
+          const categoryId = document.getElementById('categoryId').value.trim();
+          const conditionNote = document.getElementById('conditionNote').value.trim();
+          const description = document.getElementById('description').value.trim();
+          const imagesRaw = document.getElementById('images').value.trim();
+          const images = imagesRaw
+            ? imagesRaw
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean)
+            : [];
+          if (!sku || !title || !Number.isFinite(price) || images.length === 0) {
+            msg.textContent = 'Please provide SKU, title, price, and at least one image URL.';
+            return;
           }
-        } catch (err) {
-          msg.textContent = 'Error: ' + err.message;
-        }
-      });
+          const selFulfillmentEl = document.getElementById('selFulfillment');
+          const selPaymentEl = document.getElementById('selPayment');
+          const selReturnEl = document.getElementById('selReturn');
+          const locKeyEl = document.getElementById('locKey');
+          const selFulfillment =
+            selFulfillmentEl && 'value' in selFulfillmentEl ? selFulfillmentEl.value : '';
+          const selPayment = selPaymentEl && 'value' in selPaymentEl ? selPaymentEl.value : '';
+          const selReturn = selReturnEl && 'value' in selReturnEl ? selReturnEl.value : '';
+          const locKey = locKeyEl && 'value' in locKeyEl ? locKeyEl.value : '';
+          const payload = {
+            sku,
+            title,
+            price,
+            qty,
+            images,
+            categoryId: categoryId || undefined,
+            description: description || undefined,
+            conditionNote: conditionNote || undefined,
+            fulfillmentPolicyId: selFulfillment || undefined,
+            paymentPolicyId: selPayment || undefined,
+            returnPolicyId: selReturn || undefined,
+            merchantLocationKey: locKey || undefined,
+          };
+          msg.textContent = 'Creating draft…';
+          try {
+            const r = await fetch('/.netlify/functions/ebay-create-draft', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            });
+            let data;
+            try {
+              data = await r.json();
+            } catch {
+              data = { error: await r.text() };
+            }
+            if (!r.ok || !data.ok) {
+              const detail = data.detail
+                ? typeof data.detail === 'string'
+                  ? data.detail
+                  : JSON.stringify(data.detail)
+                : '';
+              msg.textContent =
+                'Error: ' + (data.error || JSON.stringify(data)) + (detail ? ' | ' + detail : '');
+            } else {
+              msg.textContent =
+                'Draft created: offerId ' + (data.draftOffer?.offerId || '(unknown)');
+            }
+          } catch (err) {
+            msg.textContent = 'Error: ' + err.message;
+          }
+        });
 
       async function evaluatePrereqs() {
         const connected = await refreshStatus();
@@ -182,13 +300,27 @@
         }
         const chkPolicies = document.getElementById('chkPolicies');
         const policiesLink = document.getElementById('policiesLink');
-        if (policiesReady) { chkPolicies.innerHTML = 'Business policies: ✅ Ready'; policiesLink.style.display = 'inline'; policiesLink.textContent = 'View'; }
-        else { chkPolicies.innerHTML = 'Business policies: ❌ Missing'; policiesLink.style.display = 'inline'; policiesLink.textContent = 'Create'; }
+        if (policiesReady) {
+          chkPolicies.innerHTML = 'Business policies: ✅ Ready';
+          policiesLink.style.display = 'inline';
+          policiesLink.textContent = 'View';
+        } else {
+          chkPolicies.innerHTML = 'Business policies: ❌ Missing';
+          policiesLink.style.display = 'inline';
+          policiesLink.textContent = 'Create';
+        }
 
         const chkLocation = document.getElementById('chkLocation');
         const locationLink = document.getElementById('locationLink');
-        if (locationReady) { chkLocation.innerHTML = 'Inventory location: ✅ Ready'; locationLink.style.display = 'inline'; locationLink.textContent = 'View'; }
-        else { chkLocation.innerHTML = 'Inventory location: ❌ Missing'; locationLink.style.display = 'inline'; locationLink.textContent = 'Create'; }
+        if (locationReady) {
+          chkLocation.innerHTML = 'Inventory location: ✅ Ready';
+          locationLink.style.display = 'inline';
+          locationLink.textContent = 'View';
+        } else {
+          chkLocation.innerHTML = 'Inventory location: ❌ Missing';
+          locationLink.style.display = 'inline';
+          locationLink.textContent = 'Create';
+        }
 
         const goBtn = document.getElementById('goCreateDraftBtn');
         goBtn.disabled = !(connected && policiesReady && locationReady);
