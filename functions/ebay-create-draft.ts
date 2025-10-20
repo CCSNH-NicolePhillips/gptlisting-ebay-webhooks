@@ -165,9 +165,10 @@ export const handler: Handler = async (event) => {
       listingPolicies: { fulfillmentPolicyId: overrideFulfillment || fulfillmentPolicyId, paymentPolicyId: overridePayment || paymentPolicyId, returnPolicyId: overrideReturns || returnPolicyId },
       merchantLocationKey: mlk,
     };
-    // Include condition on offer if provided
+    // Include condition on offer if provided (ensure numeric)
     if (condition !== undefined) {
-      (offerPayload as any).condition = typeof condition === 'string' ? condition : Number(condition);
+      const condNum = Number(condition);
+      if (Number.isFinite(condNum)) (offerPayload as any).condition = condNum;
     }
 
     const offerUrl = `${apiHost}/sell/inventory/v1/offer`;
