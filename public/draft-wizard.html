@@ -52,16 +52,8 @@
           <div id="browseList" class="row"></div>
         </div>
       </div>
-      <!-- Drafts modal -->
-      <div id="draftsModal" class="modal hide" role="dialog" aria-modal="true">
-        <div style="background:#141a33;border:1px solid #2a335c;border-radius:12px;max-width:900px;width:92%;padding:1rem 1.25rem;max-height:80vh;overflow:auto">
-          <div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:.2rem 0">Draft offers</h3><button id="draftsClose" type="button" class="secondary">Close</button></div>
-          <div id="draftsList" class="row" style="margin-top:.5rem"></div>
-        </div>
-      </div>
       <div style="margin:.5rem 0; display:flex; gap:.5rem; align-items:center; flex-wrap:wrap">
         <button id="btnNext" disabled>Next →</button>
-        <button id="btnListDrafts" class="secondary" type="button">List drafts…</button>
         <span id="msg1" class="muted"></span>
       </div>
     </div>
@@ -115,10 +107,7 @@
       const locationSel = $('location');
       const modal = $('browseModal');
   const browseBtn = $('btnBrowse');
-      const listDraftsBtn = $('btnListDrafts');
-      const draftsModal = $('draftsModal');
-      const draftsClose = $('draftsClose');
-      const draftsList = $('draftsList');
+      
       const browseClose = $('browseClose');
       const browseList = $('browseList');
       const crumbs = $('crumbs');
@@ -456,66 +445,7 @@
         } catch(e){ crumbs.textContent = 'Browse error: ' + (e.response?.error || e.message); }
       }
 
-      // List drafts modal logic
-      async function loadDrafts() {
-        draftsList.innerHTML = '';
-        try {
-          const data = await fetchJSON('/.netlify/functions/ebay-list-offers?status=DRAFT&limit=50');
-          const offers = Array.isArray(data.offers) ? data.offers : [];
-          if (!offers.length){ const d=document.createElement('div'); d.textContent='No drafts found.'; draftsList.appendChild(d); return; }
-          offers.forEach(o => {
-            const col = document.createElement('div'); col.className='col';
-            const btn = document.createElement('button'); btn.className='secondary'; btn.style.width='100%';
-            const title = (o.listingDescription||'').slice(0,80) || o.sku || o.offerId;
-            btn.textContent = `${o.offerId} — ${title}`;
-            btn.onclick = async () => {
-              try {
-                // Load offer details
-                const got = await fetchJSON('/.netlify/functions/ebay-get-offer?id='+encodeURIComponent(o.offerId));
-                const sku = got.offer?.sku || o.sku;
-                const inv = sku ? await fetchJSON('/.netlify/functions/ebay-get-inventory-item?sku='+encodeURIComponent(sku)) : null;
-                // Fill form fields
-                if (sku) $('sku').value = sku;
-                if (got.offer?.listingDescription) $('description').value = got.offer.listingDescription;
-                if (typeof got.offer?.availableQuantity === 'number') $('qty').value = String(got.offer.availableQuantity);
-                if (got.offer?.pricingSummary?.price?.value) $('price').value = String(got.offer.pricingSummary.price.value);
-                if (got.offer?.categoryId) { $('categoryId').value = String(got.offer.categoryId); nextBtn.disabled = false; }
-                if (inv?.item?.product?.title) titleEl.value = inv.item.product.title;
-                const imgs = inv?.item?.product?.imageUrls || [];
-                if (imgs.length) $('images').value = imgs.join(', ');
-                // Load requirements for aspects/condition
-                await enterStep2();
-                // Pre-fill aspects if available
-                const asp = inv?.item?.product?.aspects || {};
-                for (const [name, vals] of Object.entries(asp)){
-                  const el = document.querySelector(`[data-aspect="${name}"]`);
-                  if (!el) continue;
-                  const arr = Array.isArray(vals) ? vals : [vals];
-                  if (el.tagName === 'SELECT' && el.multiple) {
-                    const set = new Set(arr.map(v=>String(v)));
-                    Array.from(el.options).forEach(op=>{ op.selected = set.has(op.value); });
-                  } else if (el.tagName === 'SELECT') {
-                    const first = arr.find(v=>v!=null && v!=='');
-                    if (first) el.value = String(first);
-                  } else {
-                    const first = arr.find(v=>v!=null && v!=='');
-                    if (first) el.value = String(first);
-                  }
-                }
-                // Set condition if present
-                if (got.offer?.condition) conditionSel.value = String(got.offer.condition);
-                draftsModal.classList.add('hide');
-                window.scrollTo({ top: step2.offsetTop - 10, behavior:'smooth' });
-              } catch (e) {
-                alert('Failed to load draft: '+ (e?.message || JSON.stringify(e)));
-              }
-            };
-            col.appendChild(btn); draftsList.appendChild(col);
-          });
-        } catch(e){ const d=document.createElement('div'); d.textContent='Error loading drafts.'; draftsList.appendChild(d); }
-      }
-      if (listDraftsBtn) listDraftsBtn.addEventListener('click', async ()=>{ draftsModal.classList.remove('hide'); await loadDrafts(); });
-      if (draftsClose) draftsClose.addEventListener('click', ()=> draftsModal.classList.add('hide'));
+      
 
   if (browseBtn) browseBtn.onclick = () => { modal.classList.remove('hide'); browse(); };
   if (browseClose) browseClose.onclick = () => { modal.classList.add('hide'); setTimeout(()=>{ try{ browseBtn?.focus(); }catch{} }, 0); };
