@@ -62,7 +62,18 @@ export const handler: Handler = async (event) => {
       aspects: undefined,
     } as any;
     if (aspects && typeof aspects === 'object') {
-      invPayload.product.aspects = aspects; // inventory_item product.aspects
+      // Inventory API expects aspects as: { [name]: string[] }
+      const norm: Record<string, string[]> = {};
+      for (const [k, v] of Object.entries(aspects)) {
+        if (Array.isArray(v)) {
+          const arr = v.map((x) => (x == null ? '' : String(x).trim())).filter(Boolean);
+          if (arr.length) norm[k] = arr;
+        } else if (v != null) {
+          const s = String(v).trim();
+          if (s) norm[k] = [s];
+        }
+      }
+      if (Object.keys(norm).length) invPayload.product.aspects = norm; // inventory_item product.aspects
     }
 
     const invUrl = `${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
