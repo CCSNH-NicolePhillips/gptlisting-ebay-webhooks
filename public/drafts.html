@@ -3,50 +3,93 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Drafts</title>
+    <title>Draft offers</title>
     <style>
-      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; padding: 2rem; background:#0b1020; color:#f4f6fb; }
-      .wrap { max-width: 1100px; margin: 0 auto; }
-      .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
-      .card { background:#141a33; border:1px solid #2a335c; border-radius:12px; padding:1rem; display:flex; flex-direction:column; gap:.5rem; }
-      .meta { color:#a2a9c8; font-size: .9rem }
-      button { background:#4f7cff; color:white; border:none; border-radius:8px; padding:.5rem .8rem; cursor:pointer; font-weight:600; }
-      button.secondary { background: transparent; color: #cbd5ff; border: 1px solid #3d4a86; }
-      .row { display:flex; gap:.5rem; flex-wrap:wrap }
-      .muted { color:#a2a9c8 }
-      a { color:#9db2ff }
+      :root{
+        --bg:#0b1020; --panel:#141a33; --panel-2:#0f1530; --line:#2a335c; --text:#f4f6fb; --muted:#a2a9c8; --primary:#4f7cff; --primary-600:#3e66d6; --accent:#22c55e; --danger:#ef4444; --warning:#f59e0b;
+      }
+      *{ box-sizing:border-box }
+      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; background:var(--bg); color:var(--text); }
+      .wrap { max-width: 1140px; margin: 0 auto; padding: 2rem 1.25rem; }
+      header { display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-bottom: 1rem; }
+      h1 { font-size: 1.5rem; margin: 0; }
+      .flash { color: var(--muted); min-height: 1.25rem; }
+      .toolbar { display:flex; gap:.5rem; align-items:center }
+      .btn { background: var(--primary); color: #fff; border: none; border-radius: 10px; padding:.55rem .85rem; font-weight:600; cursor:pointer; box-shadow: 0 1px 0 rgba(0,0,0,.25); }
+      .btn:hover { background: var(--primary-600); }
+      .btn.secondary { background: transparent; color:#cbd5ff; border:1px solid var(--line); box-shadow: none; }
+      .btn.danger { background: transparent; color:#ffb4b4; border:1px solid rgba(239,68,68,.35); }
+      .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; }
+      .card { background:linear-gradient(180deg, var(--panel), var(--panel-2)); border:1px solid var(--line); border-radius: 14px; overflow: hidden; display:flex; flex-direction:column; }
+      .thumb { position: relative; width: 100%; padding-top: 56%; background: #0d1430; border-bottom:1px solid var(--line); }
+      .thumb img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0; transition:opacity .25s ease; }
+      .thumb img.loaded { opacity:1; }
+      .skeleton { position:absolute; inset:0; background: linear-gradient(90deg, rgba(255,255,255,.03), rgba(255,255,255,.06), rgba(255,255,255,.03)); background-size: 200% 100%; animation: shimmer 1.2s infinite; }
+      @keyframes shimmer { 0%{ background-position:200% 0 } 100%{ background-position:-200% 0 } }
+      .body { padding: .9rem .9rem 1rem; display:flex; flex-direction:column; gap:.5rem }
+      .title { font-weight:700; line-height:1.3; }
+      .meta { color: var(--muted); font-size: .9rem; display:flex; flex-wrap:wrap; gap:.5rem; }
+      .row { display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.5rem }
+      .badge { display:inline-flex; align-items:center; gap:.35rem; font-size:.75rem; padding:.2rem .5rem; border-radius: 999px; border:1px solid var(--line); color:#d6e1ff; }
+      .badge .dot { width:6px; height:6px; border-radius:999px; background: var(--warning); box-shadow: 0 0 0 3px rgba(245,158,11,.18); }
+      .muted { color: var(--muted); }
+      .empty { color: var(--muted); background: rgba(255,255,255,.02); border:1px dashed var(--line); border-radius:12px; padding:1.25rem; text-align:center }
+      a { color:#9db2ff; text-decoration:none }
+      a:hover { text-decoration:underline }
+      .topbar { display:flex; align-items:center; justify-content:space-between; margin:.25rem 0 1rem }
     </style>
   </head>
   <body>
     <div class="wrap">
-      <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:1rem">
-        <a class="secondary" href="/draft-wizard.html">← Create another</a>
-        <div id="flash" class="muted"></div>
+      <header>
+        <h1>Draft offers</h1>
+        <div class="toolbar">
+          <a class="btn secondary" href="/draft-wizard.html">← Create another</a>
+        </div>
+      </header>
+      <div class="topbar">
+        <div id="flash" class="flash"></div>
       </div>
-      <h2>Draft offers</h2>
-      <div id="list" class="grid"></div>
+      <div id="list" class="grid" aria-live="polite"></div>
     </div>
 
     <script>
-      async function fetchJSON(url, opts){ const r = await fetch(url, opts); let j; try { j = await r.json(); } catch { j = { raw: await r.text() }; } if (!r.ok) throw Object.assign(new Error('HTTP '+r.status), { response:j, status:r.status }); return j; }
+      async function fetchJSON(url, opts){ const r = await fetch(url, opts); const t = await r.text(); let j; try { j = JSON.parse(t); } catch { j = { raw:t }; } if (!r.ok) throw Object.assign(new Error('HTTP '+r.status), { response:j, status:r.status }); return j; }
       const $ = (id)=> document.getElementById(id);
       const list = $('list');
       const flash = $('flash');
 
+      const fmtPrice = (v, c) => (v!=null && c) ? new Intl.NumberFormat(undefined, { style:'currency', currency:c }).format(Number(v)) : '';
+
       function card(offer){
         const el = document.createElement('div'); el.className='card';
-        const head = document.createElement('div'); head.innerHTML = `<div style="font-weight:700">${offer.offerId} — ${escapeHtml((offer.listingDescription||'').slice(0,80))}</div>`;
-        const meta = document.createElement('div'); meta.className='meta'; meta.textContent = `SKU: ${offer.sku || ''} · Category: ${offer.categoryId || ''} · Qty: ${offer.availableQuantity || ''}`;
+        // thumbnail area
+        const th = document.createElement('div'); th.className='thumb';
+        const sk = document.createElement('div'); sk.className='skeleton'; th.appendChild(sk);
+        const img = document.createElement('img'); th.appendChild(img);
+        // body
+        const body = document.createElement('div'); body.className='body';
+        const title = document.createElement('div'); title.className='title'; title.textContent = (offer.listingDescription||'').slice(0,120) || '(no title)';
+        const meta = document.createElement('div'); meta.className='meta';
+        const priceStr = fmtPrice(offer?.pricingSummary?.price?.value, offer?.pricingSummary?.price?.currency);
+        meta.textContent = [
+          offer.sku ? `SKU: ${offer.sku}` : null,
+          offer.categoryId ? `Cat: ${offer.categoryId}` : null,
+          offer.availableQuantity!=null ? `Qty: ${offer.availableQuantity}` : null,
+          priceStr ? `Price: ${priceStr}` : null,
+        ].filter(Boolean).join(' • ');
+        const badge = document.createElement('div'); badge.className='badge'; badge.innerHTML = '<span class="dot"></span> Unpublished';
         const row = document.createElement('div'); row.className='row';
-        const pub = document.createElement('button'); pub.textContent = 'Publish Draft';
-        const del = document.createElement('button'); del.textContent = 'Delete Draft'; del.className='secondary';
+        const pub = document.createElement('button'); pub.className='btn'; pub.textContent = 'Publish';
+        const del = document.createElement('button'); del.className='btn danger'; del.textContent = 'Delete';
+
         pub.onclick = async () => {
           pub.disabled = true; del.disabled = true; flash.textContent='Publishing…';
           try {
             const r = await fetch('/.netlify/functions/ebay-publish-offer', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ offerId: offer.offerId }) });
             const data = await r.json();
             if (r.ok && data.ok) { el.remove(); flash.textContent = `Published ${offer.offerId}`; }
-            else { flash.textContent = `Publish error: ${data.error||''} ${(data.status||'')}`; pub.disabled = del.disabled = false; }
+            else { flash.textContent = `Publish error: ${data.error||''}`; pub.disabled = del.disabled = false; }
           } catch(e){ flash.textContent='Publish error: '+e.message; pub.disabled = del.disabled = false; }
         };
         del.onclick = async () => {
@@ -56,27 +99,79 @@
             const r = await fetch('/.netlify/functions/ebay-delete-offer?offerId='+encodeURIComponent(offer.offerId));
             const data = await r.json();
             if (r.ok && data.ok) { el.remove(); flash.textContent = `Deleted ${offer.offerId}`; }
-            else { flash.textContent = `Delete error: ${data.error||''} ${(data.status||'')}`; pub.disabled = del.disabled = false; }
+            else { flash.textContent = `Delete error: ${data.error||''}`; pub.disabled = del.disabled = false; }
           } catch(e){ flash.textContent='Delete error: '+e.message; pub.disabled = del.disabled = false; }
         };
+
         row.appendChild(pub); row.appendChild(del);
-        el.appendChild(head); el.appendChild(meta); el.appendChild(row);
+        body.appendChild(title); body.appendChild(meta); body.appendChild(badge); body.appendChild(row);
+        el.appendChild(th); el.appendChild(body);
+        // attach lazy thumbnail loader
+        el.dataset.sku = offer.sku || '';
+        el._img = img; el._sk = sk;
         return el;
       }
 
-      function escapeHtml(s){ return String(s).replace(/[&<>"]+/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c])); }
+      function escapeHtml(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c])); }
 
       async function load(){
         list.innerHTML='';
+        // loading skeletons
+        for (let i=0;i<6;i++){ const ph = document.createElement('div'); ph.className='card'; ph.innerHTML = '<div class="thumb"><div class="skeleton"></div></div><div class="body"><div class="title" style="height:1.2rem;background:rgba(255,255,255,.06);border-radius:6px;width:70%"></div><div class="meta" style="height:1rem;background:rgba(255,255,255,.04);border-radius:6px;width:90%"></div><div class="row"><button class="btn" disabled>Publish</button><button class="btn danger" disabled>Delete</button></div></div>'; list.appendChild(ph); }
         try {
-          const j = await fetchJSON('/.netlify/functions/ebay-list-offers?status=DRAFT&limit=100');
+          // eBay treats saved offers awaiting publish as UNPUBLISHED
+          const j = await fetchJSON('/.netlify/functions/ebay-list-offers?status=UNPUBLISHED&limit=100');
           const offers = j.offers||[];
-          if (!offers.length) { list.innerHTML = '<div class="muted">No drafts found.</div>'; return; }
+          if (!offers.length) { list.innerHTML = '<div class="empty">No drafts yet. Create your first listing draft from the wizard.</div>'; return; }
+          list.innerHTML='';
           offers.forEach(o => list.appendChild(card(o)));
-        } catch(e){ list.innerHTML = '<div class="muted">Failed to load drafts.</div>'; }
+          // lazy-load thumbnails with small concurrency to stay snappy
+          lazyLoadThumbs();
+        } catch(e){
+          const wrap = document.createElement('div'); wrap.className='empty';
+          const msg = e?.response ? JSON.stringify(e.response).slice(0,500) : (e?.message||String(e));
+          wrap.innerHTML = `Failed to load drafts.<br/><small class="muted">${escapeHtml(msg)}</small> <div style="margin-top:.75rem"><button class="btn secondary" id="retryBtn">Retry</button></div>`;
+          list.innerHTML = ''; list.appendChild(wrap);
+          document.getElementById('retryBtn')?.addEventListener('click', load);
+        }
       }
 
-      // Show flash when redirected with ?created=offerId
+      function proxied(url){ return '/.netlify/functions/image-proxy?url='+encodeURIComponent(url); }
+
+      async function getImagesForSKU(sku){
+        if (!sku) return [];
+        try {
+          const j = await fetchJSON('/.netlify/functions/ebay-get-inventory-item?sku='+encodeURIComponent(sku));
+          const imgs = j?.item?.product?.imageUrls || j?.item?.product?.images || j?.item?.product?.image || [];
+          const arr = Array.isArray(imgs) ? imgs : (imgs ? [imgs] : []);
+          return arr;
+        } catch { return []; }
+      }
+
+      function lazyLoadThumbs(){
+        const nodes = Array.from(list.querySelectorAll('.card'));
+        const q = [];
+        for (const n of nodes){
+          const sku = n.dataset.sku;
+          if (!sku) continue;
+          q.push(async () => {
+            const imgs = await getImagesForSKU(sku);
+            const url = imgs[0];
+            if (url && n._img){
+              const src = proxied(url);
+              n._img.onload = () => { n._img.classList.add('loaded'); n._sk?.remove?.(); };
+              n._img.onerror = () => { n._sk?.remove?.(); };
+              n._img.src = src;
+            } else { n._sk?.remove?.(); }
+          });
+        }
+        // run with limited concurrency
+        const concurrency = 6; let i = 0;
+        async function next(){ const fn = q[i++]; if (!fn) return; await fn(); return next(); }
+        const workers = Array.from({length: Math.min(concurrency, q.length)}, next);
+        Promise.all(workers).catch(()=>{});
+      }
+
       const params = new URLSearchParams(location.search);
       if (params.get('created')) { flash.textContent = `Created draft ${params.get('created')}`; }
       load();
