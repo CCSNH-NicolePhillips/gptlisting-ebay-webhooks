@@ -1,6 +1,8 @@
 node_modules
 dist
 .env
+.vscode/
+*.zip
 *.log
 .tmp/
 .DS_Store
