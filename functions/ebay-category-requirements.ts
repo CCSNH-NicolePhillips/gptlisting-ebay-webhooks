@@ -95,19 +95,12 @@ export const handler: Handler = async (event) => {
     return { statusCode: aspects.status, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "category-requirements error", status: aspects.status, detail: aspects.body || aspects.text || "unknown" }) };
   }
 
-  // 5) Map aspects (required may be SINGLE or MULTI)
+  // 5) Return aspects in original eBay shape (client expects localizedAspectName/aspectName/aspectValues)
   const src = aspects.body as Json;
   const arr = Array.isArray(src?.aspects) ? src.aspects : [];
-  const mapped = arr.map((a: any) => ({
-    name: a.localizedAspectName || a.aspectName,
-    required: !!a.aspectConstraint?.aspectRequired,
-    usage: a.aspectConstraint?.aspectUsage,
-    dataType: a.aspectConstraint?.aspectDataType,
-    multi: a.aspectConstraint?.itemToAspectCardinality === "MULTI",
-    forVariations: !!a.aspectConstraint?.aspectEnabledForVariations,
-    values: Array.isArray(a.aspectValues) ? a.aspectValues.map((v: any) => v.localizedValue ?? v.value ?? v) : [],
-  }));
+  const requiredAspects = arr.filter((a: any) => !!a?.aspectConstraint?.aspectRequired);
+  const optionalAspects = arr.filter((a: any) => !a?.aspectConstraint?.aspectRequired);
   const conditions = src?.itemConditionGroup?.itemConditions || [];
 
-  return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ok: true, marketplaceId: MARKETPLACE_ID, treeId, categoryId, allowedConditions: conditions, requiredAspects: mapped.filter(x => x.required), optionalAspects: mapped.filter(x => !x.required) }) };
+  return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ok: true, marketplaceId: MARKETPLACE_ID, treeId, categoryId, allowedConditions: conditions, requiredAspects, optionalAspects, raw: src }) };
 };
