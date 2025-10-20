@@ -32,7 +32,20 @@ export const handler: Handler = async (event) => {
   const weight = body.weight ?? qs["weight"]; // numeric string or number
   const weightUnitRaw = (body.weightUnit ?? qs["weightUnit"]) as string | undefined; // lb|lbs|oz|kg|g|POUND|OUNCE|KILOGRAM|GRAM
 
-    const primaryImage = image || images?.[0];
+    const toDirectDropbox = (u: string) => {
+      try {
+        const url = new URL(u);
+        if (url.hostname === 'www.dropbox.com' || url.hostname === 'dropbox.com') {
+          url.hostname = 'dl.dropboxusercontent.com';
+          url.search = '';
+          return url.toString();
+        }
+        return u;
+      } catch { return u; }
+    };
+    const normalizeImages = (arr?: string[]) => (arr||[]).map(s => toDirectDropbox(String(s).trim())).filter(Boolean);
+    const normImages = normalizeImages(images ?? (image ? [image] : []));
+    const primaryImage = normImages[0];
     if (!sku || !title || !primaryImage || !Number.isFinite(price)) {
       return { statusCode: 400, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "Missing sku|title|price|image" }) };
     }
@@ -101,7 +114,7 @@ export const handler: Handler = async (event) => {
 
     const invPayload = {
       sku,
-      product: { title, description, imageUrls: images ?? [primaryImage] },
+  product: { title, description, imageUrls: normImages.length ? normImages : [primaryImage] },
       availability: { shipToLocationAvailability: { quantity: qty } },
       // Set condition on inventory item as string enum when available (offer will also carry numeric condition)
       condition: invCond,
@@ -122,6 +135,27 @@ export const handler: Handler = async (event) => {
       }
       if (Object.keys(norm).length) invPayload.product.aspects = norm; // inventory_item product.aspects
     }
+
+    // Optionally validate images and fallback to proxy if needed
+    const MAY_PROXY = /^1|true|yes$/i.test(String(process.env.USE_IMAGE_PROXY || ''));
+    async function validateAndMaybeProxy(urls: string[]): Promise<string[]> {
+      const out: string[] = [];
+      for (const u of urls) {
+        try {
+          const head = await fetch(u, { method: 'HEAD', redirect: 'follow' });
+          const ct = (head.headers.get('content-type') || '').toLowerCase();
+          if (head.ok && ct.startsWith('image/')) { out.push(u); continue; }
+        } catch {}
+        if (MAY_PROXY && process.env.APP_BASE_URL) {
+          const prox = `${process.env.APP_BASE_URL}/.netlify/functions/image-proxy?url=${encodeURIComponent(u)}`;
+          out.push(prox);
+        } else {
+          out.push(u); // best effort
+        }
+      }
+      return out;
+    }
+    invPayload.product.imageUrls = await validateAndMaybeProxy(invPayload.product.imageUrls);
 
     const invUrl = `${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
     let r = await fetch(invUrl, {

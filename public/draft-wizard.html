@@ -67,7 +67,7 @@
         <div class="col"><label>Qty<input id="qty" type="number" min="1" value="1"/></label></div>
       </div>
       <div class="row">
-        <div class="col"><label>Image URLs (comma-separated)<input id="images" placeholder="https://...jpg, https://...png"/></label></div>
+        <div class="col"><label>Image URLs (comma-separated)<input id="images" placeholder="https://...jpg, https://...png"/></label><small class="muted">Tip: For Dropbox, convert to dl.dropboxusercontent.com/... for direct image access.</small></div>
       </div>
       <div class="row">
         <div class="col"><label>Weight (lbs)<input id="weightLbs" type="number" step="0.01" min="0" placeholder="1.0"/></label></div>
@@ -311,9 +311,12 @@
           const r = await fetch('/.netlify/functions/ebay-create-draft', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sku, title, price, qty, images, merchantLocationKey, categoryId, description: description||undefined, condition: condition||undefined, aspects: Object.keys(aspects).length? aspects: undefined, weightLbs: weightLbs||undefined, weightOz: weightOz||undefined }) });
           const data = await r.json();
           if (r.ok && data.ok) {
+            const offerId = data.draftOffer?.offerId;
+            // Redirect to drafts page listing all drafts; include created id for flash
+            if (offerId) { location.href = `/drafts.html?created=${encodeURIComponent(offerId)}`; return; }
+            // Fallback: show message if no offerId (shouldn't happen)
             const note = data.status === 'UNPUBLISHED' ? ' — (unpublished offer)' : '';
-            msg.textContent = `Draft created (${data.env||'PROD'} ${data.marketplaceId||''}): ${data.draftOffer?.offerId||'unknown'}${note}`;
-            const offerId = data.draftOffer?.offerId; if (offerId) { const btnPub = document.getElementById('btnPublish'); btnPub.disabled = false; btnPub.dataset.offerId = offerId; }
+            msg.textContent = `Draft created (${data.env||'PROD'} ${data.marketplaceId||''}): ${offerId||'unknown'}${note}`;
           }
           else {
             const detail = (typeof data.detail === 'string') ? data.detail : (data.detail?.message || data.detail?.errors || data.detail?.warnings || data.detail);
