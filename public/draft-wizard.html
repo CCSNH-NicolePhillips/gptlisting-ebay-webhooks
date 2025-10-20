@@ -85,8 +85,9 @@
         <summary>Optional specifics</summary>
         <div id="optAspects" class="row" style="margin-top:.4rem"></div>
       </details>
-      <div style="margin:.8rem 0 .2rem">
+      <div style="margin:.8rem 0 .2rem; display:flex; gap:.5rem; align-items:center">
         <button id="btnCreate">Create draft</button>
+        <button id="btnPublish" class="secondary" disabled>Publish now</button>
         <span id="msg2" class="muted"></span>
       </div>
     </div>
@@ -302,13 +303,35 @@
         try {
           const r = await fetch('/.netlify/functions/ebay-create-draft', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sku, title, price, qty, images, merchantLocationKey, categoryId, description: description||undefined, condition: condition||undefined, aspects: Object.keys(aspects).length? aspects: undefined }) });
           const data = await r.json();
-          if (r.ok && data.ok) { msg.textContent = `Draft created (${data.env||'PROD'} ${data.marketplaceId||''}): ${data.draftOffer?.offerId||'unknown'}`; }
+          if (r.ok && data.ok) { msg.textContent = `Draft created (${data.env||'PROD'} ${data.marketplaceId||''}): ${data.draftOffer?.offerId||'unknown'}`; const offerId = data.draftOffer?.offerId; if (offerId) { const btnPub = document.getElementById('btnPublish'); btnPub.disabled = false; btnPub.dataset.offerId = offerId; } }
           else {
             const detail = (typeof data.detail === 'string') ? data.detail : (data.detail?.message || data.detail?.errors || data.detail?.warnings || data.detail);
             msg.textContent = `Error: ${data.error || 'request failed'}${data.status ? ' ('+data.status+')' : ''} — ${detail ? (typeof detail==='string'? detail : JSON.stringify(detail)) : JSON.stringify(data)}`;
           }
         } catch(e){ msg.textContent='Error: '+e.message; }
       });
+
+      // Publish button handler
+      (function(){
+        const btnPub = document.getElementById('btnPublish');
+        if (!btnPub) return;
+        btnPub.addEventListener('click', async () => {
+          const offerId = btnPub.dataset.offerId;
+          const msg = document.getElementById('msg2');
+          if (!offerId) { msg.textContent = 'No offerId to publish.'; return; }
+          msg.textContent = 'Publishing…'; btnPub.disabled = true;
+          try {
+            const r = await fetch('/.netlify/functions/ebay-publish-offer', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ offerId }) });
+            const data = await r.json();
+            if (r.ok && data.ok) { msg.textContent = `Published: ${offerId}`; }
+            else {
+              const detail = (typeof data.detail === 'string') ? data.detail : (data.detail?.message || data.detail?.errors || data.detail?.warnings || data.detail);
+              msg.textContent = `Publish error: ${data.error || 'request failed'}${data.status ? ' ('+data.status+')' : ''} — ${detail ? (typeof detail==='string'? detail : JSON.stringify(detail)) : JSON.stringify(data)}`;
+              btnPub.disabled = false;
+            }
+          } catch(e) { msg.textContent = 'Publish error: ' + e.message; btnPub.disabled = false; }
+        });
+      })();
 
       // As the user types in the category picker, fetch suggestions and fill dropdown
       if (picker) picker.addEventListener('input', async () => {

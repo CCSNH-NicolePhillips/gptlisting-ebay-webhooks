@@ -201,6 +201,7 @@ export const handler: Handler = async (event) => {
     }
     const status = verified.body?.status;
     if (status !== "DRAFT") {
+      // Treat any non-DRAFT as failure for this flow; surface full offer for debugging
       return { statusCode: 502, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "unexpected-offer-status", step: "verify-offer", offerId: createdOfferId, status, offer: verified.body }) };
     }
 
