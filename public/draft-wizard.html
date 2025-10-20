@@ -70,6 +70,10 @@
         <div class="col"><label>Image URLs (comma-separated)<input id="images" placeholder="https://...jpg, https://...png"/></label></div>
       </div>
       <div class="row">
+        <div class="col"><label>Weight (lbs)<input id="weightLbs" type="number" step="0.01" min="0" placeholder="1.0"/></label></div>
+        <div class="col"><label>Weight (oz)<input id="weightOz" type="number" step="0.1" min="0" placeholder="16"/></label></div>
+      </div>
+      <div class="row">
         <div class="col"><label>Description<textarea id="description" rows="3" placeholder="Describe the item, ingredients, material, etc."></textarea></label></div>
       </div>
       <div class="row">
@@ -302,7 +306,9 @@
         if (!sku || !title || !Number.isFinite(price) || !images.length) { msg.textContent='Please provide SKU, title, price, and at least one image URL.'; return; }
         const aspects = collectAspects();
         try {
-          const r = await fetch('/.netlify/functions/ebay-create-draft', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sku, title, price, qty, images, merchantLocationKey, categoryId, description: description||undefined, condition: condition||undefined, aspects: Object.keys(aspects).length? aspects: undefined }) });
+          const weightLbs = (document.getElementById('weightLbs')||{value:''}).value.trim();
+          const weightOz = (document.getElementById('weightOz')||{value:''}).value.trim();
+          const r = await fetch('/.netlify/functions/ebay-create-draft', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sku, title, price, qty, images, merchantLocationKey, categoryId, description: description||undefined, condition: condition||undefined, aspects: Object.keys(aspects).length? aspects: undefined, weightLbs: weightLbs||undefined, weightOz: weightOz||undefined }) });
           const data = await r.json();
           if (r.ok && data.ok) {
             const note = data.status === 'UNPUBLISHED' ? ' — (unpublished offer)' : '';
