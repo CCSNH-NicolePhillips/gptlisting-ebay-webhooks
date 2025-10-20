@@ -109,8 +109,9 @@
         body.appendChild(title); body.appendChild(meta); body.appendChild(badge); body.appendChild(row);
         el.appendChild(th); el.appendChild(body);
         // attach lazy thumbnail loader
-        el.dataset.sku = offer.sku || '';
-        el._img = img; el._sk = sk;
+  el.dataset.sku = offer.sku || '';
+  el.dataset.offerId = offer.offerId || '';
+  el._img = img; el._sk = sk;
         return el;
       }
 
@@ -168,13 +169,13 @@
         const nodes = Array.from(list.querySelectorAll('.card'));
         const q = [];
         for (const n of nodes){
-          const sku = n.dataset.sku;
-          if (!sku) continue;
+          const offerId = n.dataset.offerId;
+          if (!offerId) continue;
           q.push(async () => {
-            const imgs = await getImagesForSKU(sku);
-            const url = imgs[0];
+            // Prefer server-side offer thumb to avoid client CORS/SKU issues
+            const url = `/.netlify/functions/ebay-offer-thumb?offerId=${encodeURIComponent(offerId)}`;
             if (url && n._img){
-              const src = proxied(url);
+              const src = url;
               n._img.alt = 'Draft image';
               n._img.onload = () => { n._img.classList.add('loaded'); n._sk?.remove?.(); };
               n._img.onerror = () => { n._sk?.remove?.(); };
