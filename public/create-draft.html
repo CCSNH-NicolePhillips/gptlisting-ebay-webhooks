@@ -92,6 +92,31 @@
           /></label>
         </div>
       </div>
+      <details style="margin:.5rem 0">
+        <summary>Pick images from Dropbox</summary>
+        <div class="row" style="margin-top:.5rem">
+          <div class="col">
+            <label>Folder path<input id="dpbxPath" value="/EBAY" /></label>
+          </div>
+          <div class="col">
+            <label>Limit<input id="dpbxLimit" type="number" placeholder="e.g., 50" /></label>
+          </div>
+          <div class="col" style="align-self:flex-end">
+            <label style="display:flex;align-items:center;gap:.4rem"><input id="dpbxRecursive" type="checkbox" /> recursive</label>
+          </div>
+          <div class="col" style="flex:0 0 auto;align-self:flex-end">
+            <button id="dpbxLoad" type="button">Load</button>
+          </div>
+        </div>
+        <div id="dpbxPicker" style="margin-top:.5rem">
+          <div id="dpbxDropdown" style="border:1px solid #2a335c;border-radius:8px;padding:.5rem;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:#0f1530">
+            <span id="dpbxPlaceholder" class="muted">Choose images…</span><span>▾</span>
+          </div>
+          <div id="dpbxOptions" style="display:none;position:relative;border:1px solid #2a335c;border-top:none;border-radius:0 0 8px 8px;max-height:360px;overflow:auto;background:#0f1530"></div>
+          <div id="dpbxChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:.5rem"></div>
+          <div id="dpbxGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-top:.5rem"></div>
+        </div>
+      </details>
       <div class="row">
         <div class="col">
           <label>Category ID<input id="categoryId" placeholder="e.g., 31413" /></label>
@@ -320,6 +345,100 @@
             });
             setOut(await r.json());
           };
+      })();
+
+      // Inline Dropbox image picker (fills the #images input)
+      (function ImagePicker() {
+        const byId = (id) => document.getElementById(id);
+        const elPath = byId('dpbxPath');
+        const elLimit = byId('dpbxLimit');
+        const elRec = byId('dpbxRecursive');
+        const btnLoad = byId('dpbxLoad');
+        const dd = byId('dpbxDropdown');
+        const ddOpts = byId('dpbxOptions');
+        const ddPh = byId('dpbxPlaceholder');
+        const chips = byId('dpbxChips');
+        const grid = byId('dpbxGrid');
+        const imagesInput = byId('images');
+
+        let items = [];
+        const selected = new Map(); // proxiedUrl -> item
+
+        const optionRow = (it) => {
+          const row = document.createElement('div');
+          row.style.display = 'flex';
+          row.style.alignItems = 'center';
+          row.style.gap = '10px';
+          row.style.padding = '.5rem';
+          row.style.borderTop = '1px solid #2a335c';
+          const img = document.createElement('img');
+          img.src = it.proxiedUrl; img.alt = it.name; img.width = 48; img.height = 48; img.style.objectFit = 'cover'; img.style.borderRadius = '6px';
+          const meta = document.createElement('div');
+          meta.innerHTML = `<div style="font-size:12px;font-weight:600">${it.name}</div><div class="muted" style="font-size:11px">${it.path}</div>`;
+          const cb = document.createElement('input');
+          cb.type = 'checkbox'; cb.style.marginLeft = 'auto';
+          cb.checked = selected.has(it.proxiedUrl);
+          cb.onchange = () => { if (cb.checked) selected.set(it.proxiedUrl, it); else selected.delete(it.proxiedUrl); refresh(); };
+          row.append(img, meta, cb);
+          row.onclick = (e) => { if (e.target !== cb) { cb.checked = !cb.checked; cb.onchange(); } };
+          return row;
+        };
+
+        const chip = (it) => {
+          const c = document.createElement('span');
+          c.style.display = 'inline-flex'; c.style.alignItems = 'center'; c.style.gap = '6px';
+          c.style.background = '#1c254d'; c.style.border = '1px solid #2a335c'; c.style.borderRadius = '999px'; c.style.padding = '4px 8px'; c.style.fontSize = '12px';
+          const img = document.createElement('img'); img.src = it.proxiedUrl; img.width = 16; img.height = 16; img.style.objectFit = 'cover'; img.style.borderRadius = '3px';
+          const txt = document.createElement('span'); txt.textContent = it.name;
+          c.append(img, txt);
+          return c;
+        };
+
+        const card = (it) => {
+          const wrap = document.createElement('div');
+          wrap.style.border = '1px solid #2a335c'; wrap.style.borderRadius = '8px'; wrap.style.overflow = 'hidden';
+          const img = document.createElement('img'); img.src = it.proxiedUrl; img.alt = it.name; img.style.width = '100%'; img.style.height = '140px'; img.style.objectFit = 'cover';
+          const cap = document.createElement('div'); cap.textContent = it.name; cap.style.fontSize = '12px'; cap.style.padding = '.5rem';
+          wrap.append(img, cap);
+          return wrap;
+        };
+
+        function refresh() {
+          // options list (preserve scroll)
+          const scrollTop = ddOpts.scrollTop;
+          ddOpts.innerHTML = '';
+          items.forEach((it) => ddOpts.appendChild(optionRow(it)));
+          ddOpts.scrollTop = scrollTop;
+          // chips/grid
+          chips.innerHTML = ''; grid.innerHTML = '';
+          Array.from(selected.values()).forEach((it) => { chips.appendChild(chip(it)); grid.appendChild(card(it)); });
+          // update images input
+          imagesInput.value = Array.from(selected.keys()).join(',');
+          ddPh.textContent = selected.size ? `${selected.size} selected` : 'Choose images…';
+        }
+
+        async function load() {
+          const url = new URL('/.netlify/functions/dropbox-list-images', window.location.origin);
+          url.searchParams.set('path', (elPath.value || '/EBAY'));
+          if (elRec.checked) url.searchParams.set('recursive', '1');
+          if (elLimit.value) url.searchParams.set('limit', String(elLimit.value));
+          const res = await fetch(url.toString());
+          const j = await res.json();
+          items = (j && j.items) || [];
+          refresh();
+        }
+
+        // dropdown open/close
+        dd.addEventListener('click', () => {
+          const open = ddOpts.style.display !== 'none';
+          ddOpts.style.display = open ? 'none' : 'block';
+        });
+        document.addEventListener('click', (e) => {
+          if (!dd.contains(e.target) && !ddOpts.contains(e.target)) ddOpts.style.display = 'none';
+        });
+        if (btnLoad) btnLoad.addEventListener('click', load);
+        // auto-load initial
+        load();
       })();
 
       (function CategorySuggest() {
