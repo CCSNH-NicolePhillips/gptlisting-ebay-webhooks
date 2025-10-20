@@ -106,9 +106,18 @@ function groupBySku(entries: DbxEntry[]) {
   return groups.filter((g) => !!g.main);
 }
 
-function proxyUrl(u: string) {
-  const base = process.env.APP_BASE_URL || '';
-  return base ? `${base}/.netlify/functions/image-proxy?url=${encodeURIComponent(u)}` : u;
+function deriveBaseUrlFromEvent(event: any): string | null {
+  const hdrs = event?.headers || {};
+  const proto = (hdrs['x-forwarded-proto'] || hdrs['X-Forwarded-Proto'] || 'https') as string;
+  const host = (hdrs['x-forwarded-host'] || hdrs['X-Forwarded-Host'] || hdrs['host'] || hdrs['Host']) as string;
+  if (host) return `${proto}://${host}`;
+  return null;
+}
+
+function proxyUrl(u: string, base?: string | null) {
+  const b = (process.env.APP_BASE_URL || base || '').toString();
+  if (!b) return `/.netlify/functions/image-proxy?url=${encodeURIComponent(u)}`;
+  return `${b}/.netlify/functions/image-proxy?url=${encodeURIComponent(u)}`;
 }
 
 export const handler: Handler = async (event) => {
@@ -132,7 +141,8 @@ export const handler: Handler = async (event) => {
       : files;
     const groups = groupBySku(filtered);
 
-    const result: any[] = [];
+  const result: any[] = [];
+  const derivedBase = deriveBaseUrlFromEvent(event);
     for (const g of groups.slice(0, limit || groups.length)) {
       // Create shared links
       const mainUrl = await dbxSharedRawLink(access, g.main!.path_lower);
@@ -142,13 +152,13 @@ export const handler: Handler = async (event) => {
       }
       const priceUrl = g.price ? await dbxSharedRawLink(access, g.price.path_lower) : undefined;
       const images = [mainUrl, ...otherUrls];
-      const finalImages = useProxy ? images.map(proxyUrl) : images;
+      const finalImages = useProxy ? images.map((u) => proxyUrl(u, derivedBase)) : images;
       result.push({
         sku: g.sku,
         folder,
         main: g.main?.path_display,
         images: finalImages,
-        priceImage: useProxy && priceUrl ? proxyUrl(priceUrl) : priceUrl,
+        priceImage: useProxy && priceUrl ? proxyUrl(priceUrl, derivedBase) : priceUrl,
         raw: {
           main: mainUrl,
           others: otherUrls,
