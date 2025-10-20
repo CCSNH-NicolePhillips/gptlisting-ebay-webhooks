@@ -26,6 +26,19 @@
 				"$tsc"
 			],
 			"group": "build"
+		},
+		{
+			"label": "Build project after requirements refactor",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"build"
+			],
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build"
 		}
 	]
 }
