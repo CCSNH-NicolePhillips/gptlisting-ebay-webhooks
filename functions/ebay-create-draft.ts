@@ -25,7 +25,12 @@ export const handler: Handler = async (event) => {
     const overrideFulfillment = ((body.fulfillmentPolicyId as string | undefined) ?? (qs["fulfillmentPolicyId"] as string | undefined)) || undefined;
     const overridePayment = ((body.paymentPolicyId as string | undefined) ?? (qs["paymentPolicyId"] as string | undefined)) || undefined;
     const overrideReturns = ((body.returnPolicyId as string | undefined) ?? (qs["returnPolicyId"] as string | undefined)) || undefined;
-    const overrideLocationKey = ((body.merchantLocationKey as string | undefined) ?? (qs["merchantLocationKey"] as string | undefined)) || undefined;
+  const overrideLocationKey = ((body.merchantLocationKey as string | undefined) ?? (qs["merchantLocationKey"] as string | undefined)) || undefined;
+  // Optional shipping weight
+  const weightLbs = body.weightLbs ?? qs["weightLbs"];
+  const weightOz = body.weightOz ?? qs["weightOz"];
+  const weight = body.weight ?? qs["weight"]; // numeric string or number
+  const weightUnitRaw = (body.weightUnit ?? qs["weightUnit"]) as string | undefined; // lb|lbs|oz|kg|g|POUND|OUNCE|KILOGRAM|GRAM
 
     const primaryImage = image || images?.[0];
     if (!sku || !title || !primaryImage || !Number.isFinite(price)) {
@@ -69,12 +74,38 @@ export const handler: Handler = async (event) => {
     };
     const condNumForInv = (condition !== undefined && Number.isFinite(Number(condition))) ? Number(condition) : undefined;
     const invCond = mapCondToInventory(condNumForInv);
+    // Map weight unit string to eBay enum
+    const unitMap = (u?: string) => {
+      if (!u) return undefined;
+      const s = String(u).toLowerCase();
+      if (s === 'lb' || s === 'lbs' || s === 'pound' || s === 'pounds' || s === 'p') return 'POUND';
+      if (s === 'oz' || s === 'ounce' || s === 'ounces' || s === 'o') return 'OUNCE';
+      if (s === 'kg' || s === 'kilogram' || s === 'kilograms') return 'KILOGRAM';
+      if (s === 'g' || s === 'gram' || s === 'grams') return 'GRAM';
+      if (s === 'pound' || s === 'POUND') return 'POUND';
+      if (s === 'OUNCE') return 'OUNCE';
+      if (s === 'KILOGRAM') return 'KILOGRAM';
+      if (s === 'GRAM') return 'GRAM';
+      return undefined;
+    };
+    let pkgWeight: { value: number; unit: 'POUND'|'OUNCE'|'KILOGRAM'|'GRAM' } | undefined = undefined;
+    if (weightLbs != null && String(weightLbs).trim() !== '' && Number.isFinite(Number(weightLbs))) {
+      pkgWeight = { value: Number(weightLbs), unit: 'POUND' };
+    } else if (weightOz != null && String(weightOz).trim() !== '' && Number.isFinite(Number(weightOz))) {
+      pkgWeight = { value: Number(weightOz), unit: 'OUNCE' };
+    } else if (weight != null && String(weight).trim() !== '') {
+      const val = Number(weight);
+      const unit = unitMap(weightUnitRaw) || 'POUND';
+      if (Number.isFinite(val) && val > 0) pkgWeight = { value: val, unit } as any;
+    }
+
     const invPayload = {
       sku,
       product: { title, description, imageUrls: images ?? [primaryImage] },
       availability: { shipToLocationAvailability: { quantity: qty } },
       // Set condition on inventory item as string enum when available (offer will also carry numeric condition)
       condition: invCond,
+      packageWeightAndSize: pkgWeight ? { weight: pkgWeight } : undefined,
       aspects: undefined,
     } as any;
     if (aspects && typeof aspects === 'object') {
