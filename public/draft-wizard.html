@@ -298,7 +298,7 @@
         const description = ($('description')||{value:''}).value.trim();
         const merchantLocationKey = (locationSel||{value:''}).value.trim();
         const categoryId = (categoryIdEl||{value:''}).value.trim();
-        const condition = (conditionSel||{value:''}).value.trim();
+  const condition = (conditionSel||{value:''}).value.trim(); // numeric string like '1000'
         if (!sku || !title || !Number.isFinite(price) || !images.length) { msg.textContent='Please provide SKU, title, price, and at least one image URL.'; return; }
         const aspects = collectAspects();
         try {
@@ -326,7 +326,8 @@
           if (!offerId) { msg.textContent = 'No offerId to publish.'; return; }
           msg.textContent = 'Publishing…'; btnPub.disabled = true;
           try {
-            const r = await fetch('/.netlify/functions/ebay-publish-offer', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ offerId }) });
+            const cond = (document.getElementById('condition')||{value:''}).value;
+            const r = await fetch('/.netlify/functions/ebay-publish-offer', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ offerId, condition: cond? Number(cond): undefined }) });
             const data = await r.json();
             if (r.ok && data.ok) { msg.textContent = `Published: ${offerId}`; }
             else {
