@@ -100,7 +100,29 @@ export const handler: Handler = async (event) => {
   const arr = Array.isArray(src?.aspects) ? src.aspects : [];
   const requiredAspects = arr.filter((a: any) => !!a?.aspectConstraint?.aspectRequired);
   const optionalAspects = arr.filter((a: any) => !a?.aspectConstraint?.aspectRequired);
-  const conditions = src?.itemConditionGroup?.itemConditions || [];
+  // Fetch allowed item conditions from Sell Metadata (prefer user token)
+  let conditions: any[] = [];
+  try {
+    const condPath = `/sell/metadata/v1/marketplace/${MARKETPLACE_ID}/get_item_condition_policies?category_id=${encodeURIComponent(categoryId)}`;
+    const condUrl = `${apiHost}${condPath}`;
+    // prefer user token
+    const userTok = await getUserAccessToken();
+    let cres = userTok ? await fetchJsonPass(condUrl, headersFor(userTok)) : null;
+    if (!cres || !cres.ok) {
+      // try app token fallback
+      cres = await fetchJsonPass(condUrl, appH);
+    }
+    if (cres && cres.ok) {
+      conditions = (cres.body?.itemConditionPolicies?.[0]?.itemConditions || []) as any[];
+    }
+  } catch {}
+  // Fallback: if metadata conditions unavailable, try taxonomy payload group
+  if (!conditions || conditions.length === 0) {
+    try {
+      const taxCond = (src?.itemConditionGroup?.itemConditions || []) as any[];
+      if (taxCond && taxCond.length) conditions = taxCond;
+    } catch {}
+  }
 
   return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ok: true, marketplaceId: MARKETPLACE_ID, treeId, categoryId, allowedConditions: conditions, requiredAspects, optionalAspects, raw: src }) };
 };
