@@ -151,15 +151,16 @@ export const handler: Handler = async (event) => {
       const out: string[] = [];
       for (const u of urls) {
         try {
-          const head = await fetch(u, { method: 'HEAD', redirect: 'follow' });
+          const direct = toDirectDropbox(u);
+          const head = await fetch(direct, { method: 'HEAD', redirect: 'follow' });
           const ct = (head.headers.get('content-type') || '').toLowerCase();
-          if (head.ok && ct.startsWith('image/')) { out.push(u); continue; }
+          if (head.ok && ct.startsWith('image/')) { out.push(direct); continue; }
         } catch {}
         if (MAY_PROXY && process.env.APP_BASE_URL) {
           const prox = `${process.env.APP_BASE_URL}/.netlify/functions/image-proxy?url=${encodeURIComponent(u)}`;
           out.push(prox);
         } else {
-          out.push(u); // best effort
+          out.push(toDirectDropbox(u)); // best effort but normalized
         }
       }
       return out;

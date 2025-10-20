@@ -48,20 +48,40 @@ export const handler: Handler = async (event) => {
     }
     if (!imageUrl) return { statusCode: 204 };
 
-    // 3) Fetch and stream image back with correct headers
-    const upstream = await fetch(imageUrl, { redirect: "follow" });
-    if (!upstream.ok) return { statusCode: upstream.status, body: `image fetch failed: ${upstream.status}` };
-    const type = (upstream.headers.get("content-type") || '').toLowerCase();
-    const buf = Buffer.from(await upstream.arrayBuffer());
-    if (!type.startsWith('image/')) return { statusCode: 415, body: `Not an image (type=${type})` };
+    // normalize dropbox viewer links
+    const toDirectDropbox = (u: string) => {
+      try {
+        const url = new URL(u);
+        if (url.hostname === 'www.dropbox.com' || url.hostname === 'dropbox.com') {
+          url.hostname = 'dl.dropboxusercontent.com';
+          url.search = '';
+          return url.toString();
+        }
+        return u;
+      } catch { return u; }
+    };
+    const tryFetchImage = async (u: string) => {
+      const resp = await fetch(u, { redirect: 'follow' });
+      const type = (resp.headers.get('content-type') || '').toLowerCase();
+      const ok = resp.ok && type.startsWith('image/');
+      const buf = ok ? Buffer.from(await resp.arrayBuffer()) : undefined;
+      return { ok, resp, type, buf } as const;
+    };
+    let direct = toDirectDropbox(imageUrl);
+    let upstream = await tryFetchImage(direct);
+    if (!upstream.ok && direct !== imageUrl) {
+      // Retry original if normalized failed
+      upstream = await tryFetchImage(imageUrl);
+    }
+    if (!upstream.ok) return { statusCode: upstream.resp.status || 415, body: `image fetch failed or not image (type=${upstream.type||'unknown'})` };
     return {
       statusCode: 200,
       headers: {
-        "Content-Type": type,
+        "Content-Type": upstream.type,
         "Cache-Control": "public, max-age=86400",
         "Access-Control-Allow-Origin": "*",
       },
-      body: buf.toString('base64'),
+      body: upstream.buf!.toString('base64'),
       isBase64Encoded: true,
     };
   } catch (e: any) {
