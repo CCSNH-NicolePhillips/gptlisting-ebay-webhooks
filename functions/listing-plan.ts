@@ -57,9 +57,17 @@ async function ensureSharedRawLink(access: string, filePath: string): Promise<st
   throw new Error(`dbx share: ${create.status} ${JSON.stringify(cj)}`);
 }
 
-function proxyUrl(u: string) {
-  const base = process.env.APP_BASE_URL || '';
-  return base ? `${base}/.netlify/functions/image-proxy?url=${encodeURIComponent(u)}` : u;
+function deriveBaseUrlFromEvent(event: any): string | null {
+  const hdrs = event?.headers || {};
+  const proto = (hdrs['x-forwarded-proto'] || hdrs['X-Forwarded-Proto'] || 'https') as string;
+  const host = (hdrs['x-forwarded-host'] || hdrs['X-Forwarded-Host'] || hdrs['host'] || hdrs['Host']) as string;
+  if (host) return `${proto}://${host}`;
+  return null;
+}
+function proxyUrl(u: string, base?: string | null) {
+  const b = (process.env.APP_BASE_URL || base || '').toString();
+  if (!b) return `/.netlify/functions/image-proxy?url=${encodeURIComponent(u)}`;
+  return `${b}/.netlify/functions/image-proxy?url=${encodeURIComponent(u)}`;
 }
 
 export const handler: Handler = async (event) => {
@@ -84,9 +92,10 @@ export const handler: Handler = async (event) => {
       .sort((a: any, b: any) => a.name.localeCompare(b.name));
     const priceImg = files.find((f: any) => f.name.toLowerCase().includes('_price'));
 
-    const toUrl = async (f: any) => proxyUrl(await ensureSharedRawLink(access, f.path_lower));
+  const derivedBase = deriveBaseUrlFromEvent(event);
+  const toUrl = async (f: any) => proxyUrl(await ensureSharedRawLink(access, f.path_lower), derivedBase);
     const images = main ? [await toUrl(main), ...(await Promise.all(gallery.map(toUrl)))] : [];
-    const priceUrl = priceImg ? await ensureSharedRawLink(access, priceImg.path_lower) : undefined;
+  const priceUrl = priceImg ? await ensureSharedRawLink(access, priceImg.path_lower) : undefined;
 
     // Extract base price from _price filename if present
     let basePrice = 0;
@@ -101,7 +110,7 @@ export const handler: Handler = async (event) => {
       sku,
       folder,
       images,
-      priceImage: priceUrl ? proxyUrl(priceUrl) : undefined,
+  priceImage: priceUrl ? proxyUrl(priceUrl, derivedBase) : undefined,
       pricing: {
         basePrice,
         ebayPrice,
