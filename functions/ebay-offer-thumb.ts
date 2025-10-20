@@ -1,26 +1,26 @@
-import type { Handler } from "@netlify/functions";
-import { accessTokenFromRefresh, tokenHosts } from "./_common.js";
-import { tokensStore } from "./_blobs.js";
+import type { Handler } from '@netlify/functions';
+import { accessTokenFromRefresh, tokenHosts } from './_common.js';
+import { tokensStore } from './_blobs.js';
 
 export const handler: Handler = async (event) => {
   try {
     const offerId = event.queryStringParameters?.offerId || event.queryStringParameters?.id;
-    if (!offerId) return { statusCode: 400, body: "Missing offerId" };
+    if (!offerId) return { statusCode: 400, body: 'Missing offerId' };
 
     const store = tokensStore();
-    const saved = (await store.get("ebay.json", { type: "json" })) as any;
+    const saved = (await store.get('ebay.json', { type: 'json' })) as any;
     const refresh = saved?.refresh_token as string | undefined;
-    if (!refresh) return { statusCode: 401, body: "Connect eBay first" };
+    if (!refresh) return { statusCode: 401, body: 'Connect eBay first' };
     const { access_token } = await accessTokenFromRefresh(refresh);
 
     const { apiHost } = tokenHosts(process.env.EBAY_ENV);
-    const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || "EBAY_US";
+    const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || 'EBAY_US';
     const headers = {
       Authorization: `Bearer ${access_token}`,
-      Accept: "application/json",
-      "Accept-Language": "en-US",
-      "Content-Language": "en-US",
-      "X-EBAY-C-MARKETPLACE-ID": MARKETPLACE_ID,
+      Accept: 'application/json',
+      'Accept-Language': 'en-US',
+      'Content-Language': 'en-US',
+      'X-EBAY-C-MARKETPLACE-ID': MARKETPLACE_ID,
     } as Record<string, string>;
 
     // 1) Get offer
@@ -33,7 +33,7 @@ export const handler: Handler = async (event) => {
 
     // 2) Try inventory item by sku and sanitized sku
     const trySkus = [skuRaw];
-    const san = skuRaw.replace(/[^A-Za-z0-9]/g, '').slice(0,50);
+    const san = skuRaw.replace(/[^A-Za-z0-9]/g, '').slice(0, 50);
     if (san && san !== skuRaw) trySkus.push(san);
 
     let imageUrl: string | undefined;
@@ -43,8 +43,11 @@ export const handler: Handler = async (event) => {
       if (!ir.ok) continue;
       const item = await ir.json();
       const imgs = item?.product?.imageUrls || item?.product?.images || item?.product?.image || [];
-      const arr = Array.isArray(imgs) ? imgs : (imgs ? [imgs] : []);
-      if (arr.length) { imageUrl = arr[0]; break; }
+      const arr = Array.isArray(imgs) ? imgs : imgs ? [imgs] : [];
+      if (arr.length) {
+        imageUrl = arr[0];
+        break;
+      }
     }
     if (!imageUrl) return { statusCode: 204 };
 
@@ -58,7 +61,9 @@ export const handler: Handler = async (event) => {
           return url.toString();
         }
         return u;
-      } catch { return u; }
+      } catch {
+        return u;
+      }
     };
     const tryFetchImage = async (u: string) => {
       const resp = await fetch(u, { redirect: 'follow' });
@@ -73,13 +78,17 @@ export const handler: Handler = async (event) => {
       // Retry original if normalized failed
       upstream = await tryFetchImage(imageUrl);
     }
-    if (!upstream.ok) return { statusCode: upstream.resp.status || 415, body: `image fetch failed or not image (type=${upstream.type||'unknown'})` };
+    if (!upstream.ok)
+      return {
+        statusCode: upstream.resp.status || 415,
+        body: `image fetch failed or not image (type=${upstream.type || 'unknown'})`,
+      };
     return {
       statusCode: 200,
       headers: {
-        "Content-Type": upstream.type,
-        "Cache-Control": "public, max-age=86400",
-        "Access-Control-Allow-Origin": "*",
+        'Content-Type': upstream.type,
+        'Cache-Control': 'public, max-age=86400',
+        'Access-Control-Allow-Origin': '*',
       },
       body: upstream.buf!.toString('base64'),
       isBase64Encoded: true,

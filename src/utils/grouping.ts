@@ -1,7 +1,10 @@
 type Entry = { name: string; path_lower: string; [k: string]: any };
 
 export function groupProductsFromDropbox(entries: Entry[]) {
-  const map = new Map<string, { sku: string; main: Entry | null; gallery: Entry[]; priceImageName: string }>();
+  const map = new Map<
+    string,
+    { sku: string; main: Entry | null; gallery: Entry[]; priceImageName: string }
+  >();
   for (const e of entries) {
     if (!e.name.includes('_')) continue;
     const [prefix, rest] = e.name.split('_', 2);
@@ -16,5 +19,5 @@ export function groupProductsFromDropbox(entries: Entry[]) {
     else if (lower.startsWith('price')) g.priceImageName = e.name;
     else g.gallery.push(e);
   }
-  return Array.from(map.values()).filter(g => g.main);
+  return Array.from(map.values()).filter((g) => g.main);
 }

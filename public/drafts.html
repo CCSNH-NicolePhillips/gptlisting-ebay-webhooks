@@ -5,38 +5,200 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Draft offers</title>
     <style>
-      :root{
-        --bg:#0b1020; --panel:#141a33; --panel-2:#0f1530; --line:#2a335c; --text:#f4f6fb; --muted:#a2a9c8; --primary:#4f7cff; --primary-600:#3e66d6; --accent:#22c55e; --danger:#ef4444; --warning:#f59e0b;
+      :root {
+        --bg: #0b1020;
+        --panel: #141a33;
+        --panel-2: #0f1530;
+        --line: #2a335c;
+        --text: #f4f6fb;
+        --muted: #a2a9c8;
+        --primary: #4f7cff;
+        --primary-600: #3e66d6;
+        --accent: #22c55e;
+        --danger: #ef4444;
+        --warning: #f59e0b;
       }
-      *{ box-sizing:border-box }
-      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; background:var(--bg); color:var(--text); }
-      .wrap { max-width: 1140px; margin: 0 auto; padding: 2rem 1.25rem; }
-      header { display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-bottom: 1rem; }
-      h1 { font-size: 1.5rem; margin: 0; }
-      .flash { color: var(--muted); min-height: 1.25rem; }
-      .toolbar { display:flex; gap:.5rem; align-items:center }
-      .btn { background: var(--primary); color: #fff; border: none; border-radius: 10px; padding:.55rem .85rem; font-weight:600; cursor:pointer; box-shadow: 0 1px 0 rgba(0,0,0,.25); }
-      .btn:hover { background: var(--primary-600); }
-      .btn.secondary { background: transparent; color:#cbd5ff; border:1px solid var(--line); box-shadow: none; }
-      .btn.danger { background: transparent; color:#ffb4b4; border:1px solid rgba(239,68,68,.35); }
-      .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; }
-      .card { background:linear-gradient(180deg, var(--panel), var(--panel-2)); border:1px solid var(--line); border-radius: 14px; overflow: hidden; display:flex; flex-direction:column; }
-      .thumb { position: relative; width: 100%; padding-top: 56%; background: #0d1430; border-bottom:1px solid var(--line); }
-      .thumb img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0; transition:opacity .25s ease; }
-      .thumb img.loaded { opacity:1; }
-      .skeleton { position:absolute; inset:0; background: linear-gradient(90deg, rgba(255,255,255,.03), rgba(255,255,255,.06), rgba(255,255,255,.03)); background-size: 200% 100%; animation: shimmer 1.2s infinite; }
-      @keyframes shimmer { 0%{ background-position:200% 0 } 100%{ background-position:-200% 0 } }
-      .body { padding: .9rem .9rem 1rem; display:flex; flex-direction:column; gap:.5rem }
-      .title { font-weight:700; line-height:1.3; }
-      .meta { color: var(--muted); font-size: .9rem; display:flex; flex-wrap:wrap; gap:.5rem; }
-      .row { display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.5rem }
-      .badge { display:inline-flex; align-items:center; gap:.35rem; font-size:.75rem; padding:.2rem .5rem; border-radius: 999px; border:1px solid var(--line); color:#d6e1ff; }
-      .badge .dot { width:6px; height:6px; border-radius:999px; background: var(--warning); box-shadow: 0 0 0 3px rgba(245,158,11,.18); }
-      .muted { color: var(--muted); }
-      .empty { color: var(--muted); background: rgba(255,255,255,.02); border:1px dashed var(--line); border-radius:12px; padding:1.25rem; text-align:center }
-      a { color:#9db2ff; text-decoration:none }
-      a:hover { text-decoration:underline }
-      .topbar { display:flex; align-items:center; justify-content:space-between; margin:.25rem 0 1rem }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          Segoe UI,
+          Roboto,
+          Arial,
+          sans-serif;
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+      }
+      .wrap {
+        max-width: 1140px;
+        margin: 0 auto;
+        padding: 2rem 1.25rem;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 1rem;
+      }
+      h1 {
+        font-size: 1.5rem;
+        margin: 0;
+      }
+      .flash {
+        color: var(--muted);
+        min-height: 1.25rem;
+      }
+      .toolbar {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+      }
+      .btn {
+        background: var(--primary);
+        color: #fff;
+        border: none;
+        border-radius: 10px;
+        padding: 0.55rem 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+      }
+      .btn:hover {
+        background: var(--primary-600);
+      }
+      .btn.secondary {
+        background: transparent;
+        color: #cbd5ff;
+        border: 1px solid var(--line);
+        box-shadow: none;
+      }
+      .btn.danger {
+        background: transparent;
+        color: #ffb4b4;
+        border: 1px solid rgba(239, 68, 68, 0.35);
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1rem;
+      }
+      .card {
+        background: linear-gradient(180deg, var(--panel), var(--panel-2));
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      .thumb {
+        position: relative;
+        width: 100%;
+        padding-top: 56%;
+        background: #0d1430;
+        border-bottom: 1px solid var(--line);
+      }
+      .thumb img {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        opacity: 0;
+        transition: opacity 0.25s ease;
+      }
+      .thumb img.loaded {
+        opacity: 1;
+      }
+      .skeleton {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          90deg,
+          rgba(255, 255, 255, 0.03),
+          rgba(255, 255, 255, 0.06),
+          rgba(255, 255, 255, 0.03)
+        );
+        background-size: 200% 100%;
+        animation: shimmer 1.2s infinite;
+      }
+      @keyframes shimmer {
+        0% {
+          background-position: 200% 0;
+        }
+        100% {
+          background-position: -200% 0;
+        }
+      }
+      .body {
+        padding: 0.9rem 0.9rem 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .title {
+        font-weight: 700;
+        line-height: 1.3;
+      }
+      .meta {
+        color: var(--muted);
+        font-size: 0.9rem;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+      .row {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        margin-top: 0.5rem;
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.75rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        color: #d6e1ff;
+      }
+      .badge .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 999px;
+        background: var(--warning);
+        box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.18);
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .empty {
+        color: var(--muted);
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px dashed var(--line);
+        border-radius: 12px;
+        padding: 1.25rem;
+        text-align: center;
+      }
+      a {
+        color: #9db2ff;
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin: 0.25rem 0 1rem;
+      }
     </style>
   </head>
   <body>
@@ -44,7 +206,9 @@
       <header>
         <h1>Draft offers</h1>
         <div class="toolbar">
-          <button id="btnClean" class="btn danger" title="Remove broken drafts">Clean drafts</button>
+          <button id="btnClean" class="btn danger" title="Remove broken drafts">
+            Clean drafts
+          </button>
           <a class="btn secondary" href="/draft-wizard.html">← Create another</a>
         </div>
       </header>
@@ -55,101 +219,202 @@
     </div>
 
     <script>
-      async function fetchJSON(url, opts){ const r = await fetch(url, opts); const t = await r.text(); let j; try { j = JSON.parse(t); } catch { j = { raw:t }; } if (!r.ok) throw Object.assign(new Error('HTTP '+r.status), { response:j, status:r.status }); return j; }
-      const $ = (id)=> document.getElementById(id);
+      async function fetchJSON(url, opts) {
+        const r = await fetch(url, opts);
+        const t = await r.text();
+        let j;
+        try {
+          j = JSON.parse(t);
+        } catch {
+          j = { raw: t };
+        }
+        if (!r.ok)
+          throw Object.assign(new Error('HTTP ' + r.status), { response: j, status: r.status });
+        return j;
+      }
+      const $ = (id) => document.getElementById(id);
       const list = $('list');
       const flash = $('flash');
 
-      const fmtPrice = (v, c) => (v!=null && c) ? new Intl.NumberFormat(undefined, { style:'currency', currency:c }).format(Number(v)) : '';
+      const fmtPrice = (v, c) =>
+        v != null && c
+          ? new Intl.NumberFormat(undefined, { style: 'currency', currency: c }).format(Number(v))
+          : '';
 
-      function card(offer){
-        const el = document.createElement('div'); el.className='card';
+      function card(offer) {
+        const el = document.createElement('div');
+        el.className = 'card';
         // thumbnail area
-        const th = document.createElement('div'); th.className='thumb';
-        const sk = document.createElement('div'); sk.className='skeleton'; th.appendChild(sk);
-        const img = document.createElement('img'); th.appendChild(img);
+        const th = document.createElement('div');
+        th.className = 'thumb';
+        const sk = document.createElement('div');
+        sk.className = 'skeleton';
+        th.appendChild(sk);
+        const img = document.createElement('img');
+        th.appendChild(img);
         // body
-        const body = document.createElement('div'); body.className='body';
-        const title = document.createElement('div'); title.className='title'; title.textContent = (offer.listingDescription||'').slice(0,120) || '(no title)';
-        const meta = document.createElement('div'); meta.className='meta';
-        const priceStr = fmtPrice(offer?.pricingSummary?.price?.value, offer?.pricingSummary?.price?.currency);
+        const body = document.createElement('div');
+        body.className = 'body';
+        const title = document.createElement('div');
+        title.className = 'title';
+        title.textContent = (offer.listingDescription || '').slice(0, 120) || '(no title)';
+        const meta = document.createElement('div');
+        meta.className = 'meta';
+        const priceStr = fmtPrice(
+          offer?.pricingSummary?.price?.value,
+          offer?.pricingSummary?.price?.currency
+        );
         meta.textContent = [
           offer.sku ? `SKU: ${offer.sku}` : null,
           offer.categoryId ? `Cat: ${offer.categoryId}` : null,
-          offer.availableQuantity!=null ? `Qty: ${offer.availableQuantity}` : null,
+          offer.availableQuantity != null ? `Qty: ${offer.availableQuantity}` : null,
           priceStr ? `Price: ${priceStr}` : null,
-        ].filter(Boolean).join(' • ');
-        const badge = document.createElement('div'); badge.className='badge'; badge.innerHTML = '<span class="dot"></span> Unpublished';
-        const row = document.createElement('div'); row.className='row';
-        const pub = document.createElement('button'); pub.className='btn'; pub.textContent = 'Publish';
-        const del = document.createElement('button'); del.className='btn danger'; del.textContent = 'Delete';
+        ]
+          .filter(Boolean)
+          .join(' • ');
+        const badge = document.createElement('div');
+        badge.className = 'badge';
+        badge.innerHTML = '<span class="dot"></span> Unpublished';
+        const row = document.createElement('div');
+        row.className = 'row';
+        const pub = document.createElement('button');
+        pub.className = 'btn';
+        pub.textContent = 'Publish';
+        const del = document.createElement('button');
+        del.className = 'btn danger';
+        del.textContent = 'Delete';
 
         pub.onclick = async () => {
-          pub.disabled = true; del.disabled = true; flash.textContent='Publishing…';
+          pub.disabled = true;
+          del.disabled = true;
+          flash.textContent = 'Publishing…';
           try {
-            const r = await fetch('/.netlify/functions/ebay-publish-offer', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ offerId: offer.offerId }) });
+            const r = await fetch('/.netlify/functions/ebay-publish-offer', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ offerId: offer.offerId }),
+            });
             const data = await r.json();
-            if (r.ok && data.ok && !data.deleted) { el.remove(); flash.textContent = `Published ${offer.offerId}`; return; }
-            if (r.ok && data.ok && data.deleted) { el.remove(); flash.textContent = `Draft ${offer.offerId} had errors and was deleted.`; return; }
-            flash.textContent = `Publish error: ${data.error||''}`; pub.disabled = del.disabled = false;
-          } catch(e){ flash.textContent='Publish error: '+e.message; pub.disabled = del.disabled = false; }
+            if (r.ok && data.ok && !data.deleted) {
+              el.remove();
+              flash.textContent = `Published ${offer.offerId}`;
+              return;
+            }
+            if (r.ok && data.ok && data.deleted) {
+              el.remove();
+              flash.textContent = `Draft ${offer.offerId} had errors and was deleted.`;
+              return;
+            }
+            flash.textContent = `Publish error: ${data.error || ''}`;
+            pub.disabled = del.disabled = false;
+          } catch (e) {
+            flash.textContent = 'Publish error: ' + e.message;
+            pub.disabled = del.disabled = false;
+          }
         };
         del.onclick = async () => {
           if (!confirm('Delete this draft?')) return;
-          pub.disabled = true; del.disabled = true; flash.textContent='Deleting…';
+          pub.disabled = true;
+          del.disabled = true;
+          flash.textContent = 'Deleting…';
           try {
-            const r = await fetch('/.netlify/functions/ebay-delete-offer?offerId='+encodeURIComponent(offer.offerId));
+            const r = await fetch(
+              '/.netlify/functions/ebay-delete-offer?offerId=' + encodeURIComponent(offer.offerId)
+            );
             const data = await r.json();
-            if (r.ok && data.ok) { el.remove(); flash.textContent = `Deleted ${offer.offerId}`; }
-            else { flash.textContent = `Delete error: ${data.error||''}`; pub.disabled = del.disabled = false; }
-          } catch(e){ flash.textContent='Delete error: '+e.message; pub.disabled = del.disabled = false; }
+            if (r.ok && data.ok) {
+              el.remove();
+              flash.textContent = `Deleted ${offer.offerId}`;
+            } else {
+              flash.textContent = `Delete error: ${data.error || ''}`;
+              pub.disabled = del.disabled = false;
+            }
+          } catch (e) {
+            flash.textContent = 'Delete error: ' + e.message;
+            pub.disabled = del.disabled = false;
+          }
         };
 
-        row.appendChild(pub); row.appendChild(del);
-        body.appendChild(title); body.appendChild(meta); body.appendChild(badge); body.appendChild(row);
-        el.appendChild(th); el.appendChild(body);
+        row.appendChild(pub);
+        row.appendChild(del);
+        body.appendChild(title);
+        body.appendChild(meta);
+        body.appendChild(badge);
+        body.appendChild(row);
+        el.appendChild(th);
+        el.appendChild(body);
         // attach lazy thumbnail loader
-  el.dataset.sku = offer.sku || '';
-  el.dataset.offerId = offer.offerId || '';
-  el._img = img; el._sk = sk;
+        el.dataset.sku = offer.sku || '';
+        el.dataset.offerId = offer.offerId || '';
+        el._img = img;
+        el._sk = sk;
         return el;
       }
 
-      function escapeHtml(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c])); }
+      function escapeHtml(s) {
+        return String(s).replace(
+          /[&<>"]/g,
+          (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]
+        );
+      }
 
-      async function load(){
-        list.innerHTML='';
+      async function load() {
+        list.innerHTML = '';
         // loading skeletons
-        for (let i=0;i<6;i++){ const ph = document.createElement('div'); ph.className='card'; ph.innerHTML = '<div class="thumb"><div class="skeleton"></div></div><div class="body"><div class="title" style="height:1.2rem;background:rgba(255,255,255,.06);border-radius:6px;width:70%"></div><div class="meta" style="height:1rem;background:rgba(255,255,255,.04);border-radius:6px;width:90%"></div><div class="row"><button class="btn" disabled>Publish</button><button class="btn danger" disabled>Delete</button></div></div>'; list.appendChild(ph); }
+        for (let i = 0; i < 6; i++) {
+          const ph = document.createElement('div');
+          ph.className = 'card';
+          ph.innerHTML =
+            '<div class="thumb"><div class="skeleton"></div></div><div class="body"><div class="title" style="height:1.2rem;background:rgba(255,255,255,.06);border-radius:6px;width:70%"></div><div class="meta" style="height:1rem;background:rgba(255,255,255,.04);border-radius:6px;width:90%"></div><div class="row"><button class="btn" disabled>Publish</button><button class="btn danger" disabled>Delete</button></div></div>';
+          list.appendChild(ph);
+        }
         try {
           // eBay treats saved offers awaiting publish as UNPUBLISHED
           const rawSku = new URL(location.href).searchParams.get('sku') || '';
           const skuOk = /^[A-Za-z0-9]{1,50}$/.test(rawSku);
-          const url = '/.netlify/functions/ebay-list-offers?status=UNPUBLISHED&limit=100' + (skuOk ? ('&sku='+encodeURIComponent(rawSku)) : '');
+          const url =
+            '/.netlify/functions/ebay-list-offers?status=UNPUBLISHED&limit=100' +
+            (skuOk ? '&sku=' + encodeURIComponent(rawSku) : '');
           const j = await fetchJSON(url);
-          const offers = j.offers||[];
-          if (!offers.length) { list.innerHTML = '<div class="empty">No drafts yet. Create your first listing draft from the wizard.</div>'; return; }
-          list.innerHTML='';
-          offers.forEach(o => list.appendChild(card(o)));
+          const offers = j.offers || [];
+          if (!offers.length) {
+            list.innerHTML =
+              '<div class="empty">No drafts yet. Create your first listing draft from the wizard.</div>';
+            return;
+          }
+          list.innerHTML = '';
+          offers.forEach((o) => list.appendChild(card(o)));
           // lazy-load thumbnails with small concurrency to stay snappy
           lazyLoadThumbs();
-        } catch(e){
-          const wrap = document.createElement('div'); wrap.className='empty';
-          const msg = e?.response ? JSON.stringify(e.response).slice(0,500) : (e?.message||String(e));
+        } catch (e) {
+          const wrap = document.createElement('div');
+          wrap.className = 'empty';
+          const msg = e?.response
+            ? JSON.stringify(e.response).slice(0, 500)
+            : e?.message || String(e);
           wrap.innerHTML = `Failed to load drafts.<br/><small class="muted">${escapeHtml(msg)}</small> <div style="margin-top:.75rem"><button class="btn secondary" id="retryBtn">Retry</button></div>`;
-          list.innerHTML = ''; list.appendChild(wrap);
+          list.innerHTML = '';
+          list.appendChild(wrap);
           document.getElementById('retryBtn')?.addEventListener('click', load);
         }
       }
 
-      function proxied(url){ return '/.netlify/functions/image-proxy?url='+encodeURIComponent(url); }
+      function proxied(url) {
+        return '/.netlify/functions/image-proxy?url=' + encodeURIComponent(url);
+      }
 
-      async function getImagesForSKU(sku){
+      async function getImagesForSKU(sku) {
         if (!sku) return [];
         const trySku = async (s) => {
-          const j = await fetchJSON('/.netlify/functions/ebay-get-inventory-item?sku='+encodeURIComponent(s));
-          const imgs = j?.item?.product?.imageUrls || j?.item?.product?.images || j?.item?.product?.image || [];
-          const arr = Array.isArray(imgs) ? imgs : (imgs ? [imgs] : []);
+          const j = await fetchJSON(
+            '/.netlify/functions/ebay-get-inventory-item?sku=' + encodeURIComponent(s)
+          );
+          const imgs =
+            j?.item?.product?.imageUrls ||
+            j?.item?.product?.images ||
+            j?.item?.product?.image ||
+            [];
+          const arr = Array.isArray(imgs) ? imgs : imgs ? [imgs] : [];
           return arr;
         };
         try {
@@ -158,27 +423,37 @@
           if (primary.length) return primary;
         } catch {}
         // If SKU contains invalid chars, try sanitized fallback
-        const san = String(sku).replace(/[^A-Za-z0-9]/g, '').slice(0,50);
+        const san = String(sku)
+          .replace(/[^A-Za-z0-9]/g, '')
+          .slice(0, 50);
         if (san && san !== sku) {
-          try { const fallback = await trySku(san); if (fallback.length) return fallback; } catch {}
+          try {
+            const fallback = await trySku(san);
+            if (fallback.length) return fallback;
+          } catch {}
         }
         return [];
       }
 
-      function lazyLoadThumbs(){
+      function lazyLoadThumbs() {
         const nodes = Array.from(list.querySelectorAll('.card'));
         const q = [];
-        for (const n of nodes){
+        for (const n of nodes) {
           const offerId = n.dataset.offerId;
           if (!offerId) continue;
           q.push(async () => {
             // Prefer server-side offer thumb to avoid client CORS/SKU issues
             const url = `/.netlify/functions/ebay-offer-thumb?offerId=${encodeURIComponent(offerId)}`;
-            if (url && n._img){
+            if (url && n._img) {
               const src = url;
               n._img.alt = 'Draft image';
-              n._img.onload = () => { n._img.classList.add('loaded'); n._sk?.remove?.(); };
-              n._img.onerror = () => { n._sk?.remove?.(); };
+              n._img.onload = () => {
+                n._img.classList.add('loaded');
+                n._sk?.remove?.();
+              };
+              n._img.onerror = () => {
+                n._sk?.remove?.();
+              };
               n._img.src = src;
             } else {
               // No image found – clear skeleton and leave a subtle placeholder
@@ -187,31 +462,43 @@
           });
         }
         // run with limited concurrency
-        const concurrency = 6; let i = 0;
-        async function next(){ const fn = q[i++]; if (!fn) return; await fn(); return next(); }
-        const workers = Array.from({length: Math.min(concurrency, q.length)}, next);
-        Promise.all(workers).catch(()=>{});
+        const concurrency = 6;
+        let i = 0;
+        async function next() {
+          const fn = q[i++];
+          if (!fn) return;
+          await fn();
+          return next();
+        }
+        const workers = Array.from({ length: Math.min(concurrency, q.length) }, next);
+        Promise.all(workers).catch(() => {});
       }
 
       const params = new URLSearchParams(location.search);
-      if (params.get('created')) { flash.textContent = `Created draft ${params.get('created')}`; }
+      if (params.get('created')) {
+        flash.textContent = `Created draft ${params.get('created')}`;
+      }
       // wire cleaner
       document.getElementById('btnClean')?.addEventListener('click', async () => {
-        const doAll = confirm('Delete ALL UNPUBLISHED offers? Click Cancel to only remove broken ones.');
+        const doAll = confirm(
+          'Delete ALL UNPUBLISHED offers? Click Cancel to only remove broken ones.'
+        );
         const q = doAll ? '?deleteAll=true' : '';
         try {
           flash.textContent = 'Cleaning drafts…';
-          const res = await fetch('/.netlify/functions/ebay-clean-broken-drafts'+q);
+          const res = await fetch('/.netlify/functions/ebay-clean-broken-drafts' + q);
           const j = await res.json();
           if (res.ok && j.ok) {
-            flash.textContent = `Deleted offers: ${j.deletedOffers?.length||0}`;
+            flash.textContent = `Deleted offers: ${j.deletedOffers?.length || 0}`;
             load();
           } else {
             flash.textContent = 'Clean failed';
           }
-        } catch (e) { flash.textContent = 'Clean error: '+ (e?.message||String(e)); }
+        } catch (e) {
+          flash.textContent = 'Clean error: ' + (e?.message || String(e));
+        }
       });
       load();
     </script>
   </body>
-  </html>
+</html>

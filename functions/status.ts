@@ -1,9 +1,9 @@
-import type { Handler } from "@netlify/functions";
-import { tokensStore } from "./_blobs.js";
+import type { Handler } from '@netlify/functions';
+import { tokensStore } from './_blobs.js';
 
 export const handler: Handler = async (event) => {
   try {
-  const tokens = tokensStore();
+    const tokens = tokensStore();
     if (event.httpMethod === 'POST') {
       if (event.queryStringParameters?.dropbox === 'disconnect') {
         await tokens.setJSON('dropbox.json', {});

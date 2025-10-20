@@ -9,17 +9,8 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "types": [
-      "@netlify/functions",
-      "node"
-    ],
-    "lib": [
-      "ES2022",
-      "DOM"
-    ]
+    "types": ["@netlify/functions", "node"],
+    "lib": ["ES2022", "DOM"]
   },
-  "include": [
-    "src",
-    "functions/**/*.ts"
-  ]
+  "include": ["src", "functions/**/*.ts"]
 }

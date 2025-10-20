@@ -13,7 +13,7 @@ export const cfg = {
   },
 
   ebay: {
-    env: (process.env.EBAY_ENV || 'PROD').toUpperCase() as 'PROD'|'SANDBOX',
+    env: (process.env.EBAY_ENV || 'PROD').toUpperCase() as 'PROD' | 'SANDBOX',
     clientId: process.env.EBAY_CLIENT_ID || '',
     clientSecret: process.env.EBAY_CLIENT_SECRET || '',
     ruName: process.env.EBAY_RU_NAME || '',
@@ -25,10 +25,10 @@ export const cfg = {
     },
     defaultMarketplaceId: process.env.DEFAULT_MARKETPLACE_ID || 'EBAY_US',
     defaultCategoryId: process.env.DEFAULT_CATEGORY_ID || '177011',
-    promotedCampaignId: process.env.PROMOTED_CAMPAIGN_ID || ''
+    promotedCampaignId: process.env.PROMOTED_CAMPAIGN_ID || '',
   },
 
   defaults: {
-    publishMode: (process.env.PUBLISH_MODE || 'draft') as 'draft'|'post'|'legacy-post'
-  }
+    publishMode: (process.env.PUBLISH_MODE || 'draft') as 'draft' | 'post' | 'legacy-post',
+  },
 };

@@ -1,9 +1,9 @@
 // Shared helpers for eBay OAuth in TS (uses global fetch in Node 18+)
 export function tokenHosts(env: string | undefined) {
-  const isSb = (env || "PROD") === "SANDBOX";
+  const isSb = (env || 'PROD') === 'SANDBOX';
   return {
-    tokenHost: isSb ? "https://api.sandbox.ebay.com" : "https://api.ebay.com",
-    apiHost: isSb ? "https://api.sandbox.ebay.com" : "https://api.ebay.com",
+    tokenHost: isSb ? 'https://api.sandbox.ebay.com' : 'https://api.ebay.com',
+    apiHost: isSb ? 'https://api.sandbox.ebay.com' : 'https://api.ebay.com',
   };
 }
 
@@ -11,23 +11,23 @@ export async function accessTokenFromRefresh(refreshToken: string) {
   const { tokenHost } = tokenHosts(process.env.EBAY_ENV);
   const basic = Buffer.from(
     `${process.env.EBAY_CLIENT_ID}:${process.env.EBAY_CLIENT_SECRET}`
-  ).toString("base64");
+  ).toString('base64');
 
   const body = new URLSearchParams({
-    grant_type: "refresh_token",
+    grant_type: 'refresh_token',
     refresh_token: refreshToken,
     scope: [
-      "https://api.ebay.com/oauth/api_scope",
-      "https://api.ebay.com/oauth/api_scope/sell.account",
-      "https://api.ebay.com/oauth/api_scope/sell.inventory",
-    ].join(" "),
+      'https://api.ebay.com/oauth/api_scope',
+      'https://api.ebay.com/oauth/api_scope/sell.account',
+      'https://api.ebay.com/oauth/api_scope/sell.inventory',
+    ].join(' '),
   });
 
   const res = await fetch(`${tokenHost}/identity/v1/oauth2/token`, {
-    method: "POST",
+    method: 'POST',
     headers: {
       Authorization: `Basic ${basic}`,
-      "Content-Type": "application/x-www-form-urlencoded",
+      'Content-Type': 'application/x-www-form-urlencoded',
     },
     body,
   });
@@ -42,16 +42,16 @@ export async function appAccessToken(scopes: string[]) {
   const { tokenHost } = tokenHosts(process.env.EBAY_ENV);
   const basic = Buffer.from(
     `${process.env.EBAY_CLIENT_ID}:${process.env.EBAY_CLIENT_SECRET}`
-  ).toString("base64");
+  ).toString('base64');
   const body = new URLSearchParams({
-    grant_type: "client_credentials",
-    scope: scopes.join(" "),
+    grant_type: 'client_credentials',
+    scope: scopes.join(' '),
   });
   const res = await fetch(`${tokenHost}/identity/v1/oauth2/token`, {
-    method: "POST",
+    method: 'POST',
     headers: {
       Authorization: `Basic ${basic}`,
-      "Content-Type": "application/x-www-form-urlencoded",
+      'Content-Type': 'application/x-www-form-urlencoded',
     },
     body,
   });

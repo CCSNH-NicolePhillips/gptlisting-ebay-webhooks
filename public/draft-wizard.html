@@ -5,54 +5,171 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Create draft · Wizard</title>
     <style>
-      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; padding: 2rem; background:#0b1020; color:#f4f6fb; }
-      .card { max-width: 920px; margin: 0 auto 1rem; background: #141a33; border: 1px solid #2a335c; border-radius: 12px; padding: 1.25rem 1.5rem; }
+      body {
+        font-family:
+          system-ui,
+          -apple-system,
+          Segoe UI,
+          Roboto,
+          Arial,
+          sans-serif;
+        margin: 0;
+        padding: 2rem;
+        background: #0b1020;
+        color: #f4f6fb;
+      }
+      .card {
+        max-width: 920px;
+        margin: 0 auto 1rem;
+        background: #141a33;
+        border: 1px solid #2a335c;
+        border-radius: 12px;
+        padding: 1.25rem 1.5rem;
+      }
       /* Responsive grid to prevent field collisions */
-      .row { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); margin-bottom: .75rem; }
-      .col { min-width: 0; }
-      .col.title { grid-column: span 2; }
-      label { display:block; margin:.4rem 0 .25rem }
-      input, textarea, select { background: #0f1530; color: #f4f6fb; border: 1px solid #26305a; border-radius: 8px; padding: .6rem .7rem; width:100% }
-      button { background: #4f7cff; color: white; border: none; border-radius: 8px; padding: .7rem 1rem; cursor: pointer; font-weight: 600; }
-      button.secondary { background: transparent; color: #cbd5ff; border: 1px solid #3d4a86; }
-      .muted { color: #a2a9c8; }
-      .inline { display:inline-block }
-      .hide { display:none !important }
-      details { border: 1px dashed #2a335c; padding:.4rem .6rem; border-radius: 8px; }
-      .hr { margin: .8rem 0; border:none; border-top:1px solid #2a335c }
+      .row {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        margin-bottom: 0.75rem;
+      }
+      .col {
+        min-width: 0;
+      }
+      .col.title {
+        grid-column: span 2;
+      }
+      label {
+        display: block;
+        margin: 0.4rem 0 0.25rem;
+      }
+      input,
+      textarea,
+      select {
+        background: #0f1530;
+        color: #f4f6fb;
+        border: 1px solid #26305a;
+        border-radius: 8px;
+        padding: 0.6rem 0.7rem;
+        width: 100%;
+      }
+      button {
+        background: #4f7cff;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 0.7rem 1rem;
+        cursor: pointer;
+        font-weight: 600;
+      }
+      button.secondary {
+        background: transparent;
+        color: #cbd5ff;
+        border: 1px solid #3d4a86;
+      }
+      .muted {
+        color: #a2a9c8;
+      }
+      .inline {
+        display: inline-block;
+      }
+      .hide {
+        display: none !important;
+      }
+      details {
+        border: 1px dashed #2a335c;
+        padding: 0.4rem 0.6rem;
+        border-radius: 8px;
+      }
+      .hr {
+        margin: 0.8rem 0;
+        border: none;
+        border-top: 1px solid #2a335c;
+      }
       /* Modal layout */
-      .modal { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:9999; background:rgba(0,0,0,.6); }
+      .modal {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        background: rgba(0, 0, 0, 0.6);
+      }
     </style>
   </head>
   <body>
     <div class="card">
       <a class="secondary" href="/">← Back</a>
       <h2>Create draft – Step 1: Pick category</h2>
-      <p class="muted">Start with a category so we can populate the right required and optional fields.</p>
+      <p class="muted">
+        Start with a category so we can populate the right required and optional fields.
+      </p>
       <div class="row">
-        <div class="col title"><label>Title<input id="title" placeholder="Type your listing title"/></label></div>
+        <div class="col title">
+          <label>Title<input id="title" placeholder="Type your listing title" /></label>
+        </div>
       </div>
       <div class="row">
-        <div class="col"><label>Or choose a photo (optional)<input id="photo" type="file" accept="image/*" /></label><small class="muted">We use the file name text for suggestions.</small></div>
+        <div class="col">
+          <label
+            >Or choose a photo (optional)<input id="photo" type="file" accept="image/*" /></label
+          ><small class="muted">We use the file name text for suggestions.</small>
+        </div>
       </div>
       <div class="row">
-        <div class="col"><label>Or paste an image link (optional)<input id="photoUrl" placeholder="https://... (Dropbox links ok; add ?dl=1 for direct)"/></label><small class="muted">We use the URL file name for suggestions.</small></div>
+        <div class="col">
+          <label
+            >Or paste an image link (optional)<input
+              id="photoUrl"
+              placeholder="https://... (Dropbox links ok; add ?dl=1 for direct)" /></label
+          ><small class="muted">We use the URL file name for suggestions.</small>
+        </div>
       </div>
       <div class="row">
-        <div class="col"><label>Category<input id="categoryPicker" list="categoryOptions" placeholder="Start typing or pick a suggestion" /><datalist id="categoryOptions"></datalist></label><div id="categoryPreview" class="muted" style="margin-top:.25rem"></div></div>
-        <div class="col"><label>Category ID<input id="categoryId" placeholder="e.g., 31413"/></label></div>
+        <div class="col">
+          <label
+            >Category<input
+              id="categoryPicker"
+              list="categoryOptions"
+              placeholder="Start typing or pick a suggestion" /><datalist
+              id="categoryOptions"
+            ></datalist
+          ></label>
+          <div id="categoryPreview" class="muted" style="margin-top: 0.25rem"></div>
+        </div>
+        <div class="col">
+          <label>Category ID<input id="categoryId" placeholder="e.g., 31413" /></label>
+        </div>
       </div>
-      <div class="row" style="margin-top:-.25rem">
+      <div class="row" style="margin-top: -0.25rem">
         <div class="col"><button id="btnBrowse" class="secondary">Browse categories</button></div>
       </div>
       <div id="browseModal" class="modal hide" role="dialog" aria-modal="true">
-        <div id="browsePanel" style="background:#141a33;border:1px solid #2a335c;border-radius:12px;max-width:900px;width:92%;padding:1rem 1.25rem;max-height:80vh;overflow:auto">
-          <div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:.2rem 0">Browse categories</h3><button id="browseClose" type="button" class="secondary">Close</button></div>
-          <div id="crumbs" class="muted" style="margin:.4rem 0 .6rem"></div>
+        <div
+          id="browsePanel"
+          style="
+            background: #141a33;
+            border: 1px solid #2a335c;
+            border-radius: 12px;
+            max-width: 900px;
+            width: 92%;
+            padding: 1rem 1.25rem;
+            max-height: 80vh;
+            overflow: auto;
+          "
+        >
+          <div style="display: flex; justify-content: space-between; align-items: center">
+            <h3 style="margin: 0.2rem 0">Browse categories</h3>
+            <button id="browseClose" type="button" class="secondary">Close</button>
+          </div>
+          <div id="crumbs" class="muted" style="margin: 0.4rem 0 0.6rem"></div>
           <div id="browseList" class="row"></div>
         </div>
       </div>
-      <div style="margin:.5rem 0; display:flex; gap:.5rem; align-items:center; flex-wrap:wrap">
+      <div
+        style="margin: 0.5rem 0; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap"
+      >
         <button id="btnNext" disabled>Next →</button>
         <span id="msg1" class="muted"></span>
       </div>
@@ -62,34 +179,71 @@
       <h2>Step 2: Details and create</h2>
       <p id="catPath" class="muted"></p>
       <div class="row">
-        <div class="col"><label>SKU<input id="sku" placeholder="SKU-123"/></label></div>
-        <div class="col"><label>Price USD<input id="price" type="number" min="0" step="0.01" placeholder="19.99"/></label></div>
-        <div class="col"><label>Qty<input id="qty" type="number" min="1" value="1"/></label></div>
+        <div class="col">
+          <label>SKU<input id="sku" placeholder="SKU-123" /></label>
+        </div>
+        <div class="col">
+          <label
+            >Price USD<input id="price" type="number" min="0" step="0.01" placeholder="19.99"
+          /></label>
+        </div>
+        <div class="col">
+          <label>Qty<input id="qty" type="number" min="1" value="1" /></label>
+        </div>
       </div>
       <div class="row">
-        <div class="col"><label>Image URLs (comma-separated)<input id="images" placeholder="https://...jpg, https://...png"/></label><small class="muted">Tip: For Dropbox, convert to dl.dropboxusercontent.com/... for direct image access.</small></div>
+        <div class="col">
+          <label
+            >Image URLs (comma-separated)<input
+              id="images"
+              placeholder="https://...jpg, https://...png" /></label
+          ><small class="muted"
+            >Tip: For Dropbox, convert to dl.dropboxusercontent.com/... for direct image
+            access.</small
+          >
+        </div>
       </div>
       <div class="row">
-        <div class="col"><label>Weight (lbs)<input id="weightLbs" type="number" step="0.01" min="0" placeholder="1.0"/></label></div>
-        <div class="col"><label>Weight (oz)<input id="weightOz" type="number" step="0.1" min="0" placeholder="16"/></label></div>
+        <div class="col">
+          <label
+            >Weight (lbs)<input id="weightLbs" type="number" step="0.01" min="0" placeholder="1.0"
+          /></label>
+        </div>
+        <div class="col">
+          <label
+            >Weight (oz)<input id="weightOz" type="number" step="0.1" min="0" placeholder="16"
+          /></label>
+        </div>
       </div>
       <div class="row">
-        <div class="col"><label>Description<textarea id="description" rows="3" placeholder="Describe the item, ingredients, material, etc."></textarea></label></div>
+        <div class="col">
+          <label
+            >Description<textarea
+              id="description"
+              rows="3"
+              placeholder="Describe the item, ingredients, material, etc."
+            ></textarea>
+          </label>
+        </div>
       </div>
       <div class="row">
-        <div class="col"><label>Condition<select id="condition"></select></label></div>
-        <div class="col"><label>Location<select id="location"></select></label></div>
+        <div class="col">
+          <label>Condition<select id="condition"></select></label>
+        </div>
+        <div class="col">
+          <label>Location<select id="location"></select></label>
+        </div>
       </div>
       <div class="hr"></div>
       <div>
-        <h3 style="margin:.2rem 0">Required specifics</h3>
+        <h3 style="margin: 0.2rem 0">Required specifics</h3>
         <div id="reqAspects" class="row"></div>
       </div>
-      <details style="margin-top:.6rem">
+      <details style="margin-top: 0.6rem">
         <summary>Optional specifics</summary>
-        <div id="optAspects" class="row" style="margin-top:.4rem"></div>
+        <div id="optAspects" class="row" style="margin-top: 0.4rem"></div>
       </details>
-      <div style="margin:.8rem 0 .2rem; display:flex; gap:.5rem; align-items:center">
+      <div style="margin: 0.8rem 0 0.2rem; display: flex; gap: 0.5rem; align-items: center">
         <button id="btnCreate">Create draft</button>
         <button id="btnPublish" class="secondary" disabled>Publish now</button>
         <span id="msg2" class="muted"></span>
@@ -103,117 +257,226 @@
       const categoryIdEl = $('categoryId');
       const catPreview = $('categoryPreview');
       const titleEl = $('title');
-  // removed search input
+      // removed search input
       const nextBtn = $('btnNext');
       const step2 = $('step2');
       const msg1 = $('msg1');
       const conditionSel = $('condition');
       const locationSel = $('location');
       const modal = $('browseModal');
-  const browseBtn = $('btnBrowse');
-      
+      const browseBtn = $('btnBrowse');
+
       const browseClose = $('browseClose');
       const browseList = $('browseList');
       const crumbs = $('crumbs');
-  const browsePanel = $('browsePanel');
-  // Category CSV data (if available)
-  let CAT_ROWS = null; // Array of {categoryId, categoryName, categoryPath}
-  let CAT_TREE = null; // Tree built from CSV paths
-  let ID_INDEX = null; // Map of id -> { leaf, path, name }
+      const browsePanel = $('browsePanel');
+      // Category CSV data (if available)
+      let CAT_ROWS = null; // Array of {categoryId, categoryName, categoryPath}
+      let CAT_TREE = null; // Tree built from CSV paths
+      let ID_INDEX = null; // Map of id -> { leaf, path, name }
 
-      async function fetchJSON(url, opts) { const r = await fetch(url, opts); let j; try { j = await r.json(); } catch { j = { raw: await r.text() }; } if (!r.ok) throw Object.assign(new Error('HTTP '+r.status), { response:j, status:r.status }); return j; }
-  const applyOptions = (list) => { datalist.innerHTML = ''; (list||[]).slice(0,80).forEach(item => { const opt = document.createElement('option'); opt.value = `${item.categoryId} — ${item.categoryName}`; opt.setAttribute('data-id', item.categoryId); opt.setAttribute('data-path', item.categoryPath || item.categoryName); datalist.appendChild(opt); }); };
-      const updatePreview = (opt) => { catPreview.textContent = opt ? (opt.getAttribute('data-path')||'') : ''; };
-      const debounce = (fn, ms=300) => { let t; return (...a) => { clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; };
-      async function loadCategoriesCsv(){
+      async function fetchJSON(url, opts) {
+        const r = await fetch(url, opts);
+        let j;
+        try {
+          j = await r.json();
+        } catch {
+          j = { raw: await r.text() };
+        }
+        if (!r.ok)
+          throw Object.assign(new Error('HTTP ' + r.status), { response: j, status: r.status });
+        return j;
+      }
+      const applyOptions = (list) => {
+        datalist.innerHTML = '';
+        (list || []).slice(0, 80).forEach((item) => {
+          const opt = document.createElement('option');
+          opt.value = `${item.categoryId} — ${item.categoryName}`;
+          opt.setAttribute('data-id', item.categoryId);
+          opt.setAttribute('data-path', item.categoryPath || item.categoryName);
+          datalist.appendChild(opt);
+        });
+      };
+      const updatePreview = (opt) => {
+        catPreview.textContent = opt ? opt.getAttribute('data-path') || '' : '';
+      };
+      const debounce = (fn, ms = 300) => {
+        let t;
+        return (...a) => {
+          clearTimeout(t);
+          t = setTimeout(() => fn(...a), ms);
+        };
+      };
+      async function loadCategoriesCsv() {
         if (CAT_ROWS) return CAT_ROWS;
         // Prefer relative (served from public/) then absolute
-        const tryUrls = [ 'taxonomy-categories-EBAY_US.csv', '/taxonomy-categories-EBAY_US.csv' ];
+        const tryUrls = ['taxonomy-categories-EBAY_US.csv', '/taxonomy-categories-EBAY_US.csv'];
         let text = null;
-        for (const url of tryUrls){
-          try { const r = await fetch(url); if (r.ok) { text = await r.text(); break; } } catch {}
+        for (const url of tryUrls) {
+          try {
+            const r = await fetch(url);
+            if (r.ok) {
+              text = await r.text();
+              break;
+            }
+          } catch {}
         }
         if (!text) {
           // one-time hint: allow typing, but encourage Browse
-          if (msg1 && !msg1.dataset.csvHint) { msg1.dataset.csvHint = '1'; msg1.textContent = 'Tip: use Browse to pick a leaf category.'; }
+          if (msg1 && !msg1.dataset.csvHint) {
+            msg1.dataset.csvHint = '1';
+            msg1.textContent = 'Tip: use Browse to pick a leaf category.';
+          }
           return null;
         }
         // parse CSV (3 columns: categoryId,categoryName,categoryPath), quoted
         const lines = text.split(/\r?\n/).filter(Boolean);
         const rows = [];
-        for (let i=1;i<lines.length;i++){
+        for (let i = 1; i < lines.length; i++) {
           const line = lines[i];
           const cols = [];
-          let cur=''; let inQ=false;
-          for (let j=0;j<line.length;j++){
+          let cur = '';
+          let inQ = false;
+          for (let j = 0; j < line.length; j++) {
             const ch = line[j];
-            if (ch==='"'){
-              if (inQ && line[j+1]==='"'){ cur+='"'; j++; }
-              else inQ = !inQ;
-            } else if (ch===',' && !inQ){ cols.push(cur); cur=''; }
-            else cur+=ch;
+            if (ch === '"') {
+              if (inQ && line[j + 1] === '"') {
+                cur += '"';
+                j++;
+              } else inQ = !inQ;
+            } else if (ch === ',' && !inQ) {
+              cols.push(cur);
+              cur = '';
+            } else cur += ch;
           }
           cols.push(cur);
-          if (cols.length>=3){
+          if (cols.length >= 3) {
             const [categoryId, categoryName, categoryPath] = cols;
-            if (categoryId && categoryName) rows.push({ categoryId, categoryName, categoryPath: categoryPath||categoryName });
+            if (categoryId && categoryName)
+              rows.push({ categoryId, categoryName, categoryPath: categoryPath || categoryName });
           }
         }
         CAT_ROWS = rows;
         // build tree
-        const root = { name:'Root', children: new Map(), path: '', leaf:false };
+        const root = { name: 'Root', children: new Map(), path: '', leaf: false };
         const idIndex = new Map();
-        rows.forEach(r=>{
-          const parts = (r.categoryPath||r.categoryName).split(' > ').filter(Boolean);
-          let node = root; let pathAcc=[];
-          for (let idx=0; idx<parts.length; idx++){
-            const part = parts[idx]; pathAcc.push(part);
-            if (!node.children.has(part)) node.children.set(part, { name: part, children: new Map(), path: pathAcc.join(' > '), leaf:false });
+        rows.forEach((r) => {
+          const parts = (r.categoryPath || r.categoryName).split(' > ').filter(Boolean);
+          let node = root;
+          let pathAcc = [];
+          for (let idx = 0; idx < parts.length; idx++) {
+            const part = parts[idx];
+            pathAcc.push(part);
+            if (!node.children.has(part))
+              node.children.set(part, {
+                name: part,
+                children: new Map(),
+                path: pathAcc.join(' > '),
+                leaf: false,
+              });
             node = node.children.get(part);
           }
           // mark leaf and attach id
-          node.leaf = true; node.id = r.categoryId; node.path = r.categoryPath || pathAcc.join(' > ');
-          idIndex.set(String(r.categoryId), { leaf: true, path: node.path, name: parts[parts.length-1] || r.categoryName });
+          node.leaf = true;
+          node.id = r.categoryId;
+          node.path = r.categoryPath || pathAcc.join(' > ');
+          idIndex.set(String(r.categoryId), {
+            leaf: true,
+            path: node.path,
+            name: parts[parts.length - 1] || r.categoryName,
+          });
         });
-        CAT_TREE = root; ID_INDEX = idIndex;
+        CAT_TREE = root;
+        ID_INDEX = idIndex;
         return rows;
       }
 
       const localSuggest = debounce(async (q) => {
-        const rows = CAT_ROWS || await loadCategoriesCsv();
-        if (!rows) { return; }
+        const rows = CAT_ROWS || (await loadCategoriesCsv());
+        if (!rows) {
+          return;
+        }
         const qq = (q || '').toLowerCase();
-        if (!qq) { datalist.innerHTML=''; return; }
+        if (!qq) {
+          datalist.innerHTML = '';
+          return;
+        }
         const matches = [];
         for (const r of rows) {
-          const nameLC = (r.categoryName||'').toLowerCase();
-          const lastSeg = (r.categoryPath||r.categoryName||'').split(' > ').pop() || '';
+          const nameLC = (r.categoryName || '').toLowerCase();
+          const lastSeg = (r.categoryPath || r.categoryName || '').split(' > ').pop() || '';
           const lastLC = lastSeg.toLowerCase();
           if (nameLC.startsWith(qq) || lastLC.startsWith(qq)) {
-            matches.push({ categoryId: r.categoryId, categoryName: r.categoryName, categoryPath: r.categoryPath });
+            matches.push({
+              categoryId: r.categoryId,
+              categoryName: r.categoryName,
+              categoryPath: r.categoryPath,
+            });
             if (matches.length >= 150) break;
           }
         }
         applyOptions(matches);
       }, 150);
-      
-  // Do not trigger network-based suggestions. Only local CSV filtering when user types in the category field.
+
+      // Do not trigger network-based suggestions. Only local CSV filtering when user types in the category field.
       // No suggestions triggered on Title typing to avoid UX errors.
       const photoEl = $('photo');
-  if (photoEl) photoEl.addEventListener('change', () => { const f = photoEl.files && photoEl.files[0]; if (!f) return; const name = (f.name||'').replace(/\.[^.]+$/, '').replace(/[_-]+/g,' '); if (name) { titleEl.value = titleEl.value||name; } });
+      if (photoEl)
+        photoEl.addEventListener('change', () => {
+          const f = photoEl.files && photoEl.files[0];
+          if (!f) return;
+          const name = (f.name || '').replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ');
+          if (name) {
+            titleEl.value = titleEl.value || name;
+          }
+        });
       const photoUrlEl = $('photoUrl');
-      if (photoUrlEl) photoUrlEl.addEventListener('input', () => { const url = photoUrlEl.value.trim(); if (!url) return; try { const last = url.split('?')[0].split('#')[0].split('/').pop()||''; const base = last.replace(/\.[^.]+$/, '').replace(/[_-]+/g,' '); if (base) { titleEl.value = titleEl.value||base; } } catch {} });
-      
-      if (categoryIdEl) categoryIdEl.addEventListener('input', () => { nextBtn.disabled = !categoryIdEl.value.trim(); });
+      if (photoUrlEl)
+        photoUrlEl.addEventListener('input', () => {
+          const url = photoUrlEl.value.trim();
+          if (!url) return;
+          try {
+            const last = url.split('?')[0].split('#')[0].split('/').pop() || '';
+            const base = last.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ');
+            if (base) {
+              titleEl.value = titleEl.value || base;
+            }
+          } catch {}
+        });
+
+      if (categoryIdEl)
+        categoryIdEl.addEventListener('input', () => {
+          nextBtn.disabled = !categoryIdEl.value.trim();
+        });
 
       async function loadLocations() {
-        try { const j = await fetchJSON('/.netlify/functions/ebay-list-locations'); const list = j.locations||[]; locationSel.innerHTML=''; list.forEach(loc=>{ const o=document.createElement('option'); o.value = loc.merchantLocationKey; o.textContent = loc.merchantLocationKey + (loc.location?.name? (' — '+loc.location.name):''); locationSel.appendChild(o); }); } catch(e){ locationSel.innerHTML=''; const o=document.createElement('option'); o.value=''; o.textContent='No locations found'; locationSel.appendChild(o); }
+        try {
+          const j = await fetchJSON('/.netlify/functions/ebay-list-locations');
+          const list = j.locations || [];
+          locationSel.innerHTML = '';
+          list.forEach((loc) => {
+            const o = document.createElement('option');
+            o.value = loc.merchantLocationKey;
+            o.textContent =
+              loc.merchantLocationKey + (loc.location?.name ? ' — ' + loc.location.name : '');
+            locationSel.appendChild(o);
+          });
+        } catch (e) {
+          locationSel.innerHTML = '';
+          const o = document.createElement('option');
+          o.value = '';
+          o.textContent = 'No locations found';
+          locationSel.appendChild(o);
+        }
       }
 
-      function renderAspect(containerId, aspect, required){
-        const wrap = document.createElement('div'); wrap.className='col';
-        const id = 'asp_'+(aspect.localizedAspectName||aspect.aspectName).replace(/\s+/g,'_');
-        const label = document.createElement('label'); label.textContent = (aspect.localizedAspectName||aspect.aspectName) + (required?' *':'');
+      function renderAspect(containerId, aspect, required) {
+        const wrap = document.createElement('div');
+        wrap.className = 'col';
+        const id = 'asp_' + (aspect.localizedAspectName || aspect.aspectName).replace(/\s+/g, '_');
+        const label = document.createElement('label');
+        label.textContent =
+          (aspect.localizedAspectName || aspect.aspectName) + (required ? ' *' : '');
         const name = aspect.aspectName || aspect.localizedAspectName;
         const values = Array.isArray(aspect.aspectValues) ? aspect.aspectValues : [];
         const cardinality = aspect.aspectConstraint?.itemToAspectCardinality || 'SINGLE';
@@ -221,67 +484,118 @@
         const isMulti = cardinality === 'MULTI';
         let field;
         if (isEnum) {
-          const sel = document.createElement('select'); sel.id = id; sel.setAttribute('data-aspect', name);
+          const sel = document.createElement('select');
+          sel.id = id;
+          sel.setAttribute('data-aspect', name);
           if (isMulti) sel.multiple = true;
           // optional empty for optional fields
-          if (!required && !isMulti) { const o=document.createElement('option'); o.value=''; o.textContent='—'; sel.appendChild(o); }
-          values.slice(0,200).forEach(v => { const o=document.createElement('option'); const val = v.localizedValue || v.value || v; o.value = val; o.textContent = val; sel.appendChild(o); });
+          if (!required && !isMulti) {
+            const o = document.createElement('option');
+            o.value = '';
+            o.textContent = '—';
+            sel.appendChild(o);
+          }
+          values.slice(0, 200).forEach((v) => {
+            const o = document.createElement('option');
+            const val = v.localizedValue || v.value || v;
+            o.value = val;
+            o.textContent = val;
+            sel.appendChild(o);
+          });
           field = sel;
         } else {
-          const inp = document.createElement('input'); inp.id = id; inp.setAttribute('data-aspect', name); field = inp;
+          const inp = document.createElement('input');
+          inp.id = id;
+          inp.setAttribute('data-aspect', name);
+          field = inp;
         }
-        wrap.appendChild(label); wrap.appendChild(field);
+        wrap.appendChild(label);
+        wrap.appendChild(field);
         $(containerId).appendChild(wrap);
       }
 
-      async function enterStep2(){
-        const cid = categoryIdEl.value.trim(); if (!cid) { msg1.textContent = 'Select a category first.'; return; }
-        nextBtn.disabled = true; msg1.textContent = 'Loading requirements…';
+      async function enterStep2() {
+        const cid = categoryIdEl.value.trim();
+        if (!cid) {
+          msg1.textContent = 'Select a category first.';
+          return;
+        }
+        nextBtn.disabled = true;
+        msg1.textContent = 'Loading requirements…';
         try {
           // Resolve taxonomy treeId first for reliability
           let treeId = '0';
-          try { const t = await fetchJSON('/.netlify/functions/ebay-taxonomy-tree-id'); treeId = String(t.categoryTreeId || '0'); } catch {}
+          try {
+            const t = await fetchJSON('/.netlify/functions/ebay-taxonomy-tree-id');
+            treeId = String(t.categoryTreeId || '0');
+          } catch {}
           // Call requirements with treeId and retry once on transient 502
           let req;
           try {
-            req = await fetchJSON(`/.netlify/functions/ebay-category-requirements?treeId=${encodeURIComponent(treeId)}&categoryId=${encodeURIComponent(cid)}`);
+            req = await fetchJSON(
+              `/.netlify/functions/ebay-category-requirements?treeId=${encodeURIComponent(treeId)}&categoryId=${encodeURIComponent(cid)}`
+            );
           } catch (e) {
-            if (e?.status === 502) { await new Promise(r=>setTimeout(r, 400)); req = await fetchJSON(`/.netlify/functions/ebay-category-requirements?treeId=${encodeURIComponent(treeId)}&categoryId=${encodeURIComponent(cid)}`); }
-            else throw e;
+            if (e?.status === 502) {
+              await new Promise((r) => setTimeout(r, 400));
+              req = await fetchJSON(
+                `/.netlify/functions/ebay-category-requirements?treeId=${encodeURIComponent(treeId)}&categoryId=${encodeURIComponent(cid)}`
+              );
+            } else throw e;
           }
           // render path and condition
-          $('catPath').textContent = 'Category '+cid;
-          conditionSel.innerHTML='';
-          const conds = req.allowedConditions||[];
+          $('catPath').textContent = 'Category ' + cid;
+          conditionSel.innerHTML = '';
+          const conds = req.allowedConditions || [];
           if (conds.length) {
-            conds.forEach(c=>{ const o=document.createElement('option'); o.value=c.conditionId; o.textContent = `${c.conditionId} — ${c.conditionDescription}`; conditionSel.appendChild(o); });
+            conds.forEach((c) => {
+              const o = document.createElement('option');
+              o.value = c.conditionId;
+              o.textContent = `${c.conditionId} — ${c.conditionDescription}`;
+              conditionSel.appendChild(o);
+            });
             // Default-select New (1000) if present, otherwise first
-            const prefer = conds.find(c=>String(c.conditionId)==='1000');
-            conditionSel.value = prefer ? String(prefer.conditionId) : String(conds[0]?.conditionId||'');
-          } else { const o=document.createElement('option'); o.value=''; o.textContent='(none)'; conditionSel.appendChild(o); }
+            const prefer = conds.find((c) => String(c.conditionId) === '1000');
+            conditionSel.value = prefer
+              ? String(prefer.conditionId)
+              : String(conds[0]?.conditionId || '');
+          } else {
+            const o = document.createElement('option');
+            o.value = '';
+            o.textContent = '(none)';
+            conditionSel.appendChild(o);
+          }
           // render aspects
-          $('reqAspects').innerHTML=''; $('optAspects').innerHTML='';
-          (req.requiredAspects||[]).forEach(a=>renderAspect('reqAspects', a, true));
-          (req.optionalAspects||[]).forEach(a=>renderAspect('optAspects', a, false));
+          $('reqAspects').innerHTML = '';
+          $('optAspects').innerHTML = '';
+          (req.requiredAspects || []).forEach((a) => renderAspect('reqAspects', a, true));
+          (req.optionalAspects || []).forEach((a) => renderAspect('optAspects', a, false));
           await loadLocations();
           step2.classList.remove('hide');
           msg1.textContent = '';
           window.scrollTo({ top: step2.offsetTop - 10, behavior: 'smooth' });
-        } catch(e){
+        } catch (e) {
           const detail = e?.response?.errorId || e?.response?.message || e?.message || String(e);
-          msg1.textContent = 'Requirements error: ' + detail + '. If this persists, pick a leaf category via Browse.';
+          msg1.textContent =
+            'Requirements error: ' +
+            detail +
+            '. If this persists, pick a leaf category via Browse.';
           console.error('requirements error', e);
-        } finally { nextBtn.disabled = false; }
+        } finally {
+          nextBtn.disabled = false;
+        }
       }
       nextBtn.addEventListener('click', enterStep2);
 
-      function collectAspects(){
+      function collectAspects() {
         const map = {};
-        document.querySelectorAll('[id^="asp_"]').forEach((el)=>{
+        document.querySelectorAll('[id^="asp_"]').forEach((el) => {
           const name = el.getAttribute('data-aspect');
           if (!name) return;
           if (el.tagName === 'SELECT' && el.multiple) {
-            const vals = Array.from(el.selectedOptions).map(o=>o.value).filter(Boolean);
+            const vals = Array.from(el.selectedOptions)
+              .map((o) => o.value)
+              .filter(Boolean);
             if (vals.length) map[name] = vals;
           } else {
             const val = (el.value || '').trim();
@@ -292,105 +606,193 @@
       }
 
       $('btnCreate').addEventListener('click', async () => {
-        const msg = $('msg2'); msg.textContent='Submitting…';
-        const sku = ($('sku')||{value:''}).value.trim();
-        const title = (titleEl||{value:''}).value.trim();
-        const price = parseFloat(($('price')||{value:''}).value);
-        const qty = parseInt(($('qty')||{value:'1'}).value, 10) || 1;
-        const imagesRaw = ($('images')||{value:''}).value.trim();
-        const images = imagesRaw ? imagesRaw.split(',').map(s=>s.trim()).filter(Boolean) : [];
-        const description = ($('description')||{value:''}).value.trim();
-        const merchantLocationKey = (locationSel||{value:''}).value.trim();
-        const categoryId = (categoryIdEl||{value:''}).value.trim();
-  const condition = (conditionSel||{value:''}).value.trim(); // numeric string like '1000'
-        if (!sku || !title || !Number.isFinite(price) || !images.length) { msg.textContent='Please provide SKU, title, price, and at least one image URL.'; return; }
+        const msg = $('msg2');
+        msg.textContent = 'Submitting…';
+        const sku = ($('sku') || { value: '' }).value.trim();
+        const title = (titleEl || { value: '' }).value.trim();
+        const price = parseFloat(($('price') || { value: '' }).value);
+        const qty = parseInt(($('qty') || { value: '1' }).value, 10) || 1;
+        const imagesRaw = ($('images') || { value: '' }).value.trim();
+        const images = imagesRaw
+          ? imagesRaw
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : [];
+        const description = ($('description') || { value: '' }).value.trim();
+        const merchantLocationKey = (locationSel || { value: '' }).value.trim();
+        const categoryId = (categoryIdEl || { value: '' }).value.trim();
+        const condition = (conditionSel || { value: '' }).value.trim(); // numeric string like '1000'
+        if (!sku || !title || !Number.isFinite(price) || !images.length) {
+          msg.textContent = 'Please provide SKU, title, price, and at least one image URL.';
+          return;
+        }
         const aspects = collectAspects();
         try {
-          const weightLbs = (document.getElementById('weightLbs')||{value:''}).value.trim();
-          const weightOz = (document.getElementById('weightOz')||{value:''}).value.trim();
-          const r = await fetch('/.netlify/functions/ebay-create-draft', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sku, title, price, qty, images, merchantLocationKey, categoryId, description: description||undefined, condition: condition||undefined, aspects: Object.keys(aspects).length? aspects: undefined, weightLbs: weightLbs||undefined, weightOz: weightOz||undefined }) });
+          const weightLbs = (document.getElementById('weightLbs') || { value: '' }).value.trim();
+          const weightOz = (document.getElementById('weightOz') || { value: '' }).value.trim();
+          const r = await fetch('/.netlify/functions/ebay-create-draft', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sku,
+              title,
+              price,
+              qty,
+              images,
+              merchantLocationKey,
+              categoryId,
+              description: description || undefined,
+              condition: condition || undefined,
+              aspects: Object.keys(aspects).length ? aspects : undefined,
+              weightLbs: weightLbs || undefined,
+              weightOz: weightOz || undefined,
+            }),
+          });
           const data = await r.json();
           if (r.ok && data.ok) {
             const offerId = data.draftOffer?.offerId;
             // Redirect to drafts page listing all drafts; include created id for flash
-            if (offerId) { location.href = `/drafts.html?created=${encodeURIComponent(offerId)}`; return; }
+            if (offerId) {
+              location.href = `/drafts.html?created=${encodeURIComponent(offerId)}`;
+              return;
+            }
             // Fallback: show message if no offerId (shouldn't happen)
             const note = data.status === 'UNPUBLISHED' ? ' — (unpublished offer)' : '';
-            msg.textContent = `Draft created (${data.env||'PROD'} ${data.marketplaceId||''}): ${offerId||'unknown'}${note}`;
+            msg.textContent = `Draft created (${data.env || 'PROD'} ${data.marketplaceId || ''}): ${offerId || 'unknown'}${note}`;
+          } else {
+            const detail =
+              typeof data.detail === 'string'
+                ? data.detail
+                : data.detail?.message ||
+                  data.detail?.errors ||
+                  data.detail?.warnings ||
+                  data.detail;
+            msg.textContent = `Error: ${data.error || 'request failed'}${data.status ? ' (' + data.status + ')' : ''} — ${detail ? (typeof detail === 'string' ? detail : JSON.stringify(detail)) : JSON.stringify(data)}`;
           }
-          else {
-            const detail = (typeof data.detail === 'string') ? data.detail : (data.detail?.message || data.detail?.errors || data.detail?.warnings || data.detail);
-            msg.textContent = `Error: ${data.error || 'request failed'}${data.status ? ' ('+data.status+')' : ''} — ${detail ? (typeof detail==='string'? detail : JSON.stringify(detail)) : JSON.stringify(data)}`;
-          }
-        } catch(e){ msg.textContent='Error: '+e.message; }
+        } catch (e) {
+          msg.textContent = 'Error: ' + e.message;
+        }
       });
 
       // Publish button handler
-      (function(){
+      (function () {
         const btnPub = document.getElementById('btnPublish');
         if (!btnPub) return;
         btnPub.addEventListener('click', async () => {
           const offerId = btnPub.dataset.offerId;
           const msg = document.getElementById('msg2');
-          if (!offerId) { msg.textContent = 'No offerId to publish.'; return; }
-          msg.textContent = 'Publishing…'; btnPub.disabled = true;
+          if (!offerId) {
+            msg.textContent = 'No offerId to publish.';
+            return;
+          }
+          msg.textContent = 'Publishing…';
+          btnPub.disabled = true;
           try {
-            const cond = (document.getElementById('condition')||{value:''}).value;
-            const r = await fetch('/.netlify/functions/ebay-publish-offer', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ offerId, condition: cond? Number(cond): undefined }) });
+            const cond = (document.getElementById('condition') || { value: '' }).value;
+            const r = await fetch('/.netlify/functions/ebay-publish-offer', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ offerId, condition: cond ? Number(cond) : undefined }),
+            });
             const data = await r.json();
-            if (r.ok && data.ok) { msg.textContent = `Published: ${offerId}`; }
-            else {
-              const detail = (typeof data.detail === 'string') ? data.detail : (data.detail?.message || data.detail?.errors || data.detail?.warnings || data.detail);
-              msg.textContent = `Publish error: ${data.error || 'request failed'}${data.status ? ' ('+data.status+')' : ''} — ${detail ? (typeof detail==='string'? detail : JSON.stringify(detail)) : JSON.stringify(data)}`;
+            if (r.ok && data.ok) {
+              msg.textContent = `Published: ${offerId}`;
+            } else {
+              const detail =
+                typeof data.detail === 'string'
+                  ? data.detail
+                  : data.detail?.message ||
+                    data.detail?.errors ||
+                    data.detail?.warnings ||
+                    data.detail;
+              msg.textContent = `Publish error: ${data.error || 'request failed'}${data.status ? ' (' + data.status + ')' : ''} — ${detail ? (typeof detail === 'string' ? detail : JSON.stringify(detail)) : JSON.stringify(data)}`;
               btnPub.disabled = false;
             }
-          } catch(e) { msg.textContent = 'Publish error: ' + e.message; btnPub.disabled = false; }
+          } catch (e) {
+            msg.textContent = 'Publish error: ' + e.message;
+            btnPub.disabled = false;
+          }
         });
       })();
 
       // As the user types in the category picker, fetch suggestions and fill dropdown
-      if (picker) picker.addEventListener('input', async () => {
-        const val = picker.value.trim();
-        const opt = Array.from(datalist.options).find(o=>o.value===val);
-        updatePreview(opt);
-        const id = opt ? opt.getAttribute('data-id') : '';
-        if (id) {
-          categoryIdEl.value = id;
-          // If we have CSV index, enforce leaf-only choice
-          if (ID_INDEX && ID_INDEX.get(String(id))?.leaf) { nextBtn.disabled = false; msg1.textContent = ''; }
-          else { nextBtn.disabled = true; msg1.textContent = 'Please pick a subcategory (leaf) via Browse or refine your search.'; }
-          return;
-        }
-        nextBtn.disabled = !categoryIdEl.value.trim();
-        if (val.length >= 1) {
-          const rows = CAT_ROWS || await loadCategoriesCsv();
-          if (rows) { localSuggest(val); }
-          else {
-            // CSV not available: keep quiet during typing; user can open Browse to pick.
-            datalist.innerHTML='';
+      if (picker)
+        picker.addEventListener('input', async () => {
+          const val = picker.value.trim();
+          const opt = Array.from(datalist.options).find((o) => o.value === val);
+          updatePreview(opt);
+          const id = opt ? opt.getAttribute('data-id') : '';
+          if (id) {
+            categoryIdEl.value = id;
+            // If we have CSV index, enforce leaf-only choice
+            if (ID_INDEX && ID_INDEX.get(String(id))?.leaf) {
+              nextBtn.disabled = false;
+              msg1.textContent = '';
+            } else {
+              nextBtn.disabled = true;
+              msg1.textContent =
+                'Please pick a subcategory (leaf) via Browse or refine your search.';
+            }
+            return;
           }
-        }
-      });
+          nextBtn.disabled = !categoryIdEl.value.trim();
+          if (val.length >= 1) {
+            const rows = CAT_ROWS || (await loadCategoriesCsv());
+            if (rows) {
+              localSuggest(val);
+            } else {
+              // CSV not available: keep quiet during typing; user can open Browse to pick.
+              datalist.innerHTML = '';
+            }
+          }
+        });
 
-      function renderBrowseLocal(node, trail){
+      function renderBrowseLocal(node, trail) {
         // breadcrumbs
-        const parts=[]; const rootA=document.createElement('a'); rootA.href='#'; rootA.textContent='Root'; rootA.onclick=(e)=>{e.preventDefault(); renderBrowseLocal(CAT_TREE, []);}; parts.push(rootA);
-        trail.forEach((n)=>{ const sep=document.createElement('span'); sep.textContent=' > '; parts.push(sep); const a=document.createElement('a'); a.href='#'; a.textContent=n.name; a.onclick=(e)=>{e.preventDefault(); const idx=trail.indexOf(n); renderBrowseLocal(idx>=0? trail[idx]:CAT_TREE, trail.slice(0, idx+1));}; parts.push(a); });
-        crumbs.innerHTML=''; parts.forEach(x=>crumbs.appendChild(x));
+        const parts = [];
+        const rootA = document.createElement('a');
+        rootA.href = '#';
+        rootA.textContent = 'Root';
+        rootA.onclick = (e) => {
+          e.preventDefault();
+          renderBrowseLocal(CAT_TREE, []);
+        };
+        parts.push(rootA);
+        trail.forEach((n) => {
+          const sep = document.createElement('span');
+          sep.textContent = ' > ';
+          parts.push(sep);
+          const a = document.createElement('a');
+          a.href = '#';
+          a.textContent = n.name;
+          a.onclick = (e) => {
+            e.preventDefault();
+            const idx = trail.indexOf(n);
+            renderBrowseLocal(idx >= 0 ? trail[idx] : CAT_TREE, trail.slice(0, idx + 1));
+          };
+          parts.push(a);
+        });
+        crumbs.innerHTML = '';
+        parts.forEach((x) => crumbs.appendChild(x));
         // list (chunked render to reduce lag)
-        browseList.innerHTML='';
+        browseList.innerHTML = '';
         const entries = Array.from(node.children?.entries?.() || []);
         const step = 60;
-        function renderChunk(start){
+        function renderChunk(start) {
           const frag = document.createDocumentFragment();
-          for (const [name, child] of entries.slice(start, start+step)){
-            const wrap = document.createElement('div'); wrap.className='col'; wrap.style.minWidth='260px';
-            const btn = document.createElement('button'); btn.className='secondary'; btn.style.width='100%';
-            const isLeaf = !!child.leaf && (!child.children || child.children.size===0);
-            btn.textContent = (isLeaf? '📄 ' : '📁 ') + name;
+          for (const [name, child] of entries.slice(start, start + step)) {
+            const wrap = document.createElement('div');
+            wrap.className = 'col';
+            wrap.style.minWidth = '260px';
+            const btn = document.createElement('button');
+            btn.className = 'secondary';
+            btn.style.width = '100%';
+            const isLeaf = !!child.leaf && (!child.children || child.children.size === 0);
+            btn.textContent = (isLeaf ? '📄 ' : '📁 ') + name;
             btn.title = child.path;
             btn.onclick = () => {
-              if (isLeaf && child.id){
+              if (isLeaf && child.id) {
                 picker.value = `${child.id} — ${name}`;
                 categoryIdEl.value = child.id;
                 catPreview.textContent = child.path;
@@ -405,65 +807,146 @@
             frag.appendChild(wrap);
           }
           browseList.appendChild(frag);
-          if (start + step < entries.length){
-            const more = document.createElement('button'); more.type='button'; more.className='secondary'; more.textContent = `Load more (${entries.length - (start+step)})`;
-            more.onclick = () => { more.remove(); renderChunk(start+step); };
+          if (start + step < entries.length) {
+            const more = document.createElement('button');
+            more.type = 'button';
+            more.className = 'secondary';
+            more.textContent = `Load more (${entries.length - (start + step)})`;
+            more.onclick = () => {
+              more.remove();
+              renderChunk(start + step);
+            };
             browseList.appendChild(more);
           }
         }
         renderChunk(0);
       }
 
-      async function browse(categoryId){
-        const rows = CAT_ROWS || await loadCategoriesCsv();
+      async function browse(categoryId) {
+        const rows = CAT_ROWS || (await loadCategoriesCsv());
         if (rows && CAT_TREE) {
           renderBrowseLocal(CAT_TREE, []);
           return;
         }
         // fallback to remote
         try {
-          const url = '/.netlify/functions/ebay-category-browse' + (categoryId ? ('?categoryId='+encodeURIComponent(categoryId)) : '');
+          const url =
+            '/.netlify/functions/ebay-category-browse' +
+            (categoryId ? '?categoryId=' + encodeURIComponent(categoryId) : '');
           const j = await fetchJSON(url);
           // crumbs (clickable)
-          const bc = j.breadcrumbs||[];
+          const bc = j.breadcrumbs || [];
           const parts = [];
-          const rootA = document.createElement('a'); rootA.href = '#'; rootA.textContent = 'Root'; rootA.onclick = (e)=>{ e.preventDefault(); browse(); };
+          const rootA = document.createElement('a');
+          rootA.href = '#';
+          rootA.textContent = 'Root';
+          rootA.onclick = (e) => {
+            e.preventDefault();
+            browse();
+          };
           parts.push(rootA);
-          bc.forEach((b, idx) => { const sep = document.createElement('span'); sep.textContent = ' > '; parts.push(sep); const a = document.createElement('a'); a.href='#'; a.textContent = b.name; a.onclick = (e)=>{ e.preventDefault(); browse(b.id); }; parts.push(a); });
-          crumbs.innerHTML=''; parts.forEach(el=>crumbs.appendChild(el));
+          bc.forEach((b, idx) => {
+            const sep = document.createElement('span');
+            sep.textContent = ' > ';
+            parts.push(sep);
+            const a = document.createElement('a');
+            a.href = '#';
+            a.textContent = b.name;
+            a.onclick = (e) => {
+              e.preventDefault();
+              browse(b.id);
+            };
+            parts.push(a);
+          });
+          crumbs.innerHTML = '';
+          parts.forEach((el) => crumbs.appendChild(el));
           // list
-          browseList.innerHTML='';
+          browseList.innerHTML = '';
           const children = j.children || [];
           const step = 60;
-          function renderChunk(start){
+          function renderChunk(start) {
             const frag = document.createDocumentFragment();
-            for (const n of children.slice(start, start+step)){
-              const wrap = document.createElement('div'); wrap.className='col'; wrap.style.minWidth='260px';
-              const btn = document.createElement('button'); btn.className='secondary'; btn.style.width='100%';
-              btn.textContent = (n.leaf? '📄 ' : '📁 ') + n.name; btn.title = n.path;
-              btn.onclick = () => { if (n.leaf) { picker.value = `${n.id} — ${n.name}`; categoryIdEl.value = n.id; catPreview.textContent = n.path; nextBtn.disabled = false; msg1.textContent = ''; modal.classList.add('hide'); } else { browse(n.id); } };
-              wrap.appendChild(btn); frag.appendChild(wrap);
+            for (const n of children.slice(start, start + step)) {
+              const wrap = document.createElement('div');
+              wrap.className = 'col';
+              wrap.style.minWidth = '260px';
+              const btn = document.createElement('button');
+              btn.className = 'secondary';
+              btn.style.width = '100%';
+              btn.textContent = (n.leaf ? '📄 ' : '📁 ') + n.name;
+              btn.title = n.path;
+              btn.onclick = () => {
+                if (n.leaf) {
+                  picker.value = `${n.id} — ${n.name}`;
+                  categoryIdEl.value = n.id;
+                  catPreview.textContent = n.path;
+                  nextBtn.disabled = false;
+                  msg1.textContent = '';
+                  modal.classList.add('hide');
+                } else {
+                  browse(n.id);
+                }
+              };
+              wrap.appendChild(btn);
+              frag.appendChild(wrap);
             }
             browseList.appendChild(frag);
-            if (start + step < children.length){
-              const more = document.createElement('button'); more.type='button'; more.className='secondary'; more.textContent = `Load more (${children.length - (start+step)})`;
-              more.onclick = () => { more.remove(); renderChunk(start+step); };
+            if (start + step < children.length) {
+              const more = document.createElement('button');
+              more.type = 'button';
+              more.className = 'secondary';
+              more.textContent = `Load more (${children.length - (start + step)})`;
+              more.onclick = () => {
+                more.remove();
+                renderChunk(start + step);
+              };
               browseList.appendChild(more);
             }
           }
           renderChunk(0);
-        } catch(e){ crumbs.textContent = 'Browse error: ' + (e.response?.error || e.message); }
+        } catch (e) {
+          crumbs.textContent = 'Browse error: ' + (e.response?.error || e.message);
+        }
       }
 
-      
-
-  if (browseBtn) browseBtn.onclick = () => { modal.classList.remove('hide'); browse(); };
-  if (browseClose) browseClose.onclick = () => { modal.classList.add('hide'); setTimeout(()=>{ try{ browseBtn?.focus(); }catch{} }, 0); };
-  // Backdrop click closes (use currentTarget for safety)
-  if (modal) modal.addEventListener('click', (e) => { if (e.currentTarget === e.target) { modal.classList.add('hide'); setTimeout(()=>{ try{ browseBtn?.focus(); }catch{} }, 0); } });
-  if (browsePanel) browsePanel.addEventListener('click', (e)=> e.stopPropagation());
-  // Escape key closes
-  window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modal.classList.contains('hide')) { modal.classList.add('hide'); setTimeout(()=>{ try{ browseBtn?.focus(); }catch{} }, 0); } });
+      if (browseBtn)
+        browseBtn.onclick = () => {
+          modal.classList.remove('hide');
+          browse();
+        };
+      if (browseClose)
+        browseClose.onclick = () => {
+          modal.classList.add('hide');
+          setTimeout(() => {
+            try {
+              browseBtn?.focus();
+            } catch {}
+          }, 0);
+        };
+      // Backdrop click closes (use currentTarget for safety)
+      if (modal)
+        modal.addEventListener('click', (e) => {
+          if (e.currentTarget === e.target) {
+            modal.classList.add('hide');
+            setTimeout(() => {
+              try {
+                browseBtn?.focus();
+              } catch {}
+            }, 0);
+          }
+        });
+      if (browsePanel) browsePanel.addEventListener('click', (e) => e.stopPropagation());
+      // Escape key closes
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !modal.classList.contains('hide')) {
+          modal.classList.add('hide');
+          setTimeout(() => {
+            try {
+              browseBtn?.focus();
+            } catch {}
+          }, 0);
+        }
+      });
     </script>
   </body>
-  </html>
+</html>
