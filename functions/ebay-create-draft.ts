@@ -55,12 +55,26 @@ export const handler: Handler = async (event) => {
     } as Record<string, string>;
 
     // 1) Upsert Inventory Item
+    const mapCondToInventory = (c?: number) => {
+      switch (c) {
+        case 1000: return "NEW";
+        case 1500: return "NEW_OTHER";
+        case 1750: return "NEW_OTHER"; // map to NEW_OTHER
+        case 2000: return "MANUFACTURER_REFURBISHED";
+        case 2500: return "SELLER_REFURBISHED";
+        case 3000: return "USED";
+        case 7000: return "FOR_PARTS_OR_NOT_WORKING";
+        default: return undefined;
+      }
+    };
+    const condNumForInv = (condition !== undefined && Number.isFinite(Number(condition))) ? Number(condition) : undefined;
+    const invCond = mapCondToInventory(condNumForInv);
     const invPayload = {
       sku,
       product: { title, description, imageUrls: images ?? [primaryImage] },
       availability: { shipToLocationAvailability: { quantity: qty } },
-      // Do NOT set condition on inventory item; numeric ids from Metadata don't serialize here.
-      // We'll set condition on the Offer only.
+      // Set condition on inventory item as string enum when available (offer will also carry numeric condition)
+      condition: invCond,
       aspects: undefined,
     } as any;
     if (aspects && typeof aspects === 'object') {
