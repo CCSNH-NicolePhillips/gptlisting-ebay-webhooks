@@ -12,7 +12,7 @@ export const handler: Handler = async (event) => {
     // Accept GET query for quick testing; POST body is canonical
     const qs = (event.queryStringParameters || {}) as Record<string, string>;
     const body = event.body ? (JSON.parse(event.body) as any) : {};
-    const sku = (body.sku ?? qs["sku"]) as string | undefined;
+  const skuRaw = (body.sku ?? qs["sku"]) as string | undefined;
     const title = (body.title ?? qs["title"]) as string | undefined;
     const price = body.price !== undefined ? (typeof body.price === "number" ? body.price : parseFloat(body.price)) : (qs["price"] ? parseFloat(qs["price"]) : undefined);
     const image = (body.image ?? qs["image"]) as string | undefined;
@@ -46,6 +46,15 @@ export const handler: Handler = async (event) => {
     const normalizeImages = (arr?: string[]) => (arr||[]).map(s => toDirectDropbox(String(s).trim())).filter(Boolean);
     const normImages = normalizeImages(images ?? (image ? [image] : []));
     const primaryImage = normImages[0];
+    // sanitize SKU to eBay requirements: alphanumeric only, max 50
+    const sanitizeSku = (s?: string) => {
+      if (!s) return s;
+      const cleaned = String(s).replace(/[^A-Za-z0-9]/g, "").slice(0,50);
+      return cleaned || undefined;
+    };
+    const sku = sanitizeSku(skuRaw);
+    const skuNote = skuRaw && skuRaw !== sku ? ` (orig SKU: ${skuRaw})` : '';
+
     if (!sku || !title || !primaryImage || !Number.isFinite(price)) {
       return { statusCode: 400, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "Missing sku|title|price|image" }) };
     }
@@ -114,7 +123,7 @@ export const handler: Handler = async (event) => {
 
     const invPayload = {
       sku,
-  product: { title, description, imageUrls: normImages.length ? normImages : [primaryImage] },
+  product: { title, description: (description||title)+skuNote, imageUrls: normImages.length ? normImages : [primaryImage] },
       availability: { shipToLocationAvailability: { quantity: qty } },
       // Set condition on inventory item as string enum when available (offer will also carry numeric condition)
       condition: invCond,
