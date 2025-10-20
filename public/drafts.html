@@ -88,8 +88,9 @@
           try {
             const r = await fetch('/.netlify/functions/ebay-publish-offer', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ offerId: offer.offerId }) });
             const data = await r.json();
-            if (r.ok && data.ok) { el.remove(); flash.textContent = `Published ${offer.offerId}`; }
-            else { flash.textContent = `Publish error: ${data.error||''}`; pub.disabled = del.disabled = false; }
+            if (r.ok && data.ok && !data.deleted) { el.remove(); flash.textContent = `Published ${offer.offerId}`; return; }
+            if (r.ok && data.ok && data.deleted) { el.remove(); flash.textContent = `Draft ${offer.offerId} had errors and was deleted.`; return; }
+            flash.textContent = `Publish error: ${data.error||''}`; pub.disabled = del.disabled = false;
           } catch(e){ flash.textContent='Publish error: '+e.message; pub.disabled = del.disabled = false; }
         };
         del.onclick = async () => {
