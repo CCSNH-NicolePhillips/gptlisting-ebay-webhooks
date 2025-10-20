@@ -4,7 +4,9 @@ import { tokensStore } from "./_blobs.js";
 
 export const handler: Handler = async (event) => {
   try {
-    const sku = event.queryStringParameters?.sku;
+  const rawSku = event.queryStringParameters?.sku?.trim();
+  const SKU_OK = (s: string) => /^[A-Za-z0-9]{1,50}$/.test(s || "");
+  const sku = rawSku && SKU_OK(rawSku) ? rawSku : undefined;
     const limit = Number(event.queryStringParameters?.limit || 20);
     const status = event.queryStringParameters?.status; // e.g., DRAFT, PUBLISHED
     const offset = Number(event.queryStringParameters?.offset || 0);
@@ -62,7 +64,9 @@ export const handler: Handler = async (event) => {
       // Already filtered by server; return upstream shape
       return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ok: true, ...body }) };
     }
-    return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ok: true, total: final.length, offers: final, href: body.href, next: body.next, prev: body.prev }) };
+    const meta: any = { ok: true, total: final.length, offers: final, href: body.href, next: body.next, prev: body.prev };
+    if (rawSku && !sku) meta.note = "sku filter ignored due to invalid characters";
+    return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify(meta) };
   } catch (e: any) {
     return { statusCode: 500, body: JSON.stringify({ error: "list-offers error", detail: e?.message || String(e) }) };
   }

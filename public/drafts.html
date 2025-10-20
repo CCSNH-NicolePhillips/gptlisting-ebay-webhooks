@@ -122,7 +122,10 @@
         for (let i=0;i<6;i++){ const ph = document.createElement('div'); ph.className='card'; ph.innerHTML = '<div class="thumb"><div class="skeleton"></div></div><div class="body"><div class="title" style="height:1.2rem;background:rgba(255,255,255,.06);border-radius:6px;width:70%"></div><div class="meta" style="height:1rem;background:rgba(255,255,255,.04);border-radius:6px;width:90%"></div><div class="row"><button class="btn" disabled>Publish</button><button class="btn danger" disabled>Delete</button></div></div>'; list.appendChild(ph); }
         try {
           // eBay treats saved offers awaiting publish as UNPUBLISHED
-          const j = await fetchJSON('/.netlify/functions/ebay-list-offers?status=UNPUBLISHED&limit=100');
+          const rawSku = new URL(location.href).searchParams.get('sku') || '';
+          const skuOk = /^[A-Za-z0-9]{1,50}$/.test(rawSku);
+          const url = '/.netlify/functions/ebay-list-offers?status=UNPUBLISHED&limit=100' + (skuOk ? ('&sku='+encodeURIComponent(rawSku)) : '');
+          const j = await fetchJSON(url);
           const offers = j.offers||[];
           if (!offers.length) { list.innerHTML = '<div class="empty">No drafts yet. Create your first listing draft from the wizard.</div>'; return; }
           list.innerHTML='';
