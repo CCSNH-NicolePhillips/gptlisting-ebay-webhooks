@@ -8,12 +8,40 @@ export const handler: Handler = async (event) => {
     const u = new URL(src);
     if (u.protocol !== 'https:') return { statusCode: 400, body: 'Only https URLs are allowed' };
 
-    // Follow redirects; Dropbox often redirects
-    const r = await fetch(src, { redirect: 'follow' });
-    if (!r.ok) return { statusCode: r.status, body: `Upstream fetch failed: ${r.status}` };
-    const type = (r.headers.get('content-type') || '').toLowerCase();
-    const buf = Buffer.from(await r.arrayBuffer());
-    // Validate image content type
+    // Normalize Dropbox viewer links to direct content host
+    const normalizeDropbox = (input: string) => {
+      try {
+        const url = new URL(input);
+        if (/\.dropbox\.com$/i.test(url.hostname)) {
+          url.hostname = 'dl.dropboxusercontent.com';
+          url.searchParams.delete('dl');
+          url.searchParams.set('raw', '1');
+        }
+        return url.toString();
+      } catch {
+        return input
+          .replace('www.dropbox.com', 'dl.dropboxusercontent.com')
+          .replace('?dl=0', '?raw=1')
+          .replace('&dl=0', '&raw=1');
+      }
+    };
+
+    const tryFetch = async (url: string) => {
+      const resp = await fetch(url, { redirect: 'follow' });
+      const type = (resp.headers.get('content-type') || '').toLowerCase();
+      return { resp, type };
+    };
+
+    let target = src;
+    // First attempt
+    let { resp, type } = await tryFetch(target);
+    // If Dropbox returns HTML viewer, try normalized direct link
+    if (resp.ok && !type.startsWith('image/') && /dropbox\.com/i.test(target)) {
+      target = normalizeDropbox(target);
+      ({ resp, type } = await tryFetch(target));
+    }
+    if (!resp.ok) return { statusCode: resp.status, body: `Upstream fetch failed: ${resp.status}` };
+    const buf = Buffer.from(await resp.arrayBuffer());
     if (!type.startsWith('image/')) {
       return { statusCode: 415, body: `Not an image (type=${type})` };
     }

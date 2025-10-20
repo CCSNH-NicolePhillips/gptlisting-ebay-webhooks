@@ -56,6 +56,22 @@ async function dbxListFolder(access: string, path: string, recursive = false) {
 }
 
 async function dbxSharedRawLink(access: string, filePath: string): Promise<string> {
+  function normalize(u: string) {
+    try {
+      const url = new URL(u);
+      if (/\.dropbox\.com$/i.test(url.hostname)) {
+        url.hostname = 'dl.dropboxusercontent.com';
+      }
+      url.searchParams.delete('dl');
+      url.searchParams.set('raw', '1');
+      return url.toString();
+    } catch {
+      return u
+        .replace('www.dropbox.com', 'dl.dropboxusercontent.com')
+        .replace('?dl=0', '?raw=1')
+        .replace('&dl=0', '&raw=1');
+    }
+  }
   // Try to create a shared link, fallback to listing existing links
   const create = await fetch(
     'https://api.dropboxapi.com/2/sharing/create_shared_link_with_settings',
@@ -66,7 +82,7 @@ async function dbxSharedRawLink(access: string, filePath: string): Promise<strin
     }
   );
   const cj: any = await create.json().catch(() => ({}));
-  if (create.ok && cj?.url) return String(cj.url).replace('?dl=0', '?raw=1');
+  if (create.ok && cj?.url) return normalize(String(cj.url));
   const summary = cj?.error_summary || '';
   if (!create.ok && summary.includes('shared_link_already_exists')) {
     const r2 = await fetch('https://api.dropboxapi.com/2/sharing/list_shared_links', {
@@ -76,7 +92,7 @@ async function dbxSharedRawLink(access: string, filePath: string): Promise<strin
     });
     const j2: any = await r2.json().catch(() => ({}));
     if (!r2.ok || !j2.links?.length) throw new Error(`dbx links: ${r2.status} ${JSON.stringify(j2)}`);
-    return String(j2.links[0].url).replace('?dl=0', '?raw=1');
+    return normalize(String(j2.links[0].url));
   }
   throw new Error(`dbx share: ${create.status} ${JSON.stringify(cj)}`);
 }
