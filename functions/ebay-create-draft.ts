@@ -200,8 +200,7 @@ export const handler: Handler = async (event) => {
       return { statusCode: 502, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "offer verification failed", step: "verify-offer", offerId: createdOfferId, verify: { status: verified.status, url: verified.url, body: verified.body } }) };
     }
     const status = verified.body?.status;
-    const acceptUnpublished = /^1|true|yes$/i.test(String(process.env.ACCEPT_UNPUBLISHED_AS_DRAFT || ''));
-    if (status === "DRAFT" || (acceptUnpublished && status === "UNPUBLISHED")) {
+    if (status === "DRAFT" || status === "UNPUBLISHED") {
       return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ok: true, env: ENV, marketplaceId: MARKETPLACE_ID, draftOffer: verified.body, status }) };
     }
     // Treat any other status as failure for this flow; surface full offer for debugging
