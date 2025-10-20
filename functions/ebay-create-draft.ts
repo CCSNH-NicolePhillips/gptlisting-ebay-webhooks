@@ -200,12 +200,12 @@ export const handler: Handler = async (event) => {
       return { statusCode: 502, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "offer verification failed", step: "verify-offer", offerId: createdOfferId, verify: { status: verified.status, url: verified.url, body: verified.body } }) };
     }
     const status = verified.body?.status;
-    if (status !== "DRAFT") {
-      // Treat any non-DRAFT as failure for this flow; surface full offer for debugging
-      return { statusCode: 502, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "unexpected-offer-status", step: "verify-offer", offerId: createdOfferId, status, offer: verified.body }) };
+    const acceptUnpublished = /^1|true|yes$/i.test(String(process.env.ACCEPT_UNPUBLISHED_AS_DRAFT || ''));
+    if (status === "DRAFT" || (acceptUnpublished && status === "UNPUBLISHED")) {
+      return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ok: true, env: ENV, marketplaceId: MARKETPLACE_ID, draftOffer: verified.body, status }) };
     }
-
-    return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ok: true, env: ENV, marketplaceId: MARKETPLACE_ID, draftOffer: verified.body }) };
+    // Treat any other status as failure for this flow; surface full offer for debugging
+    return { statusCode: 502, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "unexpected-offer-status", step: "verify-offer", offerId: createdOfferId, status, offer: verified.body }) };
   } catch (e: any) {
     return { statusCode: 500, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "create-draft error", detail: e?.message || String(e) }) };
   }
