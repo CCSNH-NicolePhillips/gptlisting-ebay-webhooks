@@ -57,7 +57,10 @@ export const handler: Handler = async (event) => {
         const url = new URL(u);
         if (url.hostname === 'www.dropbox.com' || url.hostname === 'dropbox.com') {
           url.hostname = 'dl.dropboxusercontent.com';
-          url.search = '';
+          const qp = new URLSearchParams(url.search);
+          qp.delete('dl');
+          const qs = qp.toString();
+          url.search = qs ? `?${qs}` : '';
           return url.toString();
         }
         return u;
