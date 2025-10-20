@@ -247,8 +247,12 @@
           $('catPath').textContent = 'Category '+cid;
           conditionSel.innerHTML='';
           const conds = req.allowedConditions||[];
-          if (conds.length) conds.forEach(c=>{ const o=document.createElement('option'); o.value=c.conditionId; o.textContent = `${c.conditionId} — ${c.conditionDescription}`; conditionSel.appendChild(o); });
-          else { const o=document.createElement('option'); o.value=''; o.textContent='(none)'; conditionSel.appendChild(o); }
+          if (conds.length) {
+            conds.forEach(c=>{ const o=document.createElement('option'); o.value=c.conditionId; o.textContent = `${c.conditionId} — ${c.conditionDescription}`; conditionSel.appendChild(o); });
+            // Default-select New (1000) if present, otherwise first
+            const prefer = conds.find(c=>String(c.conditionId)==='1000');
+            conditionSel.value = prefer ? String(prefer.conditionId) : String(conds[0]?.conditionId||'');
+          } else { const o=document.createElement('option'); o.value=''; o.textContent='(none)'; conditionSel.appendChild(o); }
           // render aspects
           $('reqAspects').innerHTML=''; $('optAspects').innerHTML='';
           (req.requiredAspects||[]).forEach(a=>renderAspect('reqAspects', a, true));
@@ -299,7 +303,10 @@
           const r = await fetch('/.netlify/functions/ebay-create-draft', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sku, title, price, qty, images, merchantLocationKey, categoryId, description: description||undefined, condition: condition||undefined, aspects: Object.keys(aspects).length? aspects: undefined }) });
           const data = await r.json();
           if (r.ok && data.ok) { msg.textContent = 'Draft created: ' + (data.draftOffer?.offerId||'unknown'); }
-          else msg.textContent = 'Error: ' + (data.error || JSON.stringify(data));
+          else {
+            const detail = (typeof data.detail === 'string') ? data.detail : (data.detail?.message || data.detail?.errors || data.detail?.warnings || data.detail);
+            msg.textContent = `Error: ${data.error || 'request failed'}${data.status ? ' ('+data.status+')' : ''} — ${detail ? (typeof detail==='string'? detail : JSON.stringify(detail)) : JSON.stringify(data)}`;
+          }
         } catch(e){ msg.textContent='Error: '+e.message; }
       });
 
