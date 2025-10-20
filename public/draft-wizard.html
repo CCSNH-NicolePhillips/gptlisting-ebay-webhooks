@@ -302,7 +302,7 @@
         try {
           const r = await fetch('/.netlify/functions/ebay-create-draft', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sku, title, price, qty, images, merchantLocationKey, categoryId, description: description||undefined, condition: condition||undefined, aspects: Object.keys(aspects).length? aspects: undefined }) });
           const data = await r.json();
-          if (r.ok && data.ok) { msg.textContent = 'Draft created: ' + (data.draftOffer?.offerId||'unknown'); }
+          if (r.ok && data.ok) { msg.textContent = `Draft created (${data.env||'PROD'} ${data.marketplaceId||''}): ${data.draftOffer?.offerId||'unknown'}`; }
           else {
             const detail = (typeof data.detail === 'string') ? data.detail : (data.detail?.message || data.detail?.errors || data.detail?.warnings || data.detail);
             msg.textContent = `Error: ${data.error || 'request failed'}${data.status ? ' ('+data.status+')' : ''} — ${detail ? (typeof detail==='string'? detail : JSON.stringify(detail)) : JSON.stringify(data)}`;

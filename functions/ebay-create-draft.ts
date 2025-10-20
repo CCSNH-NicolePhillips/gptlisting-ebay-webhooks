@@ -39,7 +39,8 @@ export const handler: Handler = async (event) => {
     if (!refresh) return { statusCode: 400, body: JSON.stringify({ error: "Connect eBay first" }) };
     const { access_token } = await accessTokenFromRefresh(refresh);
 
-    const { apiHost } = tokenHosts(process.env.EBAY_ENV);
+  const ENV = process.env.EBAY_ENV || "PROD";
+  const { apiHost } = tokenHosts(ENV);
     // Normalize and pick merchant location key
     const mlkRaw = overrideLocationKey || process.env.EBAY_MERCHANT_LOCATION_KEY || "default-loc";
     const mlk = String(mlkRaw).trim().replace(/\s+/g, "-");
@@ -180,7 +181,30 @@ export const handler: Handler = async (event) => {
     try { offerRes = JSON.parse(offerText); } catch { offerRes = { raw: offerText }; }
     if (!r.ok) return { statusCode: r.status, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "offer create failed", step: "post-offer", url: offerUrl, status: r.status, payload: offerPayload, detail: offerRes }) };
 
-    return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ok: true, draftOffer: offerRes }) };
+    // 4b) Verify the offer actually exists and is DRAFT (avoid reporting success prematurely)
+    const createdOfferId = offerRes?.offerId || offerRes?.offer?.offerId;
+    if (!createdOfferId) {
+      return { statusCode: 502, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "offer missing id after create", step: "verify-offer", detail: offerRes }) };
+    }
+    const getOffer = async () => {
+      const url = `${apiHost}/sell/inventory/v1/offer/${encodeURIComponent(createdOfferId)}`;
+      const res = await fetch(url, { headers: commonHeaders });
+      const txt = await res.text();
+      let json: any; try { json = JSON.parse(txt); } catch { json = { raw: txt }; }
+      return { ok: res.ok, status: res.status, body: json, url };
+    };
+    // retry a couple times in case of indexing delay
+    let verified = await getOffer();
+    if (!verified.ok || !verified.body) { await new Promise(r => setTimeout(r, 400)); verified = await getOffer(); }
+    if (!verified.ok || !verified.body) {
+      return { statusCode: 502, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "offer verification failed", step: "verify-offer", offerId: createdOfferId, verify: { status: verified.status, url: verified.url, body: verified.body } }) };
+    }
+    const status = verified.body?.status;
+    if (status !== "DRAFT") {
+      return { statusCode: 502, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "unexpected-offer-status", step: "verify-offer", offerId: createdOfferId, status, offer: verified.body }) };
+    }
+
+    return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ok: true, env: ENV, marketplaceId: MARKETPLACE_ID, draftOffer: verified.body }) };
   } catch (e: any) {
     return { statusCode: 500, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "create-draft error", detail: e?.message || String(e) }) };
   }
