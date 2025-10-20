@@ -68,7 +68,26 @@ export const handler: Handler = async (event) => {
       // retry publish once
       pub = await publishOnce();
     }
-    if (!pub.ok) return { statusCode: pub.status, body: JSON.stringify({ error: "publish failed", url: pub.url, status: pub.status, detail: pub.body }) };
+    if (!pub.ok) {
+      // Auto-delete the problematic draft as requested
+      try {
+        const delUrl = `${apiHost}/sell/inventory/v1/offer/${encodeURIComponent(offerId)}`;
+        const delRes = await fetch(delUrl, { method: "DELETE", headers });
+        if (delRes.ok) {
+          return {
+            statusCode: 200,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ok: true, deleted: true, offerId, reason: "publish failed", publish: { url: pub.url, status: pub.status, detail: pub.body } })
+          };
+        } else {
+          const delTxt = await delRes.text();
+          let delBody: any; try { delBody = JSON.parse(delTxt); } catch { delBody = { raw: delTxt }; }
+          return { statusCode: pub.status, body: JSON.stringify({ error: "publish failed; also failed to delete", publish: { url: pub.url, status: pub.status, detail: pub.body }, delete: { url: delUrl, status: delRes.status, detail: delBody } }) };
+        }
+      } catch (e: any) {
+        return { statusCode: pub.status, body: JSON.stringify({ error: "publish failed; delete attempt errored", publish: { url: pub.url, status: pub.status, detail: pub.body }, deleteError: e?.message || String(e) }) };
+      }
+    }
     return { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ok: true, result: pub.body }) };
   } catch (e: any) {
     return { statusCode: 500, body: JSON.stringify({ error: "publish-offer error", detail: e?.message || String(e) }) };
