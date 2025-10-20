@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Drafts</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; padding: 2rem; background:#0b1020; color:#f4f6fb; }
+      .wrap { max-width: 1100px; margin: 0 auto; }
+      .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
+      .card { background:#141a33; border:1px solid #2a335c; border-radius:12px; padding:1rem; display:flex; flex-direction:column; gap:.5rem; }
+      .meta { color:#a2a9c8; font-size: .9rem }
+      button { background:#4f7cff; color:white; border:none; border-radius:8px; padding:.5rem .8rem; cursor:pointer; font-weight:600; }
+      button.secondary { background: transparent; color: #cbd5ff; border: 1px solid #3d4a86; }
+      .row { display:flex; gap:.5rem; flex-wrap:wrap }
+      .muted { color:#a2a9c8 }
+      a { color:#9db2ff }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:1rem">
+        <a class="secondary" href="/draft-wizard.html">← Create another</a>
+        <div id="flash" class="muted"></div>
+      </div>
+      <h2>Draft offers</h2>
+      <div id="list" class="grid"></div>
+    </div>
+
+    <script>
+      async function fetchJSON(url, opts){ const r = await fetch(url, opts); let j; try { j = await r.json(); } catch { j = { raw: await r.text() }; } if (!r.ok) throw Object.assign(new Error('HTTP '+r.status), { response:j, status:r.status }); return j; }
+      const $ = (id)=> document.getElementById(id);
+      const list = $('list');
+      const flash = $('flash');
+
+      function card(offer){
+        const el = document.createElement('div'); el.className='card';
+        const head = document.createElement('div'); head.innerHTML = `<div style="font-weight:700">${offer.offerId} — ${escapeHtml((offer.listingDescription||'').slice(0,80))}</div>`;
+        const meta = document.createElement('div'); meta.className='meta'; meta.textContent = `SKU: ${offer.sku || ''} · Category: ${offer.categoryId || ''} · Qty: ${offer.availableQuantity || ''}`;
+        const row = document.createElement('div'); row.className='row';
+        const pub = document.createElement('button'); pub.textContent = 'Publish Draft';
+        const del = document.createElement('button'); del.textContent = 'Delete Draft'; del.className='secondary';
+        pub.onclick = async () => {
+          pub.disabled = true; del.disabled = true; flash.textContent='Publishing…';
+          try {
+            const r = await fetch('/.netlify/functions/ebay-publish-offer', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ offerId: offer.offerId }) });
+            const data = await r.json();
+            if (r.ok && data.ok) { el.remove(); flash.textContent = `Published ${offer.offerId}`; }
+            else { flash.textContent = `Publish error: ${data.error||''} ${(data.status||'')}`; pub.disabled = del.disabled = false; }
+          } catch(e){ flash.textContent='Publish error: '+e.message; pub.disabled = del.disabled = false; }
+        };
+        del.onclick = async () => {
+          if (!confirm('Delete this draft?')) return;
+          pub.disabled = true; del.disabled = true; flash.textContent='Deleting…';
+          try {
+            const r = await fetch('/.netlify/functions/ebay-delete-offer?offerId='+encodeURIComponent(offer.offerId));
+            const data = await r.json();
+            if (r.ok && data.ok) { el.remove(); flash.textContent = `Deleted ${offer.offerId}`; }
+            else { flash.textContent = `Delete error: ${data.error||''} ${(data.status||'')}`; pub.disabled = del.disabled = false; }
+          } catch(e){ flash.textContent='Delete error: '+e.message; pub.disabled = del.disabled = false; }
+        };
+        row.appendChild(pub); row.appendChild(del);
+        el.appendChild(head); el.appendChild(meta); el.appendChild(row);
+        return el;
+      }
+
+      function escapeHtml(s){ return String(s).replace(/[&<>"]+/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c])); }
+
+      async function load(){
+        list.innerHTML='';
+        try {
+          const j = await fetchJSON('/.netlify/functions/ebay-list-offers?status=DRAFT&limit=100');
+          const offers = j.offers||[];
+          if (!offers.length) { list.innerHTML = '<div class="muted">No drafts found.</div>'; return; }
+          offers.forEach(o => list.appendChild(card(o)));
+        } catch(e){ list.innerHTML = '<div class="muted">Failed to load drafts.</div>'; }
+      }
+
+      // Show flash when redirected with ?created=offerId
+      const params = new URLSearchParams(location.search);
+      if (params.get('created')) { flash.textContent = `Created draft ${params.get('created')}`; }
+      load();
+    </script>
+  </body>
+  </html>
