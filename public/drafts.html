@@ -145,12 +145,23 @@
 
       async function getImagesForSKU(sku){
         if (!sku) return [];
-        try {
-          const j = await fetchJSON('/.netlify/functions/ebay-get-inventory-item?sku='+encodeURIComponent(sku));
+        const trySku = async (s) => {
+          const j = await fetchJSON('/.netlify/functions/ebay-get-inventory-item?sku='+encodeURIComponent(s));
           const imgs = j?.item?.product?.imageUrls || j?.item?.product?.images || j?.item?.product?.image || [];
           const arr = Array.isArray(imgs) ? imgs : (imgs ? [imgs] : []);
           return arr;
-        } catch { return []; }
+        };
+        try {
+          // First, try given SKU
+          const primary = await trySku(sku);
+          if (primary.length) return primary;
+        } catch {}
+        // If SKU contains invalid chars, try sanitized fallback
+        const san = String(sku).replace(/[^A-Za-z0-9]/g, '').slice(0,50);
+        if (san && san !== sku) {
+          try { const fallback = await trySku(san); if (fallback.length) return fallback; } catch {}
+        }
+        return [];
       }
 
       function lazyLoadThumbs(){
@@ -164,10 +175,14 @@
             const url = imgs[0];
             if (url && n._img){
               const src = proxied(url);
+              n._img.alt = 'Draft image';
               n._img.onload = () => { n._img.classList.add('loaded'); n._sk?.remove?.(); };
               n._img.onerror = () => { n._sk?.remove?.(); };
               n._img.src = src;
-            } else { n._sk?.remove?.(); }
+            } else {
+              // No image found – clear skeleton and leave a subtle placeholder
+              if (n._sk) n._sk.remove();
+            }
           });
         }
         // run with limited concurrency
