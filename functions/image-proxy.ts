@@ -47,21 +47,21 @@ export const handler: Handler = async (event) => {
       return { statusCode: 415, body: `Not an image (type=${type})` };
     }
     // Auto-orient images based on EXIF to avoid sideways photos on eBay
-  let outBuf: Buffer = buf as Buffer;
+    let outBuf: Buffer = buf as Buffer;
     try {
       const s = sharp(buf, { failOnError: false });
-      // Rotate according to EXIF orientation
-  const rotated = await s.rotate().toBuffer();
-  if (rotated && rotated.length) outBuf = Buffer.from(rotated);
+    // Rotate according to EXIF orientation and output JPEG which strips EXIF by default
+    const rotated = await s.rotate().jpeg({ quality: 92, mozjpeg: true }).toBuffer();
+    if (rotated && rotated.length) outBuf = Buffer.from(rotated);
     } catch {
       // If sharp fails, fallback to original buffer
     }
 
-    // Preserve original type if possible; sharp typically outputs same format by default
+    // Always emit JPEG so downstream (eBay) gets normalized pixels without EXIF orientation
     return {
       statusCode: 200,
       headers: {
-        'Content-Type': type,
+        'Content-Type': 'image/jpeg',
         'Cache-Control': 'public, max-age=31536000, immutable',
         // Allow eBay crawler
         'Access-Control-Allow-Origin': '*',
