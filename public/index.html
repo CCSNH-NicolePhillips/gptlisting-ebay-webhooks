@@ -114,6 +114,13 @@
             >
             <button id="dbxDisconnect" class="secondary">Disconnect</button>
           </div>
+          <div id="dbxFolderBox" style="margin-top: .75rem;">
+            <label for="dbxFolderSelect" class="small muted" style="display:block;margin-bottom:.25rem">Default listing folder</label>
+            <select id="dbxFolderSelect" style="width:100%" disabled>
+              <option>Loading folders…</option>
+            </select>
+            <div id="dbxFolderMsg" class="small muted" style="margin-top:.25rem"></div>
+          </div>
         </div>
         <div class="col">
           <h3>eBay (Production)</h3>
@@ -174,6 +181,10 @@
         chkEbay.innerHTML = s.ebay?.connected ? 'eBay: ✅ Connected' : 'eBay: ❌ Not connected';
         const connected = !!(s.dropbox?.connected && s.ebay?.connected);
         document.getElementById('process').disabled = !connected;
+        // Load folders when Dropbox is connected
+        try {
+          await loadDropboxFolders(!!s.dropbox?.connected);
+        } catch {}
         return connected;
       }
 
@@ -201,6 +212,65 @@
           btn.disabled = false;
         }
       };
+
+      // Default Dropbox folder selection
+      function getDefaultFolder() {
+        return localStorage.getItem('dbxDefaultFolder') || '';
+      }
+      function setDefaultFolder(path) {
+        localStorage.setItem('dbxDefaultFolder', path || '');
+        const msg = document.getElementById('dbxFolderMsg');
+        if (msg) msg.textContent = path ? `Saved: ${path}` : 'Saved';
+      }
+      async function loadDropboxFolders(connected) {
+        const box = document.getElementById('dbxFolderBox');
+        const sel = document.getElementById('dbxFolderSelect');
+        const msg = document.getElementById('dbxFolderMsg');
+        if (!box || !sel) return;
+        if (!connected) {
+          sel.innerHTML = '<option>Connect Dropbox to load folders</option>';
+          sel.disabled = true;
+          if (msg) msg.textContent = '';
+          return;
+        }
+        sel.disabled = true;
+        sel.innerHTML = '<option>Loading folders…</option>';
+        try {
+          const url = new URL('/.netlify/functions/dropbox-list-folders', window.location.origin);
+          url.searchParams.set('recursive', '1');
+          const r = await fetch(url.toString());
+          const j = await r.json();
+          const folders = (j && j.folders) || [];
+          // Build unique sorted set by path_display
+          const set = new Map();
+          folders.forEach((f) => {
+            const p = f.path_display || f.path_lower || f.name;
+            if (p && !set.has(p)) set.set(p, f);
+          });
+          const list = Array.from(set.keys()).sort((a, b) => a.localeCompare(b));
+          sel.innerHTML = '';
+          // common defaults
+          const defaults = ['/EBAY', '/Ebay', '/ebay'];
+          const def = getDefaultFolder() || defaults.find((d) => list.includes(d)) || list[0] || '';
+          list.forEach((p) => {
+            const o = document.createElement('option');
+            o.value = p; o.textContent = p; sel.appendChild(o);
+          });
+          if (def) sel.value = def;
+          setDefaultFolder(sel.value);
+          sel.disabled = false;
+          if (msg) msg.textContent = sel.value ? `Saved: ${sel.value}` : '';
+        } catch (e) {
+          sel.innerHTML = '<option>Failed to load folders</option>';
+          if (msg) msg.textContent = e?.message || 'Error loading folders';
+        }
+      }
+      const selEl = document.getElementById('dbxFolderSelect');
+      if (selEl)
+        selEl.addEventListener('change', (e) => {
+          const v = e.target.value || '';
+          setDefaultFolder(v);
+        });
 
       // Optional legacy handler (guarded) – keep page JS from crashing if form isn't present
       const draftFormEl = document.getElementById('draftForm');
