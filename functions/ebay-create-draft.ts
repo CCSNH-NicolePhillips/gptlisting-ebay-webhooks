@@ -214,11 +214,32 @@ export const handler: Handler = async (event) => {
     async function validateAndMaybeProxy(urls: string[]): Promise<string[]> {
       const out: string[] = [];
       const isOurProxy = (u: string) => /\/\.netlify\/functions\/image-proxy/i.test(u);
+      const absolutizeProxy = (u: string) => {
+        // If relative, prepend APP_BASE_URL when available
+        if (u.startsWith('/')) {
+          const base = (process.env.APP_BASE_URL || '').toString().replace(/\/$/, '');
+          if (base) return base + u;
+          // Fallback: try to extract the underlying url param and use that direct
+          try {
+            const idx = u.indexOf('url=');
+            if (idx >= 0) {
+              const enc = u.slice(idx + 4);
+              const raw = decodeURIComponent(enc);
+              return toDirectDropbox(raw);
+            }
+          } catch {}
+        }
+        return u;
+      };
       for (const u of urls) {
-        const direct = toDirectDropbox(u);
+        // Normalize and absolutize if it's our proxy
+        const maybeProxy = isOurProxy(u) ? absolutizeProxy(u) : u;
+        const direct = toDirectDropbox(maybeProxy);
         // If it's already going through our image proxy, trust it
         if (isOurProxy(direct)) {
-          out.push(direct);
+          // Ensure absolute
+          const abs = absolutizeProxy(direct);
+          out.push(abs);
           continue;
         }
         try {

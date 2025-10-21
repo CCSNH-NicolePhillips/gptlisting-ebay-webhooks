@@ -1,4 +1,5 @@
 import type { Handler } from '@netlify/functions';
+import sharp from 'sharp';
 
 export const handler: Handler = async (event) => {
   try {
@@ -45,7 +46,18 @@ export const handler: Handler = async (event) => {
     if (!type.startsWith('image/')) {
       return { statusCode: 415, body: `Not an image (type=${type})` };
     }
+    // Auto-orient images based on EXIF to avoid sideways photos on eBay
+  let outBuf: Buffer = buf as Buffer;
+    try {
+      const s = sharp(buf, { failOnError: false });
+      // Rotate according to EXIF orientation
+  const rotated = await s.rotate().toBuffer();
+  if (rotated && rotated.length) outBuf = Buffer.from(rotated);
+    } catch {
+      // If sharp fails, fallback to original buffer
+    }
 
+    // Preserve original type if possible; sharp typically outputs same format by default
     return {
       statusCode: 200,
       headers: {
@@ -54,7 +66,7 @@ export const handler: Handler = async (event) => {
         // Allow eBay crawler
         'Access-Control-Allow-Origin': '*',
       },
-      body: buf.toString('base64'),
+      body: outBuf.toString('base64'),
       isBase64Encoded: true,
     };
   } catch (e: any) {
