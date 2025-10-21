@@ -213,29 +213,36 @@ export const handler: Handler = async (event) => {
     const MAY_PROXY = /^1|true|yes$/i.test(String(process.env.USE_IMAGE_PROXY || ''));
     async function validateAndMaybeProxy(urls: string[]): Promise<string[]> {
       const out: string[] = [];
+      const isOurProxy = (u: string) => /\/\.netlify\/functions\/image-proxy/i.test(u);
       for (const u of urls) {
+        const direct = toDirectDropbox(u);
+        // If it's already going through our image proxy, trust it
+        if (isOurProxy(direct)) {
+          out.push(direct);
+          continue;
+        }
         try {
-          const direct = toDirectDropbox(u);
-          // require plausible image extension
-          if (!/\.(jpe?g|png|gif|bmp|tiff|webp)(\?|$)/i.test(direct)) {
-            continue;
-          }
+          // Try a HEAD check to confirm it's an image; follow redirects
           const head = await fetch(direct, { method: 'HEAD', redirect: 'follow' });
           const ct = (head.headers.get('content-type') || '').toLowerCase();
           if (head.ok && ct.startsWith('image/')) {
             out.push(direct);
             continue;
           }
-        } catch {}
+        } catch {
+          // ignore, attempt proxy fallback below
+        }
         if (MAY_PROXY && process.env.APP_BASE_URL) {
-          const prox = `${process.env.APP_BASE_URL}/.netlify/functions/image-proxy?url=${encodeURIComponent(u)}`;
+          const prox = `${process.env.APP_BASE_URL}/.netlify/functions/image-proxy?url=${encodeURIComponent(direct)}`;
           out.push(prox);
         } else {
-          out.push(toDirectDropbox(u)); // best effort but normalized
+          // Best-effort: include normalized URL even if HEAD check failed (may still be fetchable by eBay)
+          out.push(direct);
         }
       }
-      // eBay allows up to 12 images
-      return out.slice(0, 12);
+      // Ensure we don't exceed eBay's limit
+      const unique = Array.from(new Set(out)).slice(0, 12);
+      return unique;
     }
     invPayload.product.imageUrls = await validateAndMaybeProxy(invPayload.product.imageUrls);
 

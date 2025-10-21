@@ -132,7 +132,7 @@
           <input id="images" type="hidden" />
           <div id="imgPicker" style="margin-top:.25rem">
             <div id="imgDropdown" style="border:1px solid #2a335c;border-radius:8px;padding:.55rem .7rem;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:#0f1530">
-              <span id="imgPlaceholder" class="muted">Choose images…</span><span>▾</span>
+              <span id="imgPlaceholder" class="muted"><span id="imgPhText">Choose images…</span><span id="imgSpinner" style="display:none;margin-left:8px" aria-hidden="true">⏳</span></span><span>▾</span>
             </div>
             <div id="imgOptions" style="display:none;position:relative;border:1px solid #2a335c;border-top:none;border-radius:0 0 8px 8px;max-height:360px;overflow:auto;background:#0f1530"></div>
             <div id="imgChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:.5rem"></div>
@@ -806,12 +806,28 @@
         const byId = (id) => document.getElementById(id);
         const dd = byId('imgDropdown');
         const ddOpts = byId('imgOptions');
-        const ddPh = byId('imgPlaceholder');
+        const ddPh = byId('imgPhText');
+        const ddSpinner = byId('imgSpinner');
         const chips = byId('imgChips');
         const grid = byId('imgGrid');
         const imagesInput = byId('images');
         let items = [];
         const selected = new Map(); // proxiedUrl -> item
+        let isLoading = false;
+
+        function setLoading(v) {
+          isLoading = !!v;
+          if (ddSpinner) ddSpinner.style.display = v ? 'inline' : 'none';
+          // Provide a loading placeholder inside the dropdown options
+          if (v) {
+            ddOpts.style.display = 'block';
+            ddOpts.innerHTML = '<div style="padding:.75rem" class="muted">Loading images…</div>';
+          } else if (!items.length) {
+            // If nothing loaded, keep it empty but hide to reduce confusion
+            ddOpts.style.display = 'none';
+            ddOpts.innerHTML = '';
+          }
+        }
 
         function optionRow(it) {
           const row = document.createElement('div');
@@ -877,6 +893,8 @@
             refresh();
             return;
           }
+          setLoading(true);
+          ddPh.textContent = 'Loading images…';
           const url = new URL('/.netlify/functions/dropbox-list-images', window.location.origin);
           url.searchParams.set('path', path);
           if (recursive) url.searchParams.set('recursive', '1');
@@ -886,9 +904,11 @@
             const j = await res.json();
             items = (j && j.items) || [];
             refresh();
+            ddPh.textContent = items.length ? 'Choose images…' : 'No images found';
           } catch (e) {
             ddPh.textContent = 'Failed to load images';
           }
+          setLoading(false);
         }
 
         // dropdown open/close
