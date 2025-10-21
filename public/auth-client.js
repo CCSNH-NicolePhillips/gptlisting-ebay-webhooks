@@ -110,10 +110,12 @@
       if (!isAuth) return false;
       state.user = await state.auth0.getUser();
       state.token = await state.auth0.getTokenSilently().catch(() => null);
+      attachAuthFetch();
       return true;
     }
     if (state.mode === 'identity') {
       await initIdentity();
+      attachAuthFetch();
       return !!state.user;
     }
     return false;
@@ -174,6 +176,28 @@
       return await u?.jwt?.();
     }
     return null;
+  }
+
+  // Patch window.fetch to automatically add Authorization to Netlify functions
+  function attachAuthFetch() {
+    if (window.__authFetchPatched) return;
+    const orig = window.fetch.bind(window);
+    window.fetch = async (input, init = {}) => {
+      try {
+        const url = typeof input === 'string' ? input : input.url;
+        const isFn = /\/\.netlify\/functions\//.test(url);
+        if (isFn) {
+          const token = state.token || (await getToken());
+          if (token) {
+            init.headers = Object.assign({}, init.headers, {
+              Authorization: init.headers?.Authorization || `Bearer ${token}`,
+            });
+          }
+        }
+      } catch {}
+      return orig(input, init);
+    };
+    window.__authFetchPatched = true;
   }
 
   window.authClient = { requireAuth, login, logout, getToken, ensureAuth };
