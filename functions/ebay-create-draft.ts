@@ -61,6 +61,17 @@ export const handler: Handler = async (event) => {
     const weight = body.weight ?? qs['weight']; // numeric string or number
     const weightUnitRaw = (body.weightUnit ?? qs['weightUnit']) as string | undefined; // lb|lbs|oz|kg|g|POUND|OUNCE|KILOGRAM|GRAM
 
+    function deriveBaseUrlFromEvent(): string | null {
+      try {
+        const hdrs = event?.headers || {};
+        const proto = (hdrs['x-forwarded-proto'] || hdrs['X-Forwarded-Proto'] || 'https') as string;
+        const host = (hdrs['x-forwarded-host'] || hdrs['X-Forwarded-Host'] || hdrs['host'] || hdrs['Host']) as string;
+        if (host) return `${proto}://${host}`;
+      } catch {}
+      return null;
+    }
+    const APP_BASE = (process.env.APP_BASE_URL || process.env.APP_URL || deriveBaseUrlFromEvent() || '').toString().replace(/\/$/, '');
+
     const toDirectDropbox = (u: string) => {
       try {
         const url = new URL(u);
@@ -210,14 +221,14 @@ export const handler: Handler = async (event) => {
     }
 
     // Optionally validate images and fallback to proxy if needed
-    const MAY_PROXY = /^1|true|yes$/i.test(String(process.env.USE_IMAGE_PROXY || ''));
+    const MAY_PROXY = true; // Always prefer proxy for Dropbox to enforce rotation/normalization
     async function validateAndMaybeProxy(urls: string[]): Promise<string[]> {
       const out: string[] = [];
       const isOurProxy = (u: string) => /\/\.netlify\/functions\/image-proxy/i.test(u);
       const absolutizeProxy = (u: string) => {
         // If relative, prepend APP_BASE_URL when available
         if (u.startsWith('/')) {
-          const base = (process.env.APP_BASE_URL || '').toString().replace(/\/$/, '');
+          const base = APP_BASE;
           if (base) return base + u;
           // Fallback: try to extract the underlying url param and use that direct
           try {
@@ -231,6 +242,7 @@ export const handler: Handler = async (event) => {
         }
         return u;
       };
+      const isDropbox = (u: string) => /(^|\.)dropbox\.com$/i.test(new URL(u).hostname);
       for (const u of urls) {
         // Normalize and absolutize if it's our proxy
         const maybeProxy = isOurProxy(u) ? absolutizeProxy(u) : u;
@@ -242,6 +254,16 @@ export const handler: Handler = async (event) => {
           out.push(abs);
           continue;
         }
+        // For Dropbox sources, always use proxy to ensure EXIF rotation and content-type enforcement
+        try {
+          if (isDropbox(new URL(direct).href)) {
+            const prox = APP_BASE
+              ? `${APP_BASE}/.netlify/functions/image-proxy?url=${encodeURIComponent(direct)}`
+              : `/.netlify/functions/image-proxy?url=${encodeURIComponent(direct)}`;
+            out.push(absolutizeProxy(prox));
+            continue;
+          }
+        } catch {}
         try {
           // Try a HEAD check to confirm it's an image; follow redirects
           const head = await fetch(direct, { method: 'HEAD', redirect: 'follow' });
@@ -253,8 +275,10 @@ export const handler: Handler = async (event) => {
         } catch {
           // ignore, attempt proxy fallback below
         }
-        if (MAY_PROXY && process.env.APP_BASE_URL) {
-          const prox = `${process.env.APP_BASE_URL}/.netlify/functions/image-proxy?url=${encodeURIComponent(direct)}`;
+        if (MAY_PROXY) {
+          const prox = APP_BASE
+            ? `${APP_BASE}/.netlify/functions/image-proxy?url=${encodeURIComponent(direct)}`
+            : `/.netlify/functions/image-proxy?url=${encodeURIComponent(direct)}`;
           out.push(prox);
         } else {
           // Best-effort: include normalized URL even if HEAD check failed (may still be fetchable by eBay)
