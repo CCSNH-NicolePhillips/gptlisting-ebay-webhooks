@@ -248,11 +248,6 @@
           } catch {}
         }
         if (!text) {
-          // one-time hint: allow typing, but encourage Browse
-          if (msg1 && !msg1.dataset.csvHint) {
-            msg1.dataset.csvHint = '1';
-            msg1.textContent = 'Tip: use Browse to pick a leaf category.';
-          }
           return null;
         }
         // parse CSV (3 columns: categoryId,categoryName,categoryPath), quoted
