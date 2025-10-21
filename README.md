@@ -92,6 +92,35 @@ A complete eBay-Dropbox integration with:
    npm run deploy  # deploy via CLI after login
    ```
 
+### Authentication (Auth0 recommended for Google + Apple + Email)
+
+The app includes a login page (`/login.html`) and a tiny auth client. Choose one mode:
+
+Option A — Auth0 (Google, Apple, Email/password)
+
+1) In Auth0, create a Single Page Application.
+2) In Auth0 → Application → Settings:
+   - Allowed Callback URLs: `https://<yoursite>.netlify.app/login.html`
+   - Allowed Logout URLs: `https://<yoursite>.netlify.app/`
+   - Allowed Web Origins: `https://<yoursite>.netlify.app`
+3) Enable connections you need: Google (google-oauth2), Apple (apple), and Database (for email/password).
+4) In Netlify Site settings → Environment variables set:
+   - `AUTH_MODE=auth0`
+   - `AUTH0_DOMAIN=<your-tenant>.us.auth0.com`
+   - `AUTH0_CLIENT_ID=<client id>`
+   - `AUTH0_AUDIENCE=<optional API identifier>`
+5) Deploy. Visiting any gated page will redirect to `/login.html` and use Auth0 Universal Login.
+
+Option B — Netlify Identity (Email/password, optional providers)
+
+1) Enable Identity for your site in Netlify settings.
+2) Set environment variable: `AUTH_MODE=identity`.
+3) Deploy. The login page will open the Netlify Identity widget.
+
+Notes:
+- If `AUTH_MODE` isn’t set, `/login.html` shows an inline warning and disables buttons until configured.
+- To fully isolate user data, add server-side JWT verification in functions and store per-user eBay/Dropbox tokens (keyed by JWT `sub`).
+
 ### eBay Console (Production)
 
 - Go to **Alerts & Notifications** → **Production** → **Marketplace Account Deletion**.

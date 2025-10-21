@@ -47,6 +47,7 @@
           <button class="btn" id="btnGoogle">Continue with Google</button>
           <button class="btn" id="btnApple">Continue with Apple</button>
         </div>
+        <div id="cfgWarning" class="mutedSmall" style="display:none;color:#ffb4b4"></div>
         <div class="mutedSmall">By continuing, you agree to the Terms and acknowledge the Privacy Policy.</div>
       </div>
       <p class="mutedSmall"><a href="/">← Back to app</a></p>
@@ -65,6 +66,15 @@
         const cfgRes = await fetch('/.netlify/functions/get-public-config').catch(() => null);
         const cfg = cfgRes && (await cfgRes.json());
         const mode = cfg?.AUTH_MODE || 'none';
+        if (mode === 'none') {
+          const w = document.getElementById('cfgWarning');
+          w.style.display = 'block';
+          w.textContent = 'Authentication is not configured. Set AUTH_MODE=auth0 and AUTH0_* env vars in Netlify, or set AUTH_MODE=identity to use Netlify Identity.';
+          document.getElementById('btnContinue').disabled = true;
+          document.getElementById('btnGoogle').disabled = true;
+          document.getElementById('btnApple').disabled = true;
+          return;
+        }
 
         // Default: open provider list (Auth0 Universal Login or Netlify Identity widget)
         document.getElementById('btnContinue').onclick = () => authClient.login({});
