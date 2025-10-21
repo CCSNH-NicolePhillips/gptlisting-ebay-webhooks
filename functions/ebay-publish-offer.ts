@@ -106,7 +106,7 @@ export const handler: Handler = async (event) => {
       // retry publish once
       pub = await publishOnce();
     }
-    if (!pub.ok) {
+  if (!pub.ok) {
       // Auto-delete the problematic draft as requested
       try {
         const delUrl = `${apiHost}/sell/inventory/v1/offer/${encodeURIComponent(offerId)}`;
@@ -150,6 +150,20 @@ export const handler: Handler = async (event) => {
           }),
         };
       }
+    }
+    // Success: record that this offer was published so we can hide it from future 'drafts' after it is ended/unlisted.
+    try {
+      const store2 = tokensStore();
+      const key = 'published.json';
+      const cur = ((await store2.get(key, { type: 'json' })) as any) || {};
+      const stamp = new Date().toISOString();
+      // Try to capture SKU from offer body if present
+  let sku: string | undefined = undefined;
+  try { sku = pub.body?.sku ? String(pub.body.sku) : undefined; } catch {}
+      cur[String(offerId)] = { offerId: String(offerId), sku, publishedAt: stamp };
+  await store2.set(key, JSON.stringify(cur));
+    } catch {
+      // ignore persistence errors
     }
     return {
       statusCode: 200,
