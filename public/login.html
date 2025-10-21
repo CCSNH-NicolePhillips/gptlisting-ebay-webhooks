@@ -84,16 +84,37 @@
         }
 
         // Default: open provider list (Auth0 Universal Login or Netlify Identity widget)
-        document.getElementById('btnContinue').onclick = () => authClient.login({});
+        document.getElementById('btnContinue').onclick = async () => {
+          try { await authClient.login({}); } catch (e) {
+            const w = document.getElementById('cfgWarning');
+            w.style.display = 'block';
+            w.textContent = 'Login failed: ' + (e?.message || String(e));
+            console.error('Login error', e);
+          }
+        };
 
         // Provider-hinted buttons (Auth0 only). If not supported, fall back to generic.
         document.getElementById('btnGoogle').onclick = async () => {
-          if (mode === 'auth0') return authClient.login({ connection: 'google-oauth2' });
-          return authClient.login({});
+          try {
+            if (mode === 'auth0') return await authClient.login({ connection: 'google-oauth2' });
+            return await authClient.login({});
+          } catch (e) {
+            const w = document.getElementById('cfgWarning');
+            w.style.display = 'block';
+            w.textContent = 'Login failed: ' + (e?.message || String(e));
+            console.error('Login error', e);
+          }
         };
         document.getElementById('btnApple').onclick = async () => {
-          if (mode === 'auth0') return authClient.login({ connection: 'apple' });
-          return authClient.login({});
+          try {
+            if (mode === 'auth0') return await authClient.login({ connection: 'apple' });
+            return await authClient.login({});
+          } catch (e) {
+            const w = document.getElementById('cfgWarning');
+            w.style.display = 'block';
+            w.textContent = 'Login failed: ' + (e?.message || String(e));
+            console.error('Login error', e);
+          }
         };
 
         // Auto-redirect to provider (use query ?provider=google|apple|email). Default: open Auth0 Universal Login immediately.
@@ -101,13 +122,16 @@
           if (mode === 'auth0') {
             const usp = new URLSearchParams(location.search);
             const prov = (usp.get('provider') || '').toLowerCase();
-            if (prov === 'google') return authClient.login({ connection: 'google-oauth2' });
-            if (prov === 'apple') return authClient.login({ connection: 'apple' });
+            if (prov === 'google') return await authClient.login({ connection: 'google-oauth2' });
+            if (prov === 'apple') return await authClient.login({ connection: 'apple' });
             // Default: show hosted Universal Login immediately
-            return authClient.login({});
+            return await authClient.login({});
           }
         } catch (e) {
           console.error('Auto-login failed', e);
+          const w = document.getElementById('cfgWarning');
+          w.style.display = 'block';
+          w.textContent = 'Auto-login failed: ' + (e?.message || String(e));
         }
       })();
     </script>
