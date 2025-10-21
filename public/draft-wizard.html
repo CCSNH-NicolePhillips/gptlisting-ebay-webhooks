@@ -581,6 +581,23 @@
             const data = await r.json();
             if (r.ok && data.ok) {
               msg.textContent = `Published: ${offerId}`;
+              try {
+                // Defer cleanup: when user leaves this page, delete any leftover UNPUBLISHED drafts for this SKU (excluding this offerId)
+                var skuEl = document.getElementById('sku');
+                var sku = skuEl && skuEl.value ? skuEl.value : '';
+                const payload = JSON.stringify({ items: [{ sku, excludeOfferId: offerId }] });
+                const url = '/.netlify/functions/ebay-clean-drafts';
+                // Prefer beacon for background cleanup; fallback to fetch if beacon unsupported
+                if (!navigator.sendBeacon || !navigator.sendBeacon(url, new Blob([payload], { type: 'application/json' }))) {
+                  window.addEventListener('beforeunload', () => {
+                    fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload }).catch(() => {});
+                  }, { once: true });
+                } else {
+                  window.addEventListener('beforeunload', () => {
+                    navigator.sendBeacon(url, new Blob([payload], { type: 'application/json' }));
+                  }, { once: true });
+                }
+              } catch {}
             } else {
               const detail =
                 typeof data.detail === 'string'
