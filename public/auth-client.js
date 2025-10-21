@@ -20,7 +20,7 @@
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || 'config');
       state.cfg = j;
-      state.mode = j.AUTH_MODE || 'none';
+      state.mode = (j.AUTH_MODE || 'none').toLowerCase();
     } catch (e) {
       console.warn('Auth config missing; continuing unauthenticated', e);
       state.mode = 'none';
