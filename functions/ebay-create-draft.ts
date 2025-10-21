@@ -243,6 +243,23 @@ export const handler: Handler = async (event) => {
         return u;
       };
       const isDropbox = (u: string) => /(^|\.)dropbox\.com$/i.test(new URL(u).hostname);
+      const addBust = (u: string) => {
+        try {
+          const url = new URL(u, APP_BASE || 'http://local');
+          const now = Date.now().toString(36);
+          url.searchParams.set('v', now);
+          // Preserve absolute path when APP_BASE provided; if relative proxy path startswith '/', keep it
+          const full = url.toString();
+          if (u.startsWith('/') && APP_BASE) {
+            // Ensure absolute for eBay
+            return full;
+          }
+          return full;
+        } catch {
+          // Fallback: simple concatenation
+          return u + (u.includes('?') ? '&' : '?') + 'v=' + Date.now();
+        }
+      };
       for (const u of urls) {
         // Normalize and absolutize if it's our proxy
         const maybeProxy = isOurProxy(u) ? absolutizeProxy(u) : u;
@@ -251,7 +268,7 @@ export const handler: Handler = async (event) => {
         if (isOurProxy(direct)) {
           // Ensure absolute
           const abs = absolutizeProxy(direct);
-          out.push(abs);
+          out.push(addBust(abs));
           continue;
         }
         // For Dropbox sources, always use proxy to ensure EXIF rotation and content-type enforcement
@@ -260,7 +277,7 @@ export const handler: Handler = async (event) => {
             const prox = APP_BASE
               ? `${APP_BASE}/.netlify/functions/image-proxy?url=${encodeURIComponent(direct)}`
               : `/.netlify/functions/image-proxy?url=${encodeURIComponent(direct)}`;
-            out.push(absolutizeProxy(prox));
+            out.push(addBust(absolutizeProxy(prox)));
             continue;
           }
         } catch {}
@@ -269,7 +286,7 @@ export const handler: Handler = async (event) => {
           const head = await fetch(direct, { method: 'HEAD', redirect: 'follow' });
           const ct = (head.headers.get('content-type') || '').toLowerCase();
           if (head.ok && ct.startsWith('image/')) {
-            out.push(direct);
+            out.push(addBust(direct));
             continue;
           }
         } catch {
@@ -279,10 +296,10 @@ export const handler: Handler = async (event) => {
           const prox = APP_BASE
             ? `${APP_BASE}/.netlify/functions/image-proxy?url=${encodeURIComponent(direct)}`
             : `/.netlify/functions/image-proxy?url=${encodeURIComponent(direct)}`;
-          out.push(prox);
+          out.push(addBust(prox));
         } else {
           // Best-effort: include normalized URL even if HEAD check failed (may still be fetchable by eBay)
-          out.push(direct);
+          out.push(addBust(direct));
         }
       }
       // Ensure we don't exceed eBay's limit
