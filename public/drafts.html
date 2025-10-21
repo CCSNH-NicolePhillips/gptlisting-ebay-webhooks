@@ -252,8 +252,8 @@
       <header>
         <h1>Draft offers</h1>
         <div class="toolbar">
-          <button id="btnClean" class="btn danger" title="Remove broken drafts">
-            Clean drafts
+          <button id="btnClean" class="btn danger" title="Delete ALL UNPUBLISHED drafts">
+            Delete all drafts
           </button>
           <a class="btn secondary" href="/draft-wizard.html">← Create another</a>
         </div>
@@ -573,22 +573,21 @@
       }
       // wire cleaner
       document.getElementById('btnClean')?.addEventListener('click', async () => {
-        const doAll = confirm(
-          'Delete ALL UNPUBLISHED offers? Click Cancel to only remove broken ones.'
-        );
-        const q = doAll ? '?deleteAll=true' : '';
+        const sure = confirm('Delete ALL UNPUBLISHED drafts? This cannot be undone.');
+        if (!sure) return;
+        const q = '?deleteAll=true';
         try {
-          flash.textContent = 'Cleaning drafts…';
+          flash.textContent = 'Deleting drafts…';
           const res = await fetch('/.netlify/functions/ebay-clean-broken-drafts' + q);
           const j = await res.json();
           if (res.ok && j.ok) {
             flash.textContent = `Deleted offers: ${j.deletedOffers?.length || 0}`;
             load();
           } else {
-            flash.textContent = 'Clean failed';
+            flash.textContent = 'Delete failed';
           }
         } catch (e) {
-          flash.textContent = 'Clean error: ' + (e?.message || String(e));
+          flash.textContent = 'Delete error: ' + (e?.message || String(e));
         }
       });
       load();
