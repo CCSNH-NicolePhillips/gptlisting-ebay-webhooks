@@ -349,6 +349,17 @@
         const isMulti = cardinality === 'MULTI';
         let field;
         if (isEnum) {
+          // For long lists, prepend a tiny filter input
+          const filterWrap = document.createElement('div');
+          filterWrap.style.display = 'flex';
+          filterWrap.style.gap = '6px';
+          filterWrap.style.alignItems = 'center';
+          const filter = document.createElement('input');
+          filter.type = 'text';
+          filter.placeholder = 'Filter…';
+          filter.style.fontSize = '12px';
+          filter.style.padding = '4px 6px';
+          filter.style.width = '100%';
           const sel = document.createElement('select');
           sel.id = id;
           sel.setAttribute('data-aspect', name);
@@ -360,13 +371,24 @@
             o.textContent = '—';
             sel.appendChild(o);
           }
-          values.slice(0, 200).forEach((v) => {
+          values.forEach((v) => {
             const o = document.createElement('option');
             const val = v.localizedValue || v.value || v;
             o.value = val;
             o.textContent = val;
             sel.appendChild(o);
           });
+          // simple client-side filter
+          filter.addEventListener('input', () => {
+            const q = filter.value.toLowerCase();
+            Array.from(sel.options).forEach((opt) => {
+              if (!opt.value) return; // keep empty option
+              const txt = (opt.textContent || '').toLowerCase();
+              opt.hidden = q ? !txt.includes(q) : false;
+            });
+          });
+          filterWrap.appendChild(filter);
+          wrap.appendChild(filterWrap);
           field = sel;
         } else {
           const inp = document.createElement('input');
