@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sign in</title>
+    <style>
+      :root {
+        --bg: #0b1020;
+        --panel: #141a33;
+        --line: #2a335c;
+        --text: #f4f6fb;
+        --muted: #a2a9c8;
+        --primary: #4f7cff;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; background: var(--bg); color: var(--text);
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      }
+      .wrap { max-width: 520px; margin: 6vh auto; padding: 1.25rem; }
+      .card { background: linear-gradient(180deg, #141a33, #0f1530); border: 1px solid var(--line); border-radius: 14px; padding: 1.25rem; }
+      h1 { margin: 0 0 .25rem; font-size: 1.4rem; }
+      p.muted { margin: 0 0 1rem; color: var(--muted); }
+      .btn { width: 100%; background: #1a2347; border: 1px solid var(--line); color: #e1e7ff; border-radius: 10px; padding: .7rem .9rem; font-weight: 700; cursor: pointer; margin: .4rem 0; display: flex; align-items: center; gap: .6rem; justify-content: center; }
+      .btn.primary { background: var(--primary); border-color: #3e66d6; color: #fff; }
+      .row { display: flex; gap: .6rem; }
+      .row .btn { flex: 1; }
+      .mutedSmall { color: var(--muted); font-size: .9rem; text-align: center; margin-top: .75rem; }
+      .center { text-align: center; }
+      a { color: #9db2ff; text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      .logo { font-weight: 800; letter-spacing: .2px; }
+    </style>
+    <script src="/auth-client.js"></script>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <div class="center">
+          <div class="logo">eBay + Dropbox Uploader</div>
+          <h1>Sign in</h1>
+          <p class="muted">Use your email, Google, or Apple account to continue.</p>
+        </div>
+        <button class="btn primary" id="btnContinue">Continue</button>
+        <div class="row">
+          <button class="btn" id="btnGoogle">Continue with Google</button>
+          <button class="btn" id="btnApple">Continue with Apple</button>
+        </div>
+        <div class="mutedSmall">By continuing, you agree to the Terms and acknowledge the Privacy Policy.</div>
+      </div>
+      <p class="mutedSmall"><a href="/">← Back to app</a></p>
+    </div>
+
+    <script>
+      // Decide which auth to use based on server config; buttons trigger provider-specific login when supported
+      (async function () {
+        // If already authenticated, bounce back
+        const ok = await authClient.ensureAuth();
+        if (ok) {
+          const returnTo = sessionStorage.getItem('returnTo') || '/';
+          window.location.assign(returnTo);
+          return;
+        }
+        const cfgRes = await fetch('/.netlify/functions/get-public-config').catch(() => null);
+        const cfg = cfgRes && (await cfgRes.json());
+        const mode = cfg?.AUTH_MODE || 'none';
+
+        // Default: open provider list (Auth0 Universal Login or Netlify Identity widget)
+        document.getElementById('btnContinue').onclick = () => authClient.login({});
+
+        // Provider-hinted buttons (Auth0 only). If not supported, fall back to generic.
+        document.getElementById('btnGoogle').onclick = async () => {
+          if (mode === 'auth0') return authClient.login({ connection: 'google-oauth2' });
+          return authClient.login({});
+        };
+        document.getElementById('btnApple').onclick = async () => {
+          if (mode === 'auth0') return authClient.login({ connection: 'apple' });
+          return authClient.login({});
+        };
+      })();
+    </script>
+  </body>
+</html>

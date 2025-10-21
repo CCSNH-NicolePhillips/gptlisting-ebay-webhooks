@@ -99,6 +99,11 @@
     </style>
   </head>
   <body>
+    <script src="/auth-client.js"></script>
+    <script>
+      // Enforce login before loading content
+      authClient.requireAuth();
+    </script>
     <div class="card">
       <h1>Connect your accounts</h1>
       <p class="muted">

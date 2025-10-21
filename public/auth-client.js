@@ -1,0 +1,180 @@
+// Lightweight auth client supporting two modes:
+// - Auth0 Universal Login (Google, Apple, Email) via AUTH0_DOMAIN/CLIENT_ID
+// - Netlify Identity widget fallback (Email + social providers configured in Netlify)
+//
+// Public config is fetched from /.netlify/functions/get-public-config
+// Pages can call authClient.requireAuth() to enforce login and get an access token.
+(function () {
+  const state = {
+    mode: 'none', // 'auth0' | 'identity' | 'none'
+    cfg: null,
+    auth0: null,
+    identityReady: false,
+    token: null,
+    user: null,
+  };
+
+  async function loadConfig() {
+    try {
+      const res = await fetch('/.netlify/functions/get-public-config');
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || 'config');
+      state.cfg = j;
+      state.mode = j.AUTH_MODE || 'none';
+    } catch (e) {
+      console.warn('Auth config missing; continuing unauthenticated', e);
+      state.mode = 'none';
+      state.cfg = {};
+    }
+  }
+
+  async function initAuth0() {
+    if (!state.cfg?.AUTH0_DOMAIN || !state.cfg?.AUTH0_CLIENT_ID) return;
+    if (state.auth0) return;
+    // Load SPA SDK if not present
+    if (!window.createAuth0Client) {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.auth0.com/js/auth0-spa-js/2.5/auth0-spa-js.production.js';
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+    state.auth0 = await window.createAuth0Client({
+      domain: state.cfg.AUTH0_DOMAIN,
+      clientId: state.cfg.AUTH0_CLIENT_ID,
+      cacheLocation: 'localstorage',
+      useRefreshTokens: true,
+      authorizationParams: {
+        redirect_uri: window.location.origin + '/login.html',
+        audience: state.cfg.AUTH0_AUDIENCE || undefined,
+      },
+    });
+
+    // Handle redirect callback
+    if (window.location.pathname.endsWith('/login.html')) {
+      const q = window.location.search;
+      if (q.includes('code=') && q.includes('state=')) {
+        try {
+          await state.auth0.handleRedirectCallback();
+          const returnTo = sessionStorage.getItem('returnTo') || '/';
+          sessionStorage.removeItem('returnTo');
+          window.history.replaceState({}, document.title, '/login.html');
+          window.location.assign(returnTo);
+          return; // navigation
+        } catch (e) {
+          console.error('Auth0 callback error', e);
+        }
+      }
+    }
+
+    const isAuth = await state.auth0.isAuthenticated();
+    if (isAuth) {
+      state.user = await state.auth0.getUser();
+      state.token = await state.auth0.getTokenSilently().catch(() => null);
+    }
+  }
+
+  function initIdentity() {
+    return new Promise((resolve) => {
+      if (window.netlifyIdentity) {
+        window.netlifyIdentity.on('init', (user) => {
+          state.identityReady = true;
+          state.user = user;
+          resolve();
+        });
+        window.netlifyIdentity.init();
+      } else {
+        const s = document.createElement('script');
+        s.src = 'https://identity.netlify.com/v1/netlify-identity-widget.js';
+        s.onload = () => {
+          window.netlifyIdentity.on('init', (user) => {
+            state.identityReady = true;
+            state.user = user;
+            resolve();
+          });
+          window.netlifyIdentity.init();
+        };
+        s.onerror = () => resolve();
+        document.head.appendChild(s);
+      }
+    });
+  }
+
+  async function ensureAuth() {
+    await loadConfig();
+    if (state.mode === 'auth0') {
+      await initAuth0();
+      const isAuth = state.auth0 && (await state.auth0.isAuthenticated());
+      if (!isAuth) return false;
+      state.user = await state.auth0.getUser();
+      state.token = await state.auth0.getTokenSilently().catch(() => null);
+      return true;
+    }
+    if (state.mode === 'identity') {
+      await initIdentity();
+      return !!state.user;
+    }
+    return false;
+  }
+
+  async function requireAuth() {
+    const ok = await ensureAuth();
+    if (!ok) {
+      // Remember current URL and bounce to login
+      sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
+      window.location.assign('/login.html');
+      return false;
+    }
+    return true;
+  }
+
+  async function login(opts) {
+    await loadConfig();
+    if (state.mode === 'auth0') {
+      await initAuth0();
+      const params = { appState: {} };
+      if (opts?.connection) params.authorizationParams = { connection: opts.connection };
+      sessionStorage.setItem('returnTo', opts?.returnTo || '/');
+      await state.auth0.loginWithRedirect(params);
+      return;
+    }
+    if (state.mode === 'identity') {
+      await initIdentity();
+      window.netlifyIdentity.open();
+      return;
+    }
+    alert('Authentication is not configured. Please set AUTH_MODE and provider settings.');
+  }
+
+  async function logout() {
+    await loadConfig();
+    if (state.mode === 'auth0' && state.auth0) {
+      await state.auth0.logout({ logoutParams: { returnTo: window.location.origin } });
+      return;
+    }
+    if (state.mode === 'identity' && window.netlifyIdentity) {
+      window.netlifyIdentity.logout();
+      window.location.reload();
+      return;
+    }
+  }
+
+  async function getToken() {
+    if (state.mode === 'auth0' && state.auth0) {
+      try {
+        return await state.auth0.getTokenSilently();
+      } catch {
+        return null;
+      }
+    }
+    if (state.mode === 'identity' && window.netlifyIdentity) {
+      const u = window.netlifyIdentity.currentUser();
+      return await u?.jwt?.();
+    }
+    return null;
+  }
+
+  window.authClient = { requireAuth, login, logout, getToken, ensureAuth };
+})();
