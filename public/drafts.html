@@ -140,10 +140,16 @@
         display: flex;
         flex-direction: column;
         gap: 0.5rem;
+        flex: 1; /* take remaining height under thumbnail */
       }
       .title {
         font-weight: 700;
         line-height: 1.3;
+        display: -webkit-box;
+        -webkit-line-clamp: 3; /* clamp long titles */
+        line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
       }
       .meta {
         color: var(--muted);
@@ -157,6 +163,10 @@
         gap: 0.5rem;
         flex-wrap: wrap;
         margin-top: 0.5rem;
+      }
+      /* push actions to the bottom of the card body */
+      .body .row {
+        margin-top: auto;
       }
       .badge {
         display: inline-flex;
