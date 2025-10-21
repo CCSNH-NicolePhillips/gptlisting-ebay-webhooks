@@ -173,6 +173,16 @@
         -webkit-box-orient: vertical;
         overflow: hidden;
       }
+      .desc {
+        color: var(--muted);
+        font-size: 0.92rem;
+        line-height: 1.35;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
       .meta {
         color: var(--muted);
         font-size: 0.9rem;
@@ -293,7 +303,11 @@
         body.className = 'body';
         const title = document.createElement('div');
         title.className = 'title';
-        title.textContent = (offer.listingDescription || '').slice(0, 120) || '(no title)';
+  title.textContent = offer?.title || offer?.sku || '(loading title…)';
+  const desc = document.createElement('div');
+  desc.className = 'desc';
+  const descSrc = (offer.listingDescription || '').replace(/\s+/g, ' ').trim();
+  desc.textContent = descSrc ? descSrc.slice(0, 180) : '';
         const meta = document.createElement('div');
         meta.className = 'meta';
         const priceStr = fmtPrice(
@@ -373,8 +387,9 @@
 
         row.appendChild(pub);
         row.appendChild(del);
-        body.appendChild(title);
-        body.appendChild(meta);
+  body.appendChild(title);
+  if (desc.textContent) body.appendChild(desc);
+  body.appendChild(meta);
         body.appendChild(badge);
         body.appendChild(row);
         el.appendChild(th);
@@ -382,9 +397,11 @@
         // attach lazy thumbnail loader
         el.dataset.sku = offer.sku || '';
         el.dataset.offerId = offer.offerId || '';
-        el._img = img;
-        el._sk = sk;
-        return el;
+  el._img = img;
+  el._sk = sk;
+  // @ts-ignore
+  el._title = title;
+  return el;
       }
 
       function escapeHtml(s) {
@@ -417,8 +434,9 @@
           }
           list.innerHTML = '';
           offers.forEach((o) => list.appendChild(card(o)));
-          // lazy-load thumbnails with small concurrency to stay snappy
+          // lazy-load thumbnails with small concurrency to stay snappy and enrich titles
           lazyLoadThumbs();
+          enrichTitles();
         } catch (e) {
           const wrap = document.createElement('div');
           wrap.className = 'empty';
@@ -495,6 +513,48 @@
           });
         }
         // run with limited concurrency
+        const concurrency = 6;
+        let i = 0;
+        async function next() {
+          const fn = q[i++];
+          if (!fn) return;
+          await fn();
+          return next();
+        }
+        const workers = Array.from({ length: Math.min(concurrency, q.length) }, next);
+        Promise.all(workers).catch(() => {});
+      }
+
+      // Fetch inventory item titles for each card by SKU and update the title element
+      function enrichTitles() {
+        const nodes = Array.from(list.querySelectorAll('.card'));
+        const cache = new Map();
+        const q = [];
+        for (const n of nodes) {
+          // @ts-ignore
+          const sku = n.dataset?.sku;
+          // @ts-ignore
+          if (!sku || !n._title) continue;
+          q.push(async () => {
+            if (cache.has(sku)) {
+              const t = cache.get(sku);
+              // @ts-ignore
+              if (t) n._title.textContent = t;
+              return;
+            }
+            try {
+              const j = await fetchJSON(
+                '/.netlify/functions/ebay-get-inventory-item?sku=' + encodeURIComponent(sku)
+              );
+              const t = j?.item?.product?.title || j?.item?.title || '';
+              if (t) {
+                cache.set(sku, t);
+                // @ts-ignore
+                n._title.textContent = t;
+              }
+            } catch {}
+          });
+        }
         const concurrency = 6;
         let i = 0;
         async function next() {
