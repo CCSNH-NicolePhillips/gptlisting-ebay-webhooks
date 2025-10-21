@@ -64,8 +64,8 @@
           return;
         }
         const cfgRes = await fetch('/.netlify/functions/get-public-config').catch(() => null);
-        const cfg = cfgRes && (await cfgRes.json());
-        const mode = cfg?.AUTH_MODE || 'none';
+  const cfg = cfgRes && (await cfgRes.json());
+  const mode = (cfg?.AUTH_MODE || 'none').toLowerCase();
         const hasPlaceholder =
           !cfg?.AUTH0_DOMAIN ||
           !cfg?.AUTH0_CLIENT_ID ||

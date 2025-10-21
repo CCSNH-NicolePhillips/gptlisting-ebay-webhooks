@@ -9,7 +9,7 @@ import type { Handler } from '@netlify/functions';
 // For Netlify Identity, set AUTH_MODE=identity and enable Identity in site settings.
 
 export const handler: Handler = async () => {
-  const AUTH_MODE = process.env.AUTH_MODE || 'none';
+  const AUTH_MODE = (process.env.AUTH_MODE || 'none').toLowerCase();
   const body: Record<string, string> = { AUTH_MODE };
   if (AUTH_MODE === 'auth0') {
     if (process.env.AUTH0_DOMAIN) body.AUTH0_DOMAIN = process.env.AUTH0_DOMAIN;
