@@ -105,27 +105,7 @@
       <p class="muted">
         Start with a category so we can populate the right required and optional fields.
       </p>
-      <div class="row">
-        <div class="col title">
-          <label>Title<input id="title" placeholder="Type your listing title" /></label>
-        </div>
-      </div>
-      <div class="row">
-        <div class="col">
-          <label
-            >Or choose a photo (optional)<input id="photo" type="file" accept="image/*" /></label
-          ><small class="muted">We use the file name text for suggestions.</small>
-        </div>
-      </div>
-      <div class="row">
-        <div class="col">
-          <label
-            >Or paste an image link (optional)<input
-              id="photoUrl"
-              placeholder="https://... (Dropbox links ok; add ?dl=1 for direct)" /></label
-          ><small class="muted">We use the URL file name for suggestions.</small>
-        </div>
-      </div>
+      <!-- Step 1 is category-only by request -->
       <div class="row">
         <div class="col">
           <label
@@ -179,6 +159,11 @@
       <h2>Step 2: Details and create</h2>
       <p id="catPath" class="muted"></p>
       <div class="row">
+        <div class="col title">
+          <label>Title<input id="title" placeholder="Type your listing title" /></label>
+        </div>
+      </div>
+      <div class="row">
         <div class="col">
           <label>SKU<input id="sku" placeholder="SKU-123" /></label>
         </div>
@@ -197,10 +182,7 @@
             >Image URLs (comma-separated)<input
               id="images"
               placeholder="https://...jpg, https://...png" /></label
-          ><small class="muted"
-            >Tip: For Dropbox, convert to dl.dropboxusercontent.com/... for direct image
-            access.</small
-          >
+          ><small class="muted" id="imgTip"></small>
         </div>
       </div>
       <div class="row">
@@ -256,7 +238,7 @@
       const picker = $('categoryPicker');
       const categoryIdEl = $('categoryId');
       const catPreview = $('categoryPreview');
-      const titleEl = $('title');
+  const titleEl = $('title');
       // removed search input
       const nextBtn = $('btnNext');
       const step2 = $('step2');
@@ -419,30 +401,7 @@
       }, 150);
 
       // Do not trigger network-based suggestions. Only local CSV filtering when user types in the category field.
-      // No suggestions triggered on Title typing to avoid UX errors.
-      const photoEl = $('photo');
-      if (photoEl)
-        photoEl.addEventListener('change', () => {
-          const f = photoEl.files && photoEl.files[0];
-          if (!f) return;
-          const name = (f.name || '').replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ');
-          if (name) {
-            titleEl.value = titleEl.value || name;
-          }
-        });
-      const photoUrlEl = $('photoUrl');
-      if (photoUrlEl)
-        photoUrlEl.addEventListener('input', () => {
-          const url = photoUrlEl.value.trim();
-          if (!url) return;
-          try {
-            const last = url.split('?')[0].split('#')[0].split('/').pop() || '';
-            const base = last.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ');
-            if (base) {
-              titleEl.value = titleEl.value || base;
-            }
-          } catch {}
-        });
+      // Step 1 intentionally has no Title/Photo inputs.
 
       if (categoryIdEl)
         categoryIdEl.addEventListener('input', () => {
@@ -573,6 +532,15 @@
           await loadLocations();
           step2.classList.remove('hide');
           msg1.textContent = '';
+          // Update image tip with default Dropbox folder
+          try {
+            const def = localStorage.getItem('dbxDefaultFolder') || '';
+            const tip = document.getElementById('imgTip');
+            if (tip)
+              tip.textContent = def
+                ? `Default Dropbox folder: ${def}. Images will be easiest to pick from that folder in the selector pages.`
+                : 'Tip: Use the Select Images page to pick proxied URLs, or paste direct image links.';
+          } catch {}
           window.scrollTo({ top: step2.offsetTop - 10, behavior: 'smooth' });
         } catch (e) {
           const detail = e?.response?.errorId || e?.response?.message || e?.message || String(e);
