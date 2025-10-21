@@ -33,19 +33,10 @@
         grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
         margin-bottom: 0.75rem;
       }
-      .col {
-        min-width: 0;
-      }
-      .col.title {
-        grid-column: span 2;
-      }
-      label {
-        display: block;
-        margin: 0.4rem 0 0.25rem;
-      }
-      input,
-      textarea,
-      select {
+      .col { min-width: 0; }
+      .col.title { grid-column: span 2; }
+      label { display: block; margin: 0.4rem 0 0.25rem; }
+      input, textarea, select {
         background: #0f1530;
         color: #f4f6fb;
         border: 1px solid #26305a;
@@ -53,39 +44,13 @@
         padding: 0.6rem 0.7rem;
         width: 100%;
       }
-      button {
-        background: #4f7cff;
-        color: white;
-        border: none;
-        border-radius: 8px;
-        padding: 0.7rem 1rem;
-        cursor: pointer;
-        font-weight: 600;
-      }
-      button.secondary {
-        background: transparent;
-        color: #cbd5ff;
-        border: 1px solid #3d4a86;
-      }
-      .muted {
-        color: #a2a9c8;
-      }
-      .inline {
-        display: inline-block;
-      }
-      .hide {
-        display: none !important;
-      }
-      details {
-        border: 1px dashed #2a335c;
-        padding: 0.4rem 0.6rem;
-        border-radius: 8px;
-      }
-      .hr {
-        margin: 0.8rem 0;
-        border: none;
-        border-top: 1px solid #2a335c;
-      }
+      button { background: #4f7cff; color: white; border: none; border-radius: 8px; padding: 0.7rem 1rem; cursor: pointer; font-weight: 600; }
+      button.secondary { background: transparent; color: #cbd5ff; border: 1px solid #3d4a86; }
+      .muted { color: #a2a9c8; }
+      .inline { display: inline-block; }
+      .hide { display: none !important; }
+      details { border: 1px dashed #2a335c; padding: 0.4rem 0.6rem; border-radius: 8px; }
+      .hr { margin: 0.8rem 0; border: none; border-top: 1px solid #2a335c; }
       /* Modal layout */
       .modal {
         position: fixed;
@@ -105,26 +70,11 @@
       <p class="muted">
         Start with a category so we can populate the right required and optional fields.
       </p>
-      <!-- Step 1 is category-only by request -->
-      <div class="row">
-        <div class="col">
-          <label
-            >Category<input
-              id="categoryPicker"
-              list="categoryOptions"
-              placeholder="Start typing or pick a suggestion" /><datalist
-              id="categoryOptions"
-            ></datalist
-          ></label>
-          <div id="categoryPreview" class="muted" style="margin-top: 0.25rem"></div>
-        </div>
-        <div class="col">
-          <label>Category ID<input id="categoryId" placeholder="e.g., 31413" /></label>
-        </div>
-      </div>
+      <!-- Step 1 is category-only: choose a leaf via Browse; raw IDs are hidden -->
       <div class="row" style="margin-top: -0.25rem">
         <div class="col"><button id="btnBrowse" class="secondary">Browse categories</button></div>
       </div>
+      <div id="categoryPreview" class="muted" style="margin: 0.25rem 0 0.25rem"></div>
       <div id="browseModal" class="modal hide" role="dialog" aria-modal="true">
         <div
           id="browsePanel"
@@ -178,11 +128,17 @@
       </div>
       <div class="row">
         <div class="col">
-          <label
-            >Image URLs (comma-separated)<input
-              id="images"
-              placeholder="https://...jpg, https://...png" /></label
-          ><small class="muted" id="imgTip"></small>
+          <label>Images</label>
+          <input id="images" type="hidden" />
+          <div id="imgPicker" style="margin-top:.25rem">
+            <div id="imgDropdown" style="border:1px solid #2a335c;border-radius:8px;padding:.55rem .7rem;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:#0f1530">
+              <span id="imgPlaceholder" class="muted">Choose images…</span><span>▾</span>
+            </div>
+            <div id="imgOptions" style="display:none;position:relative;border:1px solid #2a335c;border-top:none;border-radius:0 0 8px 8px;max-height:360px;overflow:auto;background:#0f1530"></div>
+            <div id="imgChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:.5rem"></div>
+            <div id="imgGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-top:.5rem"></div>
+          </div>
+          <small class="muted" id="imgTip"></small>
         </div>
       </div>
       <div class="row">
@@ -234,9 +190,6 @@
 
     <script>
       const $ = (id) => document.getElementById(id);
-      const datalist = $('categoryOptions');
-      const picker = $('categoryPicker');
-      const categoryIdEl = $('categoryId');
       const catPreview = $('categoryPreview');
   const titleEl = $('title');
       // removed search input
@@ -252,6 +205,9 @@
       const browseList = $('browseList');
       const crumbs = $('crumbs');
       const browsePanel = $('browsePanel');
+      // Internal category selection state (browse-only flow)
+      let SELECTED_CATEGORY_ID = '';
+      let SELECTED_CATEGORY_PATH = '';
       // Category CSV data (if available)
       let CAT_ROWS = null; // Array of {categoryId, categoryName, categoryPath}
       let CAT_TREE = null; // Tree built from CSV paths
@@ -269,19 +225,7 @@
           throw Object.assign(new Error('HTTP ' + r.status), { response: j, status: r.status });
         return j;
       }
-      const applyOptions = (list) => {
-        datalist.innerHTML = '';
-        (list || []).slice(0, 80).forEach((item) => {
-          const opt = document.createElement('option');
-          opt.value = `${item.categoryId} — ${item.categoryName}`;
-          opt.setAttribute('data-id', item.categoryId);
-          opt.setAttribute('data-path', item.categoryPath || item.categoryName);
-          datalist.appendChild(opt);
-        });
-      };
-      const updatePreview = (opt) => {
-        catPreview.textContent = opt ? opt.getAttribute('data-path') || '' : '';
-      };
+      // No free-text picker in Step 1; category chosen via Browse only.
       const debounce = (fn, ms = 300) => {
         let t;
         return (...a) => {
@@ -373,40 +317,7 @@
         return rows;
       }
 
-      const localSuggest = debounce(async (q) => {
-        const rows = CAT_ROWS || (await loadCategoriesCsv());
-        if (!rows) {
-          return;
-        }
-        const qq = (q || '').toLowerCase();
-        if (!qq) {
-          datalist.innerHTML = '';
-          return;
-        }
-        const matches = [];
-        for (const r of rows) {
-          const nameLC = (r.categoryName || '').toLowerCase();
-          const lastSeg = (r.categoryPath || r.categoryName || '').split(' > ').pop() || '';
-          const lastLC = lastSeg.toLowerCase();
-          if (nameLC.startsWith(qq) || lastLC.startsWith(qq)) {
-            matches.push({
-              categoryId: r.categoryId,
-              categoryName: r.categoryName,
-              categoryPath: r.categoryPath,
-            });
-            if (matches.length >= 150) break;
-          }
-        }
-        applyOptions(matches);
-      }, 150);
-
-      // Do not trigger network-based suggestions. Only local CSV filtering when user types in the category field.
-      // Step 1 intentionally has no Title/Photo inputs.
-
-      if (categoryIdEl)
-        categoryIdEl.addEventListener('input', () => {
-          nextBtn.disabled = !categoryIdEl.value.trim();
-        });
+      // Step 1 intentionally has no Title/Photo inputs; browse-only selection.
 
       async function loadLocations() {
         try {
@@ -474,7 +385,7 @@
       }
 
       async function enterStep2() {
-        const cid = categoryIdEl.value.trim();
+        const cid = (SELECTED_CATEGORY_ID || '').trim();
         if (!cid) {
           msg1.textContent = 'Select a category first.';
           return;
@@ -503,7 +414,9 @@
             } else throw e;
           }
           // render path and condition
-          $('catPath').textContent = 'Category ' + cid;
+          $('catPath').textContent = SELECTED_CATEGORY_PATH
+            ? 'Category: ' + SELECTED_CATEGORY_PATH
+            : 'Category selected';
           conditionSel.innerHTML = '';
           const conds = req.allowedConditions || [];
           if (conds.length) {
@@ -541,6 +454,8 @@
                 ? `Default Dropbox folder: ${def}. Images will be easiest to pick from that folder in the selector pages.`
                 : 'Tip: Use the Select Images page to pick proxied URLs, or paste direct image links.';
           } catch {}
+          // Auto-load images from default folder into the inline picker
+          try { ImagePickerWizard.loadDefault(); } catch {}
           window.scrollTo({ top: step2.offsetTop - 10, behavior: 'smooth' });
         } catch (e) {
           const detail = e?.response?.errorId || e?.response?.message || e?.message || String(e);
@@ -589,7 +504,7 @@
           : [];
         const description = ($('description') || { value: '' }).value.trim();
         const merchantLocationKey = (locationSel || { value: '' }).value.trim();
-        const categoryId = (categoryIdEl || { value: '' }).value.trim();
+        const categoryId = (SELECTED_CATEGORY_ID || '').trim();
         const condition = (conditionSel || { value: '' }).value.trim(); // numeric string like '1000'
         if (!sku || !title || !Number.isFinite(price) || !images.length) {
           msg.textContent = 'Please provide SKU, title, price, and at least one image URL.';
@@ -684,37 +599,7 @@
         });
       })();
 
-      // As the user types in the category picker, fetch suggestions and fill dropdown
-      if (picker)
-        picker.addEventListener('input', async () => {
-          const val = picker.value.trim();
-          const opt = Array.from(datalist.options).find((o) => o.value === val);
-          updatePreview(opt);
-          const id = opt ? opt.getAttribute('data-id') : '';
-          if (id) {
-            categoryIdEl.value = id;
-            // If we have CSV index, enforce leaf-only choice
-            if (ID_INDEX && ID_INDEX.get(String(id))?.leaf) {
-              nextBtn.disabled = false;
-              msg1.textContent = '';
-            } else {
-              nextBtn.disabled = true;
-              msg1.textContent =
-                'Please pick a subcategory (leaf) via Browse or refine your search.';
-            }
-            return;
-          }
-          nextBtn.disabled = !categoryIdEl.value.trim();
-          if (val.length >= 1) {
-            const rows = CAT_ROWS || (await loadCategoriesCsv());
-            if (rows) {
-              localSuggest(val);
-            } else {
-              // CSV not available: keep quiet during typing; user can open Browse to pick.
-              datalist.innerHTML = '';
-            }
-          }
-        });
+      // No free-text category picker; Next is enabled only after a leaf is chosen in Browse.
 
       function renderBrowseLocal(node, trail) {
         // breadcrumbs
@@ -761,9 +646,9 @@
             btn.title = child.path;
             btn.onclick = () => {
               if (isLeaf && child.id) {
-                picker.value = `${child.id} — ${name}`;
-                categoryIdEl.value = child.id;
-                catPreview.textContent = child.path;
+                SELECTED_CATEGORY_ID = String(child.id);
+                SELECTED_CATEGORY_PATH = child.path || name;
+                catPreview.textContent = SELECTED_CATEGORY_PATH;
                 nextBtn.disabled = false;
                 msg1.textContent = '';
                 modal.classList.add('hide');
@@ -845,9 +730,9 @@
               btn.title = n.path;
               btn.onclick = () => {
                 if (n.leaf) {
-                  picker.value = `${n.id} — ${n.name}`;
-                  categoryIdEl.value = n.id;
-                  catPreview.textContent = n.path;
+                  SELECTED_CATEGORY_ID = String(n.id);
+                  SELECTED_CATEGORY_PATH = n.path || n.name;
+                  catPreview.textContent = SELECTED_CATEGORY_PATH;
                   nextBtn.disabled = false;
                   msg1.textContent = '';
                   modal.classList.add('hide');
@@ -915,6 +800,118 @@
           }, 0);
         }
       });
+
+      // Inline Dropbox image picker for Step 2
+      const ImagePickerWizard = (() => {
+        const byId = (id) => document.getElementById(id);
+        const dd = byId('imgDropdown');
+        const ddOpts = byId('imgOptions');
+        const ddPh = byId('imgPlaceholder');
+        const chips = byId('imgChips');
+        const grid = byId('imgGrid');
+        const imagesInput = byId('images');
+        let items = [];
+        const selected = new Map(); // proxiedUrl -> item
+
+        function optionRow(it) {
+          const row = document.createElement('div');
+          row.style.display = 'flex';
+          row.style.alignItems = 'center';
+          row.style.gap = '10px';
+          row.style.padding = '.55rem .7rem';
+          row.style.borderTop = '1px solid #2a335c';
+          const img = document.createElement('img');
+          img.src = it.proxiedUrl; img.alt = it.name; img.width = 48; img.height = 48; img.loading = 'lazy';
+          img.style.objectFit = 'cover'; img.style.borderRadius = '6px';
+          const meta = document.createElement('div');
+          meta.innerHTML = `<div style="font-size:12px;font-weight:600">${it.name}</div><div class="muted" style="font-size:11px">${it.path}</div>`;
+          const cb = document.createElement('input');
+          cb.type = 'checkbox'; cb.style.marginLeft = 'auto';
+          cb.checked = selected.has(it.proxiedUrl);
+          cb.onchange = () => { if (cb.checked) selected.set(it.proxiedUrl, it); else selected.delete(it.proxiedUrl); refresh(); };
+          row.append(img, meta, cb);
+          row.onclick = (e) => { if (e.target !== cb) { cb.checked = !cb.checked; cb.onchange(); } };
+          return row;
+        }
+
+        function chip(it) {
+          const c = document.createElement('span');
+          c.style.display = 'inline-flex'; c.style.alignItems = 'center'; c.style.gap = '6px';
+          c.style.background = '#1c254d'; c.style.border = '1px solid #2a335c'; c.style.borderRadius = '999px'; c.style.padding = '4px 8px'; c.style.fontSize = '12px';
+          const img = document.createElement('img'); img.src = it.proxiedUrl; img.width = 16; img.height = 16; img.style.objectFit = 'cover'; img.style.borderRadius = '3px';
+          const txt = document.createElement('span'); txt.textContent = it.name;
+          c.append(img, txt);
+          return c;
+        }
+
+        function card(it) {
+          const wrap = document.createElement('div');
+          wrap.style.border = '1px solid #2a335c'; wrap.style.borderRadius = '8px'; wrap.style.overflow = 'hidden';
+          const img = document.createElement('img'); img.src = it.proxiedUrl; img.alt = it.name; img.style.width = '100%'; img.style.height = '140px'; img.style.objectFit = 'cover'; img.loading = 'lazy';
+          const cap = document.createElement('div'); cap.textContent = it.name; cap.style.fontSize = '12px'; cap.style.padding = '.5rem';
+          wrap.append(img, cap);
+          return wrap;
+        }
+
+        function refresh() {
+          // options list (preserve scroll)
+          const scrollTop = ddOpts.scrollTop;
+          ddOpts.innerHTML = '';
+          items.forEach((it) => ddOpts.appendChild(optionRow(it)));
+          ddOpts.scrollTop = scrollTop;
+          // chips/grid
+          chips.innerHTML = ''; grid.innerHTML = '';
+          Array.from(selected.values()).forEach((it) => { chips.appendChild(chip(it)); grid.appendChild(card(it)); });
+          // update hidden images input
+          imagesInput.value = Array.from(selected.keys()).join(',');
+          ddPh.textContent = selected.size ? `${selected.size} selected` : 'Choose images…';
+        }
+
+        async function loadFrom(path, recursive = true, limit = 200) {
+          if (!path) {
+            ddPh.textContent = 'Set default Dropbox folder on landing page';
+            ddOpts.innerHTML = '';
+            chips.innerHTML = '';
+            grid.innerHTML = '';
+            selected.clear();
+            refresh();
+            return;
+          }
+          const url = new URL('/.netlify/functions/dropbox-list-images', window.location.origin);
+          url.searchParams.set('path', path);
+          if (recursive) url.searchParams.set('recursive', '1');
+          if (limit) url.searchParams.set('limit', String(limit));
+          try {
+            const res = await fetch(url.toString());
+            const j = await res.json();
+            items = (j && j.items) || [];
+            refresh();
+          } catch (e) {
+            ddPh.textContent = 'Failed to load images';
+          }
+        }
+
+        // dropdown open/close
+        dd.addEventListener('click', () => {
+          const open = ddOpts.style.display !== 'none';
+          ddOpts.style.display = open ? 'none' : 'block';
+        });
+        document.addEventListener('click', (e) => {
+          if (!dd.contains(e.target) && !ddOpts.contains(e.target)) ddOpts.style.display = 'none';
+        });
+
+        return {
+          loadDefault: () => {
+            try {
+              const def = localStorage.getItem('dbxDefaultFolder') || '';
+              loadFrom(def);
+            } catch {
+              // ignore
+            }
+          },
+          loadFrom,
+        };
+      })();
     </script>
   </body>
 </html>
