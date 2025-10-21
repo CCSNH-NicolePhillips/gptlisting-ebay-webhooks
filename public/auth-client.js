@@ -123,13 +123,26 @@
 
   async function requireAuth() {
     const ok = await ensureAuth();
-    if (!ok) {
-      // Remember current URL and bounce to login
-      sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
-      window.location.assign('/login.html');
-      return false;
+    if (ok) return true;
+    // Not authenticated – prefer redirecting straight to Auth0 Universal Login (no intermediary UI)
+    try {
+      if (state.mode === 'auth0') {
+        await initAuth0();
+        const returnTo = window.location.pathname + window.location.search + window.location.hash;
+        sessionStorage.setItem('returnTo', returnTo);
+        await state.auth0.loginWithRedirect({
+          appState: { returnTo },
+          authorizationParams: { redirect_uri: window.location.origin + '/login.html' },
+        });
+        return false; // navigation will happen
+      }
+    } catch (e) {
+      console.error('Auth0 redirect failed, falling back to /login.html', e);
     }
-    return true;
+    // Fallback: go to our login page which will handle config/errors
+    sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
+    window.location.assign('/login.html');
+    return false;
   }
 
   async function login(opts) {
