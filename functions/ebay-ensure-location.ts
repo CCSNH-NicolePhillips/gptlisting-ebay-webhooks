@@ -15,8 +15,19 @@ export const handler: Handler = async (event) => {
     const h = headers(token);
 
     const body = event.body ? JSON.parse(event.body) : {};
-    const reqKey = (body.merchantLocationKey || 'default-loc').toString();
-    const reqAddr = body.address || null;
+    const reqKey = (body.merchantLocationKey || process.env.EBAY_MERCHANT_LOCATION_KEY || 'default-loc').toString();
+    let reqAddr = body.address || null;
+    // Fallback to environment-specified address if none provided
+    if (!reqAddr) {
+      const a1 = process.env.SHIP_ADDRESS1;
+      const city = process.env.SHIP_CITY;
+      const st = process.env.SHIP_STATE || process.env.SHIP_STATE_OR_PROVINCE;
+      const pc = process.env.SHIP_POSTAL || process.env.SHIP_POSTAL_CODE;
+      const ctry = process.env.SHIP_COUNTRY || 'US';
+      if (a1 && city && st && pc) {
+        reqAddr = { addressLine1: a1, city, stateOrProvince: st, postalCode: pc, country: ctry };
+      }
+    }
 
     // 1) If any location exists, return the first enabled one or first match by key
     const listUrl = `${host}/sell/inventory/v1/location?limit=200`;
@@ -49,7 +60,7 @@ export const handler: Handler = async (event) => {
     }
 
     const createPayload = {
-      name: 'Default Location',
+      name: process.env.SHIP_NAME || 'Default Location',
       merchantLocationKey: reqKey,
       merchantLocationStatus: 'ENABLED',
       locationTypes: ['WAREHOUSE'],
