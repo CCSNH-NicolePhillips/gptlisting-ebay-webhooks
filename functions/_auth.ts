@@ -1,5 +1,11 @@
 import type { HandlerEvent } from '@netlify/functions';
 import { tokensStore } from './_blobs.js';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
+
+const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN;
+const AUTH0_CLIENT_ID = process.env.AUTH0_CLIENT_ID;
+const ISSUER = AUTH0_DOMAIN ? `https://${AUTH0_DOMAIN}/` : undefined;
+const JWKS = AUTH0_DOMAIN ? createRemoteJWKSet(new URL(`${ISSUER}.well-known/jwks.json`)) : null as any;
 
 export function getBearerToken(event: HandlerEvent): string | null {
   const h = event.headers || {} as any;
@@ -16,6 +22,20 @@ export function getJwtSubUnverified(event: HandlerEvent): string | null {
     if (parts.length < 2) return null;
     const payload = JSON.parse(Buffer.from(parts[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));
     return typeof payload?.sub === 'string' ? payload.sub : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function requireAuthVerified(event: HandlerEvent): Promise<{ sub: string; claims: Record<string, any> } | null> {
+  try {
+    if (!JWKS || !ISSUER || !AUTH0_CLIENT_ID) return null;
+    const token = getBearerToken(event);
+    if (!token) return null;
+    const { payload } = await jwtVerify(token, JWKS, { issuer: ISSUER, audience: AUTH0_CLIENT_ID });
+    const sub = typeof payload?.sub === 'string' ? payload.sub : null;
+    if (!sub) return null;
+    return { sub, claims: payload as any };
   } catch {
     return null;
   }

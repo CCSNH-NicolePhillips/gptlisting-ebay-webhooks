@@ -1,5 +1,5 @@
 import type { Handler } from '@netlify/functions';
-import { createOAuthStateForUser, getJwtSubUnverified, getBearerToken } from './_auth.js';
+import { createOAuthStateForUser, getJwtSubUnverified, getBearerToken, requireAuthVerified } from './_auth.js';
 
 // Start Dropbox OAuth 2.0 flow
 export const handler: Handler = async (event) => {
@@ -10,7 +10,8 @@ export const handler: Handler = async (event) => {
   }
 
   const bearer = getBearerToken(event);
-  const sub = getJwtSubUnverified(event);
+  let sub = (await requireAuthVerified(event))?.sub || null;
+  if (!sub) sub = getJwtSubUnverified(event);
   if (!bearer || !sub) {
     const wantsJson = /application\/json/i.test(String(event.headers?.accept || '')) || event.queryStringParameters?.mode === 'json';
     if (wantsJson) {

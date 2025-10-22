@@ -1,12 +1,13 @@
 import type { Handler } from '@netlify/functions';
 import { tokensStore } from './_blobs.js';
-import { getJwtSubUnverified, userScopedKey, getBearerToken } from './_auth.js';
+import { getJwtSubUnverified, userScopedKey, getBearerToken, requireAuthVerified } from './_auth.js';
 
 export const handler: Handler = async (event) => {
   try {
     const tokens = tokensStore();
     const bearer = getBearerToken(event);
-    const sub = getJwtSubUnverified(event);
+    let sub = (await requireAuthVerified(event))?.sub || null;
+    if (!sub) sub = getJwtSubUnverified(event); // fallback if verification disabled/missing
     if (!bearer) {
       return { statusCode: 401, body: 'Unauthorized: missing Authorization' };
     }
