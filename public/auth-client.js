@@ -57,6 +57,7 @@
         // swallow
       }
     }
+      const getCreateAuth0 = () => (window.auth0 && window.auth0.createAuth0Client) || window.createAuth0Client;
     if (!window.createAuth0Client) {
       try {
         await loadSdk('/.netlify/functions/cdn-auth0-spa?v=2.5');
@@ -68,7 +69,9 @@
         }
       }
     }
-    state.auth0 = await window.createAuth0Client({
+      const createAuth0 = getCreateAuth0();
+      if (!createAuth0) throw new Error('Auth0 SDK not loaded');
+      state.auth0 = await createAuth0({
       domain: state.cfg.AUTH0_DOMAIN,
       clientId: state.cfg.AUTH0_CLIENT_ID,
       cacheLocation: 'localstorage',

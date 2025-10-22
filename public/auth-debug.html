@@ -109,17 +109,18 @@
 
           const proxyUrl = '/.netlify/functions/cdn-auth0-spa?v=2.5';
           await preflight(proxyUrl);
-          let sdkOk = !!window.createAuth0Client;
+          const hasCreate = () => (window.auth0 && window.auth0.createAuth0Client) || window.createAuth0Client;
+          let sdkOk = !!hasCreate();
           if (!sdkOk) {
             try { await injectScript(proxyUrl); } catch {}
-            sdkOk = !!window.createAuth0Client;
+            sdkOk = !!hasCreate();
           }
           if (!sdkOk) {
             // Try blob-based injection from proxy fetch
             const pf = await preflight(proxyUrl);
             if (pf.ok && pf.txt) {
               try { await injectFromBlob(pf.txt); } catch {}
-              sdkOk = !!window.createAuth0Client;
+              sdkOk = !!hasCreate();
             }
           }
           if (!sdkOk) sdkOk = await ensureSdk('2.5');
@@ -132,7 +133,9 @@
 
           // 3) Initialize Auth0
           const redirectUri = location.origin + '/auth-debug.html';
-          const auth0 = await createAuth0Client({
+          const mk = (window.auth0 && window.auth0.createAuth0Client) || window.createAuth0Client;
+          if (!mk) throw new Error('Auth0 SDK not loaded');
+          const auth0 = await mk({
             domain: cfg.AUTH0_DOMAIN,
             clientId: cfg.AUTH0_CLIENT_ID,
             cacheLocation: 'localstorage',
