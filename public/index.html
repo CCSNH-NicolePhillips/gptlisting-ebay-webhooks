@@ -489,26 +489,27 @@
         }
         const chkPolicies = document.getElementById('chkPolicies');
         const policiesLink = document.getElementById('policiesLink');
-        if (policiesReady) {
-          chkPolicies.innerHTML = 'Business policies: ✅ Ready';
+        if (chkPolicies) {
+          // Update only the status text span to avoid removing the link element
+          const span = chkPolicies.querySelector('span');
+          if (span) span.textContent = policiesReady ? '✅ Ready' : '❌ Missing';
+        }
+        if (policiesLink) {
           policiesLink.style.display = 'inline';
-          policiesLink.textContent = 'View';
-        } else {
-          chkPolicies.innerHTML = 'Business policies: ❌ Missing';
-          policiesLink.style.display = 'inline';
-          policiesLink.textContent = 'Create';
+          policiesLink.textContent = policiesReady ? 'View' : 'Create';
+          policiesLink.href = '/policies.html';
         }
 
         const chkLocation = document.getElementById('chkLocation');
         const locationLink = document.getElementById('locationLink');
-        if (locationReady) {
-          chkLocation.innerHTML = 'Inventory location: ✅ Ready';
+        if (chkLocation) {
+          const span = chkLocation.querySelector('span');
+          if (span) span.textContent = locationReady ? '✅ Ready' : '❌ Missing';
+        }
+        if (locationLink) {
           locationLink.style.display = 'inline';
-          locationLink.textContent = 'View';
-        } else {
-          chkLocation.innerHTML = 'Inventory location: ❌ Missing';
-          locationLink.style.display = 'inline';
-          locationLink.textContent = 'Create';
+          locationLink.textContent = locationReady ? 'View' : 'Create';
+          locationLink.href = '/location.html';
         }
 
         const goBtn = document.getElementById('goCreateDraftBtn');
