@@ -1,10 +1,13 @@
 import type { Handler } from '@netlify/functions';
 import { tokensStore } from './_blobs.js';
+import { consumeOAuthState } from './_auth.js';
 
 export const handler: Handler = async (event) => {
   try {
-    const code = event.queryStringParameters?.code;
+  const code = event.queryStringParameters?.code;
     if (!code) return { statusCode: 400, body: 'Missing ?code' };
+  const state = event.queryStringParameters?.state || null;
+  const sub = await consumeOAuthState(state || null);
 
     const clientId = process.env.DROPBOX_CLIENT_ID!;
     const clientSecret = process.env.DROPBOX_CLIENT_SECRET!;
@@ -35,9 +38,9 @@ export const handler: Handler = async (event) => {
       return { statusCode: 400, body: 'No refresh_token returned' };
     }
 
-    // Store for single-tenant demo; for multi-user, key by user id
-    const tokens = tokensStore();
-    await tokens.setJSON('dropbox.json', { refresh_token: refreshToken });
+  const tokens = tokensStore();
+  const key = sub ? `users/${encodeURIComponent(sub)}/dropbox.json` : 'dropbox.json';
+  await tokens.setJSON(key, { refresh_token: refreshToken });
 
     return { statusCode: 302, headers: { Location: '/' } };
   } catch (e: any) {

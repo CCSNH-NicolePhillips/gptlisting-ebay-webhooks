@@ -1,5 +1,6 @@
 import type { Handler } from '@netlify/functions';
 import { tokensStore } from './_blobs.js';
+import { getJwtSubUnverified, userScopedKey } from './_auth.js';
 
 async function dropboxAccessToken(refreshToken: string) {
   const form = new URLSearchParams({
@@ -24,8 +25,9 @@ export const handler: Handler = async (event) => {
     const path = (qs.path || qs.folder || '') as string; // '' lists root
     const recursive = /^1|true|yes$/i.test(String(qs.recursive || '0'));
 
-    const store = tokensStore();
-    const saved = (await store.get('dropbox.json', { type: 'json' })) as any;
+  const store = tokensStore();
+  const sub = getJwtSubUnverified(event);
+  const saved = ((await store.get(userScopedKey(sub, 'dropbox.json'), { type: 'json' })) as any) || ((await store.get('dropbox.json', { type: 'json' })) as any);
     const refresh = saved?.refresh_token as string | undefined;
     if (!refresh) return { statusCode: 400, body: 'Connect Dropbox first' };
     const access = await dropboxAccessToken(refresh);

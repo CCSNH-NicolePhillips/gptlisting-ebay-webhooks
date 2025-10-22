@@ -1,10 +1,13 @@
 import type { Handler } from '@netlify/functions';
 import { tokensStore } from './_blobs.js';
+import { consumeOAuthState } from './_auth.js';
 
 export const handler: Handler = async (event) => {
   try {
-    const code = event.queryStringParameters?.code;
+  const code = event.queryStringParameters?.code;
     if (!code) return { statusCode: 400, body: 'Missing ?code' };
+  const state = event.queryStringParameters?.state || null;
+  const sub = await consumeOAuthState(state || null);
 
     const env = process.env.EBAY_ENV || 'PROD';
     const tokenHost = env === 'SANDBOX' ? 'https://api.sandbox.ebay.com' : 'https://api.ebay.com';
@@ -81,8 +84,9 @@ export const handler: Handler = async (event) => {
       };
     }
 
-    const tokens = tokensStore();
-    await tokens.setJSON('ebay.json', { refresh_token: data.refresh_token });
+  const tokens = tokensStore();
+  const key = sub ? `users/${encodeURIComponent(sub)}/ebay.json` : 'ebay.json';
+  await tokens.setJSON(key, { refresh_token: data.refresh_token });
     const redirectHeaders = { Location: '/' } as Record<string, string>;
     return { statusCode: 302, headers: redirectHeaders };
   } catch (e: any) {
