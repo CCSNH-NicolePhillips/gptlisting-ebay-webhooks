@@ -113,6 +113,10 @@
             const s2 = document.getElementById('ebayStatus');
             if (s1) s1.textContent = 'Sign in required';
             if (s2) s2.textContent = 'Sign in required';
+          } else {
+            // If already authenticated (SSO, returning from login, etc.), ensure banner is hidden
+            const b = document.getElementById('authBanner');
+            if (b) b.style.display = 'none';
           }
         } catch {}
       })();
@@ -194,7 +198,13 @@
         let s = null;
         let statusCode = 0;
         try {
-          const res = await fetch('/.netlify/functions/status');
+          // Try to include Authorization proactively to avoid timing races
+          let headers = { };
+          try {
+            const t = await authClient.getToken?.();
+            if (t) headers = Object.assign(headers, { Authorization: `Bearer ${t}` });
+          } catch {}
+          const res = await fetch('/.netlify/functions/status', { headers });
           statusCode = res.status;
           s = await res.json().catch(() => null);
         } catch (e) {
@@ -210,8 +220,8 @@
           return false;
         }
         // Hide the sign-in banner when we have a valid, authorized status response
-        const banner = document.getElementById('authBanner');
-        if (banner) banner.style.display = 'none';
+  const banner = document.getElementById('authBanner');
+  if (banner) banner.style.display = 'none';
         dbxStatus.textContent = s.dropbox?.connected ? 'Connected' : 'Not connected';
         ebayStatus.textContent = s.ebay?.connected ? 'Connected' : 'Not connected';
         const chkDropbox = document.getElementById('chkDropbox');
