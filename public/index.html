@@ -252,7 +252,13 @@
               // If not signed in, prompt Universal Login
               return await authClient.login({});
             }
-            const r = await fetch(fnPath + '?mode=json', { headers: { Accept: 'application/json' } });
+            // Proactively include Authorization to bind flow to this user
+            let headers = { Accept: 'application/json' };
+            try {
+              const t = await authClient.getToken?.();
+              if (t) headers = Object.assign(headers, { Authorization: `Bearer ${t}` });
+            } catch {}
+            const r = await fetch(fnPath + '?mode=json', { headers });
             const j = await r.json();
             if (r.ok && j?.redirect) {
               window.location.assign(j.redirect);
@@ -266,11 +272,15 @@
       wireConnectLink('dbxConnect', '/.netlify/functions/dropbox-oauth-start');
       wireConnectLink('ebayConnect', '/.netlify/functions/ebay-oauth-start');
       document.getElementById('dbxDisconnect').onclick = async () => {
-        await fetch('/.netlify/functions/status?dropbox=disconnect', { method: 'POST' });
+        let headers = {};
+        try { const t = await authClient.getToken?.(); if (t) headers = { Authorization: `Bearer ${t}` }; } catch {}
+        await fetch('/.netlify/functions/status?dropbox=disconnect', { method: 'POST', headers });
         refreshStatus();
       };
       document.getElementById('ebayDisconnect').onclick = async () => {
-        await fetch('/.netlify/functions/status?ebay=disconnect', { method: 'POST' });
+        let headers = {};
+        try { const t = await authClient.getToken?.(); if (t) headers = { Authorization: `Bearer ${t}` }; } catch {}
+        await fetch('/.netlify/functions/status?ebay=disconnect', { method: 'POST', headers });
         refreshStatus();
       };
       const bannerLoginBtn = document.getElementById('bannerLogin');
@@ -283,7 +293,9 @@
         btn.disabled = true;
         msg.textContent = 'Starting…';
         try {
-          const res = await fetch('/.netlify/functions/process', { method: 'POST' });
+          let headers = {};
+          try { const t = await authClient.getToken?.(); if (t) headers = { Authorization: `Bearer ${t}` }; } catch {}
+          const res = await fetch('/.netlify/functions/process', { method: 'POST', headers });
           const data = await res.json();
           msg.textContent = data.ok ? `Created ${data.created || 0} drafts` : data.error || 'Error';
         } catch (e) {
@@ -299,7 +311,9 @@
         m.textContent = 'Checking…';
         try {
           await authClient.ensureAuth();
-          const r = await fetch('/.netlify/functions/migrate-legacy-tokens', { method: 'POST' });
+          let headers = {};
+          try { const t = await authClient.getToken?.(); if (t) headers = { Authorization: `Bearer ${t}` }; } catch {}
+          const r = await fetch('/.netlify/functions/migrate-legacy-tokens', { method: 'POST', headers });
           const j = await r.json().catch(() => null);
           if (r.ok && j?.ok) {
             const parts = [];
