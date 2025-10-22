@@ -209,6 +209,9 @@
           if (banner) banner.style.display = 'block';
           return false;
         }
+        // Hide the sign-in banner when we have a valid, authorized status response
+        const banner = document.getElementById('authBanner');
+        if (banner) banner.style.display = 'none';
         dbxStatus.textContent = s.dropbox?.connected ? 'Connected' : 'Not connected';
         ebayStatus.textContent = s.ebay?.connected ? 'Connected' : 'Not connected';
         const chkDropbox = document.getElementById('chkDropbox');
