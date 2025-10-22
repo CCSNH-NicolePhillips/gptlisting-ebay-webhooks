@@ -170,6 +170,7 @@
         <button id="process" disabled>Process folder → Drafts</button>
         <span id="processMsg" class="small"></span>
       </div>
+      <div id="setupMsg" class="small muted" style="margin-top:.5rem"></div>
       <div style="margin-top: .5rem">
         <button id="claimLegacy" class="secondary">Claim legacy connections</button>
         <span id="claimMsg" class="small"></span>
@@ -478,6 +479,35 @@
         let policiesReady = false;
         let locationReady = false;
         if (connected) {
+          // Auto opt-in + ensure policies/location when connected
+          try {
+            const setupMsg = document.getElementById('setupMsg');
+            const say = (s) => { if (setupMsg) setupMsg.textContent = s; };
+            // 0) Check opt-in and auto-submit if needed
+            try {
+              const chk = await (await authClient.authFetch('/.netlify/functions/ebay-check-optin')).json();
+              if (chk && chk.ok && !chk.optedIn) {
+                say('Enrolling in eBay Business Policies…');
+                await authClient.authFetch('/.netlify/functions/ebay-optin', { method: 'POST' }).catch(()=>{});
+                // Don't block on propagation; continue to ensure calls which are idempotent
+              }
+            } catch {}
+            // 1) Ensure policies exist (idempotent)
+            try {
+              const pol = await (await authClient.authFetch('/.netlify/functions/ebay-ensure-policies', { method: 'POST' })).json();
+              if (pol && pol.ok && pol.paymentPolicyId && pol.fulfillmentPolicyId && pol.returnPolicyId) {
+                policiesReady = true;
+              }
+            } catch {}
+            // 2) Ensure location exists (idempotent) – server has env fallback for address
+            try {
+              const loc = await (await authClient.authFetch('/.netlify/functions/ebay-ensure-location', { method: 'POST' })).json();
+              if (loc && loc.ok && loc.merchantLocationKey) {
+                locationReady = true;
+              }
+            } catch {}
+            say('');
+          } catch {}
           try {
             const p = await (await authClient.authFetch('/.netlify/functions/ebay-list-policies')).json();
             const fp = p?.fulfillment?.json?.fulfillmentPolicies || [];
