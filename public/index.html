@@ -485,7 +485,10 @@
         goBtn.disabled = !(connected && policiesReady && locationReady);
       }
 
+      // Re-check status shortly after page load to account for async auth init
       evaluatePrereqs();
+      setTimeout(() => { try { evaluatePrereqs(); } catch {} }, 600);
+      window.addEventListener('focus', () => { try { evaluatePrereqs(); } catch {} });
     </script>
   </body>
 </html>

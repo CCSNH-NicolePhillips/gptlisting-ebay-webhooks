@@ -121,6 +121,8 @@
         const idc = await state.auth0.getIdTokenClaims();
         state.idTokenRaw = idc && (idc.__raw || idc.raw || null);
       } catch {}
+      // Make sure function calls carry Authorization as soon as we detect auth
+      try { attachAuthFetch(); } catch {}
     }
   }
 
@@ -331,6 +333,8 @@
       };
       el.appendChild(label);
       el.appendChild(btn);
+      // If we are already authenticated (e.g., SSO), ensure Authorization patch is applied
+      if (authed) { try { attachAuthFetch(); } catch {} }
     } catch {}
   }
 
