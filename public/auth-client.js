@@ -228,17 +228,15 @@
 
   async function getToken() {
     if (state.mode === 'auth0' && state.auth0) {
+      // Prefer ID token for first-party function auth (stable 'aud' = CLIENT_ID). If missing, try access token.
+      try {
+        const idc = await state.auth0.getIdTokenClaims();
+        const idRaw = (idc && (idc.__raw || idc.raw)) || null;
+        if (idRaw) return idRaw;
+      } catch {}
       try {
         const at = await state.auth0.getTokenSilently();
         if (at) return at;
-      } catch {
-        // swallow
-      }
-      // Fallback: use ID token as bearer for user identification on first-party functions
-      if (state.idTokenRaw) return state.idTokenRaw;
-      try {
-        const idc = await state.auth0.getIdTokenClaims();
-        return (idc && (idc.__raw || idc.raw)) || null;
       } catch {}
       return null;
     }
