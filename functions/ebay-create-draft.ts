@@ -1,6 +1,7 @@
 import type { Handler } from '@netlify/functions';
 import { accessTokenFromRefresh, tokenHosts } from './_common.js';
 import { tokensStore } from './_blobs.js';
+import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from './_auth.js';
 
 /**
  * Creates Inventory Item + DRAFT Offer (unpublished)
@@ -112,9 +113,13 @@ export const handler: Handler = async (event) => {
       };
     }
 
-    // Use the connected user's stored refresh token
-    const store = tokensStore();
-    const saved = (await store.get('ebay.json', { type: 'json' })) as any;
+  // Use the connected user's stored refresh token
+  const store = tokensStore();
+  const bearer = getBearerToken(event);
+  let sub = (await requireAuthVerified(event))?.sub || null;
+  if (!sub) sub = getJwtSubUnverified(event);
+  if (!bearer || !sub) return { statusCode: 401, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Unauthorized' }) };
+  const saved = (await store.get(userScopedKey(sub, 'ebay.json'), { type: 'json' })) as any;
     const refresh = saved?.refresh_token as string | undefined;
     if (!refresh) return { statusCode: 400, body: JSON.stringify({ error: 'Connect eBay first' }) };
     const { access_token } = await accessTokenFromRefresh(refresh);
@@ -373,7 +378,15 @@ export const handler: Handler = async (event) => {
     }
 
     // 3) Use first available business policies
-    async function pickPolicy(path: string, preferNames?: string[]): Promise<string | null> {
+    // Load any user-preferred policy IDs
+    let userPrefs: any = null;
+    try { userPrefs = (await store.get(userScopedKey(sub!, 'policy-defaults.json'), { type: 'json' })) as any; } catch {}
+
+    async function pickPolicy(path: string, preferNames?: string[], preferredIdKey?: string): Promise<string | null> {
+      // First, honor user preferred ID if present
+      if (preferredIdKey && userPrefs && typeof userPrefs[preferredIdKey] === 'string') {
+        return String(userPrefs[preferredIdKey]);
+      }
       const url = `${apiHost}${path}?marketplace_id=${MARKETPLACE_ID}`;
       const res = await fetch(url, { headers: commonHeaders });
       const json = (await res.json()) as any;
@@ -399,14 +412,14 @@ export const handler: Handler = async (event) => {
     }
     const fulfillmentPolicyId = await pickPolicy('/sell/account/v1/fulfillment_policy', [
       'Default Shipping (Auto)',
-    ]);
+    ], 'fulfillment');
     const paymentPolicyId = await pickPolicy('/sell/account/v1/payment_policy', [
       'Default Payment (Auto)',
-    ]);
+    ], 'payment');
     const returnPolicyId = await pickPolicy('/sell/account/v1/return_policy', [
       'No Returns (Auto)',
       'Default Returns (Auto)',
-    ]);
+    ], 'return');
 
     if (!fulfillmentPolicyId || !paymentPolicyId || !returnPolicyId) {
       const hint = {

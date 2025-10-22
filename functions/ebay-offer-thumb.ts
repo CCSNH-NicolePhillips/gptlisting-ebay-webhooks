@@ -1,14 +1,19 @@
 import type { Handler } from '@netlify/functions';
 import { accessTokenFromRefresh, tokenHosts } from './_common.js';
 import { tokensStore } from './_blobs.js';
+import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from './_auth.js';
 
 export const handler: Handler = async (event) => {
   try {
     const offerId = event.queryStringParameters?.offerId || event.queryStringParameters?.id;
     if (!offerId) return { statusCode: 400, body: 'Missing offerId' };
 
-    const store = tokensStore();
-    const saved = (await store.get('ebay.json', { type: 'json' })) as any;
+  const store = tokensStore();
+  const bearer = getBearerToken(event);
+  let sub = (await requireAuthVerified(event))?.sub || null;
+  if (!sub) sub = getJwtSubUnverified(event);
+  if (!bearer || !sub) return { statusCode: 401, body: 'Unauthorized' };
+  const saved = (await store.get(userScopedKey(sub, 'ebay.json'), { type: 'json' })) as any;
     const refresh = saved?.refresh_token as string | undefined;
     if (!refresh) return { statusCode: 401, body: 'Connect eBay first' };
     const { access_token } = await accessTokenFromRefresh(refresh);
