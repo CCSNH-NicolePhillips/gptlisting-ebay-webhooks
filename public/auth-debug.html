@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Auth0 Debug</title>
-    <script src="https://cdn.auth0.com/js/auth0-spa-js/2.5/auth0-spa-js.production.js"></script>
+  <script src="https://cdn.auth0.com/js/auth0-spa-js/2.5/auth0-spa-js.production.js"></script>
     <style>
       body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 20px; }
       pre { background: #0b1020; color: #a8ff60; padding: 10px; border-radius: 6px; white-space: pre-wrap; }
@@ -34,9 +34,15 @@
         const el = document.getElementById('status');
         el.textContent = t; el.className = cls || '';
       };
+      const describe = (e) => {
+        if (!e) return '';
+        if (typeof e === 'string') return e;
+        if (e instanceof Error) return `${e.message}\n${e.stack || ''}`;
+        try { return JSON.stringify(e, null, 2); } catch { return String(e); }
+      };
       const log = (id, x) => {
         const el = document.getElementById(id);
-        el.textContent += (typeof x === 'string' ? x : JSON.stringify(x, null, 2)) + "\n";
+        el.textContent += describe(x) + "\n";
       };
       const set = (id, x) => { document.getElementById(id).textContent = typeof x === 'string' ? x : JSON.stringify(x, null, 2); };
 
@@ -57,7 +63,30 @@
             return;
           }
 
-          // 2) Initialize Auth0
+          // 2) Ensure Auth0 SDK is available (diagnose CDN/CSP issues)
+          async function ensureSdk(version) {
+            if (window.createAuth0Client) return true;
+            await new Promise((resolve) => setTimeout(resolve, 50));
+            if (window.createAuth0Client) return true;
+            return new Promise((resolve) => {
+              const s = document.createElement('script');
+              s.src = `https://cdn.auth0.com/js/auth0-spa-js/${version}/auth0-spa-js.production.js`;
+              s.onload = () => resolve(true);
+              s.onerror = () => resolve(false);
+              document.head.appendChild(s);
+            });
+          }
+
+          let sdkOk = !!window.createAuth0Client;
+          if (!sdkOk) sdkOk = await ensureSdk('2.5');
+          if (!sdkOk) sdkOk = await ensureSdk('2.1');
+          if (!sdkOk || !window.createAuth0Client) {
+            S('Init error', 'warn');
+            log('err', 'Auth0 SDK failed to load. Check network/CSP and that https://cdn.auth0.com/js/auth0-spa-js/2.5/auth0-spa-js.production.js is accessible.');
+            return;
+          }
+
+          // 3) Initialize Auth0
           const redirectUri = location.origin + '/auth-debug.html';
           const auth0 = await createAuth0Client({
             domain: cfg.AUTH0_DOMAIN,
@@ -70,15 +99,15 @@
             },
           });
 
-          // 3) Handle callback if returning from Auth0
+          // 4) Handle callback if returning from Auth0
           if (location.search.includes('code=') && location.search.includes('state=')) {
             try { await auth0.handleRedirectCallback(); }
             catch (e) { log('err', e); }
             history.replaceState({}, document.title, redirectUri);
           }
 
-          // 4) Try silent token (ok to fail)
-          try { await auth0.getTokenSilently(); } catch (e) { log('err', 'Silent token failed (ok on first run): ' + (e && e.message || e)); }
+          // 5) Try silent token (ok to fail on first run)
+          try { await auth0.getTokenSilently(); } catch (e) { log('err', 'Silent token failed (ok on first run): ' + describe(e)); }
 
           const authed = await auth0.isAuthenticated();
           S(authed ? 'Authenticated' : 'Not authenticated', authed ? 'ok' : 'warn');
@@ -105,6 +134,7 @@
         } catch (e) {
           S('Init error', 'warn');
           log('err', e);
+          log('err', 'Tip: Ensure Auth0 Allowed Callback URLs includes ' + (location.origin + '/auth-debug.html') + ' and Web Origins includes ' + location.origin + '.');
         }
       })();
     </script>
