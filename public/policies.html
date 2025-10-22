@@ -57,6 +57,7 @@
     </style>
   </head>
   <body>
+    <script src="/auth-client.js"></script>
     <div class="card">
       <h2>Business policies</h2>
       <p class="muted">
@@ -92,8 +93,12 @@
     </div>
 
     <script>
+      // Require auth for this page and ensure Authorization is attached to function calls
+      (async () => { try { await authClient.requireAuth(); } catch {} })();
+
       async function ensureConnected() {
-        const s = await (await fetch('/.netlify/functions/status')).json();
+        const r = await authClient.authFetch('/.netlify/functions/status');
+        const s = await r.json();
         if (!s.ebay?.connected) {
           document.getElementById('msg').textContent = 'Connect eBay first.';
           throw new Error('Not connected');
@@ -104,7 +109,7 @@
           await ensureConnected();
           const pref = (document.getElementById('returnsPref') || { value: 'default' }).value;
           const qs = pref === 'no-returns' ? '?returns=false' : '';
-          const r = await fetch('/.netlify/functions/ebay-provision-policies' + qs);
+          const r = await authClient.authFetch('/.netlify/functions/ebay-provision-policies' + qs);
           const data = await r.json();
           document.getElementById('msg').textContent = r.ok
             ? 'Policies ready. Returning to landing…'
@@ -114,6 +119,18 @@
           document.getElementById('msg').textContent = 'Error: ' + e.message;
         }
       };
+      // Intercept the "View policies JSON" link to ensure we include Authorization
+      const viewLink = document.querySelector('a[href="/.netlify/functions/ebay-list-policies"]');
+      if (viewLink) viewLink.addEventListener('click', async (e) => {
+        e.preventDefault();
+        try {
+          const r = await authClient.authFetch('/.netlify/functions/ebay-list-policies');
+          const text = await r.text();
+          const w = window.open('', '_blank');
+          if (w) { w.document.write('<pre style="white-space:pre-wrap;color:#fff;background:#0b1020;padding:1rem;">'+
+            text.replace(/[&<>]/g, (c)=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])) + '</pre>'); w.document.close(); }
+        } catch {}
+      });
     </script>
   </body>
 </html>
