@@ -178,7 +178,7 @@
         <li id="chkEbay">eBay: <span class="muted">Unknown</span></li>
         <li id="chkPolicies">
           Business policies: <span class="muted">Checking…</span>
-          <a href="/policies.html" id="policiesLink" style="display: none">Manage</a>
+          <a href="/policies-manage.html" id="policiesLink" style="display: none">Manage</a>
         </li>
         <li id="chkLocation">
           Inventory location: <span class="muted">Checking…</span>
@@ -497,7 +497,7 @@
         if (policiesLink) {
           policiesLink.style.display = 'inline';
           policiesLink.textContent = policiesReady ? 'View' : 'Create';
-          policiesLink.href = '/policies.html';
+          policiesLink.href = policiesReady ? '/policies-manage.html' : '/policies.html';
         }
 
         const chkLocation = document.getElementById('chkLocation');

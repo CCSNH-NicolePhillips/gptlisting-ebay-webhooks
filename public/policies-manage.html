@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Manage Policies · GPTListing</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin:0; padding:2rem; background:#0b1020; color:#f4f6fb; }
+      .card { max-width: 980px; margin: 0 auto; background: #141a33; border: 1px solid #2a335c; border-radius: 12px; padding: 1.25rem; }
+      .muted { color:#a2a9c8; }
+      a { color:#a8c1ff; }
+      button { background:#4f7cff; color:#fff; border:none; border-radius:8px; padding:.45rem .7rem; cursor:pointer; font-weight:600; }
+      button.secondary { background: transparent; color: #cbd5ff; border: 1px solid #3d4a86; }
+      table { width:100%; border-collapse: collapse; margin-top: .5rem; }
+      th, td { text-align:left; padding: .5rem; border-bottom: 1px solid #26305a; }
+      .badge { display:inline-block; padding:.1rem .4rem; border-radius: 6px; font-size: .75rem; background:#223066; color:#cbd5ff; border:1px solid #2f3f7a; }
+      .row { display:flex; gap:1rem; flex-wrap:wrap; }
+      .col { flex: 1 1 300px; background:#0f1530; border:1px solid #26305a; border-radius:10px; padding:.75rem; }
+    </style>
+  </head>
+  <body>
+    <script src="/auth-client.js"></script>
+    <div class="card">
+      <h2>Manage business policies</h2>
+      <p class="muted">Set preferred defaults used when creating drafts. You can also delete policies here; for full edits, use Seller Hub.</p>
+      <div style="margin:.5rem 0 1rem;">
+        <a class="secondary" href="/">← Back to landing</a>
+        <a class="secondary" href="/policies.html" style="margin-left:.5rem;">Create baseline policies</a>
+        <a class="secondary" href="https://www.ebay.com/sh/str/selling-policies" target="_blank" style="margin-left:.5rem;">Open in eBay ↗</a>
+      </div>
+
+      <div class="row">
+        <div class="col">
+          <h3>Shipping (Fulfillment)</h3>
+          <div class="muted small" id="fStatus">Loading…</div>
+          <table id="fTable"><thead><tr><th>Name</th><th>ID</th><th>Default</th><th>Actions</th></tr></thead><tbody></tbody></table>
+        </div>
+        <div class="col">
+          <h3>Payment</h3>
+          <div class="muted small" id="pStatus">Loading…</div>
+          <table id="pTable"><thead><tr><th>Name</th><th>ID</th><th>Default</th><th>Actions</th></tr></thead><tbody></tbody></table>
+        </div>
+        <div class="col">
+          <h3>Returns</h3>
+          <div class="muted small" id="rStatus">Loading…</div>
+          <table id="rTable"><thead><tr><th>Name</th><th>ID</th><th>Default</th><th>Actions</th></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+
+      <div id="msg" class="muted" style="margin-top:.75rem;"></div>
+    </div>
+
+    <script>
+      (async () => { try { await authClient.requireAuth(); } catch {} })();
+
+      const defaults = { fulfillment: null, payment: null, return: null };
+
+      async function loadDefaults() {
+        try {
+          const r = await authClient.authFetch('/.netlify/functions/ebay-get-policy-defaults');
+          const j = await r.json();
+          Object.assign(defaults, j?.defaults || {});
+        } catch {}
+      }
+
+      function renderTable(elId, list, typeKey) {
+        const table = document.getElementById(elId);
+        if (!table) return;
+        const tbody = table.querySelector('tbody');
+        tbody.innerHTML = '';
+        const chosen = defaults[typeKey] || '';
+        list.forEach((p) => {
+          const tr = document.createElement('tr');
+          const name = document.createElement('td');
+          name.textContent = p.name || '(unnamed)';
+          const id = document.createElement('td');
+          id.textContent = p.id || p[`${typeKey}PolicyId`] || '';
+          const def = document.createElement('td');
+          def.innerHTML = (String(id.textContent) === String(chosen)) ? '<span class="badge">Default</span>' : '';
+          const act = document.createElement('td');
+          const setBtn = document.createElement('button'); setBtn.textContent = 'Set default'; setBtn.className='secondary';
+          setBtn.onclick = async () => {
+            try {
+              const body = {}; body[typeKey] = id.textContent;
+              const r = await authClient.authFetch('/.netlify/functions/ebay-set-policy-defaults', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+              const j = await r.json(); Object.assign(defaults, j?.defaults || {});
+              await populate();
+            } catch (e) { showMsg('Failed to set default: '+(e?.message||e)); }
+          };
+          const delBtn = document.createElement('button'); delBtn.textContent = 'Delete'; delBtn.style.marginLeft='.5rem';
+          delBtn.onclick = async () => {
+            if (!confirm('Delete this policy on eBay? This cannot be undone.')) return;
+            try {
+              const url = new URL('/.netlify/functions/ebay-delete-policy', window.location.origin);
+              url.searchParams.set('type', typeKey); url.searchParams.set('id', id.textContent);
+              const r = await authClient.authFetch(url.toString(), { method: 'DELETE' });
+              if (!r.ok) { const t = await r.text(); throw new Error(t); }
+              showMsg('Deleted. Refreshing…');
+              await populate();
+            } catch (e) { showMsg('Delete failed: '+(e?.message||e)); }
+          };
+          act.appendChild(setBtn); act.appendChild(delBtn);
+          tr.appendChild(name); tr.appendChild(id); tr.appendChild(def); tr.appendChild(act);
+          tbody.appendChild(tr);
+        });
+      }
+
+      function showMsg(s) { const el = document.getElementById('msg'); if (el) el.textContent = s; }
+
+      async function populate() {
+        showMsg('');
+        try {
+          await loadDefaults();
+          const r = await authClient.authFetch('/.netlify/functions/ebay-list-policies');
+          const j = await r.json();
+          const f = (j?.fulfillment?.json?.fulfillmentPolicies) || [];
+          const p = (j?.payment?.json?.paymentPolicies) || [];
+          const rr = (j?.returns?.json?.returnPolicies) || [];
+          renderTable('fTable', f, 'fulfillment');
+          renderTable('pTable', p, 'payment');
+          renderTable('rTable', rr, 'return');
+          document.getElementById('fStatus').textContent = f.length? `${f.length} policy(ies)` : 'No policies';
+          document.getElementById('pStatus').textContent = p.length? `${p.length} policy(ies)` : 'No policies';
+          document.getElementById('rStatus').textContent = rr.length? `${rr.length} policy(ies)` : 'No policies';
+        } catch (e) { showMsg('Error loading policies: ' + (e?.message || e)); }
+      }
+
+      populate();
+    </script>
+  </body>
+</html>
