@@ -263,14 +263,21 @@
               headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
               body: JSON.stringify({ returnTo: window.location.href })
             });
-            const j = await r.json();
+            const text = await r.text();
+            let j = null; try { j = JSON.parse(text); } catch {}
             if (r.ok && j?.redirect) {
               window.location.assign(j.redirect);
               return;
             }
+            if (r.status === 401) {
+              // Session missing server-side; force re-login to refresh tokens
+              return await authClient.login({});
+            }
+            console.error('Start flow failed', { status: r.status, body: text });
+            alert('Could not start the connect flow. Check console for details.');
           } catch {}
-          // Fallback to default navigation if anything fails
-          window.location.assign(el.getAttribute('href'));
+          // No fallback GET; we require authenticated POST for proper state binding
+          return;
         });
       }
       wireConnectLink('dbxConnect', '/.netlify/functions/dropbox-oauth-start');
