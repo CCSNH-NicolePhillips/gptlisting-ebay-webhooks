@@ -43,6 +43,20 @@ export async function requireAuthVerified(event: HandlerEvent): Promise<{ sub: s
   }
 }
 
+// Simple helper required by the task contract: verifies ID token against Auth0 and returns basic identity
+export async function requireAuth(event: HandlerEvent): Promise<{ sub: string; email?: string; name?: string } | null> {
+  const v = await requireAuthVerified(event);
+  if (!v) return null;
+  const email = typeof v.claims?.email === 'string' ? v.claims.email : undefined;
+  const name = typeof v.claims?.name === 'string' ? v.claims.name : undefined;
+  return { sub: v.sub, email, name };
+}
+
+// JSON response helper
+export function json(body: any, status: number = 200) {
+  return { statusCode: status, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+}
+
 export async function createOAuthStateForUser(event: HandlerEvent, provider: string): Promise<string | null> {
   const sub = getJwtSubUnverified(event);
   if (!sub) return null;
