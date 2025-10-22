@@ -41,12 +41,31 @@
         document.head.appendChild(s);
       });
     }
+    async function loadSdkFromBlob(url) {
+      try {
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) throw new Error('fetch failed: ' + res.status);
+        const js = await res.text();
+        const blob = new Blob([js], { type: 'application/javascript' });
+        const u = URL.createObjectURL(blob);
+        try {
+          await loadSdk(u);
+        } finally {
+          URL.revokeObjectURL(u);
+        }
+      } catch (e) {
+        // swallow
+      }
+    }
     if (!window.createAuth0Client) {
       try {
         await loadSdk('/.netlify/functions/cdn-auth0-spa?v=2.5');
       } catch {
-        try { await loadSdk('https://cdn.auth0.com/js/auth0-spa-js/2.5/auth0-spa-js.production.js'); }
-        catch {}
+        await loadSdkFromBlob('/.netlify/functions/cdn-auth0-spa?v=2.5');
+        if (!window.createAuth0Client) {
+          try { await loadSdk('https://cdn.auth0.com/js/auth0-spa-js/2.5/auth0-spa-js.production.js'); }
+          catch {}
+        }
       }
     }
     state.auth0 = await window.createAuth0Client({

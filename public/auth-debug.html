@@ -24,7 +24,9 @@
     </div>
     <h3>Config</h3>
     <pre id="cfg"></pre>
-    <h3>User / Tokens</h3>
+  <h3>Preflight</h3>
+  <pre id="preflight"></pre>
+  <h3>User / Tokens</h3>
     <pre id="out"></pre>
     <h3>Errors</h3>
     <pre id="err"></pre>
@@ -64,6 +66,34 @@
           }
 
           // 2) Ensure Auth0 SDK is available (diagnose CDN/CSP issues)
+          async function preflight(url){
+            try{
+              const r = await fetch(url, { cache: 'no-store' });
+              const ct = r.headers.get('content-type');
+              const txt = await r.text();
+              set('preflight', {
+                url,
+                status: r.status,
+                contentType: ct,
+                snippet: txt.slice(0, 120)
+              });
+              return { ok: r.ok, txt };
+            }catch(e){
+              set('preflight', { url, error: describe(e) });
+              return { ok: false };
+            }
+          }
+          async function injectScript(url){
+            return new Promise((resolve, reject) => {
+              const s = document.createElement('script');
+              s.src = url; s.onload = resolve; s.onerror = reject; document.head.appendChild(s);
+            });
+          }
+          async function injectFromBlob(js){
+            const blob = new Blob([js], { type: 'application/javascript' });
+            const u = URL.createObjectURL(blob);
+            try { await injectScript(u); } finally { URL.revokeObjectURL(u); }
+          }
           async function ensureSdk(version) {
             if (window.createAuth0Client) return true;
             await new Promise((resolve) => setTimeout(resolve, 50));
@@ -77,12 +107,26 @@
             });
           }
 
+          const proxyUrl = '/.netlify/functions/cdn-auth0-spa?v=2.5';
+          await preflight(proxyUrl);
           let sdkOk = !!window.createAuth0Client;
+          if (!sdkOk) {
+            try { await injectScript(proxyUrl); } catch {}
+            sdkOk = !!window.createAuth0Client;
+          }
+          if (!sdkOk) {
+            // Try blob-based injection from proxy fetch
+            const pf = await preflight(proxyUrl);
+            if (pf.ok && pf.txt) {
+              try { await injectFromBlob(pf.txt); } catch {}
+              sdkOk = !!window.createAuth0Client;
+            }
+          }
           if (!sdkOk) sdkOk = await ensureSdk('2.5');
           if (!sdkOk) sdkOk = await ensureSdk('2.1');
           if (!sdkOk || !window.createAuth0Client) {
             S('Init error', 'warn');
-            log('err', 'Auth0 SDK failed to load. We tried same-origin proxy (/.netlify/functions/cdn-auth0-spa) and CDN. Check network/CSP.');
+            log('err', 'Auth0 SDK failed to load. We tried: proxy script tag, proxy blob injection, and CDN. Check network/CSP and extensions.');
             return;
           }
 
