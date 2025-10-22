@@ -1,0 +1,49 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Auth0 ESM Debug</title>
+<body style="font-family:system-ui;padding:2rem">
+  <h1 id="status">Init…</h1>
+  <div style="display:flex;gap:.5rem">
+    <button id="login">Login (redirect)</button>
+    <button id="logout" style="display:none">Logout</button>
+  </div>
+  <pre id="out" style="margin-top:1rem;background:#111;color:#0f0;padding:10px;white-space:pre-wrap;display:none"></pre>
+
+  <script type="module">
+    import createAuth0Client from '/vendor/auth0-spa.esm.js';
+
+    const $ = (id) => document.getElementById(id);
+    const log = (x) => { const o=$('out'); o.style.display='block'; o.textContent+=(typeof x==='string'?x:JSON.stringify(x,null,2))+'\n'; };
+
+    // Load public config so domain/clientId come from server envs
+    const cfgRes = await fetch('/.netlify/functions/get-public-config', { cache:'no-store' });
+    const cfg = await cfgRes.json().catch(()=>({}));
+    if (!cfgRes.ok || (cfg.AUTH_MODE||'none').toLowerCase() !== 'auth0' || !cfg.AUTH0_DOMAIN || !cfg.AUTH0_CLIENT_ID) {
+      $('status').textContent = 'Init error';
+      log('Missing AUTH0 config from server.');
+    } else {
+      const redirectUri = location.origin + '/auth-esm.html';
+      const auth0 = await createAuth0Client({
+        domain: cfg.AUTH0_DOMAIN,
+        clientId: cfg.AUTH0_CLIENT_ID,
+        authorizationParams: { redirect_uri: redirectUri, scope: 'openid profile email', audience: cfg.AUTH0_AUDIENCE || undefined },
+      });
+
+      if (location.search.includes('code=') && location.search.includes('state=')) {
+        try { await auth0.handleRedirectCallback(); } catch(e){ log(e); }
+        history.replaceState({}, document.title, redirectUri);
+      }
+
+      try { await auth0.getTokenSilently(); } catch {}
+
+      const authed = await auth0.isAuthenticated();
+      $('status').textContent = authed ? 'Authenticated' : 'Not authenticated';
+      $('login').style.display  = authed ? 'none' : 'inline-block';
+      $('logout').style.display = authed ? 'inline-block' : 'none';
+      if (authed) log(await auth0.getUser());
+
+      $('login').onclick  = () => auth0.loginWithRedirect({ authorizationParams: { redirect_uri: redirectUri } });
+      $('logout').onclick = () => auth0.logout({ logoutParams: { returnTo: location.origin + '/' } });
+    }
+  </script>
+</body>

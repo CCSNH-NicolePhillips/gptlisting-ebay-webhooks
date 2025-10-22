@@ -10,4 +10,11 @@
   SECRETS_SCAN_OMIT_KEYS = "PUBLISH_MODE,DEFAULT_MARKETPLACE_ID,DEFAULT_CATEGORY_ID,EBAY_ENV,APP_URL,DROPBOX_LOCALE,EBAY_RUNAME,EBAY_ENDPOINT_URL,DROPBOX_REDIRECT_URI,PROMOTED_CAMPAIGN_ID,OCR_PROVIDER,SHIP_NAME,SHIP_ADDRESS1,SHIP_CITY,SHIP_STATE,SHIP_POSTAL,SHIP_COUNTRY"
   SECRETS_SCAN_OMIT_PATHS = ".env.example,README.md,public/index.html,scripts/*,src/**"
 
+## Make a stable self-hosted ESM path that rewrites to the SDK proxy
+[[redirects]]
+  from = "/vendor/auth0-spa.esm.js"
+  to = "/.netlify/functions/cdn-auth0-spa?esm=1&v=2.5.0"
+  status = 200
+  force = true
+
 ## Do not force a single Content-Type for all functions; individual functions set appropriate headers.
