@@ -32,12 +32,25 @@
     if (!state.cfg?.AUTH0_DOMAIN || !state.cfg?.AUTH0_CLIENT_ID) return;
     if (state.auth0) return;
     // Load SPA SDK if not present. Prefer same-origin proxy to satisfy strict CSP.
+    function beginAmdDisable() {
+      const hadDefine = typeof window.define === 'function';
+      const saved = hadDefine ? window.define : undefined;
+      try { if (hadDefine) window.define = undefined; } catch {}
+      return () => {
+        try {
+          if (hadDefine && saved) window.define = saved;
+          else if (hadDefine && !saved) delete window.define;
+        } catch {}
+      };
+    }
     async function loadSdk(url) {
       return new Promise((resolve, reject) => {
+        const restore = beginAmdDisable();
         const s = document.createElement('script');
         s.src = url;
-        s.onload = resolve;
-        s.onerror = reject;
+        s.async = true;
+        s.onload = () => { try { restore(); } catch {} ; resolve(); };
+        s.onerror = (e) => { try { restore(); } catch {} ; reject(e); };
         document.head.appendChild(s);
       });
     }

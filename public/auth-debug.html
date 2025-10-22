@@ -83,10 +83,25 @@
               return { ok: false };
             }
           }
+          function beginAmdDisable(){
+            const hadDefine = typeof window.define === 'function';
+            const saved = hadDefine ? window.define : undefined;
+            try { if (hadDefine) window.define = undefined; } catch {}
+            return () => {
+              try {
+                if (hadDefine && saved) window.define = saved;
+                else if (hadDefine && !saved) delete window.define;
+              } catch {}
+            };
+          }
           async function injectScript(url){
             return new Promise((resolve, reject) => {
+              const restore = beginAmdDisable();
               const s = document.createElement('script');
-              s.src = url; s.onload = resolve; s.onerror = reject; document.head.appendChild(s);
+              s.src = url; s.async = true;
+              s.onload = () => { try { restore(); } catch{}; resolve(); };
+              s.onerror = (e) => { try { restore(); } catch{}; reject(e); };
+              document.head.appendChild(s);
             });
           }
           async function injectFromBlob(js){
@@ -108,7 +123,9 @@
           }
 
           const proxyUrl = '/.netlify/functions/cdn-auth0-spa?v=2.5';
+          const amdDetected = typeof window.define === 'function';
           await preflight(proxyUrl);
+          if (amdDetected) log('err', 'AMD loader detected (window.define is a function). Applying AMD guard while loading SDK.');
           const hasCreate = () => (window.auth0 && window.auth0.createAuth0Client) || window.createAuth0Client;
           let sdkOk = !!hasCreate();
           if (!sdkOk) {
