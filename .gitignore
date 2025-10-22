@@ -7,3 +7,5 @@ dist
 .tmp/
 .DS_Store
 prod.env
+# Local Netlify folder
+.netlify

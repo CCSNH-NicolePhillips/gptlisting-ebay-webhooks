@@ -114,9 +114,7 @@
           <h3>Dropbox</h3>
           <p class="status" id="dbxStatus">Loading…</p>
           <div>
-            <a id="dbxConnect" class="btn" href="/.netlify/functions/dropbox-oauth-start"
-              >Connect Dropbox</a
-            >
+            <a id="dbxConnect" class="btn" href="/.netlify/functions/dropbox-oauth-start">Connect Dropbox</a>
             <button id="dbxDisconnect" class="secondary">Disconnect</button>
           </div>
           <div id="dbxFolderBox" style="margin-top: .75rem;">
@@ -131,9 +129,7 @@
           <h3>eBay (Production)</h3>
           <p class="status" id="ebayStatus">Loading…</p>
           <div>
-            <a id="ebayConnect" class="btn" href="/.netlify/functions/ebay-oauth-start"
-              >Connect eBay</a
-            >
+            <a id="ebayConnect" class="btn" href="/.netlify/functions/ebay-oauth-start">Connect eBay</a>
             <button id="ebayDisconnect" class="secondary">Disconnect</button>
           </div>
         </div>
@@ -141,6 +137,10 @@
       <div style="margin-top: 1rem">
         <button id="process" disabled>Process folder → Drafts</button>
         <span id="processMsg" class="small"></span>
+      </div>
+      <div style="margin-top: .5rem">
+        <button id="claimLegacy" class="secondary">Claim legacy connections</button>
+        <span id="claimMsg" class="small"></span>
       </div>
 
       <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid #2a335c" />
@@ -193,7 +193,28 @@
         return connected;
       }
 
-      // Connect links now navigate directly via anchor hrefs above
+      // Connect links: perform authenticated fetch to bind the OAuth state to the current user,
+      // then navigate to the provider.
+      function wireConnectLink(id, fnPath) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('click', async (e) => {
+          try {
+            e.preventDefault();
+            await authClient.ensureAuth();
+            const r = await fetch(fnPath + '?mode=json', { headers: { Accept: 'application/json' } });
+            const j = await r.json();
+            if (r.ok && j?.redirect) {
+              window.location.assign(j.redirect);
+              return;
+            }
+          } catch {}
+          // Fallback to default navigation if anything fails
+          window.location.assign(el.getAttribute('href'));
+        });
+      }
+      wireConnectLink('dbxConnect', '/.netlify/functions/dropbox-oauth-start');
+      wireConnectLink('ebayConnect', '/.netlify/functions/ebay-oauth-start');
       document.getElementById('dbxDisconnect').onclick = async () => {
         await fetch('/.netlify/functions/status?dropbox=disconnect', { method: 'POST' });
         refreshStatus();
@@ -215,6 +236,28 @@
           msg.textContent = 'Error: ' + e.message;
         } finally {
           btn.disabled = false;
+        }
+      };
+
+      // Claim legacy global tokens into this user (if present)
+      document.getElementById('claimLegacy').onclick = async () => {
+        const m = document.getElementById('claimMsg');
+        m.textContent = 'Checking…';
+        try {
+          await authClient.ensureAuth();
+          const r = await fetch('/.netlify/functions/migrate-legacy-tokens', { method: 'POST' });
+          const j = await r.json().catch(() => null);
+          if (r.ok && j?.ok) {
+            const parts = [];
+            if (j.migrated?.dropbox) parts.push('Dropbox');
+            if (j.migrated?.ebay) parts.push('eBay');
+            m.textContent = parts.length ? `Migrated: ${parts.join(', ')}` : 'Nothing to migrate';
+            await refreshStatus();
+          } else {
+            m.textContent = 'Migration failed';
+          }
+        } catch (e) {
+          m.textContent = 'Error: ' + (e?.message || String(e));
         }
       };
 

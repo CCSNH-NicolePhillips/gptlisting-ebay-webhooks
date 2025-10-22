@@ -257,4 +257,79 @@
   }
 
   window.authClient = { requireAuth, login, logout, getToken, ensureAuth };
+  // Minimal, non-invasive auth badge injected in the top-right for login/logout
+  async function renderBadge() {
+    try {
+      await loadConfig();
+      if (state.mode === 'none') return; // auth not configured – don't render
+      // Light init without forcing redirects
+      if (state.mode === 'auth0') {
+        await initAuth0();
+      } else if (state.mode === 'identity') {
+        await initIdentity();
+      }
+      // Container
+      let el = document.getElementById('auth-badge');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'auth-badge';
+        el.style.position = 'fixed';
+        el.style.top = '10px';
+        el.style.right = '10px';
+        el.style.zIndex = '9999';
+        el.style.display = 'flex';
+        el.style.gap = '8px';
+        el.style.alignItems = 'center';
+        el.style.padding = '6px 10px';
+        el.style.borderRadius = '999px';
+        el.style.background = 'rgba(20,26,51,0.85)';
+        el.style.border = '1px solid #2a335c';
+        el.style.color = '#e6ebff';
+        el.style.font = '600 13px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif';
+        document.body.appendChild(el);
+      }
+      // Determine auth state
+      let authed = false;
+      try {
+        if (state.mode === 'auth0' && state.auth0) authed = await state.auth0.isAuthenticated();
+        else if (state.mode === 'identity') authed = !!state.user;
+      } catch {}
+      const name = (state.user && (state.user.name || state.user.email)) || '';
+      // Render contents
+      el.innerHTML = '';
+      const label = document.createElement('span');
+      label.textContent = authed ? (name ? `Signed in as ${name}` : 'Signed in') : 'Not signed in';
+      label.style.opacity = '0.9';
+      const btn = document.createElement('button');
+      btn.textContent = authed ? 'Sign out' : 'Sign in';
+      btn.style.background = authed ? 'transparent' : '#4f7cff';
+      btn.style.color = authed ? '#cbd5ff' : '#fff';
+      btn.style.border = authed ? '1px solid #3d4a86' : 'none';
+      btn.style.borderRadius = '999px';
+      btn.style.padding = '6px 10px';
+      btn.style.cursor = 'pointer';
+      btn.style.fontWeight = '700';
+      btn.onclick = async () => {
+        if (authed) {
+          try { await logout(); } catch {}
+        } else {
+          try { await login({}); } catch {}
+        }
+      };
+      el.appendChild(label);
+      el.appendChild(btn);
+    } catch {}
+  }
+
+  // Auto-render the badge once DOM is ready
+  if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => { renderBadge().catch(() => {}); });
+    } else {
+      // Document already interactive/complete
+      Promise.resolve().then(() => renderBadge());
+    }
+  }
+  // Expose for pages that want to re-render after app-specific flows
+  window.authClient.renderBadge = renderBadge;
 })();

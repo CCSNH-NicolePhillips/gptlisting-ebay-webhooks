@@ -1,11 +1,13 @@
 import type { Handler } from '@netlify/functions';
 import { tokensStore } from './_blobs.js';
+import { getJwtSubUnverified, userScopedKey } from './_auth.js';
 import { accessTokenFromRefresh, tokenHosts } from './_common.js';
 
-export const handler: Handler = async () => {
+export const handler: Handler = async (event) => {
   try {
     const store = tokensStore();
-    const saved = (await store.get('ebay.json', { type: 'json' })) as any;
+    const sub = getJwtSubUnverified(event);
+    const saved = ((await store.get(userScopedKey(sub, 'ebay.json'), { type: 'json' })) as any) || ((await store.get('ebay.json', { type: 'json' })) as any);
     const refresh = saved?.refresh_token as string | undefined;
     if (!refresh)
       return {
