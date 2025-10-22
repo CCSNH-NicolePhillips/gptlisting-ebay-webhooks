@@ -6,9 +6,17 @@ import type { Handler } from '@netlify/functions';
 
 export const handler: Handler = async (event) => {
   try {
-    const v = (event.queryStringParameters?.v || '2.5').trim();
-    const base = `https://cdn.auth0.com/js/auth0-spa-js/${encodeURIComponent(v)}`;
-    const url = `${base}/auth0-spa-js.production.js`;
+    const q = event.queryStringParameters || {};
+    const v = (q.v || '2.5').trim();
+    const esm = q.esm === '1' || q.esm === 'true';
+    let url: string;
+    if (esm) {
+      const ver = /^[0-9]+(\.[0-9]+){0,2}$/.test(v) ? v : '2.5.0';
+      url = `https://unpkg.com/@auth0/auth0-spa-js@${encodeURIComponent(ver)}/dist/auth0-spa-js.production.esm.js`;
+    } else {
+      const base = `https://cdn.auth0.com/js/auth0-spa-js/${encodeURIComponent(v)}`;
+      url = `${base}/auth0-spa-js.production.js`;
+    }
 
     const upstream = await fetch(url);
     const body = await upstream.text();
