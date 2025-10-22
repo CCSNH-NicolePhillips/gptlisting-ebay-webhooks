@@ -1,6 +1,6 @@
 import type { Handler } from '@netlify/functions';
 import { tokensStore } from './_blobs.js';
-import { getJwtSubUnverified, userScopedKey } from './_auth.js';
+import { getJwtSubUnverified, userScopedKey, getBearerToken } from './_auth.js';
 
 type DbxEntry = {
   name: string;
@@ -115,8 +115,10 @@ export const handler: Handler = async (event) => {
     const useProxy = /^1|true|yes$/i.test(String(qs.useProxy || '1'));
 
   const store = tokensStore();
+  const bearer = getBearerToken(event);
   const sub = getJwtSubUnverified(event);
-  const saved = ((await store.get(userScopedKey(sub, 'dropbox.json'), { type: 'json' })) as any) || ((await store.get('dropbox.json', { type: 'json' })) as any);
+  if (!bearer || !sub) return { statusCode: 401, body: 'Unauthorized' };
+  const saved = (await store.get(userScopedKey(sub, 'dropbox.json'), { type: 'json' })) as any;
     const refresh = saved?.refresh_token as string | undefined;
     if (!refresh) return { statusCode: 400, body: 'Connect Dropbox first' };
 

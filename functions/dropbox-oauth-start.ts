@@ -1,5 +1,5 @@
 import type { Handler } from '@netlify/functions';
-import { createOAuthStateForUser } from './_auth.js';
+import { createOAuthStateForUser, getJwtSubUnverified, getBearerToken } from './_auth.js';
 
 // Start Dropbox OAuth 2.0 flow
 export const handler: Handler = async (event) => {
@@ -7,6 +7,17 @@ export const handler: Handler = async (event) => {
   const redirectUri = process.env.DROPBOX_REDIRECT_URI;
   if (!clientId || !redirectUri) {
     return { statusCode: 500, body: 'Missing DROPBOX_CLIENT_ID or DROPBOX_REDIRECT_URI' };
+  }
+
+  const bearer = getBearerToken(event);
+  const sub = getJwtSubUnverified(event);
+  if (!bearer || !sub) {
+    const wantsJson = /application\/json/i.test(String(event.headers?.accept || '')) || event.queryStringParameters?.mode === 'json';
+    if (wantsJson) {
+      const jsonHeaders = { 'Content-Type': 'application/json' } as Record<string, string>;
+      return { statusCode: 401, headers: jsonHeaders, body: JSON.stringify({ error: 'Unauthorized' }) };
+    }
+    return { statusCode: 302, headers: { Location: '/login.html' } };
   }
 
   // Bind this OAuth flow to the current user via opaque server-side state

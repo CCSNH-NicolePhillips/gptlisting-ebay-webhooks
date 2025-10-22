@@ -1,11 +1,21 @@
 import type { Handler } from '@netlify/functions';
-import { createOAuthStateForUser } from './_auth.js';
+import { createOAuthStateForUser, getJwtSubUnverified, getBearerToken } from './_auth.js';
 
 export const handler: Handler = async (event) => {
   const clientId = process.env.EBAY_CLIENT_ID!;
   const runame = process.env.EBAY_RUNAME || process.env.EBAY_RU_NAME;
   if (!runame) return { statusCode: 500, body: 'Missing EBAY_RUNAME/EBAY_RU_NAME' };
   const env = process.env.EBAY_ENV || 'PROD';
+  const bearer = getBearerToken(event);
+  const sub = getJwtSubUnverified(event);
+  if (!bearer || !sub) {
+    const wantsJson = /application\/json/i.test(String(event.headers?.accept || '')) || event.queryStringParameters?.mode === 'json';
+    if (wantsJson) {
+      const jsonHeaders = { 'Content-Type': 'application/json' } as Record<string, string>;
+      return { statusCode: 401, headers: jsonHeaders, body: JSON.stringify({ error: 'Unauthorized' }) };
+    }
+    return { statusCode: 302, headers: { Location: '/login.html' } };
+  }
   const stateRaw = (await createOAuthStateForUser(event, 'ebay')) || Buffer.from(JSON.stringify({ t: Date.now() })).toString('base64');
   const state = encodeURIComponent(stateRaw);
   const host = env === 'SANDBOX' ? 'https://auth.sandbox.ebay.com' : 'https://auth.ebay.com';

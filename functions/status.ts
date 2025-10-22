@@ -1,11 +1,18 @@
 import type { Handler } from '@netlify/functions';
 import { tokensStore } from './_blobs.js';
-import { getJwtSubUnverified, userScopedKey } from './_auth.js';
+import { getJwtSubUnverified, userScopedKey, getBearerToken } from './_auth.js';
 
 export const handler: Handler = async (event) => {
   try {
     const tokens = tokensStore();
+    const bearer = getBearerToken(event);
     const sub = getJwtSubUnverified(event);
+    if (!bearer) {
+      return { statusCode: 401, body: 'Unauthorized: missing Authorization' };
+    }
+    if (!sub) {
+      return { statusCode: 401, body: 'Unauthorized: invalid token' };
+    }
     if (event.httpMethod === 'POST') {
       if (event.queryStringParameters?.dropbox === 'disconnect') {
         const key = userScopedKey(sub, 'dropbox.json');
@@ -19,11 +26,10 @@ export const handler: Handler = async (event) => {
       }
     }
 
-    // Prefer per-user tokens; fallback to legacy global for backward-compat
     const [dbx, ebay] = await Promise.all([
-      (async () => (await tokens.get(userScopedKey(sub, 'dropbox.json'), { type: 'json' })) || (await tokens.get('dropbox.json', { type: 'json' })))(),
-      (async () => (await tokens.get(userScopedKey(sub, 'ebay.json'), { type: 'json' })) || (await tokens.get('ebay.json', { type: 'json' })))(),
-    ] as any);
+      tokens.get(userScopedKey(sub, 'dropbox.json'), { type: 'json' }) as Promise<any>,
+      tokens.get(userScopedKey(sub, 'ebay.json'), { type: 'json' }) as Promise<any>,
+    ]);
 
     return {
       statusCode: 200,

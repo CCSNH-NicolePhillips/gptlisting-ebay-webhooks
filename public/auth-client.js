@@ -115,7 +115,12 @@
     const isAuth = await state.auth0.isAuthenticated();
     if (isAuth) {
       state.user = await state.auth0.getUser();
+      // Try to acquire an API access token; if audience is not configured, fall back to ID token
       state.token = await state.auth0.getTokenSilently().catch(() => null);
+      try {
+        const idc = await state.auth0.getIdTokenClaims();
+        state.idTokenRaw = idc && (idc.__raw || idc.raw || null);
+      } catch {}
     }
   }
 
@@ -222,10 +227,18 @@
   async function getToken() {
     if (state.mode === 'auth0' && state.auth0) {
       try {
-        return await state.auth0.getTokenSilently();
+        const at = await state.auth0.getTokenSilently();
+        if (at) return at;
       } catch {
-        return null;
+        // swallow
       }
+      // Fallback: use ID token as bearer for user identification on first-party functions
+      if (state.idTokenRaw) return state.idTokenRaw;
+      try {
+        const idc = await state.auth0.getIdTokenClaims();
+        return (idc && (idc.__raw || idc.raw)) || null;
+      } catch {}
+      return null;
     }
     if (state.mode === 'identity' && window.netlifyIdentity) {
       const u = window.netlifyIdentity.currentUser();
