@@ -50,6 +50,70 @@
       <div id="msg" class="muted" style="margin-top:.75rem;"></div>
     </div>
 
+    <!-- Lightweight modal for editing policies -->
+    <div id="modal" style="display:none; position:fixed; inset:0; background:rgba(3,6,20,.7); align-items:center; justify-content:center; z-index:50;">
+      <div style="width: min(720px, 92vw); background:#0f1530; border:1px solid #26305a; border-radius:12px; padding:1rem; box-shadow:0 10px 40px rgba(0,0,0,.4);">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:.5rem;">
+          <h3 id="modalTitle" style="margin:.25rem 0;">Edit policy</h3>
+          <div>
+            <button class="secondary" id="btnCloseModal">Cancel</button>
+            <button id="btnSaveModal" style="margin-left:.5rem;">Save</button>
+          </div>
+        </div>
+        <div id="modalMsg" class="muted" style="min-height:1.25rem; margin:.25rem 0 .5rem;"></div>
+        <form id="modalForm">
+          <input type="hidden" name="type" />
+          <input type="hidden" name="id" />
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:.75rem;">
+            <label style="display:block;">
+              <div class="muted" style="font-size:.85rem;">Name</div>
+              <input name="name" type="text" style="width:100%; padding:.45rem .6rem; background:#0b1020; color:#f4f6fb; border:1px solid #26305a; border-radius:8px;" />
+            </label>
+            <div id="field_immediatePay" style="display:none;">
+              <div class="muted" style="font-size:.85rem;">Immediate pay</div>
+              <label style="display:inline-flex; align-items:center; gap:.5rem;">
+                <input name="immediatePay" type="checkbox" /> Require immediate payment
+              </label>
+            </div>
+            <div id="field_handlingTime" style="display:none;">
+              <div class="muted" style="font-size:.85rem;">Handling time (days)</div>
+              <input name="handlingTimeDays" type="number" min="0" step="1" style="width:100%; padding:.45rem .6rem; background:#0b1020; color:#f4f6fb; border:1px solid #26305a; border-radius:8px;" />
+            </div>
+            <div id="field_freeDomestic" style="display:none;">
+              <div class="muted" style="font-size:.85rem;">Domestic shipping</div>
+              <label style="display:inline-flex; align-items:center; gap:.5rem;">
+                <input name="freeDomestic" type="checkbox" /> Offer free domestic shipping
+              </label>
+            </div>
+            <div id="field_returnsAccepted" style="display:none;">
+              <div class="muted" style="font-size:.85rem;">Returns accepted</div>
+              <label style="display:inline-flex; align-items:center; gap:.5rem;">
+                <input name="returnsAccepted" type="checkbox" /> Allow returns
+              </label>
+            </div>
+            <div id="field_returnPeriod" style="display:none;">
+              <div class="muted" style="font-size:.85rem;">Return period (days)</div>
+              <input name="returnPeriodDays" type="number" min="1" step="1" style="width:100%; padding:.45rem .6rem; background:#0b1020; color:#f4f6fb; border:1px solid #26305a; border-radius:8px;" />
+            </div>
+            <div id="field_refundMethod" style="display:none;">
+              <div class="muted" style="font-size:.85rem;">Refund method</div>
+              <select name="refundMethod" style="width:100%; padding:.45rem .6rem; background:#0b1020; color:#f4f6fb; border:1px solid #26305a; border-radius:8px;">
+                <option value="MONEY_BACK">Money back</option>
+                <option value="REPLACEMENT">Replacement</option>
+              </select>
+            </div>
+            <div id="field_returnShippingCostPayer" style="display:none;">
+              <div class="muted" style="font-size:.85rem;">Return shipping paid by</div>
+              <select name="returnShippingCostPayer" style="width:100%; padding:.45rem .6rem; background:#0b1020; color:#f4f6fb; border:1px solid #26305a; border-radius:8px;">
+                <option value="BUYER">Buyer</option>
+                <option value="SELLER">Seller</option>
+              </select>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <script>
       (async () => { try { await authClient.requireAuth(); } catch {} })();
 
@@ -87,6 +151,8 @@
               await populate();
             } catch (e) { showMsg('Failed to set default: '+(e?.message||e)); }
           };
+          const editBtn = document.createElement('button'); editBtn.textContent = 'Edit'; editBtn.style.marginLeft = '.5rem'; editBtn.className='secondary';
+          editBtn.onclick = () => openEdit(typeKey, id.textContent, name.textContent);
           const delBtn = document.createElement('button'); delBtn.textContent = 'Delete'; delBtn.style.marginLeft='.5rem';
           delBtn.onclick = async () => {
             if (!confirm('Delete this policy on eBay? This cannot be undone.')) return;
@@ -99,13 +165,103 @@
               await populate();
             } catch (e) { showMsg('Delete failed: '+(e?.message||e)); }
           };
-          act.appendChild(setBtn); act.appendChild(delBtn);
+          act.appendChild(setBtn); act.appendChild(editBtn); act.appendChild(delBtn);
           tr.appendChild(name); tr.appendChild(id); tr.appendChild(def); tr.appendChild(act);
           tbody.appendChild(tr);
         });
       }
 
       function showMsg(s) { const el = document.getElementById('msg'); if (el) el.textContent = s; }
+
+      function showModal() { const m = document.getElementById('modal'); if (m) m.style.display = 'flex'; }
+      function hideModal() { const m = document.getElementById('modal'); if (m) m.style.display = 'none'; }
+
+      async function openEdit(typeKey, id, displayName) {
+        try {
+          const url = new URL('/.netlify/functions/ebay-get-policy', window.location.origin);
+          url.searchParams.set('type', typeKey);
+          url.searchParams.set('id', id);
+          const r = await authClient.authFetch(url.toString());
+          const j = await r.json();
+          if (!r.ok || !j?.ok) throw new Error(j?.error || 'Failed to load policy');
+          const policy = j.policy || {};
+          const form = document.getElementById('modalForm');
+          form.type.value = typeKey; form.id.value = id;
+          document.getElementById('modalTitle').textContent = `Edit ${typeKey} policy`;
+          document.getElementById('modalMsg').textContent = '';
+
+          // Reset conditional sections
+          const sections = ['field_immediatePay','field_handlingTime','field_freeDomestic','field_returnsAccepted','field_returnPeriod','field_refundMethod','field_returnShippingCostPayer'];
+          sections.forEach(id => document.getElementById(id).style.display = 'none');
+
+          // Common field
+          form.name.value = policy.name || displayName || '';
+
+          if (typeKey === 'payment') {
+            document.getElementById('field_immediatePay').style.display = 'block';
+            form.immediatePay.checked = !!policy.immediatePay;
+          } else if (typeKey === 'fulfillment') {
+            document.getElementById('field_handlingTime').style.display = 'block';
+            document.getElementById('field_freeDomestic').style.display = 'block';
+            const days = Number(policy?.handlingTime?.value ?? 1);
+            form.handlingTimeDays.value = isNaN(days) ? 1 : days;
+            // Heuristic: if any domestic shipping service is free, pre-check
+            const shipOpts = policy?.shippingOptions || [];
+            let free = false; try {
+              for (const opt of shipOpts) {
+                if (opt?.optionType === 'DOMESTIC') {
+                  for (const svc of (opt.shippingServices||[])) { if (svc?.freeShipping) { free = true; break; } }
+                }
+                if (free) break;
+              }
+            } catch {}
+            form.freeDomestic.checked = !!free;
+          } else if (typeKey === 'return') {
+            document.getElementById('field_returnsAccepted').style.display = 'block';
+            document.getElementById('field_returnPeriod').style.display = 'block';
+            document.getElementById('field_refundMethod').style.display = 'block';
+            document.getElementById('field_returnShippingCostPayer').style.display = 'block';
+            form.returnsAccepted.checked = policy.returnsAccepted !== false;
+            const rp = Number(policy?.returnPeriod?.value ?? 30);
+            form.returnPeriodDays.value = isNaN(rp) ? 30 : rp;
+            form.refundMethod.value = policy.refundMethod || 'MONEY_BACK';
+            form.returnShippingCostPayer.value = policy.returnShippingCostPayer || 'BUYER';
+          }
+
+          showModal();
+        } catch (e) {
+          showMsg('Failed to load policy for edit: ' + (e?.message || e));
+        }
+      }
+
+      async function saveEdit() {
+        const form = document.getElementById('modalForm');
+        const type = form.type.value; const id = form.id.value;
+        const payload = { type, id };
+        if (form.name.value) payload.name = form.name.value;
+        if (type === 'payment') {
+          payload.immediatePay = !!form.immediatePay.checked;
+        } else if (type === 'fulfillment') {
+          payload.handlingTimeDays = Number(form.handlingTimeDays.value || 1);
+          payload.freeDomestic = !!form.freeDomestic.checked;
+        } else if (type === 'return') {
+          payload.returnsAccepted = !!form.returnsAccepted.checked;
+          payload.returnPeriodDays = Number(form.returnPeriodDays.value || 30);
+          payload.refundMethod = form.refundMethod.value || 'MONEY_BACK';
+          payload.returnShippingCostPayer = form.returnShippingCostPayer.value || 'BUYER';
+        }
+        try {
+          const r = await authClient.authFetch('/.netlify/functions/ebay-update-policy', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+          const j = await r.json();
+          if (!r.ok || !j?.ok) throw new Error(j?.error || 'Update failed');
+          document.getElementById('modalMsg').textContent = 'Saved.';
+          hideModal();
+          await populate();
+        } catch (e) {
+          const em = document.getElementById('modalMsg');
+          em.textContent = 'Save failed: ' + (e?.message || e);
+        }
+      }
 
       async function populate() {
         showMsg('');
@@ -126,6 +282,10 @@
       }
 
       populate();
+
+      // Wire modal buttons
+      document.getElementById('btnCloseModal').addEventListener('click', () => hideModal());
+      document.getElementById('btnSaveModal').addEventListener('click', (e) => { e.preventDefault(); saveEdit(); });
     </script>
   </body>
 </html>
