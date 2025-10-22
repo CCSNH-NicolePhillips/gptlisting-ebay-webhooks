@@ -101,14 +101,33 @@
   <body>
     <script src="/auth-client.js"></script>
     <script>
-      // Enforce login before loading content
-      authClient.requireAuth();
+      // Do not force redirect immediately; show a friendly banner if not signed in
+      // We'll still require auth before sensitive actions.
+      (async () => {
+        try {
+          const ok = await authClient.ensureAuth();
+          if (!ok) {
+            const b = document.getElementById('authBanner');
+            if (b) b.style.display = 'block';
+            const s1 = document.getElementById('dbxStatus');
+            const s2 = document.getElementById('ebayStatus');
+            if (s1) s1.textContent = 'Sign in required';
+            if (s2) s2.textContent = 'Sign in required';
+          }
+        } catch {}
+      })();
     </script>
     <div class="card">
       <h1>Connect your accounts</h1>
       <p class="muted">
         Link Dropbox to read photos, and eBay to create draft listings in your production account.
       </p>
+      <div id="authBanner" style="display:none;margin: .75rem 0 1rem; padding:.75rem 1rem; border:1px solid #3d4a86; background:#0f1530; border-radius:10px;">
+        <div style="display:flex; align-items:center; gap:.75rem; flex-wrap:wrap;">
+          <span class="small">You need to sign in to view and connect your accounts.</span>
+          <button id="bannerLogin" class="btn" style="padding:.45rem .8rem">Sign in</button>
+        </div>
+      </div>
       <div class="row">
         <div class="col">
           <h3>Dropbox</h3>
@@ -172,10 +191,24 @@
 
     <script>
       async function refreshStatus() {
-        const res = await fetch('/.netlify/functions/status');
-        const s = await res.json();
+        let s = null;
+        let statusCode = 0;
+        try {
+          const res = await fetch('/.netlify/functions/status');
+          statusCode = res.status;
+          s = await res.json().catch(() => null);
+        } catch (e) {
+          // Network failure
+        }
         const dbxStatus = document.getElementById('dbxStatus');
         const ebayStatus = document.getElementById('ebayStatus');
+        if (!s || statusCode === 401) {
+          if (dbxStatus) dbxStatus.textContent = 'Sign in required';
+          if (ebayStatus) ebayStatus.textContent = 'Sign in required';
+          const banner = document.getElementById('authBanner');
+          if (banner) banner.style.display = 'block';
+          return false;
+        }
         dbxStatus.textContent = s.dropbox?.connected ? 'Connected' : 'Not connected';
         ebayStatus.textContent = s.ebay?.connected ? 'Connected' : 'Not connected';
         const chkDropbox = document.getElementById('chkDropbox');
@@ -201,7 +234,11 @@
         el.addEventListener('click', async (e) => {
           try {
             e.preventDefault();
-            await authClient.ensureAuth();
+            const ok = await authClient.ensureAuth();
+            if (!ok) {
+              // If not signed in, prompt Universal Login
+              return await authClient.login({});
+            }
             const r = await fetch(fnPath + '?mode=json', { headers: { Accept: 'application/json' } });
             const j = await r.json();
             if (r.ok && j?.redirect) {
@@ -222,6 +259,10 @@
       document.getElementById('ebayDisconnect').onclick = async () => {
         await fetch('/.netlify/functions/status?ebay=disconnect', { method: 'POST' });
         refreshStatus();
+      };
+      const bannerLoginBtn = document.getElementById('bannerLogin');
+      if (bannerLoginBtn) bannerLoginBtn.onclick = async () => {
+        try { await authClient.login({}); } catch {}
       };
       document.getElementById('process').onclick = async () => {
         const btn = document.getElementById('process');
