@@ -4,6 +4,7 @@ import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN;
 const AUTH0_CLIENT_ID = process.env.AUTH0_CLIENT_ID;
+const AUTH0_AUDIENCE = process.env.AUTH0_AUDIENCE;
 const ISSUER = AUTH0_DOMAIN ? `https://${AUTH0_DOMAIN}/` : undefined;
 const JWKS = AUTH0_DOMAIN ? createRemoteJWKSet(new URL(`${ISSUER}.well-known/jwks.json`)) : null as any;
 
@@ -32,7 +33,8 @@ export async function requireAuthVerified(event: HandlerEvent): Promise<{ sub: s
     if (!JWKS || !ISSUER || !AUTH0_CLIENT_ID) return null;
     const token = getBearerToken(event);
     if (!token) return null;
-    const { payload } = await jwtVerify(token, JWKS, { issuer: ISSUER, audience: AUTH0_CLIENT_ID });
+    const audiences = AUTH0_AUDIENCE ? [AUTH0_CLIENT_ID, AUTH0_AUDIENCE] : [AUTH0_CLIENT_ID];
+    const { payload } = await jwtVerify(token, JWKS, { issuer: ISSUER, audience: audiences as any });
     const sub = typeof payload?.sub === 'string' ? payload.sub : null;
     if (!sub) return null;
     return { sub, claims: payload as any };
