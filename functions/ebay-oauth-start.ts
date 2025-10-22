@@ -35,15 +35,9 @@ export const handler: Handler = async (event) => {
     `${host}/oauth2/authorize?client_id=${encodeURIComponent(clientId)}` +
     `&redirect_uri=${encodeURIComponent(runame)}` +
     `&response_type=code&state=${state}&scope=${encodeURIComponent(scopes)}`;
-  // If this user hasn't connected before, try to force account selection/login
-  try {
-    const store = tokensStore();
-    const existing = (await store.get(userScopedKey(sub, 'ebay.json'), { type: 'json' })) as any;
-    const firstConnect = !existing || !existing.refresh_token;
-    if (firstConnect) {
-      url += `&prompt=${encodeURIComponent('login consent')}`;
-    }
-  } catch {}
+  // Always request a fresh login to avoid reusing a prior eBay browser session for a different Auth0 user
+  // eBay supports the standard OIDC "prompt" parameter; use login specifically (consent can be handled during flow)
+  url += `&prompt=${encodeURIComponent('login')}`;
   const wantsJson = /application\/json/i.test(String(event.headers?.accept || '')) || event.queryStringParameters?.mode === 'json';
   if (wantsJson) {
     const jsonHeaders = { 'Content-Type': 'application/json' } as Record<string, string>;
