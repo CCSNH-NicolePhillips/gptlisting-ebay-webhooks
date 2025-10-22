@@ -31,15 +31,23 @@
   async function initAuth0() {
     if (!state.cfg?.AUTH0_DOMAIN || !state.cfg?.AUTH0_CLIENT_ID) return;
     if (state.auth0) return;
-    // Load SPA SDK if not present
-    if (!window.createAuth0Client) {
-      await new Promise((resolve, reject) => {
+    // Load SPA SDK if not present. Prefer same-origin proxy to satisfy strict CSP.
+    async function loadSdk(url) {
+      return new Promise((resolve, reject) => {
         const s = document.createElement('script');
-        s.src = 'https://cdn.auth0.com/js/auth0-spa-js/2.5/auth0-spa-js.production.js';
+        s.src = url;
         s.onload = resolve;
         s.onerror = reject;
         document.head.appendChild(s);
       });
+    }
+    if (!window.createAuth0Client) {
+      try {
+        await loadSdk('/.netlify/functions/cdn-auth0-spa?v=2.5');
+      } catch {
+        try { await loadSdk('https://cdn.auth0.com/js/auth0-spa-js/2.5/auth0-spa-js.production.js'); }
+        catch {}
+      }
     }
     state.auth0 = await window.createAuth0Client({
       domain: state.cfg.AUTH0_DOMAIN,
