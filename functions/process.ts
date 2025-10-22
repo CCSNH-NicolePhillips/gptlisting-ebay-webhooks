@@ -1,16 +1,18 @@
 import type { Handler } from '@netlify/functions';
 import { tokensStore } from './_blobs.js';
-import { getJwtSubUnverified, userScopedKey } from './_auth.js';
+import { getJwtSubUnverified, userScopedKey, getBearerToken } from './_auth.js';
 
 // Minimal placeholder: returns ok when both tokens exist.
 // Later we can port the full /process logic here if desired.
 export const handler: Handler = async (event) => {
   const tokens = tokensStore();
+  const bearer = getBearerToken(event);
   const sub = getJwtSubUnverified(event);
+  if (!bearer || !sub) return { statusCode: 401, body: JSON.stringify({ ok: false, error: 'Unauthorized' }) };
   const [dbx, ebay] = await Promise.all([
-    (async () => (await tokens.get(userScopedKey(sub, 'dropbox.json'), { type: 'json' })) || (await tokens.get('dropbox.json', { type: 'json' })))(),
-    (async () => (await tokens.get(userScopedKey(sub, 'ebay.json'), { type: 'json' })) || (await tokens.get('ebay.json', { type: 'json' })))(),
-  ] as any);
+    tokens.get(userScopedKey(sub, 'dropbox.json'), { type: 'json' }) as Promise<any>,
+    tokens.get(userScopedKey(sub, 'ebay.json'), { type: 'json' }) as Promise<any>,
+  ]);
   if (!dbx?.refresh_token || !ebay?.refresh_token) {
     return {
       statusCode: 400,

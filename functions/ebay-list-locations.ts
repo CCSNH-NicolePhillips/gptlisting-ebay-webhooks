@@ -1,14 +1,16 @@
 import type { Handler } from '@netlify/functions';
 import { accessTokenFromRefresh, tokenHosts } from './_common.js';
 import { tokensStore } from './_blobs.js';
-import { getJwtSubUnverified, userScopedKey } from './_auth.js';
+import { getJwtSubUnverified, userScopedKey, getBearerToken } from './_auth.js';
 
 export const handler: Handler = async (event) => {
   try {
     // Prefer stored user token; fallback to env for diagnostics
     const store = tokensStore();
+    const bearer = getBearerToken(event);
     const sub = getJwtSubUnverified(event);
-    const saved = ((await store.get(userScopedKey(sub, 'ebay.json'), { type: 'json' })) as any) || ((await store.get('ebay.json', { type: 'json' })) as any);
+    if (!bearer || !sub) return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) };
+    const saved = (await store.get(userScopedKey(sub, 'ebay.json'), { type: 'json' })) as any;
     const refresh =
       (saved?.refresh_token as string | undefined) ||
       (process.env.EBAY_TEST_REFRESH_TOKEN as string | undefined);

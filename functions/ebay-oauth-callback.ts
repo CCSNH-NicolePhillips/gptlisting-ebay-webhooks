@@ -6,8 +6,12 @@ export const handler: Handler = async (event) => {
   try {
   const code = event.queryStringParameters?.code;
     if (!code) return { statusCode: 400, body: 'Missing ?code' };
-  const state = event.queryStringParameters?.state || null;
-  const sub = await consumeOAuthState(state || null);
+    const state = event.queryStringParameters?.state || null;
+    const sub = await consumeOAuthState(state || null);
+    if (!sub) {
+      const jsonHeaders = { 'Content-Type': 'application/json; charset=utf-8' } as Record<string, string>;
+      return { statusCode: 400, headers: jsonHeaders, body: JSON.stringify({ error: 'invalid_state', hint: 'Start eBay connect from the app while signed in' }) };
+    }
 
     const env = process.env.EBAY_ENV || 'PROD';
     const tokenHost = env === 'SANDBOX' ? 'https://api.sandbox.ebay.com' : 'https://api.ebay.com';
@@ -85,7 +89,7 @@ export const handler: Handler = async (event) => {
     }
 
   const tokens = tokensStore();
-  const key = sub ? `users/${encodeURIComponent(sub)}/ebay.json` : 'ebay.json';
+  const key = `users/${encodeURIComponent(sub)}/ebay.json`;
   await tokens.setJSON(key, { refresh_token: data.refresh_token });
     const redirectHeaders = { Location: '/' } as Record<string, string>;
     return { statusCode: 302, headers: redirectHeaders };

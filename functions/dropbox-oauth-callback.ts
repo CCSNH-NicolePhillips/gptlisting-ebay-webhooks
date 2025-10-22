@@ -8,6 +8,7 @@ export const handler: Handler = async (event) => {
     if (!code) return { statusCode: 400, body: 'Missing ?code' };
   const state = event.queryStringParameters?.state || null;
   const sub = await consumeOAuthState(state || null);
+  if (!sub) return { statusCode: 400, body: 'Invalid or expired state. Start connect from the app while signed in.' };
 
     const clientId = process.env.DROPBOX_CLIENT_ID!;
     const clientSecret = process.env.DROPBOX_CLIENT_SECRET!;
@@ -39,7 +40,7 @@ export const handler: Handler = async (event) => {
     }
 
   const tokens = tokensStore();
-  const key = sub ? `users/${encodeURIComponent(sub)}/dropbox.json` : 'dropbox.json';
+  const key = `users/${encodeURIComponent(sub)}/dropbox.json`;
   await tokens.setJSON(key, { refresh_token: refreshToken });
 
     return { statusCode: 302, headers: { Location: '/' } };
