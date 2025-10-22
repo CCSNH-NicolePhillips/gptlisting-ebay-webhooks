@@ -1,5 +1,6 @@
 import type { Handler } from '@netlify/functions';
-import { createOAuthStateForUser, getJwtSubUnverified, getBearerToken, requireAuthVerified } from './_auth.js';
+import { createOAuthStateForUser, getJwtSubUnverified, getBearerToken, requireAuthVerified, userScopedKey } from './_auth.js';
+import { tokensStore } from './_blobs.js';
 
 export const handler: Handler = async (event) => {
   const clientId = process.env.EBAY_CLIENT_ID!;
@@ -30,10 +31,19 @@ export const handler: Handler = async (event) => {
     'https://api.ebay.com/oauth/api_scope/commerce.identity.readonly',
   ].join(' ');
 
-  const url =
+  let url =
     `${host}/oauth2/authorize?client_id=${encodeURIComponent(clientId)}` +
     `&redirect_uri=${encodeURIComponent(runame)}` +
     `&response_type=code&state=${state}&scope=${encodeURIComponent(scopes)}`;
+  // If this user hasn't connected before, try to force account selection/login
+  try {
+    const store = tokensStore();
+    const existing = (await store.get(userScopedKey(sub, 'ebay.json'), { type: 'json' })) as any;
+    const firstConnect = !existing || !existing.refresh_token;
+    if (firstConnect) {
+      url += `&prompt=${encodeURIComponent('login consent')}`;
+    }
+  } catch {}
   const wantsJson = /application\/json/i.test(String(event.headers?.accept || '')) || event.queryStringParameters?.mode === 'json';
   if (wantsJson) {
     const jsonHeaders = { 'Content-Type': 'application/json' } as Record<string, string>;
