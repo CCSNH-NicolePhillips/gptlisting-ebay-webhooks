@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Auth0 Debug (ESM)</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 20px; }
+      pre { background: #0b1020; color: #a8ff60; padding: 10px; border-radius: 6px; white-space: pre-wrap; }
+      button { margin-right: 8px; margin-bottom: 8px; }
+      .warn { color: #b00; }
+      .ok { color: #070; }
+    </style>
+  </head>
+  <body>
+    <h1>Auth0 Debug (ESM)</h1>
+    <div id="status">Loading…</div>
+    <div>
+      <button id="login">Login (redirect)</button>
+      <button id="logout">Logout</button>
+      <button id="silent">Try silent token</button>
+    </div>
+    <h3>Config</h3>
+    <pre id="cfg"></pre>
+    <h3>Errors</h3>
+    <pre id="err"></pre>
+    <h3>User</h3>
+    <pre id="user"></pre>
+
+    <script type="module">
+      const set = (id, x) => { document.getElementById(id).textContent = typeof x === 'string' ? x : JSON.stringify(x, null, 2); };
+      const log = (id, x) => { const el = document.getElementById(id); el.textContent += (typeof x === 'string' ? x : JSON.stringify(x, null, 2)) + '\n'; };
+      const S = (t, cls) => { const el = document.getElementById('status'); el.textContent = t; el.className = cls || ''; };
+
+      try {
+        // Load public config
+        const res = await fetch('/.netlify/functions/get-public-config', { cache: 'no-store' });
+        const cfg = await res.json().catch(() => ({}));
+        set('cfg', cfg);
+        if (!res.ok) throw new Error('get-public-config failed: ' + (cfg.error || res.status));
+        const mode = (cfg.AUTH_MODE || 'none').toLowerCase();
+        if (mode !== 'auth0') throw new Error('AUTH_MODE is not auth0.');
+        if (!cfg.AUTH0_DOMAIN || !cfg.AUTH0_CLIENT_ID) throw new Error('Missing AUTH0_DOMAIN/CLIENT_ID.');
+
+        // Import ESM from same-origin proxy (no AMD/UMD involved)
+        // Pin to a version; adjust v if needed
+        const { default: createAuth0Client } = await import('/.netlify/functions/cdn-auth0-spa?esm=1&v=2.5.0');
+
+        const redirectUri = location.origin + '/auth-debug-esm.html';
+        const auth0 = await createAuth0Client({
+          domain: cfg.AUTH0_DOMAIN,
+          clientId: cfg.AUTH0_CLIENT_ID,
+          cacheLocation: 'localstorage',
+          useRefreshTokens: true,
+          authorizationParams: { redirect_uri: redirectUri, audience: cfg.AUTH0_AUDIENCE || undefined },
+        });
+
+        if (location.search.includes('code=') && location.search.includes('state=')) {
+          try { await auth0.handleRedirectCallback(); } catch (e) { log('err', e); }
+          history.replaceState({}, document.title, redirectUri);
+        }
+
+        try { await auth0.getTokenSilently(); } catch (e) { log('err', 'Silent token failed (ok initially): ' + (e?.message || e)); }
+
+        const ok = await auth0.isAuthenticated();
+        S(ok ? 'Authenticated' : 'Not authenticated', ok ? 'ok' : 'warn');
+        if (ok) set('user', await auth0.getUser());
+
+        document.getElementById('login').onclick = async () => {
+          try { await auth0.loginWithRedirect({ authorizationParams: { redirect_uri: redirectUri } }); } catch (e) { log('err', e); }
+        };
+        document.getElementById('logout').onclick = async () => {
+          try { await auth0.logout({ logoutParams: { returnTo: location.origin + '/' } }); } catch (e) { log('err', e); }
+        };
+        document.getElementById('silent').onclick = async () => {
+          try { const t = await auth0.getTokenSilently(); log('user', { tokenSnippet: t?.slice(0, 20) + '…' }); } catch (e) { log('err', e); }
+        };
+      } catch (e) {
+        S('Init error', 'warn');
+        log('err', e?.message || e);
+      }
+    </script>
+  </body>
+</html>
