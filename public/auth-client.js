@@ -249,6 +249,17 @@
     return null;
   }
 
+  // Explicit helper to always send Authorization for first-party function calls
+  async function authFetch(input, init = {}) {
+    try { await ensureAuth(); } catch {}
+    const headers = Object.assign({}, init.headers);
+    try {
+      const token = await getToken();
+      if (token) headers.Authorization = headers.Authorization || `Bearer ${token}`;
+    } catch {}
+    return fetch(input, Object.assign({}, init, { headers }));
+  }
+
   // Patch window.fetch to automatically add Authorization to Netlify functions
   function attachAuthFetch() {
     if (window.__authFetchPatched) return;
@@ -271,7 +282,7 @@
     window.__authFetchPatched = true;
   }
 
-  window.authClient = { requireAuth, login, logout, getToken, ensureAuth };
+  window.authClient = { requireAuth, login, logout, getToken, ensureAuth, authFetch };
   // Minimal, non-invasive auth badge injected in the top-right for login/logout
   async function renderBadge() {
     try {

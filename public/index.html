@@ -204,7 +204,7 @@
             const t = await authClient.getToken?.();
             if (t) headers = Object.assign(headers, { Authorization: `Bearer ${t}` });
           } catch {}
-          const res = await fetch('/.netlify/functions/status', { headers });
+          const res = await authClient.authFetch('/.netlify/functions/status', { headers });
           statusCode = res.status;
           s = await res.json().catch(() => null);
         } catch (e) {
@@ -254,11 +254,7 @@
             }
             // Proactively include Authorization to bind flow to this user
             let headers = { Accept: 'application/json' };
-            try {
-              const t = await authClient.getToken?.();
-              if (t) headers = Object.assign(headers, { Authorization: `Bearer ${t}` });
-            } catch {}
-            const r = await fetch(fnPath + '?mode=json', { headers });
+            const r = await authClient.authFetch(fnPath + '?mode=json', { headers });
             const j = await r.json();
             if (r.ok && j?.redirect) {
               window.location.assign(j.redirect);
@@ -272,15 +268,11 @@
       wireConnectLink('dbxConnect', '/.netlify/functions/dropbox-oauth-start');
       wireConnectLink('ebayConnect', '/.netlify/functions/ebay-oauth-start');
       document.getElementById('dbxDisconnect').onclick = async () => {
-        let headers = {};
-        try { const t = await authClient.getToken?.(); if (t) headers = { Authorization: `Bearer ${t}` }; } catch {}
-        await fetch('/.netlify/functions/status?dropbox=disconnect', { method: 'POST', headers });
+        await authClient.authFetch('/.netlify/functions/status?dropbox=disconnect', { method: 'POST' });
         refreshStatus();
       };
       document.getElementById('ebayDisconnect').onclick = async () => {
-        let headers = {};
-        try { const t = await authClient.getToken?.(); if (t) headers = { Authorization: `Bearer ${t}` }; } catch {}
-        await fetch('/.netlify/functions/status?ebay=disconnect', { method: 'POST', headers });
+        await authClient.authFetch('/.netlify/functions/status?ebay=disconnect', { method: 'POST' });
         refreshStatus();
       };
       const bannerLoginBtn = document.getElementById('bannerLogin');
@@ -293,9 +285,7 @@
         btn.disabled = true;
         msg.textContent = 'Starting…';
         try {
-          let headers = {};
-          try { const t = await authClient.getToken?.(); if (t) headers = { Authorization: `Bearer ${t}` }; } catch {}
-          const res = await fetch('/.netlify/functions/process', { method: 'POST', headers });
+          const res = await authClient.authFetch('/.netlify/functions/process', { method: 'POST' });
           const data = await res.json();
           msg.textContent = data.ok ? `Created ${data.created || 0} drafts` : data.error || 'Error';
         } catch (e) {
@@ -311,9 +301,7 @@
         m.textContent = 'Checking…';
         try {
           await authClient.ensureAuth();
-          let headers = {};
-          try { const t = await authClient.getToken?.(); if (t) headers = { Authorization: `Bearer ${t}` }; } catch {}
-          const r = await fetch('/.netlify/functions/migrate-legacy-tokens', { method: 'POST', headers });
+          const r = await authClient.authFetch('/.netlify/functions/migrate-legacy-tokens', { method: 'POST' });
           const j = await r.json().catch(() => null);
           if (r.ok && j?.ok) {
             const parts = [];
@@ -354,7 +342,7 @@
         try {
           const url = new URL('/.netlify/functions/dropbox-list-folders', window.location.origin);
           url.searchParams.set('recursive', '1');
-          const r = await fetch(url.toString());
+          const r = await authClient.authFetch(url.toString());
           const j = await r.json();
           const folders = (j && j.folders) || [];
           // Build unique sorted set by path_display
@@ -472,14 +460,14 @@
         let locationReady = false;
         if (connected) {
           try {
-            const p = await (await fetch('/.netlify/functions/ebay-list-policies')).json();
+            const p = await (await authClient.authFetch('/.netlify/functions/ebay-list-policies')).json();
             const fp = p?.fulfillment?.json?.fulfillmentPolicies || [];
             const pay = p?.payment?.json?.paymentPolicies || [];
             const ret = p?.returns?.json?.returnPolicies || [];
             policiesReady = fp.length > 0 && pay.length > 0 && ret.length > 0;
           } catch {}
           try {
-            const loc = await (await fetch('/.netlify/functions/ebay-list-locations')).json();
+            const loc = await (await authClient.authFetch('/.netlify/functions/ebay-list-locations')).json();
             const list = loc?.locations || [];
             locationReady = Array.isArray(list) && list.length > 0;
           } catch {}
