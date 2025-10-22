@@ -93,7 +93,8 @@ export const handler: Handler = async (event) => {
       returns: (returnList.json?.returnPolicies || []) as any[],
     };
 
-    const results: Record<string, any> = { marketplaceId: MARKETPLACE_ID };
+      const results: Record<string, any> = { marketplaceId: MARKETPLACE_ID };
+      const chosen: { fulfillment?: string; payment?: string; return?: string } = {};
 
     // Create Payment Policy if none by our default name
     const defaultPaymentName = 'Default Payment (Auto)';
@@ -108,8 +109,21 @@ export const handler: Handler = async (event) => {
       };
       const resp = await postJson('/sell/account/v1/payment_policy', payload);
       results.payment = resp;
+      try {
+        const id = String(
+          resp?.json?.id || resp?.json?.paymentPolicyId || resp?.json?.policyId || ''
+        ).trim();
+        if (id) chosen.payment = id;
+      } catch {}
     } else {
       results.payment = { status: 'exists' };
+      try {
+        const found = existing.payment.find((p) => p.name === defaultPaymentName);
+        const id = String(
+          found?.id || found?.paymentPolicyId || found?.policyId || ''
+        ).trim();
+        if (id) chosen.payment = id;
+      } catch {}
     }
 
     // Create Return Policy if none by our preferred name
@@ -140,8 +154,21 @@ export const handler: Handler = async (event) => {
           };
       const resp = await postJson('/sell/account/v1/return_policy', payload);
       results.returns = resp;
+      try {
+        const id = String(
+          resp?.json?.id || resp?.json?.returnPolicyId || resp?.json?.policyId || ''
+        ).trim();
+        if (id) chosen.return = id;
+      } catch {}
     } else {
       results.returns = { status: 'exists', name: returnPolicyName };
+      try {
+        const found = existing.returns.find((p) => p.name === returnPolicyName);
+        const id = String(
+          found?.id || found?.returnPolicyId || found?.policyId || ''
+        ).trim();
+        if (id) chosen.return = id;
+      } catch {}
     }
 
     // Create Fulfillment Policy if none by our default name
@@ -171,8 +198,36 @@ export const handler: Handler = async (event) => {
       };
       const resp = await postJson('/sell/account/v1/fulfillment_policy', payload);
       results.fulfillment = resp;
+      try {
+        const id = String(
+          resp?.json?.id || resp?.json?.fulfillmentPolicyId || resp?.json?.policyId || ''
+        ).trim();
+        if (id) chosen.fulfillment = id;
+      } catch {}
     } else {
       results.fulfillment = { status: 'exists' };
+      try {
+        const found = existing.fulfillment.find((p) => p.name === defaultShipName);
+        const id = String(
+          found?.id || found?.fulfillmentPolicyId || found?.policyId || ''
+        ).trim();
+        if (id) chosen.fulfillment = id;
+      } catch {}
+    }
+
+    // Persist selected policy IDs as this user's defaults so draft creation uses all three
+    try {
+      const key = userScopedKey(sub, 'policy-defaults.json');
+      const cur = ((await store.get(key, { type: 'json' })) as any) || {};
+      const merged = { ...cur, ...chosen };
+      // Remove empty values
+      Object.keys(merged).forEach((k) => {
+        if (!merged[k]) delete merged[k];
+      });
+      if (Object.keys(merged).length) await store.set(key, JSON.stringify(merged));
+      results.defaults = { saved: true, values: merged };
+    } catch {
+      // ignore
     }
 
     return {
