@@ -126,7 +126,12 @@
         } catch {}
       })();
     </script>
-    <div class="card">
+    <!-- Lightweight loading state to avoid flashes while auth/status loads -->
+    <div class="card" id="loadingCard" style="display:block; text-align:center;">
+      <h1>Loading…</h1>
+      <p class="muted">Preparing your workspace</p>
+    </div>
+    <div class="card" id="mainCard" style="display:none;">
       <h1>Connect your accounts</h1>
       <p class="muted">
         Link Dropbox to read photos, and eBay to create draft listings in your production account.
@@ -201,7 +206,7 @@
         <a class="btn secondary" href="/drafts.html" id="viewDraftsBtn">View Drafts</a>
       </div>
       <div class="footer">Need help? See <a href="/privacy.html" target="_blank">Privacy</a>.</div>
-    </div>
+  </div>
 
     <script>
       async function refreshStatus() {
@@ -553,9 +558,21 @@
         goBtn.disabled = !(connected && policiesReady && locationReady);
       }
 
-      // Re-check status shortly after page load to account for async auth init
-      evaluatePrereqs();
-      setTimeout(() => { try { evaluatePrereqs(); } catch {} }, 600);
+      // Single boot: load auth/status first, then reveal main UI to avoid flashes
+      async function boot() {
+        try { await evaluatePrereqs(); } catch {}
+        const lc = document.getElementById('loadingCard');
+        const mc = document.getElementById('mainCard');
+        if (lc) lc.style.display = 'none';
+        if (mc) mc.style.display = 'block';
+        // secondary pass after brief delay to pick up async token propagation
+        setTimeout(() => { try { evaluatePrereqs(); } catch {} }, 600);
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', boot);
+      } else {
+        boot();
+      }
       window.addEventListener('focus', () => { try { evaluatePrereqs(); } catch {} });
     </script>
   </body>
