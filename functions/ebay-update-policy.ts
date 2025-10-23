@@ -45,60 +45,118 @@ export const handler: Handler = async (event) => {
       return arr;
     };
 
-    let payload: any = {};
-    if (path === 'payment_policy') {
-      payload = {
-        name: body.name ?? cur.name,
-        marketplaceId: mp,
-        categoryTypes: normalizeCategoryTypes(cur.categoryTypes),
-        immediatePay: body.immediatePay ?? cur.immediatePay ?? false,
-      };
-    } else if (path === 'fulfillment_policy') {
-      const handlingDays = Number(body.handlingTimeDays ?? cur?.handlingTime?.value ?? 1);
-      // preserve shippingOptions if not changing freeDomestic; only include key if non-empty
-      let shippingOptions: any[] | undefined = Array.isArray(cur.shippingOptions) && cur.shippingOptions.length
-        ? cur.shippingOptions
-        : undefined;
-      if (body.freeDomestic === true) {
-        shippingOptions = [
+    const stripReadOnly = (obj: any, keys: string[]) => {
+      for (const k of keys) delete obj[k];
+      return obj;
+    };
+
+    const ensureFulfillmentShippingOptions = (
+      curOptions: any,
+      forceFreeDomestic: boolean
+    ) => {
+      if (forceFreeDomestic) {
+        return [
           {
             optionType: 'DOMESTIC',
             costType: 'FLAT_RATE',
+            insuranceFee: { value: '0.00', currency: 'USD' },
             shippingServices: [
               {
+                shippingServiceCode: 'USPSFirstClass',
+                sortOrderId: 1,
                 freeShipping: true,
-                buyerResponsibleForShipping: false,
                 shippingCarrierCode: 'USPS',
-                shippingServiceCode: 'USPSPriorityFlatRateBox',
               },
             ],
           },
         ];
       }
+      // If we have existing, keep them; else, synthesize a minimal free domestic option
+      if (Array.isArray(curOptions) && curOptions.length) return curOptions;
+      return [
+        {
+          optionType: 'DOMESTIC',
+          costType: 'FLAT_RATE',
+          insuranceFee: { value: '0.00', currency: 'USD' },
+          shippingServices: [
+            {
+              shippingServiceCode: 'USPSFirstClass',
+              sortOrderId: 1,
+              freeShipping: true,
+              shippingCarrierCode: 'USPS',
+            },
+          ],
+        },
+      ];
+    };
+
+    let payload: any = {};
+    if (path === 'payment_policy') {
+      // Start from current and override selected fields
       payload = {
+        ...cur,
+        name: body.name ?? cur.name,
+        marketplaceId: mp,
+        categoryTypes: normalizeCategoryTypes(cur.categoryTypes),
+        immediatePay: body.immediatePay ?? cur.immediatePay ?? false,
+      };
+      stripReadOnly(payload, [
+        'paymentPolicyId',
+        'policyId',
+        'creationDate',
+        'lastModifiedDate',
+        '@odata.etag',
+        'warnings',
+      ]);
+    } else if (path === 'fulfillment_policy') {
+      const handlingDays = Number(body.handlingTimeDays ?? cur?.handlingTime?.value ?? 1);
+      const shippingOptions = ensureFulfillmentShippingOptions(cur.shippingOptions, body.freeDomestic === true);
+      payload = {
+        ...cur,
         name: body.name ?? cur.name,
         marketplaceId: mp,
         categoryTypes: normalizeCategoryTypes(cur.categoryTypes),
         handlingTime: { value: Math.max(0, handlingDays), unit: 'DAY' },
-        ...(shippingOptions && shippingOptions.length ? { shippingOptions } : {}),
+        shippingOptions,
       };
+      stripReadOnly(payload, [
+        'fulfillmentPolicyId',
+        'policyId',
+        'creationDate',
+        'lastModifiedDate',
+        '@odata.etag',
+        'warnings',
+      ]);
     } else if (path === 'return_policy') {
       const returnsAccepted = body.returnsAccepted ?? cur.returnsAccepted ?? true;
       const periodDays = Number(body.returnPeriodDays ?? cur?.returnPeriod?.value ?? 30);
-      payload = returnsAccepted ? {
-        name: body.name ?? cur.name,
-        marketplaceId: mp,
-        categoryTypes: normalizeCategoryTypes(cur.categoryTypes),
-        returnsAccepted: true,
-        returnPeriod: { value: Math.max(1, periodDays), unit: 'DAY' },
-        returnShippingCostPayer: (body.returnShippingCostPayer ?? cur.returnShippingCostPayer ?? 'BUYER'),
-        refundMethod: body.refundMethod ?? cur.refundMethod ?? 'MONEY_BACK',
-      } : {
-        name: body.name ?? cur.name,
-        marketplaceId: mp,
-        categoryTypes: normalizeCategoryTypes(cur.categoryTypes),
-        returnsAccepted: false,
-      };
+      payload = returnsAccepted
+        ? {
+            ...cur,
+            name: body.name ?? cur.name,
+            marketplaceId: mp,
+            categoryTypes: normalizeCategoryTypes(cur.categoryTypes),
+            returnsAccepted: true,
+            returnPeriod: { value: Math.max(1, periodDays), unit: 'DAY' },
+            returnShippingCostPayer:
+              body.returnShippingCostPayer ?? cur.returnShippingCostPayer ?? 'BUYER',
+            refundMethod: body.refundMethod ?? cur.refundMethod ?? 'MONEY_BACK',
+          }
+        : {
+            ...cur,
+            name: body.name ?? cur.name,
+            marketplaceId: mp,
+            categoryTypes: normalizeCategoryTypes(cur.categoryTypes),
+            returnsAccepted: false,
+          };
+      stripReadOnly(payload, [
+        'returnPolicyId',
+        'policyId',
+        'creationDate',
+        'lastModifiedDate',
+        '@odata.etag',
+        'warnings',
+      ]);
     }
 
     const putRes = await fetch(url, { method: 'PUT', headers: h, body: JSON.stringify(payload) });
