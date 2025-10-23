@@ -17,6 +17,8 @@
       .row { display:flex; gap:.5rem; flex-wrap:wrap; }
       a { color:#a8c1ff; text-decoration:none; }
       a:hover { text-decoration:underline; }
+      /* Hide auth badge on the logout page to avoid extra actions */
+      #auth-badge { display:none !important; }
     </style>
     <script src="/auth-client.js"></script>
   </head>
