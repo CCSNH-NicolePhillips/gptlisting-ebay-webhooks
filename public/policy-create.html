@@ -17,6 +17,8 @@
       input, select { width:100%; background:#0f1530; color:#f4f6fb; border:1px solid #26305a; border-radius:8px; padding:.55rem .6rem; }
       .btn { background: var(--primary); color:#fff; border:none; border-radius:10px; padding:.7rem .95rem; font-weight:700; cursor:pointer; }
   .secondary { background:transparent; color:#cbd5ff; border:1px solid #3d4a86; }
+  .group { background:#0f1530; border:1px solid #26305a; border-radius:10px; padding:.8rem; }
+  .sectionTitle { color:#cbd5ff; font-weight:600; margin:0 0 .4rem; font-size:1rem; }
   .btn-toggle.on { background:#1db954; border-color:#159b46; color:#031b0f; }
   .actions { display:flex; align-items:center; gap:.6rem; }
   .tag { display:inline-block; font-size:.8rem; padding:.15rem .45rem; border:1px solid #2f3f7a; color:#cbd5ff; border-radius:999px; }
@@ -111,18 +113,23 @@
         const row = document.querySelector('.row');
         const costWrap = document.createElement('div');
         costWrap.id = 'field_costType';
+        costWrap.className = 'group';
         costWrap.innerHTML = `
-          <div class="muted" style="font-size:.85rem">Domestic cost type</div>
-          <select name="costType">
-            <option value="CALCULATED">Calculated: Cost varies by buyer location</option>
-            <option value="FLAT_RATE">Flat rate</option>
-          </select>
+          <div class="sectionTitle">Shipping cost</div>
+          <label style="display:block;">
+            <div class="muted" style="font-size:.85rem">Domestic cost type</div>
+            <select name="costType">
+              <option value="CALCULATED">Calculated: Cost varies by buyer location</option>
+              <option value="FLAT_RATE">Flat rate</option>
+            </select>
+          </label>
         `;
         const paidWrap = document.createElement('div');
         paidWrap.id = 'field_domesticPaid';
+        paidWrap.className = 'group';
         paidWrap.innerHTML = `
-          <div class="muted" style="font-size:.85rem; margin-bottom:.25rem;">If not free, choose a service</div>
-          <div class="row" style="grid-template-columns:1fr 1fr; gap:.6rem;">
+          <div class="sectionTitle">Service</div>
+          <div class="row" style="grid-template-columns:1fr 1fr; gap:.6rem; margin-top:.25rem;">
             <label>
               <div class="muted" style="font-size:.85rem;">Carrier</div>
               <select name="shippingCarrierCode">
@@ -136,7 +143,7 @@
               <select name="shippingServiceCode"></select>
             </label>
           </div>
-          <div id="field_flatRatePrices" class="row" style="grid-template-columns:1fr 1fr; gap:.6rem; margin-top:.4rem;">
+          <div id="field_flatRatePrices" class="row" style="grid-template-columns:1fr 1fr; gap:.6rem; margin-top:.6rem;">
             <label>
               <div class="muted" style="font-size:.85rem;">Flat rate (USD)</div>
               <input type="number" name="shippingCostValue" min="0" step="0.01" placeholder="e.g. 5.99" />
