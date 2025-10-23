@@ -53,6 +53,7 @@ export const handler: Handler = async (event) => {
     const ensureFulfillmentShippingOptions = (
       curOptions: any,
       forceFreeDomestic: boolean,
+      selectedCostType?: 'CALCULATED' | 'FLAT_RATE',
       carrier?: string,
       serviceCode?: string,
       shippingCostValue?: string,
@@ -82,8 +83,8 @@ export const handler: Handler = async (event) => {
         return [
           {
             optionType: 'DOMESTIC',
-            // Use FLAT_RATE with required amounts from UI
-            costType: 'FLAT_RATE',
+            // Use selected cost type; when FLAT_RATE, require amounts
+            costType: selectedCostType || 'CALCULATED',
             insuranceFee: { value: '0.00', currency: 'USD' },
             shippingServices: [
               {
@@ -91,7 +92,9 @@ export const handler: Handler = async (event) => {
                 sortOrderId: 1,
                 freeShipping: false,
                 buyerResponsibleForShipping: true,
-                shippingCost: { value: shippingCostValue || '0.00', currency: 'USD' },
+                ...(selectedCostType === 'FLAT_RATE'
+                  ? { shippingCost: { value: shippingCostValue || '0.00', currency: 'USD' } }
+                  : {}),
                 ...(additionalShippingCostValue
                   ? { additionalShippingCost: { value: additionalShippingCostValue, currency: 'USD' } }
                   : {}),
@@ -107,7 +110,7 @@ export const handler: Handler = async (event) => {
       return [
         {
           optionType: 'DOMESTIC',
-          costType: 'FLAT_RATE',
+          costType: selectedCostType || 'CALCULATED',
           insuranceFee: { value: '0.00', currency: 'USD' },
           shippingServices: [
             {
@@ -115,7 +118,9 @@ export const handler: Handler = async (event) => {
               sortOrderId: 1,
               freeShipping: false,
               buyerResponsibleForShipping: true,
-              shippingCost: { value: shippingCostValue || '0.00', currency: 'USD' },
+              ...(selectedCostType === 'FLAT_RATE'
+                ? { shippingCost: { value: shippingCostValue || '0.00', currency: 'USD' } }
+                : {}),
               shippingCarrierCode: 'USPS',
             },
           ],
@@ -146,6 +151,7 @@ export const handler: Handler = async (event) => {
       const shippingOptions = ensureFulfillmentShippingOptions(
         cur.shippingOptions,
         body.freeDomestic === true,
+        (body.costType as any) || undefined,
         body.shippingCarrierCode,
         body.shippingServiceCode,
         body.shippingCostValue,
