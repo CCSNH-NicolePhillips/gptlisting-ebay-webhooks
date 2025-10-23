@@ -312,8 +312,9 @@
         refreshStatus();
       };
       const bannerLoginBtn = document.getElementById('bannerLogin');
-      if (bannerLoginBtn) bannerLoginBtn.onclick = async () => {
-        try { await authClient.login({}); } catch {}
+      if (bannerLoginBtn) bannerLoginBtn.onclick = () => {
+        try { sessionStorage.setItem('returnTo', '/'); } catch {}
+        location.href = '/login.html';
       };
     
       // If a sign-out control exists anywhere, route through the dedicated logout page

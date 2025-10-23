@@ -119,14 +119,14 @@
           }
         };
 
-        // Auto-redirect to provider (use query ?provider=google|apple|email). Default: open Auth0 Universal Login immediately.
+        // Optional auto-login only if explicitly requested (?auto=1)
         try {
-          if (mode === 'auth0') {
-            const usp = new URLSearchParams(location.search);
+          const usp = new URLSearchParams(location.search);
+          const auto = usp.get('auto');
+          if (mode === 'auth0' && auto === '1') {
             const prov = (usp.get('provider') || '').toLowerCase();
             if (prov === 'google') return await authClient.login({ connection: 'google-oauth2' });
             if (prov === 'apple') return await authClient.login({ connection: 'apple' });
-            // Default: show hosted Universal Login immediately
             return await authClient.login({});
           }
         } catch (e) {
