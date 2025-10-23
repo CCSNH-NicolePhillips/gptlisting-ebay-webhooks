@@ -104,6 +104,87 @@
         title.textContent = 'Create shipping policy';
         show('field_handlingTime', true);
         show('field_freeDomestic', true);
+        // Inject cost type and service selectors for shipping policies
+        const row = document.querySelector('.row');
+        const costWrap = document.createElement('div');
+        costWrap.id = 'field_costType';
+        costWrap.innerHTML = `
+          <div class="muted" style="font-size:.85rem">Domestic cost type</div>
+          <select name="costType">
+            <option value="CALCULATED">Calculated: Cost varies by buyer location</option>
+            <option value="FLAT_RATE">Flat rate</option>
+          </select>
+        `;
+        const paidWrap = document.createElement('div');
+        paidWrap.id = 'field_domesticPaid';
+        paidWrap.innerHTML = `
+          <div class="muted" style="font-size:.85rem; margin-bottom:.25rem;">If not free, choose a service</div>
+          <div class="row" style="grid-template-columns:1fr 1fr; gap:.6rem;">
+            <label>
+              <div class="muted" style="font-size:.85rem;">Carrier</div>
+              <select name="shippingCarrierCode">
+                <option value="USPS">USPS</option>
+                <option value="UPS">UPS</option>
+                <option value="FedEx">FedEx</option>
+              </select>
+            </label>
+            <label>
+              <div class="muted" style="font-size:.85rem;">Service</div>
+              <select name="shippingServiceCode"></select>
+            </label>
+          </div>
+          <div id="field_flatRatePrices" class="row" style="grid-template-columns:1fr 1fr; gap:.6rem; margin-top:.4rem;">
+            <label>
+              <div class="muted" style="font-size:.85rem;">Flat rate (USD)</div>
+              <input type="number" name="shippingCostValue" min="0" step="0.01" placeholder="e.g. 5.99" />
+            </label>
+            <label>
+              <div class="muted" style="font-size:.85rem;">Each additional (USD)</div>
+              <input type="number" name="additionalShippingCostValue" min="0" step="0.01" placeholder="0.00" />
+            </label>
+          </div>
+        `;
+        row.appendChild(costWrap);
+        row.appendChild(paidWrap);
+        // Helpers to manage UI state
+        function serviceOptionsFor(carrier) {
+          if (carrier === 'UPS') return [ ['UPSGround','UPS Ground'], ['UPS3DaySelect','UPS 3 Day Select'] ];
+          if (carrier === 'FedEx') return [ ['FedExHomeDelivery','FedEx Home Delivery'], ['FedEx2Day','FedEx 2Day'] ];
+          return [ ['USPSGroundAdvantage','USPS Ground Advantage'], ['USPSPriority','USPS Priority'], ['USPSFirstClass','USPS First Class'] ];
+        }
+        function updateServiceOptions() {
+          const carrier = form.shippingCarrierCode.value || 'USPS';
+          const svc = form.shippingServiceCode; const cur = svc.value;
+          svc.innerHTML = '';
+          for (const [v,l] of serviceOptionsFor(carrier)) { const o = document.createElement('option'); o.value=v; o.textContent=l; svc.appendChild(o); }
+          if (cur) svc.value = cur; if (!svc.value && svc.options.length) svc.selectedIndex = 0;
+        }
+        function updatePaidVisibility() {
+          const free = !!form.freeDomestic.checked;
+          const costType = (form.costType && form.costType.value) || 'CALCULATED';
+          const paid = document.getElementById('field_domesticPaid');
+          const price = document.getElementById('field_flatRatePrices');
+          paid.style.display = free ? 'none' : 'block';
+          if (!free) {
+            form.shippingServiceCode.required = true;
+            price.style.display = costType === 'FLAT_RATE' ? 'grid' : 'none';
+            form.shippingCostValue.required = costType === 'FLAT_RATE';
+          } else {
+            form.shippingServiceCode.required = false;
+            price.style.display = 'none';
+            form.shippingCostValue.required = false;
+          }
+        }
+        // Defaults
+        updateServiceOptions();
+        form.costType.value = 'CALCULATED';
+        updatePaidVisibility();
+        // Listeners
+        document.addEventListener('change', (e) => {
+          const t = e.target; const nm = t && t.getAttribute ? t.getAttribute('name') : undefined;
+          if (nm === 'shippingCarrierCode') updateServiceOptions();
+          if (nm === 'freeDomestic' || nm === 'costType') updatePaidVisibility();
+        });
       } else if (type === 'return' || type === 'returns') {
         title.textContent = 'Create returns policy';
         show('field_returnsAccepted', true);
@@ -126,6 +207,22 @@
         payload.freeDomestic = !!fd.get('freeDomestic');
         payload.returnsAccepted = !!fd.get('returnsAccepted');
   payload.setDefault = !!fd.get('setDefault');
+        // Only include shipping details when not free
+        if (type === 'fulfillment' || type === 'shipping') {
+          payload.costType = (form.costType && form.costType.value) || 'CALCULATED';
+          if (!payload.freeDomestic) {
+            payload.shippingCarrierCode = form.shippingCarrierCode.value;
+            payload.shippingServiceCode = form.shippingServiceCode.value;
+            if (!payload.shippingServiceCode) { msg.textContent = 'Pick a shipping service.'; return; }
+            if (payload.costType === 'FLAT_RATE') {
+              const cost = String(Number(form.shippingCostValue.value || '0').toFixed(2));
+              if (!cost || isNaN(Number(cost))) { msg.textContent = 'Enter a flat rate (USD).'; return; }
+              payload.shippingCostValue = cost;
+              const addl = form.additionalShippingCostValue.value;
+              if (addl !== undefined && addl !== null && String(addl).length) payload.additionalShippingCostValue = String(Number(addl).toFixed(2));
+            }
+          }
+        }
         try {
           const r = await authClient.authFetch('/.netlify/functions/ebay-create-policy', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
           const j = await r.json();

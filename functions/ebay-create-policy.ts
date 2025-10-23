@@ -44,9 +44,47 @@ export const handler: Handler = async (event) => {
       };
     } else if (path === 'fulfillment_policy') {
       const handlingDays = Number(body.handlingTimeDays ?? 1);
-      let shippingOptions = body.freeDomestic ? [
-        { optionType: 'DOMESTIC', costType: 'FLAT_RATE', shippingServices: [ { freeShipping: true, buyerResponsibleForShipping: false, shippingCarrierCode: 'USPS', shippingServiceCode: 'USPSPriorityFlatRateBox' } ] }
-      ] : undefined;
+      const freeDomestic = !!body.freeDomestic;
+      const costType = (body.costType === 'FLAT_RATE') ? 'FLAT_RATE' : 'CALCULATED';
+      let shippingOptions: any[] | undefined;
+      if (freeDomestic) {
+        shippingOptions = [
+          {
+            optionType: 'DOMESTIC',
+            costType: 'FLAT_RATE',
+            shippingServices: [
+              {
+                freeShipping: true,
+                buyerResponsibleForShipping: false,
+                shippingCarrierCode: 'USPS',
+                shippingServiceCode: 'USPSGroundAdvantage',
+                sortOrderId: 1,
+              },
+            ],
+          },
+        ];
+      } else if (body.shippingServiceCode) {
+        shippingOptions = [
+          {
+            optionType: 'DOMESTIC',
+            costType,
+            shippingServices: [
+              {
+                freeShipping: false,
+                buyerResponsibleForShipping: true,
+                shippingCarrierCode: body.shippingCarrierCode || 'USPS',
+                shippingServiceCode: body.shippingServiceCode,
+                sortOrderId: 1,
+                ...(costType === 'FLAT_RATE'
+                  ? { shippingCost: { value: String(body.shippingCostValue || '0.00'), currency: 'USD' },
+                      ...(body.additionalShippingCostValue ? { additionalShippingCost: { value: String(body.additionalShippingCostValue), currency: 'USD' } } : {})
+                    }
+                  : {}),
+              },
+            ],
+          },
+        ];
+      }
       payload = {
         name: body.name || 'Shipping Policy',
         marketplaceId: mp,
