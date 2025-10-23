@@ -79,7 +79,8 @@ export const handler: Handler = async (event) => {
         return [
           {
             optionType: 'DOMESTIC',
-            costType: 'FLAT_RATE',
+            // Use CALCULATED to avoid requiring explicit shippingCost amounts
+            costType: 'CALCULATED',
             insuranceFee: { value: '0.00', currency: 'USD' },
             shippingServices: [
               {
@@ -99,7 +100,7 @@ export const handler: Handler = async (event) => {
       return [
         {
           optionType: 'DOMESTIC',
-          costType: 'FLAT_RATE',
+          costType: 'CALCULATED',
           insuranceFee: { value: '0.00', currency: 'USD' },
           shippingServices: [
             {

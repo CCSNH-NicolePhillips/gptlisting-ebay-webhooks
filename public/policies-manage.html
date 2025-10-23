@@ -303,8 +303,15 @@
         }
         try {
           const r = await authClient.authFetch('/.netlify/functions/ebay-update-policy', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-          const j = await r.json();
-          if (!r.ok || !j?.ok) throw new Error(j?.error || 'Update failed');
+          const txt = await r.text();
+          let j = {};
+          try { j = JSON.parse(txt); } catch { j = { raw: txt }; }
+          if (!r.ok || !j?.ok) {
+            // Pull best-available error detail from eBay response
+            const first = j?.detail?.errors?.[0] || j?.errors?.[0] || {};
+            const msg = first.message || j.error || 'Update failed';
+            throw new Error(msg);
+          }
           document.getElementById('modalMsg').textContent = 'Saved.';
           hideModal();
           await populate();
