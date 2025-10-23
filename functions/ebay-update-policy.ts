@@ -52,7 +52,9 @@ export const handler: Handler = async (event) => {
 
     const ensureFulfillmentShippingOptions = (
       curOptions: any,
-      forceFreeDomestic: boolean
+      forceFreeDomestic: boolean,
+      carrier?: string,
+      serviceCode?: string
     ) => {
       if (forceFreeDomestic) {
         return [
@@ -71,8 +73,29 @@ export const handler: Handler = async (event) => {
           },
         ];
       }
+      // If a specific paid service is chosen, honor it
+      if (serviceCode) {
+        const shipCarrier = carrier || 'USPS';
+        return [
+          {
+            optionType: 'DOMESTIC',
+            costType: 'FLAT_RATE',
+            insuranceFee: { value: '0.00', currency: 'USD' },
+            shippingServices: [
+              {
+                shippingServiceCode: serviceCode,
+                sortOrderId: 1,
+                freeShipping: false,
+                buyerResponsibleForShipping: true,
+                shippingCarrierCode: shipCarrier,
+              },
+            ],
+          },
+        ];
+      }
       // If we have existing, keep them; else, synthesize a minimal free domestic option
       if (Array.isArray(curOptions) && curOptions.length) return curOptions;
+      // Default to a paid USPS Priority if user unchecked free but didn't choose a service
       return [
         {
           optionType: 'DOMESTIC',
@@ -80,9 +103,10 @@ export const handler: Handler = async (event) => {
           insuranceFee: { value: '0.00', currency: 'USD' },
           shippingServices: [
             {
-              shippingServiceCode: 'USPSFirstClass',
+              shippingServiceCode: 'USPSPriority',
               sortOrderId: 1,
-              freeShipping: true,
+              freeShipping: false,
+              buyerResponsibleForShipping: true,
               shippingCarrierCode: 'USPS',
             },
           ],
@@ -110,7 +134,12 @@ export const handler: Handler = async (event) => {
       ]);
     } else if (path === 'fulfillment_policy') {
       const handlingDays = Number(body.handlingTimeDays ?? cur?.handlingTime?.value ?? 1);
-      const shippingOptions = ensureFulfillmentShippingOptions(cur.shippingOptions, body.freeDomestic === true);
+      const shippingOptions = ensureFulfillmentShippingOptions(
+        cur.shippingOptions,
+        body.freeDomestic === true,
+        body.shippingCarrierCode,
+        body.shippingServiceCode
+      );
       payload = {
         ...cur,
         name: body.name ?? cur.name,
