@@ -340,7 +340,8 @@
       btn.style.fontWeight = '700';
       btn.onclick = async () => {
         if (authed) {
-          try { await logout(); } catch {}
+          // Use the dedicated logout flow page to avoid origin-only returnTo and flicker
+          try { window.location.href = '/logout.html'; } catch { window.location.assign('/logout.html'); }
         } else {
           try { await login({}); } catch {}
         }
