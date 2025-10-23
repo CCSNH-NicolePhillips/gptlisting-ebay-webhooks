@@ -25,7 +25,7 @@
       <div class="card">
         <div style="margin-bottom:.5rem"><a class="secondary" href="/policies-manage.html">← Back to policies</a></div>
         <h2 id="title">Create policy</h2>
-        <p class="muted" id="subtitle">Fill out the minimal fields below. This will create the policy on eBay and set it as your default.</p>
+  <p class="muted" id="subtitle">Fill out the minimal fields below. You can also choose to set this as your default.</p>
         <form id="form">
           <input type="hidden" name="type" />
           <div class="row">
@@ -71,10 +71,15 @@
               </select>
             </div>
           </div>
-          <div id="msg" class="muted" style="margin:.75rem 0 .5rem; min-height:1.25rem"></div>
+          <div class="muted" style="margin-top:.5rem; display:flex; align-items:center; gap:.5rem;">
+            <label style="display:inline-flex; align-items:center; gap:.5rem;">
+              <input type="checkbox" name="setDefault" /> Set as default
+            </label>
+          </div>
+          <div id="msg" class="muted" style="margin:.5rem 0 .5rem; min-height:1.25rem"></div>
           <div style="display:flex; gap:.5rem;">
             <button type="button" class="secondary" id="btnCancel">Cancel</button>
-            <button type="submit" class="btn">Create and set as default</button>
+            <button type="submit" class="btn">Create</button>
           </div>
         </form>
       </div>
@@ -120,7 +125,7 @@
         payload.immediatePay = !!fd.get('immediatePay');
         payload.freeDomestic = !!fd.get('freeDomestic');
         payload.returnsAccepted = !!fd.get('returnsAccepted');
-        payload.setDefault = true;
+  payload.setDefault = !!fd.get('setDefault');
         try {
           const r = await authClient.authFetch('/.netlify/functions/ebay-create-policy', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
           const j = await r.json();
