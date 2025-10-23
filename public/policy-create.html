@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Create policy · GPTListing</title>
+    <style>
+      :root { --bg:#0b1020; --panel:#141a33; --line:#2a335c; --text:#f4f6fb; --muted:#a2a9c8; --primary:#4f7cff; }
+      body { margin:0; background:var(--bg); color:var(--text); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+      .wrap { max-width:760px; margin:6vh auto; padding:1.25rem; }
+      .card { background: var(--panel); border:1px solid var(--line); border-radius:12px; padding:1.25rem; }
+      .muted { color:var(--muted); }
+      a { color:#a8c1ff; text-decoration:none; }
+      a:hover { text-decoration:underline; }
+      .row { display:grid; grid-template-columns:1fr 1fr; gap:.8rem; }
+      label { display:block; }
+      input, select { width:100%; background:#0f1530; color:#f4f6fb; border:1px solid #26305a; border-radius:8px; padding:.55rem .6rem; }
+      .btn { background: var(--primary); color:#fff; border:none; border-radius:10px; padding:.7rem .95rem; font-weight:700; cursor:pointer; }
+      .secondary { background:transparent; color:#cbd5ff; border:1px solid #3d4a86; }
+    </style>
+  </head>
+  <body>
+    <script src="/auth-client.js"></script>
+    <div class="wrap">
+      <div class="card">
+        <div style="margin-bottom:.5rem"><a class="secondary" href="/policies-manage.html">← Back to policies</a></div>
+        <h2 id="title">Create policy</h2>
+        <p class="muted" id="subtitle">Fill out the minimal fields below. This will create the policy on eBay and set it as your default.</p>
+        <form id="form">
+          <input type="hidden" name="type" />
+          <div class="row">
+            <label>
+              <div class="muted" style="font-size:.85rem">Name</div>
+              <input type="text" name="name" placeholder="Policy name" />
+            </label>
+            <div id="field_immediatePay" style="display:none;align-self:end">
+              <label style="display:inline-flex; align-items:center; gap:.5rem;">
+                <input type="checkbox" name="immediatePay" /> Require immediate payment
+              </label>
+            </div>
+            <div id="field_handlingTime" style="display:none;">
+              <div class="muted" style="font-size:.85rem">Handling time (days)</div>
+              <input type="number" name="handlingTimeDays" min="0" step="1" />
+            </div>
+            <div id="field_freeDomestic" style="display:none;align-self:end">
+              <label style="display:inline-flex; align-items:center; gap:.5rem;">
+                <input type="checkbox" name="freeDomestic" /> Offer free domestic shipping
+              </label>
+            </div>
+            <div id="field_returnsAccepted" style="display:none;align-self:end">
+              <label style="display:inline-flex; align-items:center; gap:.5rem;">
+                <input type="checkbox" name="returnsAccepted" checked /> Allow returns
+              </label>
+            </div>
+            <div id="field_returnPeriod" style="display:none;">
+              <div class="muted" style="font-size:.85rem">Return period (days)</div>
+              <input type="number" name="returnPeriodDays" min="1" step="1" />
+            </div>
+            <div id="field_refundMethod" style="display:none;">
+              <div class="muted" style="font-size:.85rem">Refund method</div>
+              <select name="refundMethod">
+                <option value="MONEY_BACK">Money back</option>
+                <option value="REPLACEMENT">Replacement</option>
+              </select>
+            </div>
+            <div id="field_returnShippingCostPayer" style="display:none;">
+              <div class="muted" style="font-size:.85rem">Return shipping paid by</div>
+              <select name="returnShippingCostPayer">
+                <option value="BUYER">Buyer</option>
+                <option value="SELLER">Seller</option>
+              </select>
+            </div>
+          </div>
+          <div id="msg" class="muted" style="margin:.75rem 0 .5rem; min-height:1.25rem"></div>
+          <div style="display:flex; gap:.5rem;">
+            <button type="button" class="secondary" id="btnCancel">Cancel</button>
+            <button type="submit" class="btn">Create and set as default</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      (async () => { try { await authClient.requireAuth(); } catch {} })();
+
+      const usp = new URLSearchParams(location.search);
+      const type = (usp.get('type') || '').toLowerCase();
+      const form = document.getElementById('form');
+      form.type.value = type;
+
+      function show(id, on) { const el = document.getElementById(id); if (el) el.style.display = on ? 'block' : 'none'; }
+
+      // Configure form per type
+      const title = document.getElementById('title');
+      if (type === 'payment') {
+        title.textContent = 'Create payment policy';
+        show('field_immediatePay', true);
+      } else if (type === 'fulfillment' || type === 'shipping') {
+        title.textContent = 'Create shipping policy';
+        show('field_handlingTime', true);
+        show('field_freeDomestic', true);
+      } else if (type === 'return' || type === 'returns') {
+        title.textContent = 'Create returns policy';
+        show('field_returnsAccepted', true);
+        show('field_returnPeriod', true);
+        show('field_refundMethod', true);
+        show('field_returnShippingCostPayer', true);
+      } else {
+        document.getElementById('msg').textContent = 'Unknown type';
+      }
+
+      document.getElementById('btnCancel').onclick = () => { location.href = '/policies-manage.html'; };
+
+      form.onsubmit = async (e) => {
+        e.preventDefault();
+        const msg = document.getElementById('msg');
+        msg.textContent = 'Creating…';
+        const fd = new FormData(form);
+        const payload = Object.fromEntries(fd.entries());
+        payload.immediatePay = !!fd.get('immediatePay');
+        payload.freeDomestic = !!fd.get('freeDomestic');
+        payload.returnsAccepted = !!fd.get('returnsAccepted');
+        payload.setDefault = true;
+        try {
+          const r = await authClient.authFetch('/.netlify/functions/ebay-create-policy', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+          const j = await r.json();
+          if (!r.ok || !j?.ok) throw new Error(j?.error || 'Failed to create');
+          msg.textContent = 'Created. Returning…';
+          setTimeout(() => { location.href = '/policies-manage.html?created='+encodeURIComponent(type); }, 900);
+        } catch (e) {
+          msg.textContent = 'Error: ' + (e?.message || e);
+        }
+      };
+    </script>
+  </body>
+</html>
