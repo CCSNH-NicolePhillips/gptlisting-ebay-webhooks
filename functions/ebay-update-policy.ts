@@ -95,7 +95,7 @@ export const handler: Handler = async (event) => {
       }
       // If we have existing, keep them; else, synthesize a minimal free domestic option
       if (Array.isArray(curOptions) && curOptions.length) return curOptions;
-      // Default to a paid USPS Priority if user unchecked free but didn't choose a service
+      // Default to a paid USPS Ground Advantage if user unchecked free but didn't choose a service
       return [
         {
           optionType: 'DOMESTIC',
@@ -103,7 +103,7 @@ export const handler: Handler = async (event) => {
           insuranceFee: { value: '0.00', currency: 'USD' },
           shippingServices: [
             {
-              shippingServiceCode: 'USPSPriority',
+              shippingServiceCode: 'USPSGroundAdvantage',
               sortOrderId: 1,
               freeShipping: false,
               buyerResponsibleForShipping: true,
