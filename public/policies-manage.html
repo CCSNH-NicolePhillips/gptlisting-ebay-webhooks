@@ -36,17 +36,26 @@
 
       <div class="row">
         <div class="col">
-          <h3>Shipping (Fulfillment)</h3>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:.5rem;">
+            <h3 style="margin:0">Shipping (Fulfillment)</h3>
+            <a class="secondary btn-sm" href="/policy-create.html?type=fulfillment">Create + set default</a>
+          </div>
           <div class="muted small" id="fStatus">Loading…</div>
           <table id="fTable"><thead><tr><th>Name</th><th>ID</th><th>Default</th><th>Actions</th></tr></thead><tbody></tbody></table>
         </div>
         <div class="col">
-          <h3>Payment</h3>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:.5rem;">
+            <h3 style="margin:0">Payment</h3>
+            <a class="secondary btn-sm" href="/policy-create.html?type=payment">Create + set default</a>
+          </div>
           <div class="muted small" id="pStatus">Loading…</div>
           <table id="pTable"><thead><tr><th>Name</th><th>ID</th><th>Default</th><th>Actions</th></tr></thead><tbody></tbody></table>
         </div>
         <div class="col">
-          <h3>Returns</h3>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:.5rem;">
+            <h3 style="margin:0">Returns</h3>
+            <a class="secondary btn-sm" href="/policy-create.html?type=return">Create + set default</a>
+          </div>
           <div class="muted small" id="rStatus">Loading…</div>
           <table id="rTable"><thead><tr><th>Name</th><th>ID</th><th>Default</th><th>Actions</th></tr></thead><tbody></tbody></table>
         </div>
@@ -285,6 +294,11 @@
           document.getElementById('rStatus').textContent = rr.length? `${rr.length} policy(ies)` : 'No policies';
         } catch (e) { showMsg('Error loading policies: ' + (e?.message || e)); }
       }
+
+      // If redirected back after creation, show a short status message
+      (function(){
+        try { const usp = new URLSearchParams(location.search); const c = usp.get('created'); if (c) { showMsg('Created new ' + c + ' policy. Refreshing…'); setTimeout(()=>{ showMsg(''); history.replaceState({}, document.title, '/policies-manage.html'); }, 1500); } } catch {}
+      })();
 
       populate();
 
