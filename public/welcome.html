@@ -22,8 +22,7 @@
       <div class="card">
         <h1>Welcome to GPTListing</h1>
         <p class="muted">Sign in to continue</p>
-        <button id="btnGo" class="btn">Sign in</button>
-        <div class="hint" id="autoHint" style="display:none;">Redirecting to sign in…</div>
+  <button id="btnGo" class="btn">Sign in</button>
       </div>
     </div>
 
@@ -34,15 +33,12 @@
           const ok = await authClient.ensureAuth();
           if (ok) { location.replace('/index.html'); return; }
         } catch {}
-        // Show and wire button
+        // Show and wire button (no auto-redirect; require explicit click)
         var btn = document.getElementById('btnGo');
-        if (btn) btn.onclick = function(){ try { sessionStorage.setItem('returnTo','/index.html'); } catch {} ; location.href = '/login.html?auto=1'; };
-        // Optional auto-redirect after brief pause
-        var auto = true;
-        if (auto) {
-          var h = document.getElementById('autoHint'); if (h) h.style.display='block';
-          setTimeout(function(){ try { sessionStorage.setItem('returnTo','/index.html'); } catch {} ; location.href = '/login.html?auto=1'; }, 900);
-        }
+        if (btn) btn.onclick = function(){
+          try { sessionStorage.setItem('returnTo','/index.html'); } catch {}
+          location.href = '/login.html';
+        };
       })();
     </script>
   </body>
