@@ -64,7 +64,7 @@
         var a = document.getElementById('stateSigning'); if (a) a.style.display='none';
         var b = document.getElementById('stateDone'); if (b) b.style.display='block';
         var btn = document.getElementById('btnLogin');
-        if (btn) btn.onclick = async function(){ try { await authClient.login({}); } catch {} };
+        if (btn) btn.onclick = function(){ try { sessionStorage.setItem('returnTo','/'); } catch {} ; location.href = '/login.html'; };
       })();
     </script>
   </body>
