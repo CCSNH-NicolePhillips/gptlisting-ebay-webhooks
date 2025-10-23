@@ -12,12 +12,12 @@
       .muted { color:var(--muted); }
       a { color:#a8c1ff; text-decoration:none; }
       a:hover { text-decoration:underline; }
-      .row { display:grid; grid-template-columns:1fr 1fr; gap:.8rem; }
+  .row { display:grid; grid-template-columns:minmax(260px, 1fr) minmax(260px, 1fr); gap:1rem; align-items:end; }
       label { display:block; }
-      input, select { width:100%; background:#0f1530; color:#f4f6fb; border:1px solid #26305a; border-radius:8px; padding:.55rem .6rem; }
+  input, select { width:100%; background:#0f1530; color:#f4f6fb; border:1px solid #26305a; border-radius:8px; padding:.55rem .6rem; box-sizing:border-box; height:40px; }
       .btn { background: var(--primary); color:#fff; border:none; border-radius:10px; padding:.7rem .95rem; font-weight:700; cursor:pointer; }
   .secondary { background:transparent; color:#cbd5ff; border:1px solid #3d4a86; }
-  .group { background:#0f1530; border:1px solid #26305a; border-radius:10px; padding:.8rem; }
+  .group { background:#0f1530; border:1px solid #26305a; border-radius:10px; padding:.8rem; margin-top:.75rem; }
   .sectionTitle { color:#cbd5ff; font-weight:600; margin:0 0 .4rem; font-size:1rem; }
   .btn-toggle.on { background:#1db954; border-color:#159b46; color:#031b0f; }
   .actions { display:flex; align-items:center; gap:.6rem; }
@@ -51,8 +51,8 @@
             <div id="field_freeDomestic" style="display:none;">
               <div class="muted" style="font-size:.85rem">Offer free domestic shipping</div>
               <select name="freeDomestic">
-                <option value="no" selected>No</option>
-                <option value="yes">Yes</option>
+                <option value="yes" selected>Yes</option>
+                <option value="no">No</option>
               </select>
             </div>
             <div id="field_returnsAccepted" style="display:none;align-self:end">
