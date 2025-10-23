@@ -79,14 +79,14 @@
               </select>
             </div>
           </div>
-          <div class="actions" style="margin-top:.25rem;">
-            <button type="button" class="secondary btn-toggle" id="btnToggleDefault">Set as default</button>
-            <span id="defaultTag" class="tag" style="display:none;">Will be set as default</span>
-          </div>
+          <!-- set-as-default now lives inline with footer buttons -->
           <div id="msg" class="muted" style="margin:.5rem 0 .5rem; min-height:1.25rem"></div>
-          <div style="display:flex; gap:.5rem;">
+          <div style="display:flex; gap:.75rem; align-items:center; flex-wrap:wrap;">
             <button type="button" class="secondary" id="btnCancel">Cancel</button>
             <button type="submit" class="btn">Create</button>
+            <label style="display:inline-flex; align-items:center; gap:.45rem; margin-left:auto;">
+              <input type="checkbox" name="setDefault" /> Set as default
+            </label>
           </div>
         </form>
       </div>
@@ -156,8 +156,10 @@
             </label>
           </div>
         `;
-        row.appendChild(costWrap);
-        row.appendChild(paidWrap);
+  // Place advanced shipping controls directly under the dropdown (same column)
+  const freeWrap = document.getElementById('field_freeDomestic');
+  freeWrap.appendChild(costWrap);
+  freeWrap.appendChild(paidWrap);
         // Helpers to manage UI state
         function serviceOptionsFor(carrier) {
           if (carrier === 'UPS') return [ ['UPSGround','UPS Ground'], ['UPS3DaySelect','UPS 3 Day Select'] ];
@@ -211,29 +213,16 @@
 
       document.getElementById('btnCancel').onclick = () => { location.href = '/policies-manage.html'; };
 
-      // Toggle default via button
-      const btnToggleDefault = document.getElementById('btnToggleDefault');
-      const defaultTag = document.getElementById('defaultTag');
-      let willSetDefault = false;
-      function updateDefaultUI() {
-        form.setDefault.value = willSetDefault ? 'on' : '';
-        btnToggleDefault.classList.toggle('on', willSetDefault);
-        defaultTag.style.display = willSetDefault ? 'inline-block' : 'none';
-        btnToggleDefault.textContent = willSetDefault ? 'Will be set as default' : 'Set as default';
-      }
-      btnToggleDefault.onclick = () => { willSetDefault = !willSetDefault; updateDefaultUI(); };
-      updateDefaultUI();
-
       form.onsubmit = async (e) => {
         e.preventDefault();
         const msg = document.getElementById('msg');
         msg.textContent = 'Creating…';
         const fd = new FormData(form);
-  const payload = Object.fromEntries(fd.entries());
-  payload.immediatePay = !!fd.get('immediatePay');
-  payload.freeDomestic = (fd.get('freeDomestic') === 'yes');
+        const payload = Object.fromEntries(fd.entries());
+        payload.immediatePay = !!fd.get('immediatePay');
+        payload.freeDomestic = (fd.get('freeDomestic') === 'yes');
         payload.returnsAccepted = !!fd.get('returnsAccepted');
-        payload.setDefault = willSetDefault;
+        payload.setDefault = !!fd.get('setDefault');
         // Only include shipping details when not free
         if (type === 'fulfillment' || type === 'shipping') {
           payload.costType = (form.costType && form.costType.value) || 'CALCULATED';
