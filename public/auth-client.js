@@ -213,15 +213,20 @@
     alert('Authentication is not configured. Please set AUTH_MODE and provider settings.');
   }
 
-  async function logout() {
+  async function logout(opts) {
     await loadConfig();
     if (state.mode === 'auth0' && state.auth0) {
-      await state.auth0.logout({ logoutParams: { returnTo: window.location.origin } });
+      const rt = (opts && opts.returnTo) || window.location.origin;
+      await state.auth0.logout({ logoutParams: { returnTo: rt } });
       return;
     }
     if (state.mode === 'identity' && window.netlifyIdentity) {
       window.netlifyIdentity.logout();
-      window.location.reload();
+      if (opts && opts.returnTo) {
+        window.location.assign(opts.returnTo);
+      } else {
+        window.location.reload();
+      }
       return;
     }
   }
