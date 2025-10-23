@@ -58,13 +58,9 @@
     <script>
       // Decide which auth to use based on server config; buttons trigger provider-specific login when supported
       (async function () {
-        // If already authenticated, bounce back
+        // Check auth status but do NOT auto-redirect; keep the login screen visible
+        // so users can intentionally choose to continue or switch accounts.
         const ok = await authClient.ensureAuth();
-        if (ok) {
-          const returnTo = sessionStorage.getItem('returnTo') || '/';
-          window.location.assign(returnTo);
-          return;
-        }
         const cfgRes = await fetch('/.netlify/functions/get-public-config').catch(() => null);
   const cfg = cfgRes && (await cfgRes.json());
   const mode = (cfg?.AUTH_MODE || 'none').toLowerCase();
@@ -87,7 +83,15 @@
 
         // Default: open provider list (Auth0 Universal Login or Netlify Identity widget)
         document.getElementById('btnContinue').onclick = async () => {
-          try { await authClient.login({}); } catch (e) {
+          try {
+            if (ok) {
+              // Already authenticated; honor returnTo without forcing a new login
+              const returnTo = sessionStorage.getItem('returnTo') || '/';
+              window.location.assign(returnTo);
+              return;
+            }
+            await authClient.login({});
+          } catch (e) {
             const w = document.getElementById('cfgWarning');
             w.style.display = 'block';
             w.textContent = 'Login failed: ' + (e?.message || String(e));
