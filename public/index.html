@@ -305,6 +305,9 @@
       if (bannerLoginBtn) bannerLoginBtn.onclick = async () => {
         try { await authClient.login({}); } catch {}
       };
+    
+      // If a sign-out control exists anywhere, route through the dedicated logout page
+      const signOutIds = ['menuSignOut', 'signOut', 'btnLogout'];
       const processBtn2 = document.getElementById('process');
       if (processBtn2) processBtn2.onclick = async () => {
         const btn = document.getElementById('process');
@@ -322,6 +325,15 @@
         }
       };
 
+      for (const id of signOutIds) {
+        const el = document.getElementById(id);
+        if (el) {
+          el.addEventListener('click', (e) => {
+            e.preventDefault();
+            location.href = '/logout.html';
+          });
+        }
+      }
       // Claim legacy global tokens into this user (if present)
       const claimBtn = document.getElementById('claimLegacy');
       if (claimBtn) claimBtn.onclick = async () => {
