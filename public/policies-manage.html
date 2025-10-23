@@ -258,6 +258,8 @@
             form.freeDomestic.checked = !!free;
             document.getElementById('field_domesticPaid').style.display = free ? 'none' : 'block';
             form.shippingServiceCode.required = !free;
+            // Ensure the service dropdown has options at least once
+            updateServiceOptions();
           } else if (typeKey === 'return') {
             document.getElementById('field_returnsAccepted').style.display = 'block';
             document.getElementById('field_returnPeriod').style.display = 'block';
@@ -378,6 +380,14 @@
           document.getElementById('field_domesticPaid').style.display = on ? 'none' : 'block';
           const form = document.getElementById('modalForm');
           form.shippingServiceCode.required = !on;
+          if (!on) {
+            // Populate services when switching to paid shipping
+            updateServiceOptions();
+            // Select first service by default if none
+            if (!form.shippingServiceCode.value && form.shippingServiceCode.options.length) {
+              form.shippingServiceCode.selectedIndex = 0;
+            }
+          }
         }
         if (nm === 'shippingCarrierCode') {
           updateServiceOptions();
