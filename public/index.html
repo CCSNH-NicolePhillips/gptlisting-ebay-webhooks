@@ -101,6 +101,16 @@
   <body>
     <script src="/auth-client.js"></script>
     <script>
+      // If we're returning from a provider logout that could only come back to origin,
+      // immediately forward to the intended page to avoid flashing the dashboard.
+      (function(){
+        try {
+          var next = sessionStorage.getItem('postLogoutRedirect');
+          if (next) { sessionStorage.removeItem('postLogoutRedirect'); location.replace(next); return; }
+        } catch {}
+      })();
+    </script>
+    <script>
       // Do not force redirect immediately; show a friendly banner if not signed in
       // We'll still require auth before sensitive actions.
       (async () => {

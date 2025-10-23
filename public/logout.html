@@ -49,8 +49,11 @@
               location.replace('/logout.html?done=1');
               return;
             } catch (e) {
-              // Fallback: best-effort local logout then bounce back with done=1
-              try { await authClient.logout?.(); } catch {}
+              // Fallback: some providers require returnTo to match an allowed list (often origin-only).
+              // In that case, round-trip to origin and have index.html bounce back here immediately.
+              try { sessionStorage.setItem('postLogoutRedirect', '/logout.html?done=1'); } catch {}
+              try { await authClient.logout?.({ returnTo: location.origin }); } catch {}
+              // If the provider didn't redirect us, force it locally as a last resort.
               location.replace('/logout.html?done=1');
               return;
             }
