@@ -98,6 +98,13 @@
               <label style="display:inline-flex; align-items:center; gap:.5rem;">
                 <input name="freeDomestic" type="checkbox" /> Offer free domestic shipping
               </label>
+                <div style="margin-top:.5rem;">
+                  <div class="muted" style="font-size:.85rem;">Cost type</div>
+                  <select name="costType" style="width:100%; padding:.45rem .6rem; background:#0b1020; color:#f4f6fb; border:1px solid #26305a; border-radius:8px;">
+                    <option value="CALCULATED">Calculated: Cost varies by buyer location</option>
+                    <option value="FLAT_RATE">Flat rate</option>
+                  </select>
+                </div>
                 <div id="field_domesticPaid" style="margin-top:.5rem; display:none;">
                   <div class="muted" style="font-size:.85rem; margin-bottom:.25rem;">If not free, choose a service</div>
                   <div style="display:grid; grid-template-columns: 1fr 1fr; gap:.5rem;">
@@ -116,7 +123,7 @@
                       </select>
                     </label>
                   </div>
-                  <div style="display:grid; grid-template-columns: 1fr 1fr; gap:.5rem; margin-top:.5rem;">
+                  <div id="field_flatRatePrices" style="display:grid; grid-template-columns: 1fr 1fr; gap:.5rem; margin-top:.5rem;">
                     <label style="display:block;">
                       <div class="muted" style="font-size:.85rem;">Flat rate (USD)</div>
                       <input name="shippingCostValue" type="number" min="0" step="0.01" placeholder="e.g. 5.99" style="width:100%; padding:.45rem .6rem; background:#0b1020; color:#f4f6fb; border:1px solid #26305a; border-radius:8px;" />
@@ -253,6 +260,8 @@
             let free = false; try {
               for (const opt of shipOpts) {
                 if (opt?.optionType === 'DOMESTIC') {
+                  // Preselect cost type from existing policy (default CALCULATED)
+                  if (opt?.costType) { form.costType.value = opt.costType; } else { form.costType.value = 'CALCULATED'; }
                   for (const svc of (opt.shippingServices||[])) { if (svc?.freeShipping) { free = true; break; } }
                   // Prefill carrier/service if not free
                   if (!free) {
@@ -266,8 +275,8 @@
               }
             } catch {}
             form.freeDomestic.checked = !!free;
-            document.getElementById('field_domesticPaid').style.display = free ? 'none' : 'block';
-            form.shippingServiceCode.required = !free;
+            // Initial visibility and requirements based on cost type + free toggle
+            updateCostTypeUI();
             // Ensure the service dropdown has options at least once
             updateServiceOptions();
           } else if (typeKey === 'return') {
@@ -298,18 +307,21 @@
         } else if (type === 'fulfillment') {
           payload.handlingTimeDays = Number(form.handlingTimeDays.value || 1);
           payload.freeDomestic = !!form.freeDomestic.checked;
+          payload.costType = (form.costType && form.costType.value) || 'CALCULATED';
           if (!payload.freeDomestic) {
             const carrier = form.shippingCarrierCode.value;
             const service = form.shippingServiceCode.value;
             if (!service) { document.getElementById('modalMsg').textContent = 'Please select a shipping service.'; return; }
             payload.shippingCarrierCode = carrier;
             payload.shippingServiceCode = service;
-            const cost = String(Number(form.shippingCostValue.value || '0').toFixed(2));
-            if (!cost || isNaN(Number(cost))) { document.getElementById('modalMsg').textContent = 'Enter a flat rate (USD).'; return; }
-            payload.shippingCostValue = cost;
-            const addl = form.additionalShippingCostValue.value;
-            if (addl !== undefined && addl !== null && String(addl).length) {
-              payload.additionalShippingCostValue = String(Number(addl).toFixed(2));
+            if (payload.costType === 'FLAT_RATE') {
+              const cost = String(Number(form.shippingCostValue.value || '0').toFixed(2));
+              if (!cost || isNaN(Number(cost))) { document.getElementById('modalMsg').textContent = 'Enter a flat rate (USD).'; return; }
+              payload.shippingCostValue = cost;
+              const addl = form.additionalShippingCostValue.value;
+              if (addl !== undefined && addl !== null && String(addl).length) {
+                payload.additionalShippingCostValue = String(Number(addl).toFixed(2));
+              }
             }
           }
         } else if (type === 'return') {
@@ -397,14 +409,31 @@
         // try keep selection
         if (cur) { svcSel.value = cur; }
       }
+      function updateCostTypeUI() {
+        const form = document.getElementById('modalForm');
+        const isFree = !!form.freeDomestic.checked;
+        const costType = form.costType ? form.costType.value : 'CALCULATED';
+        const paidWrap = document.getElementById('field_domesticPaid');
+        const priceWrap = document.getElementById('field_flatRatePrices');
+        if (isFree) {
+          paidWrap.style.display = 'none';
+          if (form.shippingServiceCode) form.shippingServiceCode.required = false;
+          if (priceWrap) priceWrap.style.display = 'none';
+          if (form.shippingCostValue) form.shippingCostValue.required = false;
+        } else {
+          paidWrap.style.display = 'block';
+          if (form.shippingServiceCode) form.shippingServiceCode.required = true;
+          const isFlat = costType === 'FLAT_RATE';
+          if (priceWrap) priceWrap.style.display = isFlat ? 'grid' : 'none';
+          if (form.shippingCostValue) form.shippingCostValue.required = isFlat;
+        }
+      }
       document.addEventListener('change', (e) => {
         const t = e.target;
         const nm = t && t.getAttribute ? t.getAttribute('name') : undefined;
         if (nm === 'freeDomestic') {
-          const on = t && typeof t.checked === 'boolean' ? t.checked : false;
-          document.getElementById('field_domesticPaid').style.display = on ? 'none' : 'block';
           const form = document.getElementById('modalForm');
-          form.shippingServiceCode.required = !on;
+          const on = t && typeof t.checked === 'boolean' ? t.checked : false;
           if (!on) {
             // Populate services when switching to paid shipping
             updateServiceOptions();
@@ -413,9 +442,13 @@
               form.shippingServiceCode.selectedIndex = 0;
             }
           }
+          updateCostTypeUI();
         }
         if (nm === 'shippingCarrierCode') {
           updateServiceOptions();
+        }
+        if (nm === 'costType') {
+          updateCostTypeUI();
         }
       });
     </script>
