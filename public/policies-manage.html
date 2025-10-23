@@ -98,6 +98,25 @@
               <label style="display:inline-flex; align-items:center; gap:.5rem;">
                 <input name="freeDomestic" type="checkbox" /> Offer free domestic shipping
               </label>
+                <div id="field_domesticPaid" style="margin-top:.5rem; display:none;">
+                  <div class="muted" style="font-size:.85rem; margin-bottom:.25rem;">If not free, choose a service</div>
+                  <div style="display:grid; grid-template-columns: 1fr 1fr; gap:.5rem;">
+                    <label style="display:block;">
+                      <div class="muted" style="font-size:.85rem;">Carrier</div>
+                      <select name="shippingCarrierCode" style="width:100%; padding:.45rem .6rem; background:#0b1020; color:#f4f6fb; border:1px solid #26305a; border-radius:8px;">
+                        <option value="USPS">USPS</option>
+                        <option value="UPS">UPS</option>
+                        <option value="FedEx">FedEx</option>
+                      </select>
+                    </label>
+                    <label style="display:block;">
+                      <div class="muted" style="font-size:.85rem;">Service</div>
+                      <select name="shippingServiceCode" style="width:100%; padding:.45rem .6rem; background:#0b1020; color:#f4f6fb; border:1px solid #26305a; border-radius:8px;">
+                        <!-- Options will update based on carrier -->
+                      </select>
+                    </label>
+                  </div>
+                </div>
             </div>
             <div id="field_returnsAccepted" style="display:none;">
               <div class="muted" style="font-size:.85rem;">Returns accepted</div>
@@ -225,11 +244,20 @@
               for (const opt of shipOpts) {
                 if (opt?.optionType === 'DOMESTIC') {
                   for (const svc of (opt.shippingServices||[])) { if (svc?.freeShipping) { free = true; break; } }
+                  // Prefill carrier/service if not free
+                  if (!free) {
+                    const firstSvc = (opt.shippingServices||[])[0] || {};
+                    form.shippingCarrierCode.value = firstSvc.shippingCarrierCode || 'USPS';
+                    updateServiceOptions();
+                    if (firstSvc.shippingServiceCode) form.shippingServiceCode.value = firstSvc.shippingServiceCode;
+                  }
                 }
                 if (free) break;
               }
             } catch {}
             form.freeDomestic.checked = !!free;
+            document.getElementById('field_domesticPaid').style.display = free ? 'none' : 'block';
+            form.shippingServiceCode.required = !free;
           } else if (typeKey === 'return') {
             document.getElementById('field_returnsAccepted').style.display = 'block';
             document.getElementById('field_returnPeriod').style.display = 'block';
@@ -258,6 +286,13 @@
         } else if (type === 'fulfillment') {
           payload.handlingTimeDays = Number(form.handlingTimeDays.value || 1);
           payload.freeDomestic = !!form.freeDomestic.checked;
+          if (!payload.freeDomestic) {
+            const carrier = form.shippingCarrierCode.value;
+            const service = form.shippingServiceCode.value;
+            if (!service) { document.getElementById('modalMsg').textContent = 'Please select a shipping service.'; return; }
+            payload.shippingCarrierCode = carrier;
+            payload.shippingServiceCode = service;
+          }
         } else if (type === 'return') {
           payload.returnsAccepted = !!form.returnsAccepted.checked;
           payload.returnPeriodDays = Number(form.returnPeriodDays.value || 30);
@@ -305,6 +340,49 @@
       // Wire modal buttons
       document.getElementById('btnCloseModal').addEventListener('click', () => hideModal());
       document.getElementById('btnSaveModal').addEventListener('click', (e) => { e.preventDefault(); saveEdit(); });
+
+      // Shipping carrier -> service options
+      function serviceOptionsFor(carrier) {
+        if (carrier === 'UPS') return [
+          ['UPSGround','UPS Ground'],
+          ['UPS3DaySelect','UPS 3 Day Select'],
+        ];
+        if (carrier === 'FedEx') return [
+          ['FedExHomeDelivery','FedEx Home Delivery'],
+          ['FedEx2Day','FedEx 2Day'],
+        ];
+        // Default USPS
+        return [
+          ['USPSFirstClass','USPS First Class'],
+          ['USPSPriority','USPS Priority'],
+        ];
+      }
+      function updateServiceOptions() {
+        const form = document.getElementById('modalForm');
+        const carrier = form.shippingCarrierCode.value || 'USPS';
+        const svcSel = form.shippingServiceCode;
+        const cur = svcSel.value;
+        svcSel.innerHTML = '';
+        const opts = serviceOptionsFor(carrier);
+        for (const [val,label] of opts) {
+          const o = document.createElement('option'); o.value = val; o.textContent = label; svcSel.appendChild(o);
+        }
+        // try keep selection
+        if (cur) { svcSel.value = cur; }
+      }
+      document.addEventListener('change', (e) => {
+        const t = e.target;
+        const nm = t && t.getAttribute ? t.getAttribute('name') : undefined;
+        if (nm === 'freeDomestic') {
+          const on = t && typeof t.checked === 'boolean' ? t.checked : false;
+          document.getElementById('field_domesticPaid').style.display = on ? 'none' : 'block';
+          const form = document.getElementById('modalForm');
+          form.shippingServiceCode.required = !on;
+        }
+        if (nm === 'shippingCarrierCode') {
+          updateServiceOptions();
+        }
+      });
     </script>
   </body>
 </html>
