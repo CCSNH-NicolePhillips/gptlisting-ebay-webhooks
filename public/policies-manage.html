@@ -14,8 +14,13 @@
       table { width:100%; border-collapse: collapse; margin-top: .5rem; }
       th, td { text-align:left; padding: .5rem; border-bottom: 1px solid #26305a; }
       .badge { display:inline-block; padding:.1rem .4rem; border-radius: 6px; font-size: .75rem; background:#223066; color:#cbd5ff; border:1px solid #2f3f7a; }
-      .row { display:flex; gap:1rem; flex-wrap:wrap; }
-      .col { flex: 1 1 300px; background:#0f1530; border:1px solid #26305a; border-radius:10px; padding:.75rem; }
+  /* Stack sections vertically for clearer reading */
+  .row { display:block; }
+  .col { background:#0f1530; border:1px solid #26305a; border-radius:10px; padding:.9rem; margin:0 0 1rem; }
+  /* Tighter, consistent action buttons in tables */
+  .btn-sm { padding:.35rem .6rem; font-size:.85rem; border-radius:7px; }
+  td.actions { text-align:right; white-space:nowrap; }
+  th:last-child, td:last-child { width:1%; }
     </style>
   </head>
   <body>
@@ -141,8 +146,8 @@
           id.textContent = p.id || p[`${typeKey}PolicyId`] || '';
           const def = document.createElement('td');
           def.innerHTML = (String(id.textContent) === String(chosen)) ? '<span class="badge">Default</span>' : '';
-          const act = document.createElement('td');
-          const setBtn = document.createElement('button'); setBtn.textContent = 'Set default'; setBtn.className='secondary';
+          const act = document.createElement('td'); act.className = 'actions';
+          const setBtn = document.createElement('button'); setBtn.textContent = 'Set default'; setBtn.className='secondary btn-sm';
           setBtn.onclick = async () => {
             try {
               const body = {}; body[typeKey] = id.textContent;
@@ -151,9 +156,9 @@
               await populate();
             } catch (e) { showMsg('Failed to set default: '+(e?.message||e)); }
           };
-          const editBtn = document.createElement('button'); editBtn.textContent = 'Edit'; editBtn.style.marginLeft = '.5rem'; editBtn.className='secondary';
+          const editBtn = document.createElement('button'); editBtn.textContent = 'Edit'; editBtn.style.marginLeft = '.5rem'; editBtn.className='secondary btn-sm';
           editBtn.onclick = () => openEdit(typeKey, id.textContent, name.textContent);
-          const delBtn = document.createElement('button'); delBtn.textContent = 'Delete'; delBtn.style.marginLeft='.5rem';
+          const delBtn = document.createElement('button'); delBtn.textContent = 'Delete'; delBtn.style.marginLeft='.5rem'; delBtn.className='btn-sm';
           delBtn.onclick = async () => {
             if (!confirm('Delete this policy on eBay? This cannot be undone.')) return;
             try {
