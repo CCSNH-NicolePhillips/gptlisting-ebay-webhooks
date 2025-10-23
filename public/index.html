@@ -313,7 +313,7 @@
       };
       const bannerLoginBtn = document.getElementById('bannerLogin');
       if (bannerLoginBtn) bannerLoginBtn.onclick = () => {
-        try { sessionStorage.setItem('returnTo', '/'); } catch {}
+        try { sessionStorage.setItem('returnTo', '/index.html'); } catch {}
         location.href = '/login.html';
       };
     

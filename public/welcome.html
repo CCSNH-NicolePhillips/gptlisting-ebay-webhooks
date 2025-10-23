@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Welcome</title>
+    <style>
+      :root { --bg:#0b1020; --panel:#141a33; --line:#2a335c; --text:#f4f6fb; --muted:#a2a9c8; --primary:#4f7cff; }
+      body { margin:0; background:var(--bg); color:var(--text); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+      .wrap { max-width:640px; margin:14vh auto; padding:1.25rem; }
+      .card { background: var(--panel); border:1px solid var(--line); border-radius:14px; padding:1.4rem; box-shadow:0 10px 30px rgba(0,0,0,.25); text-align:center; }
+      h1 { margin:.3rem 0 .6rem; font-size:1.8rem; }
+      p.muted { color:var(--muted); margin:.1rem 0 1rem; }
+      .btn { background: var(--primary); color:#fff; border:none; border-radius:10px; padding:.75rem 1rem; font-weight:800; cursor:pointer; }
+      .hint { margin-top:.75rem; font-size:.9rem; color:var(--muted); }
+      #auth-badge { display:none !important; }
+    </style>
+    <script src="/auth-client.js"></script>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <h1>Welcome to GPTListing</h1>
+        <p class="muted">Sign in to continue</p>
+        <button id="btnGo" class="btn">Sign in</button>
+        <div class="hint" id="autoHint" style="display:none;">Redirecting to sign in…</div>
+      </div>
+    </div>
+
+    <script>
+      (async function(){
+        try { sessionStorage.setItem('returnTo','/index.html'); } catch {}
+        try {
+          const ok = await authClient.ensureAuth();
+          if (ok) { location.replace('/index.html'); return; }
+        } catch {}
+        // Show and wire button
+        var btn = document.getElementById('btnGo');
+        if (btn) btn.onclick = function(){ try { sessionStorage.setItem('returnTo','/index.html'); } catch {} ; location.href = '/login.html?auto=1'; };
+        // Optional auto-redirect after brief pause
+        var auto = true;
+        if (auto) {
+          var h = document.getElementById('autoHint'); if (h) h.style.display='block';
+          setTimeout(function(){ try { sessionStorage.setItem('returnTo','/index.html'); } catch {} ; location.href = '/login.html?auto=1'; }, 900);
+        }
+      })();
+    </script>
+  </body>
+</html>
