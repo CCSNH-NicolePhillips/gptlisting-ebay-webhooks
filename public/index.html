@@ -166,12 +166,12 @@
         <a class="btn secondary" href="/policies-manage.html">Policies</a>
         <a class="btn secondary" href="/location.html">Inventory location</a>
       </div>
-      <div style="margin-top: 1rem">
+      <div style="margin-top: 1rem; display:none">
         <button id="process" disabled>Process folder → Drafts</button>
         <span id="processMsg" class="small"></span>
       </div>
       <div id="setupMsg" class="small muted" style="margin-top:.5rem"></div>
-      <div style="margin-top: .5rem">
+      <div style="margin-top: .5rem; display:none">
         <button id="claimLegacy" class="secondary">Claim legacy connections</button>
         <span id="claimMsg" class="small"></span>
       </div>
@@ -240,8 +240,9 @@
           ? 'Dropbox: ✅ Connected'
           : 'Dropbox: ❌ Not connected';
         chkEbay.innerHTML = s.ebay?.connected ? 'eBay: ✅ Connected' : 'eBay: ❌ Not connected';
-        const connected = !!(s.dropbox?.connected && s.ebay?.connected);
-        document.getElementById('process').disabled = !connected;
+  const connected = !!(s.dropbox?.connected && s.ebay?.connected);
+  const processBtn = document.getElementById('process');
+  if (processBtn) processBtn.disabled = !connected;
         // Load folders when Dropbox is connected
         try {
           await loadDropboxFolders(!!s.dropbox?.connected);
@@ -299,26 +300,28 @@
       if (bannerLoginBtn) bannerLoginBtn.onclick = async () => {
         try { await authClient.login({}); } catch {}
       };
-      document.getElementById('process').onclick = async () => {
+      const processBtn2 = document.getElementById('process');
+      if (processBtn2) processBtn2.onclick = async () => {
         const btn = document.getElementById('process');
         const msg = document.getElementById('processMsg');
-        btn.disabled = true;
-        msg.textContent = 'Starting…';
+        if (btn) btn.disabled = true;
+        if (msg) msg.textContent = 'Starting…';
         try {
           const res = await authClient.authFetch('/.netlify/functions/process', { method: 'POST' });
           const data = await res.json();
-          msg.textContent = data.ok ? `Created ${data.created || 0} drafts` : data.error || 'Error';
+          if (msg) msg.textContent = data.ok ? `Created ${data.created || 0} drafts` : data.error || 'Error';
         } catch (e) {
-          msg.textContent = 'Error: ' + e.message;
+          if (msg) msg.textContent = 'Error: ' + (e?.message || e);
         } finally {
-          btn.disabled = false;
+          if (btn) btn.disabled = false;
         }
       };
 
       // Claim legacy global tokens into this user (if present)
-      document.getElementById('claimLegacy').onclick = async () => {
+      const claimBtn = document.getElementById('claimLegacy');
+      if (claimBtn) claimBtn.onclick = async () => {
         const m = document.getElementById('claimMsg');
-        m.textContent = 'Checking…';
+        if (m) m.textContent = 'Checking…';
         try {
           await authClient.ensureAuth();
           const r = await authClient.authFetch('/.netlify/functions/migrate-legacy-tokens', { method: 'POST' });
@@ -327,13 +330,13 @@
             const parts = [];
             if (j.migrated?.dropbox) parts.push('Dropbox');
             if (j.migrated?.ebay) parts.push('eBay');
-            m.textContent = parts.length ? `Migrated: ${parts.join(', ')}` : 'Nothing to migrate';
+            if (m) m.textContent = parts.length ? `Migrated: ${parts.join(', ')}` : 'Nothing to migrate';
             await refreshStatus();
           } else {
-            m.textContent = 'Migration failed';
+            if (m) m.textContent = 'Migration failed';
           }
         } catch (e) {
-          m.textContent = 'Error: ' + (e?.message || String(e));
+          if (m) m.textContent = 'Error: ' + (e?.message || String(e));
         }
       };
 
