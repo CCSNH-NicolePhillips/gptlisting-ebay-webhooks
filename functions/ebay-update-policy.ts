@@ -141,8 +141,8 @@ export const handler: Handler = async (event) => {
         body.shippingCarrierCode,
         body.shippingServiceCode
       );
+      // Build a minimal, valid payload to avoid sending read-only/unsupported fields
       payload = {
-        ...cur,
         name: body.name ?? cur.name,
         marketplaceId: mp,
         categoryTypes: normalizeCategoryTypes(cur.categoryTypes),
@@ -162,7 +162,6 @@ export const handler: Handler = async (event) => {
       const periodDays = Number(body.returnPeriodDays ?? cur?.returnPeriod?.value ?? 30);
       payload = returnsAccepted
         ? {
-            ...cur,
             name: body.name ?? cur.name,
             marketplaceId: mp,
             categoryTypes: normalizeCategoryTypes(cur.categoryTypes),
@@ -173,7 +172,6 @@ export const handler: Handler = async (event) => {
             refundMethod: body.refundMethod ?? cur.refundMethod ?? 'MONEY_BACK',
           }
         : {
-            ...cur,
             name: body.name ?? cur.name,
             marketplaceId: mp,
             categoryTypes: normalizeCategoryTypes(cur.categoryTypes),
