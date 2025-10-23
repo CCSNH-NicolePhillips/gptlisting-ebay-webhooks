@@ -48,10 +48,12 @@
               <div class="muted" style="font-size:.85rem">Handling time (days)</div>
               <input type="number" name="handlingTimeDays" min="0" step="1" />
             </div>
-            <div id="field_freeDomestic" style="display:none;align-self:end">
-              <label style="display:inline-flex; align-items:center; gap:.5rem;">
-                <input type="checkbox" name="freeDomestic" /> Offer free domestic shipping
-              </label>
+            <div id="field_freeDomestic" style="display:none;">
+              <div class="muted" style="font-size:.85rem">Offer free domestic shipping</div>
+              <select name="freeDomestic">
+                <option value="no" selected>No</option>
+                <option value="yes">Yes</option>
+              </select>
             </div>
             <div id="field_returnsAccepted" style="display:none;align-self:end">
               <label style="display:inline-flex; align-items:center; gap:.5rem;">
@@ -170,7 +172,7 @@
           if (cur) svc.value = cur; if (!svc.value && svc.options.length) svc.selectedIndex = 0;
         }
         function updatePaidVisibility() {
-          const free = !!form.freeDomestic.checked;
+          const free = String(form.freeDomestic?.value || 'no') === 'yes';
           const costType = (form.costType && form.costType.value) || 'CALCULATED';
           const paid = document.getElementById('field_domesticPaid');
           const price = document.getElementById('field_flatRatePrices');
@@ -227,9 +229,9 @@
         const msg = document.getElementById('msg');
         msg.textContent = 'Creating…';
         const fd = new FormData(form);
-        const payload = Object.fromEntries(fd.entries());
-        payload.immediatePay = !!fd.get('immediatePay');
-        payload.freeDomestic = !!fd.get('freeDomestic');
+  const payload = Object.fromEntries(fd.entries());
+  payload.immediatePay = !!fd.get('immediatePay');
+  payload.freeDomestic = (fd.get('freeDomestic') === 'yes');
         payload.returnsAccepted = !!fd.get('returnsAccepted');
         payload.setDefault = willSetDefault;
         // Only include shipping details when not free
