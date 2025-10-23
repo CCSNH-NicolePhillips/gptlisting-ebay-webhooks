@@ -116,6 +116,16 @@
                       </select>
                     </label>
                   </div>
+                  <div style="display:grid; grid-template-columns: 1fr 1fr; gap:.5rem; margin-top:.5rem;">
+                    <label style="display:block;">
+                      <div class="muted" style="font-size:.85rem;">Flat rate (USD)</div>
+                      <input name="shippingCostValue" type="number" min="0" step="0.01" placeholder="e.g. 5.99" style="width:100%; padding:.45rem .6rem; background:#0b1020; color:#f4f6fb; border:1px solid #26305a; border-radius:8px;" />
+                    </label>
+                    <label style="display:block;">
+                      <div class="muted" style="font-size:.85rem;">Each additional (USD)</div>
+                      <input name="additionalShippingCostValue" type="number" min="0" step="0.01" placeholder="0.00" style="width:100%; padding:.45rem .6rem; background:#0b1020; color:#f4f6fb; border:1px solid #26305a; border-radius:8px;" />
+                    </label>
+                  </div>
                 </div>
             </div>
             <div id="field_returnsAccepted" style="display:none;">
@@ -294,6 +304,13 @@
             if (!service) { document.getElementById('modalMsg').textContent = 'Please select a shipping service.'; return; }
             payload.shippingCarrierCode = carrier;
             payload.shippingServiceCode = service;
+            const cost = String(Number(form.shippingCostValue.value || '0').toFixed(2));
+            if (!cost || isNaN(Number(cost))) { document.getElementById('modalMsg').textContent = 'Enter a flat rate (USD).'; return; }
+            payload.shippingCostValue = cost;
+            const addl = form.additionalShippingCostValue.value;
+            if (addl !== undefined && addl !== null && String(addl).length) {
+              payload.additionalShippingCostValue = String(Number(addl).toFixed(2));
+            }
           }
         } else if (type === 'return') {
           payload.returnsAccepted = !!form.returnsAccepted.checked;
