@@ -36,29 +36,51 @@ export const handler: Handler = async (event) => {
     const curTxt = await curRes.text(); let cur: any; try { cur = JSON.parse(curTxt); } catch { cur = {}; }
     if (!curRes.ok) return json({ error: 'get-policy failed', status: curRes.status, detail: cur }, curRes.status);
 
+    // Helper: ensure categoryTypes includes a default entry
+    const normalizeCategoryTypes = (ct: any): any[] => {
+      let arr: any[] = Array.isArray(ct) && ct.length ? ct : [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }];
+      // Ensure exactly one default: true
+      let hasDefault = arr.some((x) => x && x.default === true);
+      if (!hasDefault) arr = arr.map((x, i) => ({ ...x, default: i === 0 }));
+      return arr;
+    };
+
     let payload: any = {};
     if (path === 'payment_policy') {
       payload = {
         name: body.name ?? cur.name,
         marketplaceId: mp,
-        categoryTypes: cur.categoryTypes || [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }],
+        categoryTypes: normalizeCategoryTypes(cur.categoryTypes),
         immediatePay: body.immediatePay ?? cur.immediatePay ?? false,
       };
     } else if (path === 'fulfillment_policy') {
       const handlingDays = Number(body.handlingTimeDays ?? cur?.handlingTime?.value ?? 1);
-      // preserve shippingOptions if not changing freeDomestic
-      let shippingOptions = cur.shippingOptions || [];
+      // preserve shippingOptions if not changing freeDomestic; only include key if non-empty
+      let shippingOptions: any[] | undefined = Array.isArray(cur.shippingOptions) && cur.shippingOptions.length
+        ? cur.shippingOptions
+        : undefined;
       if (body.freeDomestic === true) {
         shippingOptions = [
-          { optionType: 'DOMESTIC', costType: 'FLAT_RATE', shippingServices: [ { freeShipping: true, buyerResponsibleForShipping: false, shippingCarrierCode: 'USPS', shippingServiceCode: 'USPSPriorityFlatRateBox' } ] }
+          {
+            optionType: 'DOMESTIC',
+            costType: 'FLAT_RATE',
+            shippingServices: [
+              {
+                freeShipping: true,
+                buyerResponsibleForShipping: false,
+                shippingCarrierCode: 'USPS',
+                shippingServiceCode: 'USPSPriorityFlatRateBox',
+              },
+            ],
+          },
         ];
       }
       payload = {
         name: body.name ?? cur.name,
         marketplaceId: mp,
-        categoryTypes: cur.categoryTypes || [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }],
+        categoryTypes: normalizeCategoryTypes(cur.categoryTypes),
         handlingTime: { value: Math.max(0, handlingDays), unit: 'DAY' },
-        shippingOptions,
+        ...(shippingOptions && shippingOptions.length ? { shippingOptions } : {}),
       };
     } else if (path === 'return_policy') {
       const returnsAccepted = body.returnsAccepted ?? cur.returnsAccepted ?? true;
@@ -66,6 +88,7 @@ export const handler: Handler = async (event) => {
       payload = returnsAccepted ? {
         name: body.name ?? cur.name,
         marketplaceId: mp,
+        categoryTypes: normalizeCategoryTypes(cur.categoryTypes),
         returnsAccepted: true,
         returnPeriod: { value: Math.max(1, periodDays), unit: 'DAY' },
         returnShippingCostPayer: (body.returnShippingCostPayer ?? cur.returnShippingCostPayer ?? 'BUYER'),
@@ -73,6 +96,7 @@ export const handler: Handler = async (event) => {
       } : {
         name: body.name ?? cur.name,
         marketplaceId: mp,
+        categoryTypes: normalizeCategoryTypes(cur.categoryTypes),
         returnsAccepted: false,
       };
     }
