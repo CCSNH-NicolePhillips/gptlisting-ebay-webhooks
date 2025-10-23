@@ -31,6 +31,8 @@
       a { color: #9db2ff; text-decoration: none; }
       a:hover { text-decoration: underline; }
       .logo { font-weight: 800; letter-spacing: .2px; }
+      /* Hide auth badge on the login page to avoid confusing Signed in state */
+      #auth-badge { display: none !important; }
     </style>
     <script src="/auth-client.js"></script>
   </head>
@@ -50,7 +52,7 @@
         <div id="cfgWarning" class="mutedSmall" style="display:none;color:#ffb4b4"></div>
         <div class="mutedSmall">By continuing, you agree to the Terms and acknowledge the Privacy Policy.</div>
       </div>
-      <p class="mutedSmall"><a href="/">← Back to app</a></p>
+      <!-- Back to app intentionally removed for public-computer safety -->
     </div>
 
     <script>
