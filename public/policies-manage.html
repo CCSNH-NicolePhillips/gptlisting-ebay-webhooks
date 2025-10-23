@@ -201,8 +201,6 @@
               await populate();
             } catch (e) { showMsg('Failed to set default: '+(e?.message||e)); }
           };
-          const editBtn = document.createElement('button'); editBtn.textContent = 'Edit'; editBtn.style.marginLeft = '.5rem'; editBtn.className='secondary btn-sm';
-          editBtn.onclick = () => openEdit(typeKey, id.textContent, name.textContent);
           const delBtn = document.createElement('button'); delBtn.textContent = 'Delete'; delBtn.style.marginLeft='.5rem'; delBtn.className='btn-sm';
           delBtn.onclick = async () => {
             if (!confirm('Delete this policy on eBay? This cannot be undone.')) return;
@@ -215,7 +213,7 @@
               await populate();
             } catch (e) { showMsg('Delete failed: '+(e?.message||e)); }
           };
-          act.appendChild(setBtn); act.appendChild(editBtn); act.appendChild(delBtn);
+          act.appendChild(setBtn); act.appendChild(delBtn);
           tr.appendChild(name); tr.appendChild(id); tr.appendChild(def); tr.appendChild(act);
           tbody.appendChild(tr);
         });
