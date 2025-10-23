@@ -54,7 +54,9 @@ export const handler: Handler = async (event) => {
       curOptions: any,
       forceFreeDomestic: boolean,
       carrier?: string,
-      serviceCode?: string
+      serviceCode?: string,
+      shippingCostValue?: string,
+      additionalShippingCostValue?: string
     ) => {
       if (forceFreeDomestic) {
         return [
@@ -64,7 +66,8 @@ export const handler: Handler = async (event) => {
             insuranceFee: { value: '0.00', currency: 'USD' },
             shippingServices: [
               {
-                shippingServiceCode: 'USPSFirstClass',
+                // Default to USPS Ground Advantage for free shipping
+                shippingServiceCode: 'USPSGroundAdvantage',
                 sortOrderId: 1,
                 freeShipping: true,
                 shippingCarrierCode: 'USPS',
@@ -79,8 +82,8 @@ export const handler: Handler = async (event) => {
         return [
           {
             optionType: 'DOMESTIC',
-            // Use CALCULATED to avoid requiring explicit shippingCost amounts
-            costType: 'CALCULATED',
+            // Use FLAT_RATE with required amounts from UI
+            costType: 'FLAT_RATE',
             insuranceFee: { value: '0.00', currency: 'USD' },
             shippingServices: [
               {
@@ -88,6 +91,10 @@ export const handler: Handler = async (event) => {
                 sortOrderId: 1,
                 freeShipping: false,
                 buyerResponsibleForShipping: true,
+                shippingCost: { value: shippingCostValue || '0.00', currency: 'USD' },
+                ...(additionalShippingCostValue
+                  ? { additionalShippingCost: { value: additionalShippingCostValue, currency: 'USD' } }
+                  : {}),
                 shippingCarrierCode: shipCarrier,
               },
             ],
@@ -100,7 +107,7 @@ export const handler: Handler = async (event) => {
       return [
         {
           optionType: 'DOMESTIC',
-          costType: 'CALCULATED',
+          costType: 'FLAT_RATE',
           insuranceFee: { value: '0.00', currency: 'USD' },
           shippingServices: [
             {
@@ -108,6 +115,7 @@ export const handler: Handler = async (event) => {
               sortOrderId: 1,
               freeShipping: false,
               buyerResponsibleForShipping: true,
+              shippingCost: { value: shippingCostValue || '0.00', currency: 'USD' },
               shippingCarrierCode: 'USPS',
             },
           ],
@@ -139,7 +147,9 @@ export const handler: Handler = async (event) => {
         cur.shippingOptions,
         body.freeDomestic === true,
         body.shippingCarrierCode,
-        body.shippingServiceCode
+        body.shippingServiceCode,
+        body.shippingCostValue,
+        body.additionalShippingCostValue
       );
       // Build a minimal, valid payload to avoid sending read-only/unsupported fields
       payload = {
