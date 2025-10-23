@@ -16,7 +16,10 @@
       label { display:block; }
       input, select { width:100%; background:#0f1530; color:#f4f6fb; border:1px solid #26305a; border-radius:8px; padding:.55rem .6rem; }
       .btn { background: var(--primary); color:#fff; border:none; border-radius:10px; padding:.7rem .95rem; font-weight:700; cursor:pointer; }
-      .secondary { background:transparent; color:#cbd5ff; border:1px solid #3d4a86; }
+  .secondary { background:transparent; color:#cbd5ff; border:1px solid #3d4a86; }
+  .btn-toggle.on { background:#1db954; border-color:#159b46; color:#031b0f; }
+  .actions { display:flex; align-items:center; gap:.6rem; }
+  .tag { display:inline-block; font-size:.8rem; padding:.15rem .45rem; border:1px solid #2f3f7a; color:#cbd5ff; border-radius:999px; }
     </style>
   </head>
   <body>
@@ -28,6 +31,7 @@
   <p class="muted" id="subtitle">Fill out the minimal fields below. You can also choose to set this as your default.</p>
         <form id="form">
           <input type="hidden" name="type" />
+          <input type="hidden" name="setDefault" />
           <div class="row">
             <label>
               <div class="muted" style="font-size:.85rem">Name</div>
@@ -71,10 +75,9 @@
               </select>
             </div>
           </div>
-          <div class="muted" style="margin-top:.5rem; display:flex; align-items:center; gap:.5rem;">
-            <label style="display:inline-flex; align-items:center; gap:.5rem;">
-              <input type="checkbox" name="setDefault" /> Set as default
-            </label>
+          <div class="actions" style="margin-top:.25rem;">
+            <button type="button" class="secondary btn-toggle" id="btnToggleDefault">Set as default</button>
+            <span id="defaultTag" class="tag" style="display:none;">Will be set as default</span>
           </div>
           <div id="msg" class="muted" style="margin:.5rem 0 .5rem; min-height:1.25rem"></div>
           <div style="display:flex; gap:.5rem;">
@@ -164,6 +167,8 @@
           const costType = (form.costType && form.costType.value) || 'CALCULATED';
           const paid = document.getElementById('field_domesticPaid');
           const price = document.getElementById('field_flatRatePrices');
+          const costWrap = document.getElementById('field_costType');
+          if (costWrap) costWrap.style.display = free ? 'none' : 'block';
           paid.style.display = free ? 'none' : 'block';
           if (!free) {
             form.shippingServiceCode.required = true;
@@ -197,6 +202,19 @@
 
       document.getElementById('btnCancel').onclick = () => { location.href = '/policies-manage.html'; };
 
+      // Toggle default via button
+      const btnToggleDefault = document.getElementById('btnToggleDefault');
+      const defaultTag = document.getElementById('defaultTag');
+      let willSetDefault = false;
+      function updateDefaultUI() {
+        form.setDefault.value = willSetDefault ? 'on' : '';
+        btnToggleDefault.classList.toggle('on', willSetDefault);
+        defaultTag.style.display = willSetDefault ? 'inline-block' : 'none';
+        btnToggleDefault.textContent = willSetDefault ? 'Will be set as default' : 'Set as default';
+      }
+      btnToggleDefault.onclick = () => { willSetDefault = !willSetDefault; updateDefaultUI(); };
+      updateDefaultUI();
+
       form.onsubmit = async (e) => {
         e.preventDefault();
         const msg = document.getElementById('msg');
@@ -206,7 +224,7 @@
         payload.immediatePay = !!fd.get('immediatePay');
         payload.freeDomestic = !!fd.get('freeDomestic');
         payload.returnsAccepted = !!fd.get('returnsAccepted');
-  payload.setDefault = !!fd.get('setDefault');
+        payload.setDefault = willSetDefault;
         // Only include shipping details when not free
         if (type === 'fulfillment' || type === 'shipping') {
           payload.costType = (form.costType && form.costType.value) || 'CALCULATED';
