@@ -186,11 +186,11 @@ export const handler: Handler = async (event) => {
             costType: 'FLAT_RATE',
             shippingServices: [
               {
-                // Free domestic USPS Priority Flat Rate
+                // Free domestic USPS Ground Advantage (preferred baseline)
                 freeShipping: true,
                 buyerResponsibleForShipping: false,
                 shippingCarrierCode: 'USPS',
-                shippingServiceCode: 'USPSPriorityFlatRateBox',
+                shippingServiceCode: 'USPSGroundAdvantage',
               },
             ],
           },
