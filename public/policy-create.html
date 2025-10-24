@@ -86,7 +86,7 @@
           </div>
           <!-- set-as-default now lives inline with footer buttons -->
           <div id="msg" class="muted" style="margin:.5rem 0 .5rem; min-height:1.25rem"></div>
-          <div class="muted" style="margin:.25rem 0 .25rem;">
+          <div class="muted" id="debugHint" style="margin:.25rem 0 .25rem; display:none;">
             <a href="#" id="lnkShowDebug" style="color:#8fb0ff; display:inline-block;">Show debug</a>
             <span class="muted" style="font-size:.85rem;"> · add ?debug=1 to URL to force-open</span>
           </div>
@@ -315,10 +315,12 @@
         const dbg = (id) => document.getElementById(id);
         const dbgPanel = dbg('debugPanel');
         const lnkShow = dbg('lnkShowDebug');
+        const dbgHint = dbg('debugHint');
         if (lnkShow && dbgPanel) {
           lnkShow.onclick = (ev) => { ev.preventDefault(); dbgPanel.style.display='block'; dbgPanel.open = true; dbgPanel.scrollIntoView({behavior:'smooth', block:'nearest'}); };
         }
         if (dbgPanel) { dbg('dbg_status').textContent = 'n/a'; dbg('dbg_auth').textContent = 'n/a'; dbg('dbg_error').textContent = 'n/a'; dbg('dbg_sent').textContent = 'n/a'; dbg('dbg_request').textContent = 'n/a'; dbgPanel.style.display = 'none'; }
+        if (dbgHint) dbgHint.style.display = 'none';
         const fd = new FormData(form);
         const payload = Object.fromEntries(fd.entries());
         payload.immediatePay = !!fd.get('immediatePay');
@@ -386,6 +388,12 @@
               dbgPanel.style.display = 'block';
               dbgPanel.open = true;
               dbgPanel.scrollIntoView({behavior:'smooth', block:'nearest'});
+              if (dbgHint) dbgHint.style.display = 'block';
+            }
+            const dup = j?.detail?.errors?.find((err) => String(err?.errorId) === '20400');
+            if (dup) {
+              const dupId = dup?.parameters?.find((p) => p?.name === 'duplicatePolicyId')?.value || 'unknown';
+              throw new Error('A policy with the same logistics already exists (ID ' + dupId + ').');
             }
             throw new Error(emsg);
           }
@@ -402,7 +410,9 @@
             const usp = new URLSearchParams(location.search);
             if (usp.get('debug') === '1') {
               const el = document.getElementById('debugPanel');
+              const hint = document.getElementById('debugHint');
               if (el) { el.style.display='block'; el.open = true; }
+              if (hint) hint.style.display = 'block';
             }
           } catch {}
         })();
