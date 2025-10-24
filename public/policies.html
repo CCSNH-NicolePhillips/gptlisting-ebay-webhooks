@@ -107,6 +107,16 @@
         </div>
       </div>
 
+      <div style="margin-top: 1.25rem; background:#0f1530;border:1px solid #26305a;border-radius:10px;padding:.9rem;">
+        <div style="font-weight:700;margin-bottom:.35rem;">Debug tools</div>
+        <div class="muted" style="font-size:.9rem;margin-bottom:.5rem;">Run these from this page so your Authorization header is included. Opening the function URL directly won’t include your token and will return Unauthorized.</div>
+        <div style="display:flex; gap:.5rem; flex-wrap:wrap;">
+          <button id="btnDebugAccount" class="secondary">Run account debug (scopes)</button>
+          <button id="btnCreateKnownGood">Create shipping (known-good)</button>
+        </div>
+        <pre id="debugOut" style="white-space:pre-wrap;color:#e6ebff;background:#0b1020;border:1px solid #26305a;border-radius:8px;padding:.6rem;margin-top:.6rem;max-height:280px;overflow:auto;display:none;"></pre>
+      </div>
+
       <div style="margin-top: 1rem">
         <a class="secondary" href="/">← Back to landing</a>
         <a
@@ -180,6 +190,37 @@
       };
       // Initial load of current policies
       loadPolicies().catch(()=>{});
+      // Debug helpers
+      function showDebug(obj) {
+        const pre = document.getElementById('debugOut');
+        if (!pre) return;
+        pre.style.display = 'block';
+        try { pre.textContent = JSON.stringify(obj, null, 2); }
+        catch { pre.textContent = String(obj); }
+      }
+      const btnDbg = document.getElementById('btnDebugAccount');
+      if (btnDbg) btnDbg.addEventListener('click', async () => {
+        try {
+          const r = await authClient.authFetch('/.netlify/functions/ebay-debug-account');
+          const j = await r.json();
+          showDebug(j);
+        } catch (e) { showDebug({ error: String(e) }); }
+      });
+      const btnCreate = document.getElementById('btnCreateKnownGood');
+      if (btnCreate) btnCreate.addEventListener('click', async () => {
+        if (!confirm('Create a minimal USPS fulfillment policy now?')) return;
+        try {
+          const name = 'App Default USPS ' + new Date().toISOString().slice(0,19).replace('T',' ');
+          const r = await authClient.authFetch('/.netlify/functions/ebay-policy-create-fulfillment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, handlingTime: 3, free: false, costType: 'CALCULATED', serviceCode: 'USPSGroundAdvantage', flatRate: 5.99 })
+          });
+          const j = await r.json();
+          showDebug(j);
+          try { await loadPolicies(); } catch {}
+        } catch (e) { showDebug({ error: String(e) }); }
+      });
       // Intercept the "View policies JSON" link to ensure we include Authorization
       const viewLink = document.querySelector('a[href="/.netlify/functions/ebay-list-policies"]');
       if (viewLink) viewLink.addEventListener('click', async (e) => {
