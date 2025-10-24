@@ -174,6 +174,52 @@
               <input type="number" name="additionalShippingCostValue" min="0" step="0.01" placeholder="0.00" />
             </label>
           </div>
+          <div id="field_calculated" class="group" style="margin-top:.8rem; display:none;">
+            <div class="sectionTitle">Calculated shipping package</div>
+            <div class="row" style="grid-template-columns:1fr 1fr; gap:.6rem; margin-top:.25rem;">
+              <label>
+                <div class="muted" style="font-size:.85rem;">Measurement system</div>
+                <select name="calcMeasurementSystem">
+                  <option value="ENGLISH" selected>Inches / Pounds</option>
+                  <option value="METRIC">Centimeters / Kilograms</option>
+                </select>
+              </label>
+              <label>
+                <div class="muted" style="font-size:.85rem;">Package type</div>
+                <select name="calcPackageType">
+                  <option value="PACKAGE_THICK_ENVELOPE" selected>Thick envelope / package</option>
+                  <option value="LARGE_ENVELOPE">Large envelope</option>
+                  <option value="LETTER">Letter</option>
+                  <option value="PACKAGE">Package</option>
+                  <option value="BULKYGOODS">Bulky goods</option>
+                </select>
+              </label>
+            </div>
+            <div class="row" style="grid-template-columns:repeat(3, 1fr); gap:.6rem; margin-top:.6rem;">
+              <label>
+                <div class="muted" style="font-size:.85rem;">Length</div>
+                <input type="number" name="calcLength" min="1" step="0.1" placeholder="12" value="12" />
+              </label>
+              <label>
+                <div class="muted" style="font-size:.85rem;">Width</div>
+                <input type="number" name="calcWidth" min="1" step="0.1" placeholder="9" value="9" />
+              </label>
+              <label>
+                <div class="muted" style="font-size:.85rem;">Height</div>
+                <input type="number" name="calcHeight" min="1" step="0.1" placeholder="3" value="3" />
+              </label>
+            </div>
+            <div class="row" style="grid-template-columns:repeat(2, 1fr); gap:.6rem; margin-top:.6rem;">
+              <label>
+                <div class="muted" style="font-size:.85rem;">Weight (major)</div>
+                <input type="number" name="calcWeightMajor" min="0" step="0.1" placeholder="1" value="1" />
+              </label>
+              <label>
+                <div class="muted" style="font-size:.85rem;">Weight (minor)</div>
+                <input type="number" name="calcWeightMinor" min="0" step="0.1" placeholder="0" value="0" />
+              </label>
+            </div>
+          </div>
         `;
   // Place advanced shipping controls directly under the dropdown (same column)
   const freeWrap = document.getElementById('field_freeDomestic');
@@ -201,6 +247,7 @@
           const paid = document.getElementById('field_domesticPaid');
           const price = document.getElementById('field_flatRatePrices');
           const costWrap = document.getElementById('field_costType');
+          const calcWrap = document.getElementById('field_calculated');
           if (costWrap) costWrap.style.display = free ? 'none' : 'block';
           paid.style.display = free ? 'none' : 'block';
           if (!free) {
@@ -208,10 +255,12 @@
             updateServiceOptions();
             price.style.display = costType === 'FLAT_RATE' ? 'grid' : 'none';
             form.shippingCostValue.required = costType === 'FLAT_RATE';
+            if (calcWrap) calcWrap.style.display = costType === 'CALCULATED' ? 'block' : 'none';
           } else {
             form.shippingServiceCode.required = false;
             price.style.display = 'none';
             form.shippingCostValue.required = false;
+            if (calcWrap) calcWrap.style.display = 'none';
           }
         }
         // Defaults
@@ -267,11 +316,22 @@
               payload.shippingCostValue = cost;
               const addl = form.additionalShippingCostValue.value;
               if (addl !== undefined && addl !== null && String(addl).length) payload.additionalShippingCostValue = String(Number(addl).toFixed(2));
+            } else {
+              payload.calcMeasurementSystem = form.calcMeasurementSystem?.value || 'ENGLISH';
+              payload.calcPackageType = form.calcPackageType?.value || 'PACKAGE_THICK_ENVELOPE';
+              payload.calcLength = form.calcLength?.value;
+              payload.calcWidth = form.calcWidth?.value;
+              payload.calcHeight = form.calcHeight?.value;
+              payload.calcWeightMajor = form.calcWeightMajor?.value;
+              payload.calcWeightMinor = form.calcWeightMinor?.value;
             }
           }
         }
         const clientPayload = JSON.parse(JSON.stringify(payload));
         try {
+          for (const key of Object.keys(payload)) {
+            if (payload[key] === '' || payload[key] === null || payload[key] === undefined) delete payload[key];
+          }
           const r = await authClient.authFetch('/.netlify/functions/ebay-create-policy', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
           const www = r.headers.get('www-authenticate') || '';
           const text = await r.text();

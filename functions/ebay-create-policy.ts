@@ -63,13 +63,38 @@ export const handler: Handler = async (event) => {
               {
                 freeShipping: true,
                 shippingCarrierCode: 'USPS',
-                shippingServiceCode: 'USPSGroundAdvantage',
+                shippingServiceCode: 'USPSPriorityFlatRateBox',
                 sortOrder: 1,
               },
             ],
           },
         ];
       } else if (body.shippingServiceCode) {
+        const calcRate = costType === 'CALCULATED' ? (() => {
+          const measurementSystem = (body.calcMeasurementSystem === 'METRIC') ? 'METRIC' : 'ENGLISH';
+          const packageType = body.calcPackageType || 'PACKAGE_THICK_ENVELOPE';
+          const toNum = (val: any, def: number) => {
+            const n = Number(val);
+            return Number.isFinite(n) && n >= 0 ? n : def;
+          };
+          const lengthVal = toNum(body.calcLength, measurementSystem === 'METRIC' ? 30 : 12);
+          const widthVal = toNum(body.calcWidth, measurementSystem === 'METRIC' ? 20 : 9);
+          const heightVal = toNum(body.calcHeight, measurementSystem === 'METRIC' ? 8 : 3);
+          const weightMajor = toNum(body.calcWeightMajor, measurementSystem === 'METRIC' ? 1 : 1);
+          const weightMinor = toNum(body.calcWeightMinor, 0);
+          const dimUnit = measurementSystem === 'METRIC' ? 'CENTIMETER' : 'INCH';
+          const majorUnit = measurementSystem === 'METRIC' ? 'KILOGRAM' : 'POUND';
+          const minorUnit = measurementSystem === 'METRIC' ? 'GRAM' : 'OUNCE';
+          return {
+            measurementSystem,
+            packageType,
+            packageLength: { value: lengthVal, unit: dimUnit },
+            packageWidth: { value: widthVal, unit: dimUnit },
+            packageHeight: { value: heightVal, unit: dimUnit },
+            weightMajor: { value: weightMajor, unit: majorUnit },
+            weightMinor: { value: weightMinor, unit: minorUnit },
+          };
+        })() : null;
         shippingOptions = [
           {
             optionType: 'DOMESTIC',
@@ -87,6 +112,7 @@ export const handler: Handler = async (event) => {
                   : {}),
               },
             ],
+            ...(calcRate ? { calculatedShippingRate: calcRate } : {}),
           },
         ];
       }
