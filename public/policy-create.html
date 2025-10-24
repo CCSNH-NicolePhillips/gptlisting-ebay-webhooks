@@ -85,6 +85,10 @@
           </div>
           <!-- set-as-default now lives inline with footer buttons -->
           <div id="msg" class="muted" style="margin:.5rem 0 .5rem; min-height:1.25rem"></div>
+          <div class="muted" style="margin:.25rem 0 .25rem;">
+            <a href="#" id="lnkShowDebug" style="color:#8fb0ff; display:inline-block;">Show debug</a>
+            <span class="muted" style="font-size:.85rem;"> · add ?debug=1 to URL to force-open</span>
+          </div>
           <details id="debugPanel" class="debug" style="display:none;">
             <summary>Debug details</summary>
             <div class="kv"><strong>Status:</strong> <span id="dbg_status">n/a</span></div>
@@ -239,6 +243,10 @@
         // reset debug panel
         const dbg = (id) => document.getElementById(id);
         const dbgPanel = dbg('debugPanel');
+        const lnkShow = dbg('lnkShowDebug');
+        if (lnkShow && dbgPanel) {
+          lnkShow.onclick = (ev) => { ev.preventDefault(); dbgPanel.style.display='block'; dbgPanel.open = true; dbgPanel.scrollIntoView({behavior:'smooth', block:'nearest'}); };
+        }
         if (dbgPanel) { dbg('dbg_status').textContent = 'n/a'; dbg('dbg_auth').textContent = 'n/a'; dbg('dbg_error').textContent = 'n/a'; dbg('dbg_sent').textContent = 'n/a'; dbg('dbg_request').textContent = 'n/a'; dbgPanel.style.display = 'none'; }
         const fd = new FormData(form);
         const payload = Object.fromEntries(fd.entries());
@@ -281,6 +289,7 @@
               dbg('dbg_sent').textContent = j?.sent ? JSON.stringify(j.sent, null, 2) : 'n/a';
               dbgPanel.style.display = 'block';
               dbgPanel.open = true;
+              dbgPanel.scrollIntoView({behavior:'smooth', block:'nearest'});
             }
             throw new Error(emsg);
           }
@@ -290,6 +299,17 @@
           msg.textContent = 'Error: ' + (e?.message || e);
         }
       };
+
+        // Force-open debug panel when ?debug=1 is present
+        (function forceDebugFromQuery(){
+          try {
+            const usp = new URLSearchParams(location.search);
+            if (usp.get('debug') === '1') {
+              const el = document.getElementById('debugPanel');
+              if (el) { el.style.display='block'; el.open = true; }
+            }
+          } catch {}
+        })();
     </script>
   </body>
 </html>
