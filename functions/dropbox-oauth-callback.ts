@@ -2,13 +2,31 @@ import type { Handler } from '@netlify/functions';
 import { tokensStore } from './_blobs.js';
 import { consumeOAuthState } from './_auth.js';
 
+function sanitizeReturnTo(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  let candidate = value.trim();
+  if (!candidate) return null;
+  if (/^https?:\/\//i.test(candidate)) {
+    try {
+      const url = new URL(candidate);
+      candidate = `${url.pathname || '/'}`;
+      if (url.search) candidate += url.search;
+      if (url.hash) candidate += url.hash;
+    } catch {
+      return null;
+    }
+  }
+  if (!candidate.startsWith('/')) return null;
+  return candidate;
+}
+
 export const handler: Handler = async (event) => {
   try {
   const code = event.queryStringParameters?.code;
     if (!code) return { statusCode: 400, body: 'Missing ?code' };
   const state = event.queryStringParameters?.state || null;
-  const sub = await consumeOAuthState(state || null);
-  if (!sub) return { statusCode: 400, body: 'Invalid or expired state. Start connect from the app while signed in.' };
+  const stateInfo = await consumeOAuthState(state || null);
+  if (!stateInfo?.sub) return { statusCode: 400, body: 'Invalid or expired state. Start connect from the app while signed in.' };
 
     const clientId = process.env.DROPBOX_CLIENT_ID!;
     const clientSecret = process.env.DROPBOX_CLIENT_SECRET!;
@@ -40,10 +58,12 @@ export const handler: Handler = async (event) => {
     }
 
   const tokens = tokensStore();
-  const key = `users/${encodeURIComponent(sub)}/dropbox.json`;
+  const key = `users/${encodeURIComponent(stateInfo.sub)}/dropbox.json`;
   await tokens.setJSON(key, { refresh_token: refreshToken });
 
-    return { statusCode: 302, headers: { Location: '/' } };
+  const redirectTo = sanitizeReturnTo(stateInfo.returnTo) || '/index.html';
+
+    return { statusCode: 302, headers: { Location: redirectTo } };
   } catch (e: any) {
     return { statusCode: 500, body: `Dropbox OAuth error: ${e.message}` };
   }

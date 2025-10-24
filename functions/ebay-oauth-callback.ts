@@ -2,13 +2,31 @@ import type { Handler } from '@netlify/functions';
 import { tokensStore } from './_blobs.js';
 import { consumeOAuthState } from './_auth.js';
 
+function sanitizeReturnTo(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  let candidate = value.trim();
+  if (!candidate) return null;
+  if (/^https?:\/\//i.test(candidate)) {
+    try {
+      const url = new URL(candidate);
+      candidate = `${url.pathname || '/'}`;
+      if (url.search) candidate += url.search;
+      if (url.hash) candidate += url.hash;
+    } catch {
+      return null;
+    }
+  }
+  if (!candidate.startsWith('/')) return null;
+  return candidate;
+}
+
 export const handler: Handler = async (event) => {
   try {
   const code = event.queryStringParameters?.code;
     if (!code) return { statusCode: 400, body: 'Missing ?code' };
     const state = event.queryStringParameters?.state || null;
-    const sub = await consumeOAuthState(state || null);
-    if (!sub) {
+    const stateInfo = await consumeOAuthState(state || null);
+    if (!stateInfo?.sub) {
       const jsonHeaders = { 'Content-Type': 'application/json; charset=utf-8' } as Record<string, string>;
       return { statusCode: 400, headers: jsonHeaders, body: JSON.stringify({ error: 'invalid_state', hint: 'Start eBay connect from the app while signed in' }) };
     }
@@ -89,9 +107,10 @@ export const handler: Handler = async (event) => {
     }
 
   const tokens = tokensStore();
-  const key = `users/${encodeURIComponent(sub)}/ebay.json`;
+  const key = `users/${encodeURIComponent(stateInfo.sub)}/ebay.json`;
   await tokens.setJSON(key, { refresh_token: data.refresh_token });
-    const redirectHeaders = { Location: '/' } as Record<string, string>;
+    const redirectPath = sanitizeReturnTo(stateInfo.returnTo) || '/index.html';
+    const redirectHeaders = { Location: redirectPath } as Record<string, string>;
     return { statusCode: 302, headers: redirectHeaders };
   } catch (e: any) {
     return { statusCode: 500, body: `OAuth error: ${e.message}` };

@@ -6,7 +6,14 @@ const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN;
 const AUTH0_CLIENT_ID = process.env.AUTH0_CLIENT_ID;
 const AUTH0_AUDIENCE = process.env.AUTH0_AUDIENCE;
 const ISSUER = AUTH0_DOMAIN ? `https://${AUTH0_DOMAIN}/` : undefined;
-const JWKS = AUTH0_DOMAIN ? createRemoteJWKSet(new URL(`${ISSUER}.well-known/jwks.json`)) : null as any;
+const JWKS = AUTH0_DOMAIN ? createRemoteJWKSet(new URL(`${ISSUER}.well-known/jwks.json`)) : (null as any);
+
+export interface OAuthStateRecord {
+  sub: string;
+  provider?: string;
+  createdAt?: number;
+  returnTo?: string | null;
+}
 
 export function getBearerToken(event: HandlerEvent): string | null {
   const h = event.headers || {} as any;
@@ -57,26 +64,36 @@ export function json(body: any, status: number = 200) {
   return { statusCode: status, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
 }
 
-export async function createOAuthStateForUser(event: HandlerEvent, provider: string): Promise<string | null> {
+export async function createOAuthStateForUser(
+  event: HandlerEvent,
+  provider: string,
+  extras: Partial<OAuthStateRecord> = {}
+): Promise<string | null> {
   const sub = getJwtSubUnverified(event);
   if (!sub) return null;
   // Random opaque ID
   const nonce = (globalThis as any).crypto?.randomUUID ? (globalThis as any).crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36);
   const store = tokensStore();
-  await store.setJSON(`oauth-state/${nonce}.json`, { sub, provider, createdAt: Date.now() });
+  const record: OAuthStateRecord = {
+    sub,
+    provider,
+    createdAt: Date.now(),
+    ...extras,
+  };
+  await store.setJSON(`oauth-state/${nonce}.json`, record);
   return nonce;
 }
 
-export async function consumeOAuthState(state: string | null): Promise<string | null> {
+export async function consumeOAuthState(state: string | null): Promise<OAuthStateRecord | null> {
   if (!state) return null;
   try {
     const store = tokensStore();
     const key = `oauth-state/${state}.json`;
-    const j = (await store.get(key, { type: 'json' })) as any;
+    const j = (await store.get(key, { type: 'json' })) as OAuthStateRecord | null;
     if (j && j.sub) {
       // best-effort cleanup
       try { await store.delete?.(key as any); } catch {}
-      return String(j.sub);
+      return { ...j, sub: String(j.sub) };
     }
     return null;
   } catch {
