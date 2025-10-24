@@ -178,6 +178,7 @@
         </div>
       </div>
       <div style="margin-top:1rem; display:flex; gap:.5rem; flex-wrap:wrap;">
+        <a class="btn" href="/setup.html">Setup checklist</a>
         <a class="btn secondary" href="/policies-manage.html">Policies</a>
         <a class="btn secondary" href="/location.html">Inventory location</a>
       </div>
@@ -509,35 +510,15 @@
         const connected = await refreshStatus();
         let policiesReady = false;
         let locationReady = false;
+        const setupHints = [];
         if (connected) {
-          // Auto opt-in + ensure policies/location when connected
+          let optedIn = true;
           try {
-            const setupMsg = document.getElementById('setupMsg');
-            const say = (s) => { if (setupMsg) setupMsg.textContent = s; };
-            // 0) Check opt-in and auto-submit if needed
-            try {
-              const chk = await (await authClient.authFetch('/.netlify/functions/ebay-check-optin')).json();
-              if (chk && chk.ok && !chk.optedIn) {
-                say('Enrolling in eBay Business Policies…');
-                await authClient.authFetch('/.netlify/functions/ebay-optin', { method: 'POST' }).catch(()=>{});
-                // Don't block on propagation; continue to ensure calls which are idempotent
-              }
-            } catch {}
-            // 1) Ensure policies exist (idempotent)
-            try {
-              const pol = await (await authClient.authFetch('/.netlify/functions/ebay-ensure-policies', { method: 'POST' })).json();
-              if (pol && pol.ok && pol.paymentPolicyId && pol.fulfillmentPolicyId && pol.returnPolicyId) {
-                policiesReady = true;
-              }
-            } catch {}
-            // 2) Ensure location exists (idempotent) – server has env fallback for address
-            try {
-              const loc = await (await authClient.authFetch('/.netlify/functions/ebay-ensure-location', { method: 'POST' })).json();
-              if (loc && loc.ok && loc.merchantLocationKey) {
-                locationReady = true;
-              }
-            } catch {}
-            say('');
+            const chk = await (await authClient.authFetch('/.netlify/functions/ebay-check-optin')).json();
+            if (chk && chk.ok && !chk.optedIn) {
+              optedIn = false;
+              setupHints.push('Opt into eBay Business Policies from the setup page.');
+            }
           } catch {}
           try {
             const p = await (await authClient.authFetch('/.netlify/functions/ebay-list-policies')).json();
@@ -545,12 +526,26 @@
             const pay = p?.payment?.json?.paymentPolicies || [];
             const ret = p?.returns?.json?.returnPolicies || [];
             policiesReady = fp.length > 0 && pay.length > 0 && ret.length > 0;
-          } catch {}
+            if (!policiesReady) setupHints.push('Create your payment, shipping, and return policies on the setup page.');
+          } catch {
+            policiesReady = false;
+            setupHints.push('Create your payment, shipping, and return policies on the setup page.');
+          }
           try {
             const loc = await (await authClient.authFetch('/.netlify/functions/ebay-list-locations')).json();
             const list = loc?.locations || [];
             locationReady = Array.isArray(list) && list.length > 0;
-          } catch {}
+            if (!locationReady) setupHints.push('Add an inventory location from the setup page.');
+          } catch {
+            locationReady = false;
+            setupHints.push('Add an inventory location from the setup page.');
+          }
+          if (setupHints.length === 0 && optedIn) {
+            setupHints.push('All set! You can head to the draft wizard once your photos are ready.');
+          }
+        } else {
+          const setupMsg = document.getElementById('setupMsg');
+          if (setupMsg) setupMsg.textContent = '';
         }
         const chkPolicies = document.getElementById('chkPolicies');
         const policiesLink = document.getElementById('policiesLink');
@@ -561,8 +556,8 @@
         }
         if (policiesLink) {
           policiesLink.style.display = 'inline';
-          policiesLink.textContent = policiesReady ? 'View' : 'Create';
-          policiesLink.href = policiesReady ? '/policies-manage.html' : '/policies.html';
+          policiesLink.textContent = policiesReady ? 'View' : 'Set up';
+          policiesLink.href = policiesReady ? '/policies-manage.html' : '/setup.html';
         }
 
         const chkLocation = document.getElementById('chkLocation');
@@ -573,8 +568,13 @@
         }
         if (locationLink) {
           locationLink.style.display = 'inline';
-          locationLink.textContent = locationReady ? 'View' : 'Create';
-          locationLink.href = '/location.html';
+          locationLink.textContent = locationReady ? 'View' : 'Set up';
+          locationLink.href = locationReady ? '/location.html' : '/setup.html#inventory';
+        }
+
+        const setupMsg = document.getElementById('setupMsg');
+        if (setupMsg) {
+          setupMsg.textContent = setupHints.join(' ');
         }
 
         const goBtn = document.getElementById('goCreateDraftBtn');

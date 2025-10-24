@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GPTListing · Setup</title>
+    <style>
+      body {
+        margin: 0;
+        background: #0b1020;
+        color: #f4f6fb;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      }
+      a { color: #a8c1ff; text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      .wrap { max-width: 960px; margin: 4vh auto; padding: 1.5rem; }
+      .card { background: #141a33; border: 1px solid #2a335c; border-radius: 14px; padding: 1.75rem; box-shadow: 0 10px 30px rgba(0,0,0,0.25); }
+      h1 { margin: 0 0 0.35rem; font-size: 1.85rem; letter-spacing: 0.2px; }
+      h2 { margin-top: 2rem; font-size: 1.45rem; letter-spacing: 0.15px; }
+      h3 { margin-bottom: 0.4rem; }
+      .muted { color: #a2a9c8; }
+      .small { font-size: 0.9rem; }
+      .section { margin-top: 1.5rem; }
+      .panel { background: #0f1530; border: 1px solid #26305a; border-radius: 12px; padding: 1.05rem; margin-top: 0.9rem; }
+      .panel h3 { margin-top: 0; }
+      .status { font-size: 0.9rem; margin: 0.25rem 0 0.65rem; color: #cbd5ff; }
+      .actions { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-top: 0.6rem; }
+      button, .btn { background: #4f7cff; color: #fff; border: none; border-radius: 9px; padding: 0.65rem 0.95rem; cursor: pointer; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+      button.secondary, .btn.secondary { background: transparent; color: #cbd5ff; border: 1px solid #3d4a86; }
+      button:disabled { opacity: 0.55; cursor: not-allowed; }
+      .badge { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; padding: 0.25rem 0.5rem; border-radius: 999px; border: 1px solid #2f3f7a; color: #cbd5ff; background: rgba(79,124,255,0.08); }
+      .divider { height: 1px; background: #2a335c; margin: 1.5rem 0; border: none; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
+      .callout { margin-top: 1.2rem; padding: 0.9rem 1.05rem; border: 1px solid #3d4a86; border-radius: 10px; background: rgba(15,21,48,0.65); }
+      .callout strong { color: #cbd5ff; }
+      @media (max-width: 640px) {
+        .card { padding: 1.2rem; }
+        .wrap { padding: 1rem; }
+      }
+    </style>
+  </head>
+  <body>
+    <script src="/auth-client.js"></script>
+    <div class="wrap">
+      <div class="card">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:0.6rem; flex-wrap:wrap;">
+          <h1>Getting started</h1>
+          <a class="btn secondary" href="/index.html">← Back to dashboard</a>
+        </div>
+        <p class="muted">Connect your accounts and provision the required eBay Business Policies once. After you finish these steps you can jump straight into creating drafts.</p>
+
+        <div class="callout small" id="setupSummary" style="display:none;"></div>
+
+        <div class="section" id="connections">
+          <h2>1. Connect your accounts</h2>
+          <p class="muted">Authorize GPTListing to read your Dropbox listing photos and manage eBay listings in your production account.</p>
+          <div class="grid">
+            <div class="panel">
+              <h3>Dropbox</h3>
+              <div class="status" id="dbxStatus">Checking…</div>
+              <div class="actions">
+                <a class="btn" id="dbxConnect" href="/.netlify/functions/dropbox-oauth-start">Connect Dropbox</a>
+                <button class="secondary" id="dbxDisconnect">Disconnect</button>
+              </div>
+              <div class="small muted" style="margin-top:0.45rem;">Connection is required so GPTListing can pull product photos automatically.</div>
+            </div>
+            <div class="panel">
+              <h3>eBay</h3>
+              <div class="status" id="ebayStatus">Checking…</div>
+              <div class="actions">
+                <a class="btn" id="ebayConnect" href="/.netlify/functions/ebay-oauth-start">Connect eBay</a>
+                <button class="secondary" id="ebayDisconnect">Disconnect</button>
+              </div>
+              <div class="small muted" style="margin-top:0.45rem;">This link grants GPTListing permission to create policies, locations, and draft offers on your behalf.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section" id="optin">
+          <h2>2. Opt in to Business Policies</h2>
+          <p class="muted">eBay needs Business Policies for payments, shipping, and returns before GPTListing can post offers on your behalf outside of the standard eBay website.</p>
+          <div class="panel">
+            <div class="status" id="optinStatus">Checking…</div>
+            <div class="actions">
+              <button id="btnOptIn">Opt in automatically</button>
+              <a class="btn secondary" href="https://www.ebay.com/bp/manage" target="_blank" rel="noopener">Open eBay Business Policies ↗</a>
+            </div>
+            <div class="small muted" id="optinMsg" style="margin-top:0.45rem;"></div>
+          </div>
+        </div>
+
+        <div class="section" id="policies">
+          <h2>3. Create your core policies</h2>
+          <p class="muted">Use the recommended templates below or customize each policy in detail. GPTListing will reuse these policies whenever it provisions draft listings.</p>
+
+          <div class="panel">
+            <h3>Payment policy</h3>
+            <div class="status" id="paymentStatus">Checking…</div>
+            <p class="small muted">Requires immediate payment from buyers and applies to all categories except motor vehicles.</p>
+            <div class="actions">
+              <button id="createPayment">Create recommended payment policy</button>
+              <a class="btn secondary" href="/policy-create.html?type=payment" target="_blank">Customize</a>
+            </div>
+            <div class="small muted" id="paymentMessage" style="margin-top:0.5rem;"></div>
+          </div>
+
+          <div class="panel">
+            <h3>Shipping policy</h3>
+            <div class="status" id="shippingStatus">Checking…</div>
+            <p class="small muted">Recommended default uses USPS Ground Advantage (calculated) with one-day handling so Smart Shipping discounts stay available.</p>
+            <div class="actions">
+              <button id="createShipping">Create recommended shipping policy</button>
+              <a class="btn secondary" href="/policy-create.html?type=fulfillment" target="_blank">Customize</a>
+            </div>
+            <div class="small muted" id="shippingMessage" style="margin-top:0.5rem;"></div>
+          </div>
+
+          <div class="panel">
+            <h3>Return policy</h3>
+            <div class="status" id="returnStatus">Checking…</div>
+            <p class="small muted">Sets a 30-day return window with buyer-paid return shipping. Adjust the template if your catalog needs different terms.</p>
+            <div class="actions">
+              <button id="createReturn">Create recommended return policy</button>
+              <a class="btn secondary" href="/policy-create.html?type=return" target="_blank">Customize</a>
+            </div>
+            <div class="small muted" id="returnMessage" style="margin-top:0.5rem;"></div>
+          </div>
+        </div>
+
+        <div class="section" id="inventory">
+          <h2>4. Confirm your shipping location</h2>
+          <p class="muted">eBay drafts require at least one inventory location. Use our default template or add your own warehouse address.</p>
+          <div class="panel">
+            <div class="status" id="locationStatus">Checking…</div>
+            <div class="actions">
+              <button id="createLocation">Create recommended location</button>
+              <button class="secondary" id="deleteLocation">Delete existing location</button>
+              <a class="btn secondary" href="/location.html" target="_blank">Manage locations</a>
+            </div>
+            <div class="small muted" id="locationMessage" style="margin-top:0.5rem;"></div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>Next steps</h2>
+          <p class="muted">Once everything above shows “Ready”, you can head back to the dashboard to start generating drafts.</p>
+          <div class="actions" style="margin-top:0.6rem;">
+            <a class="btn" href="/index.html">Return to dashboard</a>
+            <a class="btn secondary" href="/draft-wizard.html">Open draft wizard</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      (async () => { try { await authClient.requireAuth(); } catch {} })();
+
+      const state = {
+        dropboxConnected: false,
+        ebayConnected: false,
+        optedIn: null,
+        paymentPolicies: [],
+        fulfillmentPolicies: [],
+        returnPolicies: [],
+        locations: [],
+      };
+
+      const recommendedPayloads = {
+        payment: {
+          type: 'payment',
+          name: 'Default Payment (Auto)',
+          immediatePay: true,
+          setDefault: true,
+        },
+        fulfillment: {
+          type: 'fulfillment',
+          name: 'Ground Advantage Shipping (Auto)',
+          handlingTimeDays: 1,
+          freeDomestic: false,
+          costType: 'CALCULATED',
+          shippingCarrierCode: 'USPS',
+          shippingServiceCode: 'USPSParcel',
+          calcMeasurementSystem: 'ENGLISH',
+          calcPackageType: 'PACKAGE_THICK_ENVELOPE',
+          calcLength: 12,
+          calcWidth: 9,
+          calcHeight: 3,
+          calcWeightMajor: 1,
+          calcWeightMinor: 0,
+          setDefault: true,
+        },
+        return: {
+          type: 'return',
+          name: 'Default Returns (Auto)',
+          returnsAccepted: true,
+          returnPeriodDays: 30,
+          returnShippingCostPayer: 'BUYER',
+          refundMethod: 'MONEY_BACK',
+          setDefault: true,
+        },
+      };
+
+      function renderSummary() {
+        const summary = document.getElementById('setupSummary');
+        if (!summary) return;
+        const pieces = [];
+        if (!state.dropboxConnected || !state.ebayConnected) pieces.push('Connect both Dropbox and eBay.');
+        if (state.optedIn === false) pieces.push('Opt in to eBay Business Policies.');
+        const policiesReady = state.paymentPolicies.length > 0 && state.fulfillmentPolicies.length > 0 && state.returnPolicies.length > 0;
+        if (!policiesReady) pieces.push('Create payment, shipping, and return policies.');
+        if (!(state.locations && state.locations.length)) pieces.push('Add at least one inventory location.');
+        if (!pieces.length) {
+          summary.textContent = 'All set! Head back to the dashboard when you are ready to list.';
+          summary.style.display = 'block';
+        } else {
+          summary.textContent = 'To finish setup: ' + pieces.join(' ');
+          summary.style.display = 'block';
+        }
+      }
+
+      function updateConnectionUI() {
+        const dbxStatus = document.getElementById('dbxStatus');
+        const dbxConnect = document.getElementById('dbxConnect');
+        const dbxDisconnect = document.getElementById('dbxDisconnect');
+        if (dbxStatus) dbxStatus.textContent = state.dropboxConnected ? 'Connected' : 'Not connected';
+        if (dbxConnect) dbxConnect.style.display = state.dropboxConnected ? 'none' : 'inline-flex';
+        if (dbxDisconnect) dbxDisconnect.style.display = state.dropboxConnected ? 'inline-flex' : 'none';
+
+        const ebayStatus = document.getElementById('ebayStatus');
+        const ebayConnect = document.getElementById('ebayConnect');
+        const ebayDisconnect = document.getElementById('ebayDisconnect');
+        if (ebayStatus) ebayStatus.textContent = state.ebayConnected ? 'Connected' : 'Not connected';
+        if (ebayConnect) ebayConnect.style.display = state.ebayConnected ? 'none' : 'inline-flex';
+        if (ebayDisconnect) ebayDisconnect.style.display = state.ebayConnected ? 'inline-flex' : 'none';
+
+        const policyButtons = ['createPayment', 'createShipping', 'createReturn'];
+        for (const id of policyButtons) {
+          const btn = document.getElementById(id);
+          if (btn) btn.disabled = !state.ebayConnected;
+        }
+        const optBtn = document.getElementById('btnOptIn');
+        if (optBtn) optBtn.disabled = !state.ebayConnected;
+        const locBtn = document.getElementById('createLocation');
+        if (locBtn) locBtn.disabled = !state.ebayConnected;
+  const delBtn = document.getElementById('deleteLocation');
+  if (delBtn) delBtn.disabled = !state.ebayConnected;
+      }
+
+      function describePolicyStatus(arr, recommendedName, statusEl, msgEl) {
+        const el = document.getElementById(statusEl);
+        if (!el) return;
+        if (!state.ebayConnected) {
+          el.textContent = 'Connect eBay to continue.';
+          const msg = document.getElementById(msgEl);
+          if (msg) msg.textContent = '';
+          return;
+        }
+        const count = Array.isArray(arr) ? arr.length : 0;
+        const recommended = Array.isArray(arr) ? arr.find((p) => (p?.name || '') === recommendedName) : null;
+        if (recommended) {
+          el.innerHTML = `<span class="badge">Ready · ${recommended.name}</span>`;
+        } else if (count > 0) {
+          el.textContent = `Found ${count} policy${count === 1 ? '' : 'ies'}. You can still create our recommended template if needed.`;
+        } else {
+          el.textContent = 'Missing · use the button below to create the recommended template.';
+        }
+        const btn = document.getElementById(statusEl === 'shippingStatus' ? 'createShipping' : statusEl === 'returnStatus' ? 'createReturn' : 'createPayment');
+        if (btn) btn.disabled = !state.ebayConnected || !!recommended;
+        if (btn && !state.ebayConnected) btn.disabled = true;
+        const msg = document.getElementById(msgEl);
+        if (msg && recommended) msg.textContent = 'Already provisioned via eBay. Use Customize to edit details if needed.';
+        if (msg && !recommended && count > 0) msg.textContent = '';
+      }
+
+      function updatePolicyPanels() {
+        describePolicyStatus(state.paymentPolicies, 'Default Payment (Auto)', 'paymentStatus', 'paymentMessage');
+        describePolicyStatus(state.fulfillmentPolicies, 'Ground Advantage Shipping (Auto)', 'shippingStatus', 'shippingMessage');
+        describePolicyStatus(state.returnPolicies, 'Default Returns (Auto)', 'returnStatus', 'returnMessage');
+      }
+
+      function updateLocationPanel() {
+        const el = document.getElementById('locationStatus');
+        if (!el) return;
+        if (!state.ebayConnected) {
+          el.textContent = 'Connect eBay to continue.';
+          const msg = document.getElementById('locationMessage');
+          if (msg) msg.textContent = '';
+          const delBtn = document.getElementById('deleteLocation');
+          if (delBtn) delBtn.disabled = true;
+          return;
+        }
+        const count = Array.isArray(state.locations) ? state.locations.length : 0;
+        if (count > 0) {
+          const first = state.locations[0];
+          el.innerHTML = `<span class="badge">Ready${first?.name ? ` · ${first.name}` : ''}</span>`;
+          const btn = document.getElementById('createLocation');
+          if (btn) btn.disabled = true;
+          const delBtn = document.getElementById('deleteLocation');
+          if (delBtn) {
+            delBtn.disabled = false;
+            delBtn.dataset.key = first?.merchantLocationKey || '';
+          }
+          const msg = document.getElementById('locationMessage');
+          if (msg) msg.textContent = count > 1 ? `Additional locations detected (${count} total).` : 'Already provisioned on eBay.';
+        } else {
+          el.textContent = 'Missing · add your warehouse address to continue.';
+          const btn = document.getElementById('createLocation');
+          if (btn) btn.disabled = !state.ebayConnected;
+          const delBtn = document.getElementById('deleteLocation');
+          if (delBtn) {
+            delBtn.disabled = true;
+            delBtn.dataset.key = '';
+          }
+        }
+      }
+
+      async function loadConnections() {
+        try {
+          let headers = {};
+          try {
+            const t = await authClient.getToken?.();
+            if (t) headers = Object.assign(headers, { Authorization: `Bearer ${t}` });
+          } catch {}
+          const res = await authClient.authFetch('/.netlify/functions/status', { headers });
+          if (!res.ok) throw new Error('status');
+          const j = await res.json();
+          state.dropboxConnected = !!j.dropbox?.connected;
+          state.ebayConnected = !!j.ebay?.connected;
+        } catch (err) {
+          state.dropboxConnected = false;
+          state.ebayConnected = false;
+        }
+        updateConnectionUI();
+        renderSummary();
+        return state.ebayConnected;
+      }
+
+      async function loadOptInStatus() {
+        const statusEl = document.getElementById('optinStatus');
+        const msg = document.getElementById('optinMsg');
+        if (!state.ebayConnected) {
+          if (statusEl) statusEl.textContent = 'Connect eBay to continue.';
+          if (msg) msg.textContent = '';
+          state.optedIn = null;
+          renderSummary();
+          return;
+        }
+        try {
+          const res = await authClient.authFetch('/.netlify/functions/ebay-check-optin');
+          const j = await res.json();
+          if (res.ok && j?.ok) {
+            state.optedIn = !!j.optedIn;
+            if (statusEl) statusEl.innerHTML = j.optedIn ? '<span class="badge">Ready</span>' : 'Not enrolled yet.';
+            if (msg) msg.textContent = j.optedIn ? 'Business Policies are active on your eBay account.' : 'Use the button above or visit eBay to finish enrollment.';
+            const btn = document.getElementById('btnOptIn');
+            if (btn) btn.disabled = j.optedIn || !state.ebayConnected;
+          } else {
+            state.optedIn = null;
+            if (statusEl) statusEl.textContent = 'Unable to verify opt-in status.';
+          }
+        } catch (err) {
+          state.optedIn = null;
+          const statusEl2 = document.getElementById('optinStatus');
+          if (statusEl2) statusEl2.textContent = 'Unable to verify opt-in status.';
+        }
+        renderSummary();
+      }
+
+      async function loadPolicies() {
+        if (!state.ebayConnected) {
+          state.paymentPolicies = [];
+          state.fulfillmentPolicies = [];
+          state.returnPolicies = [];
+          updatePolicyPanels();
+          renderSummary();
+          return;
+        }
+        try {
+          const res = await authClient.authFetch('/.netlify/functions/ebay-list-policies');
+          const j = await res.json();
+          if (res.ok) {
+            state.paymentPolicies = j?.payment?.json?.paymentPolicies || [];
+            state.fulfillmentPolicies = j?.fulfillment?.json?.fulfillmentPolicies || [];
+            state.returnPolicies = j?.returns?.json?.returnPolicies || [];
+          }
+        } catch {}
+        updatePolicyPanels();
+        renderSummary();
+      }
+
+      async function loadLocations() {
+        if (!state.ebayConnected) {
+          state.locations = [];
+          updateLocationPanel();
+          renderSummary();
+          return;
+        }
+        try {
+          const res = await authClient.authFetch('/.netlify/functions/ebay-list-locations');
+          const j = await res.json();
+          if (res.ok) state.locations = j?.locations || [];
+        } catch {}
+        updateLocationPanel();
+        renderSummary();
+      }
+
+      function wireConnectLink(id, fnPath) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('click', async (e) => {
+          try {
+            e.preventDefault();
+            const ok = await authClient.ensureAuth();
+            if (!ok) return await authClient.login({});
+            const r = await authClient.authFetch(fnPath, {
+              method: 'POST',
+              headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+              body: JSON.stringify({ returnTo: window.location.href }),
+            });
+            const text = await r.text();
+            let j = null;
+            try { j = JSON.parse(text); } catch {}
+            if (r.ok && j?.redirect) {
+              window.location.assign(j.redirect);
+              return;
+            }
+            if (r.status === 401) return await authClient.login({});
+            alert('Could not start the connect flow. See console for details.');
+            console.error('connect start failed', { status: r.status, body: text });
+          } catch {}
+        });
+      }
+
+      async function createRecommended(type) {
+        const payload = recommendedPayloads[type];
+        const messageEl = document.getElementById(type === 'fulfillment' ? 'shippingMessage' : type === 'payment' ? 'paymentMessage' : 'returnMessage');
+        const button = document.getElementById(type === 'fulfillment' ? 'createShipping' : type === 'payment' ? 'createPayment' : 'createReturn');
+        if (!payload || !messageEl || !button) return;
+        button.disabled = true;
+        messageEl.textContent = 'Creating…';
+        try {
+          const res = await authClient.authFetch('/.netlify/functions/ebay-create-policy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          const j = await res.json().catch(() => ({}));
+          if (res.ok && j?.ok) {
+            messageEl.textContent = 'Created successfully on eBay.';
+            await loadPolicies();
+          } else {
+            const errMsg = j?.error || j?.message || 'Failed to create policy.';
+            messageEl.textContent = 'Error: ' + errMsg;
+            if (button) button.disabled = false;
+          }
+        } catch (err) {
+          messageEl.textContent = 'Error: ' + (err?.message || err);
+          if (button) button.disabled = false;
+        }
+      }
+
+      async function ensureLocation() {
+        const btn = document.getElementById('createLocation');
+        const msg = document.getElementById('locationMessage');
+        if (!btn || !msg) return;
+        btn.disabled = true;
+        msg.textContent = 'Creating…';
+        try {
+          const res = await authClient.authFetch('/.netlify/functions/ebay-ensure-location', { method: 'POST' });
+          const j = await res.json().catch(() => ({}));
+          if (res.ok && j?.ok) {
+            msg.textContent = 'Location ready.';
+            await loadLocations();
+          } else {
+            msg.textContent = 'Error: ' + (j?.error || 'Unable to create location.');
+            btn.disabled = false;
+          }
+        } catch (err) {
+          msg.textContent = 'Error: ' + (err?.message || err);
+          btn.disabled = false;
+        }
+      }
+
+      async function deleteLocation() {
+        const btn = document.getElementById('deleteLocation');
+        const msg = document.getElementById('locationMessage');
+        if (!btn || !msg) return;
+        const fromState = Array.isArray(state.locations) && state.locations.length ? state.locations[0]?.merchantLocationKey : null;
+        const key = btn.dataset?.key || fromState || '';
+        if (!key) {
+          msg.textContent = 'No location detected to delete.';
+          return;
+        }
+        if (!window.confirm('Delete this inventory location on eBay?')) return;
+        btn.disabled = true;
+        msg.textContent = 'Deleting…';
+        try {
+          const res = await authClient.authFetch('/.netlify/functions/ebay-delete-location', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key }),
+          });
+          const j = await res.json().catch(() => ({}));
+          if (res.ok && j?.ok) {
+            msg.textContent = 'Deleted on eBay.';
+            await loadLocations();
+          } else {
+            msg.textContent = 'Error deleting location: ' + (j?.error || j?.detail?.message || 'See console.');
+            btn.disabled = false;
+          }
+        } catch (err) {
+          msg.textContent = 'Error: ' + (err?.message || err);
+          btn.disabled = false;
+        }
+      }
+
+      async function optIn() {
+        const btn = document.getElementById('btnOptIn');
+        const msg = document.getElementById('optinMsg');
+        if (!btn || !msg) return;
+        btn.disabled = true;
+        msg.textContent = 'Submitting opt-in request…';
+        try {
+          const res = await authClient.authFetch('/.netlify/functions/ebay-optin', { method: 'POST' });
+          if (res.ok) {
+            msg.textContent = 'Opt-in requested. Refreshing status…';
+            await loadOptInStatus();
+            await loadPolicies();
+          } else {
+            const text = await res.text();
+            msg.textContent = 'Opt-in failed: ' + text;
+            btn.disabled = false;
+          }
+        } catch (err) {
+          msg.textContent = 'Error: ' + (err?.message || err);
+          btn.disabled = false;
+        }
+      }
+
+      async function refreshAll() {
+        await loadConnections();
+        if (state.ebayConnected) {
+          await Promise.all([loadOptInStatus(), loadPolicies(), loadLocations()]);
+        } else {
+          await loadOptInStatus();
+          await loadPolicies();
+          await loadLocations();
+        }
+      }
+
+      function boot() {
+        wireConnectLink('dbxConnect', '/.netlify/functions/dropbox-oauth-start');
+        wireConnectLink('ebayConnect', '/.netlify/functions/ebay-oauth-start');
+        const dbxDisconnect = document.getElementById('dbxDisconnect');
+        if (dbxDisconnect) dbxDisconnect.onclick = async () => { await authClient.authFetch('/.netlify/functions/status?dropbox=disconnect', { method: 'POST' }); refreshAll(); };
+        const ebayDisconnect = document.getElementById('ebayDisconnect');
+        if (ebayDisconnect) ebayDisconnect.onclick = async () => { await authClient.authFetch('/.netlify/functions/status?ebay=disconnect', { method: 'POST' }); refreshAll(); };
+
+        const btnPayment = document.getElementById('createPayment');
+        if (btnPayment) btnPayment.onclick = () => createRecommended('payment');
+        const btnShipping = document.getElementById('createShipping');
+        if (btnShipping) btnShipping.onclick = () => createRecommended('fulfillment');
+        const btnReturn = document.getElementById('createReturn');
+        if (btnReturn) btnReturn.onclick = () => createRecommended('return');
+    const btnLocation = document.getElementById('createLocation');
+    if (btnLocation) btnLocation.onclick = ensureLocation;
+    const btnDeleteLocation = document.getElementById('deleteLocation');
+    if (btnDeleteLocation) btnDeleteLocation.onclick = deleteLocation;
+        const btnOpt = document.getElementById('btnOptIn');
+        if (btnOpt) btnOpt.onclick = optIn;
+
+        refreshAll();
+        window.addEventListener('focus', () => { refreshAll(); });
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', boot);
+      } else {
+        boot();
+      }
+    </script>
+  </body>
+</html>
