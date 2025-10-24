@@ -2,6 +2,24 @@ import type { Handler } from '@netlify/functions';
 import { createOAuthStateForUser, getJwtSubUnverified, getBearerToken, requireAuthVerified, userScopedKey } from './_auth.js';
 import { tokensStore } from './_blobs.js';
 
+function sanitizeReturnTo(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  let candidate = value.trim();
+  if (!candidate) return null;
+  if (/^https?:\/\//i.test(candidate)) {
+    try {
+      const url = new URL(candidate);
+      candidate = `${url.pathname || '/'}`;
+      if (url.search) candidate += url.search;
+      if (url.hash) candidate += url.hash;
+    } catch {
+      return null;
+    }
+  }
+  if (!candidate.startsWith('/')) return null;
+  return candidate;
+}
+
 export const handler: Handler = async (event) => {
   const clientId = process.env.EBAY_CLIENT_ID!;
   const runame = process.env.EBAY_RUNAME || process.env.EBAY_RU_NAME;
@@ -18,7 +36,19 @@ export const handler: Handler = async (event) => {
     }
     return { statusCode: 302, headers: { Location: '/login.html' } };
   }
-  const stateRaw = (await createOAuthStateForUser(event, 'ebay')) || Buffer.from(JSON.stringify({ t: Date.now() })).toString('base64');
+  let parsedBody: any = null;
+  if (event.body) {
+    try {
+      const raw = event.isBase64Encoded ? Buffer.from(event.body, 'base64').toString('utf8') : event.body;
+      parsedBody = JSON.parse(raw);
+    } catch {}
+  }
+  const queryReturnTo = sanitizeReturnTo(event.queryStringParameters?.returnTo);
+  const bodyReturnTo = sanitizeReturnTo(parsedBody?.returnTo);
+  const returnTo = bodyReturnTo || queryReturnTo || null;
+
+  const stateRaw = (await createOAuthStateForUser(event, 'ebay', { returnTo })) ||
+    Buffer.from(JSON.stringify({ t: Date.now() })).toString('base64');
   const state = encodeURIComponent(stateRaw);
   const host = env === 'SANDBOX' ? 'https://auth.sandbox.ebay.com' : 'https://auth.ebay.com';
 

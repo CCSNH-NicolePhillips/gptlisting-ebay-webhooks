@@ -220,6 +220,10 @@
   </div>
 
     <script>
+      const SETUP_STORAGE_KEY = 'gptlistingVisitedSetup';
+      const SETUP_REDIRECT_GUARD = 'gptlistingSuppressSetupRedirect';
+      let lastStatus = null;
+
       async function refreshStatus() {
         let s = null;
         let statusCode = 0;
@@ -236,6 +240,7 @@
         } catch (e) {
           // Network failure
         }
+        lastStatus = null;
         const dbxStatus = document.getElementById('dbxStatus');
         const ebayStatus = document.getElementById('ebayStatus');
         if (!s || statusCode === 401) {
@@ -248,6 +253,7 @@
         // Hide the sign-in banner when we have a valid, authorized status response
   const banner = document.getElementById('authBanner');
   if (banner) banner.style.display = 'none';
+        lastStatus = s;
         dbxStatus.textContent = s.dropbox?.connected ? 'Connected' : 'Not connected';
         ebayStatus.textContent = s.ebay?.connected ? 'Connected' : 'Not connected';
         const chkDropbox = document.getElementById('chkDropbox');
@@ -508,11 +514,13 @@
 
       async function evaluatePrereqs() {
         const connected = await refreshStatus();
+        let visitedSetup = false;
+        try { visitedSetup = localStorage.getItem(SETUP_STORAGE_KEY) === '1'; } catch {}
         let policiesReady = false;
         let locationReady = false;
+        let optedIn = true;
         const setupHints = [];
         if (connected) {
-          let optedIn = true;
           try {
             const chk = await (await authClient.authFetch('/.netlify/functions/ebay-check-optin')).json();
             if (chk && chk.ok && !chk.optedIn) {
@@ -547,6 +555,16 @@
           const setupMsg = document.getElementById('setupMsg');
           if (setupMsg) setupMsg.textContent = '';
         }
+        const ready = connected && policiesReady && locationReady && optedIn;
+        try {
+          const suppressed = sessionStorage.getItem(SETUP_REDIRECT_GUARD) === '1';
+          if (!visitedSetup && !ready && !suppressed) {
+            sessionStorage.setItem(SETUP_REDIRECT_GUARD, '1');
+            location.replace('/setup.html');
+            return;
+          }
+          if (ready) sessionStorage.removeItem(SETUP_REDIRECT_GUARD);
+        } catch {}
         const chkPolicies = document.getElementById('chkPolicies');
         const policiesLink = document.getElementById('policiesLink');
         if (chkPolicies) {
@@ -577,8 +595,8 @@
           setupMsg.textContent = setupHints.join(' ');
         }
 
-        const goBtn = document.getElementById('goCreateDraftBtn');
-        goBtn.disabled = !(connected && policiesReady && locationReady);
+  const goBtn = document.getElementById('goCreateDraftBtn');
+  goBtn.disabled = !ready;
       }
 
       // Single boot: load auth/status first, then reveal main UI to avoid flashes

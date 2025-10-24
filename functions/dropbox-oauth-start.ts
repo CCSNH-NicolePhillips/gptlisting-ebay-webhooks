@@ -2,6 +2,24 @@ import type { Handler } from '@netlify/functions';
 import { createOAuthStateForUser, getJwtSubUnverified, getBearerToken, requireAuthVerified, userScopedKey } from './_auth.js';
 import { tokensStore } from './_blobs.js';
 
+function sanitizeReturnTo(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  let candidate = value.trim();
+  if (!candidate) return null;
+  if (/^https?:\/\//i.test(candidate)) {
+    try {
+      const url = new URL(candidate);
+      candidate = `${url.pathname || '/'}`;
+      if (url.search) candidate += url.search;
+      if (url.hash) candidate += url.hash;
+    } catch {
+      return null;
+    }
+  }
+  if (!candidate.startsWith('/')) return null;
+  return candidate;
+}
+
 // Start Dropbox OAuth 2.0 flow
 export const handler: Handler = async (event) => {
   const clientId = process.env.DROPBOX_CLIENT_ID;
@@ -23,7 +41,18 @@ export const handler: Handler = async (event) => {
   }
 
   // Bind this OAuth flow to the current user via opaque server-side state
-  const userState = (await createOAuthStateForUser(event, 'dropbox')) ||
+  let parsedBody: any = null;
+  if (event.body) {
+    try {
+      const raw = event.isBase64Encoded ? Buffer.from(event.body, 'base64').toString('utf8') : event.body;
+      parsedBody = JSON.parse(raw);
+    } catch {}
+  }
+  const queryReturnTo = sanitizeReturnTo(event.queryStringParameters?.returnTo);
+  const bodyReturnTo = sanitizeReturnTo(parsedBody?.returnTo);
+  const returnTo = bodyReturnTo || queryReturnTo || null;
+
+  const userState = (await createOAuthStateForUser(event, 'dropbox', { returnTo })) ||
     Buffer.from(JSON.stringify({ t: Date.now() })).toString('base64');
   const url = new URL('https://www.dropbox.com/oauth2/authorize');
   url.searchParams.set('response_type', 'code');
