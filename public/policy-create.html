@@ -22,6 +22,10 @@
   .btn-toggle.on { background:#1db954; border-color:#159b46; color:#031b0f; }
   .actions { display:flex; align-items:center; gap:.6rem; }
   .tag { display:inline-block; font-size:.8rem; padding:.15rem .45rem; border:1px solid #2f3f7a; color:#cbd5ff; border-radius:999px; }
+  details.debug { margin-top:.5rem; border:1px dashed #3d4a86; border-radius:8px; padding:.5rem .6rem; background:rgba(15,21,48,.5); }
+  details.debug > summary { cursor:pointer; color:#cbd5ff; }
+  .kv { font-size:.9rem; color:#a2a9c8; margin:.25rem 0; }
+  pre.code { background:#0b1020; border:1px solid #26305a; border-radius:6px; padding:.5rem; overflow:auto; max-height:260px; }
     </style>
   </head>
   <body>
@@ -81,6 +85,17 @@
           </div>
           <!-- set-as-default now lives inline with footer buttons -->
           <div id="msg" class="muted" style="margin:.5rem 0 .5rem; min-height:1.25rem"></div>
+          <details id="debugPanel" class="debug" style="display:none;">
+            <summary>Debug details</summary>
+            <div class="kv"><strong>Status:</strong> <span id="dbg_status">n/a</span></div>
+            <div class="kv"><strong>WWW-Authenticate:</strong> <span id="dbg_auth">n/a</span></div>
+            <div class="kv"><strong>Request payload (client → function):</strong></div>
+            <pre id="dbg_request" class="code">n/a</pre>
+            <div class="kv"><strong>Response JSON/Text:</strong></div>
+            <pre id="dbg_error" class="code">n/a</pre>
+            <div class="kv"><strong>Server echoed "sent" (function → eBay):</strong></div>
+            <pre id="dbg_sent" class="code">n/a</pre>
+          </details>
           <div style="display:flex; gap:.75rem; align-items:center; flex-wrap:wrap;">
             <button type="button" class="secondary" id="btnCancel">Cancel</button>
             <button type="submit" class="btn">Create</button>
@@ -161,17 +176,19 @@
   freeWrap.appendChild(costWrap);
   freeWrap.appendChild(paidWrap);
         // Helpers to manage UI state
-        function serviceOptionsFor(carrier) {
+        function serviceOptionsFor(carrier, costType) {
           if (carrier === 'UPS') return [ ['UPSGround','UPS Ground'], ['UPS3DaySelect','UPS 3 Day Select'] ];
           if (carrier === 'FedEx') return [ ['FedExHomeDelivery','FedEx Home Delivery'], ['FedEx2Day','FedEx 2Day'] ];
-          // Use known-good USPS codes
-          return [ ['USPSGroundAdvantage','USPS Ground Advantage'], ['USPSPriorityMail','USPS Priority Mail'] ];
+          // USPS: prefer known-good services per cost type
+          if (costType === 'FLAT_RATE') return [ ['USPSPriorityFlatRateBox','USPS Priority Mail Flat Rate Box'] ];
+          return [ ['USPSPriorityMail','USPS Priority Mail'] ];
         }
         function updateServiceOptions() {
           const carrier = form.shippingCarrierCode.value || 'USPS';
+          const costType = (form.costType && form.costType.value) || 'CALCULATED';
           const svc = form.shippingServiceCode; const cur = svc.value;
           svc.innerHTML = '';
-          for (const [v,l] of serviceOptionsFor(carrier)) { const o = document.createElement('option'); o.value=v; o.textContent=l; svc.appendChild(o); }
+          for (const [v,l] of serviceOptionsFor(carrier, costType)) { const o = document.createElement('option'); o.value=v; o.textContent=l; svc.appendChild(o); }
           if (cur) svc.value = cur; if (!svc.value && svc.options.length) svc.selectedIndex = 0;
         }
         function updatePaidVisibility() {
@@ -184,6 +201,7 @@
           paid.style.display = free ? 'none' : 'block';
           if (!free) {
             form.shippingServiceCode.required = true;
+            updateServiceOptions();
             price.style.display = costType === 'FLAT_RATE' ? 'grid' : 'none';
             form.shippingCostValue.required = costType === 'FLAT_RATE';
           } else {
@@ -218,6 +236,10 @@
         e.preventDefault();
         const msg = document.getElementById('msg');
         msg.textContent = 'Creating…';
+        // reset debug panel
+        const dbg = (id) => document.getElementById(id);
+        const dbgPanel = dbg('debugPanel');
+        if (dbgPanel) { dbg('dbg_status').textContent = 'n/a'; dbg('dbg_auth').textContent = 'n/a'; dbg('dbg_error').textContent = 'n/a'; dbg('dbg_sent').textContent = 'n/a'; dbg('dbg_request').textContent = 'n/a'; dbgPanel.style.display = 'none'; }
         const fd = new FormData(form);
         const payload = Object.fromEntries(fd.entries());
         payload.immediatePay = !!fd.get('immediatePay');
@@ -240,14 +262,27 @@
             }
           }
         }
+        const clientPayload = JSON.parse(JSON.stringify(payload));
         try {
           const r = await authClient.authFetch('/.netlify/functions/ebay-create-policy', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-          const j = await r.json();
+          const www = r.headers.get('www-authenticate') || '';
+          const text = await r.text();
+          let j; try { j = text ? JSON.parse(text) : undefined; } catch { j = undefined; }
           if (!r.ok || !j?.ok) {
             const first = j?.detail?.errors?.[0];
-            let msg = (first?.message || j?.error || 'Failed to create');
-            if (!first && j?.auth) msg += ` (${j.auth})`;
-            throw new Error(msg);
+            let emsg = (first?.message || j?.error || 'Failed to create');
+            if (!first && (j?.auth || www)) emsg += ` (${j?.auth || www})`;
+            // Populate debug panel
+            if (dbgPanel) {
+              dbg('dbg_status').textContent = `${r.status} ${r.statusText}`;
+              dbg('dbg_auth').textContent = www || (j?.auth || 'n/a');
+              dbg('dbg_request').textContent = JSON.stringify(clientPayload, null, 2);
+              dbg('dbg_error').textContent = j ? JSON.stringify(j, null, 2) : (text || 'n/a');
+              dbg('dbg_sent').textContent = j?.sent ? JSON.stringify(j.sent, null, 2) : 'n/a';
+              dbgPanel.style.display = 'block';
+              dbgPanel.open = true;
+            }
+            throw new Error(emsg);
           }
           msg.textContent = 'Created. Returning…';
           setTimeout(() => { location.href = '/policies-manage.html?created='+encodeURIComponent(type); }, 900);
