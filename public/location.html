@@ -230,7 +230,7 @@
           const url = `/.netlify/functions/ebay-create-location?key=${encodeURIComponent(v.key)}&name=${encodeURIComponent(v.name)}&address1=${encodeURIComponent(v.a1)}&city=${encodeURIComponent(v.city)}&state=${encodeURIComponent(v.state)}&postal=${encodeURIComponent(v.postal)}&country=${encodeURIComponent(v.country)}&minimal=true`;
           const r = await authClient.authFetch(url);
           const data = await safeParseJson(r);
-          if (r.ok && (data?.ok || data?.exists)) {
+          if (r.status === 204 || (r.ok && (!data || data.ok || data.exists))) {
             msg.textContent = 'Saved. Returning…';
             setTimeout(() => (location.href = '/'), 800);
           } else {
