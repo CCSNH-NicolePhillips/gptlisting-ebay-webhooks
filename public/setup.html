@@ -155,6 +155,9 @@
     <script>
       (async () => { try { await authClient.requireAuth(); } catch {} })();
 
+      const SETUP_STORAGE_KEY = 'gptlistingVisitedSetup';
+      try { localStorage.setItem(SETUP_STORAGE_KEY, '1'); } catch {}
+
       const state = {
         dropboxConnected: false,
         ebayConnected: false,
@@ -578,6 +581,10 @@
       } else {
         boot();
       }
-    </script>
-  </body>
-</html>
+    <script>
+      (async () => { try { await authClient.requireAuth(); } catch {} })();
+
+      const SETUP_STORAGE_KEY = 'gptlistingVisitedSetup';
+      try { localStorage.setItem(SETUP_STORAGE_KEY, '1'); } catch {}
+
+      const state = {
