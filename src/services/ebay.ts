@@ -354,7 +354,7 @@ async function ensureFulfillmentPolicy(userId: string, name = 'Auto Shipping Pol
           {
             freeShipping: true,
             shippingCarrierCode: 'USPS',
-            shippingServiceCode: 'USPSGroundAdvantage',
+            shippingServiceCode: 'USPSPriorityFlatRateBox',
             sortOrder: 1,
           },
         ],

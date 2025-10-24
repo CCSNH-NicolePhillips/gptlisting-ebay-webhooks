@@ -74,7 +74,7 @@ export const handler: Handler = async (event) => {
               {
                 freeShipping: true,
                 shippingCarrierCode: 'USPS',
-                shippingServiceCode: 'USPSGroundAdvantage',
+                shippingServiceCode: 'USPSPriorityFlatRateBox',
                 sortOrder: 1,
               },
             ],
