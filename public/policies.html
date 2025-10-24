@@ -211,10 +211,11 @@
         if (!confirm('Create a minimal USPS fulfillment policy now?')) return;
         try {
           const name = 'App Default USPS ' + new Date().toISOString().slice(0,19).replace('T',' ');
+          // Known-good sample matches eBay docs: free domestic flat-rate USPS Priority Flat Rate Box
           const r = await authClient.authFetch('/.netlify/functions/ebay-policy-create-fulfillment', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, handlingTime: 3, free: false, costType: 'CALCULATED', serviceCode: 'USPSGroundAdvantage', flatRate: 5.99 })
+            body: JSON.stringify({ name, handlingTime: 3, free: true, costType: 'FLAT_RATE', serviceCode: 'USPSPriorityFlatRateBox' })
           });
           const j = await r.json();
           showDebug(j);

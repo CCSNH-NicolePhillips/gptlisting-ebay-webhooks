@@ -36,13 +36,10 @@ export const handler: Handler = async (event) => {
     const curTxt = await curRes.text(); let cur: any; try { cur = JSON.parse(curTxt); } catch { cur = {}; }
     if (!curRes.ok) return json({ error: 'get-policy failed', status: curRes.status, detail: cur }, curRes.status);
 
-    // Helper: ensure categoryTypes includes a default entry
+    // Helper: normalize categoryTypes without deprecated 'default' flag
     const normalizeCategoryTypes = (ct: any): any[] => {
-      let arr: any[] = Array.isArray(ct) && ct.length ? ct : [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }];
-      // Ensure exactly one default: true
-      let hasDefault = arr.some((x) => x && x.default === true);
-      if (!hasDefault) arr = arr.map((x, i) => ({ ...x, default: i === 0 }));
-      return arr;
+      const arr: any[] = Array.isArray(ct) && ct.length ? ct : [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }];
+      return arr.map((x) => ({ name: x?.name || 'ALL_EXCLUDING_MOTORS_VEHICLES' }));
     };
 
     const stripReadOnly = (obj: any, keys: string[]) => {
@@ -64,12 +61,11 @@ export const handler: Handler = async (event) => {
           {
             optionType: 'DOMESTIC',
             costType: 'FLAT_RATE',
-            insuranceFee: { value: '0.00', currency: 'USD' },
             shippingServices: [
               {
                 // Default to USPS Ground Advantage for free shipping
                 shippingServiceCode: 'USPSGroundAdvantage',
-                sortOrderId: 1,
+                sortOrder: 1,
                 freeShipping: true,
                 shippingCarrierCode: 'USPS',
               },
@@ -85,13 +81,11 @@ export const handler: Handler = async (event) => {
             optionType: 'DOMESTIC',
             // Use selected cost type; when FLAT_RATE, require amounts
             costType: selectedCostType || 'CALCULATED',
-            insuranceFee: { value: '0.00', currency: 'USD' },
             shippingServices: [
               {
                 shippingServiceCode: serviceCode,
-                sortOrderId: 1,
+                sortOrder: 1,
                 freeShipping: false,
-                buyerResponsibleForShipping: true,
                 ...(selectedCostType === 'FLAT_RATE'
                   ? { shippingCost: { value: shippingCostValue || '0.00', currency: 'USD' } }
                   : {}),
@@ -111,13 +105,11 @@ export const handler: Handler = async (event) => {
         {
           optionType: 'DOMESTIC',
           costType: selectedCostType || 'CALCULATED',
-          insuranceFee: { value: '0.00', currency: 'USD' },
           shippingServices: [
             {
               shippingServiceCode: 'USPSGroundAdvantage',
-              sortOrderId: 1,
+              sortOrder: 1,
               freeShipping: false,
-              buyerResponsibleForShipping: true,
               ...(selectedCostType === 'FLAT_RATE'
                 ? { shippingCost: { value: shippingCostValue || '0.00', currency: 'USD' } }
                 : {}),
@@ -180,7 +172,6 @@ export const handler: Handler = async (event) => {
         ? {
             name: body.name ?? cur.name,
             marketplaceId: mp,
-            categoryTypes: normalizeCategoryTypes(cur.categoryTypes),
             returnsAccepted: true,
             returnPeriod: { value: Math.max(1, periodDays), unit: 'DAY' },
             returnShippingCostPayer:
@@ -190,7 +181,6 @@ export const handler: Handler = async (event) => {
         : {
             name: body.name ?? cur.name,
             marketplaceId: mp,
-            categoryTypes: normalizeCategoryTypes(cur.categoryTypes),
             returnsAccepted: false,
           };
       stripReadOnly(payload, [
