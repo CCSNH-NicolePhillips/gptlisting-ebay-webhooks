@@ -125,7 +125,7 @@ export const handler: Handler = async (event) => {
     const txt = await res.text(); let j: any; try { j = JSON.parse(txt); } catch { j = { raw: txt }; }
     if (!res.ok) {
       const www = res.headers.get('www-authenticate') || '';
-      return json({ error: 'create-policy failed', status: res.status, auth: www, detail: j }, res.status);
+      return json({ error: 'create-policy failed', status: res.status, auth: www, detail: j, sent: payload }, res.status);
     }
 
     // Extract ID returned by eBay
