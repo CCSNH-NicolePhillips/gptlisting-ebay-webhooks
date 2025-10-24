@@ -229,9 +229,19 @@
         function serviceOptionsFor(carrier, costType) {
           if (carrier === 'UPS') return [ ['UPSGround','UPS Ground'], ['UPS3DaySelect','UPS 3 Day Select'] ];
           if (carrier === 'FedEx') return [ ['FedExHomeDelivery','FedEx Home Delivery'], ['FedEx2Day','FedEx 2Day'] ];
-          // USPS: prefer known-good services per cost type
-          if (costType === 'FLAT_RATE') return [ ['USPSPriorityFlatRateBox','USPS Priority Mail Flat Rate Box'] ];
-          return [ ['USPSPriorityMail','USPS Priority Mail'] ];
+          // USPS: expose both Priority and Ground Advantage so sellers can pick what their account supports
+          if (costType === 'FLAT_RATE') {
+            return [
+              ['USPSPriorityFlatRateBox','USPS Priority Mail Flat Rate Box'],
+              ['USPSGroundAdvantage','USPS Ground Advantage'],
+              ['USPSPriorityMail','USPS Priority Mail'],
+            ];
+          }
+          return [
+            ['USPSPriorityMail','USPS Priority Mail'],
+            ['USPSGroundAdvantage','USPS Ground Advantage'],
+            ['USPSParcelSelect','USPS Parcel Select'],
+          ];
         }
         function updateServiceOptions() {
           const carrier = form.shippingCarrierCode.value || 'USPS';
