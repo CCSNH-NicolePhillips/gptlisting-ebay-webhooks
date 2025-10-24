@@ -403,8 +403,16 @@
             }
             const dup = j?.detail?.errors?.find((err) => String(err?.errorId) === '20400');
             if (dup) {
-              const dupId = dup?.parameters?.find((p) => p?.name === 'duplicatePolicyId')?.value || 'unknown';
-              msg.textContent = `A policy with these settings already exists on eBay (ID ${dupId}). Update that policy or adjust these values.`;
+              const dupId = dup?.parameters?.find((p) => p?.name === 'duplicatePolicyId')?.value || '';
+              let dupName = 'these settings';
+              if (dupId) {
+                try {
+                  const dupRes = await authClient.authFetch(`/.netlify/functions/ebay-get-policy?type=${encodeURIComponent(type)}&id=${encodeURIComponent(dupId)}`);
+                  const dupJson = await dupRes.json();
+                  if (dupRes.ok && dupJson?.policy?.name) dupName = dupJson.policy.name;
+                } catch {}
+              }
+              msg.textContent = `A policy named “${dupName}” already exists with these settings. Update that policy or adjust these values.`;
               return;
             }
             throw new Error(emsg);
