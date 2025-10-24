@@ -1,13 +1,15 @@
 import type { Handler } from '@netlify/functions';
-import { requireAuth, json, userScopedKey, getBearerToken, getJwtSubUnverified, requireAuthVerified } from './_auth.js';
+import { json, userScopedKey, getBearerToken, getJwtSubUnverified, requireAuthVerified } from './_auth.js';
 import { getUserAccessToken, apiHost, headers } from './_ebay.js';
 import { tokensStore } from './_blobs.js';
 
 export const handler: Handler = async (event) => {
   try {
-    // Verify auth
-    const auth = await requireAuth(event);
-    if (!auth) return json({ error: 'unauthorized' }, 401);
+    // Verify auth (allow Auth0-verified or Netlify Identity tokens)
+    const bearer = getBearerToken(event);
+    let sub = (await requireAuthVerified(event))?.sub || null;
+    if (!sub) sub = getJwtSubUnverified(event);
+    if (!bearer || !sub) return json({ error: 'unauthorized' }, 401);
 
     const body = event.body ? JSON.parse(event.body) : {};
     const type = String(body.type || '').toLowerCase();
@@ -15,7 +17,12 @@ export const handler: Handler = async (event) => {
 
     // Mint eBay access token
     let token: string;
-    try { token = await getUserAccessToken(auth.sub); } catch (e: any) {
+    try {
+      token = await getUserAccessToken(sub, [
+        'https://api.ebay.com/oauth/api_scope',
+        'https://api.ebay.com/oauth/api_scope/sell.account',
+      ]);
+    } catch (e: any) {
       if (e?.code === 'ebay-not-connected') return json({ error: 'ebay-not-connected' }, 400);
       return json({ error: 'token-mint-failed', detail: e?.message || String(e) }, 500);
     }
@@ -116,7 +123,10 @@ export const handler: Handler = async (event) => {
     // Create policy
     const res = await fetch(`${host}/sell/account/v1/${path}`, { method: 'POST', headers: h as any, body: JSON.stringify(payload) });
     const txt = await res.text(); let j: any; try { j = JSON.parse(txt); } catch { j = { raw: txt }; }
-    if (!res.ok) return json({ error: 'create-policy failed', status: res.status, detail: j }, res.status);
+    if (!res.ok) {
+      const www = res.headers.get('www-authenticate') || '';
+      return json({ error: 'create-policy failed', status: res.status, auth: www, detail: j }, res.status);
+    }
 
     // Extract ID returned by eBay
     const id = String(j?.id || j?.policyId || j?.paymentPolicyId || j?.fulfillmentPolicyId || j?.returnPolicyId || '').trim();
@@ -126,7 +136,7 @@ export const handler: Handler = async (event) => {
     if (id && body.setDefault) {
       try {
         const store = tokensStore();
-        const key = userScopedKey(auth.sub, 'policy-defaults.json');
+        const key = userScopedKey(sub, 'policy-defaults.json');
         const cur = ((await store.get(key, { type: 'json' })) as any) || {};
         if (path === 'payment_policy') cur.payment = id;
         else if (path === 'fulfillment_policy') cur.fulfillment = id;

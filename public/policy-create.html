@@ -245,7 +245,8 @@
           const j = await r.json();
           if (!r.ok || !j?.ok) {
             const first = j?.detail?.errors?.[0];
-            const msg = (first?.message || j?.error || 'Failed to create');
+            let msg = (first?.message || j?.error || 'Failed to create');
+            if (!first && j?.auth) msg += ` (${j.auth})`;
             throw new Error(msg);
           }
           msg.textContent = 'Created. Returning…';
