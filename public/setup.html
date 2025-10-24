@@ -338,6 +338,28 @@
         return state.ebayConnected;
       }
 
+      const truthyStrings = ['true', 'yes', 'y', 'opted_in', 'active', 'enrolled', 'enabled'];
+      function isTruthy(val) {
+        if (val === true) return true;
+        if (typeof val === 'string') {
+          const norm = val.trim().toLowerCase();
+          return truthyStrings.includes(norm);
+        }
+        return false;
+      }
+      function computeOptInState(payload) {
+        if (!payload) return false;
+        if (isTruthy(payload.optedIn)) return true;
+        if (isTruthy(payload.status)) return true;
+        if (isTruthy(payload?.detail?.optedIn) || isTruthy(payload?.detail?.status)) return true;
+        if (Array.isArray(payload.programs)) {
+          for (const p of payload.programs) {
+            if (isTruthy(p?.optedIn) || isTruthy(p?.status)) return true;
+          }
+        }
+        return false;
+      }
+
       async function loadOptInStatus() {
         const statusEl = document.getElementById('optinStatus');
         const msg = document.getElementById('optinMsg');
@@ -352,19 +374,53 @@
           const res = await authClient.authFetch('/.netlify/functions/ebay-check-optin');
           const j = await res.json();
           if (res.ok && j?.ok) {
-            state.optedIn = !!j.optedIn;
-            if (statusEl) statusEl.innerHTML = j.optedIn ? '<span class="badge">Ready</span>' : 'Not enrolled yet.';
-            if (msg) msg.textContent = j.optedIn ? 'Business Policies are active on your eBay account.' : 'Use the button above or visit eBay to finish enrollment.';
+            state.optedIn = computeOptInState(j);
+            if (statusEl) {
+              if (state.optedIn) {
+                const label = typeof j?.detail?.programType === 'string' ? ` · ${j.detail.programType}` : '';
+                statusEl.innerHTML = `<span class="badge">Ready${label}</span>`;
+              } else {
+                statusEl.textContent = 'Not enrolled yet.';
+              }
+            }
+            if (msg) {
+              if (state.optedIn) {
+                const statusNote = j?.detail?.status || j?.status;
+                msg.textContent = statusNote ? `Business Policies are active (${statusNote}).` : 'Business Policies are active on your eBay account.';
+              } else {
+                const statusNote = j?.detail?.status || j?.status;
+                msg.textContent = statusNote ? `eBay returned status: ${statusNote}. Use the button above or visit eBay to finish enrollment.` : 'Use the button above or visit eBay to finish enrollment.';
+              }
+            }
             const btn = document.getElementById('btnOptIn');
-            if (btn) btn.disabled = j.optedIn || !state.ebayConnected;
+            if (btn) {
+              btn.disabled = state.optedIn || !state.ebayConnected;
+              btn.style.display = state.optedIn ? 'none' : 'inline-flex';
+            }
+            const manual = document.querySelector('#optin .actions a.btn.secondary');
+            if (manual) manual.style.display = state.optedIn ? 'none' : 'inline-flex';
           } else {
             state.optedIn = null;
             if (statusEl) statusEl.textContent = 'Unable to verify opt-in status.';
+            const btn = document.getElementById('btnOptIn');
+            if (btn) {
+              btn.disabled = !state.ebayConnected;
+              btn.style.display = !state.ebayConnected ? 'none' : 'inline-flex';
+            }
+            const manual = document.querySelector('#optin .actions a.btn.secondary');
+            if (manual) manual.style.display = state.ebayConnected ? 'inline-flex' : 'none';
           }
         } catch (err) {
           state.optedIn = null;
           const statusEl2 = document.getElementById('optinStatus');
           if (statusEl2) statusEl2.textContent = 'Unable to verify opt-in status.';
+          const btn = document.getElementById('btnOptIn');
+          if (btn) {
+            btn.disabled = !state.ebayConnected;
+            btn.style.display = !state.ebayConnected ? 'none' : 'inline-flex';
+          }
+          const manual = document.querySelector('#optin .actions a.btn.secondary');
+          if (manual) manual.style.display = state.ebayConnected ? 'inline-flex' : 'none';
         }
         renderSummary();
       }
