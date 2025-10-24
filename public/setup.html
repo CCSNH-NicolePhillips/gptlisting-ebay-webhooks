@@ -107,9 +107,9 @@
           <div class="panel">
             <h3>Shipping policy</h3>
             <div class="status" id="shippingStatus">Connect eBay to review shipping policies.</div>
-            <p class="small muted">Recommended default uses USPS Ground Advantage (calculated) with one-day handling so Smart Shipping discounts stay available.</p>
+            <p class="small muted">Recommended default uses USPS Ground Advantage (calculated) with a three-day handling window so Smart Shipping discounts stay available.</p>
             <div class="actions">
-              <button id="createShipping" title="Creates a default shipping policy with USPS Ground Advantage, calculated rates, and one-day handling time.">Create recommended shipping policy</button>
+              <button id="createShipping" title="Creates a default shipping policy with USPS Ground Advantage, calculated rates, and a three-day handling time.">Create recommended shipping policy</button>
               <a class="btn secondary" href="/policy-create.html?type=fulfillment" target="_blank">Customize</a>
             </div>
             <div class="small muted" id="shippingMessage" style="margin-top:0.5rem;"></div>
@@ -178,7 +178,7 @@
         fulfillment: {
           type: 'fulfillment',
           name: 'Ground Advantage Shipping (Auto)',
-          handlingTimeDays: 1,
+          handlingTimeDays: 3,
           freeDomestic: false,
           costType: 'CALCULATED',
           shippingCarrierCode: 'USPS',
