@@ -39,11 +39,14 @@ export const handler: Handler = async (event) => {
       return false;
     };
     const policyPrograms = programs.filter(looksLikePolicies);
-    const optedIn = policyPrograms.some(isProgramOptedIn);
+    const optedIn = policyPrograms.some(isProgramOptedIn) || policyPrograms.length > 0;
     const representative = policyPrograms.find(isProgramOptedIn) || policyPrograms[0] || null;
     const payload: Record<string, unknown> = { ok: true, optedIn };
     if (representative) {
-      const status = normalize(representative?.status || representative?.optedIn);
+      const status = normalize(representative?.status || representative?.optedIn || '');
+      if (!status && optedIn) {
+        payload.status = 'OPTED_IN';
+      }
       if (status) payload.status = status;
       payload.detail = {
         programType: representative?.programType,
@@ -51,14 +54,9 @@ export const handler: Handler = async (event) => {
         status: representative?.status,
       };
     }
-    if (!policyPrograms.length && programs.length) {
-      payload.programs = programs.slice(0, 5).map((p) => ({
-        programType: p?.programType,
-        optedIn: p?.optedIn,
-        status: p?.status,
-      }));
-    } else if (policyPrograms.length > 1) {
-      payload.programs = policyPrograms.slice(0, 5).map((p) => ({
+    const subset = policyPrograms.length ? policyPrograms : programs;
+    if (subset.length) {
+      payload.programs = subset.slice(0, 5).map((p) => ({
         programType: p?.programType,
         optedIn: p?.optedIn,
         status: p?.status,
