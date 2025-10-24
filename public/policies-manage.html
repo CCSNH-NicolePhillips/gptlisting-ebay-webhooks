@@ -62,6 +62,20 @@
         </div>
       </div>
 
+      <div class="col" id="inspector" style="display:none;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:.5rem;">
+          <h3 style="margin:0" id="inspectorTitle">Policy details</h3>
+          <button class="secondary btn-sm" id="inspectorHide">Close</button>
+        </div>
+        <div class="muted small" id="inspectorStatus">Select a policy to view its full payload and logistics summary.</div>
+        <div id="inspectorBody" style="display:none; margin-top:.75rem;">
+          <div class="muted" style="font-size:.85rem; margin-bottom:.35rem;">Logistics summary</div>
+          <pre id="inspectorSummary" style="background:#0b1020; border:1px solid #26305a; border-radius:6px; padding:.6rem; overflow:auto; max-height:180px; white-space:pre-wrap; font-size:.85rem;">n/a</pre>
+          <div class="muted" style="font-size:.85rem; margin:.75rem 0 .35rem;">Raw payload from eBay</div>
+          <pre id="inspectorJson" style="background:#0b1020; border:1px solid #26305a; border-radius:6px; padding:.6rem; overflow:auto; max-height:320px;">n/a</pre>
+        </div>
+      </div>
+
       <div id="msg" class="muted" style="margin-top:.75rem;"></div>
     </div>
 
@@ -95,7 +109,13 @@
           const def = document.createElement('td');
           def.innerHTML = (String(id.textContent) === String(chosen)) ? '<span class="badge">Default</span>' : '';
           const act = document.createElement('td'); act.className = 'actions';
+          const inspectBtn = document.createElement('button');
+          inspectBtn.textContent = 'Inspect';
+          inspectBtn.className = 'secondary btn-sm';
+          inspectBtn.onclick = () => inspectPolicy(typeKey, id.textContent, name.textContent);
+          act.appendChild(inspectBtn);
           const setBtn = document.createElement('button'); setBtn.textContent = 'Set default'; setBtn.className='secondary btn-sm';
+          setBtn.style.marginLeft = '.35rem';
           setBtn.onclick = async () => {
             try {
               const body = {}; body[typeKey] = id.textContent;
@@ -104,7 +124,7 @@
               await populate();
             } catch (e) { showMsg('Failed to set default: '+(e?.message||e)); }
           };
-          const delBtn = document.createElement('button'); delBtn.textContent = 'Delete'; delBtn.style.marginLeft='.5rem'; delBtn.className='btn-sm';
+          const delBtn = document.createElement('button'); delBtn.textContent = 'Delete'; delBtn.style.marginLeft='.35rem'; delBtn.className='btn-sm';
           delBtn.onclick = async () => {
             if (!confirm('Delete this policy on eBay? This cannot be undone.')) return;
             try {
@@ -123,6 +143,100 @@
       }
 
       function showMsg(s) { const el = document.getElementById('msg'); if (el) el.textContent = s; }
+
+      function ensureInspectorVisible() {
+        const box = document.getElementById('inspector');
+        if (box) box.style.display = 'block';
+      }
+
+      function formatSummary(typeKey, policy) {
+        if (!policy || typeof policy !== 'object') return 'n/a';
+        if (typeKey === 'fulfillment') {
+          const lines = [];
+          const options = Array.isArray(policy.shippingOptions) ? policy.shippingOptions : [];
+          options.forEach((opt, idx) => {
+            lines.push(`Option ${idx + 1}: ${opt.optionType || 'n/a'} · ${opt.costType || 'n/a'}`);
+            const shipTo = opt.shipToLocations?.regionIncluded || [];
+            if (shipTo.length) {
+              lines.push('  Ship to: ' + shipTo.map((r) => `${r.regionType || ''}:${r.regionName || ''}`).join(', '));
+            }
+            const services = Array.isArray(opt.shippingServices) ? opt.shippingServices : [];
+            services.forEach((svc) => {
+              const parts = [svc.shippingServiceCode || 'service'];
+              if (svc.shippingCarrierCode) parts.push(`carrier=${svc.shippingCarrierCode}`);
+              if (svc.freeShipping) parts.push('free');
+              if (!svc.freeShipping && svc.shippingCost?.value)
+                parts.push(`cost=${svc.shippingCost.value} ${svc.shippingCost.currency || ''}`.trim());
+              if (svc.additionalShippingCost?.value)
+                parts.push(`addl=${svc.additionalShippingCost.value} ${svc.additionalShippingCost.currency || ''}`.trim());
+              if (svc.sortOrder != null) parts.push(`sort=${svc.sortOrder}`);
+              lines.push('  Service: ' + parts.join(' · '));
+            });
+            if (opt.calculatedShippingRate) {
+              const calc = opt.calculatedShippingRate;
+              const dims = ['packageLength', 'packageWidth', 'packageHeight']
+                .map((k) => calc[k] ? `${k.replace('package','').toLowerCase()}=${calc[k].value}${calc[k].unit ? ' ' + calc[k].unit : ''}` : null)
+                .filter(Boolean)
+                .join(', ');
+              const weights = ['weightMajor', 'weightMinor']
+                .map((k) => calc[k] ? `${k.replace('weight','weight ').toLowerCase()}=${calc[k].value}${calc[k].unit ? ' ' + calc[k].unit : ''}` : null)
+                .filter(Boolean)
+                .join(', ');
+              lines.push(`  Calculated rate: ${calc.measurementSystem || 'n/a'} · ${calc.packageType || 'n/a'}`);
+              if (dims) lines.push('    ' + dims);
+              if (weights) lines.push('    ' + weights);
+            }
+          });
+          return lines.length ? lines.join('\n') : 'No shipping options in payload';
+        }
+        if (typeKey === 'payment') {
+          const methods = Array.isArray(policy.paymentMethods)
+            ? policy.paymentMethods.map((m) => m.paymentMethodType || JSON.stringify(m)).join(', ')
+            : 'n/a';
+          return `Immediate pay: ${policy.immediatePay ? 'Yes' : 'No'}\nPayment methods: ${methods}`;
+        }
+        if (typeKey === 'return') {
+          const period = policy.returnPeriod ? `${policy.returnPeriod.value} ${policy.returnPeriod.unit}` : 'n/a';
+          return `Returns accepted: ${policy.returnsAccepted ? 'Yes' : 'No'}\nReturn period: ${period}`;
+        }
+        return 'n/a';
+      }
+
+      async function inspectPolicy(typeKey, policyId, policyName) {
+        if (!policyId) return;
+        ensureInspectorVisible();
+        const title = document.getElementById('inspectorTitle');
+        const status = document.getElementById('inspectorStatus');
+        const body = document.getElementById('inspectorBody');
+        const summary = document.getElementById('inspectorSummary');
+        const raw = document.getElementById('inspectorJson');
+        if (title) title.textContent = `${policyName || 'Policy'} · ${typeKey}`;
+        if (body) body.style.display = 'none';
+        if (status) status.textContent = 'Loading full policy payload…';
+        try {
+          const url = new URL('/.netlify/functions/ebay-get-policy', window.location.origin);
+          url.searchParams.set('type', typeKey);
+          url.searchParams.set('id', policyId);
+          const res = await authClient.authFetch(url.toString());
+          const json = await res.json();
+          if (!res.ok || !json?.ok) throw new Error(json?.error || 'Fetch failed');
+          if (summary) summary.textContent = formatSummary(typeKey, json.policy);
+          if (raw) raw.textContent = JSON.stringify(json.policy, null, 2);
+          if (status) status.textContent = `Policy ID ${policyId}`;
+          if (body) body.style.display = 'block';
+        } catch (e) {
+          if (status) status.textContent = 'Failed to load policy: ' + (e?.message || e);
+        }
+      }
+
+      (function setupInspectorHide(){
+        const btn = document.getElementById('inspectorHide');
+        if (!btn) return;
+        btn.onclick = () => {
+          const box = document.getElementById('inspector');
+          if (box) box.style.display = 'none';
+        };
+      })();
 
 
       async function populate() {

@@ -345,23 +345,23 @@ async function ensureFulfillmentPolicy(userId: string, name = 'Auto Shipping Pol
     name,
     marketplaceId: 'EBAY_US',
     categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES', default: true }],
-  handlingTime: { value: 2, unit: 'DAY' },
+    handlingTime: { value: 2, unit: 'DAY' },
     shippingOptions: [
       {
         costType: 'FLAT_RATE',
         optionType: 'DOMESTIC',
-        insuranceFee: { value: '0.00', currency: 'USD' },
         shippingServices: [
           {
             freeShipping: true,
             shippingCarrierCode: 'USPS',
             shippingServiceCode: 'USPSPriorityFlatRateBox',
-            sortOrderId: 1,
+            sortOrder: 1,
           },
         ],
         shipToLocations: { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] },
       },
     ],
+    shipToLocations: { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] },
   };
   const r = await authedFetch(userId, '/sell/account/v1/fulfillment_policy', 'POST', body);
   const j: any = await r.json().catch(() => ({}));
