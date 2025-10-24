@@ -181,10 +181,26 @@
       // Require auth and ensure all calls carry Authorization
       (async () => { try { await authClient.requireAuth(); } catch {} })();
 
+      async function safeParseJson(response) {
+        const text = await response.text();
+        if (!text) return null;
+        try {
+          return JSON.parse(text);
+        } catch (err) {
+          console.warn('Failed to parse JSON response', err, text);
+          return null;
+        }
+      }
+
       async function ensureConnected() {
         const r = await authClient.authFetch('/.netlify/functions/status');
-        const s = await r.json();
-        if (!s.ebay?.connected) {
+        const payload = await safeParseJson(r);
+        if (!r.ok) {
+          const message = payload?.error || `Unable to verify connection (status ${r.status}).`;
+          document.getElementById('msg').textContent = message;
+          throw new Error(message);
+        }
+        if (!payload?.ebay?.connected) {
           document.getElementById('msg').textContent = 'Connect eBay first.';
           throw new Error('Not connected');
         }
@@ -208,11 +224,14 @@
           await ensureConnected();
           const url = `/.netlify/functions/ebay-create-location?key=${encodeURIComponent(v.key)}&name=${encodeURIComponent(v.name)}&address1=${encodeURIComponent(v.a1)}&city=${encodeURIComponent(v.city)}&state=${encodeURIComponent(v.state)}&postal=${encodeURIComponent(v.postal)}&country=${encodeURIComponent(v.country)}&minimal=true`;
           const r = await authClient.authFetch(url);
-          const data = await r.json();
-          if (r.ok && (data.ok || data.exists)) {
+          const data = await safeParseJson(r);
+          if (r.ok && (data?.ok || data?.exists)) {
             msg.textContent = 'Saved. Returning…';
             setTimeout(() => (location.href = '/'), 800);
-          } else msg.textContent = 'Error: ' + (data.error || JSON.stringify(data));
+          } else {
+            const detail = data?.error || data?.message || (data ? JSON.stringify(data) : `status ${r.status}`);
+            msg.textContent = 'Error: ' + detail;
+          }
         } catch (e) {
           msg.textContent = 'Error: ' + e.message;
         }
