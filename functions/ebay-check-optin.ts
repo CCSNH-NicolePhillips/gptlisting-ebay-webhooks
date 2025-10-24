@@ -17,30 +17,48 @@ export const handler: Handler = async (event) => {
     let body: any; try { body = JSON.parse(txt); } catch { body = { raw: txt }; }
     if (!res.ok) return json({ ok: false, status: res.status, error: 'check-optin-failed', detail: body }, res.status);
     const programs: any[] = Array.isArray(body?.programs) ? body.programs : [];
-    const matched = programs.find((p) => {
-      const type = (p?.programType || '').toString().toUpperCase();
+    const normalize = (val: unknown) => (val == null ? '' : String(val)).trim().toUpperCase();
+    const looksLikePolicies = (p: any) => {
+      const type = normalize(p?.programType);
       if (!type) return false;
       if (type === 'SELLING_POLICY_MANAGEMENT') return true;
       if (type === 'SELLING_POLICIES') return true;
+      if (type === 'BUSINESS_POLICIES') return true;
+      if (type === 'BUSINESS_POLICY_MANAGEMENT') return true;
       return type.includes('POLICY');
-    });
-    const status = (matched?.status || '').toString().toUpperCase();
-    const rawFlag = matched?.optedIn;
-    const optedIn = rawFlag === true
-      || (typeof rawFlag === 'string' && ['TRUE', 'YES', 'Y'].includes(rawFlag.trim().toUpperCase()))
-      || status === 'OPTED_IN'
-      || status === 'ACTIVE';
+    };
+    const truthyStatuses = ['OPTED_IN', 'ACTIVE', 'ENROLLED', 'ENABLED'];
+    const isProgramOptedIn = (p: any) => {
+      const rawFlag = p?.optedIn;
+      if (rawFlag === true) return true;
+      const rawStr = normalize(rawFlag);
+      if (rawStr && (rawStr === 'TRUE' || rawStr === 'YES' || rawStr === 'Y')) return true;
+      if (truthyStatuses.includes(rawStr)) return true;
+      const status = normalize(p?.status);
+      if (truthyStatuses.includes(status)) return true;
+      return false;
+    };
+    const policyPrograms = programs.filter(looksLikePolicies);
+    const optedIn = policyPrograms.some(isProgramOptedIn);
+    const representative = policyPrograms.find(isProgramOptedIn) || policyPrograms[0] || null;
     const payload: Record<string, unknown> = { ok: true, optedIn };
-    if (status) payload.status = status;
-    if (matched?.programType || matched?.optedIn !== undefined) {
+    if (representative) {
+      const status = normalize(representative?.status || representative?.optedIn);
+      if (status) payload.status = status;
       payload.detail = {
-        programType: matched?.programType,
-        optedIn: matched?.optedIn,
-        status: matched?.status,
+        programType: representative?.programType,
+        optedIn: representative?.optedIn,
+        status: representative?.status,
       };
     }
-    if (!matched && programs.length) {
+    if (!policyPrograms.length && programs.length) {
       payload.programs = programs.slice(0, 5).map((p) => ({
+        programType: p?.programType,
+        optedIn: p?.optedIn,
+        status: p?.status,
+      }));
+    } else if (policyPrograms.length > 1) {
+      payload.programs = policyPrograms.slice(0, 5).map((p) => ({
         programType: p?.programType,
         optedIn: p?.optedIn,
         status: p?.status,
