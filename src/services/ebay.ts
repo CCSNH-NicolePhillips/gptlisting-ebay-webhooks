@@ -296,7 +296,7 @@ async function ensurePaymentPolicy(userId: string, name = 'Auto Payment Policy')
         (x: any) =>
           x.name === 'duplicatePolicyId' ||
           x.name === 'DuplicateProfileId' ||
-          x.name === 'DuplicateProfileId'
+          x.name === 'DuplicatePolicyId'
       );
       if (p && p.value) return String(p.value);
     }
@@ -356,12 +356,20 @@ async function ensureFulfillmentPolicy(userId: string, name = 'Auto Shipping Pol
             shippingCarrierCode: 'USPS',
             shippingServiceCode: 'USPSPriorityFlatRateBox',
             sortOrder: 1,
+            buyerResponsibleForShipping: false,
+            buyerResponsibleForPickup: false,
           },
         ],
+        packageHandlingCost: { value: '0.00', currency: 'USD' },
+        shippingDiscountProfileId: '0',
+        shippingPromotionOffered: false,
         shipToLocations: { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] },
       },
     ],
     shipToLocations: { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] },
+    globalShipping: false,
+    pickupDropOff: false,
+    freightShipping: false,
   };
   const r = await authedFetch(userId, '/sell/account/v1/fulfillment_policy', 'POST', body);
   const j: any = await r.json().catch(() => ({}));

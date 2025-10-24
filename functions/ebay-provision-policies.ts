@@ -191,12 +191,20 @@ export const handler: Handler = async (event) => {
                 shippingCarrierCode: 'USPS',
                 shippingServiceCode: 'USPSPriorityFlatRateBox',
                 sortOrder: 1,
+                buyerResponsibleForShipping: false,
+                buyerResponsibleForPickup: false,
               },
             ],
+            packageHandlingCost: { value: '0.00', currency: 'USD' },
+            shippingDiscountProfileId: '0',
+            shippingPromotionOffered: false,
             shipToLocations: { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] },
           },
         ],
         shipToLocations: { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] },
+        globalShipping: false,
+        pickupDropOff: false,
+        freightShipping: false,
       };
       const resp = await postJson('/sell/account/v1/fulfillment_policy', payload);
       results.fulfillment = resp;
