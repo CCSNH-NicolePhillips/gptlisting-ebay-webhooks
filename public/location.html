@@ -232,7 +232,7 @@
           const data = await safeParseJson(r);
           if (r.status === 204 || (r.ok && (!data || data.ok || data.exists))) {
             msg.textContent = 'Saved. Returning…';
-            setTimeout(() => (location.href = '/'), 800);
+            setTimeout(() => (location.href = '/setup.html'), 800);
           } else {
             const detail = data?.error || data?.message || (data ? JSON.stringify(data) : `status ${r.status}`);
             msg.textContent = 'Error: ' + detail;
