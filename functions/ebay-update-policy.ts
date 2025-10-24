@@ -160,7 +160,7 @@ export const handler: Handler = async (event) => {
         name: body.name ?? cur.name,
         marketplaceId: mp,
         categoryTypes: normalizeCategoryTypes(cur.categoryTypes),
-        handlingTime: Math.max(0, handlingDays),
+  handlingTime: { value: Math.max(0, handlingDays), unit: 'DAY' },
         shippingOptions,
       };
       stripReadOnly(payload, [

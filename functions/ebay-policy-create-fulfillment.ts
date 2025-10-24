@@ -67,7 +67,7 @@ export const handler: Handler = async (event) => {
       name,
       marketplaceId: MARKETPLACE_ID,
       categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES', default: true }],
-      handlingTime: Math.max(0, isNaN(handlingTimeVal) ? 3 : handlingTimeVal),
+      handlingTime: { value: Math.max(0, isNaN(handlingTimeVal) ? 3 : handlingTimeVal), unit: 'DAY' },
       shippingOptions: [
         {
           optionType: 'DOMESTIC',

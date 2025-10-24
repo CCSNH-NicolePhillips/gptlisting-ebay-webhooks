@@ -65,7 +65,7 @@ export const handler: Handler = async (event) => {
         name: fulDefaultName,
         marketplaceId: mp,
         categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES', default: true }],
-        handlingTime: 1,
+  handlingTime: { value: 1, unit: 'DAY' },
         shippingOptions: [
           {
             optionType: 'DOMESTIC',

@@ -140,7 +140,7 @@ export const handler: Handler = async (event) => {
         name: body.name || 'Shipping Policy',
         marketplaceId: mp,
         categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES', default: true }],
-        handlingTime: Math.max(0, isNaN(handlingDays) ? 1 : handlingDays),
+        handlingTime: { value: Math.max(0, isNaN(handlingDays) ? 1 : handlingDays), unit: 'DAY' },
         ...(shippingOptions ? { shippingOptions } : {}),
       };
     } else if (path === 'return_policy') {
