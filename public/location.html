@@ -28,18 +28,20 @@
       }
       .row {
         display: flex;
-        gap: 0.75rem;
+        gap: 1rem;
         flex-wrap: wrap;
-        margin-bottom: 0.9rem;
+        margin-bottom: 1.15rem;
       }
       .col {
-        flex: 1 1 220px;
-        max-width: 260px;
-        min-width: 200px;
+        flex: 1 1 240px;
+        max-width: 300px;
+        min-width: 220px;
+        display: flex;
+        flex-direction: column;
       }
       label {
-        display: block;
-        margin: 0.35rem 0 0.4rem;
+        font-weight: 600;
+        margin-bottom: 0.45rem;
       }
       input,
       select {
@@ -49,6 +51,8 @@
         border-radius: 8px;
         padding: 0.5rem;
         width: 100%;
+        box-sizing: border-box;
+        min-height: 42px;
       }
       button {
         background: #4f7cff;
@@ -76,24 +80,28 @@
       <p class="muted">Create your eBay ship-from location with the details you use for order fulfillment.</p>
       <div class="row">
         <div class="col">
-          <label>Location key<input id="key" placeholder="primary-warehouse" /></label>
+          <label for="key">Location key</label>
+          <input id="key" placeholder="primary-warehouse" />
         </div>
         <div class="col">
-          <label>Name<input id="name" placeholder="Main Warehouse" /></label>
-        </div>
-      </div>
-      <div class="row">
-        <div class="col">
-          <label>Address 1<input id="a1" placeholder="123 Commerce Way" /></label>
-        </div>
-        <div class="col">
-          <label>City<input id="city" placeholder="Sampledale" /></label>
+          <label for="name">Name</label>
+          <input id="name" placeholder="Main Warehouse" />
         </div>
       </div>
       <div class="row">
         <div class="col">
-          <label>State
-            <select id="state">
+          <label for="a1">Address 1</label>
+          <input id="a1" placeholder="123 Commerce Way" />
+        </div>
+        <div class="col">
+          <label for="city">City</label>
+          <input id="city" placeholder="Sampledale" />
+        </div>
+      </div>
+      <div class="row">
+        <div class="col">
+          <label for="state">State</label>
+          <select id="state">
               <option value="">Select a state…</option>
               <option value="AL">Alabama</option>
               <option value="AK">Alaska</option>
@@ -145,22 +153,21 @@
               <option value="WV">West Virginia</option>
               <option value="WI">Wisconsin</option>
               <option value="WY">Wyoming</option>
-            </select>
-          </label>
+          </select>
         </div>
         <div class="col">
-          <label>Postal<input id="postal" placeholder="00000" /></label>
+          <label for="postal">Postal</label>
+          <input id="postal" placeholder="00000" />
         </div>
         <div class="col">
-          <label>Country
-            <select id="country">
-              <option value="US">United States</option>
-              <option value="CA">Canada</option>
-              <option value="GB">United Kingdom</option>
-              <option value="AU">Australia</option>
-              <option value="DE">Germany</option>
-            </select>
-          </label>
+          <label for="country">Country</label>
+          <select id="country">
+            <option value="US">United States</option>
+            <option value="CA">Canada</option>
+            <option value="GB">United Kingdom</option>
+            <option value="AU">Australia</option>
+            <option value="DE">Germany</option>
+          </select>
         </div>
       </div>
       <div style="margin: 0.75rem 0">
