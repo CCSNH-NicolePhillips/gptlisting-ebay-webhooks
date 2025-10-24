@@ -525,13 +525,25 @@
         msg.textContent = 'Submitting opt-in request…';
         try {
           const res = await authClient.authFetch('/.netlify/functions/ebay-optin', { method: 'POST' });
-          if (res.ok) {
-            msg.textContent = 'Opt-in requested. Refreshing status…';
+          const raw = await res.text();
+          let result = {};
+          try { result = JSON.parse(raw); } catch {}
+          if (res.ok && (result?.ok || result?.already)) {
+            const note = typeof result?.note === 'string' && result.note.trim()
+              ? result.note.trim()
+              : 'Opt-in request submitted. eBay may take a few minutes to reflect.';
             await loadOptInStatus();
             await loadPolicies();
+            if (state.optedIn) {
+              msg.textContent = 'Business Policies are active on your eBay account.';
+              btn.disabled = true;
+            } else {
+              msg.textContent = note;
+              btn.disabled = false;
+            }
           } else {
-            const text = await res.text();
-            msg.textContent = 'Opt-in failed: ' + text;
+            const err = result?.error || result?.detail?.message || result?.detail || raw || 'Unknown error';
+            msg.textContent = 'Opt-in failed: ' + err;
             btn.disabled = false;
           }
         } catch (err) {
