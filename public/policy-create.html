@@ -315,25 +315,34 @@
         payload.setDefault = !!fd.get('setDefault');
         // Only include shipping details when not free
         if (type === 'fulfillment' || type === 'shipping') {
+          if (form.handlingTimeDays) {
+            const ht = Number(form.handlingTimeDays.value);
+            payload.handlingTimeDays = Number.isFinite(ht) ? ht : '';
+          }
           payload.costType = (form.costType && form.costType.value) || 'CALCULATED';
           if (!payload.freeDomestic) {
             payload.shippingCarrierCode = form.shippingCarrierCode.value;
             payload.shippingServiceCode = form.shippingServiceCode.value;
             if (!payload.shippingServiceCode) { msg.textContent = 'Pick a shipping service.'; return; }
             if (payload.costType === 'FLAT_RATE') {
-              const cost = String(Number(form.shippingCostValue.value || '0').toFixed(2));
-              if (!cost || isNaN(Number(cost))) { msg.textContent = 'Enter a flat rate (USD).'; return; }
-              payload.shippingCostValue = cost;
-              const addl = form.additionalShippingCostValue.value;
-              if (addl !== undefined && addl !== null && String(addl).length) payload.additionalShippingCostValue = String(Number(addl).toFixed(2));
+              const costNum = Number(form.shippingCostValue.value);
+              if (!Number.isFinite(costNum)) { msg.textContent = 'Enter a flat rate (USD).'; return; }
+              payload.shippingCostValue = Number(costNum.toFixed(2));
+              const addl = Number(form.additionalShippingCostValue.value);
+              if (Number.isFinite(addl)) payload.additionalShippingCostValue = Number(addl.toFixed(2));
             } else {
               payload.calcMeasurementSystem = form.calcMeasurementSystem?.value || 'ENGLISH';
               payload.calcPackageType = form.calcPackageType?.value || 'PACKAGE_THICK_ENVELOPE';
-              payload.calcLength = form.calcLength?.value;
-              payload.calcWidth = form.calcWidth?.value;
-              payload.calcHeight = form.calcHeight?.value;
-              payload.calcWeightMajor = form.calcWeightMajor?.value;
-              payload.calcWeightMinor = form.calcWeightMinor?.value;
+              const len = Number(form.calcLength?.value);
+              const wid = Number(form.calcWidth?.value);
+              const hgt = Number(form.calcHeight?.value);
+              const wtMajor = Number(form.calcWeightMajor?.value);
+              const wtMinor = Number(form.calcWeightMinor?.value);
+              if (Number.isFinite(len)) payload.calcLength = len;
+              if (Number.isFinite(wid)) payload.calcWidth = wid;
+              if (Number.isFinite(hgt)) payload.calcHeight = hgt;
+              if (Number.isFinite(wtMajor)) payload.calcWeightMajor = wtMajor;
+              if (Number.isFinite(wtMinor)) payload.calcWeightMinor = wtMinor;
             }
           }
         }

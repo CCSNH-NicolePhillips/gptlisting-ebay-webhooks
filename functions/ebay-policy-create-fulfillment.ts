@@ -66,12 +66,13 @@ export const handler: Handler = async (event) => {
     const payload = {
       name,
       marketplaceId: MARKETPLACE_ID,
-      categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }],
-      handlingTime: { value: Math.max(0, isNaN(handlingTimeVal) ? 3 : handlingTimeVal), unit: 'DAY' },
+      categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES', default: true }],
+      handlingTime: Math.max(0, isNaN(handlingTimeVal) ? 3 : handlingTimeVal),
       shippingOptions: [
         {
           optionType: 'DOMESTIC',
           costType: free ? 'FLAT_RATE' : costType,
+          insuranceFee: { value: '0.00', currency: 'USD' },
           shippingServices: [
             {
               shippingCarrierCode: 'USPS',
@@ -80,10 +81,10 @@ export const handler: Handler = async (event) => {
               ...(free || costType === 'CALCULATED'
                 ? {}
                 : { shippingCost: { value: flatRate, currency: 'USD' } }),
-              sortOrder: 1,
+              sortOrderId: 1,
             },
           ],
-          shipToLocations: { regionIncluded: [{ regionName: 'UNITED_STATES' }] },
+          shipToLocations: { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] },
           ...(free || costType !== 'CALCULATED'
             ? {}
             : {

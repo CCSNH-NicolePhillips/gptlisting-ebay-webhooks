@@ -344,20 +344,22 @@ async function ensureFulfillmentPolicy(userId: string, name = 'Auto Shipping Pol
   const body = {
     name,
     marketplaceId: 'EBAY_US',
-    categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }],
-    handlingTime: { value: 2, unit: 'DAY' },
+    categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES', default: true }],
+    handlingTime: 2,
     shippingOptions: [
       {
         costType: 'FLAT_RATE',
         optionType: 'DOMESTIC',
+        insuranceFee: { value: '0.00', currency: 'USD' },
         shippingServices: [
           {
             freeShipping: true,
             shippingCarrierCode: 'USPS',
             shippingServiceCode: 'USPSPriorityFlatRateBox',
-            sortOrder: 1,
+            sortOrderId: 1,
           },
         ],
+        shipToLocations: { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] },
       },
     ],
   };

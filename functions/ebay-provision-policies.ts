@@ -178,21 +178,23 @@ export const handler: Handler = async (event) => {
       const payload = {
         name: defaultShipName,
         marketplaceId: MARKETPLACE_ID,
-        categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }],
-        handlingTime: { value: 1, unit: 'DAY' },
+        categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES', default: true }],
+        handlingTime: 1,
         shippingOptions: [
           {
             optionType: 'DOMESTIC',
             costType: 'FLAT_RATE',
+            insuranceFee: { value: '0.00', currency: 'USD' },
       shippingServices: [
         {
           // Free domestic USPS Priority Flat Rate Box (doc sample, widely accepted)
           freeShipping: true,
           shippingCarrierCode: 'USPS',
           shippingServiceCode: 'USPSPriorityFlatRateBox',
-          sortOrder: 1,
+                sortOrderId: 1,
         },
       ],
+            shipToLocations: { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] },
           },
         ],
       };
