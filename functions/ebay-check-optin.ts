@@ -17,9 +17,32 @@ export const handler: Handler = async (event) => {
     let body: any; try { body = JSON.parse(txt); } catch { body = { raw: txt }; }
     if (!res.ok) return json({ ok: false, status: res.status, error: 'check-optin-failed', detail: body }, res.status);
     const programs: any[] = Array.isArray(body?.programs) ? body.programs : [];
-    const found = programs.find((p) => (p?.programType || '').toUpperCase() === 'SELLING_POLICY_MANAGEMENT');
-    const optedIn = !!found?.optedIn;
-    return json({ ok: true, optedIn });
+    const matched = programs.find((p) => {
+      const type = (p?.programType || '').toString().toUpperCase();
+      if (!type) return false;
+      if (type === 'SELLING_POLICY_MANAGEMENT') return true;
+      if (type === 'SELLING_POLICIES') return true;
+      return type.includes('POLICY');
+    });
+    const status = (matched?.status || '').toString().toUpperCase();
+    const optedIn = matched?.optedIn === true || status === 'OPTED_IN';
+    const payload: Record<string, unknown> = { ok: true, optedIn };
+    if (status) payload.status = status;
+    if (matched?.programType || matched?.optedIn !== undefined) {
+      payload.detail = {
+        programType: matched?.programType,
+        optedIn: matched?.optedIn,
+        status: matched?.status,
+      };
+    }
+    if (!matched && programs.length) {
+      payload.programs = programs.slice(0, 5).map((p) => ({
+        programType: p?.programType,
+        optedIn: p?.optedIn,
+        status: p?.status,
+      }));
+    }
+    return json(payload);
   } catch (e: any) {
     return json({ error: e?.message || String(e) }, 500);
   }
