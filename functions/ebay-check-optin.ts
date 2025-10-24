@@ -25,7 +25,11 @@ export const handler: Handler = async (event) => {
       return type.includes('POLICY');
     });
     const status = (matched?.status || '').toString().toUpperCase();
-    const optedIn = matched?.optedIn === true || status === 'OPTED_IN';
+    const rawFlag = matched?.optedIn;
+    const optedIn = rawFlag === true
+      || (typeof rawFlag === 'string' && ['TRUE', 'YES', 'Y'].includes(rawFlag.trim().toUpperCase()))
+      || status === 'OPTED_IN'
+      || status === 'ACTIVE';
     const payload: Record<string, unknown> = { ok: true, optedIn };
     if (status) payload.status = status;
     if (matched?.programType || matched?.optedIn !== undefined) {
