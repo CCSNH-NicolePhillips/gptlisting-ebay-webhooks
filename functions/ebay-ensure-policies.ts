@@ -43,7 +43,12 @@ export const handler: Handler = async (event) => {
     const namedPay = paymentPolicies.find((p: any) => (p?.name || '') === payDefaultName);
     if (namedPay) payPick = namedPay;
     if (!payPick) {
-      const payload = { name: payDefaultName, marketplaceId: mp, categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }], immediatePay: true };
+      const payload = {
+        name: payDefaultName,
+        marketplaceId: mp,
+        categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES', default: true }],
+        immediatePay: true,
+      };
       const created = await postJson(`${host}/sell/account/v1/payment_policy`, payload);
       if (!created.ok) return json({ ok: false, error: 'payment-create-failed', detail: created.body }, created.status);
       payPick = created.body;
@@ -59,11 +64,24 @@ export const handler: Handler = async (event) => {
       const payload = {
         name: fulDefaultName,
         marketplaceId: mp,
-        categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }],
+        categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES', default: true }],
         handlingTime: { value: 1, unit: 'DAY' },
         shippingOptions: [
-          { optionType: 'DOMESTIC', costType: 'FLAT_RATE', shippingServices: [ { freeShipping: true, buyerResponsibleForShipping: false, shippingCarrierCode: 'USPS', shippingServiceCode: 'USPSPriorityFlatRateBox' } ] }
-        ]
+          {
+            optionType: 'DOMESTIC',
+            costType: 'FLAT_RATE',
+            insuranceFee: { value: '0.00', currency: 'USD' },
+            shippingServices: [
+              {
+                freeShipping: true,
+                buyerResponsibleForShipping: false,
+                shippingCarrierCode: 'USPS',
+                shippingServiceCode: 'USPSPriorityFlatRateBox',
+                sortOrderId: 1,
+              },
+            ],
+          },
+        ],
       };
       const created = await postJson(`${host}/sell/account/v1/fulfillment_policy`, payload);
       if (!created.ok) return json({ ok: false, error: 'fulfillment-create-failed', detail: created.body }, created.status);
@@ -77,7 +95,15 @@ export const handler: Handler = async (event) => {
     const namedRet = returnPolicies.find((p: any) => (p?.name || '') === retDefaultName);
     if (namedRet) retPick = namedRet;
     if (!retPick) {
-      const payload = { name: retDefaultName, marketplaceId: mp, returnsAccepted: true, returnPeriod: { value: 30, unit: 'DAY' }, returnShippingCostPayer: 'BUYER', refundMethod: 'MONEY_BACK' };
+      const payload = {
+        name: retDefaultName,
+        marketplaceId: mp,
+        categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES', default: true }],
+        returnsAccepted: true,
+        returnPeriod: { value: 30, unit: 'DAY' },
+        returnShippingCostPayer: 'BUYER',
+        refundMethod: 'MONEY_BACK',
+      };
       const created = await postJson(`${host}/sell/account/v1/return_policy`, payload);
       if (!created.ok) return json({ ok: false, error: 'return-create-failed', detail: created.body }, created.status);
       retPick = created.body;
