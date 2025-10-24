@@ -345,7 +345,7 @@ async function ensureFulfillmentPolicy(userId: string, name = 'Auto Shipping Pol
     name,
     marketplaceId: 'EBAY_US',
     categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES', default: true }],
-    handlingTime: 2,
+  handlingTime: { value: 2, unit: 'DAY' },
     shippingOptions: [
       {
         costType: 'FLAT_RATE',
