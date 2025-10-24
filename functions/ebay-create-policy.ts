@@ -54,6 +54,7 @@ export const handler: Handler = async (event) => {
       const freeDomestic = !!body.freeDomestic;
       const costType = (body.costType === 'FLAT_RATE') ? 'FLAT_RATE' : 'CALCULATED';
       let shippingOptions: any[] | undefined;
+      const domesticShipTo = { shipToLocations: { regionIncluded: [{ regionName: 'UNITED_STATES' }] } };
       if (freeDomestic) {
         shippingOptions = [
           {
@@ -67,6 +68,7 @@ export const handler: Handler = async (event) => {
                 sortOrder: 1,
               },
             ],
+            ...domesticShipTo,
           },
         ];
       } else if (body.shippingServiceCode) {
@@ -113,6 +115,7 @@ export const handler: Handler = async (event) => {
               },
             ],
             ...(calcRate ? { calculatedShippingRate: calcRate } : {}),
+            ...domesticShipTo,
           },
         ];
       }

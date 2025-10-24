@@ -83,6 +83,7 @@ export const handler: Handler = async (event) => {
               sortOrder: 1,
             },
           ],
+          shipToLocations: { regionIncluded: [{ regionName: 'UNITED_STATES' }] },
           ...(free || costType !== 'CALCULATED'
             ? {}
             : {
