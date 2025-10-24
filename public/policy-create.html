@@ -164,7 +164,8 @@
         function serviceOptionsFor(carrier) {
           if (carrier === 'UPS') return [ ['UPSGround','UPS Ground'], ['UPS3DaySelect','UPS 3 Day Select'] ];
           if (carrier === 'FedEx') return [ ['FedExHomeDelivery','FedEx Home Delivery'], ['FedEx2Day','FedEx 2Day'] ];
-          return [ ['USPSGroundAdvantage','USPS Ground Advantage'], ['USPSPriority','USPS Priority'], ['USPSFirstClass','USPS First Class'] ];
+          // Use known-good USPS codes
+          return [ ['USPSGroundAdvantage','USPS Ground Advantage'], ['USPSPriorityMail','USPS Priority Mail'] ];
         }
         function updateServiceOptions() {
           const carrier = form.shippingCarrierCode.value || 'USPS';
@@ -242,7 +243,11 @@
         try {
           const r = await authClient.authFetch('/.netlify/functions/ebay-create-policy', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
           const j = await r.json();
-          if (!r.ok || !j?.ok) throw new Error(j?.error || 'Failed to create');
+          if (!r.ok || !j?.ok) {
+            const first = j?.detail?.errors?.[0];
+            const msg = (first?.message || j?.error || 'Failed to create');
+            throw new Error(msg);
+          }
           msg.textContent = 'Created. Returning…';
           setTimeout(() => { location.href = '/policies-manage.html?created='+encodeURIComponent(type); }, 900);
         } catch (e) {
