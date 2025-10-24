@@ -3,21 +3,41 @@ import { json, userScopedKey, getBearerToken, getJwtSubUnverified, requireAuthVe
 import { getUserAccessToken, apiHost, headers } from './_ebay.js';
 import { tokensStore } from './_blobs.js';
 
+function normalizeMoney(input: any, fallbackCurrency = 'USD', fallbackValue = '0.00') {
+  if (!input || typeof input !== 'object') {
+    return { value: fallbackValue, currency: fallbackCurrency };
+  }
+  const currency = input.currency || fallbackCurrency;
+  const rawVal = input.value;
+  if (typeof rawVal === 'string') {
+    return { value: rawVal, currency };
+  }
+  const num = Number(rawVal);
+  return {
+    value: Number.isFinite(num) ? num.toFixed(2) : fallbackValue,
+    currency,
+  };
+}
+
 function sanitizeFulfillmentPayload(payload: any) {
   if (!payload || typeof payload !== 'object') return payload;
-  if (!payload.shipToLocations) {
-    payload.shipToLocations = { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] };
-  }
+  payload.globalShipping = !!payload.globalShipping;
+  payload.pickupDropOff = !!payload.pickupDropOff;
+  payload.freightShipping = !!payload.freightShipping;
+  if (!payload.shipToLocations) payload.shipToLocations = { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] };
   if (!Array.isArray(payload.shippingOptions)) return payload;
 
   payload.shippingOptions = payload.shippingOptions.map((option: any, optIdx: number) => {
     if (!option || typeof option !== 'object') return option;
     const normalized = { ...option };
     delete normalized.insuranceFee;
+    if (!normalized.shipToLocations) normalized.shipToLocations = { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] };
 
-    if (!normalized.shipToLocations) {
-      normalized.shipToLocations = { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] };
-    }
+    normalized.packageHandlingCost = normalizeMoney(normalized.packageHandlingCost);
+    normalized.shippingDiscountProfileId = normalized.shippingDiscountProfileId != null
+      ? String(normalized.shippingDiscountProfileId)
+      : '0';
+    normalized.shippingPromotionOffered = !!normalized.shippingPromotionOffered;
 
     if (Array.isArray(normalized.shippingServices)) {
       normalized.shippingServices = normalized.shippingServices.map((svc: any, svcIdx: number) => {
@@ -41,9 +61,12 @@ function sanitizeFulfillmentPayload(payload: any) {
             value: service.additionalShippingCost.value.toFixed(2),
           };
         }
+        service.buyerResponsibleForShipping = !!service.buyerResponsibleForShipping;
+        service.buyerResponsibleForPickup = !!service.buyerResponsibleForPickup;
         return service;
       });
     }
+    if (!Array.isArray(normalized.shippingServices)) normalized.shippingServices = [];
 
     if (normalized.calculatedShippingRate) {
       const calc = { ...normalized.calculatedShippingRate };
@@ -134,8 +157,13 @@ export const handler: Handler = async (event) => {
                 shippingCarrierCode: 'USPS',
                 shippingServiceCode: 'USPSPriorityFlatRateBox',
                 sortOrder: 1,
+                buyerResponsibleForShipping: false,
+                buyerResponsibleForPickup: false,
               },
             ],
+            packageHandlingCost: { value: '0.00', currency: 'USD' },
+            shippingDiscountProfileId: '0',
+            shippingPromotionOffered: false,
             ...domesticShipTo,
           },
         ];
@@ -175,6 +203,8 @@ export const handler: Handler = async (event) => {
                 shippingCarrierCode: body.shippingCarrierCode || 'USPS',
                 shippingServiceCode: body.shippingServiceCode,
                 sortOrder: 1,
+                buyerResponsibleForShipping: false,
+                buyerResponsibleForPickup: false,
                 ...(costType === 'FLAT_RATE'
                   ? {
                       shippingCost: {
@@ -194,6 +224,9 @@ export const handler: Handler = async (event) => {
               },
             ],
             ...(calcRate ? { calculatedShippingRate: calcRate } : {}),
+            packageHandlingCost: { value: '0.00', currency: 'USD' },
+            shippingDiscountProfileId: '0',
+            shippingPromotionOffered: false,
             ...domesticShipTo,
           },
         ];
@@ -205,6 +238,9 @@ export const handler: Handler = async (event) => {
         handlingTime: { value: Math.max(0, isNaN(handlingDays) ? 1 : handlingDays), unit: 'DAY' },
         ...(shippingOptions ? { shippingOptions } : {}),
         ...domesticShipTo,
+        globalShipping: false,
+        pickupDropOff: false,
+        freightShipping: false,
       };
       payload = sanitizeFulfillmentPayload(payload);
     } else if (path === 'return_policy') {

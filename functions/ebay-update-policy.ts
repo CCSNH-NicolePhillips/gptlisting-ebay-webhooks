@@ -57,6 +57,14 @@ export const handler: Handler = async (event) => {
       additionalShippingCostValue?: string
     ) => {
       const baseShipTo = { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] };
+      const normalizeMoney = (money: any, fallback = '0.00') => {
+        if (!money || typeof money !== 'object') return { value: fallback, currency: 'USD' };
+        const currency = money.currency || 'USD';
+        const raw = money.value;
+        if (typeof raw === 'string') return { value: raw, currency };
+        const num = Number(raw);
+        return { value: Number.isFinite(num) ? num.toFixed(2) : fallback, currency };
+      };
       const normalizeServices = (services: any[]) =>
         Array.isArray(services)
           ? services.map((svc, idx) => {
@@ -66,40 +74,46 @@ export const handler: Handler = async (event) => {
                 next.sortOrder = Number.isFinite(parsed) ? parsed : idx + 1;
               }
               delete next.sortOrderId;
-              if (next.shippingCost && typeof next.shippingCost.value === 'number') {
-                next.shippingCost = {
-                  ...next.shippingCost,
-                  value: next.shippingCost.value.toFixed(2),
-                };
-              }
-              if (next.additionalShippingCost && typeof next.additionalShippingCost.value === 'number') {
-                next.additionalShippingCost = {
-                  ...next.additionalShippingCost,
-                  value: next.additionalShippingCost.value.toFixed(2),
-                };
-              }
+              if (next.shippingCost) next.shippingCost = normalizeMoney(next.shippingCost);
+              if (next.additionalShippingCost)
+                next.additionalShippingCost = normalizeMoney(next.additionalShippingCost);
+              next.buyerResponsibleForShipping = !!next.buyerResponsibleForShipping;
+              next.buyerResponsibleForPickup = !!next.buyerResponsibleForPickup;
               return next;
             })
           : services;
 
-      const wrapOption = (partial: any) => ({
-        optionType: 'DOMESTIC',
-        shipToLocations: baseShipTo,
-        ...partial,
-      });
+      const wrapOption = (partial: any) => {
+        const next = {
+          optionType: 'DOMESTIC',
+          shipToLocations: baseShipTo,
+          packageHandlingCost: { value: '0.00', currency: 'USD' },
+          shippingDiscountProfileId: '0',
+          shippingPromotionOffered: false,
+          ...partial,
+        };
+        delete next.insuranceFee;
+        next.shipToLocations = next.shipToLocations || baseShipTo;
+        next.packageHandlingCost = normalizeMoney(next.packageHandlingCost);
+        next.shippingDiscountProfileId =
+          next.shippingDiscountProfileId != null ? String(next.shippingDiscountProfileId) : '0';
+        next.shippingPromotionOffered = !!next.shippingPromotionOffered;
+        next.shippingServices = normalizeServices(next.shippingServices);
+        return next;
+      };
 
       if (forceFreeDomestic) {
         return [
           wrapOption({
             costType: 'FLAT_RATE',
-            shippingServices: normalizeServices([
+            shippingServices: [
               {
-                shippingServiceCode: 'USPSGroundAdvantage',
+                shippingServiceCode: 'USPSParcel',
                 sortOrder: 1,
                 freeShipping: true,
                 shippingCarrierCode: 'USPS',
               },
-            ]),
+            ],
           }),
         ];
       }
@@ -109,7 +123,7 @@ export const handler: Handler = async (event) => {
         return [
           wrapOption({
             costType: selectedCostType || 'CALCULATED',
-            shippingServices: normalizeServices([
+            shippingServices: [
               {
                 shippingServiceCode: serviceCode,
                 freeShipping: false,
@@ -122,27 +136,21 @@ export const handler: Handler = async (event) => {
                   : {}),
                 shippingCarrierCode: shipCarrier,
               },
-            ]),
+            ],
           }),
         ];
       }
 
       if (Array.isArray(curOptions) && curOptions.length) {
-        return curOptions.map((opt: any) => {
-          const next = { ...opt };
-          delete next.insuranceFee;
-          next.shipToLocations = next.shipToLocations || baseShipTo;
-          next.shippingServices = normalizeServices(next.shippingServices);
-          return next;
-        });
+        return curOptions.map((opt: any) => wrapOption({ ...opt }));
       }
 
       return [
         wrapOption({
           costType: selectedCostType || 'CALCULATED',
-          shippingServices: normalizeServices([
+          shippingServices: [
             {
-              shippingServiceCode: 'USPSGroundAdvantage',
+              shippingServiceCode: 'USPSParcel',
               freeShipping: false,
               sortOrder: 1,
               ...(selectedCostType === 'FLAT_RATE'
@@ -150,7 +158,7 @@ export const handler: Handler = async (event) => {
                 : {}),
               shippingCarrierCode: 'USPS',
             },
-          ]),
+          ],
         }),
       ];
     };
@@ -184,6 +192,12 @@ export const handler: Handler = async (event) => {
         body.shippingCostValue,
         body.additionalShippingCostValue
       );
+      const globalShipping =
+        body.globalShipping != null ? !!body.globalShipping : !!cur.globalShipping;
+      const pickupDropOff =
+        body.pickupDropOff != null ? !!body.pickupDropOff : !!cur.pickupDropOff;
+      const freightShipping =
+        body.freightShipping != null ? !!body.freightShipping : !!cur.freightShipping;
       // Build a minimal, valid payload to avoid sending read-only/unsupported fields
       payload = {
         name: body.name ?? cur.name,
@@ -192,6 +206,9 @@ export const handler: Handler = async (event) => {
         handlingTime: { value: Math.max(0, handlingDays), unit: 'DAY' },
         shippingOptions,
         shipToLocations: { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] },
+        globalShipping,
+        pickupDropOff,
+        freightShipping,
       };
       stripReadOnly(payload, [
         'fulfillmentPolicyId',

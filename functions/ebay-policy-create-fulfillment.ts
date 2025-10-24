@@ -3,21 +3,41 @@ import { tokensStore } from './_blobs.js';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from './_auth.js';
 import { accessTokenFromRefresh, tokenHosts } from './_common.js';
 
+function normalizeMoney(input: any, fallbackCurrency = 'USD', fallbackValue = '0.00') {
+  if (!input || typeof input !== 'object') {
+    return { value: fallbackValue, currency: fallbackCurrency };
+  }
+  const currency = input.currency || fallbackCurrency;
+  const rawVal = input.value;
+  if (typeof rawVal === 'string') {
+    return { value: rawVal, currency };
+  }
+  const num = Number(rawVal);
+  return {
+    value: Number.isFinite(num) ? num.toFixed(2) : fallbackValue,
+    currency,
+  };
+}
+
 function sanitizeFulfillmentPayload(payload: any) {
   if (!payload || typeof payload !== 'object') return payload;
-  if (!payload.shipToLocations) {
-    payload.shipToLocations = { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] };
-  }
+  payload.globalShipping = !!payload.globalShipping;
+  payload.pickupDropOff = !!payload.pickupDropOff;
+  payload.freightShipping = !!payload.freightShipping;
+  if (!payload.shipToLocations) payload.shipToLocations = { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] };
   if (!Array.isArray(payload.shippingOptions)) return payload;
 
   payload.shippingOptions = payload.shippingOptions.map((option: any, optIdx: number) => {
     if (!option || typeof option !== 'object') return option;
     const normalized = { ...option };
     delete normalized.insuranceFee;
+    if (!normalized.shipToLocations) normalized.shipToLocations = { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] };
 
-    if (!normalized.shipToLocations) {
-      normalized.shipToLocations = { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] };
-    }
+    normalized.packageHandlingCost = normalizeMoney(normalized.packageHandlingCost);
+    normalized.shippingDiscountProfileId = normalized.shippingDiscountProfileId != null
+      ? String(normalized.shippingDiscountProfileId)
+      : '0';
+    normalized.shippingPromotionOffered = !!normalized.shippingPromotionOffered;
 
     if (Array.isArray(normalized.shippingServices)) {
       normalized.shippingServices = normalized.shippingServices.map((svc: any, svcIdx: number) => {
@@ -40,9 +60,12 @@ function sanitizeFulfillmentPayload(payload: any) {
             value: service.additionalShippingCost.value.toFixed(2),
           };
         }
+        service.buyerResponsibleForShipping = !!service.buyerResponsibleForShipping;
+        service.buyerResponsibleForPickup = !!service.buyerResponsibleForPickup;
         return service;
       });
     }
+    if (!Array.isArray(normalized.shippingServices)) normalized.shippingServices = [];
 
     if (normalized.calculatedShippingRate) {
       const calc = { ...normalized.calculatedShippingRate };
@@ -108,7 +131,7 @@ export const handler: Handler = async (event) => {
     const handlingTimeVal = Number(body.handlingTime ?? 3);
     const free = !!body.free;
     const costType = String(body.costType || (free ? 'FLAT_RATE' : 'CALCULATED')).toUpperCase();
-    const serviceCode = String(body.serviceCode || (free ? 'USPSPriorityFlatRateBox' : 'USPSPriorityMail'));
+  const serviceCode = String(body.serviceCode || (free ? 'USPSPriorityFlatRateBox' : 'USPSParcel'));
     const flatRate = body.flatRate != null ? String(Number(body.flatRate).toFixed(2)) : '5.99';
     const measurementSystem = (body.calcMeasurementSystem === 'METRIC') ? 'METRIC' : 'ENGLISH';
     const packageType = body.calcPackageType || 'PACKAGE_THICK_ENVELOPE';
@@ -144,9 +167,14 @@ export const handler: Handler = async (event) => {
                 ? {}
                 : { shippingCost: { value: flatRate, currency: 'USD' } }),
               sortOrder: 1,
+              buyerResponsibleForShipping: false,
+              buyerResponsibleForPickup: false,
             },
           ],
           shipToLocations: { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] },
+          packageHandlingCost: { value: '0.00', currency: 'USD' },
+          shippingDiscountProfileId: '0',
+          shippingPromotionOffered: false,
           ...(free || costType !== 'CALCULATED'
             ? {}
             : {
@@ -163,6 +191,9 @@ export const handler: Handler = async (event) => {
         },
       ],
       shipToLocations: { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] },
+      globalShipping: false,
+      pickupDropOff: false,
+      freightShipping: false,
     };
     payload = sanitizeFulfillmentPayload(payload);
 
