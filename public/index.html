@@ -198,11 +198,11 @@
         <li id="chkDropbox">Dropbox: <span class="muted">Unknown</span></li>
         <li id="chkEbay">eBay: <span class="muted">Unknown</span></li>
         <li id="chkPolicies">
-          Business policies: <span class="muted">Checking…</span>
+          Business policies: <span class="muted">Connect eBay to view status.</span>
           <a href="/policies-manage.html" id="policiesLink" style="display: none">Manage</a>
         </li>
         <li id="chkLocation">
-          Inventory location: <span class="muted">Checking…</span>
+          Inventory location: <span class="muted">Connect eBay to view status.</span>
           <a href="/location.html" id="locationLink" style="display: none">Manage</a>
         </li>
       </ul>
@@ -356,7 +356,7 @@
       const claimBtn = document.getElementById('claimLegacy');
       if (claimBtn) claimBtn.onclick = async () => {
         const m = document.getElementById('claimMsg');
-        if (m) m.textContent = 'Checking…';
+        if (m) m.textContent = 'Scanning for legacy tokens…';
         try {
           await authClient.ensureAuth();
           const r = await authClient.authFetch('/.netlify/functions/migrate-legacy-tokens', { method: 'POST' });

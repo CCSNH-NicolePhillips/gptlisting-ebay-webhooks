@@ -57,7 +57,7 @@
           <div class="grid">
             <div class="panel">
               <h3>Dropbox</h3>
-              <div class="status" id="dbxStatus">Checking…</div>
+              <div class="status" id="dbxStatus">Please connect Dropbox to continue.</div>
               <div class="actions">
                 <a class="btn" id="dbxConnect" href="/.netlify/functions/dropbox-oauth-start">Connect Dropbox</a>
                 <button class="secondary" id="dbxDisconnect">Disconnect</button>
@@ -66,7 +66,7 @@
             </div>
             <div class="panel">
               <h3>eBay</h3>
-              <div class="status" id="ebayStatus">Checking…</div>
+              <div class="status" id="ebayStatus">Please connect eBay to continue.</div>
               <div class="actions">
                 <a class="btn" id="ebayConnect" href="/.netlify/functions/ebay-oauth-start">Connect eBay</a>
                 <button class="secondary" id="ebayDisconnect">Disconnect</button>
@@ -80,7 +80,7 @@
           <h2>2. Opt in to Business Policies</h2>
           <p class="muted">eBay needs Business Policies for payments, shipping, and returns before GPTListing can post offers on your behalf outside of the standard eBay website.</p>
           <div class="panel">
-            <div class="status" id="optinStatus">Checking…</div>
+            <div class="status" id="optinStatus">Connect eBay to manage Business Policies.</div>
             <div class="actions">
               <button id="btnOptIn">Opt in automatically</button>
               <a class="btn secondary" href="https://www.ebay.com/bp/manage" target="_blank" rel="noopener">Open eBay Business Policies ↗</a>
@@ -95,7 +95,7 @@
 
           <div class="panel">
             <h3>Payment policy</h3>
-            <div class="status" id="paymentStatus">Checking…</div>
+            <div class="status" id="paymentStatus">Connect eBay to review payment policies.</div>
             <p class="small muted">Requires immediate payment from buyers and applies to all categories except motor vehicles.</p>
             <div class="actions">
               <button id="createPayment">Create recommended payment policy</button>
@@ -106,7 +106,7 @@
 
           <div class="panel">
             <h3>Shipping policy</h3>
-            <div class="status" id="shippingStatus">Checking…</div>
+            <div class="status" id="shippingStatus">Connect eBay to review shipping policies.</div>
             <p class="small muted">Recommended default uses USPS Ground Advantage (calculated) with one-day handling so Smart Shipping discounts stay available.</p>
             <div class="actions">
               <button id="createShipping">Create recommended shipping policy</button>
@@ -117,7 +117,7 @@
 
           <div class="panel">
             <h3>Return policy</h3>
-            <div class="status" id="returnStatus">Checking…</div>
+            <div class="status" id="returnStatus">Connect eBay to review return policies.</div>
             <p class="small muted">Sets a 30-day return window with buyer-paid return shipping. Adjust the template if your catalog needs different terms.</p>
             <div class="actions">
               <button id="createReturn">Create recommended return policy</button>
@@ -131,7 +131,7 @@
           <h2>4. Confirm your shipping location</h2>
           <p class="muted">eBay drafts require at least one inventory location. Use our default template or add your own warehouse address.</p>
           <div class="panel">
-            <div class="status" id="locationStatus">Checking…</div>
+            <div class="status" id="locationStatus">Connect eBay to manage locations.</div>
             <div class="actions">
               <button id="createLocation">Create recommended location</button>
               <button class="secondary" id="deleteLocation">Delete existing location</button>
@@ -581,10 +581,6 @@
       } else {
         boot();
       }
-    <script>
-      (async () => { try { await authClient.requireAuth(); } catch {} })();
-
-      const SETUP_STORAGE_KEY = 'gptlistingVisitedSetup';
-      try { localStorage.setItem(SETUP_STORAGE_KEY, '1'); } catch {}
-
-      const state = {
+    </script>
+  </body>
+</html>
