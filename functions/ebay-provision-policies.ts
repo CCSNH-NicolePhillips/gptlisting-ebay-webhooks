@@ -179,24 +179,24 @@ export const handler: Handler = async (event) => {
         name: defaultShipName,
         marketplaceId: MARKETPLACE_ID,
         categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES', default: true }],
-  handlingTime: { value: 1, unit: 'DAY' },
+        handlingTime: { value: 1, unit: 'DAY' },
         shippingOptions: [
           {
             optionType: 'DOMESTIC',
             costType: 'FLAT_RATE',
-            insuranceFee: { value: '0.00', currency: 'USD' },
-      shippingServices: [
-        {
-          // Free domestic USPS Priority Flat Rate Box (doc sample, widely accepted)
-          freeShipping: true,
-          shippingCarrierCode: 'USPS',
-          shippingServiceCode: 'USPSPriorityFlatRateBox',
-                sortOrderId: 1,
-        },
-      ],
+            shippingServices: [
+              {
+                // Free domestic USPS Priority Flat Rate Box (doc sample, widely accepted)
+                freeShipping: true,
+                shippingCarrierCode: 'USPS',
+                shippingServiceCode: 'USPSPriorityFlatRateBox',
+                sortOrder: 1,
+              },
+            ],
             shipToLocations: { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] },
           },
         ],
+        shipToLocations: { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] },
       };
       const resp = await postJson('/sell/account/v1/fulfillment_policy', payload);
       results.fulfillment = resp;

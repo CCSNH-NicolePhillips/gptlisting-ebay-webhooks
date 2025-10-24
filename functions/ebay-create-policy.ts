@@ -3,6 +3,70 @@ import { json, userScopedKey, getBearerToken, getJwtSubUnverified, requireAuthVe
 import { getUserAccessToken, apiHost, headers } from './_ebay.js';
 import { tokensStore } from './_blobs.js';
 
+function sanitizeFulfillmentPayload(payload: any) {
+  if (!payload || typeof payload !== 'object') return payload;
+  if (!payload.shipToLocations) {
+    payload.shipToLocations = { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] };
+  }
+  if (!Array.isArray(payload.shippingOptions)) return payload;
+
+  payload.shippingOptions = payload.shippingOptions.map((option: any, optIdx: number) => {
+    if (!option || typeof option !== 'object') return option;
+    const normalized = { ...option };
+    delete normalized.insuranceFee;
+
+    if (!normalized.shipToLocations) {
+      normalized.shipToLocations = { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] };
+    }
+
+    if (Array.isArray(normalized.shippingServices)) {
+      normalized.shippingServices = normalized.shippingServices.map((svc: any, svcIdx: number) => {
+        if (!svc || typeof svc !== 'object') return svc;
+        const service = { ...svc };
+        if (service.sortOrder == null) {
+          const raw = service.sortOrderId;
+          const parsed = Number(raw);
+          service.sortOrder = Number.isFinite(parsed) ? parsed : svcIdx + 1;
+        }
+        delete service.sortOrderId;
+        if (service.shippingCost && typeof service.shippingCost.value === 'number') {
+          service.shippingCost = {
+            ...service.shippingCost,
+            value: service.shippingCost.value.toFixed(2),
+          };
+        }
+        if (service.additionalShippingCost && typeof service.additionalShippingCost.value === 'number') {
+          service.additionalShippingCost = {
+            ...service.additionalShippingCost,
+            value: service.additionalShippingCost.value.toFixed(2),
+          };
+        }
+        return service;
+      });
+    }
+
+    if (normalized.calculatedShippingRate) {
+      const calc = { ...normalized.calculatedShippingRate };
+      const fixDim = (dim: any) => {
+        if (!dim || typeof dim !== 'object') return dim;
+        const val = dim.value;
+        return typeof val === 'string' ? dim : { ...dim, value: val != null ? String(val) : val };
+      };
+      calc.packageLength = fixDim(calc.packageLength);
+      calc.packageWidth = fixDim(calc.packageWidth);
+      calc.packageHeight = fixDim(calc.packageHeight);
+      calc.weightMajor = fixDim(calc.weightMajor);
+      calc.weightMinor = fixDim(calc.weightMinor);
+      calc.measurementSystem = (calc.measurementSystem || 'ENGLISH').toString().toUpperCase();
+      normalized.calculatedShippingRate = calc;
+    }
+
+    return normalized;
+  });
+
+  return payload;
+}
+
 export const handler: Handler = async (event) => {
   try {
     // Verify auth (allow Auth0-verified or Netlify Identity tokens)
@@ -41,7 +105,7 @@ export const handler: Handler = async (event) => {
     if (!path) return json({ error: 'invalid type' }, 400);
 
     // Build payload
-    let payload: any = {};
+  let payload: any = {};
     if (path === 'payment_policy') {
       payload = {
         name: body.name || 'Payment Policy',
@@ -54,7 +118,7 @@ export const handler: Handler = async (event) => {
       const freeDomestic = !!body.freeDomestic;
       const costType = (body.costType === 'FLAT_RATE') ? 'FLAT_RATE' : 'CALCULATED';
       let shippingOptions: any[] | undefined;
-      const domesticShipTo = { shipToLocations: { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] } };
+  const domesticShipTo = { shipToLocations: { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] } };
       const shippingCostValueNum = Number(body.shippingCostValue);
       const additionalShippingCostValueNum = Number(body.additionalShippingCostValue);
       const hasShippingCost = Number.isFinite(shippingCostValueNum);
@@ -64,13 +128,12 @@ export const handler: Handler = async (event) => {
           {
             optionType: 'DOMESTIC',
             costType: 'FLAT_RATE',
-            insuranceFee: { value: '0.00', currency: 'USD' },
             shippingServices: [
               {
                 freeShipping: true,
                 shippingCarrierCode: 'USPS',
                 shippingServiceCode: 'USPSPriorityFlatRateBox',
-                sortOrderId: 1,
+                sortOrder: 1,
               },
             ],
             ...domesticShipTo,
@@ -95,24 +158,23 @@ export const handler: Handler = async (event) => {
           return {
             measurementSystem,
             packageType,
-            packageLength: { value: lengthVal, unit: dimUnit },
-            packageWidth: { value: widthVal, unit: dimUnit },
-            packageHeight: { value: heightVal, unit: dimUnit },
-            weightMajor: { value: weightMajor, unit: majorUnit },
-            weightMinor: { value: weightMinor, unit: minorUnit },
+            packageLength: { value: lengthVal.toString(), unit: dimUnit },
+            packageWidth: { value: widthVal.toString(), unit: dimUnit },
+            packageHeight: { value: heightVal.toString(), unit: dimUnit },
+            weightMajor: { value: weightMajor.toString(), unit: majorUnit },
+            weightMinor: { value: weightMinor.toString(), unit: minorUnit },
           };
         })() : null;
         shippingOptions = [
           {
             optionType: 'DOMESTIC',
             costType,
-            insuranceFee: { value: '0.00', currency: 'USD' },
             shippingServices: [
               {
                 freeShipping: false,
                 shippingCarrierCode: body.shippingCarrierCode || 'USPS',
                 shippingServiceCode: body.shippingServiceCode,
-                sortOrderId: 1,
+                sortOrder: 1,
                 ...(costType === 'FLAT_RATE'
                   ? {
                       shippingCost: {
@@ -142,7 +204,9 @@ export const handler: Handler = async (event) => {
         categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES', default: true }],
         handlingTime: { value: Math.max(0, isNaN(handlingDays) ? 1 : handlingDays), unit: 'DAY' },
         ...(shippingOptions ? { shippingOptions } : {}),
+        ...domesticShipTo,
       };
+      payload = sanitizeFulfillmentPayload(payload);
     } else if (path === 'return_policy') {
       const returnsAccepted = body.returnsAccepted !== false;
       const periodDays = Number(body.returnPeriodDays ?? 30);
@@ -161,7 +225,7 @@ export const handler: Handler = async (event) => {
     }
 
     // Create policy
-    const res = await fetch(`${host}/sell/account/v1/${path}`, { method: 'POST', headers: h as any, body: JSON.stringify(payload) });
+  const res = await fetch(`${host}/sell/account/v1/${path}`, { method: 'POST', headers: h as any, body: JSON.stringify(payload) });
     const txt = await res.text(); let j: any; try { j = JSON.parse(txt); } catch { j = { raw: txt }; }
     if (!res.ok) {
       const www = res.headers.get('www-authenticate') || '';

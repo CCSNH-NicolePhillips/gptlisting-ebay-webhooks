@@ -56,39 +56,64 @@ export const handler: Handler = async (event) => {
       shippingCostValue?: string,
       additionalShippingCostValue?: string
     ) => {
+      const baseShipTo = { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] };
+      const normalizeServices = (services: any[]) =>
+        Array.isArray(services)
+          ? services.map((svc, idx) => {
+              const next = { ...svc };
+              if (next.sortOrder == null) {
+                const parsed = Number(next.sortOrderId);
+                next.sortOrder = Number.isFinite(parsed) ? parsed : idx + 1;
+              }
+              delete next.sortOrderId;
+              if (next.shippingCost && typeof next.shippingCost.value === 'number') {
+                next.shippingCost = {
+                  ...next.shippingCost,
+                  value: next.shippingCost.value.toFixed(2),
+                };
+              }
+              if (next.additionalShippingCost && typeof next.additionalShippingCost.value === 'number') {
+                next.additionalShippingCost = {
+                  ...next.additionalShippingCost,
+                  value: next.additionalShippingCost.value.toFixed(2),
+                };
+              }
+              return next;
+            })
+          : services;
+
+      const wrapOption = (partial: any) => ({
+        optionType: 'DOMESTIC',
+        shipToLocations: baseShipTo,
+        ...partial,
+      });
+
       if (forceFreeDomestic) {
         return [
-          {
-            optionType: 'DOMESTIC',
+          wrapOption({
             costType: 'FLAT_RATE',
-            insuranceFee: { value: '0.00', currency: 'USD' },
-            shippingServices: [
+            shippingServices: normalizeServices([
               {
-                // Default to USPS Ground Advantage for free shipping
                 shippingServiceCode: 'USPSGroundAdvantage',
-                sortOrderId: 1,
+                sortOrder: 1,
                 freeShipping: true,
                 shippingCarrierCode: 'USPS',
               },
-            ],
-            shipToLocations: { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] },
-          },
+            ]),
+          }),
         ];
       }
-      // If a specific paid service is chosen, honor it
+
       if (serviceCode) {
         const shipCarrier = carrier || 'USPS';
         return [
-          {
-            optionType: 'DOMESTIC',
-            // Use selected cost type; when FLAT_RATE, require amounts
+          wrapOption({
             costType: selectedCostType || 'CALCULATED',
-            insuranceFee: { value: '0.00', currency: 'USD' },
-            shippingServices: [
+            shippingServices: normalizeServices([
               {
                 shippingServiceCode: serviceCode,
-                sortOrderId: 1,
                 freeShipping: false,
+                sortOrder: 1,
                 ...(selectedCostType === 'FLAT_RATE'
                   ? { shippingCost: { value: shippingCostValue || '0.00', currency: 'USD' } }
                   : {}),
@@ -97,32 +122,36 @@ export const handler: Handler = async (event) => {
                   : {}),
                 shippingCarrierCode: shipCarrier,
               },
-            ],
-            shipToLocations: { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] },
-          },
+            ]),
+          }),
         ];
       }
-      // If we have existing, keep them; else, synthesize a minimal free domestic option
-      if (Array.isArray(curOptions) && curOptions.length) return curOptions;
-      // Default to a paid USPS Ground Advantage if user unchecked free but didn't choose a service
+
+      if (Array.isArray(curOptions) && curOptions.length) {
+        return curOptions.map((opt: any) => {
+          const next = { ...opt };
+          delete next.insuranceFee;
+          next.shipToLocations = next.shipToLocations || baseShipTo;
+          next.shippingServices = normalizeServices(next.shippingServices);
+          return next;
+        });
+      }
+
       return [
-        {
-          optionType: 'DOMESTIC',
+        wrapOption({
           costType: selectedCostType || 'CALCULATED',
-          insuranceFee: { value: '0.00', currency: 'USD' },
-          shippingServices: [
+          shippingServices: normalizeServices([
             {
               shippingServiceCode: 'USPSGroundAdvantage',
-              sortOrderId: 1,
               freeShipping: false,
+              sortOrder: 1,
               ...(selectedCostType === 'FLAT_RATE'
                 ? { shippingCost: { value: shippingCostValue || '0.00', currency: 'USD' } }
                 : {}),
               shippingCarrierCode: 'USPS',
             },
-          ],
-          shipToLocations: { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] },
-        },
+          ]),
+        }),
       ];
     };
 
@@ -160,8 +189,9 @@ export const handler: Handler = async (event) => {
         name: body.name ?? cur.name,
         marketplaceId: mp,
         categoryTypes: normalizeCategoryTypes(cur.categoryTypes),
-  handlingTime: { value: Math.max(0, handlingDays), unit: 'DAY' },
+        handlingTime: { value: Math.max(0, handlingDays), unit: 'DAY' },
         shippingOptions,
+        shipToLocations: { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] },
       };
       stripReadOnly(payload, [
         'fulfillmentPolicyId',

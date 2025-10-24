@@ -3,6 +3,69 @@ import { tokensStore } from './_blobs.js';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from './_auth.js';
 import { accessTokenFromRefresh, tokenHosts } from './_common.js';
 
+function sanitizeFulfillmentPayload(payload: any) {
+  if (!payload || typeof payload !== 'object') return payload;
+  if (!payload.shipToLocations) {
+    payload.shipToLocations = { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] };
+  }
+  if (!Array.isArray(payload.shippingOptions)) return payload;
+
+  payload.shippingOptions = payload.shippingOptions.map((option: any, optIdx: number) => {
+    if (!option || typeof option !== 'object') return option;
+    const normalized = { ...option };
+    delete normalized.insuranceFee;
+
+    if (!normalized.shipToLocations) {
+      normalized.shipToLocations = { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] };
+    }
+
+    if (Array.isArray(normalized.shippingServices)) {
+      normalized.shippingServices = normalized.shippingServices.map((svc: any, svcIdx: number) => {
+        if (!svc || typeof svc !== 'object') return svc;
+        const service = { ...svc };
+        if (service.sortOrder == null) {
+          const parsed = Number(service.sortOrderId);
+          service.sortOrder = Number.isFinite(parsed) ? parsed : svcIdx + 1;
+        }
+        delete service.sortOrderId;
+        if (service.shippingCost && typeof service.shippingCost.value === 'number') {
+          service.shippingCost = {
+            ...service.shippingCost,
+            value: service.shippingCost.value.toFixed(2),
+          };
+        }
+        if (service.additionalShippingCost && typeof service.additionalShippingCost.value === 'number') {
+          service.additionalShippingCost = {
+            ...service.additionalShippingCost,
+            value: service.additionalShippingCost.value.toFixed(2),
+          };
+        }
+        return service;
+      });
+    }
+
+    if (normalized.calculatedShippingRate) {
+      const calc = { ...normalized.calculatedShippingRate };
+      const fixDim = (dim: any) => {
+        if (!dim || typeof dim !== 'object') return dim;
+        const val = dim.value;
+        return typeof val === 'string' ? dim : { ...dim, value: val != null ? String(val) : val };
+      };
+      calc.packageLength = fixDim(calc.packageLength);
+      calc.packageWidth = fixDim(calc.packageWidth);
+      calc.packageHeight = fixDim(calc.packageHeight);
+      calc.weightMajor = fixDim(calc.weightMajor);
+      calc.weightMinor = fixDim(calc.weightMinor);
+      calc.measurementSystem = (calc.measurementSystem || 'ENGLISH').toString().toUpperCase();
+      normalized.calculatedShippingRate = calc;
+    }
+
+    return normalized;
+  });
+
+  return payload;
+}
+
 function json(body: any, status: number = 200) {
   return { statusCode: status, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
 }
@@ -63,7 +126,7 @@ export const handler: Handler = async (event) => {
     const minorUnit = measurementSystem === 'METRIC' ? 'GRAM' : 'OUNCE';
 
 
-    const payload = {
+    let payload = {
       name,
       marketplaceId: MARKETPLACE_ID,
       categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES', default: true }],
@@ -72,7 +135,6 @@ export const handler: Handler = async (event) => {
         {
           optionType: 'DOMESTIC',
           costType: free ? 'FLAT_RATE' : costType,
-          insuranceFee: { value: '0.00', currency: 'USD' },
           shippingServices: [
             {
               shippingCarrierCode: 'USPS',
@@ -81,7 +143,7 @@ export const handler: Handler = async (event) => {
               ...(free || costType === 'CALCULATED'
                 ? {}
                 : { shippingCost: { value: flatRate, currency: 'USD' } }),
-              sortOrderId: 1,
+              sortOrder: 1,
             },
           ],
           shipToLocations: { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] },
@@ -91,16 +153,18 @@ export const handler: Handler = async (event) => {
                 calculatedShippingRate: {
                   measurementSystem,
                   packageType,
-                  packageLength: { value: lengthVal, unit: dimUnit },
-                  packageWidth: { value: widthVal, unit: dimUnit },
-                  packageHeight: { value: heightVal, unit: dimUnit },
-                  weightMajor: { value: weightMajor, unit: majorUnit },
-                  weightMinor: { value: weightMinor, unit: minorUnit },
+                  packageLength: { value: lengthVal.toString(), unit: dimUnit },
+                  packageWidth: { value: widthVal.toString(), unit: dimUnit },
+                  packageHeight: { value: heightVal.toString(), unit: dimUnit },
+                  weightMajor: { value: weightMajor.toString(), unit: majorUnit },
+                  weightMinor: { value: weightMinor.toString(), unit: minorUnit },
                 },
               }),
         },
       ],
+      shipToLocations: { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] },
     };
+    payload = sanitizeFulfillmentPayload(payload);
 
     const url = `${apiHost}/sell/account/v1/fulfillment_policy`;
     const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(payload) });
