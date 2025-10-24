@@ -2,12 +2,12 @@ import { tokensStore } from './_blobs.js';
 import { accessTokenFromRefresh, tokenHosts } from './_common.js';
 import { userScopedKey } from './_auth.js';
 
-export async function getUserAccessToken(sub: string): Promise<string> {
+export async function getUserAccessToken(sub: string, scopes?: string[]): Promise<string> {
   const store = tokensStore();
   const saved = (await store.get(userScopedKey(sub, 'ebay.json'), { type: 'json' })) as any;
   const refresh = saved?.refresh_token as string | undefined;
   if (!refresh) throw Object.assign(new Error('ebay-not-connected'), { code: 'ebay-not-connected' });
-  const { access_token } = await accessTokenFromRefresh(refresh);
+  const { access_token } = await accessTokenFromRefresh(refresh, scopes);
   if (!access_token) throw new Error('failed-to-mint-access-token');
   return access_token;
 }

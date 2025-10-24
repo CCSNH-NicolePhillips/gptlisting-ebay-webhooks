@@ -7,7 +7,7 @@ export function tokenHosts(env: string | undefined) {
   };
 }
 
-export async function accessTokenFromRefresh(refreshToken: string) {
+export async function accessTokenFromRefresh(refreshToken: string, scopes?: string[]) {
   const { tokenHost } = tokenHosts(process.env.EBAY_ENV);
   const basic = Buffer.from(
     `${process.env.EBAY_CLIENT_ID}:${process.env.EBAY_CLIENT_SECRET}`
@@ -16,11 +16,14 @@ export async function accessTokenFromRefresh(refreshToken: string) {
   const body = new URLSearchParams({
     grant_type: 'refresh_token',
     refresh_token: refreshToken,
-    scope: [
-      'https://api.ebay.com/oauth/api_scope',
-      'https://api.ebay.com/oauth/api_scope/sell.account',
-      'https://api.ebay.com/oauth/api_scope/sell.inventory',
-    ].join(' '),
+    scope: (scopes && scopes.length
+      ? scopes
+      : [
+          'https://api.ebay.com/oauth/api_scope',
+          'https://api.ebay.com/oauth/api_scope/sell.account',
+          'https://api.ebay.com/oauth/api_scope/sell.inventory',
+        ]
+    ).join(' '),
   });
 
   const res = await fetch(`${tokenHost}/identity/v1/oauth2/token`, {

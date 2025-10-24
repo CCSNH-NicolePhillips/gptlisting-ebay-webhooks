@@ -88,6 +88,25 @@
         <span id="msg" class="muted"></span>
       </div>
 
+      <div id="current" style="margin-top:1rem;">
+        <h3 style="margin:.5rem 0;">Current policies</h3>
+        <div class="muted" id="curStatus">Loading…</div>
+        <div style="display:grid;grid-template-columns:1fr;gap:.75rem;margin-top:.5rem;">
+          <div style="background:#0f1530;border:1px solid #26305a;border-radius:10px;padding:.75rem;">
+            <div style="font-weight:600;margin-bottom:.25rem;">Shipping</div>
+            <ul id="listFulfillment" style="margin:.25rem 0 .25rem 1.25rem;"></ul>
+          </div>
+          <div style="background:#0f1530;border:1px solid #26305a;border-radius:10px;padding:.75rem;">
+            <div style="font-weight:600;margin-bottom:.25rem;">Payment</div>
+            <ul id="listPayment" style="margin:.25rem 0 .25rem 1.25rem;"></ul>
+          </div>
+          <div style="background:#0f1530;border:1px solid #26305a;border-radius:10px;padding:.75rem;">
+            <div style="font-weight:600;margin-bottom:.25rem;">Returns</div>
+            <ul id="listReturns" style="margin:.25rem 0 .25rem 1.25rem;"></ul>
+          </div>
+        </div>
+      </div>
+
       <div style="margin-top: 1rem">
         <a class="secondary" href="/">← Back to landing</a>
         <a
@@ -103,6 +122,34 @@
     <script>
       // Require auth for this page and ensure Authorization is attached to function calls
       (async () => { try { await authClient.requireAuth(); } catch {} })();
+
+      async function loadPolicies() {
+        try {
+          const r = await authClient.authFetch('/.netlify/functions/ebay-list-policies');
+          const j = await r.json();
+          const f = (j?.fulfillment?.json?.fulfillmentPolicies) || [];
+          const p = (j?.payment?.json?.paymentPolicies) || [];
+          const rr = (j?.returns?.json?.returnPolicies) || [];
+          const status = document.getElementById('curStatus');
+          if (status) status.textContent = (f.length||p.length||rr.length) ? '' : 'No policies yet';
+          function fill(id, arr) {
+            const ul = document.getElementById(id);
+            if (!ul) return;
+            ul.innerHTML='';
+            arr.forEach((it)=>{
+              const li = document.createElement('li');
+              li.textContent = (it.name || '(unnamed)') + ' — ' + (it.id || it.fulfillmentPolicyId || it.paymentPolicyId || it.returnPolicyId || '');
+              ul.appendChild(li);
+            });
+          }
+          fill('listFulfillment', f);
+          fill('listPayment', p);
+          fill('listReturns', rr);
+        } catch (e) {
+          const status = document.getElementById('curStatus');
+          if (status) status.textContent = 'Failed to load: ' + (e?.message || e);
+        }
+      }
 
       async function ensureConnected() {
         const r = await authClient.authFetch('/.netlify/functions/status');
@@ -122,11 +169,17 @@
           document.getElementById('msg').textContent = r.ok
             ? 'Policies ready. Returning to landing…'
             : 'Error: ' + (data.error || JSON.stringify(data));
-          if (r.ok) setTimeout(() => (location.href = '/'), 1200);
+          if (r.ok) {
+            // Refresh list and then return
+            try { await loadPolicies(); } catch {}
+            setTimeout(() => (location.href = '/'), 1200);
+          }
         } catch (e) {
           document.getElementById('msg').textContent = 'Error: ' + e.message;
         }
       };
+      // Initial load of current policies
+      loadPolicies().catch(()=>{});
       // Intercept the "View policies JSON" link to ensure we include Authorization
       const viewLink = document.querySelector('a[href="/.netlify/functions/ebay-list-policies"]');
       if (viewLink) viewLink.addEventListener('click', async (e) => {
