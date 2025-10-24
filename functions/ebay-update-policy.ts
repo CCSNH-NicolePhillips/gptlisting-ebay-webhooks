@@ -39,7 +39,7 @@ export const handler: Handler = async (event) => {
     // Helper: normalize categoryTypes without deprecated 'default' flag
     const normalizeCategoryTypes = (ct: any): any[] => {
       const arr: any[] = Array.isArray(ct) && ct.length ? ct : [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }];
-      return arr.map((x) => ({ name: x?.name || 'ALL_EXCLUDING_MOTORS_VEHICLES' }));
+      return arr.map((x) => ({ name: x?.name || 'ALL_EXCLUDING_MOTORS_VEHICLES', default: true }));
     };
 
     const stripReadOnly = (obj: any, keys: string[]) => {
@@ -61,15 +61,17 @@ export const handler: Handler = async (event) => {
           {
             optionType: 'DOMESTIC',
             costType: 'FLAT_RATE',
+            insuranceFee: { value: '0.00', currency: 'USD' },
             shippingServices: [
               {
                 // Default to USPS Ground Advantage for free shipping
                 shippingServiceCode: 'USPSGroundAdvantage',
-                sortOrder: 1,
+                sortOrderId: 1,
                 freeShipping: true,
                 shippingCarrierCode: 'USPS',
               },
             ],
+            shipToLocations: { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] },
           },
         ];
       }
@@ -81,10 +83,11 @@ export const handler: Handler = async (event) => {
             optionType: 'DOMESTIC',
             // Use selected cost type; when FLAT_RATE, require amounts
             costType: selectedCostType || 'CALCULATED',
+            insuranceFee: { value: '0.00', currency: 'USD' },
             shippingServices: [
               {
                 shippingServiceCode: serviceCode,
-                sortOrder: 1,
+                sortOrderId: 1,
                 freeShipping: false,
                 ...(selectedCostType === 'FLAT_RATE'
                   ? { shippingCost: { value: shippingCostValue || '0.00', currency: 'USD' } }
@@ -95,6 +98,7 @@ export const handler: Handler = async (event) => {
                 shippingCarrierCode: shipCarrier,
               },
             ],
+            shipToLocations: { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] },
           },
         ];
       }
@@ -105,10 +109,11 @@ export const handler: Handler = async (event) => {
         {
           optionType: 'DOMESTIC',
           costType: selectedCostType || 'CALCULATED',
+          insuranceFee: { value: '0.00', currency: 'USD' },
           shippingServices: [
             {
               shippingServiceCode: 'USPSGroundAdvantage',
-              sortOrder: 1,
+              sortOrderId: 1,
               freeShipping: false,
               ...(selectedCostType === 'FLAT_RATE'
                 ? { shippingCost: { value: shippingCostValue || '0.00', currency: 'USD' } }
@@ -116,6 +121,7 @@ export const handler: Handler = async (event) => {
               shippingCarrierCode: 'USPS',
             },
           ],
+          shipToLocations: { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] },
         },
       ];
     };
@@ -154,7 +160,7 @@ export const handler: Handler = async (event) => {
         name: body.name ?? cur.name,
         marketplaceId: mp,
         categoryTypes: normalizeCategoryTypes(cur.categoryTypes),
-        handlingTime: { value: Math.max(0, handlingDays), unit: 'DAY' },
+        handlingTime: Math.max(0, handlingDays),
         shippingOptions,
       };
       stripReadOnly(payload, [

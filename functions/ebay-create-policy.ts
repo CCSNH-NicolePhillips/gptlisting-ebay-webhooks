@@ -54,18 +54,23 @@ export const handler: Handler = async (event) => {
       const freeDomestic = !!body.freeDomestic;
       const costType = (body.costType === 'FLAT_RATE') ? 'FLAT_RATE' : 'CALCULATED';
       let shippingOptions: any[] | undefined;
-      const domesticShipTo = { shipToLocations: { regionIncluded: [{ regionName: 'UNITED_STATES' }] } };
+      const domesticShipTo = { shipToLocations: { regionIncluded: [{ regionType: 'COUNTRY', regionName: 'US' }] } };
+      const shippingCostValueNum = Number(body.shippingCostValue);
+      const additionalShippingCostValueNum = Number(body.additionalShippingCostValue);
+      const hasShippingCost = Number.isFinite(shippingCostValueNum);
+      const hasAdditionalCost = Number.isFinite(additionalShippingCostValueNum);
       if (freeDomestic) {
         shippingOptions = [
           {
             optionType: 'DOMESTIC',
             costType: 'FLAT_RATE',
+            insuranceFee: { value: '0.00', currency: 'USD' },
             shippingServices: [
               {
                 freeShipping: true,
                 shippingCarrierCode: 'USPS',
                 shippingServiceCode: 'USPSPriorityFlatRateBox',
-                sortOrder: 1,
+                sortOrderId: 1,
               },
             ],
             ...domesticShipTo,
@@ -101,15 +106,27 @@ export const handler: Handler = async (event) => {
           {
             optionType: 'DOMESTIC',
             costType,
+            insuranceFee: { value: '0.00', currency: 'USD' },
             shippingServices: [
               {
                 freeShipping: false,
                 shippingCarrierCode: body.shippingCarrierCode || 'USPS',
                 shippingServiceCode: body.shippingServiceCode,
-                sortOrder: 1,
+                sortOrderId: 1,
                 ...(costType === 'FLAT_RATE'
-                  ? { shippingCost: { value: String(body.shippingCostValue || '0.00'), currency: 'USD' },
-                      ...(body.additionalShippingCostValue ? { additionalShippingCost: { value: String(body.additionalShippingCostValue), currency: 'USD' } } : {})
+                  ? {
+                      shippingCost: {
+                        value: (hasShippingCost ? shippingCostValueNum : 0).toFixed(2),
+                        currency: 'USD',
+                      },
+                      ...(hasAdditionalCost
+                        ? {
+                            additionalShippingCost: {
+                              value: additionalShippingCostValueNum.toFixed(2),
+                              currency: 'USD',
+                            },
+                          }
+                        : {}),
                     }
                   : {}),
               },
@@ -122,8 +139,8 @@ export const handler: Handler = async (event) => {
       payload = {
         name: body.name || 'Shipping Policy',
         marketplaceId: mp,
-        categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }],
-        handlingTime: { value: Math.max(0, isNaN(handlingDays) ? 1 : handlingDays), unit: 'DAY' },
+        categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES', default: true }],
+        handlingTime: Math.max(0, isNaN(handlingDays) ? 1 : handlingDays),
         ...(shippingOptions ? { shippingOptions } : {}),
       };
     } else if (path === 'return_policy') {
