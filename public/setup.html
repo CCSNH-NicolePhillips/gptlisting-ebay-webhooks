@@ -129,15 +129,14 @@
 
         <div class="section" id="inventory">
           <h2>4. Confirm your shipping location</h2>
-          <p class="muted">eBay drafts require at least one inventory location. Use our default template or add your own warehouse address.</p>
+          <p class="muted">eBay drafts require at least one inventory location. Add your warehouse address directly on eBay before returning to GPTListing.</p>
           <div class="panel">
             <div class="status" id="locationStatus">Connect eBay to manage locations.</div>
             <div class="actions">
-              <button id="createLocation" title="Adds a default warehouse location so eBay has a ship-from address (123 Test St, San Jose, CA 95131).">Create recommended location</button>
               <button class="secondary" id="deleteLocation">Delete existing location</button>
               <a class="btn secondary" href="/location.html" target="_blank">Manage locations</a>
             </div>
-            <div class="small muted" id="locationMessage" style="margin-top:0.5rem;"></div>
+            <div class="small muted" id="locationMessage" style="margin-top:0.5rem;">Use the Manage link above to add or edit locations on eBay.</div>
           </div>
         </div>
 
@@ -241,12 +240,10 @@
           const btn = document.getElementById(id);
           if (btn) btn.disabled = !state.ebayConnected;
         }
-        const optBtn = document.getElementById('btnOptIn');
-        if (optBtn) optBtn.disabled = !state.ebayConnected;
-        const locBtn = document.getElementById('createLocation');
-        if (locBtn) locBtn.disabled = !state.ebayConnected;
-  const delBtn = document.getElementById('deleteLocation');
-  if (delBtn) delBtn.disabled = !state.ebayConnected;
+    const optBtn = document.getElementById('btnOptIn');
+    if (optBtn) optBtn.disabled = !state.ebayConnected;
+    const delBtn = document.getElementById('deleteLocation');
+    if (delBtn) delBtn.disabled = !state.ebayConnected;
       }
 
       function describePolicyStatus(arr, recommendedName, statusEl, msgEl) {
@@ -296,8 +293,6 @@
         if (count > 0) {
           const first = state.locations[0];
           el.innerHTML = `<span class="badge">Ready${first?.name ? ` · ${first.name}` : ''}</span>`;
-          const btn = document.getElementById('createLocation');
-          if (btn) btn.disabled = true;
           const delBtn = document.getElementById('deleteLocation');
           if (delBtn) {
             delBtn.disabled = false;
@@ -307,13 +302,13 @@
           if (msg) msg.textContent = count > 1 ? `Additional locations detected (${count} total).` : 'Already provisioned on eBay.';
         } else {
           el.textContent = 'Missing · add your warehouse address to continue.';
-          const btn = document.getElementById('createLocation');
-          if (btn) btn.disabled = !state.ebayConnected;
           const delBtn = document.getElementById('deleteLocation');
           if (delBtn) {
             delBtn.disabled = true;
             delBtn.dataset.key = '';
           }
+          const msg = document.getElementById('locationMessage');
+          if (msg) msg.textContent = 'Add a ship-from location on eBay using the Manage link above.';
         }
       }
 
@@ -518,28 +513,6 @@
         }
       }
 
-      async function ensureLocation() {
-        const btn = document.getElementById('createLocation');
-        const msg = document.getElementById('locationMessage');
-        if (!btn || !msg) return;
-        btn.disabled = true;
-        msg.textContent = 'Creating…';
-        try {
-          const res = await authClient.authFetch('/.netlify/functions/ebay-ensure-location', { method: 'POST' });
-          const j = await res.json().catch(() => ({}));
-          if (res.ok && j?.ok) {
-            msg.textContent = 'Location ready.';
-            await loadLocations();
-          } else {
-            msg.textContent = 'Error: ' + (j?.error || 'Unable to create location.');
-            btn.disabled = false;
-          }
-        } catch (err) {
-          msg.textContent = 'Error: ' + (err?.message || err);
-          btn.disabled = false;
-        }
-      }
-
       async function deleteLocation() {
         const btn = document.getElementById('deleteLocation');
         const msg = document.getElementById('locationMessage');
@@ -633,8 +606,6 @@
         if (btnShipping) btnShipping.onclick = () => createRecommended('fulfillment');
         const btnReturn = document.getElementById('createReturn');
         if (btnReturn) btnReturn.onclick = () => createRecommended('return');
-    const btnLocation = document.getElementById('createLocation');
-    if (btnLocation) btnLocation.onclick = ensureLocation;
     const btnDeleteLocation = document.getElementById('deleteLocation');
     if (btnDeleteLocation) btnDeleteLocation.onclick = deleteLocation;
         const btnOpt = document.getElementById('btnOptIn');
