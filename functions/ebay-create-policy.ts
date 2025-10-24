@@ -46,7 +46,7 @@ export const handler: Handler = async (event) => {
       payload = {
         name: body.name || 'Payment Policy',
         marketplaceId: mp,
-        categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES', default: true }],
+        categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }],
         immediatePay: !!body.immediatePay,
       };
     } else if (path === 'fulfillment_policy') {
@@ -59,14 +59,12 @@ export const handler: Handler = async (event) => {
           {
             optionType: 'DOMESTIC',
             costType: 'FLAT_RATE',
-            insuranceFee: { value: '0.00', currency: 'USD' },
             shippingServices: [
               {
                 freeShipping: true,
-                buyerResponsibleForShipping: false,
                 shippingCarrierCode: 'USPS',
                 shippingServiceCode: 'USPSGroundAdvantage',
-                sortOrderId: 1,
+                sortOrder: 1,
               },
             ],
           },
@@ -76,14 +74,12 @@ export const handler: Handler = async (event) => {
           {
             optionType: 'DOMESTIC',
             costType,
-            insuranceFee: { value: '0.00', currency: 'USD' },
             shippingServices: [
               {
                 freeShipping: false,
-                buyerResponsibleForShipping: true,
                 shippingCarrierCode: body.shippingCarrierCode || 'USPS',
                 shippingServiceCode: body.shippingServiceCode,
-                sortOrderId: 1,
+                sortOrder: 1,
                 ...(costType === 'FLAT_RATE'
                   ? { shippingCost: { value: String(body.shippingCostValue || '0.00'), currency: 'USD' },
                       ...(body.additionalShippingCostValue ? { additionalShippingCost: { value: String(body.additionalShippingCostValue), currency: 'USD' } } : {})
@@ -97,7 +93,7 @@ export const handler: Handler = async (event) => {
       payload = {
         name: body.name || 'Shipping Policy',
         marketplaceId: mp,
-        categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES', default: true }],
+        categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }],
         handlingTime: { value: Math.max(0, isNaN(handlingDays) ? 1 : handlingDays), unit: 'DAY' },
         ...(shippingOptions ? { shippingOptions } : {}),
       };
@@ -107,7 +103,6 @@ export const handler: Handler = async (event) => {
       payload = returnsAccepted ? {
         name: body.name || 'Returns Policy',
         marketplaceId: mp,
-        categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES', default: true }],
         returnsAccepted: true,
         returnPeriod: { value: Math.max(1, isNaN(periodDays) ? 30 : periodDays), unit: 'DAY' },
         returnShippingCostPayer: body.returnShippingCostPayer || 'BUYER',
@@ -115,7 +110,6 @@ export const handler: Handler = async (event) => {
       } : {
         name: body.name || 'No Returns Policy',
         marketplaceId: mp,
-        categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES', default: true }],
         returnsAccepted: false,
       };
     }

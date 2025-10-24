@@ -283,7 +283,7 @@ async function ensurePaymentPolicy(userId: string, name = 'Auto Payment Policy')
   const body = {
     name,
     marketplaceId: 'EBAY_US',
-    categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES', default: true }],
+    categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }],
     immediatePay: true,
   };
   const r = await authedFetch(userId, '/sell/account/v1/payment_policy', 'POST', body);
@@ -311,7 +311,7 @@ async function ensureReturnPolicy(userId: string, name = 'Auto Return Policy') {
   const body = {
     name,
     marketplaceId: 'EBAY_US',
-    categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES', default: true }],
+    categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }],
     returnsAccepted: true,
     returnPeriod: { value: 30, unit: 'DAY' },
     refundMethod: 'MONEY_BACK',
@@ -344,7 +344,7 @@ async function ensureFulfillmentPolicy(userId: string, name = 'Auto Shipping Pol
   const body = {
     name,
     marketplaceId: 'EBAY_US',
-    categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES', default: true }],
+    categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }],
     handlingTime: { value: 2, unit: 'DAY' },
     shippingOptions: [
       {
@@ -352,10 +352,10 @@ async function ensureFulfillmentPolicy(userId: string, name = 'Auto Shipping Pol
         optionType: 'DOMESTIC',
         shippingServices: [
           {
-            buyerResponsibleForShipping: false,
             freeShipping: true,
             shippingCarrierCode: 'USPS',
-            shippingServiceCode: 'USPSPriority',
+            shippingServiceCode: 'USPSGroundAdvantage',
+            sortOrder: 1,
           },
         ],
       },

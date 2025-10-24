@@ -46,7 +46,7 @@ export const handler: Handler = async (event) => {
       const payload = {
         name: payDefaultName,
         marketplaceId: mp,
-        categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES', default: true }],
+        categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }],
         immediatePay: true,
       };
       const created = await postJson(`${host}/sell/account/v1/payment_policy`, payload);
@@ -64,20 +64,18 @@ export const handler: Handler = async (event) => {
       const payload = {
         name: fulDefaultName,
         marketplaceId: mp,
-        categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES', default: true }],
+        categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }],
         handlingTime: { value: 1, unit: 'DAY' },
         shippingOptions: [
           {
             optionType: 'DOMESTIC',
             costType: 'FLAT_RATE',
-            insuranceFee: { value: '0.00', currency: 'USD' },
             shippingServices: [
               {
                 freeShipping: true,
-                buyerResponsibleForShipping: false,
                 shippingCarrierCode: 'USPS',
-                shippingServiceCode: 'USPSPriorityFlatRateBox',
-                sortOrderId: 1,
+                shippingServiceCode: 'USPSGroundAdvantage',
+                sortOrder: 1,
               },
             ],
           },
@@ -98,7 +96,6 @@ export const handler: Handler = async (event) => {
       const payload = {
         name: retDefaultName,
         marketplaceId: mp,
-        categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES', default: true }],
         returnsAccepted: true,
         returnPeriod: { value: 30, unit: 'DAY' },
         returnShippingCostPayer: 'BUYER',
