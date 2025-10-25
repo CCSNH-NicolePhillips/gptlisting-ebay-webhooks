@@ -40,8 +40,58 @@ async function verifyUrl(url: string): Promise<boolean> {
   }
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+type RetryOpts = {
+  maxRetries?: number;
+  baseDelayMs?: number;
+  factor?: number;
+  jitterPct?: number;
+};
+
+async function withRetry<T>(fn: () => Promise<T>, opts: RetryOpts = {}): Promise<T> {
+  const maxRetries = opts.maxRetries ?? 3;
+  const baseDelayMs = opts.baseDelayMs ?? 250;
+  const factor = opts.factor ?? 2;
+  const jitterPct = opts.jitterPct ?? 0.2;
+
+  let attempt = 0;
+  let lastErr: unknown;
+
+  while (attempt <= maxRetries) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastErr = err;
+      attempt++;
+
+      const status = err?.status ?? err?.response?.status;
+      const retryable =
+        status === 429 ||
+        (typeof status === "number" && status >= 500 && status < 600) ||
+        err?.code === "ETIMEDOUT" ||
+        err?.code === "ECONNRESET" ||
+        err?.name === "FetchError";
+
+      if (!retryable || attempt > maxRetries) {
+        break;
+      }
+
+      const delay = Math.round(baseDelayMs * Math.pow(factor, attempt - 1));
+      const jitter = Math.round(delay * (Math.random() * 2 * jitterPct - jitterPct));
+      const wait = Math.max(50, delay + jitter);
+      console.warn(`🔁 Retry ${attempt}/${maxRetries} in ${wait}ms (status=${status ?? "n/a"})`);
+      await sleep(wait);
+    }
+  }
+
+  throw (lastErr as Error);
+}
+
 async function analyzeBatchWithOpenAI(batch: string[]) {
-  try {
+  const run = async () => {
     const content: any[] = [
       {
         type: "text",
@@ -70,11 +120,23 @@ async function analyzeBatchWithOpenAI(batch: string[]) {
     });
 
     const raw = response.choices[0]?.message?.content || "{}";
-    const parsed = JSON.parse(raw);
-    return parsed;
-  } catch (err) {
-    console.error("❌ OpenAI Vision batch failed:", err);
-    return { groups: [], error: (err as Error).message };
+    return JSON.parse(raw);
+  };
+
+  try {
+    return await withRetry(run, {
+      maxRetries: 3,
+      baseDelayMs: 300,
+      factor: 2,
+      jitterPct: 0.25,
+    });
+  } catch (err: any) {
+    const status = err?.status ?? err?.response?.status;
+    console.error("❌ OpenAI batch failed permanently:", status, err?.message || err);
+    return {
+      groups: [],
+      _error: `OpenAI failed: status=${status ?? "n/a"} msg=${err?.message ?? "unknown"}`,
+    };
   }
 }
 
@@ -132,10 +194,14 @@ export const handler: Handler = async (event) => {
   console.log("✅ Images per batch:", verifiedBatches.map((b) => b.length));
 
   const analyzedResults: Array<Record<string, unknown>> = [];
+  const warnings: string[] = [];
 
   for (const [i, batch] of verifiedBatches.entries()) {
     console.log(`🧠 Analyzing batch ${i + 1}/${verifiedBatches.length} (${batch.length} images)`);
     const result = await analyzeBatchWithOpenAI(batch);
+    if (result && typeof result === "object" && "_error" in result) {
+      warnings.push(`Batch ${i + 1}: ${(result as { _error: string })._error}`);
+    }
     analyzedResults.push(result);
   }
 
@@ -144,14 +210,23 @@ export const handler: Handler = async (event) => {
   const merged = mergeGroups(analyzedResults as Array<{ groups?: any[] }>);
 
   console.log("🧩 Merge complete. Groups:", merged.groups.length);
+  console.log(
+    JSON.stringify({
+      evt: "analyze-images.done",
+      batches: analyzedResults.length,
+      groups: merged.groups.length,
+      warningsCount: warnings.length,
+    })
+  );
 
   return ok({
     status: "ok",
-    info: "Multi-batch merge complete.",
+    info: "Multi-batch merge complete (with resilience).",
     summary: {
       batches: analyzedResults.length,
       totalGroups: merged.groups.length,
     },
+    warnings,
     groups: merged.groups,
   });
 };
