@@ -147,6 +147,20 @@ function renderResult(data){
     const claims = Array.isArray(g.claims) && g.claims.length
       ? el("div", {class:"muted", html: "Claims: " + g.claims.map(c => `<code>${c}</code>`).join(" ")} )
       : el("div");
+    const market = (g.market && (g.market.avg || g.market.amazon || g.market.walmart))
+      ? el("div", {class:"muted", html:
+          `Market avg ≈ $${g.market.avg ?? "–"} (Amazon $${g.market.amazon ?? "–"}, Walmart $${g.market.walmart ?? "–"})`
+        })
+      : null;
+    const pricing = g.pricing
+      ? (() => {
+          const auto = g.pricing.auto || {};
+          return el("div", {class:"muted", html:
+            `eBay Price $${g.pricing.ebay} (base $${g.pricing.base})<br>` +
+            `Auto-reduce $${auto.reduceBy} every ${auto.everyDays} days → min $${auto.minPrice}`
+          });
+        })()
+      : null;
     const imgs = el("div", {class:"imgs"});
     (g.images || []).slice(0,10).forEach(u => imgs.appendChild(el("img", {src: u, alt: "preview"})));
 
@@ -154,6 +168,8 @@ function renderResult(data){
     card.appendChild(meta);
     card.appendChild(id);
     card.appendChild(claims);
+    if (market) card.appendChild(market);
+    if (pricing) card.appendChild(pricing);
     card.appendChild(imgs);
     grid.appendChild(card);
   });
