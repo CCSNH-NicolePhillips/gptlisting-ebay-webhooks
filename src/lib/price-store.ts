@@ -444,3 +444,45 @@ export async function removeBinding(jobId: string, groupId: string): Promise<boo
   const result = typeof res.result === "number" ? res.result : Number(res.result || 0);
   return result > 0;
 }
+
+export type PriceState = {
+  key: string;
+  current: number;
+  auto: AutoConfig | null;
+  binding: ListingBinding;
+};
+
+function extractJobIdFromPrefix(prefix: string): string | null {
+  if (!prefix.startsWith("price:")) return null;
+  const trimmed = prefix.slice("price:".length).replace(/:+$/, "");
+  return trimmed || null;
+}
+
+export async function getAllPriceKeys(prefix = ""): Promise<string[]> {
+  const normalizedPrefix = typeof prefix === "string" ? prefix : "";
+  const jobId = normalizedPrefix ? extractJobIdFromPrefix(normalizedPrefix) : null;
+
+  if (jobId) {
+    const bindings = await getBindingsForJob(jobId);
+    return bindings.map((binding) => bindingKey(binding.jobId, binding.groupId));
+  }
+
+  const setResp = await redisCall("SMEMBERS", GLOBAL_INDEX_KEY);
+  const keys = toStringArray(setResp.result);
+  if (!normalizedPrefix) return keys;
+  return keys.filter((key) => key.startsWith(normalizedPrefix));
+}
+
+export async function getPriceState(key: string): Promise<PriceState | null> {
+  const trimmed = typeof key === "string" ? key.trim() : "";
+  if (!trimmed) return null;
+  const resp = await redisCall("GET", trimmed);
+  const binding = parseBinding(resp.result);
+  if (!binding) return null;
+  return {
+    key: trimmed,
+    current: sanitizePrice(binding.currentPrice),
+    auto: binding.auto ?? null,
+    binding,
+  };
+}
