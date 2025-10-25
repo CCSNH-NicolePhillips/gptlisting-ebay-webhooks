@@ -11,3 +11,6 @@
 - [x] Add multi-batch merge helper
 - [x] Wire merge into analyze-images response
 - [x] Deploy and smoke test Chunk 5
+- [x] Add OpenAI retry/backoff helpers
+- [x] Surface warnings + structured logs
+- [x] Trigger live smoke tests for Chunk 6
