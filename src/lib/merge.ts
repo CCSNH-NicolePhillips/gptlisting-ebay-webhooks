@@ -7,22 +7,16 @@ export function toDirectDropbox(url: string): string {
   try {
     if (!url) return url;
     let clean = url.trim();
-
     clean = clean
       .replace("www.dropbox.com", "dl.dropboxusercontent.com")
       .replace("dropbox.com", "dl.dropboxusercontent.com");
-
     clean = clean.replace(/\?dl=\d/, "");
-
     return clean;
   } catch {
     return url;
   }
 }
 
-/**
- * Basic URL sanitizer: trims, removes duplicates, and filters out falsy entries.
- */
 export function sanitizeUrls(urls: string[] = []): string[] {
   const set = new Set<string>();
   for (const raw of urls) {
@@ -31,4 +25,47 @@ export function sanitizeUrls(urls: string[] = []): string[] {
     set.add(val);
   }
   return Array.from(set);
+}
+
+/**
+ * Merge multiple OpenAI Vision results into one clean groups array
+ */
+export function mergeGroups(parts: { groups?: any[] }[]): { groups: any[] } {
+  const map = new Map<string, any>();
+
+  const key = (g: any) =>
+    [g.brand, g.product, g.variant].map((x: string) => (x || "").toLowerCase().trim()).join("|");
+
+  for (const part of parts) {
+    for (const g of part.groups || []) {
+      const k = key(g);
+      if (!map.has(k)) {
+        map.set(k, {
+          ...g,
+          images: [...(g.images || [])],
+          claims: Array.from(new Set(g.claims || [])),
+        });
+      } else {
+        const existing = map.get(k);
+        const mergedImages = new Set([
+          ...(existing.images || []),
+          ...(g.images || []),
+        ]);
+        existing.images = Array.from(mergedImages);
+        const mergedClaims = new Set([
+          ...(existing.claims || []),
+          ...(g.claims || []),
+        ]);
+        existing.claims = Array.from(mergedClaims);
+        existing.confidence = Math.max(existing.confidence || 0, g.confidence || 0);
+      }
+    }
+  }
+
+  let i = 1;
+  for (const g of map.values()) {
+    if (!g.groupId) g.groupId = `group_${String(i++).padStart(3, "0")}`;
+  }
+
+  return { groups: Array.from(map.values()) };
 }
