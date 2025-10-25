@@ -21,4 +21,4 @@
 - [x] Smoke test admin analyzer page
 - [x] Add CORS+auth helpers to analyze-images
 - [x] Remove wildcard Netlify headers
-- [ ] Run curl smoke tests for Chunk 9
+- [x] Run curl smoke tests for Chunk 9
