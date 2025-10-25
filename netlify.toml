@@ -22,3 +22,7 @@
   force = true
 
 ## Do not force a single Content-Type for all functions; individual functions set appropriate headers.
+
+[[scheduled_function]]
+  name = "price-tick"
+  schedule = "0 */6 * * *"
