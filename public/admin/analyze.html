@@ -70,6 +70,14 @@ try {
 } catch {
   // localStorage might be disabled; ignore
 }
+if (tokenInput instanceof HTMLInputElement) {
+  tokenInput.addEventListener("change", () => {
+    loadAnalytics().catch(() => {});
+  });
+  tokenInput.addEventListener("blur", () => {
+    loadAnalytics().catch(() => {});
+  });
+}
 
 let pollTimer = null;
 let lastResult = null;
