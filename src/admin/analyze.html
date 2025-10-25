@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Product Analyzer — Admin</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body{font-family:system-ui,Segoe UI,Arial,sans-serif;margin:24px;line-height:1.4}
+    .row{display:grid;grid-template-columns:1fr auto auto;gap:12px;margin-bottom:12px}
+    textarea{width:100%;height:140px}
+    input[type="number"]{width:80px}
+    button{padding:8px 14px;border:1px solid #ddd;border-radius:8px;cursor:pointer;background:#111;color:#fff}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;margin-top:20px}
+    .card{border:1px solid #eee;border-radius:12px;padding:12px}
+    .imgs{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+    .imgs img{width:76px;height:76px;object-fit:cover;border:1px solid #eee;border-radius:8px}
+    .muted{color:#666;font-size:.9rem}
+    .summary{margin-top:10px}
+    .warn{background:#fff8e6;border:1px solid #fde1a3;padding:8px;border-radius:8px;margin-top:8px}
+    code{background:#f6f6f6;padding:2px 4px;border-radius:4px}
+  </style>
+</head>
+<body>
+  <h1>Product Analyzer — Admin</h1>
+
+  <div class="row">
+    <label style="display:block">
+      <div class="muted">Image URLs (one per line)</div>
+      <textarea id="urls" placeholder="https://dl.dropboxusercontent.com/..."></textarea>
+    </label>
+    <label>
+      <div class="muted">Batch size</div>
+      <input id="batch" type="number" min="4" max="20" value="12"/>
+    </label>
+    <div style="align-self:end">
+      <button id="runBtn">Analyze</button>
+    </div>
+  </div>
+
+  <div id="status" class="muted"></div>
+  <div id="warnings"></div>
+  <div id="summary" class="summary"></div>
+  <div id="grid" class="grid"></div>
+
+<script>
+const fnUrl = "/.netlify/functions/analyze-images";
+
+function parseUrls(text){
+  return Array.from(new Set(
+    text.split(/\r?\n/).map(s => s.trim()).filter(Boolean)
+  ));
+}
+
+function el(tag, attrs={}, children=[]){
+  const n = document.createElement(tag);
+  Object.entries(attrs).forEach(([k,v]) => {
+    if (k === "class") n.className = v;
+    else if (k === "html") n.innerHTML = v;
+    else n.setAttribute(k, v);
+  });
+  children.forEach(c => n.appendChild(c));
+  return n;
+}
+
+async function analyze(){
+  const urls = parseUrls(document.getElementById("urls").value);
+  const batchSize = Number(document.getElementById("batch").value) || 12;
+  const status = document.getElementById("status");
+  const grid = document.getElementById("grid");
+  const summary = document.getElementById("summary");
+  const warningsBox = document.getElementById("warnings");
+
+  grid.innerHTML = ""; summary.textContent = ""; warningsBox.innerHTML = "";
+  status.textContent = "Running…";
+
+  const res = await fetch(fnUrl, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ images: urls, batchSize })
+  });
+  const data = await res.json();
+  status.textContent = data.info || "";
+
+  if (Array.isArray(data.warnings) && data.warnings.length){
+    warningsBox.appendChild(el("div", {class:"warn"}, [
+      el("div", {html: "<strong>Warnings:</strong>"}),
+      el("ul", {}, data.warnings.map(w => el("li", {html: w})))
+    ]));
+  }
+
+  if (data.summary){
+    summary.textContent = `Batches: ${data.summary.batches} • Groups: ${data.summary.totalGroups}`;
+  }
+
+  (data.groups || []).forEach(g => {
+    const card = el("div", {class:"card"});
+    const header = el("div", {html: `<strong>${g.brand || "Unknown"} — ${g.product || ""}</strong>`});
+    const meta = el("div", {class:"muted", html:
+      [
+        g.variant ? `Variant: <code>${g.variant}</code>` : "",
+        g.size ? `Size: <code>${g.size}</code>` : "",
+        g.category ? `Category: <code>${g.category}</code>` : "",
+        g.confidence != null ? `Confidence: <code>${g.confidence}</code>` : ""
+      ].filter(Boolean).join(" • ")
+    });
+    const id = el("div", {class:"muted", html: `ID: <code>${g.groupId}</code>`});
+    const claims = Array.isArray(g.claims) && g.claims.length
+      ? el("div", {class:"muted", html: "Claims: " + g.claims.map(c => `<code>${c}</code>`).join(" ")} )
+      : el("div");
+    const imgs = el("div", {class:"imgs"});
+    (g.images || []).slice(0,10).forEach(u => imgs.appendChild(el("img", {src: u, alt: "preview"})));
+
+    card.appendChild(header);
+    card.appendChild(meta);
+    card.appendChild(id);
+    card.appendChild(claims);
+    card.appendChild(imgs);
+    grid.appendChild(card);
+  });
+}
+
+document.getElementById("runBtn").addEventListener("click", analyze);
+</script>
+</body>
+</html>

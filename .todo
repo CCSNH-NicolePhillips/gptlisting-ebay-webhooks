@@ -17,3 +17,5 @@
 - [x] Add deterministic group hashing
 - [x] Sort merged groups for stable output
 - [x] Verify repeated calls keep IDs stable
+- [x] Add admin analyzer preview UI
+- [ ] Smoke test admin analyzer page
