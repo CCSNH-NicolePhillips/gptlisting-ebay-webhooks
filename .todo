@@ -1,4 +1,4 @@
 - [x] Add Dropbox URL normalization helpers in src/lib/merge.ts
 - [x] Update analyze-images function to sanitize and log cleaned URLs
 - [x] Run TypeScript build to ensure no compile errors
-- [ ] Commit and push Chunk 2 changes
+- [x] Commit and push Chunk 2 changes
