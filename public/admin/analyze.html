@@ -37,8 +37,9 @@
       <div class="muted">Admin token</div>
       <input id="token" type="password" placeholder="Bearer token" autocomplete="off"/>
     </label>
-    <div style="align-self:end">
+    <div style="align-self:end;display:flex;gap:8px">
       <button id="runBtn">Analyze</button>
+      <button id="bgBtn">Analyze (background)</button>
     </div>
   </div>
 
@@ -49,6 +50,8 @@
 
 <script>
 const fnUrl = "/.netlify/functions/analyze-images";
+const bgUrl = "/.netlify/functions/analyze-images-bg";
+const statusUrl = "/.netlify/functions/analyze-images-status";
 const TOKEN_KEY = "analyzerAdminToken";
 
 const tokenInput = document.getElementById("token");
@@ -58,6 +61,8 @@ try {
 } catch {
   // localStorage might be disabled; ignore
 }
+
+let pollTimer = null;
 
 function parseUrls(text){
   return Array.from(new Set(
@@ -76,36 +81,20 @@ function el(tag, attrs={}, children=[]){
   return n;
 }
 
-async function analyze(){
-  const urls = parseUrls(document.getElementById("urls").value);
-  const batchSize = Number(document.getElementById("batch").value) || 12;
+function clearResults(){
+  document.getElementById("grid").innerHTML = "";
+  document.getElementById("summary").textContent = "";
+  document.getElementById("warnings").innerHTML = "";
+}
+
+function renderResult(data){
   const status = document.getElementById("status");
   const grid = document.getElementById("grid");
   const summary = document.getElementById("summary");
   const warningsBox = document.getElementById("warnings");
 
-  grid.innerHTML = ""; summary.textContent = ""; warningsBox.innerHTML = "";
-  status.textContent = "Running…";
-
-  const headers = { "Content-Type": "application/json" };
-  const token = tokenInput instanceof HTMLInputElement ? tokenInput.value.trim() : "";
-
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-    try {
-      localStorage.setItem(TOKEN_KEY, token);
-    } catch {
-      // ignore storage errors
-    }
-  }
-
-  const res = await fetch(fnUrl, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ images: urls, batchSize })
-  });
-  const data = await res.json();
-  status.textContent = data.info || "";
+  clearResults();
+  status.textContent = data.info || "Complete.";
 
   if (Array.isArray(data.warnings) && data.warnings.length){
     warningsBox.appendChild(el("div", {class:"warn"}, [
@@ -145,7 +134,127 @@ async function analyze(){
   });
 }
 
+function buildHeaders(includeJson = true){
+  const headers = includeJson ? { "Content-Type": "application/json" } : {};
+  const token = tokenInput instanceof HTMLInputElement ? tokenInput.value.trim() : "";
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+    try {
+      localStorage.setItem(TOKEN_KEY, token);
+    } catch {
+      // ignore storage errors
+    }
+  }
+
+  return headers;
+}
+
+async function analyze(){
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+
+  const urls = parseUrls(document.getElementById("urls").value);
+  const batchSize = Number(document.getElementById("batch").value) || 12;
+  const status = document.getElementById("status");
+
+  clearResults();
+  status.textContent = "Running…";
+
+  const res = await fetch(fnUrl, {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify({ images: urls, batchSize })
+  });
+
+  if (!res.ok) {
+    status.textContent = `Error (${res.status})`;
+    return;
+  }
+
+  const data = await res.json();
+  renderResult(data);
+}
+
+async function analyzeBackground(){
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+
+  const urls = parseUrls(document.getElementById("urls").value);
+  const batchSize = Number(document.getElementById("batch").value) || 12;
+  const status = document.getElementById("status");
+
+  clearResults();
+  status.textContent = "Queuing background job…";
+
+  const res = await fetch(bgUrl, {
+    method: "POST",
+    headers: buildHeaders(true),
+    body: JSON.stringify({ images: urls, batchSize })
+  });
+
+  if (!res.ok) {
+    status.textContent = `Error (${res.status})`;
+    return;
+  }
+
+  const data = await res.json();
+  const jobId = data.jobId;
+  if (!jobId) {
+    status.textContent = "Unexpected response";
+    return;
+  }
+
+  status.textContent = `Job ${jobId} pending…`;
+
+  const pollHeaders = buildHeaders(false);
+
+  pollTimer = setInterval(async () => {
+    try {
+      const resp = await fetch(`${statusUrl}?jobId=${encodeURIComponent(jobId)}`, {
+        headers: pollHeaders
+      });
+
+      if (!resp.ok) {
+        status.textContent = `Status error (${resp.status})`;
+        clearInterval(pollTimer);
+        pollTimer = null;
+        return;
+      }
+
+      const payload = await resp.json();
+      const state = payload.state;
+
+      if (state === "pending" || state === "running") {
+        status.textContent = state === "running" ? `Job ${jobId} running…` : `Job ${jobId} pending…`;
+        return;
+      }
+
+      clearInterval(pollTimer);
+      pollTimer = null;
+
+      if (state === "complete") {
+        renderResult(payload);
+      } else if (state === "error") {
+        status.textContent = `Job ${jobId} failed: ${payload.error || "unknown"}`;
+      } else {
+        status.textContent = `Job ${jobId} status: ${state || "unknown"}`;
+      }
+    } catch (err) {
+      console.error("Polling error", err);
+      status.textContent = "Polling failed";
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  }, 2000);
+}
+
 document.getElementById("runBtn").addEventListener("click", analyze);
+document.getElementById("bgBtn").addEventListener("click", analyzeBackground);
 </script>
 </body>
 </html>
