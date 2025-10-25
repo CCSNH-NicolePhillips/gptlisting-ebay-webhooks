@@ -1,6 +1,6 @@
 import type { Handler } from "@netlify/functions";
 import crypto from "crypto";
-import { runAnalysis } from "../../src/lib/analyze-core.js";
+import fetch from "node-fetch";
 import { getOrigin, isAuthorized, isOriginAllowed, jsonResponse } from "../../src/lib/http.js";
 import { putJob } from "../../src/lib/job-store.js";
 import { sanitizeUrls, toDirectDropbox } from "../../src/lib/merge.js";
@@ -68,35 +68,36 @@ export const handler: Handler = async (event) => {
       summary: null,
     });
   } catch (err) {
-    console.error("[bg] Failed to enqueue job", err);
+    console.error("[bg-trigger] Failed to enqueue job", err);
     return jsonResponse(500, { error: "Failed to enqueue job" }, originHdr, methods);
   }
 
-  (async () => {
-    try {
-      await putJob(jobId, { jobId, state: "running", startedAt: Date.now() });
-      const result = await runAnalysis(images, batchSize);
-      await putJob(jobId, {
-        jobId,
-        state: "complete",
-        finishedAt: Date.now(),
-        status: "ok",
-        info: result.info,
-        summary: result.summary,
-        warnings: result.warnings,
-        groups: result.groups,
-      });
-    } catch (err: any) {
-      console.error("[bg] Background analysis failed", err);
-      const message = err?.message || "Unknown error";
-      await putJob(jobId, {
-        jobId,
-        state: "error",
-        finishedAt: Date.now(),
-        error: message,
-      });
+  const baseUrl =
+    process.env.URL || process.env.DEPLOY_PRIME_URL || process.env.DEPLOY_URL || "https://ebaywebhooks.netlify.app";
+  const backgroundUrl = `${baseUrl.replace(/\/$/, "")}/.netlify/functions/analyze-images-background`;
+
+  try {
+    const resp = await fetch(backgroundUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jobId, images, batchSize }),
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`Background trigger failed (${resp.status}): ${text}`);
     }
-  })();
+  } catch (err: any) {
+    console.error("[bg-trigger] Failed to start background worker", err);
+    const message = err?.message || "Failed to start background worker";
+    await putJob(jobId, {
+      jobId,
+      state: "error",
+      finishedAt: Date.now(),
+      error: message,
+    });
+    return jsonResponse(500, { error: "Failed to start background worker" }, originHdr, methods);
+  }
 
   return jsonResponse(200, { jobId }, originHdr, methods);
 };
