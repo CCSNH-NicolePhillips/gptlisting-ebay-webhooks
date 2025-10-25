@@ -24,4 +24,5 @@
 - [x] Run curl smoke tests for Chunk 9
 - [x] Add background job endpoints + status polling (Chunk 10)
 - [x] Chunk 11 — results export buttons & CSV utility
-- [ ] Chunk 13 — dynamic price formula + auto-reduction integration
+- [x] Chunk 13 — dynamic price formula + auto-reduction integration
+- [ ] Chunk 14 — reliable market price lookup + fallback bands

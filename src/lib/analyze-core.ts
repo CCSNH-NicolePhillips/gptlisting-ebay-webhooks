@@ -189,6 +189,19 @@ export async function runAnalysis(inputUrls: string[], rawBatchSize = 12): Promi
 
     try {
       const market = await lookupMarketPrice(query);
+
+      if (!market.avg || market.avg === 0) {
+        const category = (group.category || "").toLowerCase();
+        if (category.includes("supplement")) {
+          market.avg = 29.95;
+        } else if (category.includes("hair")) {
+          market.avg = 25.95;
+        } else {
+          market.avg = 19.95;
+        }
+        warnings.push(`Pricing unavailable for "${query}" — no live price found. Applied default band.`);
+      }
+
       const pricing = applyPricingFormula(market.avg);
       if (!pricing) {
         warnings.push(`Pricing unavailable for "${query}" (avg=${market.avg || 0})`);
