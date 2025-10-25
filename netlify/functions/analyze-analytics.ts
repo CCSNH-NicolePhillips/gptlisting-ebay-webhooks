@@ -9,6 +9,10 @@ const METHODS = "GET, OPTIONS";
 export const handler: Handler = async (event) => {
   const headers = event.headers as HeadersMap;
   const originHdr = getOrigin(headers);
+  const fetchSite = (headers["sec-fetch-site"] || headers["Sec-Fetch-Site"] || "")
+    .toString()
+    .toLowerCase();
+  const originAllowed = isOriginAllowed(originHdr);
 
   if (event.httpMethod === "OPTIONS") {
     return jsonResponse(200, {}, originHdr, METHODS);
@@ -18,7 +22,7 @@ export const handler: Handler = async (event) => {
     return jsonResponse(405, { error: "Method not allowed" }, originHdr, METHODS);
   }
 
-  if (!isOriginAllowed(originHdr)) {
+  if (!originAllowed && fetchSite !== "same-origin") {
     return jsonResponse(403, { error: "Forbidden" }, originHdr, METHODS);
   }
 
