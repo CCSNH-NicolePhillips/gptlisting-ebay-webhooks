@@ -30,17 +30,20 @@ export function sanitizeUrls(urls: string[] = []): string[] {
 }
 
 function makeSignature(g: any): string {
-  const raw = [
-    g.brand || "",
-    g.product || "",
-    g.variant || "",
-    g.size || "",
-  ]
+  const normalize = (val: unknown): string => {
+    const str = String(val ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    if (!str) return "";
+    if (["unknown", "not specified", "not available", "n a", "na", "none"].includes(str)) {
+      return "";
+    }
+    return str;
+  };
+
+  const raw = [g.brand, g.product, g.variant, g.size]
+    .map(normalize)
     .join("|")
-    .toLowerCase()
-    .replace(/[^a-z0-9|]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+    .replace(/\|+/g, "|")
+    .replace(/^\|+|\|+$/g, "");
 
   return crypto.createHash("sha1").update(raw).digest("hex");
 }
