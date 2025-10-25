@@ -81,10 +81,8 @@ export function mergeGroups(parts: { groups?: any[] }[]): { groups: any[] } {
   }
 
   for (const g of map.values()) {
-    if (!g.groupId) {
-      const sig = makeSignature(g);
-      g.groupId = `grp_${sig.slice(0, 8)}`;
-    }
+    const sig = makeSignature(g);
+    g.groupId = `grp_${sig.slice(0, 8)}`;
   }
 
   const sorted = Array.from(map.values()).sort((a, b) =>
