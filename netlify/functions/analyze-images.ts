@@ -1,5 +1,6 @@
 import type { Handler } from "@netlify/functions";
 import fetch from "node-fetch";
+import { openai } from "../../src/lib/openai.js";
 import { sanitizeUrls, toDirectDropbox } from "../../src/lib/merge.js";
 
 function ok(body: unknown, statusCode = 200) {
@@ -36,6 +37,44 @@ async function verifyUrl(url: string): Promise<boolean> {
   } catch (err) {
     console.warn(`HEAD failed for ${url}:`, (err as Error).message);
     return false;
+  }
+}
+
+async function analyzeBatchWithOpenAI(batch: string[]) {
+  try {
+    const content: any[] = [
+      {
+        type: "text",
+        text: [
+          "You are a product photo analyst.",
+          "Group visually identical products together (front/back/side shots).",
+          "Extract brand, product name, variant/flavor, size/servings, and category.",
+          "Return STRICT JSON only: { groups: [{ groupId, brand, product, variant, size, category, claims, confidence, images }] }.",
+          "If uncertain, group best-guess and lower confidence.",
+        ].join("\n"),
+      },
+    ];
+
+    for (const url of batch) {
+      content.push({ type: "image_url", image_url: { url } });
+    }
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      temperature: 0.2,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: "You are a strict JSON-only product photo parser." },
+        { role: "user", content },
+      ],
+    });
+
+    const raw = response.choices[0]?.message?.content || "{}";
+    const parsed = JSON.parse(raw);
+    return parsed;
+  } catch (err) {
+    console.error("❌ OpenAI Vision batch failed:", err);
+    return { groups: [], error: (err as Error).message };
   }
 }
 
@@ -77,8 +116,6 @@ export const handler: Handler = async (event) => {
 
   console.log("Cleaned images:", images);
 
-  const batches = chunkArray(images, batchSize);
-
   let verifiedImages: string[] = [];
   for (const url of images) {
     const okHead = await verifyUrl(url);
@@ -94,14 +131,28 @@ export const handler: Handler = async (event) => {
   console.log("✅ Batches created:", verifiedBatches.length);
   console.log("✅ Images per batch:", verifiedBatches.map((b) => b.length));
 
+  const analyzedResults: Array<Record<string, unknown>> = [];
+
+  for (const [i, batch] of verifiedBatches.entries()) {
+    console.log(`🧠 Analyzing batch ${i + 1}/${verifiedBatches.length} (${batch.length} images)`);
+    const result = await analyzeBatchWithOpenAI(batch);
+    analyzedResults.push(result);
+  }
+
+  console.log("🔍 Analysis complete. Total batches:", analyzedResults.length);
+
+  const totalGroups = analyzedResults.reduce((acc, item) => {
+    const groups = Array.isArray((item as any).groups) ? (item as any).groups.length : 0;
+    return acc + groups;
+  }, 0);
+
   return ok({
     status: "ok",
-    info: "Batch slicer + HEAD check complete.",
-    received: {
-      originalCount: images.length,
-      verifiedCount: verifiedImages.length,
-      batchSize,
-      batches: verifiedBatches.length,
+    info: "Vision batch analysis complete.",
+    summary: {
+      batches: analyzedResults.length,
+      totalGroups,
     },
+    results: analyzedResults,
   });
 };
