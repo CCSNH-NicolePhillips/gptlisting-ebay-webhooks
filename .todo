@@ -5,3 +5,6 @@
 - [x] Implement batch slicing and HEAD checks in analyze-images
 - [x] Validate TypeScript build for Chunk 3
 - [x] Push Chunk 3 deployment
+- [x] Wire OpenAI client for vision batch calls
+- [x] Add vision analysis loop to analyze-images
+- [x] Deploy and live-test Chunk 4
