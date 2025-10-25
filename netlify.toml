@@ -14,14 +14,6 @@
   SECRETS_SCAN_OMIT_KEYS = "PUBLISH_MODE,DEFAULT_MARKETPLACE_ID,DEFAULT_CATEGORY_ID,EBAY_ENV,APP_URL,DROPBOX_LOCALE,EBAY_RUNAME,EBAY_ENDPOINT_URL,DROPBOX_REDIRECT_URI,PROMOTED_CAMPAIGN_ID,OCR_PROVIDER,SHIP_NAME,SHIP_ADDRESS1,SHIP_CITY,SHIP_STATE,SHIP_POSTAL,SHIP_COUNTRY"
   SECRETS_SCAN_OMIT_PATHS = ".env.example,README.md,public/index.html,scripts/*,src/**"
 
-# Simple CORS for all functions (tighten later)
-[[headers]]
-  for = "/.netlify/functions/*"
-  [headers.values]
-    Access-Control-Allow-Origin = "*"
-    Access-Control-Allow-Methods = "POST, OPTIONS"
-    Access-Control-Allow-Headers = "Content-Type, Authorization"
-
 ## Make a stable self-hosted ESM path that rewrites to the SDK proxy
 [[redirects]]
   from = "/vendor/auth0-spa.esm.js"

@@ -19,3 +19,6 @@
 - [x] Verify repeated calls keep IDs stable
 - [x] Add admin analyzer preview UI
 - [x] Smoke test admin analyzer page
+- [x] Add CORS+auth helpers to analyze-images
+- [x] Remove wildcard Netlify headers
+- [ ] Run curl smoke tests for Chunk 9
