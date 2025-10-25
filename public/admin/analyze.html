@@ -48,14 +48,19 @@
   <div id="status" class="muted"></div>
   <div id="warnings"></div>
   <div id="summary" class="summary"></div>
+  <h2>Analytics Dashboard</h2>
+  <div id="analytics" style="margin-bottom:20px;"></div>
+  <canvas id="priceChart" width="600" height="300"></canvas>
   <div id="grid" class="grid"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script type="module">
 import { groupsToCSV } from "./export-utils.js";
 
 const fnUrl = "/.netlify/functions/analyze-images";
 const bgUrl = "/.netlify/functions/analyze-images-bg";
 const statusUrl = "/.netlify/functions/analyze-images-status";
+const analyticsUrl = "/.netlify/functions/analyze-analytics";
 const TOKEN_KEY = "analyzerAdminToken";
 
 const tokenInput = document.getElementById("token");
@@ -68,6 +73,92 @@ try {
 
 let pollTimer = null;
 let lastResult = null;
+let priceChart = null;
+
+async function loadAnalytics(){
+  const div = document.getElementById("analytics");
+  const canvas = document.getElementById("priceChart");
+  if (!div || !canvas) return;
+
+  try {
+    const headers = buildHeaders(false);
+    headers.Accept = "application/json";
+    const res = await fetch(analyticsUrl, { headers });
+    if (!res.ok) {
+      div.textContent = res.status === 401 ? "Enter admin token to view analytics." : `Analytics unavailable (${res.status})`;
+      return;
+    }
+
+    const data = await res.json();
+    const list = Array.isArray(data?.summaries) ? data.summaries : [];
+    if (!list.length) {
+      div.textContent = "No completed jobs yet.";
+      if (priceChart) {
+        priceChart.destroy();
+        priceChart = null;
+      }
+      return;
+    }
+
+    const tbl = document.createElement("table");
+    tbl.innerHTML = `
+  <tr><th>Job ID</th><th>Groups</th><th>Warnings</th>
+      <th>Avg Price</th><th>Min</th><th>Max</th><th>Duration (s)</th></tr>`;
+    for (const job of list) {
+      const row = document.createElement("tr");
+      row.innerHTML = `
+      <td>${(job.jobId || "").slice(0,8)}...</td>
+      <td>${job.groups ?? 0}</td>
+      <td>${job.warnings ?? 0}</td>
+      <td>$${job.avgPrice ?? 0}</td>
+      <td>$${job.minPrice ?? 0}</td>
+      <td>$${job.maxPrice ?? 0}</td>
+      <td>${job.durationSec ?? "?"}</td>`;
+      tbl.appendChild(row);
+    }
+    div.innerHTML = "";
+    div.appendChild(tbl);
+
+    if (typeof Chart !== "undefined") {
+      const ctx = canvas.getContext("2d");
+      const labels = list.map((job) => (job.jobId || "").slice(0,6));
+      const dataPoints = list.map((job) => Number(job.avgPrice ?? 0));
+      if (priceChart) {
+        priceChart.destroy();
+      }
+      priceChart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [
+            {
+              label: "Avg Price",
+              data: dataPoints,
+              borderColor: "#0074D9",
+              backgroundColor: "rgba(0,116,217,0.15)",
+              tension: 0.2,
+              fill: false,
+            },
+          ],
+        },
+        options: {
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: "Price ($)" },
+            },
+          },
+          plugins: {
+            legend: { display: false },
+          },
+        },
+      });
+    }
+  } catch (err) {
+    console.error("Analytics load failed", err);
+    div.textContent = "Analytics unavailable.";
+  }
+}
 
 function parseUrls(text){
   return Array.from(new Set(
@@ -173,6 +264,8 @@ function renderResult(data){
     card.appendChild(imgs);
     grid.appendChild(card);
   });
+
+  loadAnalytics().catch(() => {});
 }
 
 async function pollJob(jobId, pollHeaders){
@@ -325,6 +418,8 @@ document.getElementById("downloadCSV").addEventListener("click", () => {
   anchor.click();
   URL.revokeObjectURL(url);
 });
+
+loadAnalytics().catch(() => {});
 </script>
 </body>
 </html>

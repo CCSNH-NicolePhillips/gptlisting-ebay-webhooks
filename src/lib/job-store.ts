@@ -46,3 +46,42 @@ export async function getJob(jobId: string) {
     return null;
   }
 }
+
+function toStringArray(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+  return input
+    .map((item) => (typeof item === "string" ? item : String(item ?? "")))
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+export async function listJobs(limit = 25) {
+  const keysResp = await redisCall("KEYS", "job:*");
+  const keys = toStringArray(keysResp.result);
+  if (!keys.length) return [];
+
+  const jobs: Array<Record<string, any>> = [];
+  for (const key of keys) {
+    try {
+      const jobResp = await redisCall("GET", key);
+      const raw = jobResp.result;
+      if (typeof raw !== "string" || !raw) continue;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        const jobId = typeof parsed.jobId === "string" && parsed.jobId
+          ? parsed.jobId
+          : key.startsWith("job:")
+            ? key.slice(4)
+            : key;
+        jobs.push({ key, jobId, ...parsed });
+      }
+    } catch {
+      // ignore malformed job payloads
+    }
+  }
+
+  return jobs
+    .filter((job) => job.state === "complete")
+    .sort((a, b) => (Number(b.finishedAt) || 0) - (Number(a.finishedAt) || 0))
+    .slice(0, limit);
+}
