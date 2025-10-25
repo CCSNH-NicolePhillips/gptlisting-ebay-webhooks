@@ -1,6 +1,8 @@
 import fetch from "node-fetch";
 import { openai } from "./openai.js";
 import { mergeGroups, sanitizeUrls, toDirectDropbox } from "./merge.js";
+import { lookupMarketPrice } from "./price-lookup.js";
+import { applyPricingFormula } from "./price-formula.js";
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -171,13 +173,41 @@ export async function runAnalysis(inputUrls: string[], rawBatchSize = 12): Promi
     })
   );
 
+  const finalGroups: any[] = [];
+
+  for (const group of merged.groups) {
+    const parts = [group.brand, group.product, group.variant]
+      .map((part: string) => (part || "").trim())
+      .filter(Boolean);
+    const query = parts.join(" ");
+
+    if (!query) {
+      warnings.push(`Pricing skipped: insufficient product details for group ${group.groupId || "unknown"}`);
+      finalGroups.push({ ...group, market: null, pricing: null });
+      continue;
+    }
+
+    try {
+      const market = await lookupMarketPrice(query);
+      const pricing = applyPricingFormula(market.avg);
+      if (!pricing) {
+        warnings.push(`Pricing unavailable for "${query}" (avg=${market.avg || 0})`);
+      }
+      finalGroups.push({ ...group, market, pricing });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      warnings.push(`Price lookup failed for "${query}": ${message}`);
+      finalGroups.push({ ...group, market: null, pricing: null });
+    }
+  }
+
   return {
-    info: "Multi-batch merge complete (with resilience).",
+    info: "Full analysis with market pricing and auto-reduction schedule.",
     summary: {
       batches: verifiedBatches.length,
-      totalGroups: merged.groups.length,
+      totalGroups: finalGroups.length,
     },
     warnings,
-    groups: merged.groups,
+    groups: finalGroups,
   };
 }
