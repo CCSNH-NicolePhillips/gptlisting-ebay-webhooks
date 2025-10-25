@@ -37,9 +37,11 @@
       <div class="muted">Admin token</div>
       <input id="token" type="password" placeholder="Bearer token" autocomplete="off"/>
     </label>
-    <div style="align-self:end;display:flex;gap:8px">
+    <div style="align-self:end;display:flex;gap:8px;flex-wrap:wrap">
       <button id="runBtn">Analyze</button>
       <button id="bgBtn">Analyze (background)</button>
+      <button id="downloadJSON" disabled>Download JSON</button>
+      <button id="downloadCSV" disabled>Download CSV</button>
     </div>
   </div>
 
@@ -48,7 +50,9 @@
   <div id="summary" class="summary"></div>
   <div id="grid" class="grid"></div>
 
-<script>
+<script type="module">
+import { groupsToCSV } from "./export-utils.js";
+
 const fnUrl = "/.netlify/functions/analyze-images";
 const bgUrl = "/.netlify/functions/analyze-images-bg";
 const statusUrl = "/.netlify/functions/analyze-images-status";
@@ -63,6 +67,7 @@ try {
 }
 
 let pollTimer = null;
+let lastResult = null;
 
 function parseUrls(text){
   return Array.from(new Set(
@@ -81,19 +86,39 @@ function el(tag, attrs={}, children=[]){
   return n;
 }
 
-function clearResults(){
+function stopPolling(){
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+}
+
+function setDownloadEnabled(enabled) {
+  const jsonBtn = document.getElementById("downloadJSON");
+  const csvBtn = document.getElementById("downloadCSV");
+  if (jsonBtn) jsonBtn.disabled = !enabled;
+  if (csvBtn) csvBtn.disabled = !enabled;
+}
+
+function clearResults(options = { resetLast: true }){
   document.getElementById("grid").innerHTML = "";
   document.getElementById("summary").textContent = "";
   document.getElementById("warnings").innerHTML = "";
+  if (options.resetLast) {
+    lastResult = null;
+    setDownloadEnabled(false);
+  }
 }
 
 function renderResult(data){
+  clearResults({ resetLast: false });
   const status = document.getElementById("status");
   const grid = document.getElementById("grid");
   const summary = document.getElementById("summary");
   const warningsBox = document.getElementById("warnings");
 
-  clearResults();
+  lastResult = data;
+  setDownloadEnabled(true);
   status.textContent = data.info || "Complete.";
 
   if (Array.isArray(data.warnings) && data.warnings.length){
@@ -134,6 +159,47 @@ function renderResult(data){
   });
 }
 
+async function pollJob(jobId, pollHeaders){
+  const status = document.getElementById("status");
+
+  try {
+    const resp = await fetch(`${statusUrl}?jobId=${encodeURIComponent(jobId)}`, {
+      headers: pollHeaders
+    });
+
+    if (!resp.ok) {
+      status.textContent = `Status error (${resp.status})`;
+      stopPolling();
+      return;
+    }
+
+    const payload = await resp.json();
+    const state = payload.state;
+
+    if (state === "pending" || state === "running") {
+      status.textContent = state === "running"
+        ? `Job ${jobId} running…`
+        : `Job ${jobId} pending…`;
+      return;
+    }
+
+    stopPolling();
+
+    if (state === "complete") {
+      renderResult(payload);
+      status.textContent = "Complete.";
+    } else if (state === "error") {
+      status.textContent = `Job ${jobId} failed: ${payload.error || "unknown"}`;
+    } else {
+      status.textContent = `Job ${jobId} status: ${state || "unknown"}`;
+    }
+  } catch (err) {
+    console.error("Polling error", err);
+    status.textContent = "Polling failed";
+    stopPolling();
+  }
+}
+
 function buildHeaders(includeJson = true){
   const headers = includeJson ? { "Content-Type": "application/json" } : {};
   const token = tokenInput instanceof HTMLInputElement ? tokenInput.value.trim() : "";
@@ -151,16 +217,13 @@ function buildHeaders(includeJson = true){
 }
 
 async function analyze(){
-  if (pollTimer) {
-    clearInterval(pollTimer);
-    pollTimer = null;
-  }
+  stopPolling();
 
   const urls = parseUrls(document.getElementById("urls").value);
   const batchSize = Number(document.getElementById("batch").value) || 12;
   const status = document.getElementById("status");
 
-  clearResults();
+  clearResults({ resetLast: true });
   status.textContent = "Running…";
 
   const res = await fetch(fnUrl, {
@@ -179,16 +242,13 @@ async function analyze(){
 }
 
 async function analyzeBackground(){
-  if (pollTimer) {
-    clearInterval(pollTimer);
-    pollTimer = null;
-  }
+  stopPolling();
 
   const urls = parseUrls(document.getElementById("urls").value);
   const batchSize = Number(document.getElementById("batch").value) || 12;
   const status = document.getElementById("status");
 
-  clearResults();
+  clearResults({ resetLast: true });
   status.textContent = "Queuing background job…";
 
   const res = await fetch(bgUrl, {
@@ -212,49 +272,43 @@ async function analyzeBackground(){
   status.textContent = `Job ${jobId} pending…`;
 
   const pollHeaders = buildHeaders(false);
-
-  pollTimer = setInterval(async () => {
-    try {
-      const resp = await fetch(`${statusUrl}?jobId=${encodeURIComponent(jobId)}`, {
-        headers: pollHeaders
-      });
-
-      if (!resp.ok) {
-        status.textContent = `Status error (${resp.status})`;
-        clearInterval(pollTimer);
-        pollTimer = null;
-        return;
-      }
-
-      const payload = await resp.json();
-      const state = payload.state;
-
-      if (state === "pending" || state === "running") {
-        status.textContent = state === "running" ? `Job ${jobId} running…` : `Job ${jobId} pending…`;
-        return;
-      }
-
-      clearInterval(pollTimer);
-      pollTimer = null;
-
-      if (state === "complete") {
-        renderResult(payload);
-      } else if (state === "error") {
-        status.textContent = `Job ${jobId} failed: ${payload.error || "unknown"}`;
-      } else {
-        status.textContent = `Job ${jobId} status: ${state || "unknown"}`;
-      }
-    } catch (err) {
-      console.error("Polling error", err);
-      status.textContent = "Polling failed";
-      clearInterval(pollTimer);
-      pollTimer = null;
-    }
+  pollTimer = setInterval(() => {
+    pollJob(jobId, pollHeaders);
   }, 2000);
 }
 
 document.getElementById("runBtn").addEventListener("click", analyze);
 document.getElementById("bgBtn").addEventListener("click", analyzeBackground);
+document.getElementById("downloadJSON").addEventListener("click", () => {
+  if (!lastResult) {
+    alert("No data yet");
+    return;
+  }
+
+  const blob = new Blob([JSON.stringify(lastResult, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `visionhooks_${Date.now()}.json`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+});
+
+document.getElementById("downloadCSV").addEventListener("click", () => {
+  if (!lastResult) {
+    alert("No data yet");
+    return;
+  }
+
+  const csv = groupsToCSV(lastResult.groups || []);
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `visionhooks_${Date.now()}.csv`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+});
 </script>
 </body>
 </html>
