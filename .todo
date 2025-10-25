@@ -8,3 +8,6 @@
 - [x] Wire OpenAI client for vision batch calls
 - [x] Add vision analysis loop to analyze-images
 - [x] Deploy and live-test Chunk 4
+- [x] Add multi-batch merge helper
+- [x] Wire merge into analyze-images response
+- [x] Deploy and smoke test Chunk 5
