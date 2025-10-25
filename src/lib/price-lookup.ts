@@ -27,7 +27,7 @@ function averagePrices(parts: Array<number | null>): number {
 async function requestWithWebAccess(product: string): Promise<MarketPrices> {
   const prompt = `
 Search Amazon.com, Walmart.com, and the official brand website for "${product}".
-Return exact retail prices if visible. Respond ONLY in JSON:
+Return exact retail prices if visible. Respond ONLY in json using this structure:
 {"amazon": number|null, "walmart": number|null, "brand": number|null, "avg": number }.
 `;
 
@@ -65,7 +65,7 @@ async function fallbackEstimation(product: string): Promise<number> {
   const prompt = `
 Estimate an approximate retail price (USD) for "${product}" by comparing
 similar supplements or cosmetics on Amazon/Walmart.
-Respond as {"avg": number}.
+Respond in json as {"avg": number}.
 `;
 
   const response = await openai.chat.completions.create({
