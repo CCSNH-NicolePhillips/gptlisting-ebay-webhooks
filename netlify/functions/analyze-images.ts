@@ -3,21 +3,42 @@ import fetch from "node-fetch";
 import { openai } from "../../src/lib/openai.js";
 import { mergeGroups, sanitizeUrls, toDirectDropbox } from "../../src/lib/merge.js";
 
-function ok(body: unknown, statusCode = 200) {
-  return {
-    statusCode,
-    headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    },
-    body: JSON.stringify(body),
-  };
+function parseAllowedOrigins(): string[] {
+  const raw = process.env.ALLOWED_ORIGINS || "";
+  return raw.split(",").map((s) => s.trim()).filter(Boolean);
 }
 
-function bad(status: number, message: string) {
-  return ok({ error: message }, status);
+function isOriginAllowed(originHeader?: string): boolean {
+  const allow = parseAllowedOrigins();
+  if (!allow.length) return true;
+  if (!originHeader) return false;
+  try {
+    const origin = new URL(originHeader).origin;
+    return allow.includes(origin);
+  } catch {
+    return false;
+  }
+}
+
+function corsHeaders(originHeader?: string) {
+  const allow = parseAllowedOrigins();
+  const allowedOrigin =
+    originHeader && isOriginAllowed(originHeader) ? originHeader : allow[0] || "*";
+  return {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    Vary: "Origin",
+  } as Record<string, string>;
+}
+
+function jsonResponse(statusCode: number, body: unknown, originHeader?: string) {
+  return {
+    statusCode,
+    headers: corsHeaders(originHeader),
+    body: JSON.stringify(body),
+  };
 }
 
 // Utility: split an array into evenly sized batches
@@ -146,31 +167,48 @@ type AnalyzeRequest = {
 };
 
 export const handler: Handler = async (event) => {
+  const originHdr = (event.headers["origin"] || event.headers["Origin"] ||
+    event.headers["access-control-request-origin"]) as string | undefined;
+
   if (event.httpMethod === "OPTIONS") {
-    return ok({});
+    return jsonResponse(200, {}, originHdr);
   }
 
   if (event.httpMethod !== "POST") {
-    return bad(405, "Method not allowed. Use POST.");
+    return jsonResponse(405, { error: "Method not allowed" }, originHdr);
+  }
+
+  if (!isOriginAllowed(originHdr)) {
+    return jsonResponse(403, { error: "Forbidden" }, originHdr);
+  }
+
+  const adminToken = process.env.ADMIN_API_TOKEN || "";
+  const authHeader = event.headers["authorization"] || event.headers["Authorization"] || "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length).trim() : "";
+
+  if (adminToken) {
+    if (!token || token !== adminToken) {
+      return jsonResponse(401, { error: "Unauthorized" }, originHdr);
+    }
   }
 
   const ctype = event.headers["content-type"] || event.headers["Content-Type"] || "";
   if (!ctype.includes("application/json")) {
-    return bad(415, "Unsupported content-type. Use application/json.");
+    return jsonResponse(415, { error: "Use application/json" }, originHdr);
   }
 
   let payload: AnalyzeRequest = {};
   try {
     payload = JSON.parse(event.body || "{}");
   } catch (err) {
-    return bad(400, "Invalid JSON.");
+    return jsonResponse(400, { error: "Invalid JSON" }, originHdr);
   }
 
   let images = Array.isArray(payload.images) ? payload.images : [];
   images = sanitizeUrls(images).map(toDirectDropbox);
 
   if (images.length === 0) {
-    return bad(400, "No valid image URLs provided.");
+    return jsonResponse(400, { error: "No valid image URLs provided." }, originHdr);
   }
 
   const rawBatch = Number(payload.batchSize);
@@ -219,7 +257,7 @@ export const handler: Handler = async (event) => {
     })
   );
 
-  return ok({
+  return jsonResponse(200, {
     status: "ok",
     info: "Multi-batch merge complete (with resilience).",
     summary: {
@@ -228,5 +266,5 @@ export const handler: Handler = async (event) => {
     },
     warnings,
     groups: merged.groups,
-  });
+  }, originHdr);
 };
