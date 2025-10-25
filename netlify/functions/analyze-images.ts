@@ -1,7 +1,7 @@
 import type { Handler } from "@netlify/functions";
 import fetch from "node-fetch";
 import { openai } from "../../src/lib/openai.js";
-import { sanitizeUrls, toDirectDropbox } from "../../src/lib/merge.js";
+import { mergeGroups, sanitizeUrls, toDirectDropbox } from "../../src/lib/merge.js";
 
 function ok(body: unknown, statusCode = 200) {
   return {
@@ -141,18 +141,17 @@ export const handler: Handler = async (event) => {
 
   console.log("🔍 Analysis complete. Total batches:", analyzedResults.length);
 
-  const totalGroups = analyzedResults.reduce((acc, item) => {
-    const groups = Array.isArray((item as any).groups) ? (item as any).groups.length : 0;
-    return acc + groups;
-  }, 0);
+  const merged = mergeGroups(analyzedResults as Array<{ groups?: any[] }>);
+
+  console.log("🧩 Merge complete. Groups:", merged.groups.length);
 
   return ok({
     status: "ok",
-    info: "Vision batch analysis complete.",
+    info: "Multi-batch merge complete.",
     summary: {
       batches: analyzedResults.length,
-      totalGroups,
+      totalGroups: merged.groups.length,
     },
-    results: analyzedResults,
+    groups: merged.groups,
   });
 };
