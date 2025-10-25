@@ -22,3 +22,4 @@
 - [x] Add CORS+auth helpers to analyze-images
 - [x] Remove wildcard Netlify headers
 - [x] Run curl smoke tests for Chunk 9
+- [x] Add background job endpoints + status polling (Chunk 10)
