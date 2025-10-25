@@ -1,4 +1,5 @@
 import type { Handler } from "@netlify/functions";
+import { sanitizeUrls, toDirectDropbox } from "../../src/lib/merge.js";
 
 function ok(body: unknown, statusCode = 200) {
   return {
@@ -43,13 +44,17 @@ export const handler: Handler = async (event) => {
     return bad(400, "Invalid JSON.");
   }
 
-  const images = Array.isArray(payload.images) ? payload.images : [];
+  let images = Array.isArray(payload.images) ? payload.images : [];
+  images = sanitizeUrls(images).map(toDirectDropbox);
+
   if (images.length === 0) {
-    return bad(400, "No images provided.");
+    return bad(400, "No valid image URLs provided.");
   }
 
   const rawBatch = Number(payload.batchSize);
   const batchSize = Number.isFinite(rawBatch) ? Math.min(Math.max(rawBatch, 4), 20) : 12;
+
+  console.log("Cleaned images:", images);
 
   return ok({
     status: "ok",
