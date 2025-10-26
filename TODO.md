@@ -7,6 +7,7 @@
 ## Next
 - [ ] Provider router + vision batch cache (env switch OpenAI/Anthropic/Gemini)
 - [ ] Jobs dashboard polish: filter/search/export
+- [ ] Chunk 14 — reliable market price lookup + fallback bands
 
 ## Later
 - [ ] Auto Price Reduction (native Sell API block on Offer)
