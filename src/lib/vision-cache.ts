@@ -10,17 +10,18 @@ if (!BASE || !TOKEN) {
   console.warn("⚠️ Vision cache disabled — missing Upstash credentials");
 }
 
-async function upstash(body: unknown): Promise<any> {
+async function redisCall(...parts: string[]): Promise<any> {
   if (!BASE || !TOKEN) return null;
 
+  const encoded = parts.map((part) => encodeURIComponent(part));
+  const url = `${BASE}/${encoded.join("/")}`;
+
   try {
-    const res = await fetch(BASE, {
+    const res = await fetch(url, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${TOKEN}`,
-        "Content-Type": "application/json",
       },
-      body: JSON.stringify(body),
     });
 
     if (!res.ok) {
@@ -29,7 +30,7 @@ async function upstash(body: unknown): Promise<any> {
 
     return res.json();
   } catch (err) {
-    console.warn("vision-cache upstash call failed", err);
+    console.warn("vision-cache redis call failed", err);
     return null;
   }
 }
@@ -46,7 +47,7 @@ export function makeBatchKey(urls: string[]): string {
 
 export async function getCachedBatch(urls: string[]): Promise<any | null> {
   const key = makeBatchKey(urls);
-  const response = await upstash({ command: "GET", args: [key] });
+  const response = await redisCall("GET", key);
   const raw = response?.result;
   if (typeof raw !== "string" || !raw) return null;
   try {
@@ -59,10 +60,6 @@ export async function getCachedBatch(urls: string[]): Promise<any | null> {
 
 export async function setCachedBatch(urls: string[], data: unknown): Promise<void> {
   const key = makeBatchKey(urls);
-  await upstash({
-    pipeline: [
-      { command: "SET", args: [key, JSON.stringify(data)] },
-      { command: "EXPIRE", args: [key, `${TTL_SEC}`] },
-    ],
-  });
+  await redisCall("SET", key, JSON.stringify(data));
+  await redisCall("EXPIRE", key, `${TTL_SEC}`);
 }
