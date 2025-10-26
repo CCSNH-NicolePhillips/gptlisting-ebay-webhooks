@@ -25,6 +25,25 @@ type DraftItem = {
   marketplaceId?: string;
 };
 
+type DraftMeta = {
+  selectedCategory?: { id: string; slug: string; title: string } | null;
+  missingRequired?: string[];
+  marketplaceId?: string;
+  categoryId?: string;
+  price?: number;
+};
+
+type DraftPreview = {
+  sku: string;
+  title: string;
+  price: number;
+  quantity: number;
+  categoryId?: string;
+  marketplaceId?: string;
+  imageUrls: string[];
+  aspects: Record<string, string[]>;
+};
+
 type PolicyCache = {
   fulfillment: Map<string, string>;
   payment: Map<string, string>;
@@ -84,13 +103,23 @@ export const handler: Handler = async (event) => {
 
   const initialItems: any[] = Array.isArray(payload?.items)
     ? payload.items
-    : payload && typeof payload === "object" && Object.keys(payload).length && !Array.isArray(payload)
+    : payload &&
+        typeof payload === "object" &&
+        !Array.isArray(payload) &&
+        Object.keys(payload).length &&
+        (payload as any).groups == null
       ? [payload]
       : [];
 
-  let rawItems: any[] = [...initialItems];
+  const rawItems: any[] = [];
+  const rawMeta: Array<DraftMeta | null> = [];
 
-  const invalid: Array<{ index: number; error: string; sku?: string }> = [];
+  initialItems.forEach((item) => {
+    rawItems.push(item);
+    rawMeta.push(extractMeta(item));
+  });
+
+  const invalid: Array<{ index: number; error: string; sku?: string; meta?: DraftMeta | null }> = [];
 
   if (Array.isArray(payload?.groups)) {
     const groupIndexBase = rawItems.length;
@@ -99,12 +128,14 @@ export const handler: Handler = async (event) => {
       try {
         const mapped = await mapGroupToDraftWithTaxonomy(group);
         rawItems.push(mapped);
+        rawMeta.push(extractMeta(mapped));
       } catch (err: any) {
         const message = err instanceof Error ? err.message : String(err);
         invalid.push({
           index: groupIndexBase + i,
           error: message,
           sku: groupSkuHint(group) || undefined,
+          meta: extractMeta(group),
         });
       }
     }
@@ -115,42 +146,81 @@ export const handler: Handler = async (event) => {
   }
 
   const normalized: DraftItem[] = [];
+  const normalizedMeta: Array<DraftMeta | null> = [];
 
   rawItems.forEach((item, idx) => {
     try {
       const mapped = normalizeItem(item);
       if (mapped) {
         normalized.push(mapped);
+        normalizedMeta.push(rawMeta[idx] ?? extractMeta(item));
       } else {
-        invalid.push({ index: idx, error: "Item missing required fields", sku: captureSku(item) || undefined });
+        invalid.push({
+          index: idx,
+          error: "Item missing required fields",
+          sku: captureSku(item) || undefined,
+          meta: rawMeta[idx] ?? extractMeta(item),
+        });
       }
     } catch (err: any) {
-  const message = err instanceof Error ? err.message : String(err);
-  const fallbackSku = captureSku(item);
-  invalid.push({ index: idx, error: message, sku: fallbackSku || undefined });
+      const message = err instanceof Error ? err.message : String(err);
+      const fallbackSku = captureSku(item);
+      invalid.push({
+        index: idx,
+        error: message,
+        sku: fallbackSku || undefined,
+        meta: rawMeta[idx] ?? extractMeta(item),
+      });
     }
   });
 
   if (!normalized.length) {
-    return jsonResponse(400, { error: "No valid items", invalid }, originHdr, METHODS);
+    const invalidSummaries = invalid.map((entry) => ({
+      index: entry.index,
+      error: entry.error,
+      sku: entry.sku,
+      meta: cleanMeta(entry.meta ?? null),
+    }));
+    return jsonResponse(400, { error: "No valid items", invalid: invalidSummaries }, originHdr, METHODS);
   }
+
+  const invalidSummaries = invalid.map((entry) => ({
+    index: entry.index,
+    error: entry.error,
+    sku: entry.sku,
+    meta: cleanMeta(entry.meta ?? null),
+  }));
 
   const publishMode = (process.env.PUBLISH_MODE || "draft").toLowerCase();
   const isDryRun = payload?.dryRun === true || publishMode === "dry-run" || publishMode === "preview";
   const appBase = deriveBaseUrlFromEvent(event);
 
   if (isDryRun) {
-    const previews = normalized.map((item) => ({
-      sku: item.sku,
-      title: item.title,
-      price: item.price,
-      quantity: item.quantity,
-      categoryId: item.categoryId,
-      marketplaceId: item.marketplaceId,
-      imageUrls: item.imageUrls,
-      aspects: item.aspects || {},
-    }));
-    return jsonResponse(200, { dryRun: true, count: previews.length, previews, invalid }, originHdr, METHODS);
+    const previews = normalized.map((item, idx) => {
+      const meta = mergeMeta(normalizedMeta[idx], item);
+      return {
+        sku: item.sku,
+        title: item.title,
+        price: item.price,
+        quantity: item.quantity,
+        categoryId: item.categoryId,
+        marketplaceId: item.marketplaceId,
+        imageUrls: item.imageUrls,
+        aspects: item.aspects || {},
+        meta,
+      };
+    });
+    return jsonResponse(
+      200,
+      {
+        dryRun: true,
+        count: previews.length,
+        previews,
+        invalid: invalidSummaries,
+      },
+      originHdr,
+      METHODS
+    );
   }
 
   const refreshToken = process.env.EBAY_REFRESH_TOKEN;
@@ -201,19 +271,37 @@ export const handler: Handler = async (event) => {
     },
   };
 
-  const successes: Array<{ sku: string; offerId: string; status: string; offer: unknown }> = [];
-  const failures: Array<{ sku: string; error: string; detail?: unknown }> = invalid.map((entry) => ({
-    sku: entry.sku || `idx:${entry.index}`,
-    error: entry.error,
-  }));
+  const successes: Array<{
+    sku: string;
+    offerId: string;
+    status: string;
+    offer: unknown;
+    meta?: DraftMeta | null;
+    draft?: DraftPreview;
+  }> = [];
+  const failures: Array<{
+    sku: string;
+    error: string;
+    detail?: unknown;
+    meta?: DraftMeta | null;
+    draft?: DraftPreview;
+  }> = invalidSummaries.map(
+    (entry) => ({
+      sku: entry.sku || `idx:${entry.index}`,
+      error: entry.error,
+      meta: entry.meta || null,
+    })
+  );
 
-  for (const item of normalized) {
+  for (let i = 0; i < normalized.length; i++) {
+    const item = normalized[i];
+    const meta = cleanMeta(normalizedMeta[i] ?? null);
     try {
       const result = await processItem(item, context);
-      successes.push(result);
+      successes.push({ ...result, meta, draft: buildDraftPreview(item) });
     } catch (err: any) {
       const message = err instanceof Error ? err.message : String(err);
-      failures.push({ sku: item.sku, error: message, detail: err?.detail });
+      failures.push({ sku: item.sku, error: message, detail: err?.detail, meta, draft: buildDraftPreview(item) });
     }
   }
 
@@ -224,6 +312,7 @@ export const handler: Handler = async (event) => {
       created: successes.length,
       results: successes,
       failures,
+      invalid: invalidSummaries,
     },
     originHdr,
     METHODS
@@ -285,6 +374,92 @@ function normalizeItem(raw: any): DraftItem {
     returnPolicyId: offer.returnPolicyId || raw.returnPolicyId || null,
     merchantLocationKey: merchantLocationKey ? String(merchantLocationKey) : null,
     marketplaceId,
+  };
+}
+
+function extractMeta(raw: unknown): DraftMeta | null {
+  if (!raw || typeof raw !== "object") return null;
+  const meta = (raw as any)._meta;
+  if (!meta || typeof meta !== "object") return null;
+
+  const candidate: DraftMeta = {};
+
+  if (meta.selectedCategory && typeof meta.selectedCategory === "object") {
+    const source = meta.selectedCategory as Record<string, unknown>;
+    const idValue = source.id ?? source.categoryId;
+    if (idValue) {
+      const id = String(idValue);
+      const slug = source.slug ? String(source.slug) : id;
+      const title = source.title ? String(source.title) : slug;
+      candidate.selectedCategory = { id, slug, title };
+    }
+  }
+
+  if (Array.isArray(meta.missingRequired)) {
+    candidate.missingRequired = meta.missingRequired.map((entry: unknown) => String(entry)).filter(Boolean);
+  }
+
+  if (meta.marketplaceId) candidate.marketplaceId = String(meta.marketplaceId);
+  if (meta.categoryId) candidate.categoryId = String(meta.categoryId);
+  if (typeof meta.price === "number" && Number.isFinite(meta.price)) candidate.price = meta.price;
+
+  return cleanMeta(candidate);
+}
+
+function cleanMeta(meta: DraftMeta | null): DraftMeta | null {
+  if (!meta) return null;
+  const out: DraftMeta = {};
+  if (meta.selectedCategory && meta.selectedCategory.id) {
+    const id = meta.selectedCategory.id;
+    const slug = meta.selectedCategory.slug || id;
+    const title = meta.selectedCategory.title || slug;
+    out.selectedCategory = { id, slug, title };
+  }
+  if (Array.isArray(meta.missingRequired) && meta.missingRequired.length) {
+    const dedup = Array.from(new Set(meta.missingRequired.map((entry) => String(entry).trim()).filter(Boolean)));
+    if (dedup.length) out.missingRequired = dedup;
+  }
+  if (meta.marketplaceId) out.marketplaceId = meta.marketplaceId;
+  if (meta.categoryId) out.categoryId = meta.categoryId;
+  if (typeof meta.price === "number" && Number.isFinite(meta.price)) out.price = meta.price;
+  return Object.keys(out).length ? out : null;
+}
+
+function missingFromAspects(aspects?: Record<string, string[] | undefined> | undefined): string[] {
+  if (!aspects) return [];
+  return Object.entries(aspects)
+    .filter(([, values]) => Array.isArray(values) && values.length === 0)
+    .map(([name]) => name);
+}
+
+function mergeMeta(meta: DraftMeta | null | undefined, item: DraftItem): DraftMeta | null {
+  const cleaned = cleanMeta(meta ?? null);
+  const merged: DraftMeta = cleaned ? { ...cleaned } : {};
+  const missing = missingFromAspects(item.aspects);
+  if (missing.length) {
+    const set = new Set((merged.missingRequired || []).map((entry) => entry));
+    missing.forEach((entry) => set.add(entry));
+    merged.missingRequired = Array.from(set);
+  }
+  if (!merged.marketplaceId && item.marketplaceId) merged.marketplaceId = item.marketplaceId;
+  if (!merged.categoryId && item.categoryId) merged.categoryId = item.categoryId;
+  if (!merged.selectedCategory && item.categoryId) {
+    merged.selectedCategory = { id: item.categoryId, slug: item.categoryId, title: item.categoryId };
+  }
+  if (typeof item.price === "number" && Number.isFinite(item.price)) merged.price = item.price;
+  return cleanMeta(merged);
+}
+
+function buildDraftPreview(item: DraftItem): DraftPreview {
+  return {
+    sku: item.sku,
+    title: item.title,
+    price: item.price,
+    quantity: item.quantity,
+    categoryId: item.categoryId,
+    marketplaceId: item.marketplaceId,
+    imageUrls: item.imageUrls,
+    aspects: item.aspects || {},
   };
 }
 
