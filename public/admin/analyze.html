@@ -118,6 +118,9 @@ const analyticsUrl = "/.netlify/functions/analyze-analytics";
 const jobsUrl = "/.netlify/functions/analyze-jobs";
 const jobDetailUrl = "/.netlify/functions/analyze-job";
 const TOKEN_KEY = "analyzerAdminToken";
+const DEFAULT_MARKETPLACE_ID = window.__DEFAULT_MARKETPLACE_ID__ || "EBAY_US";
+const DEFAULT_CATEGORY_ID = window.__DEFAULT_CATEGORY_ID__ || "177011";
+const SUPPLEMENT_CATEGORY_ID = "180959";
 
 const tokenInput = document.getElementById("token");
 try {
@@ -823,10 +826,6 @@ function renderJobDetail(job) {
   setupDraftButton(job);
 }
 
-const DEFAULT_MARKETPLACE_ID = window.__DEFAULT_MARKETPLACE_ID__ || "EBAY_US";
-const DEFAULT_CATEGORY_ID = window.__DEFAULT_CATEGORY_ID__ || "177011";
-const SUPPLEMENT_CATEGORY_ID = "180959";
-
 function setupDraftButton(job) {
   window._currentJobData = job;
   const btn = document.getElementById("btnCreateDrafts");
@@ -845,26 +844,15 @@ function setupDraftButton(job) {
       alert("No groups with pricing available.");
       return;
     }
-    const taxonomy = await ensureTaxonomyData();
-    if (!taxonomy) {
-      console.warn("Taxonomy data unavailable; falling back to default categories.");
-    }
-    const items = groups
-      .map((group) => mapGroupToExistingDraftFormat(group, taxonomy))
-      .filter((item) => item);
-    if (!items.length) {
-      alert("No groups produced a valid draft payload.");
-      return;
-    }
     btn.disabled = true;
-    if (statusEl) statusEl.textContent = `Creating ${items.length} draft${items.length === 1 ? '' : 's'}…`;
+    if (statusEl) statusEl.textContent = `Submitting ${groups.length} group${groups.length === 1 ? '' : 's'}…`;
     try {
       const headers = buildHeaders(true);
       headers.Accept = "application/json";
       const res = await fetch("/.netlify/functions/ebay-create-draft", {
         method: "POST",
         headers,
-        body: JSON.stringify({ items }),
+        body: JSON.stringify({ groups }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
@@ -877,11 +865,11 @@ function setupDraftButton(job) {
       window._lastDraftResponse = data;
       if (data?.dryRun) {
         if (statusEl)
-          statusEl.textContent = `Dry run ready for ${data.count || items.length} item(s). Check console for previews.`;
+          statusEl.textContent = `Dry run ready for ${data.count || groups.length} item(s). Check console for previews.`;
         console.log("Draft preview result", data);
-        alert(`Dry run complete for ${data.count || items.length} item(s).`);
+        alert(`Dry run complete for ${data.count || groups.length} item(s).`);
       } else {
-        const created = Number(data?.created ?? data?.count ?? items.length);
+        const created = Number(data?.created ?? data?.count ?? groups.length);
         if (statusEl)
           statusEl.textContent = `Created ${created} draft${created === 1 ? '' : 's'}.`;
         console.log("Draft creation result", data);
