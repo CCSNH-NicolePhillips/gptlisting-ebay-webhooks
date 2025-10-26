@@ -48,10 +48,23 @@ export const handler: Handler = async (event) => {
     return jsonResponse(400, { error: "No valid image URLs provided." }, originHdr, methods);
   }
 
-  const rawBatch = Number(payload.batchSize);
-  const batchSize = Number.isFinite(rawBatch) ? Math.min(Math.max(rawBatch, 4), 15) : 12;
+  if (images.length > 3) {
+    return jsonResponse(
+      202,
+      {
+        status: "redirect",
+        message: "Use background endpoint for more than 3 images",
+        endpoint: "/.netlify/functions/analyze-images-bg",
+      },
+      originHdr,
+      methods
+    );
+  }
 
-  const result = await runAnalysis(images, batchSize);
+  const rawBatch = Number(payload.batchSize);
+  const batchSize = Number.isFinite(rawBatch) ? Math.min(Math.max(rawBatch, 4), 12) : 12;
+
+  const result = await runAnalysis(images, batchSize, { skipPricing: true });
 
   return jsonResponse(
     200,

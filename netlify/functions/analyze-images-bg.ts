@@ -1,6 +1,5 @@
 import type { Handler } from "@netlify/functions";
 import crypto from "crypto";
-import fetch from "node-fetch";
 import { getOrigin, isAuthorized, isOriginAllowed, jsonResponse } from "../../src/lib/http.js";
 import { putJob } from "../../src/lib/job-store.js";
 import { sanitizeUrls, toDirectDropbox } from "../../src/lib/merge.js";
@@ -56,7 +55,7 @@ export const handler: Handler = async (event) => {
   }
 
   const rawBatch = Number(payload.batchSize);
-  const batchSize = Number.isFinite(rawBatch) ? Math.min(Math.max(rawBatch, 4), 20) : 12;
+  const batchSize = Number.isFinite(rawBatch) ? Math.min(Math.max(rawBatch, 4), 12) : 12;
 
   const jobId = crypto.randomUUID();
 

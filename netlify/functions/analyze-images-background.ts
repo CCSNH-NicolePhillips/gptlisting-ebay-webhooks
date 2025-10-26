@@ -15,7 +15,9 @@ export const handler: Handler = async (event) => {
   try {
     const body: BackgroundPayload = JSON.parse(event.body || "{}");
     jobId = body.jobId;
-    const { images = [], batchSize = 12 } = body;
+    const images = Array.isArray(body.images) ? body.images : [];
+    const rawBatch = Number(body.batchSize);
+    const batchSize = Number.isFinite(rawBatch) ? Math.min(Math.max(rawBatch, 4), 12) : 12;
 
     if (!jobId) {
       throw new Error("Missing jobId in background payload");
