@@ -176,40 +176,38 @@ export async function runAnalysis(inputUrls: string[], rawBatchSize = 12): Promi
   const finalGroups: any[] = [];
 
   for (const group of merged.groups) {
-    const parts = [group.brand, group.product, group.variant]
-      .map((part: string) => (part || "").trim())
-      .filter(Boolean);
-    const query = parts.join(" ");
+    const brand = typeof group.brand === "string" ? group.brand.trim() : "";
+    const product = typeof group.product === "string" ? group.product.trim() : "";
+    const variant = typeof group.variant === "string" ? group.variant.trim() : "";
+    const parts = [brand, product, variant].filter(Boolean);
+    const label = parts.join(" ").trim();
 
-    if (!query) {
+    if (!label) {
       warnings.push(`Pricing skipped: insufficient product details for group ${group.groupId || "unknown"}`);
       finalGroups.push({ ...group, market: null, pricing: null });
       continue;
     }
 
     try {
-      const market = await lookupMarketPrice(query);
+      const market = await lookupMarketPrice(brand, product, variant);
 
       if (!market.avg || market.avg === 0) {
-        const category = (group.category || "").toLowerCase();
-        if (category.includes("supplement")) {
-          market.avg = 29.95;
-        } else if (category.includes("hair")) {
-          market.avg = 25.95;
-        } else {
-          market.avg = 19.95;
-        }
-        warnings.push(`Pricing unavailable for "${query}" — no live price found. Applied default band.`);
+        warnings.push(`No live price found for "${label}".`);
+        finalGroups.push({ ...group, market, pricing: null });
+        continue;
       }
 
       const pricing = applyPricingFormula(market.avg);
       if (!pricing) {
-        warnings.push(`Pricing unavailable for "${query}" (avg=${market.avg || 0})`);
+        warnings.push(`Pricing unavailable for "${label}" (avg=${market.avg || 0})`);
+        finalGroups.push({ ...group, market, pricing: null });
+        continue;
       }
+
       finalGroups.push({ ...group, market, pricing });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      warnings.push(`Price lookup failed for "${query}": ${message}`);
+      warnings.push(`Price lookup failed for "${label}": ${message}`);
       finalGroups.push({ ...group, market: null, pricing: null });
     }
   }

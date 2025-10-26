@@ -246,10 +246,18 @@ function renderResult(data){
     const claims = Array.isArray(g.claims) && g.claims.length
       ? el("div", {class:"muted", html: "Claims: " + g.claims.map(c => `<code>${c}</code>`).join(" ")} )
       : el("div");
-    const market = (g.market && (g.market.avg || g.market.amazon || g.market.walmart))
+    const hasMarket = g.market && (g.market.avg || g.market.amazon || g.market.walmart || g.market.brand);
+    const market = hasMarket
       ? el("div", {class:"muted", html:
-          `Market avg ≈ $${g.market.avg ?? "–"} (Amazon $${g.market.amazon ?? "–"}, Walmart $${g.market.walmart ?? "–"})`
+          `Market avg ≈ $${g.market?.avg ?? "–"} (Amazon $${g.market?.amazon ?? "–"}, Walmart $${g.market?.walmart ?? "–"}, Brand $${g.market?.brand ?? "–"})`
         })
+      : null;
+    const sources = hasMarket
+      ? el("div", {class:"muted", html: `Sources: ${[
+          g.market?.amazon ? "Amazon ✓" : "Amazon –",
+          g.market?.walmart ? "Walmart ✓" : "Walmart –",
+          g.market?.brand ? "Brand ✓" : "Brand –"
+        ].join(" · ")}`})
       : null;
     const pricing = g.pricing
       ? (() => {
@@ -268,7 +276,18 @@ function renderResult(data){
     card.appendChild(id);
     card.appendChild(claims);
     if (market) card.appendChild(market);
+    if (sources) card.appendChild(sources);
     if (pricing) card.appendChild(pricing);
+    if (!pricing) {
+      const manualBtn = document.createElement("button");
+      manualBtn.textContent = "Set price manually";
+      manualBtn.addEventListener("click", () => {
+        const manual = prompt("Enter eBay start price (USD):");
+        if (!manual) return;
+        alert(`Manual price recorded: $${manual}`);
+      });
+      card.appendChild(manualBtn);
+    }
     card.appendChild(imgs);
     grid.appendChild(card);
   });
