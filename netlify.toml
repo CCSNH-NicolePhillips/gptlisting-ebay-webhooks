@@ -2,11 +2,11 @@
 [build]
   command = "npm run build"
   publish = "public"
-  functions = "functions"
+  functions = "netlify/functions"
 
 [functions]
   node_bundler = "esbuild"
-  directory = "functions"
+  directory = "netlify/functions"
   external_node_modules = ["openai"]
 
 # Reduce false positives in Netlify Secrets Scanning by omitting non-sensitive keys.
