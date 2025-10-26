@@ -21,12 +21,23 @@ export function isOriginAllowed(originHeader?: string): boolean {
 }
 
 export function getOrigin(headers: HeadersRecord): string | undefined {
-  return (
+  const origin =
     headers["origin"] ||
     headers["Origin"] ||
     headers["access-control-request-origin"] ||
-    headers["Access-Control-Request-Origin"]
-  );
+    headers["Access-Control-Request-Origin"];
+
+  if (origin) return origin;
+
+  const referer = headers["referer"] || headers["Referer"];
+  if (!referer) return undefined;
+
+  try {
+    // Browsers skip the Origin header on same-origin requests, but Referer still exposes it.
+    return new URL(referer).origin;
+  } catch {
+    return undefined;
+  }
 }
 
 export function corsHeaders(originHeader: string | undefined, methods: string) {
