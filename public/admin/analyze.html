@@ -16,6 +16,12 @@
     .imgs{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
     .imgs img{width:76px;height:76px;object-fit:cover;border:1px solid #eee;border-radius:8px}
     .muted{color:#666;font-size:.9rem}
+    #status{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;min-height:28px}
+    .status-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:#103f91;color:#fff;font-size:.85rem;font-weight:600;text-transform:uppercase;letter-spacing:.02em}
+    .status-pill button{border:none;background:rgba(255,255,255,0.9);color:#103f91;font-size:.7rem;font-weight:600;padding:2px 8px;border-radius:999px;cursor:pointer}
+    .status-pill button:hover{background:#fff}
+    .status-pill button:focus{outline:2px solid rgba(16,63,145,0.35);outline-offset:1px}
+    .status-message{font-weight:600;color:#103f91}
     .summary{margin-top:10px}
     .warn{background:#fff8e6;border:1px solid #fde1a3;padding:8px;border-radius:8px;margin-top:8px}
     code{background:#f6f6f6;padding:2px 4px;border-radius:4px}
@@ -30,6 +36,8 @@
     .job-row:hover{background:#fafafa}
     .job-row.active{background:#e9f3ff}
     .job-summary-card{border:1px solid #eee;border-radius:12px;padding:12px;margin-bottom:16px;background:#fafbff}
+    .job-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+    .job-actions button{background:#0f62fe;border-color:#0f62fe;color:#fff}
     .detail-table{width:100%;border-collapse:collapse;margin:12px 0}
     .detail-table th,.detail-table td{border:1px solid #eee;padding:6px 8px;text-align:left;font-size:.9rem}
     .groups-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:12px}
@@ -132,6 +140,8 @@ let lastResult = null;
 let priceChart = null;
 let jobPollTimer = null;
 let activeJobId = null;
+window._currentJobData = null;
+let taxonomyDataPromise = null;
 
 async function loadAnalytics(){
   const div = document.getElementById("analytics");
@@ -242,6 +252,61 @@ function stopPolling(){
   }
 }
 
+function renderJobStatus(statusEl, jobId, message) {
+  if (!statusEl) return;
+  statusEl.innerHTML = "";
+
+  if (jobId) {
+    const pill = document.createElement("span");
+    pill.className = "status-pill";
+    pill.dataset.jobId = jobId;
+
+    const label = document.createElement("span");
+    label.textContent = `Job ${jobId}`;
+    pill.appendChild(label);
+
+    const copyBtn = document.createElement("button");
+    copyBtn.type = "button";
+    copyBtn.textContent = "Copy";
+    copyBtn.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const original = copyBtn.textContent;
+      const reset = () => {
+        copyBtn.textContent = original;
+      };
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(jobId);
+        } else {
+          const accepted = window.prompt("Copy job ID:", jobId);
+          if (accepted === null) {
+            copyBtn.textContent = "Copy?";
+            setTimeout(reset, 1600);
+            return;
+          }
+        }
+        copyBtn.textContent = "Copied!";
+      } catch (err) {
+        console.warn("Job ID copy failed", err);
+        const accepted = window.prompt("Copy job ID:", jobId);
+        copyBtn.textContent = accepted === null ? "Copy?" : "Copied!";
+      }
+      setTimeout(reset, 1600);
+    });
+    pill.appendChild(copyBtn);
+
+    statusEl.appendChild(pill);
+  }
+
+  if (message) {
+    const messageSpan = document.createElement("span");
+    messageSpan.className = "status-message";
+    messageSpan.textContent = message;
+    statusEl.appendChild(messageSpan);
+  }
+}
+
 function setDownloadEnabled(enabled) {
   const jsonBtn = document.getElementById("downloadJSON");
   const csvBtn = document.getElementById("downloadCSV");
@@ -259,7 +324,7 @@ function clearResults(options = { resetLast: true }){
   }
 }
 
-function renderResult(data){
+function renderResult(data, options = {}){
   clearResults({ resetLast: false });
   const status = document.getElementById("status");
   const grid = document.getElementById("grid");
@@ -268,7 +333,12 @@ function renderResult(data){
 
   lastResult = data;
   setDownloadEnabled(true);
-  status.textContent = data.info || "Complete.";
+  const statusMessage = options.statusMessage ?? data.info ?? "Complete.";
+  if (options.jobId) {
+    renderJobStatus(status, options.jobId, statusMessage);
+  } else if (status) {
+    status.textContent = statusMessage;
+  }
 
   if (Array.isArray(data.warnings) && data.warnings.length){
     warningsBox.appendChild(el("div", {class:"warn"}, [
@@ -354,7 +424,7 @@ async function pollJob(jobId, pollHeaders){
     });
 
     if (!resp.ok) {
-      status.textContent = `Status error (${resp.status})`;
+      renderJobStatus(status, jobId, `status error (${resp.status})`);
       stopPolling();
       return;
     }
@@ -363,25 +433,22 @@ async function pollJob(jobId, pollHeaders){
     const state = payload.state;
 
     if (state === "pending" || state === "running") {
-      status.textContent = state === "running"
-        ? `Job ${jobId} running…`
-        : `Job ${jobId} pending…`;
+  renderJobStatus(status, jobId, state === "running" ? "Running…" : "Pending…");
       return;
     }
 
     stopPolling();
 
     if (state === "complete") {
-      renderResult(payload);
-      status.textContent = "Complete.";
+      renderResult(payload, { jobId, statusMessage: payload.info || "Complete." });
     } else if (state === "error") {
-      status.textContent = `Job ${jobId} failed: ${payload.error || "unknown"}`;
+      renderJobStatus(status, jobId, `failed: ${payload.error || "unknown"}`);
     } else {
-      status.textContent = `Job ${jobId} status: ${state || "unknown"}`;
+      renderJobStatus(status, jobId, `status: ${state || "unknown"}`);
     }
   } catch (err) {
     console.error("Polling error", err);
-    status.textContent = "Polling failed";
+    renderJobStatus(status, jobId, "polling failed");
     stopPolling();
   }
 }
@@ -455,7 +522,7 @@ async function analyzeBackground(){
     return;
   }
 
-  status.textContent = `Job ${jobId} pending…`;
+  renderJobStatus(status, jobId, "Pending…");
 
   const pollHeaders = buildHeaders(false);
   pollTimer = setInterval(() => {
@@ -652,6 +719,7 @@ async function loadJobDetail(jobId) {
   const detailEl = document.getElementById("jobDetail");
   const statusEl = document.getElementById("jobsStatus");
   if (!detailEl || !statusEl) return;
+  window._currentJobData = null;
   statusEl.textContent = `Loading job ${jobId}…`;
   detailEl.innerHTML = "";
   focusJobRow(jobId);
@@ -661,11 +729,13 @@ async function loadJobDetail(jobId) {
     const res = await fetch(`${jobDetailUrl}?jobId=${encodeURIComponent(jobId)}`, { headers });
     if (!res.ok) {
       statusEl.textContent = res.status === 404 ? "Job not found" : `Failed to load job (${res.status})`;
+      window._currentJobData = null;
       return;
     }
     const data = await res.json();
     if (!data?.job) {
       statusEl.textContent = "Job unavailable.";
+      window._currentJobData = null;
       return;
     }
     activeJobId = jobId;
@@ -674,6 +744,7 @@ async function loadJobDetail(jobId) {
   } catch (err) {
     console.error("Job detail failed", err);
     statusEl.textContent = "Job detail unavailable.";
+    window._currentJobData = null;
   }
 }
 
@@ -739,12 +810,619 @@ function renderJobDetail(job) {
       <div>Duration: ${job.durationMs ? (job.durationMs / 1000).toFixed(1) + "s" : "—"}</div>
       ${priceSummary}
       <div><strong>Warnings</strong>: ${warnList}</div>
+      <div class="job-actions">
+        <button id="btnCreateDrafts">Create eBay Drafts</button>
+      </div>
     </div>
     <h3>Bindings</h3>
     ${bindingsHtml}
     ${groupsHtml ? "<h3>Groups</h3>" : ""}
     ${groupsHtml}
   `;
+
+  setupDraftButton(job);
+}
+
+const DEFAULT_MARKETPLACE_ID = window.__DEFAULT_MARKETPLACE_ID__ || "EBAY_US";
+const DEFAULT_CATEGORY_ID = window.__DEFAULT_CATEGORY_ID__ || "177011";
+const SUPPLEMENT_CATEGORY_ID = "180959";
+
+function setupDraftButton(job) {
+  window._currentJobData = job;
+  const btn = document.getElementById("btnCreateDrafts");
+  if (!btn) return;
+  const statusEl = document.getElementById("jobsStatus");
+  btn.onclick = async () => {
+    const current = window._currentJobData;
+    if (!current) {
+      alert("Open a job in the list first.");
+      return;
+    }
+    const groups = Array.isArray(current.groups)
+      ? current.groups.filter((g) => Number(g?.pricing?.ebay) > 0)
+      : [];
+    if (!groups.length) {
+      alert("No groups with pricing available.");
+      return;
+    }
+    const taxonomy = await ensureTaxonomyData();
+    if (!taxonomy) {
+      console.warn("Taxonomy data unavailable; falling back to default categories.");
+    }
+    const items = groups
+      .map((group) => mapGroupToExistingDraftFormat(group, taxonomy))
+      .filter((item) => item);
+    if (!items.length) {
+      alert("No groups produced a valid draft payload.");
+      return;
+    }
+    btn.disabled = true;
+    if (statusEl) statusEl.textContent = `Creating ${items.length} draft${items.length === 1 ? '' : 's'}…`;
+    try {
+      const headers = buildHeaders(true);
+      headers.Accept = "application/json";
+      const res = await fetch("/.netlify/functions/ebay-create-draft", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ items }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        if (statusEl)
+          statusEl.textContent = `Draft creation failed (${res.status})`;
+        console.error("Draft creation failed", data);
+        alert(`Draft creation failed: ${data?.error || res.statusText || res.status}`);
+        return;
+      }
+      window._lastDraftResponse = data;
+      if (data?.dryRun) {
+        if (statusEl)
+          statusEl.textContent = `Dry run ready for ${data.count || items.length} item(s). Check console for previews.`;
+        console.log("Draft preview result", data);
+        alert(`Dry run complete for ${data.count || items.length} item(s).`);
+      } else {
+        const created = Number(data?.created ?? data?.count ?? items.length);
+        if (statusEl)
+          statusEl.textContent = `Created ${created} draft${created === 1 ? '' : 's'}.`;
+        console.log("Draft creation result", data);
+        alert(`Created ${created} draft${created === 1 ? '' : 's'}.`);
+      }
+    } catch (err) {
+      if (statusEl) statusEl.textContent = "Draft creation error.";
+      console.error("Draft creation error", err);
+      alert(`Draft creation error: ${err?.message || err}`);
+    } finally {
+      btn.disabled = false;
+    }
+  };
+}
+
+function mapGroupToExistingDraftFormat(group, taxonomy) {
+  if (!group) return null;
+  const price = Number(group?.pricing?.ebay ?? group?.price ?? 0);
+  if (!Number.isFinite(price) || price <= 0) return null;
+
+  const title = [group.brand, group.product, group.variant, group.size]
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 80);
+  if (!title) return null;
+
+  const imageUrls = Array.isArray(group.images)
+    ? group.images.filter((url) => typeof url === "string" && url.trim()).slice(0, 12)
+    : [];
+  if (!imageUrls.length) return null;
+
+  const sku = makeSku(group);
+  if (!sku) return null;
+
+  const quantity = sanitizeQuantity(group);
+  const aspects = buildAspectsFromGroup(group);
+  const useAspects = Object.keys(aspects).length ? aspects : undefined;
+  const categorySelection = selectCategoryForGroup(group, taxonomy);
+  const categoryId = categorySelection?.categoryId || DEFAULT_CATEGORY_ID;
+  const description = buildDescriptionFromGroup(title, group, useAspects, categorySelection);
+  const { inventoryCondition, offerCondition } = deriveConditionForGroup(group);
+
+  return {
+    inventory: {
+      condition: inventoryCondition,
+      product: {
+        title,
+        description,
+        imageUrls,
+        ...(useAspects ? { aspects: useAspects } : {}),
+      },
+    },
+    offer: {
+      sku,
+      marketplaceId: DEFAULT_MARKETPLACE_ID,
+      categoryId,
+      price: Math.round(price * 100) / 100,
+      quantity,
+      condition: offerCondition,
+      fulfillmentPolicyId: null,
+      paymentPolicyId: null,
+      returnPolicyId: null,
+      locationKey: null,
+      merchantLocationKey: null,
+      description,
+    },
+  };
+}
+
+function makeSku(group) {
+  const base = slugify([group.brand, group.product].filter(Boolean).join("-"));
+  const suffix = slugify(group.groupId || group.id || Date.now().toString(36));
+  const raw = [base, suffix].filter(Boolean).join("-");
+  return raw ? raw.slice(0, 48) : suffix.slice(0, 48);
+}
+
+function slugify(value) {
+  return String(value || "")
+    .replace(/[^A-Za-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toUpperCase();
+}
+
+function sanitizeQuantity(group) {
+  const candidates = [
+    group?.quantity,
+    group?.qty,
+    group?.units,
+    group?.binding?.quantity,
+    group?.binding?.currentQuantity,
+    group?.binding?.metadata?.quantity,
+    1,
+  ];
+  for (const value of candidates) {
+    const num = Number(value);
+    if (Number.isFinite(num) && num > 0) {
+      return Math.min(999, Math.max(1, Math.round(num)));
+    }
+  }
+  return 1;
+}
+
+function buildAspectsFromGroup(group) {
+  const aspects = {};
+  const add = (name, value) => {
+    const clean = sanitizeAspectValue(value);
+    if (!name || !clean) return;
+    const list = aspects[name] || (aspects[name] = []);
+    if (!list.some((existing) => existing.toLowerCase() === clean.toLowerCase())) {
+      list.push(clean);
+    }
+  };
+  const addMany = (name, values) => {
+    if (!name || values === undefined || values === null) return;
+    const arr = Array.isArray(values) ? values : [values];
+    arr.forEach((item) => add(name, item));
+  };
+
+  const bindingAspects = group?.binding?.metadata?.aspects;
+  if (bindingAspects && typeof bindingAspects === "object") {
+    Object.entries(bindingAspects).forEach(([key, values]) => addMany(key, values));
+  }
+
+  if (group?.options && typeof group.options === "object") {
+    Object.entries(group.options).forEach(([key, values]) => {
+      const label = formatAspectName(key);
+      addMany(label, values);
+    });
+  }
+
+  if (group.brand) add("Brand", group.brand);
+  if (group.category) add("Category", group.category);
+  if (group.variant) {
+    add("Flavor", group.variant);
+    add("Variety", group.variant);
+  }
+
+  if (group.size) {
+    add("Size", group.size);
+    if (/\b(ct|count)\b/i.test(group.size)) add("Item Count", group.size);
+    if (/[0-9]\s*(ml|fl\s?oz|oz|ounce)/i.test(group.size)) add("Volume", group.size);
+  }
+
+  const formulation = inferFormulation(group);
+  if (formulation) add("Formulation", formulation);
+
+  const claims = Array.isArray(group.claims) ? group.claims : [];
+  if (claims.length) addMany("Features", claims);
+
+  return aspects;
+}
+
+function sanitizeAspectValue(value) {
+  if (value === undefined || value === null) return "";
+  const str = String(value).replace(/[\r\n]+/g, " ").trim();
+  return str ? str.slice(0, 80) : "";
+}
+
+function formatAspectName(name) {
+  if (!name && name !== 0) return "";
+  const parts = String(name)
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .split(" ")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase());
+  return parts.join(" ") || String(name);
+}
+
+function inferFormulation(group) {
+  const texts = [];
+  const push = (value) => {
+    if (value === undefined || value === null) return;
+    texts.push(String(value).toLowerCase());
+  };
+  [group?.variant, group?.product, group?.size].forEach(push);
+  if (Array.isArray(group?.claims)) group.claims.forEach(push);
+  if (group?.options && typeof group.options === "object") {
+    Object.values(group.options).forEach((value) => {
+      if (Array.isArray(value)) value.forEach(push);
+      else push(value);
+    });
+  }
+  const haystack = texts.join(" ");
+  if (!haystack) return null;
+  if (haystack.includes("softgel") || haystack.includes("soft gel")) return "Softgel";
+  if (haystack.includes("capsule") || haystack.includes("caplet")) return "Capsule";
+  if (haystack.includes("tablet")) return "Tablet";
+  if (haystack.includes("gummy")) return "Gummy";
+  if (haystack.includes("chew")) return "Chewable";
+  if (haystack.includes("powder")) return "Powder";
+  if (haystack.includes("liquid") || haystack.includes("drops")) return "Liquid";
+  if (haystack.includes("spray")) return "Spray";
+  if (haystack.includes("drink mix")) return "Drink Mix";
+  return null;
+}
+
+function selectCategoryForGroup(group, taxonomy) {
+  if (!taxonomy) {
+    return detectSupplementFallback(group);
+  }
+
+  const explicitIds = [
+    group?.binding?.categoryId,
+    group?.categoryId,
+    group?.category_id,
+    group?.binding?.metadata?.categoryId,
+  ]
+    .map(sanitizeCategoryId)
+    .filter(Boolean);
+
+  for (const id of explicitIds) {
+    if (taxonomy.byId.has(id)) {
+      const row = taxonomy.byId.get(id);
+      return { categoryId: row.categoryId, categoryPath: row.categoryPath, source: "explicit" };
+    }
+  }
+
+  const pathHints = [
+    group?.binding?.categoryPath,
+    group?.categoryPath,
+    group?.category,
+  ]
+    .map(normalizeCategoryValue)
+    .filter(Boolean);
+
+  for (const hint of pathHints) {
+    const rowsByPath = taxonomy.byPath.get(hint);
+    if (rowsByPath && rowsByPath.length) {
+      const row = pickPrimaryCategory(rowsByPath);
+      if (row) return { categoryId: row.categoryId, categoryPath: row.categoryPath, source: "path" };
+    }
+    const rowsByName = taxonomy.byName.get(hint);
+    if (rowsByName && rowsByName.length) {
+      const row = pickPrimaryCategory(rowsByName);
+      if (row) return { categoryId: row.categoryId, categoryPath: row.categoryPath, source: "name" };
+    }
+  }
+
+  const tokens = collectCategoryTokens(group);
+  if (!tokens.length) {
+    return detectSupplementFallback(group);
+  }
+
+  let best = null;
+  let bestScore = 0;
+
+  for (const row of taxonomy.rows) {
+    let score = 0;
+    for (const token of tokens) {
+      if (row.tokenSet.has(token)) score += 4;
+      else if (row.normPath.includes(token)) score += 1;
+    }
+    if (row.normName && row.normName === normalizeCategoryValue(group.category)) score += 6;
+    if (row.normName && row.normName === normalizeCategoryValue(group.product)) score += 3;
+
+    if (!best || score > bestScore || (score === bestScore && row.depth > best.depth)) {
+      best = row;
+      bestScore = score;
+    }
+  }
+
+  if (best && bestScore >= 4) {
+    return { categoryId: best.categoryId, categoryPath: best.categoryPath, source: "taxonomy" };
+  }
+
+  return detectSupplementFallback(group);
+}
+
+function sanitizeCategoryId(value) {
+  if (value === undefined || value === null) return null;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(Math.trunc(value));
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (/^\d+$/.test(trimmed)) return trimmed;
+  }
+  return null;
+}
+
+function normalizeCategoryValue(value) {
+  if (value === undefined || value === null) return "";
+  return String(value)
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tokenizeCategoryValue(value) {
+  const normalized = normalizeCategoryValue(value);
+  if (!normalized) return [];
+  return normalized.split(" ").filter((token) => token.length >= 3);
+}
+
+function collectCategoryTokens(group) {
+  const pool = [
+    group?.category,
+    group?.categoryPath,
+    group?.product,
+    group?.variant,
+    group?.brand,
+    group?.size,
+  ];
+  if (Array.isArray(group?.claims)) pool.push(...group.claims);
+  if (group?.options && typeof group.options === "object") {
+    Object.values(group.options).forEach((value) => {
+      if (Array.isArray(value)) pool.push(...value);
+      else pool.push(value);
+    });
+  }
+  const tokens = new Set();
+  pool.forEach((value) => tokenizeCategoryValue(value).forEach((token) => tokens.add(token)));
+  return Array.from(tokens);
+}
+
+function pickPrimaryCategory(list) {
+  if (!Array.isArray(list) || !list.length) return null;
+  return list.slice().sort((a, b) => b.depth - a.depth)[0];
+}
+
+function detectSupplementFallback(group) {
+  const text = [
+    group?.category,
+    group?.product,
+    group?.variant,
+    Array.isArray(group?.claims) ? group.claims.join(" ") : "",
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  if (!text) return null;
+  if (/(supplement|vitamin|probiotic|prebiotic|collagen|multivitamin|omega|gummy)/i.test(text)) {
+    return { categoryId: SUPPLEMENT_CATEGORY_ID, categoryPath: null, source: "supplement-fallback" };
+  }
+  return null;
+}
+
+function buildDescriptionFromGroup(title, group, aspects, categorySelection) {
+  const existing = extractExistingDescription(group);
+  if (existing) return truncateDescription(existing);
+
+  const lines = [title];
+  const brandProduct = [group.brand, group.product].filter(Boolean).join(" ").trim();
+  if (brandProduct && brandProduct !== title) {
+    lines.push(brandProduct);
+  }
+  if (group.variant) lines.push(`Variant: ${group.variant}`);
+  if (group.size) lines.push(`Size: ${group.size}`);
+  if (categorySelection?.categoryPath) {
+    lines.push(`Category: ${categorySelection.categoryPath}`);
+  }
+
+  const claims = Array.isArray(group.claims)
+    ? group.claims.filter((claim) => typeof claim === "string" && claim.trim())
+    : [];
+  if (claims.length) {
+    lines.push("", "Key Features:");
+    claims.slice(0, 8).forEach((claim) => lines.push(`• ${claim}`));
+  }
+
+  return truncateDescription(lines.join("\n").trim() || title);
+}
+
+function extractExistingDescription(group) {
+  const candidates = [group?.binding?.metadata?.description, group?.description];
+  for (const value of candidates) {
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (trimmed) return trimmed;
+    }
+  }
+  return null;
+}
+
+function truncateDescription(text) {
+  const limit = 4500;
+  if (!text) return "";
+  if (text.length <= limit) return text;
+  return `${text.slice(0, limit - 3).trimEnd()}...`;
+}
+
+function deriveConditionForGroup(group) {
+  const sources = [
+    group?.condition,
+    group?.binding?.condition,
+    group?.binding?.metadata?.condition,
+  ];
+
+  for (const source of sources) {
+    if (source === undefined || source === null) continue;
+    if (typeof source === "number" && Number.isFinite(source)) {
+      const code = Math.trunc(source);
+      return {
+        inventoryCondition: mapConditionCodeToInventory(code) || "NEW",
+        offerCondition: code,
+      };
+    }
+    if (typeof source === "string" && source.trim()) {
+      const code = conditionStringToCode(source);
+      if (code) {
+        return {
+          inventoryCondition: mapConditionCodeToInventory(code) || "NEW",
+          offerCondition: code,
+        };
+      }
+      const normalized = source.trim().toUpperCase();
+      return {
+        inventoryCondition: normalized || "NEW",
+        offerCondition: conditionStringToCode(normalized) || 1000,
+      };
+    }
+  }
+
+  return { inventoryCondition: "NEW", offerCondition: 1000 };
+}
+
+function conditionStringToCode(value) {
+  const str = String(value || "").trim().toUpperCase();
+  if (!str) return null;
+  if (str === "NEW") return 1000;
+  if (str.includes("NEW") && str.includes("OTHER")) return 1500;
+  if (str.includes("MANUFACTURER") && str.includes("REFURB")) return 2000;
+  if (str.includes("SELLER") && str.includes("REFURB")) return 2500;
+  if (str.includes("REFURB")) return 2000;
+  if (str.includes("USED")) return 3000;
+  if (str.includes("FOR PARTS") || str.includes("NOT WORKING")) return 7000;
+  return null;
+}
+
+function mapConditionCodeToInventory(code) {
+  switch (code) {
+    case 1000:
+      return "NEW";
+    case 1500:
+    case 1750:
+      return "NEW_OTHER";
+    case 2000:
+      return "MANUFACTURER_REFURBISHED";
+    case 2500:
+      return "SELLER_REFURBISHED";
+    case 3000:
+      return "USED";
+    case 7000:
+      return "FOR_PARTS_OR_NOT_WORKING";
+    default:
+      return null;
+  }
+}
+
+async function ensureTaxonomyData() {
+  if (!taxonomyDataPromise) {
+    taxonomyDataPromise = loadTaxonomyCsv().catch((err) => {
+      console.warn("Failed to load taxonomy CSV", err);
+      return null;
+    });
+  }
+  return taxonomyDataPromise;
+}
+
+async function loadTaxonomyCsv() {
+  const tryUrls = ["../taxonomy-categories-EBAY_US.csv", "/taxonomy-categories-EBAY_US.csv"];
+  let text = null;
+  for (const url of tryUrls) {
+    try {
+      const res = await fetch(url, { cache: "no-store" });
+      if (res.ok) {
+        text = await res.text();
+        break;
+      }
+    } catch {}
+  }
+  if (!text) return null;
+
+  const lines = text.split(/\r?\n/).filter((line) => line.trim().length);
+  if (lines.length <= 1) return null;
+
+  const rows = [];
+  const byId = new Map();
+  const byPath = new Map();
+  const byName = new Map();
+
+  for (let i = 1; i < lines.length; i++) {
+    const cols = parseCsvLine(lines[i]);
+    if (cols.length < 3) continue;
+    const categoryId = cols[0].trim();
+    const categoryName = cols[1].trim();
+    const categoryPath = (cols[2] || cols[1] || "").trim();
+    if (!categoryId || !categoryName) continue;
+    const normName = normalizeCategoryValue(categoryName);
+    const normPath = normalizeCategoryValue(categoryPath || categoryName);
+    const tokens = normPath.split(" ").filter(Boolean);
+    const row = {
+      categoryId,
+      categoryName,
+      categoryPath,
+      normName,
+      normPath,
+      tokenSet: new Set(tokens),
+      depth: (categoryPath || categoryName).split(">").filter((part) => part.trim()).length,
+    };
+    rows.push(row);
+    byId.set(categoryId, row);
+    const nameList = byName.get(normName) || [];
+    nameList.push(row);
+    byName.set(normName, nameList);
+    const pathList = byPath.get(normPath) || [];
+    pathList.push(row);
+    byPath.set(normPath, pathList);
+  }
+
+  return { rows, byId, byName, byPath };
+}
+
+function parseCsvLine(line) {
+  const cols = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        cur += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === "," && !inQuotes) {
+      cols.push(cur);
+      cur = "";
+    } else {
+      cur += ch;
+    }
+  }
+  cols.push(cur);
+  return cols;
 }
 
 function formatPrice(value) {

@@ -124,8 +124,8 @@ async function analyzeBatchViaVision(batch: string[]) {
   const prompt = [
     "You are a product photo analyst.",
     "Group visually identical products (front/back/side).",
-    "Extract: brand, product, variant/flavor, size/servings, category, short claims[].",
-    "Return STRICT JSON: { groups: [{ groupId, brand, product, variant, size, category, claims, confidence, images[] }] }.",
+    "Extract: brand, product, variant/flavor, size/servings, best-fit category label, categoryPath (parent > child), options object of item specifics (e.g. { Flavor, Formulation, Features, Ingredients, Dietary Feature }), short claims[].",
+    "Return STRICT JSON: { groups: [{ groupId, brand, product, variant, size, category, categoryPath, options, claims, confidence, images[] }] }.",
     "If uncertain, group best-guess and lower confidence.",
   ].join("\n");
 

@@ -1,0 +1,649 @@
+import type { Handler } from "@netlify/functions";
+import { accessTokenFromRefresh, tokenHosts } from "../../functions/_common.js";
+import { getOrigin, isAuthorized, isOriginAllowed, jsonResponse } from "../../src/lib/http.js";
+
+type HeadersMap = Record<string, string | undefined>;
+
+const METHODS = "POST, OPTIONS";
+
+type DraftItem = {
+  sku: string;
+  title: string;
+  price: number;
+  quantity: number;
+  imageUrls: string[];
+  aspects?: Record<string, string[]>;
+  inventoryCondition?: string;
+  offerCondition?: number;
+  categoryId?: string;
+  description?: string;
+  fulfillmentPolicyId?: string | null;
+  paymentPolicyId?: string | null;
+  returnPolicyId?: string | null;
+  merchantLocationKey?: string | null;
+  marketplaceId?: string;
+};
+
+type PolicyCache = {
+  fulfillment: Map<string, string>;
+  payment: Map<string, string>;
+  return: Map<string, string>;
+};
+
+type EnvPolicies = {
+  fulfillment?: string | null;
+  payment?: string | null;
+  return?: string | null;
+};
+
+type ProcessContext = {
+  apiHost: string;
+  baseHeaders: Record<string, string>;
+  appBase: string | null;
+  defaultCategoryId: string;
+  defaultMarketplaceId: string;
+  promotedCampaignId?: string | null;
+  envPolicies: EnvPolicies;
+  envLocationKey?: string | null;
+  locationCache: Set<string>;
+  policyCache: PolicyCache;
+};
+
+export const handler: Handler = async (event) => {
+  const headers = event.headers as HeadersMap;
+  const originHdr = getOrigin(headers);
+  if (event.httpMethod === "OPTIONS") {
+    return jsonResponse(200, {}, originHdr, METHODS);
+  }
+
+  if (event.httpMethod !== "POST") {
+    return jsonResponse(405, { error: "Method not allowed" }, originHdr, METHODS);
+  }
+
+  const fetchSite = (headers["sec-fetch-site"] || headers["Sec-Fetch-Site"] || "")
+    .toString()
+    .toLowerCase();
+  const originAllowed = isOriginAllowed(originHdr);
+  if (!originAllowed && fetchSite !== "same-origin") {
+    return jsonResponse(403, { error: "Forbidden" }, originHdr, METHODS);
+  }
+
+  if (!isAuthorized(headers)) {
+    return jsonResponse(401, { error: "Unauthorized" }, originHdr, METHODS);
+  }
+
+  let payload: any = {};
+  if (event.body) {
+    try {
+      payload = JSON.parse(event.body);
+    } catch {
+      return jsonResponse(400, { error: "Invalid JSON" }, originHdr, METHODS);
+    }
+  }
+
+  const rawItems: any[] = Array.isArray(payload?.items)
+    ? payload.items
+    : payload && Object.keys(payload).length
+      ? [payload]
+      : [];
+
+  if (!rawItems.length) {
+    return jsonResponse(400, { error: "No items provided" }, originHdr, METHODS);
+  }
+
+  const invalid: Array<{ index: number; error: string; sku?: string }> = [];
+  const normalized: DraftItem[] = [];
+
+  rawItems.forEach((item, idx) => {
+    try {
+      const mapped = normalizeItem(item);
+      if (mapped) {
+        normalized.push(mapped);
+      } else {
+        invalid.push({ index: idx, error: "Item missing required fields", sku: captureSku(item) || undefined });
+      }
+    } catch (err: any) {
+  const message = err instanceof Error ? err.message : String(err);
+  const fallbackSku = captureSku(item);
+  invalid.push({ index: idx, error: message, sku: fallbackSku || undefined });
+    }
+  });
+
+  if (!normalized.length) {
+    return jsonResponse(400, { error: "No valid items", invalid }, originHdr, METHODS);
+  }
+
+  const publishMode = (process.env.PUBLISH_MODE || "draft").toLowerCase();
+  const isDryRun = payload?.dryRun === true || publishMode === "dry-run" || publishMode === "preview";
+  const appBase = deriveBaseUrlFromEvent(event);
+
+  if (isDryRun) {
+    const previews = normalized.map((item) => ({
+      sku: item.sku,
+      title: item.title,
+      price: item.price,
+      quantity: item.quantity,
+      categoryId: item.categoryId,
+      marketplaceId: item.marketplaceId,
+      imageUrls: item.imageUrls,
+      aspects: item.aspects || {},
+    }));
+    return jsonResponse(200, { dryRun: true, count: previews.length, previews, invalid }, originHdr, METHODS);
+  }
+
+  const refreshToken = process.env.EBAY_REFRESH_TOKEN;
+  if (!refreshToken) {
+    return jsonResponse(500, { error: "EBAY_REFRESH_TOKEN env var is required" }, originHdr, METHODS);
+  }
+
+  let token: { access_token: string };
+  try {
+    token = await accessTokenFromRefresh(refreshToken);
+  } catch (err: any) {
+    const message = err instanceof Error ? err.message : String(err);
+    return jsonResponse(500, { error: "Failed to refresh eBay token", detail: message }, originHdr, METHODS);
+  }
+
+  const ENV = (process.env.EBAY_ENV || "PROD").toUpperCase();
+  const { apiHost } = tokenHosts(ENV);
+  const defaultMarketplaceId = process.env.DEFAULT_MARKETPLACE_ID || "EBAY_US";
+  const defaultCategoryId = process.env.DEFAULT_CATEGORY_ID || "31413";
+  const promotedCampaignId = process.env.PROMOTED_CAMPAIGN_ID || null;
+
+  const baseHeaders: Record<string, string> = {
+    Authorization: `Bearer ${token.access_token}`,
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    "Accept-Language": "en-US",
+    "Content-Language": "en-US",
+  };
+
+  const context: ProcessContext = {
+    apiHost,
+    baseHeaders,
+    appBase,
+    defaultCategoryId,
+    defaultMarketplaceId,
+    promotedCampaignId,
+    envPolicies: {
+      fulfillment: process.env.EBAY_FULFILLMENT_POLICY_ID || null,
+      payment: process.env.EBAY_PAYMENT_POLICY_ID || null,
+      return: process.env.EBAY_RETURN_POLICY_ID || null,
+    },
+    envLocationKey: process.env.EBAY_MERCHANT_LOCATION_KEY || null,
+    locationCache: new Set<string>(),
+    policyCache: {
+      fulfillment: new Map<string, string>(),
+      payment: new Map<string, string>(),
+      return: new Map<string, string>(),
+    },
+  };
+
+  const successes: Array<{ sku: string; offerId: string; status: string; offer: unknown }> = [];
+  const failures: Array<{ sku: string; error: string; detail?: unknown }> = invalid.map((entry) => ({
+    sku: entry.sku || `idx:${entry.index}`,
+    error: entry.error,
+  }));
+
+  for (const item of normalized) {
+    try {
+      const result = await processItem(item, context);
+      successes.push(result);
+    } catch (err: any) {
+      const message = err instanceof Error ? err.message : String(err);
+      failures.push({ sku: item.sku, error: message, detail: err?.detail });
+    }
+  }
+
+  return jsonResponse(
+    200,
+    {
+      dryRun: false,
+      created: successes.length,
+      results: successes,
+      failures,
+    },
+    originHdr,
+    METHODS
+  );
+};
+
+function normalizeItem(raw: any): DraftItem {
+  if (!raw || typeof raw !== "object") throw new Error("Invalid item payload");
+  const inventory = raw.inventory || {};
+  const product = inventory.product || {};
+  const offer = raw.offer || {};
+
+  const sku = sanitizeSku(offer.sku || raw.sku);
+  if (!sku) throw new Error("Missing sku");
+
+  const title = String(product.title || offer.title || raw.title || "").trim();
+  if (!title) throw new Error("Missing title");
+
+  const price = Number(offer.price ?? raw.price ?? 0);
+  if (!Number.isFinite(price) || price <= 0) throw new Error("Missing price");
+
+  const imagesSource = Array.isArray(product.imageUrls)
+    ? product.imageUrls
+    : Array.isArray(raw.imageUrls)
+      ? raw.imageUrls
+      : [];
+  const imageUrls = imagesSource
+    .filter((url: unknown) => typeof url === "string" && url.trim())
+    .map((url: unknown) => String(url as string).trim())
+    .slice(0, 12);
+  if (!imageUrls.length) throw new Error("Missing images");
+
+  const qtyRaw = Number(offer.quantity ?? raw.quantity ?? raw.qty ?? 1);
+  const quantity = Number.isFinite(qtyRaw) && qtyRaw > 0 ? Math.trunc(qtyRaw) : 1;
+
+  const aspects = normalizeAspects(product.aspects || raw.aspects);
+  const conditionRaw = inventory.condition ?? offer.condition ?? raw.condition ?? "NEW";
+  const { inventoryCondition, offerCondition } = normalizeCondition(conditionRaw);
+
+  const categoryId = offer.categoryId || raw.categoryId || undefined;
+  const marketplaceId = offer.marketplaceId || raw.marketplaceId || undefined;
+  const description = product.description || offer.description || raw.description || title;
+  const merchantLocationKey =
+    offer.merchantLocationKey || offer.locationKey || raw.merchantLocationKey || raw.locationKey || null;
+
+  return {
+    sku,
+    title,
+    price: Math.round(price * 100) / 100,
+    quantity,
+    imageUrls,
+    aspects,
+    inventoryCondition,
+    offerCondition,
+    categoryId,
+    description,
+    fulfillmentPolicyId: offer.fulfillmentPolicyId || raw.fulfillmentPolicyId || null,
+    paymentPolicyId: offer.paymentPolicyId || raw.paymentPolicyId || null,
+    returnPolicyId: offer.returnPolicyId || raw.returnPolicyId || null,
+    merchantLocationKey: merchantLocationKey ? String(merchantLocationKey) : null,
+    marketplaceId,
+  };
+}
+
+function sanitizeSku(value: unknown): string | null {
+  if (!value) return null;
+  const cleaned = String(value)
+    .replace(/[^A-Za-z0-9]/g, "")
+    .slice(0, 50);
+  return cleaned || null;
+}
+
+function captureSku(raw: unknown): string | null {
+  try {
+    if (!raw || typeof raw !== "object") return null;
+    const data = raw as Record<string, unknown>;
+    const offer = typeof data.offer === "object" && data.offer ? (data.offer as Record<string, unknown>) : undefined;
+    const candidate = offer?.sku ?? data.sku;
+    return sanitizeSku(candidate);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeCondition(value: unknown): { inventoryCondition?: string; offerCondition?: number } {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return {
+      inventoryCondition: mapCondToInventory(Number(value)) ?? undefined,
+      offerCondition: Number(value),
+    };
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim().toUpperCase();
+    return {
+      inventoryCondition: trimmed || undefined,
+      offerCondition: conditionStringToCode(trimmed),
+    };
+  }
+  return {};
+}
+
+function mapCondToInventory(code?: number): string | undefined {
+  switch (code) {
+    case 1000:
+      return "NEW";
+    case 1500:
+    case 1750:
+      return "NEW_OTHER";
+    case 2000:
+      return "MANUFACTURER_REFURBISHED";
+    case 2500:
+      return "SELLER_REFURBISHED";
+    case 3000:
+      return "USED";
+    case 7000:
+      return "FOR_PARTS_OR_NOT_WORKING";
+    default:
+      return undefined;
+  }
+}
+
+function conditionStringToCode(value: string): number | undefined {
+  switch (value.toUpperCase()) {
+    case "NEW":
+      return 1000;
+    case "NEW_OTHER":
+    case "NEW OTHER":
+    case "NEW OTHER (SEE DETAILS)":
+      return 1500;
+    case "MANUFACTURER_REFURBISHED":
+      return 2000;
+    case "SELLER_REFURBISHED":
+      return 2500;
+    case "USED":
+      return 3000;
+    case "FOR_PARTS_OR_NOT_WORKING":
+      return 7000;
+    default:
+      return undefined;
+  }
+}
+
+function normalizeAspects(input: unknown): Record<string, string[]> | undefined {
+  if (!input || typeof input !== "object") return undefined;
+  const out: Record<string, string[]> = {};
+  Object.entries(input as Record<string, unknown>).forEach(([key, value]) => {
+    if (!key) return;
+    const values = Array.isArray(value) ? value : [value];
+    const normalized = values
+      .map((entry) => (entry == null ? "" : String(entry).trim()))
+      .filter(Boolean);
+    if (normalized.length) out[String(key).trim()] = normalized;
+  });
+  return Object.keys(out).length ? out : undefined;
+}
+
+function deriveBaseUrlFromEvent(event: any): string | null {
+  try {
+    const hdrs = event?.headers || {};
+    const proto = (hdrs["x-forwarded-proto"] || hdrs["X-Forwarded-Proto"] || "https") as string;
+    const host = (hdrs["x-forwarded-host"] || hdrs["X-Forwarded-Host"] || hdrs.host || hdrs.Host) as string;
+    if (host) return `${proto}://${host}`;
+  } catch {
+    // ignore derivation errors
+  }
+  return null;
+}
+
+function toDirectDropbox(input: string): string {
+  try {
+    const url = new URL(input);
+    if (url.hostname === "www.dropbox.com" || url.hostname === "dropbox.com") {
+      url.hostname = "dl.dropboxusercontent.com";
+      const qp = new URLSearchParams(url.search);
+      qp.delete("dl");
+      const qs = qp.toString();
+      url.search = qs ? `?${qs}` : "";
+      return url.toString();
+    }
+    return input;
+  } catch {
+    return input;
+  }
+}
+
+async function processItem(item: DraftItem, ctx: ProcessContext) {
+  const marketplaceId = item.marketplaceId || ctx.defaultMarketplaceId;
+  const headers = makeHeaders(ctx.baseHeaders, marketplaceId);
+  const imageUrls = await validateAndMaybeProxy(item.imageUrls, ctx.appBase);
+
+  const inventoryPayload: Record<string, unknown> = {
+    sku: item.sku,
+    product: {
+      title: item.title,
+      description: item.description || item.title,
+      imageUrls,
+    },
+    availability: { shipToLocationAvailability: { quantity: item.quantity } },
+  };
+  if (item.inventoryCondition) inventoryPayload.condition = item.inventoryCondition;
+  if (item.aspects) (inventoryPayload.product as any).aspects = item.aspects;
+
+  const invUrl = `${ctx.apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(item.sku)}`;
+  const invRes = await fetch(invUrl, {
+    method: "PUT",
+    headers,
+    body: JSON.stringify(inventoryPayload),
+  });
+  if (!invRes.ok) {
+    throw buildError("inventory put failed", {
+      step: "put-inventory-item",
+      status: invRes.status,
+      detail: await safeBody(invRes),
+    });
+  }
+
+  const mlkBase = item.merchantLocationKey || ctx.envLocationKey || "default-loc";
+  const merchantLocationKey = mlkBase.trim().replace(/\s+/g, "-");
+  if (!ctx.locationCache.has(merchantLocationKey)) {
+    const locUrl = `${ctx.apiHost}/sell/inventory/v1/location/${encodeURIComponent(
+      merchantLocationKey
+    )}`;
+    const locRes = await fetch(locUrl, { headers });
+    if (locRes.status === 404) {
+      throw buildError("missing-location", {
+        step: "get-location",
+        location: merchantLocationKey,
+        detail: await safeBody(locRes),
+      });
+    }
+    if (!locRes.ok) {
+      throw buildError("location check failed", {
+        step: "get-location",
+        status: locRes.status,
+        detail: await safeBody(locRes),
+      });
+    }
+    ctx.locationCache.add(merchantLocationKey);
+  }
+
+  const fulfillmentPolicyId =
+    item.fulfillmentPolicyId ||
+    ctx.envPolicies.fulfillment ||
+    (await resolvePolicy(
+      ctx.policyCache.fulfillment,
+      marketplaceId,
+      () => pickPolicy(ctx.apiHost, headers, "/sell/account/v1/fulfillment_policy", marketplaceId)
+    ));
+  const paymentPolicyId =
+    item.paymentPolicyId ||
+    ctx.envPolicies.payment ||
+    (await resolvePolicy(
+      ctx.policyCache.payment,
+      marketplaceId,
+      () => pickPolicy(ctx.apiHost, headers, "/sell/account/v1/payment_policy", marketplaceId)
+    ));
+  const returnPolicyId =
+    item.returnPolicyId ||
+    ctx.envPolicies.return ||
+    (await resolvePolicy(
+      ctx.policyCache.return,
+      marketplaceId,
+      () => pickPolicy(ctx.apiHost, headers, "/sell/account/v1/return_policy", marketplaceId)
+    ));
+
+  if (!fulfillmentPolicyId || !paymentPolicyId || !returnPolicyId) {
+    throw buildError("missing-policies", {
+      step: "ensure-policies",
+      marketplaceId,
+    });
+  }
+
+  const offerPayload: Record<string, unknown> = {
+    sku: item.sku,
+    marketplaceId,
+    format: "FIXED_PRICE",
+    availableQuantity: item.quantity,
+    categoryId: item.categoryId || ctx.defaultCategoryId,
+    listingDescription: item.description || item.title,
+    pricingSummary: { price: { currency: "USD", value: item.price.toFixed(2) } },
+    listingPolicies: {
+      fulfillmentPolicyId,
+      paymentPolicyId,
+      returnPolicyId,
+    },
+    merchantLocationKey,
+  };
+  if (item.offerCondition) offerPayload.condition = item.offerCondition;
+  if (ctx.promotedCampaignId) offerPayload.appliedPromotionIds = [ctx.promotedCampaignId];
+
+  const offerUrl = `${ctx.apiHost}/sell/inventory/v1/offer`;
+  const offerRes = await fetch(offerUrl, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(offerPayload),
+  });
+  const offerBody = await safeBody(offerRes);
+  if (!offerRes.ok) {
+    throw buildError("offer create failed", {
+      step: "post-offer",
+      status: offerRes.status,
+      detail: offerBody,
+    });
+  }
+
+  const offerId = (offerBody as any)?.offerId || (offerBody as any)?.offer?.offerId;
+  if (!offerId) {
+    throw buildError("offer missing id after create", {
+      step: "verify-offer",
+      detail: offerBody,
+    });
+  }
+
+  const verifyUrl = `${ctx.apiHost}/sell/inventory/v1/offer/${encodeURIComponent(offerId)}`;
+  const verifyRes = await fetch(verifyUrl, { headers });
+  const verifyBody = await safeBody(verifyRes);
+  if (!verifyRes.ok) {
+    throw buildError("offer verification failed", {
+      step: "verify-offer",
+      status: verifyRes.status,
+      offerId,
+      detail: verifyBody,
+    });
+  }
+
+  return {
+    sku: item.sku,
+    offerId,
+    status: (verifyBody as any)?.status ?? "UNKNOWN",
+    offer: verifyBody,
+  };
+}
+
+async function validateAndMaybeProxy(urls: string[], appBase: string | null): Promise<string[]> {
+  const out: string[] = [];
+  const base = appBase ? appBase.replace(/\/$/, "") : "";
+  const isProxy = (u: string) => /\/\.netlify\/functions\/image-proxy/i.test(u);
+  const absolutizeProxy = (u: string) => {
+    if (u.startsWith("/") && base) return `${base}${u}`;
+    return u;
+  };
+  const addBust = (u: string) => {
+    try {
+      const url = new URL(u, base || undefined);
+      url.searchParams.set("v", Date.now().toString(36));
+      return url.toString();
+    } catch {
+      return `${u}${u.includes("?") ? "&" : "?"}v=${Date.now().toString(36)}`;
+    }
+  };
+  const maybeProxy = (source: string) => {
+    if (isProxy(source)) return addBust(absolutizeProxy(source));
+    const direct = toDirectDropbox(source);
+    if (isProxy(direct)) return addBust(absolutizeProxy(direct));
+    try {
+      const url = new URL(direct);
+      if (/(^|\.)dropbox\.com$/i.test(url.hostname)) {
+        const prox = base
+          ? `${base}/.netlify/functions/image-proxy?url=${encodeURIComponent(direct)}`
+          : `/.netlify/functions/image-proxy?url=${encodeURIComponent(direct)}`;
+        return addBust(absolutizeProxy(prox));
+      }
+    } catch {
+      // ignore parse issues
+    }
+    return addBust(direct);
+  };
+
+  for (const src of urls) {
+    const normalized = maybeProxy(String(src));
+    try {
+      const head = await fetch(normalized, { method: "HEAD", redirect: "follow" });
+      const ct = (head.headers.get("content-type") || "").toLowerCase();
+      if (head.ok && (!ct || ct.startsWith("image/"))) {
+        out.push(normalized);
+        continue;
+      }
+    } catch {
+      // ignore failures during validation
+    }
+    out.push(normalized);
+  }
+
+  return Array.from(new Set(out)).slice(0, 12);
+}
+
+async function pickPolicy(
+  apiHost: string,
+  headers: Record<string, string>,
+  path: string,
+  marketplaceId: string
+): Promise<string | null> {
+  const url = `${apiHost}${path}?marketplace_id=${marketplaceId}`;
+  const res = await fetch(url, { headers });
+  const body = await safeBody(res);
+  if (!res.ok) {
+    return null;
+  }
+  const list =
+    (body as any).fulfillmentPolicies ||
+    (body as any).paymentPolicies ||
+    (body as any).returnPolicies ||
+    [];
+  if (!Array.isArray(list) || !list.length) return null;
+  const first = list[0];
+  return (
+    first?.id ||
+    first?.fulfillmentPolicyId ||
+    first?.paymentPolicyId ||
+    first?.returnPolicyId ||
+    null
+  );
+}
+
+async function resolvePolicy(
+  cache: Map<string, string>,
+  marketplaceId: string,
+  loader: () => Promise<string | null>
+): Promise<string | null> {
+  if (cache.has(marketplaceId)) {
+    return cache.get(marketplaceId) || null;
+  }
+  const value = await loader();
+  if (value) cache.set(marketplaceId, value);
+  return value;
+}
+
+function makeHeaders(base: Record<string, string>, marketplaceId: string) {
+  return { ...base, "X-EBAY-C-MARKETPLACE-ID": marketplaceId };
+}
+
+async function safeBody(res: Response): Promise<unknown> {
+  const text = await res.text().catch(() => "");
+  try {
+    return text ? JSON.parse(text) : {};
+  } catch {
+    return text;
+  }
+}
+
+function buildError(message: string, detail?: unknown) {
+  const err = new Error(message);
+  (err as any).detail = detail;
+  return err;
+}

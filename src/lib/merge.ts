@@ -48,6 +48,38 @@ function makeSignature(g: any): string {
   return crypto.createHash("sha1").update(raw).digest("hex");
 }
 
+function normalizeOptions(input: any): Record<string, string[]> | undefined {
+  if (!input || typeof input !== "object") return undefined;
+  const out: Record<string, string[]> = {};
+  Object.entries(input as Record<string, unknown>).forEach(([key, value]) => {
+    const cleanKey = typeof key === "string" ? key.trim() : "";
+    if (!cleanKey) return;
+    const raw = Array.isArray(value) ? value : [value];
+    const normalized = Array.from(
+      new Set(
+        raw
+          .map((entry) => (entry === undefined || entry === null ? "" : String(entry).trim()))
+          .filter(Boolean)
+      )
+    );
+    if (normalized.length) out[cleanKey] = normalized;
+  });
+  return Object.keys(out).length ? out : undefined;
+}
+
+function mergeOptionMaps(existing: any, incoming: any): Record<string, string[]> | undefined {
+  const base = normalizeOptions(existing) || {};
+  const next = normalizeOptions(incoming) || {};
+  const merged: Record<string, string[]> = { ...base };
+  Object.entries(next).forEach(([key, values]) => {
+    const current = merged[key] || [];
+    const set = new Set(current.map((entry) => String(entry)));
+    values.forEach((value) => set.add(String(value)));
+    merged[key] = Array.from(set);
+  });
+  return Object.keys(merged).length ? merged : undefined;
+}
+
 /**
  * Merge multiple OpenAI Vision results into one clean groups array
  */
@@ -61,10 +93,18 @@ export function mergeGroups(parts: { groups?: any[] }[]): { groups: any[] } {
     for (const g of part.groups || []) {
       const k = key(g);
       if (!map.has(k)) {
+        const normalizedClaims = Array.from(
+          new Set(
+            (Array.isArray(g.claims) ? g.claims : [])
+              .map((claim: unknown) => (claim === undefined || claim === null ? "" : String(claim).trim()))
+              .filter(Boolean)
+          )
+        );
         map.set(k, {
           ...g,
+          options: normalizeOptions(g.options),
           images: [...(g.images || [])],
-          claims: Array.from(new Set(g.claims || [])),
+          claims: normalizedClaims,
         });
       } else {
         const existing = map.get(k);
@@ -73,11 +113,27 @@ export function mergeGroups(parts: { groups?: any[] }[]): { groups: any[] } {
           ...(g.images || []),
         ]);
         existing.images = Array.from(mergedImages);
+        const incomingClaims = Array.isArray(g.claims)
+          ? g.claims.map((claim: unknown) => (claim === undefined || claim === null ? "" : String(claim).trim()))
+          : [];
         const mergedClaims = new Set([
           ...(existing.claims || []),
-          ...(g.claims || []),
+          ...incomingClaims.filter(Boolean),
         ]);
         existing.claims = Array.from(mergedClaims);
+        existing.options = mergeOptionMaps(existing.options, g.options);
+        if (!existing.category && g.category) existing.category = g.category;
+        const existingDepth = typeof existing.categoryPath === "string"
+          ? existing.categoryPath.split(">").filter((part: string) => part.trim()).length
+          : 0;
+        const newDepth = typeof g.categoryPath === "string"
+          ? g.categoryPath.split(">").filter((part: string) => part.trim()).length
+          : 0;
+        if (!existing.categoryPath && g.categoryPath) {
+          existing.categoryPath = g.categoryPath;
+        } else if (newDepth > existingDepth) {
+          existing.categoryPath = g.categoryPath;
+        }
         existing.confidence = Math.max(existing.confidence || 0, g.confidence || 0);
       }
     }

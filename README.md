@@ -30,7 +30,35 @@ A complete eBay-Dropbox integration with:
 - **Platform Notifications** (`/.netlify/functions/ebay-platform`) - optional Trading API push
 - **OAuth flow** (`/.netlify/functions/ebay-oauth-start`, `ebay-oauth-callback`)
 - **Inventory setup** (`/.netlify/functions/ebay-init-location`)
-- **Draft creation** (`/.netlify/functions/ebay-create-draft`)
+- **Draft creation** (`/.netlify/functions/ebay-create-draft`) – accepts analyzer output and builds eBay Inventory + Offer drafts
+
+### Draft creation function
+
+`POST /.netlify/functions/ebay-create-draft`
+
+```jsonc
+{
+   "items": [
+      {
+         "sku": "SKU123",
+         "title": "Contoso Backpack",
+         "price": 42.99,
+         "quantity": 1,
+         "imageUrls": ["https://dl.dropboxusercontent.com/..."],
+         "inventory": {
+            "product": {
+               "aspects": { "Brand": ["Contoso"] }
+            }
+         }
+      }
+   ],
+   "dryRun": false
+}
+```
+
+- `items` may be a single object or array; analyzer UI already formats the payload.
+- `dryRun: true` (or `PUBLISH_MODE=dry-run`) returns a preview without calling eBay.
+- Provides automatic Dropbox URL conversion, policy lookup, and offer verification. Response includes `created` count, `results`, and `failures` with detailed errors.
 
 ## Quickstart
 
@@ -85,6 +113,10 @@ A complete eBay-Dropbox integration with:
    - `EBAY_ENDPOINT_URL`: exact MAD URL you'll paste into eBay (e.g., `https://<yoursite>.netlify.app/.netlify/functions/ebay-mad`)
    - `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET`, `EBAY_RUNAME` (production credentials)
    - `EBAY_ENV=PROD`
+   - `EBAY_REFRESH_TOKEN`: seller refresh token with Inventory scope for draft creation
+   - `DEFAULT_MARKETPLACE_ID` (e.g. `EBAY_US`) and `DEFAULT_CATEGORY_ID` fallback for analyzer → draft mapping
+   - `EBAY_FULFILLMENT_POLICY_ID`, `EBAY_PAYMENT_POLICY_ID`, `EBAY_RETURN_POLICY_ID`, `EBAY_MERCHANT_LOCATION_KEY` to pin policy/location defaults (or let the function auto-discover the first policy)
+   - Optional: `PROMOTED_CAMPAIGN_ID` (applies to created offers), `PUBLISH_MODE` (`draft` | `dry-run`), `EBAY_ENV` overrides (`SANDBOX`/`PROD`)
    - See `prod.env` for complete list
 
 3. **Deploy**:
