@@ -1,8 +1,9 @@
 import fetch from "node-fetch";
-import { openai } from "./openai.js";
 import { mergeGroups, sanitizeUrls, toDirectDropbox } from "./merge.js";
 import { lookupMarketPrice } from "./price-lookup.js";
 import { applyPricingFormula } from "./price-formula.js";
+import { runVision } from "./vision-router.js";
+import { getCachedBatch, setCachedBatch } from "./vision-cache.js";
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -70,46 +71,38 @@ async function verifyUrl(url: string): Promise<boolean> {
   }
 }
 
-async function analyzeBatchWithOpenAI(batch: string[]) {
-  const run = async () => {
-    const content: any[] = [
-      {
-        type: "text",
-        text: [
-          "You are a product photo analyst.",
-          "Group visually identical products (front/back/side).",
-          "Extract: brand, product, variant/flavor, size/servings, category, short claims[].",
-          "Return STRICT JSON: { groups: [{ groupId, brand, product, variant, size, category, claims, confidence, images[] }] }.",
-          "If uncertain, group best-guess and lower confidence.",
-        ].join("\n"),
-      },
-    ];
+const BYPASS_VISION_CACHE = (process.env.VISION_BYPASS_CACHE || "false").toLowerCase() === "true";
 
-    for (const url of batch) {
-      content.push({ type: "image_url", image_url: { url } });
+async function analyzeBatchViaVision(batch: string[]) {
+  const cacheEligible = !BYPASS_VISION_CACHE;
+
+  if (cacheEligible) {
+    const cached = await getCachedBatch(batch);
+    if (cached?.groups) {
+      return { ...cached, _cache: true };
     }
+  }
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      temperature: 0.2,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: "You are a strict JSON-only product photo parser." },
-        { role: "user", content },
-      ],
-    });
-
-    return JSON.parse(response.choices[0]?.message?.content || "{}");
-  };
+  const prompt = [
+    "You are a product photo analyst.",
+    "Group visually identical products (front/back/side).",
+    "Extract: brand, product, variant/flavor, size/servings, category, short claims[].",
+    "Return STRICT JSON: { groups: [{ groupId, brand, product, variant, size, category, claims, confidence, images[] }] }.",
+    "If uncertain, group best-guess and lower confidence.",
+  ].join("\n");
 
   try {
-    return await withRetry(run);
+    const result = await withRetry(() => runVision({ images: batch, prompt }));
+    if (cacheEligible) {
+      await setCachedBatch(batch, result);
+    }
+    return result;
   } catch (err: any) {
     const status = err?.status ?? err?.response?.status;
-    console.error("❌ OpenAI batch failed permanently:", status, err?.message || err);
+    console.error("❌ Vision batch failed permanently:", status, err?.message || err);
     return {
       groups: [],
-      _error: `OpenAI failed: status=${status ?? "n/a"} msg=${err?.message ?? "unknown"}`,
+      _error: `Vision failed: status=${status ?? "n/a"} msg=${err?.message ?? "unknown"}`,
     };
   }
 }
@@ -155,7 +148,7 @@ export async function runAnalysis(inputUrls: string[], rawBatchSize = 12): Promi
 
   for (const [idx, batch] of verifiedBatches.entries()) {
     console.log(`🧠 Analyzing batch ${idx + 1}/${verifiedBatches.length} (${batch.length} images)`);
-    const result = await analyzeBatchWithOpenAI(batch);
+    const result = await analyzeBatchViaVision(batch);
     if (result?._error) {
       warnings.push(`Batch ${idx + 1}: ${result._error}`);
     }
