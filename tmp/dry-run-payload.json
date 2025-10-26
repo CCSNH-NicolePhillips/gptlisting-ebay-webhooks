@@ -1,0 +1,33 @@
+{
+  "items": [
+    {
+      "sku": "testsku1",
+      "title": "Test Listing",
+      "price": 49.99,
+      "quantity": 2,
+      "imageUrls": [
+        "https://www.dropbox.com/s/abcdef123456/image1.jpg?dl=0"
+      ],
+      "inventory": {
+        "product": {
+          "description": "Test description",
+          "aspects": {
+            "Brand": ["Contoso"],
+            "Style": ["Modern"]
+          },
+          "imageUrls": [
+            "https://www.dropbox.com/s/abcdef123456/image1.jpg?dl=0",
+            "https://www.dropbox.com/s/abcdef123456/image2.jpg?dl=0"
+          ]
+        }
+      },
+      "offer": {
+        "marketplaceId": "EBAY_US",
+        "categoryId": "12345",
+        "condition": 1000,
+        "quantity": 2
+      }
+    }
+  ],
+  "dryRun": true
+}
