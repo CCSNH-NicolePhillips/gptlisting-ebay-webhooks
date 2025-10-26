@@ -79,16 +79,34 @@ export const handler: Handler = async (event) => {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ jobId, images, batchSize }),
-  }).catch(async (err: any) => {
-    console.error("[bg-trigger] Failed to start background worker", err);
-    const message = err?.message || "Failed to start background worker";
-    await putJob(jobId, {
-      jobId,
-      state: "error",
-      finishedAt: Date.now(),
-      error: message,
+  })
+    .then(async (res) => {
+      if (res.ok) return;
+      const detail = await res.text().catch(() => "");
+      const message = detail ? `${res.status} ${res.statusText}: ${detail}` : `${res.status} ${res.statusText}`;
+      console.error("[bg-trigger] Background worker returned non-OK", {
+        jobId,
+        status: res.status,
+        statusText: res.statusText,
+        detail: detail?.slice(0, 500),
+      });
+      await putJob(jobId, {
+        jobId,
+        state: "error",
+        finishedAt: Date.now(),
+        error: message,
+      });
+    })
+    .catch(async (err: any) => {
+      console.error("[bg-trigger] Failed to start background worker", err);
+      const message = err?.message || "Failed to start background worker";
+      await putJob(jobId, {
+        jobId,
+        state: "error",
+        finishedAt: Date.now(),
+        error: message,
+      });
     });
-  });
 
   trigger.catch(() => {});
 
