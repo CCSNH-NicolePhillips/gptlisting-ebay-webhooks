@@ -75,18 +75,11 @@ export const handler: Handler = async (event) => {
     process.env.URL || process.env.DEPLOY_PRIME_URL || process.env.DEPLOY_URL || "https://ebaywebhooks.netlify.app";
   const backgroundUrl = `${baseUrl.replace(/\/$/, "")}/.netlify/functions/analyze-images-background`;
 
-  try {
-    const resp = await fetch(backgroundUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jobId, images, batchSize }),
-    });
-
-    if (!resp.ok) {
-      const text = await resp.text();
-      throw new Error(`Background trigger failed (${resp.status}): ${text}`);
-    }
-  } catch (err: any) {
+  const trigger = fetch(backgroundUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jobId, images, batchSize }),
+  }).catch(async (err: any) => {
     console.error("[bg-trigger] Failed to start background worker", err);
     const message = err?.message || "Failed to start background worker";
     await putJob(jobId, {
@@ -95,8 +88,9 @@ export const handler: Handler = async (event) => {
       finishedAt: Date.now(),
       error: message,
     });
-    return jsonResponse(500, { error: "Failed to start background worker" }, originHdr, methods);
-  }
+  });
+
+  trigger.catch(() => {});
 
   return jsonResponse(200, { jobId }, originHdr, methods);
 };
