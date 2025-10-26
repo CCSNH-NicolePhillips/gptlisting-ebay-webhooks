@@ -55,7 +55,7 @@ function toStringArray(input: unknown): string[] {
     .filter(Boolean);
 }
 
-export async function listJobs(limit = 25) {
+export async function listJobs(limit = 50) {
   const keysResp = await redisCall("KEYS", "job:*");
   const keys = toStringArray(keysResp.result);
   if (!keys.length) return [];
@@ -81,7 +81,11 @@ export async function listJobs(limit = 25) {
   }
 
   return jobs
-    .filter((job) => job.state === "complete")
-    .sort((a, b) => (Number(b.finishedAt) || 0) - (Number(a.finishedAt) || 0))
+    .filter((job) => ["complete", "error", "running", "pending"].includes(job.state))
+    .sort((a, b) => {
+      const aTime = Number(a.finishedAt ?? a.startedAt ?? a.createdAt ?? 0);
+      const bTime = Number(b.finishedAt ?? b.startedAt ?? b.createdAt ?? 0);
+      return bTime - aTime;
+    })
     .slice(0, limit);
 }
