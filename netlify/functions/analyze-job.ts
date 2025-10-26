@@ -1,6 +1,6 @@
 import type { Handler } from "@netlify/functions";
 import { getOrigin, isAuthorized, isOriginAllowed, jsonResponse } from "../../src/lib/http.js";
-import { getJob } from "../../src/lib/job-store.js";
+import { fetchJobDetail } from "../../src/lib/job-analytics.js";
 
 type HeadersMap = Record<string, string | undefined>;
 const METHODS = "GET, OPTIONS";
@@ -37,13 +37,15 @@ export const handler: Handler = async (event) => {
   }
 
   try {
-    const job = await getJob(jobId);
+    const job = await fetchJobDetail(jobId);
     if (!job) {
       console.log(JSON.stringify({ evt: "analyze-job.done", ok: false, jobId, missing: true }));
       return jsonResponse(404, { error: "Job not found" }, originHdr, METHODS);
     }
 
-    console.log(JSON.stringify({ evt: "analyze-job.done", ok: true, jobId, state: job?.state }));
+    console.log(
+      JSON.stringify({ evt: "analyze-job.done", ok: true, jobId, state: job?.state }),
+    );
     return jsonResponse(200, { job }, originHdr, METHODS);
   } catch (err) {
     console.error("[analyze-job] lookup failed", err);
