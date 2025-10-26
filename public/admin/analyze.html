@@ -663,7 +663,8 @@ function buildJobsTable(jobs) {
     .map((job) => {
   const jobId = String(job?.jobId || "unknown");
   const shortId = escapeHtml(jobId.slice(0, 8));
-      const started = job?.startedAt ? formatTime(job.startedAt) : "—";
+  const startedAt = job?.startedAt || job?.createdAt || null;
+  const started = startedAt ? formatTime(startedAt) : "—";
       const finished = job?.finishedAt ? formatTime(job.finishedAt) : "—";
       const durationSec = job?.durationMs ? (job.durationMs / 1000).toFixed(1) : "—";
       const price = job?.price || {};
@@ -818,6 +819,7 @@ function renderJobDetail(job) {
     <div class="job-summary-card">
   <div><strong>Job ${escapeHtml(job.jobId || "unknown")}</strong></div>
   <div>Status: ${escapeHtml(job.state || "unknown")}</div>
+      <div>Created: ${job.createdAt ? formatTime(job.createdAt) : "—"}</div>
       <div>Started: ${job.startedAt ? formatTime(job.startedAt) : "—"}, Finished: ${job.finishedAt ? formatTime(job.finishedAt) : "—"}</div>
       <div>Duration: ${job.durationMs ? (job.durationMs / 1000).toFixed(1) + "s" : "—"}</div>
       ${priceSummary}

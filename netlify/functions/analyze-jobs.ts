@@ -1,6 +1,6 @@
 import type { Handler } from "@netlify/functions";
 import { getOrigin, isAuthorized, isOriginAllowed, jsonResponse } from "../../src/lib/http.js";
-import { listJobs } from "../../src/lib/job-store.js";
+import { fetchJobSummaries } from "../../src/lib/job-analytics.js";
 
 type HeadersMap = Record<string, string | undefined>;
 const METHODS = "GET, OPTIONS";
@@ -41,7 +41,7 @@ export const handler: Handler = async (event) => {
   const limit = parseLimit(event.queryStringParameters?.limit);
 
   try {
-    const jobs = await listJobs(limit);
+    const jobs = await fetchJobSummaries(limit);
     console.log(
       JSON.stringify({ evt: "analyze-jobs.done", ok: true, count: jobs.length, limit }),
     );
