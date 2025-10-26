@@ -16,6 +16,8 @@
     "deploy": "netlify deploy --prod"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.21.1",
+    "@google/generative-ai": "^0.7.0",
     "@netlify/blobs": "^6.5.0",
     "dotenv": "^16.4.5",
     "cheerio": "^1.0.0-rc.12",
