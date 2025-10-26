@@ -1,4 +1,3 @@
-import fetch from "node-fetch";
 import { mergeGroups, sanitizeUrls, toDirectDropbox } from "./merge.js";
 import { lookupMarketPrice } from "./price-lookup.js";
 import { applyPricingFormula } from "./price-formula.js";
@@ -61,9 +60,31 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
+function abortableFetch(url: string, init: RequestInit = {}, timeoutMs = 2000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const current = nextIndex++;
+      results[current] = await fn(items[current], current);
+    }
+  }
+
+  const workers = new Array(Math.min(limit, items.length)).fill(0).map(() => worker());
+  await Promise.all(workers);
+  return results;
+}
+
 async function verifyUrl(url: string): Promise<boolean> {
   try {
-    const res = await fetch(url, { method: "HEAD" });
+    const res = await abortableFetch(url, { method: "HEAD" }, 2000);
     return res.ok || (res.status >= 300 && res.status < 400);
   } catch (err) {
     console.warn(`HEAD failed for ${url}:`, (err as Error).message);
@@ -117,7 +138,12 @@ export type AnalysisResult = {
   groups: any[];
 };
 
-export async function runAnalysis(inputUrls: string[], rawBatchSize = 12): Promise<AnalysisResult> {
+export async function runAnalysis(
+  inputUrls: string[],
+  rawBatchSize = 12,
+  opts: { skipPricing?: boolean } = {}
+): Promise<AnalysisResult> {
+  const { skipPricing = false } = opts;
   let images = sanitizeUrls(inputUrls).map(toDirectDropbox);
 
   if (images.length === 0) {
@@ -129,17 +155,16 @@ export async function runAnalysis(inputUrls: string[], rawBatchSize = 12): Promi
     };
   }
 
-  const batchSize = Math.min(Math.max(Number(rawBatchSize) || 12, 4), 20);
+  const batchSize = Math.min(Math.max(Number(rawBatchSize) || 12, 4), 12);
 
-  const verified: string[] = [];
-  for (const url of images) {
-    const reachable = await verifyUrl(url);
-    if (reachable) {
-      verified.push(url);
-    } else {
-      console.warn(`⚠️ Skipping unreachable image: ${url}`);
+  const checks = await mapLimit(images, 6, (url) => verifyUrl(url));
+  const verified = images.filter((_, idx) => {
+    const reachable = Boolean(checks[idx]);
+    if (!reachable) {
+      console.warn(`⚠️ Skipping unreachable image: ${images[idx]}`);
     }
-  }
+    return reachable;
+  });
 
   const verifiedBatches = chunkArray(verified, batchSize);
 
@@ -165,6 +190,18 @@ export async function runAnalysis(inputUrls: string[], rawBatchSize = 12): Promi
       warningsCount: warnings.length,
     })
   );
+
+  if (skipPricing) {
+    return {
+      info: "Image analysis complete (pricing skipped)",
+      summary: {
+        batches: verifiedBatches.length,
+        totalGroups: merged.groups.length,
+      },
+      warnings,
+      groups: merged.groups,
+    };
+  }
 
   const finalGroups: any[] = [];
 
