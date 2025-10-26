@@ -85,7 +85,24 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T, index: nu
 async function verifyUrl(url: string): Promise<boolean> {
   try {
     const res = await abortableFetch(url, { method: "HEAD" }, 2000);
-    return res.ok || (res.status >= 300 && res.status < 400);
+
+    if (res.ok || (res.status >= 300 && res.status < 400) || res.status === 403) {
+      return true;
+    }
+
+    if (res.status === 405) {
+      const getRes = await abortableFetch(
+        url,
+        {
+          method: "GET",
+          headers: { Range: "bytes=0-0" },
+        },
+        2000
+      );
+      return getRes.ok || getRes.status === 206;
+    }
+
+    return false;
   } catch (err) {
     console.warn(`HEAD failed for ${url}:`, (err as Error).message);
     return false;
