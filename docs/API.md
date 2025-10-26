@@ -29,8 +29,19 @@ Body: {
 	items?: [ { inventory:{...}, offer:{...} } ],
 	groups?: [TaxonomyGroup]
 }
-Resp: { dryRun:true,count,note } | { ok:true, created, results:[{offerId, sku}] }
-Notes: When `groups` are provided, the function maps them server-side using the taxonomy registry.
+Resp: {
+	dryRun:true,
+	count,
+	previews:[{ sku,title,price,quantity,categoryId,marketplaceId,aspects,meta }],
+	invalid:[{ index,error,sku?,meta? }]
+} | {
+	dryRun:false,
+	created,
+	results:[{ offerId, sku, status, offer, meta?, draft? }],
+	failures:[{ sku,error,detail?,meta?, draft? }],
+	invalid:[{ index,error,sku?,meta? }]
+}
+Notes: When `groups` are provided, the function maps them server-side using the taxonomy registry and includes `_meta` with selected category + missing specifics for UI previews.
 
 ## POST /.netlify/functions/taxonomy-upsert
 Body: CategoryDef (see taxonomy-schema.ts)

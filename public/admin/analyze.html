@@ -42,6 +42,15 @@
     .detail-table th,.detail-table td{border:1px solid #eee;padding:6px 8px;text-align:left;font-size:.9rem}
     .groups-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:12px}
     .group-card{border:1px solid #eee;border-radius:12px;padding:10px;background:#fff}
+  .draft-preview-wrap{margin-top:16px;padding:12px;border:1px solid #d7dcff;border-radius:12px;background:#f4f6ff}
+  .draft-preview-title{margin:0 0 12px;font-size:1.05rem}
+  .draft-preview-item{padding:12px 0;border-top:1px solid #e0e4ff}
+  .draft-preview-item:first-child{border-top:none;padding-top:0}
+  .draft-preview-meta{display:flex;flex-wrap:wrap;gap:12px;margin:6px 0;font-size:.9rem;color:#333}
+  .draft-preview-aspects{margin:8px 0 0;padding-left:18px;font-size:.9rem;color:#333}
+  .draft-preview-aspects li{margin:2px 0}
+  .draft-preview-missing{color:#c9372c;font-weight:600}
+  .badge{display:inline-flex;align-items:center;font-size:.75rem;font-weight:600;padding:2px 8px;border-radius:999px;background:#e0e4ff;color:#103f91}
   </style>
 </head>
 <body>
@@ -817,6 +826,7 @@ function renderJobDetail(job) {
         <button id="btnCreateDrafts">Create eBay Drafts</button>
       </div>
     </div>
+    <div id="draftPreviewPanel"></div>
     <h3>Bindings</h3>
     ${bindingsHtml}
     ${groupsHtml ? "<h3>Groups</h3>" : ""}
@@ -844,6 +854,7 @@ function setupDraftButton(job) {
       alert("No groups with pricing available.");
       return;
     }
+    renderDraftPreview([]);
     btn.disabled = true;
     if (statusEl) statusEl.textContent = `Submitting ${groups.length} group${groups.length === 1 ? '' : 's'}…`;
     try {
@@ -860,6 +871,7 @@ function setupDraftButton(job) {
           statusEl.textContent = `Draft creation failed (${res.status})`;
         console.error("Draft creation failed", data);
         alert(`Draft creation failed: ${data?.error || res.statusText || res.status}`);
+        renderDraftPreview([]);
         return;
       }
       window._lastDraftResponse = data;
@@ -867,22 +879,117 @@ function setupDraftButton(job) {
         if (statusEl)
           statusEl.textContent = `Dry run ready for ${data.count || groups.length} item(s). Check console for previews.`;
         console.log("Draft preview result", data);
+        renderDraftPreview(Array.isArray(data?.previews) ? data.previews : []);
         alert(`Dry run complete for ${data.count || groups.length} item(s).`);
       } else {
         const created = Number(data?.created ?? data?.count ?? groups.length);
         if (statusEl)
           statusEl.textContent = `Created ${created} draft${created === 1 ? '' : 's'}.`;
         console.log("Draft creation result", data);
+        renderDraftPreview(extractPreviewsFromResult(data));
         alert(`Created ${created} draft${created === 1 ? '' : 's'}.`);
       }
     } catch (err) {
       if (statusEl) statusEl.textContent = "Draft creation error.";
       console.error("Draft creation error", err);
       alert(`Draft creation error: ${err?.message || err}`);
+      renderDraftPreview([]);
     } finally {
       btn.disabled = false;
     }
   };
+}
+
+function renderDraftPreview(previews) {
+  const panel = document.getElementById("draftPreviewPanel");
+  if (!panel) return;
+  if (!Array.isArray(previews) || !previews.length) {
+    panel.innerHTML = "";
+    panel.style.display = "none";
+    return;
+  }
+
+  const itemsHtml = previews
+    .map((preview) => {
+      const sku = escapeHtml(preview?.sku || "(no sku)");
+      const title = escapeHtml(preview?.title || "Untitled Listing");
+      const marketplace = escapeHtml(preview?.marketplaceId || preview?.meta?.marketplaceId || "EBAY_US");
+      const price = Number(preview?.price || preview?.meta?.price || 0);
+      const priceText = price > 0 ? `$${price.toFixed(2)}` : "—";
+      const quantity = Number(preview?.quantity || 0);
+      const qtyText = Number.isFinite(quantity) && quantity > 0 ? String(quantity) : "—";
+      const selected = preview?.meta?.selectedCategory;
+      const categoryLabel = selected
+        ? `${escapeHtml(selected.title)} (${escapeHtml(selected.id)})`
+        : escapeHtml(preview?.categoryId || preview?.meta?.categoryId || "Unassigned");
+      const missing = Array.isArray(preview?.meta?.missingRequired)
+        ? preview.meta.missingRequired
+        : findMissingRequired(preview?.aspects);
+      const aspectsList = summarizeAspects(preview?.aspects);
+      const missingHtml = missing.length
+        ? `<div class="draft-preview-missing">Missing required specifics: ${missing
+            .map((name) => escapeHtml(name))
+            .join(", ")}</div>`
+        : "";
+
+      return `
+        <div class="draft-preview-item">
+          <div class="draft-preview-meta"><span class="badge">${sku}</span><span>${title}</span></div>
+          <div class="draft-preview-meta"><span><strong>Category</strong>: ${categoryLabel}</span><span><strong>Marketplace</strong>: ${marketplace}</span><span><strong>Price</strong>: ${priceText}</span><span><strong>Qty</strong>: ${qtyText}</span></div>
+          ${missingHtml}
+          ${aspectsList}
+        </div>`;
+    })
+    .join("");
+
+  panel.style.display = "block";
+  panel.innerHTML = `
+    <div class="draft-preview-wrap">
+      <h3 class="draft-preview-title">Draft Preview</h3>
+      ${itemsHtml}
+    </div>`;
+}
+
+function extractPreviewsFromResult(data) {
+  if (!data || !Array.isArray(data?.results)) return [];
+  return data.results.map((entry) => {
+    const draft = entry?.draft || {};
+    return {
+      sku: draft.sku || entry?.sku,
+      title: draft.title || entry?.meta?.selectedCategory?.title || entry?.sku,
+      price: draft.price ?? entry?.meta?.price,
+      quantity: draft.quantity,
+      categoryId: draft.categoryId || entry?.meta?.selectedCategory?.id || entry?.meta?.categoryId,
+      marketplaceId: draft.marketplaceId || entry?.meta?.marketplaceId,
+      imageUrls: draft.imageUrls || [],
+      aspects: draft.aspects || {},
+      meta: entry?.meta || null,
+    };
+  });
+}
+
+function summarizeAspects(aspects) {
+  if (!aspects || typeof aspects !== "object") return "";
+  const entries = Object.entries(aspects).slice(0, 8);
+  if (!entries.length) return "";
+  const items = entries
+    .map(([name, values]) => {
+      const list = Array.isArray(values) ? values : [];
+      if (!list.length) {
+        return `<li class="draft-preview-missing">${escapeHtml(name)}: (missing)</li>`;
+      }
+      const joined = list.map((val) => escapeHtml(val)).join(", ");
+      return `<li>${escapeHtml(name)}: ${joined}</li>`;
+    })
+    .join("");
+  return `<ul class="draft-preview-aspects">${items}</ul>`;
+}
+
+function findMissingRequired(aspects) {
+  if (!aspects || typeof aspects !== "object") return [];
+  return Object.entries(aspects)
+    .filter(([, values]) => Array.isArray(values) && values.length === 0)
+    .map(([name]) => name);
 }
 
 function mapGroupToExistingDraftFormat(group, taxonomy) {

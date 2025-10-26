@@ -87,7 +87,40 @@ function buildDescription(title: string, group: Record<string, any>): string {
   return lines.join("\n").slice(0, 7000);
 }
 
-export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>) {
+export type TaxonomyMappedDraft = {
+  sku: string;
+  inventory: {
+    condition: string;
+    product: {
+      title: string;
+      description: string;
+      imageUrls: string[];
+      aspects: Record<string, string[]>;
+    };
+  };
+  offer: {
+    sku: string;
+    marketplaceId: string;
+    categoryId: string;
+    price: number;
+    quantity: number;
+    condition: number;
+    fulfillmentPolicyId: string | null;
+    paymentPolicyId: string | null;
+    returnPolicyId: string | null;
+    merchantLocationKey: string | null;
+    description: string;
+  };
+  _meta: {
+    selectedCategory: { id: string; slug: string; title: string } | null;
+    missingRequired: string[];
+    marketplaceId: string;
+    categoryId: string;
+    price: number;
+  };
+};
+
+export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>): Promise<TaxonomyMappedDraft> {
   if (!group) throw new Error("Invalid group payload");
 
   const price = extractPrice(group);
@@ -111,7 +144,12 @@ export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>) {
   const returnPolicyId = matched?.defaults?.returnPolicyId || process.env.EBAY_RETURN_POLICY_ID || null;
   const merchantLocationKey = process.env.EBAY_MERCHANT_LOCATION_KEY || null;
 
+  const missingRequired = Object.entries(aspects)
+    .filter(([, values]) => Array.isArray(values) && values.length === 0)
+    .map(([name]) => name);
+
   return {
+    sku,
     inventory: {
       condition,
       product: {
@@ -133,6 +171,13 @@ export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>) {
       returnPolicyId,
       merchantLocationKey,
       description,
+    },
+    _meta: {
+      selectedCategory: matched ? { id: matched.id, slug: matched.slug, title: matched.title } : null,
+      missingRequired,
+      marketplaceId,
+      categoryId,
+      price,
     },
   };
 }
