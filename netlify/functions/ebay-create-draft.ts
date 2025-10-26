@@ -1,6 +1,7 @@
 import type { Handler } from "@netlify/functions";
 import { accessTokenFromRefresh, tokenHosts } from "../../functions/_common.js";
 import { getOrigin, isAuthorized, isOriginAllowed, jsonResponse } from "../../src/lib/http.js";
+import { mapGroupToDraftWithTaxonomy } from "../../src/lib/taxonomy-map.js";
 
 type HeadersMap = Record<string, string | undefined>;
 
@@ -81,17 +82,38 @@ export const handler: Handler = async (event) => {
     }
   }
 
-  const rawItems: any[] = Array.isArray(payload?.items)
+  const initialItems: any[] = Array.isArray(payload?.items)
     ? payload.items
-    : payload && Object.keys(payload).length
+    : payload && typeof payload === "object" && Object.keys(payload).length && !Array.isArray(payload)
       ? [payload]
       : [];
 
-  if (!rawItems.length) {
-    return jsonResponse(400, { error: "No items provided" }, originHdr, METHODS);
-  }
+  let rawItems: any[] = [...initialItems];
 
   const invalid: Array<{ index: number; error: string; sku?: string }> = [];
+
+  if (Array.isArray(payload?.groups)) {
+    const groupIndexBase = rawItems.length;
+    for (let i = 0; i < payload.groups.length; i++) {
+      const group = payload.groups[i];
+      try {
+        const mapped = await mapGroupToDraftWithTaxonomy(group);
+        rawItems.push(mapped);
+      } catch (err: any) {
+        const message = err instanceof Error ? err.message : String(err);
+        invalid.push({
+          index: groupIndexBase + i,
+          error: message,
+          sku: groupSkuHint(group) || undefined,
+        });
+      }
+    }
+  }
+
+  if (!rawItems.length) {
+    return jsonResponse(400, { error: "No items provided", invalid }, originHdr, METHODS);
+  }
+
   const normalized: DraftItem[] = [];
 
   rawItems.forEach((item, idx) => {
@@ -286,6 +308,15 @@ function captureSku(raw: unknown): string | null {
   }
 }
 
+function groupSkuHint(raw: any): string | null {
+  if (!raw || typeof raw !== "object") return null;
+  const candidate = raw.sku || raw.groupId || raw.id;
+  if (candidate && typeof candidate === "string") {
+    return candidate.slice(0, 50);
+  }
+  return null;
+}
+
 function normalizeCondition(value: unknown): { inventoryCondition?: string; offerCondition?: number } {
   if (typeof value === "number" && Number.isFinite(value)) {
     return {
@@ -353,7 +384,9 @@ function normalizeAspects(input: unknown): Record<string, string[]> | undefined 
     const normalized = values
       .map((entry) => (entry == null ? "" : String(entry).trim()))
       .filter(Boolean);
-    if (normalized.length) out[String(key).trim()] = normalized;
+    if (normalized.length || (Array.isArray(value) && value.length === 0)) {
+      out[String(key).trim()] = normalized;
+    }
   });
   return Object.keys(out).length ? out : undefined;
 }

@@ -25,8 +25,12 @@ Resp: { job }
 Notes: 404 when the job is missing/expired.
 
 ## POST /.netlify/functions/ebay-create-draft
-Body: { items: [ { inventory:{...}, offer:{...} } ] }
+Body: {
+	items?: [ { inventory:{...}, offer:{...} } ],
+	groups?: [TaxonomyGroup]
+}
 Resp: { dryRun:true,count,note } | { ok:true, created, results:[{offerId, sku}] }
+Notes: When `groups` are provided, the function maps them server-side using the taxonomy registry.
 
 ## POST /.netlify/functions/taxonomy-upsert
 Body: CategoryDef (see taxonomy-schema.ts)
