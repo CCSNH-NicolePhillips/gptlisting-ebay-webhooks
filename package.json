@@ -4,15 +4,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "dev:netlify": "netlify dev --live",
+    "dev": "netlify dev",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "cli": "tsx src/cli.ts",
     "lint": "eslint --cache --max-warnings=0 --ext .ts,.tsx,.js netlify/functions src",
     "lint:fix": "eslint --cache --fix --ext .ts,.tsx,.js netlify/functions src",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "format": "prettier --write netlify/functions src",
+    "format:check": "prettier --check netlify/functions src",
+    "smoke:sh": "bash scripts/smoke.sh",
+    "smoke:ps": "pwsh -File scripts/smoke.ps1",
     "prepare": "husky install",
     "deploy": "netlify deploy --prod"
   },
@@ -41,6 +43,7 @@
     "netlify-cli": "^17.0.0",
     "prettier": "^3.6.2",
     "tsx": "^4.16.2",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.8.1"
   }
 }
