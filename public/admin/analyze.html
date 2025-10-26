@@ -10,7 +10,7 @@
     textarea{width:100%;height:140px}
     input[type="number"]{width:80px}
   input[type="password"]{width:200px}
-    button{padding:8px 14px;border:1px solid #ddd;border-radius:8px;cursor:pointer;background:#111;color:#fff}
+  button{padding:8px 14px;border:1px solid #ddd;border-radius:8px;cursor:pointer;background:#111;color:#fff}
     .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;margin-top:20px}
     .card{border:1px solid #eee;border-radius:12px;padding:12px}
     .imgs{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
@@ -19,39 +19,85 @@
     .summary{margin-top:10px}
     .warn{background:#fff8e6;border:1px solid #fde1a3;padding:8px;border-radius:8px;margin-top:8px}
     code{background:#f6f6f6;padding:2px 4px;border-radius:4px}
+    .tabs{display:flex;gap:8px;margin-bottom:16px}
+    .tab{background:#f4f4f4;color:#111;border:1px solid #ddd;border-radius:24px;padding:8px 16px;cursor:pointer}
+    .tab.active{background:#111;color:#fff}
+    .tab-panel{display:none}
+    .tab-panel.active{display:block}
+    .jobs-table{width:100%;border-collapse:collapse;margin-bottom:16px}
+    .jobs-table th,.jobs-table td{padding:8px 10px;border:1px solid #eee;text-align:left;font-size:.95rem}
+    .job-row{cursor:pointer}
+    .job-row:hover{background:#fafafa}
+    .job-row.active{background:#e9f3ff}
+    .job-summary-card{border:1px solid #eee;border-radius:12px;padding:12px;margin-bottom:16px;background:#fafbff}
+    .detail-table{width:100%;border-collapse:collapse;margin:12px 0}
+    .detail-table th,.detail-table td{border:1px solid #eee;padding:6px 8px;text-align:left;font-size:.9rem}
+    .groups-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:12px}
+    .group-card{border:1px solid #eee;border-radius:12px;padding:10px;background:#fff}
   </style>
 </head>
 <body>
   <h1>Product Analyzer — Admin</h1>
 
-  <div class="row">
-    <label style="display:block">
-      <div class="muted">Image URLs (one per line)</div>
-      <textarea id="urls" placeholder="https://dl.dropboxusercontent.com/..."></textarea>
-    </label>
-    <label>
-      <div class="muted">Batch size</div>
-      <input id="batch" type="number" min="4" max="20" value="12"/>
-    </label>
-    <label>
-      <div class="muted">Admin token</div>
-      <input id="token" type="password" placeholder="Bearer token" autocomplete="off"/>
-    </label>
-    <div style="align-self:end;display:flex;gap:8px;flex-wrap:wrap">
-      <button id="runBtn">Analyze</button>
-      <button id="bgBtn">Analyze (background)</button>
-      <button id="downloadJSON" disabled>Download JSON</button>
-      <button id="downloadCSV" disabled>Download CSV</button>
-    </div>
+  <div id="tabs" class="tabs">
+    <button data-tab="analyze" class="tab active">Analyze</button>
+    <button data-tab="jobs" class="tab">Jobs</button>
   </div>
 
-  <div id="status" class="muted"></div>
-  <div id="warnings"></div>
-  <div id="summary" class="summary"></div>
-  <h2>Analytics Dashboard</h2>
-  <div id="analytics" style="margin-bottom:20px;"></div>
-  <canvas id="priceChart" width="600" height="300"></canvas>
-  <div id="grid" class="grid"></div>
+  <section id="tab-analyze" class="tab-panel active">
+    <div class="row">
+      <label style="display:block">
+        <div class="muted">Image URLs (one per line)</div>
+        <textarea id="urls" placeholder="https://dl.dropboxusercontent.com/..."></textarea>
+      </label>
+      <label>
+        <div class="muted">Batch size</div>
+        <input id="batch" type="number" min="4" max="20" value="12"/>
+      </label>
+      <label>
+        <div class="muted">Admin token</div>
+        <input id="token" type="password" placeholder="Bearer token" autocomplete="off"/>
+      </label>
+      <div style="align-self:end;display:flex;gap:8px;flex-wrap:wrap">
+        <button id="runBtn">Analyze</button>
+        <button id="bgBtn">Analyze (background)</button>
+        <button id="downloadJSON" disabled>Download JSON</button>
+        <button id="downloadCSV" disabled>Download CSV</button>
+      </div>
+    </div>
+
+    <div id="status" class="muted"></div>
+    <div id="warnings"></div>
+    <div id="summary" class="summary"></div>
+    <h2>Analytics Dashboard</h2>
+    <div id="analytics" style="margin-bottom:20px;"></div>
+    <canvas id="priceChart" width="600" height="300"></canvas>
+    <div id="grid" class="grid"></div>
+  </section>
+
+  <section id="tab-jobs" class="tab-panel" aria-hidden="true">
+    <div id="jobsStatus" class="muted"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:12px 0">
+      <div>
+        <strong>Recent Jobs</strong>
+        <span id="jobsCount" class="muted"></span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <label class="muted" style="display:flex;align-items:center;gap:6px">
+          Refresh
+          <select id="jobRefresh">
+            <option value="0">Manual</option>
+            <option value="15000">15s</option>
+            <option value="30000">30s</option>
+            <option value="60000">60s</option>
+          </select>
+        </label>
+        <button id="refreshJobs">Reload</button>
+      </div>
+    </div>
+    <div id="jobsTableWrap"></div>
+    <div id="jobDetail" class="job-detail"></div>
+  </section>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script type="module">
@@ -61,6 +107,8 @@ const fnUrl = "/.netlify/functions/analyze-images";
 const bgUrl = "/.netlify/functions/analyze-images-bg";
 const statusUrl = "/.netlify/functions/analyze-images-status";
 const analyticsUrl = "/.netlify/functions/analyze-analytics";
+const jobsUrl = "/.netlify/functions/analyze-jobs";
+const jobDetailUrl = "/.netlify/functions/analyze-job";
 const TOKEN_KEY = "analyzerAdminToken";
 
 const tokenInput = document.getElementById("token");
@@ -82,6 +130,8 @@ if (tokenInput instanceof HTMLInputElement) {
 let pollTimer = null;
 let lastResult = null;
 let priceChart = null;
+let jobPollTimer = null;
+let activeJobId = null;
 
 async function loadAnalytics(){
   const div = document.getElementById("analytics");
@@ -445,6 +495,291 @@ document.getElementById("downloadCSV").addEventListener("click", () => {
   anchor.click();
   URL.revokeObjectURL(url);
 });
+
+const tabs = Array.from(document.querySelectorAll("#tabs .tab"));
+const panels = {
+  analyze: document.getElementById("tab-analyze"),
+  jobs: document.getElementById("tab-jobs"),
+};
+
+tabs.forEach((tab) => {
+  tab.addEventListener("click", () => {
+    const target = tab.getAttribute("data-tab");
+    if (!target || !panels[target]) return;
+    tabs.forEach((btn) => btn.classList.toggle("active", btn === tab));
+    Object.entries(panels).forEach(([name, panel]) => {
+      const isActive = name === target;
+      panel.classList.toggle("active", isActive);
+      panel.setAttribute("aria-hidden", isActive ? "false" : "true");
+    });
+    if (target === "jobs") {
+      loadJobs().catch(() => {});
+    }
+  });
+});
+
+const refreshSelect = document.getElementById("jobRefresh");
+const refreshBtn = document.getElementById("refreshJobs");
+if (refreshBtn) {
+  refreshBtn.addEventListener("click", () => loadJobs(true).catch(() => {}));
+}
+if (refreshSelect instanceof HTMLSelectElement) {
+  refreshSelect.addEventListener("change", () => {
+    const interval = Number(refreshSelect.value);
+    setJobPolling(interval);
+  });
+}
+
+function setJobPolling(intervalMs) {
+  if (jobPollTimer) {
+    clearInterval(jobPollTimer);
+    jobPollTimer = null;
+  }
+  if (!intervalMs) return;
+  jobPollTimer = setInterval(() => {
+    loadJobs().catch(() => {});
+  }, intervalMs);
+}
+
+async function loadJobs(force = false) {
+  const statusEl = document.getElementById("jobsStatus");
+  const tableWrap = document.getElementById("jobsTableWrap");
+  if (!statusEl || !tableWrap) return;
+  if (!force && tableWrap.dataset.loading === "1") return;
+  tableWrap.dataset.loading = "1";
+  statusEl.textContent = "Loading jobs…";
+  try {
+    const headers = buildHeaders(false);
+    headers.Accept = "application/json";
+    const res = await fetch(`${jobsUrl}?limit=50`, { headers });
+    if (!res.ok) {
+      statusEl.textContent = res.status === 401 ? "Enter admin token" : `Failed to load jobs (${res.status})`;
+      tableWrap.innerHTML = "";
+      return;
+    }
+  const data = await res.json();
+  const jobs = Array.isArray(data?.jobs) ? data.jobs : [];
+  tableWrap.innerHTML = buildJobsTable(jobs);
+  const countEl = document.getElementById("jobsCount");
+  if (countEl) countEl.textContent = jobs.length ? `(${jobs.length})` : "";
+    statusEl.textContent = jobs.length ? "" : "No jobs available.";
+    attachJobRowHandlers();
+    if (activeJobId) {
+      focusJobRow(activeJobId);
+    }
+  } catch (err) {
+    console.error("Jobs load failed", err);
+    statusEl.textContent = "Jobs unavailable.";
+    tableWrap.innerHTML = "";
+  } finally {
+    delete tableWrap.dataset.loading;
+  }
+}
+
+function buildJobsTable(jobs) {
+  if (!jobs.length) {
+    return "<div class=\"muted\">No jobs yet.</div>";
+  }
+  const rows = jobs
+    .map((job) => {
+  const jobId = String(job?.jobId || "unknown");
+  const shortId = escapeHtml(jobId.slice(0, 8));
+      const started = job?.startedAt ? formatTime(job.startedAt) : "—";
+      const finished = job?.finishedAt ? formatTime(job.finishedAt) : "—";
+      const durationSec = job?.durationMs ? (job.durationMs / 1000).toFixed(1) : "—";
+      const price = job?.price || {};
+      const groups = job?.summary?.totalGroups ?? 0;
+  const state = escapeHtml(job?.state || "unknown");
+      const avg = price.sampleCount ? `$${Number(price.average || 0).toFixed(2)}` : "—";
+      const min = price.sampleCount ? `$${Number(price.min || 0).toFixed(2)}` : "—";
+      const max = price.sampleCount ? `$${Number(price.max || 0).toFixed(2)}` : "—";
+      return `
+        <tr data-job-id="${jobId}" class="job-row">
+          <td><code>${shortId}</code></td>
+          <td>${state}</td>
+          <td>${groups}</td>
+          <td>${job?.warningsCount ?? 0}</td>
+          <td>${avg}</td>
+          <td>${min}</td>
+          <td>${max}</td>
+          <td>${durationSec}</td>
+          <td>${started}</td>
+          <td>${finished}</td>
+        </tr>`;
+    })
+    .join("");
+
+  return `
+    <table class="jobs-table">
+      <thead>
+        <tr>
+          <th>Job</th>
+          <th>Status</th>
+          <th>Groups</th>
+          <th>Warnings</th>
+          <th>Avg</th>
+          <th>Min</th>
+          <th>Max</th>
+          <th>Duration (s)</th>
+          <th>Started</th>
+          <th>Finished</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function attachJobRowHandlers() {
+  document.querySelectorAll(".job-row").forEach((row) => {
+    row.addEventListener("click", () => {
+      const jobId = row.getAttribute("data-job-id");
+      if (jobId) {
+        activeJobId = jobId;
+        loadJobDetail(jobId).catch(() => {});
+      }
+    });
+  });
+}
+
+function focusJobRow(jobId) {
+  document.querySelectorAll(".job-row").forEach((row) => {
+    const isActive = row.getAttribute("data-job-id") === jobId;
+    row.classList.toggle("active", isActive);
+  });
+}
+
+async function loadJobDetail(jobId) {
+  const detailEl = document.getElementById("jobDetail");
+  const statusEl = document.getElementById("jobsStatus");
+  if (!detailEl || !statusEl) return;
+  statusEl.textContent = `Loading job ${jobId}…`;
+  detailEl.innerHTML = "";
+  focusJobRow(jobId);
+  try {
+    const headers = buildHeaders(false);
+    headers.Accept = "application/json";
+    const res = await fetch(`${jobDetailUrl}?jobId=${encodeURIComponent(jobId)}`, { headers });
+    if (!res.ok) {
+      statusEl.textContent = res.status === 404 ? "Job not found" : `Failed to load job (${res.status})`;
+      return;
+    }
+    const data = await res.json();
+    if (!data?.job) {
+      statusEl.textContent = "Job unavailable.";
+      return;
+    }
+    activeJobId = jobId;
+    renderJobDetail(data.job);
+    statusEl.textContent = "";
+  } catch (err) {
+    console.error("Job detail failed", err);
+    statusEl.textContent = "Job detail unavailable.";
+  }
+}
+
+function renderJobDetail(job) {
+  const detailEl = document.getElementById("jobDetail");
+  if (!detailEl) return;
+  const price = job.price || {};
+  const warnings = Array.isArray(job.warnings) ? job.warnings : [];
+  const bindings = Array.isArray(job.bindings) ? job.bindings : [];
+  const groups = Array.isArray(job.groups) ? job.groups : [];
+
+  const priceSummary = price.sampleCount
+  ? `<div><strong>Pricing</strong>: avg $${Number(price.average || 0).toFixed(2)} (min $${Number(price.min || 0).toFixed(2)}, max $${Number(price.max || 0).toFixed(2)}) from ${price.sampleCount} bindings; auto=${price.autoCount}</div>`
+    : `<div class="muted">No pricing data</div>`;
+
+  const warnList = warnings.length
+    ? `<ul>${warnings.map((w) => `<li>${escapeHtml(w)}</li>`).join("")}</ul>`
+    : `<div class="muted">No warnings</div>`;
+
+  const bindingsHtml = bindings.length
+    ? `<table class="detail-table">
+        <thead><tr><th>Group</th><th>Price</th><th>Auto</th><th>Listing</th><th>SKU</th></tr></thead>
+        <tbody>
+          ${bindings
+            .map(
+              (binding) => `
+                <tr>
+                  <td><code>${escapeHtml(binding.groupId || "")}</code></td>
+                  <td>${formatPrice(binding.currentPrice)}</td>
+                  <td>${binding.auto ? formatAuto(binding.auto) : "—"}</td>
+                  <td>${escapeHtml(binding.listingId || binding.offerId || "—")}</td>
+                  <td>${escapeHtml(binding.sku || "—")}</td>
+                </tr>
+              `
+            )
+            .join("")}
+        </tbody>
+      </table>`
+    : `<div class="muted">No bound listings</div>`;
+
+  const groupsHtml = groups.length
+    ? `<div class="groups-grid">
+        ${groups
+          .map((group) => {
+            const meta = [group.brand, group.product, group.variant].filter(Boolean).join(" · ");
+            const market = group.market?.avg ? `$${Number(group.market.avg || 0).toFixed(2)}` : "—";
+            const binding = group.binding;
+            return `<div class="group-card">
+              <div><strong>${escapeHtml(group.groupId || "(id?)")}</strong></div>
+              <div class="muted">${escapeHtml(meta || "Unknown product")} • Market ${market}</div>
+              <div>${binding ? `Bound ${formatPrice(binding.currentPrice)}` : "Not bound"}</div>
+            </div>`;
+          })
+          .join("")}
+      </div>`
+    : "";
+
+  detailEl.innerHTML = `
+    <div class="job-summary-card">
+  <div><strong>Job ${escapeHtml(job.jobId || "unknown")}</strong></div>
+  <div>Status: ${escapeHtml(job.state || "unknown")}</div>
+      <div>Started: ${job.startedAt ? formatTime(job.startedAt) : "—"}, Finished: ${job.finishedAt ? formatTime(job.finishedAt) : "—"}</div>
+      <div>Duration: ${job.durationMs ? (job.durationMs / 1000).toFixed(1) + "s" : "—"}</div>
+      ${priceSummary}
+      <div><strong>Warnings</strong>: ${warnList}</div>
+    </div>
+    <h3>Bindings</h3>
+    ${bindingsHtml}
+    ${groupsHtml ? "<h3>Groups</h3>" : ""}
+    ${groupsHtml}
+  `;
+}
+
+function formatPrice(value) {
+  const num = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(num) || num <= 0) return "—";
+  return `$${num.toFixed(2)}`;
+}
+
+function formatAuto(auto) {
+  if (!auto) return "—";
+  const reduce = Number(auto.reduceBy || 0);
+  const every = Number(auto.everyDays || 0);
+  const min = Number(auto.minPrice || 0);
+  if (!Number.isFinite(reduce) || reduce <= 0 || !Number.isFinite(every) || every <= 0) return "—";
+  const reduceStr = `$${reduce.toFixed(2)}`;
+  const minStr = Number.isFinite(min) && min > 0 ? `$${min.toFixed(2)}` : "—";
+  return `${reduceStr} / ${every}d (min ${minStr})`;
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function formatTime(timestamp) {
+  if (!timestamp) return "—";
+  try {
+    return new Date(timestamp).toLocaleString();
+  } catch {
+    return "—";
+  }
+}
 
 loadAnalytics().catch(() => {});
 </script>
