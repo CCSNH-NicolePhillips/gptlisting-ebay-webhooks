@@ -244,10 +244,12 @@
         const idRaw = (idc && (idc.__raw || idc.raw)) || null;
         if (idRaw) return idRaw;
       } catch {}
+      if (state.idTokenRaw) return state.idTokenRaw;
       try {
         const at = await state.auth0.getTokenSilently();
         if (at) return at;
       } catch {}
+      if (state.token) return state.token;
       return null;
     }
     if (state.mode === 'identity' && window.netlifyIdentity) {
