@@ -1,7 +1,8 @@
 import type { Handler } from "@netlify/functions";
 import { listJobs } from "../../src/lib/job-store.js";
 import { getAllPriceKeys, getPriceState } from "../../src/lib/price-store.js";
-import { getOrigin, isAuthorized, isOriginAllowed, jsonResponse } from "../../src/lib/http.js";
+import { requireAdminAuth } from "../../src/lib/auth-admin.js";
+import { getOrigin, isOriginAllowed, json } from "../../src/lib/http.js";
 
 type HeadersMap = Record<string, string | undefined>;
 const METHODS = "GET, OPTIONS";
@@ -15,19 +16,21 @@ export const handler: Handler = async (event) => {
   const originAllowed = isOriginAllowed(originHdr);
 
   if (event.httpMethod === "OPTIONS") {
-    return jsonResponse(200, {}, originHdr, METHODS);
+    return json(200, {}, originHdr, METHODS);
   }
 
   if (event.httpMethod !== "GET") {
-    return jsonResponse(405, { error: "Method not allowed" }, originHdr, METHODS);
+    return json(405, { error: "Method not allowed" }, originHdr, METHODS);
   }
 
   if (!originAllowed && fetchSite !== "same-origin") {
-    return jsonResponse(403, { error: "Forbidden" }, originHdr, METHODS);
+    return json(403, { error: "Forbidden" }, originHdr, METHODS);
   }
 
-  if (!isAuthorized(headers)) {
-    return jsonResponse(401, { error: "Unauthorized" }, originHdr, METHODS);
+  try {
+    requireAdminAuth(headers.authorization || headers.Authorization);
+  } catch {
+    return json(401, { error: "Unauthorized" }, originHdr, METHODS);
   }
 
   try {
@@ -67,9 +70,9 @@ export const handler: Handler = async (event) => {
       });
     }
 
-    return jsonResponse(200, { summaries }, originHdr, METHODS);
+    return json(200, { summaries }, originHdr, METHODS);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return jsonResponse(500, { error: "Failed to load analytics", detail: message }, originHdr, METHODS);
+    return json(500, { error: "Failed to load analytics", detail: message }, originHdr, METHODS);
   }
 };

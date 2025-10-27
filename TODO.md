@@ -3,6 +3,12 @@
 ## Now
 - [ ] CHUNK-21: Taxonomy registry (store, select, autofill, wire into draft)
 - [ ] BG HEAD checker: parallel 6 + 2s timeout (Dropbox)
+- [ ] PHASE-0: Add auth-admin.ts, auth-user.ts, http.ts, user-keys.ts.
+- [ ] PHASE-0: Wrap admin endpoints with requireAdminAuth + json() (no logic change).
+- [ ] PHASE-0: Update background worker to accept userId and optional job key override.
+- [ ] PHASE-0: Guard external eBay calls with EBAY_DRY_RUN + PUBLISH_MODE.
+- [ ] PHASE-0: Add .eslintignore and scoped lint scripts.
+- [ ] PHASE-0: Run smoke (admin jobs list/detail, preflight).
 
 ## Next
 - [ ] Provider router + vision batch cache (env switch OpenAI/Anthropic/Gemini)

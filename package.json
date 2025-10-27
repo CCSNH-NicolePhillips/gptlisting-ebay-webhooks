@@ -11,7 +11,7 @@
     "lint": "eslint --cache --max-warnings=0 --ext .ts,.tsx,.js netlify/functions src",
     "lint:fix": "eslint --cache --fix --ext .ts,.tsx,.js netlify/functions src",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "format": "prettier --write netlify/functions src",
+  "format": "prettier -w netlify/functions src",
     "format:check": "prettier --check netlify/functions src",
     "smoke:sh": "bash scripts/smoke.sh",
     "smoke:ps": "pwsh -File scripts/smoke.ps1",
