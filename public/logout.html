@@ -45,7 +45,7 @@
           if (!done) {
             // Try to perform provider logout with explicit returnTo back to this page
             try {
-              await authClient.logout?.({ returnTo: location.origin + '/logout.html?done=1' });
+              await authClient.logout?.({ returnTo: location.origin + '/logout.html?done=1', federated: true });
               // If the provider redirects away, we won't reach this line. If it doesn't, fall through:
               location.replace('/logout.html?done=1');
               return;
@@ -53,7 +53,7 @@
               // Fallback: some providers require returnTo to match an allowed list (often origin-only).
               // In that case, round-trip to origin and have index.html bounce back here immediately.
               try { sessionStorage.setItem('postLogoutRedirect', '/logout.html?done=1'); } catch {}
-              try { await authClient.logout?.({ returnTo: location.origin }); } catch {}
+              try { await authClient.logout?.({ returnTo: location.origin, federated: true }); } catch {}
               // If the provider didn't redirect us, force it locally as a last resort.
               location.replace('/logout.html?done=1');
               return;
