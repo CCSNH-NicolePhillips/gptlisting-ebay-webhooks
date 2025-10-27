@@ -38,8 +38,9 @@
         const cfg = await res.json().catch(() => ({}));
         set('cfg', cfg);
         if (!res.ok) throw new Error('get-public-config failed: ' + (cfg.error || res.status));
-        const mode = (cfg.AUTH_MODE || 'none').toLowerCase();
-        if (mode !== 'auth0') throw new Error('AUTH_MODE is not auth0.');
+  const rawMode = (cfg.AUTH_MODE_RAW || cfg.AUTH_MODE || 'none').toLowerCase();
+  const mode = ['admin', 'user', 'mixed', 'auth0'].includes(rawMode) ? 'auth0' : rawMode;
+  if (mode !== 'auth0') throw new Error('Auth is not configured for Auth0.');
         if (!cfg.AUTH0_DOMAIN || !cfg.AUTH0_CLIENT_ID) throw new Error('Missing AUTH0_DOMAIN/CLIENT_ID.');
 
         // Import ESM from same-origin proxy (no AMD/UMD involved)

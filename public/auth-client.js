@@ -8,6 +8,7 @@
   const state = {
     mode: 'none', // 'auth0' | 'identity' | 'none'
     cfg: null,
+    rawMode: 'none',
     auth0: null,
     identityReady: false,
     token: null,
@@ -20,11 +21,15 @@
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || 'config');
       state.cfg = j;
-      state.mode = (j.AUTH_MODE || 'none').toLowerCase();
+      const rawMode = (j.AUTH_MODE_RAW || j.AUTH_MODE || 'none').toLowerCase();
+      const hasAuth0 = Boolean(j.AUTH0_DOMAIN && j.AUTH0_CLIENT_ID);
+      state.rawMode = rawMode;
+      state.mode = hasAuth0 && ['admin', 'user', 'mixed', 'auth0'].includes(rawMode) ? 'auth0' : rawMode;
     } catch (e) {
       console.warn('Auth config missing; continuing unauthenticated', e);
       state.mode = 'none';
       state.cfg = {};
+      state.rawMode = 'none';
     }
   }
 

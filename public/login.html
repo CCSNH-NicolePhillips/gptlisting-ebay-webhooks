@@ -60,10 +60,12 @@
       (async function () {
         // Check auth status but do NOT auto-redirect; keep the login screen visible
         // so users can intentionally choose to continue or switch accounts.
-        const ok = await authClient.ensureAuth();
-        const cfgRes = await fetch('/.netlify/functions/get-public-config').catch(() => null);
+    const ok = await authClient.ensureAuth();
+  const cfgRes = await fetch('/.netlify/functions/get-public-config').catch(() => null);
   const cfg = cfgRes && (await cfgRes.json());
-  const mode = (cfg?.AUTH_MODE || 'none').toLowerCase();
+  const rawMode = (cfg?.AUTH_MODE_RAW || cfg?.AUTH_MODE || 'none').toLowerCase();
+  const hasAuth0 = Boolean(cfg?.AUTH0_DOMAIN && cfg?.AUTH0_CLIENT_ID);
+  const mode = hasAuth0 && ['admin', 'user', 'mixed', 'auth0'].includes(rawMode) ? 'auth0' : rawMode;
         const hasPlaceholder =
           !cfg?.AUTH0_DOMAIN ||
           !cfg?.AUTH0_CLIENT_ID ||
@@ -74,7 +76,7 @@
           const w = document.getElementById('cfgWarning');
           w.style.display = 'block';
           w.textContent =
-            'Authentication is not fully configured. Set AUTH_MODE=auth0 and real AUTH0_DOMAIN/AUTH0_CLIENT_ID in Netlify (not placeholders), or set AUTH_MODE=identity to use Netlify Identity.';
+            'Authentication is not fully configured. Provide real AUTH0_DOMAIN/AUTH0_CLIENT_ID in Netlify, or set AUTH_MODE=identity to use Netlify Identity.';
           document.getElementById('btnContinue').disabled = true;
           document.getElementById('btnGoogle').disabled = true;
           document.getElementById('btnApple').disabled = true;
