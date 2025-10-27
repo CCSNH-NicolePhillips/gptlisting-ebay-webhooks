@@ -3,12 +3,10 @@
 ## Now
 - [ ] CHUNK-21: Taxonomy registry (store, select, autofill, wire into draft)
 - [ ] BG HEAD checker: parallel 6 + 2s timeout (Dropbox)
-- [ ] PHASE-0: Add auth-admin.ts, auth-user.ts, http.ts, user-keys.ts.
-- [ ] PHASE-0: Wrap admin endpoints with requireAdminAuth + json() (no logic change).
-- [ ] PHASE-0: Update background worker to accept userId and optional job key override.
-- [ ] PHASE-0: Guard external eBay calls with EBAY_DRY_RUN + PUBLISH_MODE.
-- [ ] PHASE-0: Add .eslintignore and scoped lint scripts.
-- [ ] PHASE-0: Run smoke (admin jobs list/detail, preflight).
+- [ ] PHASE-1: Wire Auth0 user endpoints (fg/bg/status/list).
+- [ ] PHASE-1: Enforce per-user quotas (daily images + running jobs).
+- [ ] PHASE-1: Frontend hook-up for user analyze flow (token storage + calls).
+- [ ] PHASE-1: Document Auth0 + quota env vars.
 
 ## Next
 - [ ] Provider router + vision batch cache (env switch OpenAI/Anthropic/Gemini)
@@ -24,6 +22,12 @@
 - [ ] Increase OpenAI tier or add Anthropic/Gemini keys
 
 ## Done
+- [ ] ✅ PHASE-0: Add auth-admin.ts, auth-user.ts, http.ts, user-keys.ts.
+- [ ] ✅ PHASE-0: Wrap admin endpoints with requireAdminAuth + json() (no logic change).
+- [ ] ✅ PHASE-0: Update background worker to accept userId and optional job key override.
+- [ ] ✅ PHASE-0: Guard external eBay calls with EBAY_DRY_RUN + PUBLISH_MODE.
+- [ ] ✅ PHASE-0: Add .eslintignore and scoped lint scripts.
+- [ ] ✅ PHASE-0: Run smoke (admin jobs list/detail, preflight).
 - [ ] ✅ Add “Create Drafts” button on job detail (posts mapped groups to ebay-create-draft) – commit 794de3b
 - [ ] ✅ BG worker split (`analyze-images-bg` trigger + `analyze-images-background` true background) – PR #123
 - [ ] ✅ Pricing formula + warnings – PR #118

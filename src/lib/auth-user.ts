@@ -28,3 +28,13 @@ export async function maybeRequireUserAuth(authHeader?: string): Promise<UserAut
 
   return { userId: sub };
 }
+
+export async function requireUserAuth(authHeader?: string): Promise<UserAuth> {
+  if (MODE !== "user" && MODE !== "mixed") {
+    throw new Error("unauthorized");
+  }
+
+  const auth = await maybeRequireUserAuth(authHeader);
+  if (!auth) throw new Error("unauthorized");
+  return auth;
+}
