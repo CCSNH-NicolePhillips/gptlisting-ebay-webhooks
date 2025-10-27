@@ -3,6 +3,7 @@ import { runAnalysis } from "../../src/lib/analyze-core.js";
 import { putJob } from "../../src/lib/job-store.js";
 import { k } from "../../src/lib/user-keys.js";
 import { sanitizeUrls, toDirectDropbox } from "../../src/lib/merge.js";
+import { decRunning } from "../../src/lib/quota.js";
 
 interface BackgroundPayload {
   jobId?: string;
@@ -72,6 +73,15 @@ export const handler: Handler = async (event) => {
   let userId: string | undefined = parsed.payload.userId || parsed.hints.userId;
   let jobKey: string | undefined = userId && jobId ? k.job(userId, jobId) : undefined;
 
+  async function releaseSlot() {
+    if (!userId) return;
+    try {
+      await decRunning(userId);
+    } catch (err) {
+      console.warn("[bg-worker] failed to release running slot", err);
+    }
+  }
+
   if (parsed.parseError) {
     console.error("[bg-worker] Invalid JSON payload", {
       preview: rawBody.slice(0, 200),
@@ -87,6 +97,7 @@ export const handler: Handler = async (event) => {
         finishedAt: Date.now(),
         error: "Invalid background payload",
       }, { key: jobKey });
+      await releaseSlot();
     }
 
     return { statusCode: 200 };
@@ -116,6 +127,7 @@ export const handler: Handler = async (event) => {
         finishedAt: Date.now(),
         error: "No images provided",
       }, { key: jobKey });
+      await releaseSlot();
       return { statusCode: 200 };
     }
 
@@ -134,6 +146,7 @@ export const handler: Handler = async (event) => {
         warnings: result.warnings,
         groups: result.groups,
       }, { key: jobKey });
+      await releaseSlot();
     } catch (err: any) {
       await putJob(jobId, {
         jobId,
@@ -142,6 +155,7 @@ export const handler: Handler = async (event) => {
         finishedAt: Date.now(),
         error: err?.message || "Unknown error",
       }, { key: jobKey });
+      await releaseSlot();
     }
   } catch (err) {
     console.error("Background worker crashed:", err);
@@ -154,6 +168,7 @@ export const handler: Handler = async (event) => {
         finishedAt: Date.now(),
         error: message,
       }, { key: jobKey });
+      await releaseSlot();
     }
   }
 
