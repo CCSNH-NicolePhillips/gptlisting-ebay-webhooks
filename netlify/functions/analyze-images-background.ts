@@ -11,16 +11,93 @@ interface BackgroundPayload {
   userId?: string;
 }
 
-export const handler: Handler = async (event) => {
-  let jobId: string | undefined;
-  let userId: string | undefined;
-  let jobKey: string | undefined;
+function extractHints(raw: string): Pick<BackgroundPayload, "jobId" | "userId"> {
+  const hints: Pick<BackgroundPayload, "jobId" | "userId"> = {};
+
+  if (!raw) return hints;
 
   try {
-    const body: BackgroundPayload = JSON.parse(event.body || "{}");
+    const params = new URLSearchParams(raw);
+    const pJob = params.get("jobId");
+    const pUser = params.get("userId");
+    if (pJob) hints.jobId = pJob;
+    if (pUser) hints.userId = pUser;
+  } catch {
+    // ignore URLSearchParams failure – fall back to regex extraction below
+  }
+
+  const jobMatch = raw.match(/jobId["'\s:=]+([a-z0-9-]{6,})/i);
+  if (!hints.jobId && jobMatch) {
+    hints.jobId = jobMatch[1];
+  }
+
+  const userMatch = raw.match(/userId["'\s:=]+([a-z0-9-]{3,})/i);
+  if (!hints.userId && userMatch) {
+    hints.userId = userMatch[1];
+  }
+
+  return hints;
+}
+
+function safeParsePayload(
+  raw: string | null | undefined,
+): {
+  payload: BackgroundPayload;
+  parseError: Error | null;
+  hints: Pick<BackgroundPayload, "jobId" | "userId">;
+} {
+  if (!raw) {
+    return { payload: {} as BackgroundPayload, parseError: null, hints: {} as Pick<BackgroundPayload, "jobId" | "userId"> };
+  }
+
+  try {
+    return {
+      payload: JSON.parse(raw) as BackgroundPayload,
+      parseError: null,
+      hints: {} as Pick<BackgroundPayload, "jobId" | "userId">,
+    };
+  } catch (err) {
+    return {
+      payload: {} as BackgroundPayload,
+      parseError: err instanceof Error ? err : new Error(String(err ?? "")),
+      hints: extractHints(raw),
+    };
+  }
+}
+
+export const handler: Handler = async (event) => {
+  const rawBody = event.body || "";
+  const parsed = safeParsePayload(rawBody);
+  let jobId: string | undefined = parsed.payload.jobId || parsed.hints.jobId;
+  let userId: string | undefined = parsed.payload.userId || parsed.hints.userId;
+  let jobKey: string | undefined = userId && jobId ? k.job(userId, jobId) : undefined;
+
+  if (parsed.parseError) {
+    console.error("[bg-worker] Invalid JSON payload", {
+      preview: rawBody.slice(0, 200),
+      jobId,
+      userId,
+    });
+
+    if (jobId) {
+      await putJob(jobId, {
+        jobId,
+        userId,
+        state: "error",
+        finishedAt: Date.now(),
+        error: "Invalid background payload",
+      }, { key: jobKey });
+    }
+
+    return { statusCode: 200 };
+  }
+
+  try {
+    const body = parsed.payload;
     jobId = body.jobId;
     userId = typeof body.userId === "string" && body.userId.trim() ? body.userId.trim() : undefined;
-    jobKey = userId && jobId ? k.job(userId, jobId) : undefined;
+    const derivedJobKey = userId && jobId ? k.job(userId, jobId) : undefined;
+    jobKey = derivedJobKey || jobKey;
     const images = Array.isArray(body.images) ? body.images : [];
     const rawBatch = Number(body.batchSize);
     const batchSize = Number.isFinite(rawBatch) ? Math.min(Math.max(rawBatch, 4), 12) : 12;
