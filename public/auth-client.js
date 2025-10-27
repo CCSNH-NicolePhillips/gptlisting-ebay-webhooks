@@ -13,7 +13,36 @@
     identityReady: false,
     token: null,
     user: null,
+    idTokenRaw: null,
   };
+
+  function clearLocalAuthState() {
+    state.token = null;
+    state.user = null;
+    state.idTokenRaw = null;
+    try {
+      const ls = window.localStorage;
+      if (ls) {
+  const drop = [];
+        for (let i = 0; i < ls.length; i++) {
+          const key = ls.key(i);
+          if (key && key.startsWith('@@auth0')) drop.push(key);
+        }
+        drop.forEach((k) => ls.removeItem(k));
+      }
+    } catch {}
+    try {
+      const ss = window.sessionStorage;
+      if (ss) {
+  const drop = [];
+        for (let i = 0; i < ss.length; i++) {
+          const key = ss.key(i);
+          if (key && key.startsWith('@@auth0')) drop.push(key);
+        }
+        drop.forEach((k) => ss.removeItem(k));
+      }
+    } catch {}
+  }
 
   async function loadConfig() {
     try {
@@ -222,7 +251,15 @@
     await loadConfig();
     if (state.mode === 'auth0' && state.auth0) {
       const rt = (opts && opts.returnTo) || window.location.origin;
-      await state.auth0.logout({ logoutParams: { returnTo: rt } });
+      const params = { logoutParams: { returnTo: rt } };
+      if (opts && typeof opts.federated === 'boolean' && opts.federated) {
+        params.logoutParams.federated = true;
+      }
+      try {
+        await state.auth0.logout(params);
+      } finally {
+        clearLocalAuthState();
+      }
       return;
     }
     if (state.mode === 'identity' && window.netlifyIdentity) {
