@@ -29,22 +29,51 @@ async function redisCall(...parts: string[]) {
   return res.json() as Promise<{ result: unknown }>;
 }
 
-export async function putJob(jobId: string, data: unknown) {
-  await redisCall("SETEX", `job:${jobId}`, `${TTL_SEC}`, JSON.stringify(data));
+type JobStoreOptions = {
+  key?: string;
+};
+
+function defaultJobKey(jobId: string): string {
+  return `job:${jobId}`;
 }
 
-export async function getJob(jobId: string) {
-  const resp = await redisCall("GET", `job:${jobId}`);
-  const val = resp.result;
-  if (typeof val !== "string" || !val) {
-    return null;
+async function setWithTtl(key: string, serialized: string) {
+  await redisCall("SETEX", key, `${TTL_SEC}`, serialized);
+}
+
+export async function putJob(jobId: string, data: unknown, options?: JobStoreOptions) {
+  const serialized = JSON.stringify(data);
+  const primaryKey = options?.key || defaultJobKey(jobId);
+  await setWithTtl(primaryKey, serialized);
+
+  const fallbackKey = defaultJobKey(jobId);
+  if (options?.key && options.key !== fallbackKey) {
+    await setWithTtl(fallbackKey, serialized);
+  }
+}
+
+export async function getJob(jobId: string, options?: JobStoreOptions) {
+  const keys = [] as string[];
+  if (options?.key) keys.push(options.key);
+  const fallback = defaultJobKey(jobId);
+  if (!keys.includes(fallback)) keys.push(fallback);
+
+  for (const key of keys) {
+    try {
+      const resp = await redisCall("GET", key);
+      const val = resp.result;
+      if (typeof val !== "string" || !val) continue;
+      try {
+        return JSON.parse(val);
+      } catch {
+        return null;
+      }
+    } catch {
+      // ignore missing keys
+    }
   }
 
-  try {
-    return JSON.parse(val);
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 function toStringArray(input: unknown): string[] {

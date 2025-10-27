@@ -1,20 +1,20 @@
 type HeadersRecord = Record<string, string | undefined>;
 
+const ALLOW = (process.env.ALLOWED_ORIGINS || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
 export function parseAllowedOrigins(): string[] {
-  const raw = process.env.ALLOWED_ORIGINS || "";
-  return raw
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  return ALLOW;
 }
 
 export function isOriginAllowed(originHeader?: string): boolean {
-  const allow = parseAllowedOrigins();
-  if (!allow.length) return true;
+  if (!ALLOW.length) return true;
   if (!originHeader) return false;
   try {
     const validated = new URL(originHeader).origin;
-    return allow.includes(validated);
+    return ALLOW.includes(validated);
   } catch {
     return false;
   }
@@ -40,10 +40,9 @@ export function getOrigin(headers: HeadersRecord): string | undefined {
   }
 }
 
-export function corsHeaders(originHeader: string | undefined, methods: string) {
-  const allow = parseAllowedOrigins();
+export function corsHeaders(originHeader?: string, methods = "GET, POST, OPTIONS") {
   const allowedOrigin =
-    originHeader && isOriginAllowed(originHeader) ? originHeader : allow[0] || "*";
+    originHeader && isOriginAllowed(originHeader) ? originHeader : ALLOW[0] || "*";
   return {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": allowedOrigin,
@@ -53,17 +52,26 @@ export function corsHeaders(originHeader: string | undefined, methods: string) {
   } as Record<string, string>;
 }
 
-export function jsonResponse(
+export function json(
   statusCode: number,
   body: unknown,
-  originHeader: string | undefined,
-  methods: string
+  originHeader?: string,
+  methods = "GET, POST, OPTIONS"
 ) {
   return {
     statusCode,
     headers: corsHeaders(originHeader, methods),
     body: JSON.stringify(body),
   };
+}
+
+export function jsonResponse(
+  statusCode: number,
+  body: unknown,
+  originHeader: string | undefined,
+  methods: string
+) {
+  return json(statusCode, body, originHeader, methods);
 }
 
 export function extractBearerToken(headers: HeadersRecord): string {
@@ -77,4 +85,9 @@ export function isAuthorized(headers: HeadersRecord): boolean {
   if (!adminToken) return true;
   const token = extractBearerToken(headers);
   return Boolean(token) && token === adminToken;
+}
+
+export function isUserMode(): boolean {
+  const mode = (process.env.AUTH_MODE || "admin").toLowerCase();
+  return mode === "user" || mode === "mixed";
 }

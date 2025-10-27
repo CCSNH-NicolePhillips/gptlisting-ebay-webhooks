@@ -1,5 +1,6 @@
 import type { Handler } from "@netlify/functions";
-import { getOrigin, isAuthorized, isOriginAllowed, jsonResponse } from "../../src/lib/http.js";
+import { requireAdminAuth } from "../../src/lib/auth-admin.js";
+import { getOrigin, isOriginAllowed, json } from "../../src/lib/http.js";
 import { fetchJobSummaries } from "../../src/lib/job-analytics.js";
 
 type HeadersMap = Record<string, string | undefined>;
@@ -23,19 +24,21 @@ export const handler: Handler = async (event) => {
   const originHdr = getOrigin(headers);
 
   if (event.httpMethod === "OPTIONS") {
-    return jsonResponse(200, {}, originHdr, METHODS);
+    return json(200, {}, originHdr, METHODS);
   }
 
   if (event.httpMethod !== "GET") {
-    return jsonResponse(405, { error: "Method not allowed" }, originHdr, METHODS);
+    return json(405, { error: "Method not allowed" }, originHdr, METHODS);
   }
 
   if (!isOriginAllowed(originHdr)) {
-    return jsonResponse(403, { error: "Forbidden" }, originHdr, METHODS);
+    return json(403, { error: "Forbidden" }, originHdr, METHODS);
   }
 
-  if (!isAuthorized(headers)) {
-    return jsonResponse(401, { error: "Unauthorized" }, originHdr, METHODS);
+  try {
+    requireAdminAuth(headers.authorization || headers.Authorization);
+  } catch {
+    return json(401, { error: "Unauthorized" }, originHdr, METHODS);
   }
 
   const limit = parseLimit(event.queryStringParameters?.limit);
@@ -45,11 +48,11 @@ export const handler: Handler = async (event) => {
     console.log(
       JSON.stringify({ evt: "analyze-jobs.done", ok: true, count: jobs.length, limit }),
     );
-    return jsonResponse(200, { jobs, count: jobs.length }, originHdr, METHODS);
+  return json(200, { jobs, count: jobs.length }, originHdr, METHODS);
   } catch (err) {
     console.error("[analyze-jobs] list failed", err);
     const status = statusFromError(err);
     const message = err instanceof Error ? err.message : "Failed to fetch jobs";
-    return jsonResponse(status, { error: message }, originHdr, METHODS);
+  return json(status, { error: message }, originHdr, METHODS);
   }
 };

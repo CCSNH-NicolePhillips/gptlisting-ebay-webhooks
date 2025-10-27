@@ -192,10 +192,21 @@ export const handler: Handler = async (event) => {
   }));
 
   const publishMode = (process.env.PUBLISH_MODE || "draft").toLowerCase();
-  const isDryRun = payload?.dryRun === true || publishMode === "dry-run" || publishMode === "preview";
+  const envDryRun = (process.env.EBAY_DRY_RUN || "true").toLowerCase() !== "false";
+  const requestDry = payload?.dryRun === true;
+  const modeImpliedDry = publishMode !== "publish" && publishMode !== "live";
+  const isDryRun = envDryRun || modeImpliedDry || requestDry;
   const appBase = deriveBaseUrlFromEvent(event);
 
   if (isDryRun) {
+    console.log(
+      JSON.stringify({
+        evt: "ebay.dryRun",
+        publishMode,
+        envDryRun,
+        requestedDry: requestDry,
+      }),
+    );
     const previews = normalized.map((item, idx) => {
       const meta = mergeMeta(normalizedMeta[idx], item);
       return {

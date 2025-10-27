@@ -1,0 +1,11 @@
+node_modules
+dist
+build
+coverage
+public
+static
+.netlify
+.eslintcache
+**/generated/**
+**/__generated__/**
+**/*.{png,jpg,jpeg,gif,svg,webp,ico,pdf,zip,tar,rar}
