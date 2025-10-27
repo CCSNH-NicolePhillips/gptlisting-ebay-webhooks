@@ -18,7 +18,9 @@
     // Load public config so domain/clientId come from server envs
     const cfgRes = await fetch('/.netlify/functions/get-public-config', { cache:'no-store' });
     const cfg = await cfgRes.json().catch(()=>({}));
-    if (!cfgRes.ok || (cfg.AUTH_MODE||'none').toLowerCase() !== 'auth0' || !cfg.AUTH0_DOMAIN || !cfg.AUTH0_CLIENT_ID) {
+    const rawMode = (cfg.AUTH_MODE_RAW || cfg.AUTH_MODE || 'none').toLowerCase();
+    const mode = ['admin','user','mixed','auth0'].includes(rawMode) ? 'auth0' : rawMode;
+    if (!cfgRes.ok || mode !== 'auth0' || !cfg.AUTH0_DOMAIN || !cfg.AUTH0_CLIENT_ID) {
       $('status').textContent = 'Init error';
       log('Missing AUTH0 config from server.');
     } else {
