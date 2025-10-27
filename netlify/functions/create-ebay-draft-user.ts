@@ -1,0 +1,213 @@
+import type { Handler } from "@netlify/functions";
+import { requireUserAuth } from "../../src/lib/auth-user.js";
+import { getOrigin, isOriginAllowed, json } from "../../src/lib/http.js";
+import { mapGroupToDraft, type TaxonomyMappedDraft } from "../../src/lib/map-group-to-draft.js";
+import { putBinding } from "../../src/lib/bind-store.js";
+import { getEbayAccessToken } from "../../src/lib/ebay-auth.js";
+import { createOffer, putInventoryItem } from "../../src/lib/ebay-sell.js";
+
+const METHODS = "POST, OPTIONS";
+const DRY_RUN_DEFAULT = (process.env.EBAY_DRY_RUN || "true").toLowerCase() !== "false";
+
+type HeadersMap = Record<string, string | undefined>;
+
+type RequestBody = {
+  jobId?: string;
+  groups?: any[];
+};
+
+type PreparedGroup = {
+  group: any;
+  mapped: TaxonomyMappedDraft;
+  groupId: string;
+};
+
+function ensureJsonContentType(headers: HeadersMap) {
+  const ctype = headers["content-type"] || headers["Content-Type"] || "";
+  return ctype.includes("application/json");
+}
+
+function parseBody(body: string | null | undefined): RequestBody {
+  if (!body) return {};
+  return JSON.parse(body) as RequestBody;
+}
+
+function toGroupId(group: any): string {
+  const raw = group?.groupId ?? group?.id;
+  return typeof raw === "string" && raw.trim() ? raw.trim() : "";
+}
+
+function responseUnauthorized(origin: string | undefined) {
+  return json(401, { error: "Unauthorized" }, origin, METHODS);
+}
+
+function responseBadRequest(origin: string | undefined, detail: Record<string, unknown>) {
+  return json(400, detail, origin, METHODS);
+}
+
+export const handler: Handler = async (event) => {
+  const headers = event.headers as HeadersMap;
+  const originHdr = getOrigin(headers);
+
+  if (event.httpMethod === "OPTIONS") {
+    return json(200, {}, originHdr, METHODS);
+  }
+
+  if (event.httpMethod !== "POST") {
+    return json(405, { error: "Method not allowed" }, originHdr, METHODS);
+  }
+
+  if (!isOriginAllowed(originHdr)) {
+    return json(403, { error: "Forbidden" }, originHdr, METHODS);
+  }
+
+  if (!ensureJsonContentType(headers)) {
+    return json(415, { error: "Use application/json" }, originHdr, METHODS);
+  }
+
+  let user;
+  try {
+    user = await requireUserAuth(headers.authorization || headers.Authorization);
+  } catch {
+    return responseUnauthorized(originHdr);
+  }
+
+  let body: RequestBody = {};
+  try {
+    body = parseBody(event.body);
+  } catch {
+    return responseBadRequest(originHdr, { error: "Invalid JSON" });
+  }
+
+  const jobId = typeof body.jobId === "string" ? body.jobId.trim() : "";
+  if (!jobId) {
+    return responseBadRequest(originHdr, { error: "Missing jobId" });
+  }
+
+  const groupsInput = Array.isArray(body.groups) ? body.groups : [];
+  if (!groupsInput.length) {
+    return responseBadRequest(originHdr, { error: "No groups provided" });
+  }
+
+  const prepared: PreparedGroup[] = [];
+
+  for (const group of groupsInput) {
+    const groupId = toGroupId(group);
+    if (!groupId) {
+      return responseBadRequest(originHdr, { error: "Group missing groupId", group });
+    }
+
+    let mapped: TaxonomyMappedDraft;
+    try {
+      mapped = await mapGroupToDraft(group, { jobId, userId: user.userId });
+    } catch (err: any) {
+      return json(
+        400,
+        {
+          error: "Failed to map group",
+          detail: err?.message || String(err ?? ""),
+          groupId,
+        },
+        originHdr,
+        METHODS,
+      );
+    }
+
+    const missing = Array.isArray(mapped._meta?.missingRequired)
+      ? mapped._meta.missingRequired.filter(Boolean)
+      : [];
+    if (missing.length) {
+      return responseBadRequest(originHdr, {
+        error: "Missing required specifics",
+        missing,
+        groupId,
+      });
+    }
+
+    prepared.push({ group, mapped, groupId });
+  }
+
+  if (DRY_RUN_DEFAULT) {
+    const previews = prepared.map(({ mapped }) => ({
+      sku: mapped.sku,
+      inventory: mapped.inventory,
+      offer: mapped.offer,
+      meta: mapped._meta,
+    }));
+    return json(200, { dryRun: true, count: previews.length, previews }, originHdr, METHODS);
+  }
+
+  let access;
+  try {
+    access = await getEbayAccessToken();
+  } catch (err: any) {
+    return json(502, { error: "eBay auth failed", detail: err?.message || String(err ?? "") }, originHdr, METHODS);
+  }
+
+  const results: Array<{ sku: string; offerId: string; warnings: unknown[] }> = [];
+
+  for (const { group, mapped, groupId } of prepared) {
+    try {
+      const marketplaceId = mapped.offer.marketplaceId || process.env.DEFAULT_MARKETPLACE_ID || "EBAY_US";
+      const merchantLocationKey =
+        mapped.offer.merchantLocationKey || process.env.EBAY_MERCHANT_LOCATION_KEY || null;
+
+      if (!merchantLocationKey) {
+        throw new Error("Missing EBAY_MERCHANT_LOCATION_KEY env var or mapping override");
+      }
+
+      await putInventoryItem(access.token, access.apiHost, mapped.sku, mapped.inventory, mapped.offer.quantity, marketplaceId);
+
+      const offerResult = await createOffer(access.token, access.apiHost, {
+        sku: mapped.sku,
+        marketplaceId,
+        categoryId: mapped.offer.categoryId,
+        price: mapped.offer.price,
+        quantity: mapped.offer.quantity,
+        condition: mapped.offer.condition,
+        fulfillmentPolicyId: mapped.offer.fulfillmentPolicyId,
+        paymentPolicyId: mapped.offer.paymentPolicyId,
+        returnPolicyId: mapped.offer.returnPolicyId,
+        merchantLocationKey,
+        description: mapped.offer.description,
+      });
+
+      results.push({ sku: mapped.sku, offerId: offerResult.offerId, warnings: offerResult.warnings });
+
+      try {
+        await putBinding(user.userId, jobId, groupId, {
+          sku: mapped.sku,
+          offerId: offerResult.offerId,
+          jobId,
+          groupId,
+          warnings: offerResult.warnings,
+          createdAt: Date.now(),
+        });
+      } catch (bindErr) {
+        console.warn("[create-ebay-draft-user] failed to persist binding", bindErr);
+      }
+    } catch (err: any) {
+      return json(
+        502,
+        {
+          error: "Failed to create eBay draft",
+          detail: err?.message || String(err ?? ""),
+          groupId,
+        },
+        originHdr,
+        METHODS,
+      );
+    }
+  }
+
+  console.log(
+    JSON.stringify({
+      evt: "create-ebay-draft-user.success",
+      userId: user.userId,
+      jobId,
+      created: results.length,
+    }),
+  );
+
+  return json(200, { ok: true, created: results.length, results }, originHdr, METHODS);
+};
