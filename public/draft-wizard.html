@@ -51,6 +51,37 @@
       .hide { display: none !important; }
       details { border: 1px dashed #2a335c; padding: 0.4rem 0.6rem; border-radius: 8px; }
       .hr { margin: 0.8rem 0; border: none; border-top: 1px solid #2a335c; }
+      .overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(11, 16, 32, 0.85);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9998;
+      }
+      .overlay-box {
+        background: rgba(20, 26, 51, 0.92);
+        border: 1px solid #2a335c;
+        border-radius: 12px;
+        padding: 1.35rem 1.75rem;
+        text-align: center;
+        box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
+      }
+      .spinner-lg {
+        width: 48px;
+        height: 48px;
+        border: 4px solid rgba(255, 255, 255, 0.2);
+        border-top-color: #4f7cff;
+        border-radius: 50%;
+        animation: spin 0.85s linear infinite;
+        margin: 0 auto 0.85rem;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
       /* Modal layout */
       .modal {
         position: fixed;
@@ -68,6 +99,12 @@
     <script>
       authClient.requireAuth();
     </script>
+    <div id="pageLoader" class="overlay hide" role="status" aria-live="polite">
+      <div class="overlay-box">
+        <div class="spinner-lg" aria-hidden="true"></div>
+        <div class="muted" style="font-size:.9rem;">Preparing image picker…</div>
+      </div>
+    </div>
     <div class="card">
       <a class="secondary" href="/">← Back</a>
       <h2>Create draft – Step 1: Pick category</h2>
@@ -177,7 +214,7 @@
         </div>
       </div>
       <div class="hr"></div>
-      <div>
+      <div id="reqAspectsWrap" class="hide">
         <h3 style="margin: 0.2rem 0">Required specifics</h3>
         <div id="reqAspects" class="row"></div>
       </div>
@@ -459,9 +496,12 @@
             conditionSel.appendChild(o);
           }
           // render aspects
+          const reqWrap = $('reqAspectsWrap');
           $('reqAspects').innerHTML = '';
           $('optAspects').innerHTML = '';
-          (req.requiredAspects || []).forEach((a) => renderAspect('reqAspects', a, true));
+          const reqList = Array.isArray(req.requiredAspects) ? req.requiredAspects : [];
+          reqList.forEach((a) => renderAspect('reqAspects', a, true));
+          if (reqWrap) reqWrap.classList.toggle('hide', reqList.length === 0);
           (req.optionalAspects || []).forEach((a) => renderAspect('optAspects', a, false));
           await loadLocations();
           step2.classList.remove('hide');
@@ -849,6 +889,7 @@
         const chips = byId('imgChips');
         const grid = byId('imgGrid');
         const imagesInput = byId('images');
+        const pageLoader = document.getElementById('pageLoader');
         let items = [];
         const selected = new Map(); // proxiedUrl -> item
         let isLoading = false;
@@ -856,6 +897,15 @@
         function setLoading(v) {
           isLoading = !!v;
           if (ddSpinner) ddSpinner.style.display = v ? 'inline' : 'none';
+          if (pageLoader) {
+            if (v) {
+              pageLoader.classList.remove('hide');
+              try { document.body.style.overflow = 'hidden'; } catch {}
+            } else {
+              pageLoader.classList.add('hide');
+              try { document.body.style.overflow = ''; } catch {}
+            }
+          }
           // Provide a loading placeholder inside the dropdown options
           if (v) {
             ddOpts.style.display = 'block';
@@ -923,6 +973,7 @@
 
         async function loadFrom(path, recursive = true, limit = 200) {
           if (!path) {
+            setLoading(false);
             ddPh.textContent = 'Set default Dropbox folder on landing page';
             ddOpts.innerHTML = '';
             chips.innerHTML = '';
