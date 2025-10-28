@@ -501,7 +501,10 @@
           $('optAspects').innerHTML = '';
           const reqList = Array.isArray(req.requiredAspects) ? req.requiredAspects : [];
           reqList.forEach((a) => renderAspect('reqAspects', a, true));
-          if (reqWrap) reqWrap.classList.toggle('hide', reqList.length === 0);
+          if (reqWrap) {
+            reqWrap.classList.add('hide');
+            reqWrap.setAttribute('aria-hidden', 'true');
+          }
           (req.optionalAspects || []).forEach((a) => renderAspect('optAspects', a, false));
           await loadLocations();
           step2.classList.remove('hide');
