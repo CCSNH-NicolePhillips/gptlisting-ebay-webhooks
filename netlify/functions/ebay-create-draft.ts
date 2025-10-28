@@ -369,11 +369,21 @@ function normalizeItem(raw: any): DraftItem {
   const price = Number(offer.price ?? raw.price ?? 0);
   if (!Number.isFinite(price) || price <= 0) throw new Error("Missing price");
 
-  const imagesSource = Array.isArray(product.imageUrls)
+  let imagesSource = Array.isArray(product.imageUrls)
     ? product.imageUrls
     : Array.isArray(raw.imageUrls)
       ? raw.imageUrls
       : [];
+  if (!imagesSource.length) {
+    if (Array.isArray((raw as any).images)) {
+      imagesSource = (raw as any).images;
+    } else if (typeof (raw as any).images === "string") {
+      imagesSource = ((raw as any).images as string)
+        .split(",")
+        .map((s: string) => s.trim())
+        .filter(Boolean);
+    }
+  }
   const imageUrls = imagesSource
     .filter((url: unknown) => typeof url === "string" && url.trim())
     .map((url: unknown) => String(url as string).trim())

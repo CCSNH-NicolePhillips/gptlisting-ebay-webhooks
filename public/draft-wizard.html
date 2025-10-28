@@ -904,6 +904,7 @@
             qty,
             hasLocation: !!merchantLocationKey,
             hasAspects: Object.keys(aspects).length,
+            imageCount: images.length,
             hasToken: true,
           });
           const r = await fetch('/.netlify/functions/ebay-create-draft', {
@@ -915,6 +916,7 @@
               price,
               qty,
               images,
+              imageUrls: images,
               merchantLocationKey,
               categoryId,
               description: description || undefined,
