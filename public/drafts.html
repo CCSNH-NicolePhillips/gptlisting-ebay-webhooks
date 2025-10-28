@@ -491,6 +491,7 @@
       function lazyLoadThumbs() {
         const nodes = Array.from(list.querySelectorAll('.card'));
         const q = [];
+        const exec = authClient && typeof authClient.authFetch === 'function' ? authClient.authFetch : fetch;
         for (const n of nodes) {
           const offerId = n.dataset.offerId;
           if (!offerId) continue;
@@ -498,16 +499,32 @@
             // Prefer server-side offer thumb to avoid client CORS/SKU issues
             const url = `/.netlify/functions/ebay-offer-thumb?offerId=${encodeURIComponent(offerId)}`;
             if (url && n._img) {
-              const src = url;
-              n._img.alt = 'Draft image';
-              n._img.onload = () => {
-                n._img.classList.add('loaded');
+              try {
+                const resp = await exec(url);
+                if (!resp.ok) throw new Error(`thumb fetch failed: ${resp.status}`);
+                const type = (resp.headers.get('content-type') || '').toLowerCase();
+                if (type && !type.startsWith('image/')) throw new Error('unexpected content-type');
+                const blob = await resp.blob();
+                const objectUrl = URL.createObjectURL(blob);
+                const revoke = () => {
+                  try {
+                    URL.revokeObjectURL(objectUrl);
+                  } catch {}
+                };
+                n._img.alt = 'Draft image';
+                n._img.onload = () => {
+                  n._img.classList.add('loaded');
+                  n._sk?.remove?.();
+                  revoke();
+                };
+                n._img.onerror = () => {
+                  n._sk?.remove?.();
+                  revoke();
+                };
+                n._img.src = objectUrl;
+              } catch (err) {
                 n._sk?.remove?.();
-              };
-              n._img.onerror = () => {
-                n._sk?.remove?.();
-              };
-              n._img.src = src;
+              }
             } else {
               // No image found – clear skeleton and leave a subtle placeholder
               if (n._sk) n._sk.remove();
