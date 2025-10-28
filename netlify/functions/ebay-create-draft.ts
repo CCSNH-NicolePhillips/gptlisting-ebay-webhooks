@@ -206,8 +206,16 @@ export const handler: Handler = async (event) => {
   const publishMode = (process.env.PUBLISH_MODE || "draft").toLowerCase();
   const envDryRun = (process.env.EBAY_DRY_RUN || "true").toLowerCase() !== "false";
   const requestDry = payload?.dryRun === true;
-  const modeImpliedDry = publishMode !== "publish" && publishMode !== "live";
+  const dryRunModes = new Set(["dry-run", "dryrun", "simulate", "preview", "test"]);
+  const modeImpliedDry = dryRunModes.has(publishMode);
   const isDryRun = envDryRun || modeImpliedDry || requestDry;
+  const dryRunReason = envDryRun
+    ? "env"
+    : modeImpliedDry
+      ? "mode"
+      : requestDry
+        ? "request"
+        : null;
   const appBase = deriveBaseUrlFromEvent(event);
 
   if (isDryRun) {
@@ -217,6 +225,7 @@ export const handler: Handler = async (event) => {
         publishMode,
         envDryRun,
         requestedDry: requestDry,
+        dryRunReason,
         userId: userAuth?.userId || null,
       }),
     );
@@ -240,7 +249,13 @@ export const handler: Handler = async (event) => {
         ok: true,
         dryRun: true,
         status: "DRY_RUN",
-        message: "Draft creation skipped because EBAY_DRY_RUN is enabled.",
+        dryRunReason,
+        message:
+          dryRunReason === "env"
+            ? "Draft creation skipped because EBAY_DRY_RUN is enabled."
+            : dryRunReason === "mode"
+              ? `Draft creation skipped because PUBLISH_MODE=${publishMode} is set to a dry-run mode.`
+              : "Draft creation skipped because dryRun=true was requested.",
         count: previews.length,
         previews,
         invalid: invalidSummaries,
