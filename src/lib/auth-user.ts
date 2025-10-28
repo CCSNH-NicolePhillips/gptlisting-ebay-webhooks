@@ -4,6 +4,7 @@ const MODE = (process.env.AUTH_MODE || "admin").toLowerCase();
 const DOMAIN = process.env.AUTH0_DOMAIN || "";
 const ISS = DOMAIN ? `https://${DOMAIN}/` : "";
 const AUD = process.env.AUTH0_AUDIENCE || undefined;
+const CLIENT = process.env.AUTH0_CLIENT_ID || undefined;
 
 let JWKS: ReturnType<typeof createRemoteJWKSet> | null = null;
 if (DOMAIN) {
@@ -18,10 +19,14 @@ export async function maybeRequireUserAuth(authHeader?: string): Promise<UserAut
   if (!authHeader?.startsWith("Bearer ")) throw new Error("unauthorized");
 
   const token = authHeader.slice(7).trim();
-  const { payload } = await jwtVerify(token, JWKS, {
+  const audiences = [AUD, CLIENT].filter(Boolean) as string[];
+  const verifyOptions: Parameters<typeof jwtVerify>[2] = {
     issuer: ISS || undefined,
-    audience: AUD,
-  });
+  };
+  if (audiences.length === 1) verifyOptions.audience = audiences[0];
+  else if (audiences.length > 1) verifyOptions.audience = audiences;
+
+  const { payload } = await jwtVerify(token, JWKS, verifyOptions);
 
   const sub = String(payload.sub || "").trim();
   if (!sub) throw new Error("unauthorized");
