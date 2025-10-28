@@ -4,6 +4,8 @@ import { getOrigin, isOriginAllowed, json } from "../../src/lib/http.js";
 import { mapGroupToDraft, type TaxonomyMappedDraft } from "../../src/lib/map-group-to-draft.js";
 import { putBinding } from "../../src/lib/bind-store.js";
 import { getEbayAccessToken } from "../../src/lib/ebay-auth.js";
+import { tokensStore } from "../../functions/_blobs.js";
+import { userScopedKey } from "../../functions/_auth.js";
 import { createOffer, putInventoryItem } from "../../src/lib/ebay-sell.js";
 
 const METHODS = "POST, OPTIONS";
@@ -148,9 +150,22 @@ export const handler: Handler = async (event) => {
 
   for (const { group, mapped, groupId } of prepared) {
     try {
-      const marketplaceId = mapped.offer.marketplaceId || process.env.DEFAULT_MARKETPLACE_ID || "EBAY_US";
-      const merchantLocationKey =
+      const marketplaceId =
+        mapped.offer.marketplaceId || process.env.DEFAULT_MARKETPLACE_ID || process.env.EBAY_MARKETPLACE_ID || "EBAY_US";
+      let merchantLocationKey =
         mapped.offer.merchantLocationKey || process.env.EBAY_MERCHANT_LOCATION_KEY || null;
+
+      // Per-user default merchant location fallback
+      if (!merchantLocationKey) {
+        try {
+          const store = tokensStore();
+          const saved = (await store.get(userScopedKey(user.userId, "ebay-location.json"), { type: "json" })) as any;
+          const candidate = typeof saved?.merchantLocationKey === "string" ? saved.merchantLocationKey.trim() : "";
+          if (candidate) merchantLocationKey = candidate;
+        } catch {
+          // ignore
+        }
+      }
 
       if (!merchantLocationKey) {
         throw new Error("Missing EBAY_MERCHANT_LOCATION_KEY env var or mapping override");

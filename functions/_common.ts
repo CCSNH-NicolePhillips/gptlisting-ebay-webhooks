@@ -1,9 +1,11 @@
 // Shared helpers for eBay OAuth in TS (uses global fetch in Node 18+)
 export function tokenHosts(env: string | undefined) {
   const isSb = (env || 'PROD') === 'SANDBOX';
+  const defaultApi = isSb ? 'https://api.sandbox.ebay.com' : 'https://api.ebay.com';
+  const apiOverride = (process.env.EBAY_ENDPOINT_URL || '').trim();
   return {
     tokenHost: isSb ? 'https://api.sandbox.ebay.com' : 'https://api.ebay.com',
-    apiHost: isSb ? 'https://api.sandbox.ebay.com' : 'https://api.ebay.com',
+    apiHost: apiOverride || defaultApi,
   };
 }
 

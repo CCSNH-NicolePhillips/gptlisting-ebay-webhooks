@@ -326,7 +326,7 @@ export const handler: Handler = async (event) => {
 
   const ENV = (process.env.EBAY_ENV || "PROD").toUpperCase();
   const { apiHost } = tokenHosts(ENV);
-  const defaultMarketplaceId = process.env.DEFAULT_MARKETPLACE_ID || "EBAY_US";
+  const defaultMarketplaceId = process.env.DEFAULT_MARKETPLACE_ID || process.env.EBAY_MARKETPLACE_ID || "EBAY_US";
   const defaultCategoryId = process.env.DEFAULT_CATEGORY_ID || "31413";
   const promotedCampaignId = process.env.PROMOTED_CAMPAIGN_ID || null;
 
