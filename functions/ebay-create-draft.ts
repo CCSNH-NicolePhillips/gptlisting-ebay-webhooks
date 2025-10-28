@@ -116,9 +116,15 @@ export const handler: Handler = async (event) => {
   // Use the connected user's stored refresh token
   const store = tokensStore();
   const bearer = getBearerToken(event);
-  let sub = (await requireAuthVerified(event))?.sub || null;
+  const originHdr = event.headers?.origin || event.headers?.Origin || null;
+  console.log(JSON.stringify({ evt: 'create-draft.auth.check', hasAuth: Boolean(bearer), origin: originHdr, path: event.path }));
+  const verifiedAuth = await requireAuthVerified(event);
+  let sub = verifiedAuth?.sub || null;
   if (!sub) sub = getJwtSubUnverified(event);
-  if (!bearer || !sub) return { statusCode: 401, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Unauthorized' }) };
+  if (!bearer || !sub) {
+    console.warn('create-draft missing auth', { hasBearer: Boolean(bearer), sub, origin: originHdr });
+    return { statusCode: 401, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Unauthorized' }) };
+  }
   const saved = (await store.get(userScopedKey(sub, 'ebay.json'), { type: 'json' })) as any;
     const refresh = saved?.refresh_token as string | undefined;
     if (!refresh) return { statusCode: 400, body: JSON.stringify({ error: 'Connect eBay first' }) };
