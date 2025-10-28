@@ -98,7 +98,20 @@
       throw new Error('Timed out waiting for job.');
     }
 
-    function renderGroups(result) {
+    async function getDefaultLocationKey() {
+      try {
+        const t = await getToken();
+        if (!t) return '';
+        const r = await fetch('/.netlify/functions/ebay-get-location-user', {
+          headers: { Authorization: `Bearer ${t}` },
+        });
+        if (!r.ok) return '';
+        const j = await r.json().catch(() => ({}));
+        return (typeof j?.merchantLocationKey === 'string' ? j.merchantLocationKey : '') || '';
+      } catch { return ''; }
+    }
+
+    async function renderGroups(result) {
       const grid = qs('#groupsGrid');
       grid.innerHTML = '';
       const groups = result.groups || result.data?.groups || [];
@@ -108,6 +121,12 @@
       }
       window._currentJobId = result.jobId || 'adhoc';
       window._currentGroups = groups;
+
+      // Pull the user's default merchantLocationKey once per render
+      if (!window._defaultMerchantLocationKeyLoaded) {
+        window._defaultMerchantLocationKey = await getDefaultLocationKey();
+        window._defaultMerchantLocationKeyLoaded = true;
+      }
 
       for (const g of groups) {
         const title = [g.brand, g.product].filter(Boolean).join(' — ') || 'Unknown';
@@ -154,7 +173,9 @@
           // Offer overrides (Price & Merchant Location Key)
           const offerBox = el('div', { class: 'muted' });
           offerBox.appendChild(el('div', { html: `<label>Price (USD): <input type="number" step="0.01" min="0" data-offer-price placeholder="auto"></label>` }));
-          offerBox.appendChild(el('div', { html: `<label>Merchant Location Key: <input data-offer-mlk placeholder="env or enter per-user key"></label>` }));
+          const defaultMlk = (window._defaultMerchantLocationKey || '').trim();
+          const mlkPlaceholder = defaultMlk ? `default: ${defaultMlk}` : 'env or enter per-user key';
+          offerBox.appendChild(el('div', { html: `<label>Merchant Location Key: <input data-offer-mlk placeholder="${mlkPlaceholder}"></label>` }));
           offerBox.appendChild(el('div', { html: `<label><input type="checkbox" data-offer-mlk-default> Save as my default</label>` }));
 
           const saveBtn = el('button', { html: 'Save Overrides' });
@@ -187,6 +208,15 @@
           ovrBox.appendChild(list);
           ovrBox.appendChild(offerBox);
           ovrBox.appendChild(saveBtn);
+
+          // If we have a default and no group-level override present in data, prefill the input value
+          try {
+            const mlkInp = card.querySelector('input[data-offer-mlk]');
+            const groupOverride = g?.offer?.merchantLocationKey || g?._meta?.offer?.merchantLocationKey || null;
+            if (mlkInp && !groupOverride && defaultMlk) {
+              mlkInp.value = defaultMlk;
+            }
+          } catch {}
         })();
 
         grid.appendChild(card);
