@@ -66,7 +66,7 @@ export const handler: Handler = async (event) => {
   const rawBatch = Number(body.batchSize);
   const batchSize = Number.isFinite(rawBatch) ? Math.min(Math.max(rawBatch, 4), 12) : 12;
 
-  const result = await runAnalysis(images, batchSize, { skipPricing: true });
+  const result = await runAnalysis(images, batchSize);
   console.log(
     JSON.stringify({ evt: "analyze-images-user.done", ok: true, userId: user.userId, count: images.length })
   );
