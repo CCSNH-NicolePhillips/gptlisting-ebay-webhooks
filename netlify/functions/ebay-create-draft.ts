@@ -1,6 +1,8 @@
 import type { Handler } from "@netlify/functions";
 import { accessTokenFromRefresh, tokenHosts } from "../../functions/_common.js";
 import { getOrigin, isAuthorized, isOriginAllowed, jsonResponse } from "../../src/lib/http.js";
+import { maybeRequireUserAuth } from "../../src/lib/auth-user.js";
+import type { UserAuth } from "../../src/lib/auth-user.js";
 import { mapGroupToDraftWithTaxonomy } from "../../src/lib/taxonomy-map.js";
 
 type HeadersMap = Record<string, string | undefined>;
@@ -88,8 +90,18 @@ export const handler: Handler = async (event) => {
     return jsonResponse(403, { error: "Forbidden" }, originHdr, METHODS);
   }
 
+  let userAuth: UserAuth | null = null;
   if (!isAuthorized(headers)) {
-    return jsonResponse(401, { error: "Unauthorized" }, originHdr, METHODS);
+    try {
+      userAuth = await maybeRequireUserAuth(headers.authorization || headers.Authorization);
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err ?? "");
+      console.warn("[ebay-create-draft] user auth failed", reason);
+      return jsonResponse(401, { error: "Unauthorized" }, originHdr, METHODS);
+    }
+    if (!userAuth) {
+      return jsonResponse(401, { error: "Unauthorized" }, originHdr, METHODS);
+    }
   }
 
   let payload: any = {};
@@ -205,6 +217,7 @@ export const handler: Handler = async (event) => {
         publishMode,
         envDryRun,
         requestedDry: requestDry,
+        userId: userAuth?.userId || null,
       }),
     );
     const previews = normalized.map((item, idx) => {
@@ -315,6 +328,17 @@ export const handler: Handler = async (event) => {
       failures.push({ sku: item.sku, error: message, detail: err?.detail, meta, draft: buildDraftPreview(item) });
     }
   }
+
+  console.log(
+    JSON.stringify({
+      evt: "ebay.createDraft",
+      dryRun: false,
+      created: successes.length,
+      failures: failures.length,
+      invalid: invalidSummaries.length,
+      userId: userAuth?.userId || null,
+    }),
+  );
 
   return jsonResponse(
     200,
