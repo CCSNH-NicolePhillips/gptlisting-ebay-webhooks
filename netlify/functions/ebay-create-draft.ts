@@ -404,9 +404,12 @@ export const handler: Handler = async (event) => {
     }),
   );
 
+  const ok = successes.length > 0;
+
   return jsonResponse(
     200,
     {
+      ok,
       dryRun: false,
       created: successes.length,
       results: successes,

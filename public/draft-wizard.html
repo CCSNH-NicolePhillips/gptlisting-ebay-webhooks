@@ -928,7 +928,10 @@
           });
           const data = await r.json();
           debugLog('create-draft response', { status: r.status, ok: r.ok, body: data });
-          if (r.ok && (data.ok || data.dryRun)) {
+          const resultsCount = Array.isArray(data.results) ? data.results.length : 0;
+          const failuresCount = Array.isArray(data.failures) ? data.failures.length : 0;
+          const treatedSuccess = Boolean(data.ok) || (!data.dryRun && resultsCount > 0);
+          if (r.ok && (treatedSuccess || data.dryRun)) {
             if (data.dryRun) {
               const reason = data.dryRunReason || null;
               let note = data.message || 'Dry run only — no draft created.';
@@ -941,15 +944,26 @@
               debugLog('create-draft dryRun', data);
               return;
             }
-            const offerId = data.draftOffer?.offerId;
-            // Redirect to drafts page listing all drafts; include created id for flash
+            const firstResult = Array.isArray(data.results) ? data.results[0] : null;
+            const offerId = firstResult?.offerId || data.draftOffer?.offerId || null;
+            const status = firstResult?.status || data.status || 'UNPUBLISHED';
             if (offerId) {
+              debugLog('create-draft success', { offerId, status, failures: failuresCount });
               location.href = `/drafts.html?created=${encodeURIComponent(offerId)}`;
               return;
             }
-            // Fallback: show message if no offerId (shouldn't happen)
-            const note = data.status === 'UNPUBLISHED' ? ' — (unpublished offer)' : '';
-            msg.textContent = `Draft created (${data.env || 'PROD'} ${data.marketplaceId || ''}): ${offerId || 'unknown'}${note}`;
+            const summaryParts = [];
+            if (resultsCount) summaryParts.push(`${resultsCount} draft${resultsCount > 1 ? 's' : ''} created`);
+            if (failuresCount) summaryParts.push(`${failuresCount} failed`);
+            const summary = summaryParts.join(', ') || 'Draft created';
+            msg.textContent = `${summary} (${status}). Check Drafts page for details.`;
+            debugLog('create-draft success', {
+              resultsCount,
+              failuresCount,
+              status,
+              offerIds: (Array.isArray(data.results) ? data.results : []).map((r) => r.offerId),
+            });
+            return;
           } else {
             const detail =
               typeof data.detail === 'string'
