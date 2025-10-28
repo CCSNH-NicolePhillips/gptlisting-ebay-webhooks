@@ -720,9 +720,34 @@
         try {
           const weightLbs = (document.getElementById('weightLbs') || { value: '' }).value.trim();
           const weightOz = (document.getElementById('weightOz') || { value: '' }).value.trim();
-          const r = await authClient.authFetch('/.netlify/functions/ebay-create-draft', {
+          let token = null;
+          try {
+            if (authClient && typeof authClient.ensureAuth === 'function') {
+              const ok = await authClient.ensureAuth();
+              if (!ok) {
+                await authClient.requireAuth();
+                msg.textContent = 'Please sign in again to create drafts.';
+                return;
+              }
+            }
+            if (authClient && typeof authClient.getToken === 'function') {
+              token = await authClient.getToken();
+            }
+          } catch (err) {
+            console.warn('auth ensure failed', err);
+          }
+          if (!token) {
+            msg.textContent = 'Please sign in again to create drafts.';
+            try { await authClient.requireAuth(); } catch {}
+            return;
+          }
+          const headers = {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          };
+          const r = await fetch('/.netlify/functions/ebay-create-draft', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify({
               sku,
               title,
@@ -778,10 +803,37 @@
           msg.textContent = 'Publishing…';
           btnPub.disabled = true;
           try {
+            let token = null;
+            try {
+              if (authClient && typeof authClient.ensureAuth === 'function') {
+                const ok = await authClient.ensureAuth();
+                if (!ok) {
+                  await authClient.requireAuth();
+                  msg.textContent = 'Please sign in again before publishing.';
+                  btnPub.disabled = false;
+                  return;
+                }
+              }
+              if (authClient && typeof authClient.getToken === 'function') {
+                token = await authClient.getToken();
+              }
+            } catch (err) {
+              console.warn('auth ensure failed', err);
+            }
+            if (!token) {
+              msg.textContent = 'Please sign in again before publishing.';
+              btnPub.disabled = false;
+              try { await authClient.requireAuth(); } catch {}
+              return;
+            }
+            const headers = {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            };
             const cond = (document.getElementById('condition') || { value: '' }).value;
-            const r = await authClient.authFetch('/.netlify/functions/ebay-publish-offer', {
+            const r = await fetch('/.netlify/functions/ebay-publish-offer', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers,
               body: JSON.stringify({ offerId, condition: cond ? Number(cond) : undefined }),
             });
             const data = await r.json();
