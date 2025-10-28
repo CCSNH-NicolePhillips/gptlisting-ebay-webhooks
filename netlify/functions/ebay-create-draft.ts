@@ -237,7 +237,10 @@ export const handler: Handler = async (event) => {
     return jsonResponse(
       200,
       {
+        ok: true,
         dryRun: true,
+        status: "DRY_RUN",
+        message: "Draft creation skipped because EBAY_DRY_RUN is enabled.",
         count: previews.length,
         previews,
         invalid: invalidSummaries,

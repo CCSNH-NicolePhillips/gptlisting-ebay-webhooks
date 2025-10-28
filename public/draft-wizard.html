@@ -928,7 +928,12 @@
           });
           const data = await r.json();
           debugLog('create-draft response', { status: r.status, ok: r.ok, body: data });
-          if (r.ok && data.ok) {
+          if (r.ok && (data.ok || data.dryRun)) {
+            if (data.dryRun) {
+              msg.textContent = data.message || 'Dry run only — disable EBAY_DRY_RUN to create live drafts.';
+              debugLog('create-draft dryRun', data);
+              return;
+            }
             const offerId = data.draftOffer?.offerId;
             // Redirect to drafts page listing all drafts; include created id for flash
             if (offerId) {
