@@ -52,6 +52,24 @@
         letter-spacing: 0.01em;
       }
       .form-section .form-row:last-child { margin-bottom: 0; }
+      details.form-section {
+        padding: 1.05rem 1.25rem;
+      }
+      details.form-section summary {
+        list-style: none;
+        font-weight: 600;
+        color: #e6ebff;
+        cursor: pointer;
+        margin: -0.2rem 0 0.75rem;
+      }
+      details.form-section[open] summary { margin-bottom: 0.85rem; }
+      details.form-section summary::-webkit-details-marker { display: none; }
+      .aspect-grid {
+        display: grid;
+        gap: 1.1rem;
+        grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+      }
+      .aspect-field { display: flex; flex-direction: column; gap: 0.4rem; }
       /* Structured row layout for the Step 2 form */
       .form-row {
         display: flex;
@@ -112,6 +130,15 @@
         width: 100%;
         box-sizing: border-box;
         transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      }
+      input[type='number']::-webkit-outer-spin-button,
+      input[type='number']::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+      input[type='number'] {
+        appearance: textfield;
+        -moz-appearance: textfield;
       }
       textarea { min-height: 110px; }
       input:focus, textarea:focus, select:focus {
@@ -291,14 +318,13 @@
           </div>
         </div>
       </div>
-      <div class="hr"></div>
-      <div id="reqAspectsWrap" class="hide">
-        <h3 style="margin: 0.2rem 0">Required specifics</h3>
-        <div id="reqAspects" class="row"></div>
+      <div id="reqAspectsWrap" class="form-section hide">
+        <h3>Required specifics</h3>
+        <div id="reqAspects" class="aspect-grid"></div>
       </div>
-      <details style="margin-top: 0.6rem">
+      <details class="form-section optional-details">
         <summary>Optional specifics</summary>
-        <div id="optAspects" class="row" style="margin-top: 0.4rem"></div>
+        <div id="optAspects" class="aspect-grid"></div>
       </details>
       <div style="margin: 0.8rem 0 0.2rem; display: flex; gap: 0.5rem; align-items: center">
         <button id="btnCreate">Create draft</button>
@@ -494,7 +520,7 @@
 
       function renderAspect(containerId, aspect, required) {
         const wrap = document.createElement('div');
-        wrap.className = 'col';
+        wrap.className = 'aspect-field';
         const id = 'asp_' + (aspect.localizedAspectName || aspect.aspectName).replace(/\s+/g, '_');
         const label = document.createElement('label');
         label.textContent =
