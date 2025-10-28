@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Analyze — DNH Solutions</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <style>
+    body{font-family:system-ui,Segoe UI,Arial,sans-serif;margin:24px;color:#111}
+    .row{display:grid;grid-template-columns:1fr auto;gap:12px;margin-bottom:12px}
+    textarea{width:100%;height:140px}
+    button{padding:8px 14px;border:1px solid #ddd;border-radius:8px;cursor:pointer;background:#111;color:#fff}
+    .muted{color:#666}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:16px}
+    .card{border:1px solid #eee;border-radius:12px;padding:12px}
+    .thumbs{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+    .thumbs img{width:64px;height:64px;object-fit:cover;border:1px solid #eee;border-radius:8px}
+    .bar{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+    .ok{color:#0a7}
+    .bad{color:#a00}
+  </style>
+</head>
+<body>
+  <script src="/auth-client.js"></script>
+  <h1>Analyze Images</h1>
+  <div class="row">
+    <textarea id="imgUrls" placeholder="Paste image URLs here (one per line)"></textarea>
+    <div><button id="runAnalyze">Analyze</button></div>
+  </div>
+  <div id="status" class="muted"></div>
+  <div id="groupsGrid" class="grid"></div>
+
+  <div class="bar">
+    <button id="btnCreateDrafts">Create Drafts</button>
+    <span id="draftNote" class="muted">Select the groups you want to draft.</span>
+  </div>
+
+  <script type="module">
+    const qs = (sel) => document.querySelector(sel);
+    const qsa = (sel) => Array.from(document.querySelectorAll(sel));
+    const el = (tag, attrs = {}, kids = []) => {
+      const n = document.createElement(tag);
+      for (const [k, v] of Object.entries(attrs)) k === 'html' ? (n.innerHTML = v) : n.setAttribute(k, v);
+      kids.forEach((k) => n.appendChild(k));
+      return n;
+    };
+    const uniq = (arr) => Array.from(new Set(arr));
+    const parseUrls = (s) => uniq(s.split(/\r?\n/).map((x) => x.trim()).filter(Boolean));
+
+    async function requireAuth() {
+      try {
+        const ok = await (window.authClient?.requireAuth?.() ?? Promise.resolve(false));
+        return ok;
+      } catch {
+        return false;
+      }
+    }
+    async function getToken() {
+      try {
+        return await (window.authClient?.getToken?.() ?? null);
+      } catch {
+        return null;
+      }
+    }
+
+    async function analyzeUrls(urls) {
+      const t = await getToken();
+      if (!t) throw new Error('Not authenticated');
+      const hdr = { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` };
+      if (urls.length <= 3) {
+        const r = await fetch('/.netlify/functions/analyze-images-user', {
+          method: 'POST',
+          headers: hdr,
+          body: JSON.stringify({ images: urls, batchSize: 12 }),
+        });
+        const data = await r.json();
+        if (data.status === 'redirect') return { mode: 'redirect' };
+        return { mode: 'fg', data };
+      }
+      const r = await fetch('/.netlify/functions/analyze-images-bg-user', {
+        method: 'POST',
+        headers: hdr,
+        body: JSON.stringify({ images: urls, batchSize: 12 }),
+      });
+      const { jobId } = await r.json();
+      return { mode: 'bg', jobId };
+    }
+
+    async function pollJob(jobId) {
+      const t = await getToken();
+      if (!t) throw new Error('Not authenticated');
+      const hdr = { Authorization: `Bearer ${t}` };
+      for (let i = 0; i < 40; i++) {
+        await new Promise((r) => setTimeout(r, 2000));
+        const r = await fetch(`/.netlify/functions/analyze-images-status-user?jobId=${encodeURIComponent(jobId)}`, { headers: hdr });
+        const st = await r.json();
+        if (st.state === 'complete' || st.state === 'error') return st;
+      }
+      throw new Error('Timed out waiting for job.');
+    }
+
+    function renderGroups(result) {
+      const grid = qs('#groupsGrid');
+      grid.innerHTML = '';
+      const groups = result.groups || result.data?.groups || [];
+      if (!groups.length) {
+        grid.innerHTML = '<div class="muted">No groups found.</div>';
+        return;
+      }
+      window._currentJobId = result.jobId || 'adhoc';
+      window._currentGroups = groups;
+
+      for (const g of groups) {
+        const title = [g.brand, g.product].filter(Boolean).join(' — ') || 'Unknown';
+        const meta = [g.variant && `Variant: <code>${g.variant}</code>`, g.size && `Size: <code>${g.size}</code>`]
+          .filter(Boolean)
+          .join(' • ');
+        const thumbs = el('div', { class: 'thumbs' });
+        (g.images || []).slice(0, 6).forEach((u) => thumbs.appendChild(el('img', { src: u, alt: 'preview' })));
+
+        const pick = el('label', { html: `<input type="checkbox" data-pick value="${g.groupId}" checked> Use for draft` });
+
+        const card = el('div', { class: 'card' }, [
+          el('div', { html: `<strong>${title}</strong>` }),
+          el('div', { class: 'muted', html: meta }),
+          el('div', { class: 'muted', html: `Confidence: ${g.confidence ?? '—'}` }),
+          thumbs,
+          pick,
+          el('div', { class: 'muted', html: `<span data-cat="${g.groupId}"></span><div data-missing="${g.groupId}"></div><div data-ovrbox="${g.groupId}"></div>` }),
+        ]);
+
+        // Build overrides UI (Phase 2B)
+        (function buildOverridesUI() {
+          const jobId = window._currentJobId || 'adhoc';
+          const missing = g._meta?.missingRequired || [];
+          const catSpan = card.querySelector(`[data-cat="${g.groupId}"]`);
+          const missDiv = card.querySelector(`[data-missing="${g.groupId}"]`);
+          const ovrBox = card.querySelector(`[data-ovrbox="${g.groupId}"]`);
+
+          catSpan.innerHTML = g._meta?.selectedCategory
+            ? `Category: <code>${g._meta.selectedCategory.title}</code> (<code>${g._meta.selectedCategory.id}</code>)`
+            : `Category: <i>auto</i>`;
+
+          if (Array.isArray(missing) && missing.length) {
+            missDiv.innerHTML = `Missing required: ${missing.map((x) => `<code>${x}</code>`).join(' ')}`;
+            const list = el('div');
+            missing.forEach((name) => {
+              const row = el('div', { html: `<label>${name}: <input data-aspect="${name}" placeholder="enter ${name}"></label>` });
+              list.appendChild(row);
+            });
+            const saveBtn = el('button', { html: 'Save Overrides' });
+            saveBtn.addEventListener('click', async () => {
+              const inputs = Array.from(list.querySelectorAll('input[data-aspect]'));
+              const aspects = {};
+              inputs.forEach((inp) => {
+                const v = inp.value.trim();
+                if (v) aspects[inp.getAttribute('data-aspect')] = v;
+              });
+              try {
+                await saveOverrides(jobId, g.groupId, aspects, null);
+                missDiv.innerHTML = '<span class="ok">Saved. Re-Create Drafts to apply.</span>';
+              } catch (e) {
+                missDiv.innerHTML = `<span class="bad">Save failed: ${e?.message || e}</span>`;
+              }
+            });
+            ovrBox.appendChild(list);
+            ovrBox.appendChild(saveBtn);
+          } else {
+            missDiv.innerHTML = '';
+          }
+        })();
+
+        grid.appendChild(card);
+      }
+      window._currentAnalyzeResult = result;
+    }
+
+    async function saveOverrides(jobId, groupId, aspects, categoryId) {
+      const t = await getToken();
+      if (!t) throw new Error('Not authenticated');
+      const hdr = { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` };
+      const body = JSON.stringify({ jobId, groupId, aspects, categoryId });
+      const r = await fetch('/.netlify/functions/taxonomy-override-upsert', { method: 'POST', headers: hdr, body });
+      if (!r.ok) throw new Error(`override save failed: ${await r.text()}`);
+    }
+
+    qs('#runAnalyze').addEventListener('click', async () => {
+      const urls = parseUrls(qs('#imgUrls').value);
+      const status = qs('#status');
+      if (!urls.length) return (status.textContent = 'Paste image URLs first.');
+      status.textContent = 'Analyzing…';
+      try {
+        await requireAuth();
+        const start = await analyzeUrls(urls);
+        if (start.mode === 'fg') {
+          renderGroups(start);
+          status.textContent = 'Done.';
+        } else if (start.mode === 'redirect') {
+          status.textContent = 'Redirected to background.';
+        } else {
+          status.textContent = `Queued job ${start.jobId}…`;
+          const fin = await pollJob(start.jobId);
+          renderGroups(fin);
+          status.textContent = 'Complete.';
+        }
+      } catch (e) {
+        status.textContent = 'Error: ' + (e?.message || e);
+      }
+    });
+
+    qs('#btnCreateDrafts').addEventListener('click', createDraftsFromSelected);
+
+    async function createDraftsFromSelected() {
+      const status = qs('#status');
+      const groups = window._currentGroups || [];
+      const pickedIds = new Set(qsa('input[type=checkbox][data-pick]').filter((i) => i.checked).map((i) => i.value));
+      const picked = groups.filter((g) => pickedIds.has(g.groupId));
+      if (!picked.length) {
+        status.textContent = 'No groups selected.';
+        return;
+      }
+      try {
+        const t = await getToken();
+        if (!t) throw new Error('Not authenticated');
+        const hdr = { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` };
+        const body = JSON.stringify({ jobId: window._currentJobId || 'adhoc', groups: picked });
+        const r = await fetch('/.netlify/functions/create-ebay-draft-user', { method: 'POST', headers: hdr, body });
+        const data = await r.json();
+        if (data.dryRun) {
+          status.textContent = `DRY RUN: ${data.count} preview(s)`;
+        } else if (data.ok && (data.created > 0 || (data.results || []).length > 0)) {
+          const first = (data.results || [])[0];
+          const s = String(first?.status || '').toUpperCase();
+          const draftStatuses = new Set(['UNPUBLISHED', 'INACTIVE', 'DRAFT']);
+          status.textContent = draftStatuses.has(s)
+            ? `Draft created: Offer ${first.offerId} (status: ${s})`
+            : `Offer status: ${s || 'unknown'}`;
+        } else {
+          status.textContent = `Create draft failed: ${JSON.stringify(data)}`;
+        }
+      } catch (e) {
+        status.textContent = 'Error: ' + (e?.message || e);
+      }
+    }
+  </script>
+</body>
+</html>
