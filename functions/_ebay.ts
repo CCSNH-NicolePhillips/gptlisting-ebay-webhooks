@@ -19,12 +19,14 @@ export function apiHost(): string {
 }
 
 export function headers(token: string): Record<string, string> {
+  const MARKETPLACE_ID =
+    process.env.DEFAULT_MARKETPLACE_ID || process.env.EBAY_MARKETPLACE_ID || 'EBAY_US';
   return {
     Authorization: `Bearer ${token}`,
     Accept: 'application/json',
     'Content-Language': 'en-US',
     'Accept-Language': 'en-US',
-    'X-EBAY-C-MARKETPLACE-ID': process.env.EBAY_MARKETPLACE_ID || 'EBAY_US',
+    'X-EBAY-C-MARKETPLACE-ID': MARKETPLACE_ID,
     'Content-Type': 'application/json',
   };
 }

@@ -26,7 +26,8 @@ export const handler: Handler = async (event) => {
 
     const { access_token } = await accessTokenFromRefresh(refresh);
     const { apiHost } = tokenHosts(process.env.EBAY_ENV);
-    const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || 'EBAY_US';
+    const MARKETPLACE_ID =
+      process.env.DEFAULT_MARKETPLACE_ID || process.env.EBAY_MARKETPLACE_ID || 'EBAY_US';
 
     const url = `${apiHost}/sell/inventory/v1/location?limit=200`;
     const r = await fetch(url, {
