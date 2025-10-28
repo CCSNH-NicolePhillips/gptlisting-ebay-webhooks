@@ -354,7 +354,7 @@
         <h3>Required specifics</h3>
         <div id="reqAspects" class="aspect-grid"></div>
       </div>
-      <details class="form-section optional-details">
+      <details id="optAspectsWrap" class="form-section optional-details">
         <summary>Optional specifics</summary>
         <div id="optAspects" class="aspect-grid"></div>
       </details>
@@ -375,7 +375,7 @@
     <script>
       const $ = (id) => document.getElementById(id);
       const catPreview = $('categoryPreview');
-  const titleEl = $('title');
+      const titleEl = $('title');
       // removed search input
       const nextBtn = $('btnNext');
       const step2 = $('step2');
@@ -624,6 +624,18 @@
         }
       }
 
+      const optAspectsWrap = $('optAspectsWrap');
+      let optionalToggleProgrammatic = false;
+      if (optAspectsWrap) {
+        optAspectsWrap.addEventListener('toggle', () => {
+          if (optionalToggleProgrammatic) {
+            optionalToggleProgrammatic = false;
+            return;
+          }
+          optAspectsWrap.dataset.userToggle = '1';
+        });
+      }
+
       function renderAspect(containerId, aspect, required) {
         const wrap = document.createElement('div');
         wrap.className = 'aspect-field';
@@ -731,6 +743,7 @@
           const reqWrap = $('reqAspectsWrap');
           const reqContainer = $('reqAspects');
           const optContainer = $('optAspects');
+          const optWrap = optAspectsWrap;
           if (reqContainer) reqContainer.innerHTML = '';
           if (optContainer) optContainer.innerHTML = '';
           const reqList = Array.isArray(req.requiredAspects) ? req.requiredAspects : [];
@@ -744,7 +757,22 @@
               reqWrap.setAttribute('aria-hidden', 'true');
             }
           }
-          (req.optionalAspects || []).forEach((a) => renderAspect('optAspects', a, false));
+          const optList = Array.isArray(req.optionalAspects) ? req.optionalAspects : [];
+          optList.forEach((a) => renderAspect('optAspects', a, false));
+          if (optWrap) {
+            const hasOptional = optList.length > 0;
+            optWrap.style.display = hasOptional ? '' : 'none';
+            if (hasOptional) {
+              if (!optWrap.dataset.userToggle) {
+                optionalToggleProgrammatic = true;
+                optWrap.open = true;
+              }
+            } else {
+              optionalToggleProgrammatic = true;
+              optWrap.open = false;
+              delete optWrap.dataset.userToggle;
+            }
+          }
           await loadLocations();
           step2.classList.remove('hide');
           msg1.textContent = '';
