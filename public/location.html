@@ -3,110 +3,96 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Inventory location · GPTListing</title>
+    <title>Manage Inventory Locations · GPTListing</title>
     <style>
-      body {
-        font-family:
-          system-ui,
-          -apple-system,
-          Segoe UI,
-          Roboto,
-          Arial,
-          sans-serif;
-        margin: 0;
-        padding: 2rem;
-        background: #0b1020;
-        color: #f4f6fb;
-      }
-      .card {
-        max-width: 760px;
-        margin: 0 auto;
-        background: #141a33;
-        border: 1px solid #2a335c;
-        border-radius: 12px;
-        padding: 1.5rem;
-      }
-      .row {
-        display: flex;
-        gap: 1rem;
-        flex-wrap: wrap;
-        margin-bottom: 1.15rem;
-      }
-      .col {
-        flex: 1 1 240px;
-        max-width: 300px;
-        min-width: 220px;
-        display: flex;
-        flex-direction: column;
-      }
-      label {
-        font-weight: 600;
-        margin-bottom: 0.45rem;
-      }
-      input,
-      select {
-        background: #0f1530;
-        color: #f4f6fb;
-        border: 1px solid #26305a;
-        border-radius: 8px;
-        padding: 0.5rem;
-        width: 100%;
-        box-sizing: border-box;
-        min-height: 42px;
-      }
-      button {
-        background: #4f7cff;
-        color: white;
-        border: none;
-        border-radius: 8px;
-        padding: 0.7rem 1rem;
-        cursor: pointer;
-        font-weight: 600;
-      }
-      button.secondary {
-        background: transparent;
-        color: #cbd5ff;
-        border: 1px solid #3d4a86;
-      }
-      .muted {
-        color: #a2a9c8;
-      }
-      .hint {
-        font-size: 0.85rem;
-        margin-top: 0.35rem;
-      }
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin:0; padding:2rem; background:#0b1020; color:#f4f6fb; }
+      .card { max-width: 1000px; margin: 0 auto; background: #141a33; border: 1px solid #2a335c; border-radius: 12px; padding: 1.25rem; }
+      .muted { color:#a2a9c8; }
+      .small { font-size:.85rem; }
+      a { color:#a8c1ff; }
+      button { background:#4f7cff; color:#fff; border:none; border-radius:8px; padding:.45rem .7rem; cursor:pointer; font-weight:600; }
+      button.secondary { background: transparent; color: #cbd5ff; border: 1px solid #3d4a86; }
+      .btn-sm { padding:.35rem .6rem; font-size:.85rem; border-radius:7px; }
+      table { width:100%; border-collapse: collapse; margin-top: .5rem; }
+      th, td { text-align:left; padding: .5rem; border-bottom: 1px solid #26305a; }
+      td.actions { text-align:right; white-space:nowrap; }
+      .row { display:flex; flex-wrap:wrap; gap:1rem; }
+      .col { flex:1 1 320px; background:#0f1530; border:1px solid #26305a; border-radius:10px; padding:.9rem; }
+      .col.flex { display:flex; flex-direction:column; }
+      .section-header { display:flex; align-items:center; justify-content:space-between; gap:.5rem; }
+      .locations-table tr.selected { background: rgba(79,124,255,0.18); }
+      pre { background:#0b1020; border:1px solid #26305a; border-radius:6px; padding:.6rem; overflow:auto; max-height:260px; font-size:.82rem; }
+      .label { font-size:.8rem; letter-spacing:.01em; text-transform:uppercase; color:#7e88b3; }
+      .form-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .8rem; }
+      input, select { background:#0b1020; color:#f4f6fb; border:1px solid #26305a; border-radius:8px; padding:.55rem; width:100%; box-sizing:border-box; }
+      .error { color:#fca5a5; }
     </style>
   </head>
   <body>
     <script src="/auth-client.js"></script>
     <div class="card">
-      <h2>Inventory location</h2>
-      <p class="muted">Create your eBay ship-from location with the details you use for order fulfillment.</p>
+      <h2>Manage inventory locations</h2>
+      <p class="muted">View, create, or delete the eBay inventory locations used for fulfillment. A location must exist before you publish offers.</p>
+      <div style="margin:.5rem 0 1rem; display:flex; flex-wrap:wrap; gap:.5rem;">
+        <a class="secondary" href="/">← Back to landing</a>
+        <a class="secondary" href="/setup.html#inventory">Setup checklist</a>
+        <a class="secondary" href="https://www.ebay.com/sh/locations" target="_blank" rel="noopener">Open in eBay ↗</a>
+      </div>
+
       <div class="row">
-        <div class="col">
-          <label for="key">Location key</label>
-          <input id="key" placeholder="primary-warehouse" />
+        <div class="col flex">
+          <div class="section-header">
+            <h3 style="margin:0">Existing locations</h3>
+            <div style="display:flex; gap:.4rem;">
+              <button class="secondary btn-sm" id="refreshBtn">Refresh</button>
+            </div>
+          </div>
+          <div class="muted small" id="locationsStatus">Loading…</div>
+          <table class="locations-table" id="locationsTable">
+            <thead><tr><th>Name</th><th>Status</th><th class="actions">Actions</th></tr></thead>
+            <tbody></tbody>
+          </table>
         </div>
-        <div class="col">
-          <label for="name">Location name</label>
-          <input id="name" placeholder="Main Warehouse" />
-          <div class="hint muted">Use a nickname like "Main Warehouse" instead of your personal first name.</div>
+        <div class="col flex" id="inspector" style="display:none;">
+          <div class="section-header">
+            <h3 style="margin:0" id="inspectorTitle">Location details</h3>
+            <button class="secondary btn-sm" id="closeInspector">Close</button>
+          </div>
+          <div class="muted small" id="inspectorStatus">Select a location to see its full payload.</div>
+          <div id="inspectorBody" style="display:none; margin-top:.75rem;">
+            <div class="label">Address</div>
+            <div id="inspectorAddress" class="muted" style="margin-bottom:.75rem;"></div>
+            <div class="label">Location types</div>
+            <div id="inspectorTypes" class="muted" style="margin-bottom:.75rem;"></div>
+            <div class="label">Raw payload</div>
+            <pre id="inspectorJson">n/a</pre>
+          </div>
         </div>
       </div>
-      <div class="row">
-        <div class="col">
-          <label for="a1">Address 1</label>
-          <input id="a1" placeholder="123 Commerce Way" />
-        </div>
-        <div class="col">
-          <label for="city">City</label>
-          <input id="city" placeholder="Sampledale" />
-        </div>
-      </div>
-      <div class="row">
-        <div class="col">
-          <label for="state">State</label>
-          <select id="state">
+
+      <div class="col flex" style="margin-top:1rem;">
+        <h3 style="margin:0 0 .5rem;">Create or update a location</h3>
+        <div class="muted small" style="margin-bottom:.75rem;">All fields are required for US addresses. Creating a location with an existing key updates it.</div>
+        <div class="form-grid">
+          <div>
+            <label class="label" for="locKey">Location key</label>
+            <input id="locKey" placeholder="primary-warehouse" />
+          </div>
+          <div>
+            <label class="label" for="locName">Location name</label>
+            <input id="locName" placeholder="Main Warehouse" />
+          </div>
+          <div>
+            <label class="label" for="locAddress1">Address line 1</label>
+            <input id="locAddress1" placeholder="123 Commerce Way" />
+          </div>
+          <div>
+            <label class="label" for="locCity">City</label>
+            <input id="locCity" placeholder="Sampledale" />
+          </div>
+          <div>
+            <label class="label" for="locState">State</label>
+            <select id="locState">
               <option value="">Select a state…</option>
               <option value="AL">Alabama</option>
               <option value="AK">Alaska</option>
@@ -158,90 +144,286 @@
               <option value="WV">West Virginia</option>
               <option value="WI">Wisconsin</option>
               <option value="WY">Wyoming</option>
-          </select>
+            </select>
+          </div>
+          <div>
+            <label class="label" for="locPostal">Postal code</label>
+            <input id="locPostal" placeholder="03101" />
+          </div>
+          <div>
+            <label class="label" for="locCountry">Country</label>
+            <select id="locCountry">
+              <option value="US">United States</option>
+              <option value="CA">Canada</option>
+              <option value="GB">United Kingdom</option>
+              <option value="AU">Australia</option>
+              <option value="DE">Germany</option>
+            </select>
+          </div>
         </div>
-        <div class="col">
-          <label for="postal">Postal</label>
-          <input id="postal" placeholder="00000" />
-        </div>
-        <div class="col">
-          <label for="country">Country</label>
-          <select id="country">
-            <option value="US">United States</option>
-            <option value="CA">Canada</option>
-            <option value="GB">United Kingdom</option>
-            <option value="AU">Australia</option>
-            <option value="DE">Germany</option>
-          </select>
+        <div style="margin-top:.75rem; display:flex; gap:.5rem; flex-wrap:wrap;">
+          <button id="createLocation">Create or update</button>
+          <button id="resetForm" class="secondary">Reset form</button>
         </div>
       </div>
-      <div style="margin: 0.75rem 0">
-        <button id="create">Create</button>
-        <span id="msg" class="muted"></span>
-      </div>
-      <div style="margin-top: 1rem"><a class="secondary" href="/">← Back to landing</a></div>
+
+      <div id="msg" class="muted" style="margin-top:.75rem;"></div>
     </div>
 
     <script>
-      // Require auth and ensure all calls carry Authorization
-      (async () => { try { await authClient.requireAuth(); } catch {} })();
-
-      async function safeParseJson(response) {
-        const text = await response.text();
-        if (!text) return null;
+      (async () => {
         try {
-          return JSON.parse(text);
+          const ok = await authClient.requireAuth();
+          if (!ok) return;
         } catch (err) {
-          console.warn('Failed to parse JSON response', err, text);
-          return null;
+          console.error('Auth failed', err);
+          return;
         }
-      }
+        initLocations();
+      })();
 
-      async function ensureConnected() {
-        const r = await authClient.authFetch('/.netlify/functions/status');
-        const payload = await safeParseJson(r);
-        if (!r.ok) {
-          const message = payload?.error || `Unable to verify connection (status ${r.status}).`;
-          document.getElementById('msg').textContent = message;
-          throw new Error(message);
-        }
-        if (!payload?.ebay?.connected) {
-          document.getElementById('msg').textContent = 'Connect eBay first.';
-          throw new Error('Not connected');
-        }
-      }
-      function vals() {
-        return {
-          key: (document.getElementById('key') || { value: '' }).value.trim() || 'default-loc',
-          name: (document.getElementById('name') || { value: '' }).value.trim() || 'Main Warehouse',
-          a1: (document.getElementById('a1') || { value: '' }).value.trim(),
-          city: (document.getElementById('city') || { value: '' }).value.trim(),
-          state: (document.getElementById('state') || { value: '' }).value.trim(),
-          postal: (document.getElementById('postal') || { value: '' }).value.trim(),
-          country: (document.getElementById('country') || { value: '' }).value.trim() || 'US',
+      function initLocations() {
+        const state = { locations: [], selectedKey: null };
+        const tableBody = document.querySelector('#locationsTable tbody');
+        const statusEl = document.getElementById('locationsStatus');
+        const msgEl = document.getElementById('msg');
+        const inspectorBox = document.getElementById('inspector');
+        const inspectorStatus = document.getElementById('inspectorStatus');
+        const inspectorBody = document.getElementById('inspectorBody');
+        const inspectorAddress = document.getElementById('inspectorAddress');
+        const inspectorTypes = document.getElementById('inspectorTypes');
+        const inspectorJson = document.getElementById('inspectorJson');
+        const closeInspectorBtn = document.getElementById('closeInspector');
+
+        const refreshBtn = document.getElementById('refreshBtn');
+        const createBtn = document.getElementById('createLocation');
+        const resetBtn = document.getElementById('resetForm');
+
+        const fields = {
+          key: document.getElementById('locKey'),
+          name: document.getElementById('locName'),
+          address1: document.getElementById('locAddress1'),
+          city: document.getElementById('locCity'),
+          state: document.getElementById('locState'),
+          postal: document.getElementById('locPostal'),
+          country: document.getElementById('locCountry'),
         };
-      }
-      document.getElementById('create').onclick = async () => {
-        const v = vals();
-        const msg = document.getElementById('msg');
-        msg.textContent = 'Saving…';
-        try {
-          await ensureConnected();
-          const url = `/.netlify/functions/ebay-create-location?key=${encodeURIComponent(v.key)}&name=${encodeURIComponent(v.name)}&address1=${encodeURIComponent(v.a1)}&city=${encodeURIComponent(v.city)}&state=${encodeURIComponent(v.state)}&postal=${encodeURIComponent(v.postal)}&country=${encodeURIComponent(v.country)}&minimal=true`;
-          const r = await authClient.authFetch(url);
-          const data = await safeParseJson(r);
-          if (r.status === 204 || (r.ok && (!data || data.ok || data.exists))) {
-            msg.textContent = 'Saved. Returning…';
-            setTimeout(() => (location.href = '/setup.html'), 800);
-          } else {
-            const detail = data?.error || data?.message || (data ? JSON.stringify(data) : `status ${r.status}`);
-            msg.textContent = 'Error: ' + detail;
+
+        function setMsg(text, type) {
+          if (msgEl) {
+            msgEl.textContent = text || '';
+            msgEl.className = type === 'error' ? 'error' : 'muted';
           }
-        } catch (e) {
-          msg.textContent = 'Error: ' + e.message;
         }
-      };
-      // No separate enable flow; creating the location is sufficient.
+
+        function safeParse(text) {
+          if (!text) return null;
+          try { return JSON.parse(text); } catch { return { raw: text }; }
+        }
+
+        function formatAddress(loc) {
+          const addr = loc?.location?.address || {};
+          const parts = [addr.addressLine1, addr.addressLine2, addr.city, addr.stateOrProvince, addr.postalCode]
+            .map((part) => (part || '').trim())
+            .filter(Boolean);
+          const line = parts.join(', ');
+          const country = (addr.country || '').trim();
+          return country ? (line ? line + ', ' + country : country) : line || 'n/a';
+        }
+
+        function renderInspector() {
+          const loc = state.locations.find((l) => l.merchantLocationKey === state.selectedKey);
+          if (!loc) {
+            if (inspectorBox) inspectorBox.style.display = 'none';
+            return;
+          }
+          if (inspectorBox) inspectorBox.style.display = 'flex';
+          if (inspectorStatus) inspectorStatus.style.display = 'none';
+          if (inspectorBody) inspectorBody.style.display = 'block';
+          const name = loc.name || loc.merchantLocationKey || 'Location';
+          const title = document.getElementById('inspectorTitle');
+          if (title) title.textContent = name;
+          if (inspectorAddress) inspectorAddress.textContent = formatAddress(loc);
+          const types = Array.isArray(loc.locationTypes) ? loc.locationTypes.join(', ') : 'n/a';
+          if (inspectorTypes) inspectorTypes.textContent = types || 'n/a';
+          if (inspectorJson) inspectorJson.textContent = JSON.stringify(loc, null, 2);
+        }
+
+        function renderLocations() {
+          if (!tableBody) return;
+          tableBody.innerHTML = '';
+          state.locations.forEach((loc) => {
+            const tr = document.createElement('tr');
+            if (state.selectedKey && state.selectedKey === loc.merchantLocationKey) tr.classList.add('selected');
+            const nameTd = document.createElement('td');
+            const nameLine = document.createElement('div');
+            nameLine.textContent = loc.name || '(unnamed)';
+            const keyLine = document.createElement('div');
+            keyLine.className = 'muted small';
+            keyLine.textContent = loc.merchantLocationKey || '';
+            const addressLine = document.createElement('div');
+            addressLine.className = 'muted small';
+            addressLine.textContent = formatAddress(loc);
+            nameTd.appendChild(nameLine);
+            nameTd.appendChild(keyLine);
+            nameTd.appendChild(addressLine);
+            const statusTd = document.createElement('td');
+            statusTd.textContent = loc.merchantLocationStatus || 'UNKNOWN';
+            const actionsTd = document.createElement('td');
+            actionsTd.className = 'actions';
+            const inspectBtn = document.createElement('button');
+            inspectBtn.textContent = 'Inspect';
+            inspectBtn.className = 'secondary btn-sm';
+            inspectBtn.onclick = () => {
+              state.selectedKey = loc.merchantLocationKey;
+              renderLocations();
+              renderInspector();
+            };
+            const enableBtn = document.createElement('button');
+            enableBtn.textContent = 'Enable';
+            enableBtn.className = 'secondary btn-sm';
+            enableBtn.style.marginLeft = '.35rem';
+            enableBtn.disabled = (loc.merchantLocationStatus || '').toUpperCase() === 'ENABLED';
+            enableBtn.onclick = async () => {
+              if (!loc.merchantLocationKey) return;
+              try {
+                setMsg('Enabling…');
+                const url = new URL('/.netlify/functions/ebay-enable-location', window.location.origin);
+                url.searchParams.set('key', loc.merchantLocationKey);
+                const res = await authClient.authFetch(url.toString(), { method: 'POST' });
+                const text = await res.text();
+                if (!res.ok) throw new Error(text || 'Enable failed');
+                setMsg('Location enabled. Refreshing…');
+                await loadLocations();
+              } catch (err) {
+                setMsg('Enable failed: ' + (err?.message || err), 'error');
+              }
+            };
+            const deleteBtn = document.createElement('button');
+            deleteBtn.textContent = 'Delete';
+            deleteBtn.style.marginLeft = '.35rem';
+            deleteBtn.className = 'btn-sm';
+            deleteBtn.onclick = async () => {
+              if (!loc.merchantLocationKey) return;
+              if (!confirm(`Delete location "${loc.merchantLocationKey}" on eBay? This cannot be undone.`)) return;
+              try {
+                setMsg('Deleting…');
+                const res = await authClient.authFetch('/.netlify/functions/ebay-delete-location', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ key: loc.merchantLocationKey }),
+                });
+                const text = await res.text();
+                const payload = safeParse(text);
+                if (!res.ok || !payload?.ok) {
+                  const detail = payload?.error || payload?.message || text || 'Delete failed';
+                  throw new Error(detail);
+                }
+                setMsg('Deleted. Refreshing…');
+                state.selectedKey = null;
+                await loadLocations();
+              } catch (err) {
+                setMsg('Delete failed: ' + (err?.message || err), 'error');
+              }
+            };
+            actionsTd.appendChild(inspectBtn);
+            actionsTd.appendChild(enableBtn);
+            actionsTd.appendChild(deleteBtn);
+            tr.appendChild(nameTd);
+            tr.appendChild(statusTd);
+            tr.appendChild(actionsTd);
+            tableBody.appendChild(tr);
+          });
+        }
+
+        async function loadLocations() {
+          statusEl.textContent = 'Loading…';
+          try {
+            const res = await authClient.authFetch('/.netlify/functions/ebay-list-locations');
+            const text = await res.text();
+            const payload = safeParse(text) || {};
+            if (!res.ok) {
+              const errMsg = payload?.error || payload?.message || text || `status ${res.status}`;
+              throw new Error(errMsg);
+            }
+            const list = Array.isArray(payload.locations) ? payload.locations : [];
+            state.locations = list;
+            statusEl.textContent = list.length ? `${list.length} location${list.length === 1 ? '' : 's'} found.` : 'No locations yet. Create one below.';
+            renderLocations();
+            if (state.selectedKey) {
+              const exists = list.some((loc) => loc.merchantLocationKey === state.selectedKey);
+              if (!exists) state.selectedKey = null;
+            }
+            renderInspector();
+            setMsg('');
+          } catch (err) {
+            statusEl.textContent = 'Failed to load locations.';
+            setMsg('Load failed: ' + (err?.message || err), 'error');
+          }
+        }
+
+        async function handleCreate() {
+          const values = {
+            key: (fields.key?.value || '').trim() || 'default-loc',
+            name: (fields.name?.value || '').trim() || 'Main Warehouse',
+            address1: (fields.address1?.value || '').trim(),
+            city: (fields.city?.value || '').trim(),
+            state: (fields.state?.value || '').trim(),
+            postal: (fields.postal?.value || '').trim(),
+            country: (fields.country?.value || '').trim() || 'US',
+          };
+          if (!values.address1 || !values.city || !values.state || !values.postal) {
+            setMsg('Fill in address, city, state, and postal code.', 'error');
+            return;
+          }
+          try {
+            createBtn.disabled = true;
+            setMsg('Saving location…');
+            const qs = new URLSearchParams();
+            qs.set('key', values.key);
+            qs.set('name', values.name);
+            qs.set('address1', values.address1);
+            qs.set('city', values.city);
+            qs.set('state', values.state);
+            qs.set('postal', values.postal);
+            qs.set('country', values.country);
+            qs.set('minimal', 'true');
+            const url = `/.netlify/functions/ebay-create-location?${qs.toString()}`;
+            const res = await authClient.authFetch(url);
+            const text = await res.text();
+            const payload = safeParse(text) || {};
+            if (!res.ok || payload?.error) {
+              const detail = payload?.error || payload?.message || text || 'Save failed';
+              throw new Error(detail);
+            }
+            setMsg('Location saved. Refreshing list…');
+            await loadLocations();
+          } catch (err) {
+            setMsg('Save failed: ' + (err?.message || err), 'error');
+          } finally {
+            createBtn.disabled = false;
+          }
+        }
+
+        function resetForm() {
+          Object.values(fields).forEach((el) => {
+            if (el) el.value = '';
+          });
+          if (fields.country) fields.country.value = 'US';
+          setMsg('');
+        }
+
+        if (refreshBtn) refreshBtn.onclick = loadLocations;
+        if (createBtn) createBtn.onclick = handleCreate;
+        if (resetBtn) resetBtn.onclick = resetForm;
+        if (closeInspectorBtn) closeInspectorBtn.onclick = () => {
+          state.selectedKey = null;
+          renderLocations();
+          if (inspectorBox) inspectorBox.style.display = 'none';
+        };
+
+        loadLocations();
+      }
     </script>
   </body>
 </html>
