@@ -66,6 +66,26 @@ function sanitizeAspects(aspects: Record<string, string[]>): Record<string, stri
   return out;
 }
 
+function sanitizeImageUrls(value: unknown): string[] {
+  const out: string[] = [];
+  const arr = Array.isArray(value) ? value : [];
+  for (const entry of arr) {
+    if (typeof entry !== "string") continue;
+    const url = entry.trim();
+    if (!url) continue;
+    // Require http(s) scheme and a plausible host; ignore placeholders
+    try {
+      const u = new URL(url);
+      if ((u.protocol === "http:" || u.protocol === "https:") && /[.]/.test(u.hostname)) {
+        out.push(u.toString());
+      }
+    } catch {
+      // skip invalid
+    }
+  }
+  return out.slice(0, 12);
+}
+
 async function ensureInventoryLocation(
   token: string,
   apiHost: string,
@@ -110,10 +130,17 @@ export async function putInventoryItem(
     product: {
       title: inventory.product.title,
       description: inventory.product.description || inventory.product.title,
-      imageUrls: (inventory.product.imageUrls || []).slice(0, 12),
+      imageUrls: sanitizeImageUrls(inventory.product.imageUrls || []),
       aspects: sanitizeAspects(inventory.product.aspects || {}),
     },
   };
+
+  // Ensure at least one valid image URL remains
+  if (!Array.isArray((payload.product as any).imageUrls) || !(payload.product as any).imageUrls.length) {
+    throw new Error(
+      "No valid image URLs found. Provide publicly accessible https links (e.g., Dropbox direct links with dl=1)."
+    );
+  }
 
   if (inventory.condition) {
     payload.condition = inventory.condition;

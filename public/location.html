@@ -45,6 +45,7 @@
             <h3 style="margin:0">Existing locations</h3>
             <div style="display:flex; gap:.4rem;">
               <button class="secondary btn-sm" id="refreshBtn">Refresh</button>
+              <button class="btn-sm" id="setDefaultBtn" disabled>Set as my default</button>
             </div>
           </div>
           <div class="muted small" id="locationsStatus">Loading…</div>
@@ -183,7 +184,7 @@
       })();
 
       function initLocations() {
-        const state = { locations: [], selectedKey: null };
+        const state = { locations: [], selectedKey: null, defaultKey: '' };
         const tableBody = document.querySelector('#locationsTable tbody');
         const statusEl = document.getElementById('locationsStatus');
         const msgEl = document.getElementById('msg');
@@ -195,7 +196,8 @@
         const inspectorJson = document.getElementById('inspectorJson');
         const closeInspectorBtn = document.getElementById('closeInspector');
 
-        const refreshBtn = document.getElementById('refreshBtn');
+  const refreshBtn = document.getElementById('refreshBtn');
+  const setDefaultBtn = document.getElementById('setDefaultBtn');
         const createBtn = document.getElementById('createLocation');
         const resetBtn = document.getElementById('resetForm');
 
@@ -208,6 +210,34 @@
           postal: document.getElementById('locPostal'),
           country: document.getElementById('locCountry'),
         };
+
+        async function getDefaultLocationKey() {
+          try {
+            const r = await authClient.authFetch('/.netlify/functions/ebay-get-location-user');
+            const j = await r.json().catch(() => ({}));
+            return (typeof j?.merchantLocationKey === 'string' ? j.merchantLocationKey : '') || '';
+          } catch { return ''; }
+        }
+
+        async function setDefaultLocationKey(key) {
+          const res = await authClient.authFetch('/.netlify/functions/ebay-set-location-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ merchantLocationKey: key }),
+          });
+          if (!res.ok) {
+            const txt = await res.text();
+            throw new Error(txt || 'Failed to save default');
+          }
+        }
+
+        function updateDefaultButton() {
+          if (!setDefaultBtn) return;
+          const sel = (state.selectedKey || '').trim();
+          const def = (state.defaultKey || '').trim();
+          setDefaultBtn.disabled = !sel || (def && sel === def);
+          setDefaultBtn.textContent = def && sel === def ? 'Default set' : 'Set as my default';
+        }
 
         function setMsg(text, type) {
           if (msgEl) {
@@ -260,7 +290,8 @@
             nameLine.textContent = loc.name || '(unnamed)';
             const keyLine = document.createElement('div');
             keyLine.className = 'muted small';
-            keyLine.textContent = loc.merchantLocationKey || '';
+            const isDefault = !!(state.defaultKey && loc.merchantLocationKey && state.defaultKey === loc.merchantLocationKey);
+            keyLine.textContent = (loc.merchantLocationKey || '') + (isDefault ? '  • Default' : '');
             const addressLine = document.createElement('div');
             addressLine.className = 'muted small';
             addressLine.textContent = formatAddress(loc);
@@ -278,6 +309,7 @@
               state.selectedKey = loc.merchantLocationKey;
               renderLocations();
               renderInspector();
+              updateDefaultButton();
             };
             const enableBtn = document.createElement('button');
             enableBtn.textContent = 'Enable';
@@ -334,6 +366,7 @@
             tr.appendChild(actionsTd);
             tableBody.appendChild(tr);
           });
+          updateDefaultButton();
         }
 
         async function loadLocations() {
@@ -349,6 +382,10 @@
             const list = Array.isArray(payload.locations) ? payload.locations : [];
             state.locations = list;
             statusEl.textContent = list.length ? `${list.length} location${list.length === 1 ? '' : 's'} found.` : 'No locations yet. Create one below.';
+            // Refresh default key if not loaded yet
+            if (!state.defaultKey) {
+              try { state.defaultKey = await getDefaultLocationKey(); } catch {}
+            }
             renderLocations();
             if (state.selectedKey) {
               const exists = list.some((loc) => loc.merchantLocationKey === state.selectedKey);
@@ -414,6 +451,22 @@
         }
 
         if (refreshBtn) refreshBtn.onclick = loadLocations;
+        if (setDefaultBtn) setDefaultBtn.onclick = async () => {
+          const key = (state.selectedKey || '').trim();
+          if (!key) return;
+          try {
+            setDefaultBtn.disabled = true;
+            setMsg('Saving default…');
+            await setDefaultLocationKey(key);
+            state.defaultKey = key;
+            setMsg('Default location saved.');
+            renderLocations();
+          } catch (err) {
+            setMsg('Save default failed: ' + (err?.message || err), 'error');
+          } finally {
+            updateDefaultButton();
+          }
+        };
         if (createBtn) createBtn.onclick = handleCreate;
         if (resetBtn) resetBtn.onclick = resetForm;
         if (closeInspectorBtn) closeInspectorBtn.onclick = () => {
@@ -422,7 +475,10 @@
           if (inspectorBox) inspectorBox.style.display = 'none';
         };
 
-        loadLocations();
+        (async () => {
+          try { state.defaultKey = await getDefaultLocationKey(); } catch {}
+          loadLocations();
+        })();
       }
     </script>
   </body>
