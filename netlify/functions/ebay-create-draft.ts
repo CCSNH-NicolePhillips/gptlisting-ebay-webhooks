@@ -609,10 +609,19 @@ function normalizeCondition(value: unknown): { inventoryCondition?: string; offe
     };
   }
   if (typeof value === "string") {
-    const trimmed = value.trim().toUpperCase();
+    const trimmed = value.trim();
+    if (!trimmed) return {};
+    const numeric = Number(trimmed);
+    if (Number.isFinite(numeric)) {
+      return {
+        inventoryCondition: mapCondToInventory(numeric) ?? undefined,
+        offerCondition: numeric,
+      };
+    }
+    const upper = trimmed.toUpperCase();
     return {
-      inventoryCondition: trimmed || undefined,
-      offerCondition: conditionStringToCode(trimmed),
+      inventoryCondition: upper || undefined,
+      offerCondition: conditionStringToCode(upper),
     };
   }
   return {};
