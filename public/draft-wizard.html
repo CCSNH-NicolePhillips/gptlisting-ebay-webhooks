@@ -35,14 +35,26 @@
         grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
         margin-bottom: 0.75rem;
       }
-      .row.fit-3 { grid-template-columns: minmax(260px, 2fr) minmax(150px, 1fr) minmax(120px, 0.8fr); }
-      .row.fit-2 { grid-template-columns: repeat(2, minmax(200px, 1fr)); }
+      .row.fit-3 { grid-template-columns: minmax(260px, 1fr) max-content max-content; }
+      .row.fit-2 { grid-template-columns: repeat(2, max-content); }
       .row.align-end { align-items: end; }
       .col { min-width: 0; }
-      .col.shrink { max-width: 220px; justify-self: start; }
+      .col.shrink { max-width: 170px; justify-self: start; }
       .col.shrink input,
       .col.shrink select {
-        max-width: 200px;
+        max-width: 150px;
+      }
+      .text-warn { color: #ff8f8f; }
+      @media (max-width: 680px) {
+        .row.fit-3,
+        .row.fit-2 {
+          grid-template-columns: 1fr;
+        }
+        .col.shrink,
+        .col.shrink input,
+        .col.shrink select {
+          max-width: none;
+        }
       }
       .col.title { grid-column: span 2; }
       label { display: block; margin: 0.4rem 0 0.25rem; }
@@ -166,7 +178,10 @@
       </div>
       <div class="row fit-3 align-end">
         <div class="col">
-          <label>SKU<input id="sku" placeholder="SKU-123" /></label>
+          <label>SKU
+            <input id="sku" placeholder="SKU123" maxlength="50" />
+            <small id="skuHint" class="muted" style="display:block;margin-top:.3rem;">Use 1-50 letters or numbers. No spaces or punctuation.</small>
+          </label>
         </div>
         <div class="col shrink">
           <label
@@ -256,6 +271,44 @@
       const browseList = $('browseList');
       const crumbs = $('crumbs');
       const browsePanel = $('browsePanel');
+      const skuInput = $('sku');
+      const skuHintEl = $('skuHint');
+      const skuDefaultHint = 'Use 1-50 letters or numbers. No spaces or punctuation.';
+      const skuPattern = /^[A-Za-z0-9]{1,50}$/;
+
+      function updateSkuHint(value) {
+        if (!skuHintEl) return;
+        const trimmed = (value || '').trim();
+        if (!trimmed) {
+          skuHintEl.textContent = skuDefaultHint;
+          skuHintEl.classList.remove('text-warn');
+          return;
+        }
+        if (skuPattern.test(trimmed)) {
+          skuHintEl.textContent = 'Looks good. Keep using only letters or numbers.';
+          skuHintEl.classList.remove('text-warn');
+        } else {
+          skuHintEl.textContent = 'SKU must be 1-50 characters, letters and numbers only.';
+          skuHintEl.classList.add('text-warn');
+        }
+      }
+      if (skuInput) {
+        const sanitizeSku = (raw) => (raw || '').replace(/[^A-Za-z0-9]/g, '');
+        const syncSku = (raw) => {
+          const clean = sanitizeSku(raw);
+          if (skuInput.value !== clean) {
+            skuInput.value = clean;
+            try {
+              const pos = clean.length;
+              skuInput.setSelectionRange(pos, pos);
+            } catch {}
+          }
+          updateSkuHint(clean);
+        };
+        updateSkuHint(sanitizeSku(skuInput.value));
+        skuInput.addEventListener('input', () => syncSku(skuInput.value));
+        skuInput.addEventListener('blur', () => syncSku(skuInput.value));
+      }
       // Internal category selection state (browse-only flow)
       let SELECTED_CATEGORY_ID = '';
       let SELECTED_CATEGORY_PATH = '';
@@ -542,7 +595,7 @@
       $('btnCreate').addEventListener('click', async () => {
         const msg = $('msg2');
         msg.textContent = 'Submitting…';
-        const sku = ($('sku') || { value: '' }).value.trim();
+        const skuRaw = (skuInput || { value: '' }).value.trim();
         const title = (titleEl || { value: '' }).value.trim();
         const price = parseFloat(($('price') || { value: '' }).value);
         const qty = parseInt(($('qty') || { value: '1' }).value, 10) || 1;
@@ -557,8 +610,31 @@
         const merchantLocationKey = (locationSel || { value: '' }).value.trim();
         const categoryId = (SELECTED_CATEGORY_ID || '').trim();
         const condition = (conditionSel || { value: '' }).value.trim(); // numeric string like '1000'
-        if (!sku || !title || !Number.isFinite(price) || !images.length) {
-          msg.textContent = 'Please provide SKU, title, price, and at least one image URL.';
+        if (!skuRaw) {
+          updateSkuHint(skuRaw);
+          msg.textContent = 'SKU is required and must be alphanumeric.';
+          return;
+        }
+        if (!skuPattern.test(skuRaw)) {
+          updateSkuHint(skuRaw);
+          msg.textContent = 'SKU must be 1-50 characters, using letters and numbers only.';
+          return;
+        }
+        const sku = skuRaw;
+        if (!title) {
+          msg.textContent = 'Title is required.';
+          return;
+        }
+        if (!Number.isFinite(price) || price <= 0) {
+          msg.textContent = 'Price must be a positive number.';
+          return;
+        }
+        if (!Number.isFinite(qty) || qty <= 0) {
+          msg.textContent = 'Quantity must be a positive whole number.';
+          return;
+        }
+        if (!images.length) {
+          msg.textContent = 'Add at least one image URL before creating a draft.';
           return;
         }
         const aspects = collectAspects();
