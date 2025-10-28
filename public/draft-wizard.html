@@ -179,6 +179,38 @@
         animation: spin 0.85s linear infinite;
         margin: 0 auto 0.85rem;
       }
+      .debug-console {
+        margin-top: 1rem;
+        border: 1px dashed #3d4a86;
+        border-radius: 10px;
+        background: rgba(15, 21, 48, 0.65);
+        padding: 0.75rem 0.9rem;
+      }
+      .debug-console summary {
+        cursor: pointer;
+        color: #cbd5ff;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+      }
+      .debug-entry {
+        border-top: 1px solid rgba(61, 74, 134, 0.65);
+        padding: 0.6rem 0;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+        font-size: 0.78rem;
+      }
+      .debug-entry:first-child {
+        border-top: none;
+        padding-top: 0;
+      }
+      .debug-entry pre {
+        margin: 0.35rem 0 0;
+        background: rgba(14, 22, 52, 0.9);
+        border: 1px solid rgba(61, 74, 134, 0.7);
+        border-radius: 8px;
+        padding: 0.55rem;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
       @keyframes spin {
         to {
           transform: rotate(360deg);
@@ -331,6 +363,13 @@
         <button id="btnPublish" class="secondary" disabled>Publish now</button>
         <span id="msg2" class="muted"></span>
       </div>
+      <div id="debugHint" class="muted" style="display:none;margin:0.75rem 0 0.25rem; font-size:0.82rem;">
+        Trouble creating drafts? <a id="lnkShowDebug" href="#" style="color:#8fb0ff">Show debug console</a> or add <code>?debug=1</code> to the URL.
+      </div>
+      <details id="debugPanel" class="debug-console" style="display:none;">
+        <summary>Debug console</summary>
+        <div id="debugLog"></div>
+      </details>
     </div>
 
     <script>
@@ -354,6 +393,70 @@
       const skuHintEl = $('skuHint');
       const skuDefaultHint = 'Use 1-50 letters or numbers. No spaces or punctuation.';
       const skuPattern = /^[A-Za-z0-9]{1,50}$/;
+      const debugPanel = $('debugPanel');
+      const debugLogBox = $('debugLog');
+      const debugHint = $('debugHint');
+      const debugShowLink = $('lnkShowDebug');
+      const debugState = { enabled: false, buffer: [] };
+
+      function renderDebugEntry(entry) {
+        if (!debugLogBox) return;
+        const block = document.createElement('div');
+        block.className = 'debug-entry';
+        const title = document.createElement('div');
+        title.textContent = `[${new Date(entry.ts).toLocaleTimeString()}] ${entry.label}`;
+        block.appendChild(title);
+        if (entry.detail !== undefined) {
+          const pre = document.createElement('pre');
+          try {
+            pre.textContent = typeof entry.detail === 'string'
+              ? entry.detail
+              : JSON.stringify(entry.detail, null, 2);
+          } catch {
+            pre.textContent = String(entry.detail);
+          }
+          block.appendChild(pre);
+        }
+        debugLogBox.insertBefore(block, debugLogBox.firstChild || null);
+        while (debugLogBox.childElementCount > 200) {
+          debugLogBox.removeChild(debugLogBox.lastElementChild);
+        }
+      }
+
+      function debugLog(label, detail) {
+        const entry = { ts: Date.now(), label, detail };
+        debugState.buffer.push(entry);
+        if (debugState.buffer.length > 200) debugState.buffer.shift();
+        if (debugState.enabled) renderDebugEntry(entry);
+      }
+
+      function setDebugEnabled(on) {
+        debugState.enabled = on;
+        if (debugPanel) {
+          debugPanel.style.display = on ? 'block' : 'none';
+          debugPanel.open = on;
+        }
+        if (debugHint) debugHint.style.display = on ? 'none' : 'block';
+        if (on && debugLogBox) {
+          debugLogBox.innerHTML = '';
+          debugState.buffer.forEach(renderDebugEntry);
+        }
+      }
+
+      if (debugShowLink) {
+        debugShowLink.addEventListener('click', (e) => {
+          e.preventDefault();
+          setDebugEnabled(true);
+        });
+      }
+
+      if (new URLSearchParams(location.search).get('debug') === '1') {
+        setDebugEnabled(true);
+      } else {
+        setDebugEnabled(false);
+      }
+
+      window.draftDebug = { enable: () => setDebugEnabled(true), log: debugLog };
 
       function updateSkuHint(value) {
         if (!skuHintEl) return;
@@ -404,8 +507,11 @@
         } catch {
           j = { raw: await r.text() };
         }
-        if (!r.ok)
+        if (!r.ok) {
+          debugLog('fetchJSON error', { url, status: r.status, body: j });
           throw Object.assign(new Error('HTTP ' + r.status), { response: j, status: r.status });
+        }
+        debugLog('fetchJSON ok', { url, status: r.status });
         return j;
       }
       // No free-text picker in Step 1; category chosen via Browse only.
@@ -576,6 +682,7 @@
             const t = await fetchJSON('/.netlify/functions/ebay-taxonomy-tree-id');
             treeId = String(t.categoryTreeId || '0');
           } catch {}
+          debugLog('requirements request', { categoryId: cid, treeId });
           // Call requirements with treeId and retry once on transient 502
           let req;
           try {
@@ -614,6 +721,12 @@
             o.textContent = '(none)';
             conditionSel.appendChild(o);
           }
+          debugLog('requirements response', {
+            categoryId: cid,
+            requiredAspects: req.requiredAspects?.length || 0,
+            optionalAspects: req.optionalAspects?.length || 0,
+            allowedConditions: req.allowedConditions?.length || 0,
+          });
           // render aspects
           const reqWrap = $('reqAspectsWrap');
           const reqContainer = $('reqAspects');
@@ -649,6 +762,7 @@
           window.scrollTo({ top: step2.offsetTop - 10, behavior: 'smooth' });
         } catch (e) {
           const detail = e?.response?.errorId || e?.response?.message || e?.message || String(e);
+          debugLog('requirements failure', { categoryId: cid, detail });
           msg1.textContent =
             'Requirements error: ' +
             detail +
@@ -731,6 +845,7 @@
           try {
             if (authClient && typeof authClient.ensureAuth === 'function') {
               const ok = await authClient.ensureAuth();
+              debugLog('auth.ensure', { ok });
               if (!ok) {
                 await authClient.requireAuth();
                 msg.textContent = 'Please sign in again to create drafts.';
@@ -739,19 +854,30 @@
             }
             if (authClient && typeof authClient.getToken === 'function') {
               token = await authClient.getToken();
+              debugLog('auth.token', { hasToken: !!token });
             }
           } catch (err) {
             console.warn('auth ensure failed', err);
+            debugLog('auth.error', err?.message || err);
           }
           if (!token) {
             msg.textContent = 'Please sign in again to create drafts.';
             try { await authClient.requireAuth(); } catch {}
+            debugLog('auth.missingToken', null);
             return;
           }
           const headers = {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           };
+          debugLog('create-draft request', {
+            sku,
+            categoryId,
+            qty,
+            hasLocation: !!merchantLocationKey,
+            hasAspects: Object.keys(aspects).length,
+            hasToken: true,
+          });
           const r = await fetch('/.netlify/functions/ebay-create-draft', {
             method: 'POST',
             headers,
@@ -771,6 +897,7 @@
             }),
           });
           const data = await r.json();
+          debugLog('create-draft response', { status: r.status, ok: r.ok, body: data });
           if (r.ok && data.ok) {
             const offerId = data.draftOffer?.offerId;
             // Redirect to drafts page listing all drafts; include created id for flash
@@ -790,9 +917,11 @@
                   data.detail?.warnings ||
                   data.detail;
             msg.textContent = `Error: ${data.error || 'request failed'}${data.status ? ' (' + data.status + ')' : ''} — ${detail ? (typeof detail === 'string' ? detail : JSON.stringify(detail)) : JSON.stringify(data)}`;
+            debugLog('create-draft error', { status: r.status, body: data });
           }
         } catch (e) {
           msg.textContent = 'Error: ' + e.message;
+          debugLog('create-draft failure', e?.message || e);
         }
       });
 
