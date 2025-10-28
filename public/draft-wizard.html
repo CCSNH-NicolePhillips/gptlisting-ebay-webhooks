@@ -19,7 +19,7 @@
         color: #f4f6fb;
       }
       .card {
-        max-width: 920px;
+        max-width: 1080px;
         margin: 0 auto 1rem;
         background: #141a33;
         border: 1px solid #2a335c;
@@ -36,20 +36,36 @@
         margin-bottom: 0.75rem;
       }
       .col { min-width: 0; }
+      .form-section {
+        background: rgba(17, 24, 50, 0.9);
+        border: 1px solid #273463;
+        border-radius: 14px;
+        padding: 1.25rem 1.4rem;
+        margin-bottom: 1.2rem;
+        box-shadow: 0 12px 26px rgba(0, 0, 0, 0.22);
+      }
+      .form-section h3 {
+        margin: 0 0 0.95rem;
+        font-size: 1.02rem;
+        font-weight: 600;
+        color: #d5dcff;
+        letter-spacing: 0.01em;
+      }
+      .form-section .form-row:last-child { margin-bottom: 0; }
       /* Structured row layout for the Step 2 form */
       .form-row {
         display: flex;
         flex-wrap: wrap;
-        gap: 1rem;
-        margin-bottom: 0.85rem;
+        gap: 1.25rem;
+        margin-bottom: 1rem;
       }
       .form-field {
-        flex: 1 1 250px;
-        min-width: 220px;
+        flex: 1 1 280px;
+        min-width: 240px;
       }
       .form-field.compact {
-        flex: 0 0 160px;
-        min-width: 140px;
+        flex: 0 0 185px;
+        min-width: 170px;
       }
       .form-field.tiny {
         flex: 0 0 120px;
@@ -78,7 +94,15 @@
         .form-field.wide { flex: 1 1 100%; min-width: 100%; }
         .compact-input { max-width: none; }
       }
-      label { display: block; margin: 0.4rem 0 0.25rem; }
+      label {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.35rem;
+        margin: 0 0 0.35rem;
+        font-weight: 600;
+        color: #e6ebff;
+      }
       input, textarea, select {
         background: #0f1530;
         color: #f4f6fb;
@@ -86,6 +110,7 @@
         border-radius: 8px;
         padding: 0.6rem 0.7rem;
         width: 100%;
+        box-sizing: border-box;
         transition: border-color 0.2s ease, box-shadow 0.2s ease;
       }
       textarea { min-height: 110px; }
@@ -199,65 +224,71 @@
     <div id="step2" class="card hide">
       <h2>Step 2: Details and create</h2>
       <p id="catPath" class="muted"></p>
-      <div class="form-row">
-        <div class="form-field wide">
-          <label>Title<input id="title" placeholder="Type your listing title" /></label>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-field">
-          <label>SKU
-            <input id="sku" placeholder="SKU123" maxlength="50" />
-            <small id="skuHint" class="muted">Use 1-50 letters or numbers. No spaces or punctuation.</small>
-          </label>
-        </div>
-        <div class="form-field compact">
-          <label>Price USD<input id="price" class="compact-input" type="number" inputmode="decimal" min="0" step="0.01" placeholder="19.99" /></label>
-        </div>
-        <div class="form-field compact">
-          <label>Qty<input id="qty" class="compact-input" type="number" inputmode="numeric" min="1" step="1" value="1" /></label>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-field wide">
-          <label>Images</label>
-          <input id="images" type="hidden" />
-          <div id="imgPicker" style="margin-top:.25rem">
-            <div id="imgDropdown" style="border:1px solid #2a335c;border-radius:8px;padding:.55rem .7rem;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:#0f1530">
-              <span id="imgPlaceholder" class="muted"><span id="imgPhText">Choose images…</span><span id="imgSpinner" style="display:none;margin-left:8px" aria-hidden="true">⏳</span></span><span>▾</span>
-            </div>
-            <div id="imgOptions" style="display:none;position:relative;border:1px solid #2a335c;border-top:none;border-radius:0 0 8px 8px;max-height:360px;overflow:auto;background:#0f1530"></div>
-            <div id="imgChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:.5rem"></div>
-            <div id="imgGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-top:.5rem"></div>
+      <div class="form-section">
+        <h3>Listing basics</h3>
+        <div class="form-row">
+          <div class="form-field wide">
+            <label>Title<input id="title" placeholder="Type your listing title" /></label>
           </div>
-          <small class="muted" id="imgTip"></small>
+        </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label>SKU
+              <input id="sku" placeholder="SKU123" maxlength="50" />
+              <small id="skuHint" class="muted">Use 1-50 letters or numbers. No spaces or punctuation.</small>
+            </label>
+          </div>
+          <div class="form-field compact">
+            <label>Price USD<input id="price" class="compact-input" type="number" inputmode="decimal" min="0" step="0.01" placeholder="19.99" /></label>
+          </div>
+          <div class="form-field compact">
+            <label>Qty<input id="qty" class="compact-input" type="number" inputmode="numeric" min="1" step="1" value="1" /></label>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-field wide">
+            <label>Images</label>
+            <input id="images" type="hidden" />
+            <div id="imgPicker" style="margin-top:.25rem">
+              <div id="imgDropdown" style="border:1px solid #2a335c;border-radius:8px;padding:.55rem .7rem;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:#0f1530">
+                <span id="imgPlaceholder" class="muted"><span id="imgPhText">Choose images…</span><span id="imgSpinner" style="display:none;margin-left:8px" aria-hidden="true">⏳</span></span><span>▾</span>
+              </div>
+              <div id="imgOptions" style="display:none;position:relative;border:1px solid #2a335c;border-top:none;border-radius:0 0 8px 8px;max-height:360px;overflow:auto;background:#0f1530"></div>
+              <div id="imgChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:.5rem"></div>
+              <div id="imgGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-top:.5rem"></div>
+            </div>
+            <small class="muted" id="imgTip"></small>
+          </div>
         </div>
       </div>
-      <div class="form-row">
-        <div class="form-field compact">
-          <label>Weight (lbs)<input id="weightLbs" class="compact-input" type="number" step="0.01" min="0" placeholder="1.0" /></label>
+      <div class="form-section">
+        <h3>Fulfillment details</h3>
+        <div class="form-row">
+          <div class="form-field compact">
+            <label>Weight (lbs)<input id="weightLbs" class="compact-input" type="number" step="0.01" min="0" placeholder="1.0" /></label>
+          </div>
+          <div class="form-field compact">
+            <label>Weight (oz)<input id="weightOz" class="compact-input" type="number" step="0.1" min="0" placeholder="16" /></label>
+          </div>
         </div>
-        <div class="form-field compact">
-          <label>Weight (oz)<input id="weightOz" class="compact-input" type="number" step="0.1" min="0" placeholder="16" /></label>
+        <div class="form-row">
+          <div class="form-field wide">
+            <label
+              >Description<textarea
+                id="description"
+                rows="3"
+                placeholder="Describe the item, ingredients, material, etc."
+              ></textarea>
+            </label>
+          </div>
         </div>
-      </div>
-      <div class="form-row">
-        <div class="form-field wide">
-          <label
-            >Description<textarea
-              id="description"
-              rows="3"
-              placeholder="Describe the item, ingredients, material, etc."
-            ></textarea>
-          </label>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-field">
-          <label>Condition<select id="condition"></select></label>
-        </div>
-        <div class="form-field">
-          <label>Location<select id="location"></select></label>
+        <div class="form-row">
+          <div class="form-field">
+            <label>Condition<select id="condition"></select></label>
+          </div>
+          <div class="form-field">
+            <label>Location<select id="location"></select></label>
+          </div>
         </div>
       </div>
       <div class="hr"></div>
