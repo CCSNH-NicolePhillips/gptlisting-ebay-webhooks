@@ -1,0 +1,1 @@
+export { handler } from "../../functions/ebay-taxonomy-aspects.js";

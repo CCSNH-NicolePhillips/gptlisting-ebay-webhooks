@@ -1,0 +1,1 @@
+export { handler } from "../../functions/ebay-get-offer.js";
