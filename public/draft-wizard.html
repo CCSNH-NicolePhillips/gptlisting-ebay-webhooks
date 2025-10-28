@@ -578,7 +578,7 @@
         try {
           const weightLbs = (document.getElementById('weightLbs') || { value: '' }).value.trim();
           const weightOz = (document.getElementById('weightOz') || { value: '' }).value.trim();
-          const r = await fetch('/.netlify/functions/ebay-create-draft', {
+          const r = await authClient.authFetch('/.netlify/functions/ebay-create-draft', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -637,7 +637,7 @@
           btnPub.disabled = true;
           try {
             const cond = (document.getElementById('condition') || { value: '' }).value;
-            const r = await fetch('/.netlify/functions/ebay-publish-offer', {
+            const r = await authClient.authFetch('/.netlify/functions/ebay-publish-offer', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ offerId, condition: cond ? Number(cond) : undefined }),
