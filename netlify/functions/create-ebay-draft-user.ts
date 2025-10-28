@@ -139,7 +139,7 @@ export const handler: Handler = async (event) => {
 
   let access;
   try {
-    access = await getEbayAccessToken();
+    access = await getEbayAccessToken(user.userId);
   } catch (err: any) {
     return json(502, { error: "eBay auth failed", detail: err?.message || String(err ?? "") }, originHdr, METHODS);
   }
