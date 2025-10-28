@@ -122,19 +122,22 @@ export const handler: Handler = async (event) => {
       const code = Number((res.body?.errors && res.body.errors[0]?.errorId) || 0);
       if (res.status === 400 && code === 25707) {
         const safe = await safeAggregateByInventory();
-        if (safe.offers.length) {
-          return {
-            statusCode: 200,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              ok: true,
-              total: safe.offers.length,
-              offers: safe.offers,
-              attempts: [...attempts, ...safe.attempts],
-              note: 'safe-aggregate',
-            }),
-          };
-        }
+        const note = safe.offers.length ? 'safe-aggregate' : 'safe-aggregate-empty';
+        const warning = safe.offers.length
+          ? undefined
+          : 'Upstream offer listing failed due to invalid SKU values. Showing filtered results.';
+        return {
+          statusCode: 200,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ok: true,
+            total: safe.offers.length,
+            offers: safe.offers,
+            attempts: [...attempts, ...safe.attempts],
+            note,
+            warning,
+          }),
+        };
       }
       return {
         statusCode: res.status,
