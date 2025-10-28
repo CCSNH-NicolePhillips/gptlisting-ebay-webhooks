@@ -616,13 +616,20 @@
           }
           // render aspects
           const reqWrap = $('reqAspectsWrap');
-          $('reqAspects').innerHTML = '';
-          $('optAspects').innerHTML = '';
+          const reqContainer = $('reqAspects');
+          const optContainer = $('optAspects');
+          if (reqContainer) reqContainer.innerHTML = '';
+          if (optContainer) optContainer.innerHTML = '';
           const reqList = Array.isArray(req.requiredAspects) ? req.requiredAspects : [];
           reqList.forEach((a) => renderAspect('reqAspects', a, true));
           if (reqWrap) {
-            reqWrap.classList.add('hide');
-            reqWrap.setAttribute('aria-hidden', 'true');
+            if (reqList.length) {
+              reqWrap.classList.remove('hide');
+              reqWrap.removeAttribute('aria-hidden');
+            } else {
+              reqWrap.classList.add('hide');
+              reqWrap.setAttribute('aria-hidden', 'true');
+            }
           }
           (req.optionalAspects || []).forEach((a) => renderAspect('optAspects', a, false));
           await loadLocations();
