@@ -48,16 +48,32 @@ export const handler: Handler = async (ev) => {
       return json(400, { error: "Invalid JSON" }, originHdr, methods);
     }
 
-    const { jobId, groupId, aspects, categoryId } = body;
+  const { jobId, groupId, aspects, categoryId, offer } = body;
     if (!jobId || !groupId) return json(400, { error: "Missing jobId or groupId" }, originHdr, methods);
 
     const key = k.override(user.userId, jobId, groupId);
-    const record: any = {
-      inventory: { product: { aspects: aspects || {} } },
-    };
+    const record: any = { inventory: { product: { aspects: aspects || {} } } };
     if (categoryId) {
-      record.offer = { categoryId };
-      record._meta = { selectedCategory: { id: categoryId, slug: String(categoryId), title: String(categoryId) } };
+      record.offer = { ...(record.offer || {}), categoryId };
+      record._meta = {
+        ...(record._meta || {}),
+        selectedCategory: { id: categoryId, slug: String(categoryId), title: String(categoryId) },
+      };
+    }
+    if (offer && typeof offer === "object") {
+      const o: any = {};
+      if (typeof offer.price === "number" && Number.isFinite(offer.price) && offer.price > 0) {
+        o.price = Math.round(offer.price * 100) / 100;
+        record._meta = { ...(record._meta || {}), price: o.price };
+      }
+      if (typeof offer.quantity === "number" && Number.isFinite(offer.quantity) && offer.quantity > 0) o.quantity = Math.trunc(offer.quantity);
+      if (typeof offer.merchantLocationKey === "string" && offer.merchantLocationKey.trim()) o.merchantLocationKey = offer.merchantLocationKey.trim();
+      if (typeof offer.marketplaceId === "string" && offer.marketplaceId.trim()) o.marketplaceId = offer.marketplaceId.trim();
+      if (typeof offer.description === "string" && offer.description.trim()) o.description = offer.description.trim();
+      ["fulfillmentPolicyId", "paymentPolicyId", "returnPolicyId"].forEach((k) => {
+        if (Object.prototype.hasOwnProperty.call(offer, k)) (o as any)[k] = (offer as any)[k] ?? null;
+      });
+      if (Object.keys(o).length) record.offer = { ...(record.offer || {}), ...o };
     }
 
     const setRes = await upstash(["SET", key, JSON.stringify(record)]);
