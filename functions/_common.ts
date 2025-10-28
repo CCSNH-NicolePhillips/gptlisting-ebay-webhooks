@@ -2,10 +2,27 @@
 export function tokenHosts(env: string | undefined) {
   const isSb = (env || 'PROD') === 'SANDBOX';
   const defaultApi = isSb ? 'https://api.sandbox.ebay.com' : 'https://api.ebay.com';
-  const apiOverride = (process.env.EBAY_ENDPOINT_URL || '').trim();
+  // Allow an explicit API host override, but only if it looks like an eBay host.
+  // Some environments set EBAY_ENDPOINT_URL to the site origin; that should NOT be used here.
+  const endpoint = (process.env.EBAY_ENDPOINT_URL || '').trim();
+  const apiHostEnv = (process.env.EBAY_API_HOST || '').trim();
+  let apiHost = defaultApi;
+  if (apiHostEnv) {
+    apiHost = apiHostEnv;
+  } else if (endpoint) {
+    try {
+      const u = new URL(endpoint);
+      const host = u.hostname.toLowerCase();
+      if (host.includes('ebay.com')) {
+        apiHost = `${u.protocol}//${u.host}`;
+      }
+    } catch {
+      // Ignore invalid URL values
+    }
+  }
   return {
     tokenHost: isSb ? 'https://api.sandbox.ebay.com' : 'https://api.ebay.com',
-    apiHost: apiOverride || defaultApi,
+    apiHost,
   };
 }
 

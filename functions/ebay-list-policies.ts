@@ -20,7 +20,8 @@ export const handler: Handler = async (event) => {
 
     const { access_token } = await accessTokenFromRefresh(refresh);
     const { apiHost } = tokenHosts(process.env.EBAY_ENV);
-    const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || 'EBAY_US';
+    const MARKETPLACE_ID =
+      process.env.DEFAULT_MARKETPLACE_ID || process.env.EBAY_MARKETPLACE_ID || 'EBAY_US';
 
     const headers = {
       Authorization: `Bearer ${access_token}`,
