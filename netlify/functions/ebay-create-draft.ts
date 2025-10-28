@@ -1,5 +1,7 @@
 import type { Handler } from "@netlify/functions";
 import { accessTokenFromRefresh, tokenHosts } from "../../functions/_common.js";
+import { tokensStore } from "../../functions/_blobs.js";
+import { userScopedKey } from "../../functions/_auth.js";
 import { getOrigin, isAuthorized, isOriginAllowed, jsonResponse } from "../../src/lib/http.js";
 import { maybeRequireUserAuth } from "../../src/lib/auth-user.js";
 import type { UserAuth } from "../../src/lib/auth-user.js";
@@ -265,9 +267,53 @@ export const handler: Handler = async (event) => {
     );
   }
 
-  const refreshToken = process.env.EBAY_REFRESH_TOKEN;
+  let refreshToken = (process.env.EBAY_REFRESH_TOKEN || "").trim();
+  let refreshSource: "env" | "user" | "global" | null = refreshToken ? "env" : null;
+
+  if (!refreshToken && userAuth?.userId) {
+    try {
+      const store = tokensStore();
+      const saved = (await store.get(userScopedKey(userAuth.userId, "ebay.json"), { type: "json" })) as any;
+      const candidate = typeof saved?.refresh_token === "string" ? saved.refresh_token.trim() : "";
+      if (candidate) {
+        refreshToken = candidate;
+        refreshSource = "user";
+      }
+    } catch (err) {
+      console.warn("[ebay-create-draft] failed to load user-scoped refresh token", err);
+    }
+  }
+
   if (!refreshToken) {
-    return jsonResponse(500, { error: "EBAY_REFRESH_TOKEN env var is required" }, originHdr, METHODS);
+    try {
+      const store = tokensStore();
+      const saved = (await store.get("ebay.json", { type: "json" })) as any;
+      const candidate = typeof saved?.refresh_token === "string" ? saved.refresh_token.trim() : "";
+      if (candidate) {
+        refreshToken = candidate;
+        refreshSource = "global";
+      }
+    } catch (err) {
+      console.warn("[ebay-create-draft] failed to load global refresh token", err);
+    }
+  }
+
+  if (!refreshToken) {
+    return jsonResponse(
+      500,
+      {
+        error: "EBAY_REFRESH_TOKEN env var is required",
+        detail: "Add EBAY_REFRESH_TOKEN in environment or connect eBay for this account.",
+      },
+      originHdr,
+      METHODS,
+    );
+  }
+
+  if (refreshSource) {
+    console.log(
+      JSON.stringify({ evt: "ebay.refreshToken.source", source: refreshSource, userId: userAuth?.userId || null }),
+    );
   }
 
   let token: { access_token: string };
