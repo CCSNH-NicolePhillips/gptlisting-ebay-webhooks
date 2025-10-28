@@ -33,7 +33,15 @@
         grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
         margin-bottom: 0.75rem;
       }
+      .row.fit-3 { grid-template-columns: minmax(260px, 2fr) minmax(150px, 1fr) minmax(120px, 0.8fr); }
+      .row.fit-2 { grid-template-columns: repeat(2, minmax(200px, 1fr)); }
+      .row.align-end { align-items: end; }
       .col { min-width: 0; }
+      .col.shrink { max-width: 220px; justify-self: start; }
+      .col.shrink input,
+      .col.shrink select {
+        max-width: 200px;
+      }
       .col.title { grid-column: span 2; }
       label { display: block; margin: 0.4rem 0 0.25rem; }
       input, textarea, select {
@@ -154,16 +162,16 @@
           <label>Title<input id="title" placeholder="Type your listing title" /></label>
         </div>
       </div>
-      <div class="row">
+      <div class="row fit-3 align-end">
         <div class="col">
           <label>SKU<input id="sku" placeholder="SKU-123" /></label>
         </div>
-        <div class="col">
+        <div class="col shrink">
           <label
             >Price USD<input id="price" type="number" min="0" step="0.01" placeholder="19.99"
           /></label>
         </div>
-        <div class="col">
+        <div class="col shrink">
           <label>Qty<input id="qty" type="number" min="1" value="1" /></label>
         </div>
       </div>
@@ -182,13 +190,13 @@
           <small class="muted" id="imgTip"></small>
         </div>
       </div>
-      <div class="row">
-        <div class="col">
+      <div class="row fit-2 align-end">
+        <div class="col shrink">
           <label
             >Weight (lbs)<input id="weightLbs" type="number" step="0.01" min="0" placeholder="1.0"
           /></label>
         </div>
-        <div class="col">
+        <div class="col shrink">
           <label
             >Weight (oz)<input id="weightOz" type="number" step="0.1" min="0" placeholder="16"
           /></label>
