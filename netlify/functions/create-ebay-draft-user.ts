@@ -74,6 +74,22 @@ export const handler: Handler = async (event) => {
     return responseUnauthorized(originHdr);
   }
 
+  // Load per-user policy defaults (if any)
+  let userPolicyDefaults: { fulfillment?: string; payment?: string; return?: string } = {};
+  try {
+    const store = tokensStore();
+    const saved = (await store.get(userScopedKey(user.userId, "policy-defaults.json"), { type: "json" })) as any;
+    if (saved && typeof saved === "object") {
+      userPolicyDefaults = {
+        fulfillment: typeof saved.fulfillment === "string" ? saved.fulfillment : undefined,
+        payment: typeof saved.payment === "string" ? saved.payment : undefined,
+        return: typeof saved.return === "string" ? saved.return : undefined,
+      };
+    }
+  } catch {
+    // ignore
+  }
+
   let body: RequestBody = {};
   try {
     body = parseBody(event.body);
@@ -180,9 +196,9 @@ export const handler: Handler = async (event) => {
         price: mapped.offer.price,
         quantity: mapped.offer.quantity,
         condition: mapped.offer.condition,
-        fulfillmentPolicyId: mapped.offer.fulfillmentPolicyId,
-        paymentPolicyId: mapped.offer.paymentPolicyId,
-        returnPolicyId: mapped.offer.returnPolicyId,
+        fulfillmentPolicyId: mapped.offer.fulfillmentPolicyId ?? userPolicyDefaults.fulfillment ?? null,
+        paymentPolicyId: mapped.offer.paymentPolicyId ?? userPolicyDefaults.payment ?? null,
+        returnPolicyId: mapped.offer.returnPolicyId ?? userPolicyDefaults.return ?? null,
         merchantLocationKey,
         description: mapped.offer.description,
       });
