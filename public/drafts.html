@@ -249,9 +249,6 @@
   </head>
   <body>
     <script src="/auth-client.js"></script>
-    <script>
-      authClient.requireAuth();
-    </script>
     <div class="wrap">
       <header>
         <h1>Draft offers</h1>
@@ -270,7 +267,8 @@
 
     <script>
       async function fetchJSON(url, opts) {
-        const r = await fetch(url, opts);
+        const exec = authClient && typeof authClient.authFetch === 'function' ? authClient.authFetch : fetch;
+        const r = await exec(url, opts);
         const t = await r.text();
         let j;
         try {
@@ -594,7 +592,17 @@
           flash.textContent = 'Delete error: ' + (e?.message || String(e));
         }
       });
-      load();
+      async function bootstrap() {
+        try {
+          const ok = await authClient.requireAuth();
+          if (!ok) return;
+        } catch (e) {
+          console.error('Auth check failed', e);
+          return;
+        }
+        load();
+      }
+      bootstrap();
     </script>
   </body>
 </html>
