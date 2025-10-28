@@ -1,0 +1,1 @@
+export { handler } from "../../functions/ebay-ensure-policies.js";

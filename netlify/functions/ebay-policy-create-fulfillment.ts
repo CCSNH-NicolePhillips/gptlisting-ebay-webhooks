@@ -1,0 +1,1 @@
+export { handler } from "../../functions/ebay-policy-create-fulfillment.js";
