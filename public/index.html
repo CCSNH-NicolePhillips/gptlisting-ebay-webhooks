@@ -117,6 +117,13 @@
         try {
           const ok = await authClient.ensureAuth();
           if (!ok) {
+            try {
+              const mode = await authClient.getMode?.();
+              if (mode && mode !== 'none') {
+                await authClient.requireAuth?.();
+                return;
+              }
+            } catch {}
             const b = document.getElementById('authBanner');
             if (b) b.style.display = 'block';
             const s1 = document.getElementById('dbxStatus');

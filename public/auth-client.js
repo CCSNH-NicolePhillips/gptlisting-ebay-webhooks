@@ -329,7 +329,14 @@
     window.__authFetchPatched = true;
   }
 
-  window.authClient = { requireAuth, login, logout, getToken, ensureAuth, authFetch };
+  async function getMode() {
+    if (!state.cfg) {
+      await loadConfig();
+    }
+    return state.mode;
+  }
+
+  window.authClient = { requireAuth, login, logout, getToken, ensureAuth, authFetch, getMode };
   // Minimal, non-invasive auth badge injected in the top-right for login/logout
   async function renderBadge() {
     try {
