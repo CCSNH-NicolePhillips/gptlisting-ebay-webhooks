@@ -635,14 +635,23 @@ function mapCondToInventory(code?: number): string | undefined {
     case 1000:
       return "NEW";
     case 1500:
-    case 1750:
       return "NEW_OTHER";
+    case 1750:
+      return "NEW_WITH_DEFECTS";
     case 2000:
-      return "MANUFACTURER_REFURBISHED";
+      return "CERTIFIED_REFURBISHED";
     case 2500:
       return "SELLER_REFURBISHED";
+    case 2750:
+      return "LIKE_NEW";
     case 3000:
       return "USED";
+    case 4000:
+      return "VERY_GOOD";
+    case 5000:
+      return "GOOD";
+    case 6000:
+      return "ACCEPTABLE";
     case 7000:
       return "FOR_PARTS_OR_NOT_WORKING";
     default:
@@ -658,13 +667,27 @@ function conditionStringToCode(value: string): number | undefined {
     case "NEW OTHER":
     case "NEW OTHER (SEE DETAILS)":
       return 1500;
-    case "MANUFACTURER_REFURBISHED":
+    case "NEW_WITH_DEFECTS":
+      return 1750;
+    case "CERTIFIED_REFURBISHED":
+    case "CERTIFIED REFURBISHED":
       return 2000;
     case "SELLER_REFURBISHED":
       return 2500;
+    case "LIKE_NEW":
+    case "LIKE NEW":
+      return 2750;
     case "USED":
       return 3000;
+    case "VERY_GOOD":
+    case "VERY GOOD":
+      return 4000;
+    case "GOOD":
+      return 5000;
+    case "ACCEPTABLE":
+      return 6000;
     case "FOR_PARTS_OR_NOT_WORKING":
+    case "FOR PARTS OR NOT WORKING":
       return 7000;
     default:
       return undefined;

@@ -493,31 +493,53 @@
             merchantLocationKey: locKey || undefined,
           };
           msg.textContent = 'Creating draft…';
-          try {
-            const r = await fetch('/.netlify/functions/ebay-create-draft', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload),
-            });
-            let data;
             try {
-              data = await r.json();
-            } catch {
-              data = { error: await r.text() };
-            }
-            if (!r.ok || !data.ok) {
-              const detail = data.detail
-                ? typeof data.detail === 'string'
-                  ? data.detail
-                  : JSON.stringify(data.detail)
+              const r = await fetch('/.netlify/functions/ebay-create-draft', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+              });
+              let data;
+              try {
+                data = await r.json();
+              } catch {
+                data = { error: await r.text() };
+              }
+              const resultsCount = Array.isArray(data?.results) ? data.results.length : 0;
+              const failuresCount = Array.isArray(data?.failures) ? data.failures.length : 0;
+              const ok = r.ok && (data?.ok !== false);
+              if (ok && data?.dryRun) {
+                const reason = data.dryRunReason || null;
+                let note = data.message || 'Dry run only — no draft created.';
+                if (!data.message) {
+                  if (reason === 'env') note = 'Dry run only — disable EBAY_DRY_RUN to create live drafts.';
+                  else if (reason === 'mode') note = 'Dry run only — set PUBLISH_MODE=publish (or live) to create drafts.';
+                  else if (reason === 'request') note = 'Dry run only — payload requested dryRun=true.';
+                }
+                msg.textContent = note;
+                return;
+              }
+              const treatedSuccess = ok && resultsCount > 0;
+              if (treatedSuccess) {
+                const first = Array.isArray(data.results) ? data.results[0] : null;
+                const offerId = first?.offerId || data.draftOffer?.offerId || null;
+                const status = (first?.status || data.status || 'UNPUBLISHED').toString();
+                if (offerId) {
+                  msg.textContent = `Draft created: Offer ${offerId} (status: ${status})`;
+                  return;
+                }
+                const parts = [];
+                if (resultsCount) parts.push(`${resultsCount} draft${resultsCount>1?'s':''} created`);
+                if (failuresCount) parts.push(`${failuresCount} failed`);
+                const summary = parts.join(', ') || 'Draft created';
+                msg.textContent = `${summary} (${status}).`;
+                return;
+              }
+              const detail = data?.detail
+                ? (typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail))
                 : '';
-              msg.textContent =
-                'Error: ' + (data.error || JSON.stringify(data)) + (detail ? ' | ' + detail : '');
-            } else {
-              msg.textContent =
-                'Draft created: offerId ' + (data.draftOffer?.offerId || '(unknown)');
-            }
-          } catch (err) {
+              msg.textContent = 'Error: ' + (data?.error || JSON.stringify(data)) + (detail ? ' | ' + detail : '');
+            } catch (err) {
             msg.textContent = 'Error: ' + err.message;
           }
         });
