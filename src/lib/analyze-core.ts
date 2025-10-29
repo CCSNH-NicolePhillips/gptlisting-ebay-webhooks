@@ -60,7 +60,7 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
-function abortableFetch(url: string, init: RequestInit = {}, timeoutMs = 2000) {
+function abortableFetch(url: string, init: RequestInit = {}, timeoutMs = 3500) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   return fetch(url, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer));
@@ -84,28 +84,36 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T, index: nu
 
 async function verifyUrl(url: string): Promise<boolean> {
   try {
-    const res = await abortableFetch(url, { method: "HEAD" }, 2000);
+    const res = await abortableFetch(url, { method: "HEAD" });
 
     if (res.ok || (res.status >= 300 && res.status < 400) || res.status === 403) {
       return true;
     }
 
-    if (res.status === 405) {
+    // Fallback: many hosts disallow HEAD or respond with non-OK; try a tiny ranged GET
+    const getRes = await abortableFetch(
+      url,
+      {
+        method: "GET",
+        headers: { Range: "bytes=0-0" },
+      }
+    );
+    return getRes.ok || getRes.status === 206;
+  } catch (err) {
+    // Final fallback attempt via GET in case HEAD aborted/failed
+    try {
       const getRes = await abortableFetch(
         url,
         {
           method: "GET",
           headers: { Range: "bytes=0-0" },
-        },
-        2000
+        }
       );
       return getRes.ok || getRes.status === 206;
+    } catch (err2) {
+      console.warn(`URL verify failed for ${url}:`, (err2 as Error).message);
+      return false;
     }
-
-    return false;
-  } catch (err) {
-    console.warn(`HEAD failed for ${url}:`, (err as Error).message);
-    return false;
   }
 }
 

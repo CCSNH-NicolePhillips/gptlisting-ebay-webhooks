@@ -114,9 +114,13 @@
     async function renderGroups(result) {
       const grid = qs('#groupsGrid');
       grid.innerHTML = '';
-      const groups = result.groups || result.data?.groups || [];
+        const groups = result.groups || result.data?.groups || [];
+        const warnings = result.warnings || result.data?.warnings || [];
       if (!groups.length) {
-        grid.innerHTML = '<div class="muted">No groups found.</div>';
+          const warnHtml = Array.isArray(warnings) && warnings.length
+            ? `<div style="margin-top:8px;" class="muted">Warnings:<br>${warnings.map(w => `<div>• ${String(w).replace(/[<>]/g,'')}</div>`).join('')}</div>`
+            : '';
+          grid.innerHTML = `<div class="muted">No groups found.${warnHtml}</div>`;
         return;
       }
       window._currentJobId = result.jobId || 'adhoc';
