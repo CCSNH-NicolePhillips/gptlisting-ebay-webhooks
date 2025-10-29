@@ -24,7 +24,14 @@
   <h1>Analyze Images</h1>
   <div class="row">
     <textarea id="imgUrls" placeholder="Paste image URLs here (one per line)"></textarea>
-    <div><button id="runAnalyze">Analyze</button></div>
+    <div>
+      <button id="runAnalyze">Analyze</button>
+      <div style="margin-top:8px">
+        <label class="muted" style="display:flex;align-items:center;gap:6px;user-select:none">
+          <input type="checkbox" id="toggleDebug" /> Show debug
+        </label>
+      </div>
+    </div>
   </div>
   <div id="status" class="muted"></div>
   <div id="groupsGrid" class="grid"></div>
@@ -32,6 +39,17 @@
   <div class="bar">
     <button id="btnCreateDrafts">Create Drafts</button>
     <span id="draftNote" class="muted">Select the groups you want to draft.</span>
+  </div>
+
+  <div id="debugWrap" style="display:none;margin-top:16px;border:1px solid #eee;border-radius:12px;padding:10px;background:#fafafa">
+    <div style="display:flex;gap:8px;align-items:center;justify-content:space-between">
+      <div class="muted">Debug</div>
+      <div style="display:flex;gap:8px">
+        <button id="copyDebug" type="button">Copy</button>
+        <button id="clearDebug" type="button">Clear</button>
+      </div>
+    </div>
+    <pre id="debugLog" style="white-space:pre-wrap;word-break:break-word;max-height:320px;overflow:auto;margin:8px 0 0"></pre>
   </div>
 
   <script type="module">
@@ -62,26 +80,70 @@
       }
     }
 
+    // -------- Debug helpers --------
+    const dbgState = { enabled: false, logs: [] };
+    function dbgShow(show) {
+      dbgState.enabled = !!show;
+      const wrap = qs('#debugWrap');
+      if (wrap) wrap.style.display = show ? 'block' : 'none';
+      if (!show) return;
+      // Render current buffer
+      const pre = qs('#debugLog');
+      if (pre) pre.textContent = dbgState.logs.join('\n');
+    }
+    function dbg(label, payload) {
+      try {
+        const stamp = new Date().toISOString();
+        const text = typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2);
+        const line = `[#${String(dbgState.logs.length + 1).padStart(3,'0')}] ${stamp} ${label}\n${text}`;
+        dbgState.logs.push(line);
+        if (dbgState.logs.length > 200) dbgState.logs.shift();
+        if (dbgState.enabled) {
+          const pre = qs('#debugLog');
+          if (pre) pre.textContent = dbgState.logs.join('\n');
+        }
+      } catch {}
+    }
+    // Auto-enable via ?debug=1
+    try { if (new URLSearchParams(location.search).get('debug') === '1') { const t = qs('#toggleDebug'); if (t) t.checked = true; dbgShow(true);} } catch {}
+    const toggle = qs('#toggleDebug');
+    if (toggle) toggle.addEventListener('change', (e) => dbgShow(!!e.target.checked));
+    const copyBtn = qs('#copyDebug');
+    if (copyBtn) copyBtn.addEventListener('click', async () => { try { await navigator.clipboard.writeText((qs('#debugLog')?.textContent)||''); } catch {} });
+    const clearBtn = qs('#clearDebug');
+    if (clearBtn) clearBtn.addEventListener('click', () => { dbgState.logs = []; const pre = qs('#debugLog'); if (pre) pre.textContent=''; });
+
     async function analyzeUrls(urls) {
       const t = await getToken();
       if (!t) throw new Error('Not authenticated');
       const hdr = { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` };
+      // Log input and normalized shapes (without secrets)
+      dbg('analyze.input', { urls });
       if (urls.length <= 3) {
-        const r = await fetch('/.netlify/functions/analyze-images-user', {
+        const endpoint = '/.netlify/functions/analyze-images-user';
+        const body = JSON.stringify({ images: urls, batchSize: 12 });
+        const r = await fetch(endpoint, {
           method: 'POST',
           headers: hdr,
-          body: JSON.stringify({ images: urls, batchSize: 12 }),
+          body,
         });
-        const data = await r.json();
+        let data = {};
+        try { data = await r.json(); } catch { data = { parse: 'failed', text: await r.text().catch(()=> '') }; }
+        dbg('analyze.fg.response', { endpoint, status: r.status, ok: r.ok, body: data });
         if (data.status === 'redirect') return { mode: 'redirect' };
         return { mode: 'fg', data };
       }
-      const r = await fetch('/.netlify/functions/analyze-images-bg-user', {
+      const endpoint = '/.netlify/functions/analyze-images-bg-user';
+      const body = JSON.stringify({ images: urls, batchSize: 12 });
+      const r = await fetch(endpoint, {
         method: 'POST',
         headers: hdr,
-        body: JSON.stringify({ images: urls, batchSize: 12 }),
+        body,
       });
-      const { jobId } = await r.json();
+      let jobResp = {};
+      try { jobResp = await r.json(); } catch { jobResp = { parse: 'failed', text: await r.text().catch(()=> '') }; }
+      dbg('analyze.bg.enqueue', { endpoint, status: r.status, ok: r.ok, body: jobResp });
+      const { jobId } = jobResp;
       return { mode: 'bg', jobId };
     }
 
@@ -91,8 +153,11 @@
       const hdr = { Authorization: `Bearer ${t}` };
       for (let i = 0; i < 40; i++) {
         await new Promise((r) => setTimeout(r, 2000));
-        const r = await fetch(`/.netlify/functions/analyze-images-status-user?jobId=${encodeURIComponent(jobId)}`, { headers: hdr });
-        const st = await r.json();
+        const endpoint = `/.netlify/functions/analyze-images-status-user?jobId=${encodeURIComponent(jobId)}`;
+        const r = await fetch(endpoint, { headers: hdr });
+        let st = {};
+        try { st = await r.json(); } catch { st = { parse: 'failed', text: await r.text().catch(()=> '') }; }
+        dbg('analyze.bg.poll', { endpoint, status: r.status, ok: r.ok, body: st });
         if (st.state === 'complete' || st.state === 'error') return st;
       }
       throw new Error('Timed out waiting for job.');
@@ -112,6 +177,7 @@
     }
 
     async function renderGroups(result) {
+      dbg('analyze.render.result', { summary: result?.summary, warnings: result?.warnings, groupsCount: (result?.groups || result?.data?.groups || []).length });
       const grid = qs('#groupsGrid');
       grid.innerHTML = '';
         const groups = result.groups || result.data?.groups || [];
@@ -286,8 +352,11 @@
         if (!t) throw new Error('Not authenticated');
         const hdr = { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` };
         const body = JSON.stringify({ jobId: window._currentJobId || 'adhoc', groups: picked });
-        const r = await fetch('/.netlify/functions/create-ebay-draft-user', { method: 'POST', headers: hdr, body });
-        const data = await r.json();
+        const endpoint = '/.netlify/functions/create-ebay-draft-user';
+        const r = await fetch(endpoint, { method: 'POST', headers: hdr, body });
+        let data = {};
+        try { data = await r.json(); } catch { data = { parse: 'failed', text: await r.text().catch(()=> '') }; }
+        dbg('draft.create.response', { endpoint, status: r.status, ok: r.ok, body: data });
         if (data.dryRun) {
           status.textContent = `DRY RUN: ${data.count} preview(s)`;
         } else if (data.ok && (data.created > 0 || (data.results || []).length > 0)) {
