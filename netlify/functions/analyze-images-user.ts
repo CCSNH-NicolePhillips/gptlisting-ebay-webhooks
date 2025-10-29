@@ -28,7 +28,13 @@ export const handler: Handler = async (event) => {
   try {
     user = await requireUserAuth(headers.authorization || headers.Authorization);
   } catch {
-    return json(401, { error: "Unauthorized" }, originHdr, methods);
+    const mode = (process.env.AUTH_MODE || "admin").toLowerCase();
+    return json(
+      401,
+      { error: "Unauthorized", detail: `User endpoints require AUTH_MODE=user|mixed (current: ${mode}) or a valid user token.` },
+      originHdr,
+      methods
+    );
   }
 
   const ctype = headers["content-type"] || headers["Content-Type"] || "";
