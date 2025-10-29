@@ -27,11 +27,32 @@ function buildTitle(group: Record<string, any>): string {
   return title.slice(0, MAX_TITLE_LENGTH);
 }
 
+function normalizeImageUrl(raw: string): string | null {
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    // Normalize common Dropbox share/viewer links to direct-content host
+    const host = u.hostname.toLowerCase();
+    if (host.endsWith("dropbox.com")) {
+      u.hostname = "dl.dropboxusercontent.com";
+      // Prefer raw=1 over dl=1 to avoid HTML landing pages
+      u.searchParams.delete("dl");
+      if (!u.searchParams.has("raw")) u.searchParams.set("raw", "1");
+      return u.toString();
+    }
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
 function ensureImages(group: Record<string, any>): string[] {
   const img = Array.isArray(group?.images) ? group.images : [];
   const urls = img
     .filter((url) => typeof url === "string" && url.trim())
-    .map((url) => url.trim());
+    .map((url) => url.trim())
+    .map((url) => normalizeImageUrl(url))
+    .filter((u): u is string => typeof u === "string" && !!u);
   if (!urls.length) throw new Error("Group missing image URLs");
   return urls.slice(0, 12);
 }

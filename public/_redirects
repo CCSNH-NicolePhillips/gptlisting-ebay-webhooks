@@ -2,3 +2,7 @@
 # Consolidate analyze UI
 /admin/analyze /analyze.html 301
 /admin/analyze.html /analyze.html 301
+# Pretty routes for key pages
+/location /location.html 200!
+/analyze /analyze.html 200!
+/setup /setup.html 200!
