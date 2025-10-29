@@ -107,11 +107,16 @@ export async function runVision(input: VisionInput): Promise<any> {
   const prompt = input.prompt || "";
 
   const primary = parseModel(process.env.VISION_MODEL);
-  const fallbacks = (process.env.VISION_FALLBACK || "")
+  const envFallbacks = (process.env.VISION_FALLBACK || "")
     .split(",")
     .map((entry) => entry.trim())
     .filter(Boolean)
     .map(parseModel);
+  // Provide sensible defaults if no explicit fallbacks are configured
+  const defaultFallbacks: VisionModel[] = envFallbacks.length
+    ? []
+    : [parseModel("openai:gpt-4o"), parseModel("openai:gpt-4o-mini")];
+  const fallbacks = [...envFallbacks, ...defaultFallbacks];
 
   const attempts = [primary, ...fallbacks];
 
