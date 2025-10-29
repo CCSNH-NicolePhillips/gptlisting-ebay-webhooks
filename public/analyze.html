@@ -17,6 +17,8 @@
     .bar{display:flex;align-items:center;gap:8px;margin-bottom:8px}
     .ok{color:#0a7}
     .bad{color:#a00}
+    .debug-only{display:none}
+    body.debug .debug-only{display:block}
   </style>
 </head>
 <body>
@@ -86,6 +88,7 @@
       dbgState.enabled = !!show;
       const wrap = qs('#debugWrap');
       if (wrap) wrap.style.display = show ? 'block' : 'none';
+      try { document.body.classList.toggle('debug', !!show); } catch {}
       if (!show) return;
       // Render current buffer
       const pre = qs('#debugLog');
@@ -233,12 +236,19 @@
       }
 
       for (const g of groups) {
+        try { dbg('group.images', { groupId: g.groupId, images: Array.isArray(g.images) ? g.images : [] }); } catch {}
         const title = [g.brand, g.product].filter(Boolean).join(' — ') || 'Unknown';
         const meta = [g.variant && `Variant: <code>${g.variant}</code>`, g.size && `Size: <code>${g.size}</code>`]
           .filter(Boolean)
           .join(' • ');
         const thumbs = el('div', { class: 'thumbs' });
         (g.images || []).slice(0, 6).forEach((u) => thumbs.appendChild(el('img', { src: u, alt: 'preview' })));
+        const urlsBlock = el('div', { class: 'debug-only' }, [
+          el('details', { open: true }, [
+            el('summary', { html: 'Image URLs' }),
+            el('pre', { html: (Array.isArray(g.images) ? g.images : []).map((u) => String(u)).join('\n') })
+          ])
+        ]);
 
         const pick = el('label', { html: `<input type="checkbox" data-pick value="${g.groupId}" checked> Use for draft` });
 
@@ -247,6 +257,7 @@
           el('div', { class: 'muted', html: meta }),
           el('div', { class: 'muted', html: `Confidence: ${g.confidence ?? '—'}` }),
           thumbs,
+          urlsBlock,
           pick,
           el('div', { class: 'muted', html: `<span data-cat="${g.groupId}"></span><div data-missing="${g.groupId}"></div><div data-ovrbox="${g.groupId}"></div>` }),
         ]);
