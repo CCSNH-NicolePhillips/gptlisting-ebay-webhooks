@@ -60,7 +60,7 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
-function abortableFetch(url: string, init: RequestInit = {}, timeoutMs = 3500) {
+function abortableFetch(url: string, init: RequestInit = {}, timeoutMs = 6000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   return fetch(url, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer));
@@ -183,7 +183,7 @@ export async function runAnalysis(
   const batchSize = Math.min(Math.max(Number(rawBatchSize) || 12, 4), 12);
 
   const checks = await mapLimit(images, 6, (url) => verifyUrl(url));
-  const verified = images.filter((_, idx) => {
+  let verified = images.filter((_, idx) => {
     const reachable = Boolean(checks[idx]);
     if (!reachable) {
       console.warn(`⚠️ Skipping unreachable image: ${images[idx]}`);
@@ -191,10 +191,20 @@ export async function runAnalysis(
     return reachable;
   });
 
+  const preflightWarnings: string[] = [];
+  if (verified.length === 0 && images.length > 0) {
+    // If every preflight failed, proceed anyway (providers may still fetch successfully)
+    preflightWarnings.push("All image preflight checks failed; proceeding anyway.");
+    verified = images.slice();
+  } else if (verified.length < images.length) {
+    const skipped = images.length - verified.length;
+    preflightWarnings.push(`Skipped ${skipped} unreachable image${skipped === 1 ? '' : 's'}.`);
+  }
+
   const verifiedBatches = chunkArray(verified, batchSize);
 
   const analyzedResults: any[] = [];
-  const warnings: string[] = [];
+  const warnings: string[] = [...preflightWarnings];
 
   for (const [idx, batch] of verifiedBatches.entries()) {
     console.log(`🧠 Analyzing batch ${idx + 1}/${verifiedBatches.length} (${batch.length} images)`);
