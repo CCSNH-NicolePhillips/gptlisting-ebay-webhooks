@@ -125,7 +125,25 @@ async function analyzeBatchViaVision(batch: string[]) {
   if (cacheEligible) {
     const cached = await getCachedBatch(batch);
     if (cached?.groups) {
-      return { ...cached, _cache: true };
+      // Ensure images are usable even for cached results
+      try {
+        const result = { ...cached, _cache: true } as any;
+        const validHttp = (u: unknown) => typeof u === "string" && /^https?:\/\//i.test((u as string).trim());
+        if (Array.isArray(result?.groups)) {
+          for (const g of result.groups) {
+            const raw = Array.isArray(g?.images) ? g.images : [];
+            let imgs = raw.filter(validHttp);
+            const hasPlaceholder = raw.some((u: unknown) => typeof u === "string" && /placeholder/i.test(u as string));
+            if (imgs.length === 0 || hasPlaceholder) {
+              imgs = batch.slice(0, 12);
+            }
+            g.images = imgs.map((u: string) => toDirectDropbox(u));
+          }
+        }
+        return result;
+      } catch {
+        return { ...cached, _cache: true };
+      }
     }
   }
 
