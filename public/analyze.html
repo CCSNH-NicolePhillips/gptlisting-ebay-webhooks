@@ -289,8 +289,16 @@
           const offerBox = el('div', { class: 'muted' });
           offerBox.appendChild(el('div', { html: `<label>Price (USD): <input type="number" step="0.01" min="0" data-offer-price placeholder="auto"></label>` }));
           const defaultMlk = (window._defaultMerchantLocationKey || '').trim();
-          const mlkPlaceholder = defaultMlk ? `default: ${defaultMlk}` : 'env or enter per-user key';
-          offerBox.appendChild(el('div', { html: `<label>Merchant Location Key: <input data-offer-mlk placeholder="${mlkPlaceholder}"></label>` }));
+          // Replace free-text with dropdown fed by live locations
+          const mlkRow = el('div');
+          const mlkLabel = document.createElement('label');
+          mlkLabel.textContent = 'Merchant Location Key: ';
+          const mlkSelect = document.createElement('select');
+          mlkSelect.setAttribute('data-offer-mlk-select', '');
+          mlkSelect.innerHTML = `<option value="">Loading…</option>`;
+          mlkLabel.appendChild(mlkSelect);
+          mlkRow.appendChild(mlkLabel);
+          offerBox.appendChild(mlkRow);
           offerBox.appendChild(el('div', { html: `<label><input type="checkbox" data-offer-mlk-default> Save as my default</label>` }));
 
           const saveBtn = el('button', { html: 'Save Overrides' });
@@ -302,9 +310,9 @@
               if (v) aspects[inp.getAttribute('data-aspect')] = v;
             });
             const pEl = card.querySelector('input[data-offer-price]');
-            const mlkEl = card.querySelector('input[data-offer-mlk]');
+            const mlkSel = card.querySelector('select[data-offer-mlk-select]');
             const price = pEl && pEl.value ? Number(pEl.value) : undefined;
-            const merchantLocationKey = mlkEl && mlkEl.value ? mlkEl.value.trim() : undefined;
+            const merchantLocationKey = mlkSel && mlkSel.value ? mlkSel.value.trim() : undefined;
             const offer = {};
             if (typeof price === 'number' && Number.isFinite(price) && price > 0) offer.price = price;
             if (merchantLocationKey) offer.merchantLocationKey = merchantLocationKey;
@@ -324,14 +332,40 @@
           ovrBox.appendChild(offerBox);
           ovrBox.appendChild(saveBtn);
 
-          // If we have a default and no group-level override present in data, prefill the input value
-          try {
-            const mlkInp = card.querySelector('input[data-offer-mlk]');
-            const groupOverride = g?.offer?.merchantLocationKey || g?._meta?.offer?.merchantLocationKey || null;
-            if (mlkInp && !groupOverride && defaultMlk) {
-              mlkInp.value = defaultMlk;
+          // Populate the merchant location dropdown
+          (async function loadLocationsIntoSelect() {
+            try {
+              const tkn = await getToken();
+              if (!tkn) return;
+              const r = await fetch('/.netlify/functions/ebay-list-locations', { headers: { Authorization: `Bearer ${tkn}` } });
+              const j = await r.json().catch(() => ({}));
+              const list = Array.isArray(j?.locations) ? j.locations : (Array.isArray(j?.locationResponses) ? j.locationResponses : []);
+              const options = [];
+              for (const loc of list) {
+                const key = (loc && (loc.merchantLocationKey || loc.merchantlocationkey)) || '';
+                if (typeof key === 'string' && key.trim()) options.push(String(key).trim());
+              }
+              mlkSelect.innerHTML = '';
+              if (!options.length) {
+                mlkSelect.innerHTML = `<option value="">No locations</option>`;
+              } else {
+                options.forEach((k) => {
+                  const opt = document.createElement('option');
+                  opt.value = k;
+                  opt.textContent = k;
+                  mlkSelect.appendChild(opt);
+                });
+              }
+              const groupOverride = g?.offer?.merchantLocationKey || g?._meta?.offer?.merchantLocationKey || '';
+              const initial = (groupOverride || defaultMlk || '').trim();
+              if (initial) {
+                const found = options.find((k) => k === initial) || options.find((k) => k.toLowerCase() === initial.toLowerCase());
+                if (found) mlkSelect.value = found;
+              }
+            } catch (e) {
+              dbg('mlk.load.error', e?.message || String(e));
             }
-          } catch {}
+          })();
         })();
 
         grid.appendChild(card);
@@ -402,6 +436,28 @@
         let data = {};
         try { data = await r.json(); } catch { data = { parse: 'failed', text: await r.text().catch(()=> '') }; }
         dbg('draft.create.response', { endpoint, status: r.status, ok: r.ok, body: data });
+        // Handle invalid merchantLocationKey with available keys from server
+        if (r.status === 400 && Array.isArray(data?.availableKeys) && data.availableKeys.length) {
+          const keys = Array.from(new Set(data.availableKeys.map((k) => String(k).trim()).filter(Boolean)));
+          const gId = data.groupId || '';
+          const targetOv = gId ? document.querySelector(`[data-ovrbox="${gId}"]`) : null;
+          const card = targetOv ? targetOv.closest('.card') : null;
+          const defaultMlk = (window._defaultMerchantLocationKey || '').trim();
+          if (card) {
+            const sel = card.querySelector('select[data-offer-mlk-select]');
+            if (sel) {
+              sel.innerHTML = '';
+              keys.forEach((k) => { const o = document.createElement('option'); o.value = k; o.textContent = k; sel.appendChild(o); });
+              if (defaultMlk) {
+                const found = keys.find((k) => k === defaultMlk) || keys.find((k) => k.toLowerCase() === defaultMlk.toLowerCase());
+                if (found) sel.value = found;
+              }
+            }
+            try { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); card.style.outline = '2px solid #f90'; setTimeout(() => { card.style.outline = ''; }, 2000);} catch {}
+          }
+          status.textContent = 'Invalid merchantLocationKey. Please pick one of your inventory locations from the dropdown, click Save Overrides, then retry Create Drafts.';
+          return;
+        }
         if (data.dryRun) {
           status.textContent = `DRY RUN: ${data.count} preview(s)`;
         } else if (data.ok && (data.created > 0 || (data.results || []).length > 0)) {

@@ -8,6 +8,37 @@ import { tokensStore } from "../../functions/_blobs.js";
 import { userScopedKey } from "../../functions/_auth.js";
 import { createOffer, putInventoryItem } from "../../src/lib/ebay-sell.js";
 
+async function fetchInventoryLocationKeys(accessToken: string, apiHost: string, marketplaceId: string): Promise<string[]> {
+  const url = `${apiHost}/sell/inventory/v1/location?limit=200`;
+  const r = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/json",
+      "Accept-Language": "en-US",
+      "Content-Language": "en-US",
+      "X-EBAY-C-MARKETPLACE-ID": marketplaceId,
+    },
+  });
+  const text = await r.text();
+  if (!r.ok) throw new Error(`locations ${r.status}: ${text.slice(0, 300)}`);
+  try {
+    const json = JSON.parse(text);
+    const list = Array.isArray(json?.locations)
+      ? json.locations
+      : Array.isArray(json?.locationResponses)
+      ? json.locationResponses
+      : [];
+    const keys: string[] = [];
+    for (const loc of list) {
+      const k = typeof loc?.merchantLocationKey === "string" ? loc.merchantLocationKey : null;
+      if (k) keys.push(k);
+    }
+    return keys;
+  } catch {
+    return [];
+  }
+}
+
 const METHODS = "POST, OPTIONS";
 const DRY_RUN_DEFAULT = (process.env.EBAY_DRY_RUN || "true").toLowerCase() !== "false";
 
@@ -162,6 +193,16 @@ export const handler: Handler = async (event) => {
     return json(502, { error: "eBay auth failed", detail: err?.message || String(err ?? "") }, originHdr, METHODS);
   }
 
+  // Fetch available inventory location keys once and reuse for all groups
+  const marketplaceForLocations = process.env.DEFAULT_MARKETPLACE_ID || process.env.EBAY_MARKETPLACE_ID || "EBAY_US";
+  let availableLocationKeys: string[] = [];
+  try {
+    availableLocationKeys = await fetchInventoryLocationKeys(access.token, access.apiHost, marketplaceForLocations);
+  } catch (e: any) {
+    // If fetching locations fails, continue; eBay will still error later, but we won't block here
+    console.warn("[create-ebay-draft-user] failed to list locations:", e?.message || e);
+  }
+
   const results: Array<{ sku: string; offerId: string; warnings: unknown[] }> = [];
 
   for (const { group, mapped, groupId } of prepared) {
@@ -169,7 +210,7 @@ export const handler: Handler = async (event) => {
       const marketplaceId =
         mapped.offer.marketplaceId || process.env.DEFAULT_MARKETPLACE_ID || process.env.EBAY_MARKETPLACE_ID || "EBAY_US";
       let merchantLocationKey =
-        mapped.offer.merchantLocationKey || process.env.EBAY_MERCHANT_LOCATION_KEY || null;
+        (mapped.offer.merchantLocationKey && String(mapped.offer.merchantLocationKey)) || process.env.EBAY_MERCHANT_LOCATION_KEY || null;
 
       // Per-user default merchant location fallback
       if (!merchantLocationKey) {
@@ -183,11 +224,34 @@ export const handler: Handler = async (event) => {
         }
       }
 
-      if (!merchantLocationKey) {
-        throw new Error("Missing EBAY_MERCHANT_LOCATION_KEY env var or mapping override");
+      // Resolve and validate merchantLocationKey against live locations
+      const keys = Array.isArray(availableLocationKeys) ? availableLocationKeys : [];
+      const findKey = (name?: string | null) => {
+        if (!name) return null;
+        // exact match first (case-sensitive)
+        const exact = keys.find((k) => k === name);
+        if (exact) return exact;
+        const lower = String(name).toLowerCase();
+        const ci = keys.find((k) => String(k).toLowerCase() === lower);
+        return ci || null;
+      };
+      const resolvedKey = findKey(merchantLocationKey);
+      if (!resolvedKey) {
+        return json(
+          400,
+          {
+            error: "Invalid merchantLocationKey",
+            detail: `Key '${merchantLocationKey || "(none)"}' not found in ${process.env.EBAY_ENV || "production"}.`,
+            availableKeys: keys,
+            groupId,
+          },
+          originHdr,
+          METHODS
+        );
       }
+      merchantLocationKey = resolvedKey;
 
-      await putInventoryItem(access.token, access.apiHost, mapped.sku, mapped.inventory, mapped.offer.quantity, marketplaceId);
+  await putInventoryItem(access.token, access.apiHost, mapped.sku, mapped.inventory, mapped.offer.quantity, marketplaceId);
 
       const offerResult = await createOffer(access.token, access.apiHost, {
         sku: mapped.sku,
