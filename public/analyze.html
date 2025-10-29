@@ -118,31 +118,56 @@
       if (!t) throw new Error('Not authenticated');
       const hdr = { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` };
       // Log input and normalized shapes (without secrets)
-      dbg('analyze.input', { urls });
+      try { dbg('analyze.input', { urls, authMode: await (window.authClient?.getMode?.()||Promise.resolve('unknown')), tokenPresent: !!t }); } catch { dbg('analyze.input', { urls }); }
       if (urls.length <= 3) {
         const endpoint = '/.netlify/functions/analyze-images-user';
         const body = JSON.stringify({ images: urls, batchSize: 12 });
-        const r = await fetch(endpoint, {
+        let r = await fetch(endpoint, {
           method: 'POST',
           headers: hdr,
           body,
         });
-        let data = {};
+        if (r.status === 401) {
+          dbg('auth.retry', { reason: '401 on analyze-images-user' });
+          const ok = await requireAuth();
+          if (ok) {
+            const t2 = await getToken();
+            const hdr2 = { 'Content-Type': 'application/json', Authorization: `Bearer ${t2}` };
+            r = await fetch(endpoint, { method: 'POST', headers: hdr2, body });
+          }
+        }
+  let data = {};
         try { data = await r.json(); } catch { data = { parse: 'failed', text: await r.text().catch(()=> '') }; }
         dbg('analyze.fg.response', { endpoint, status: r.status, ok: r.ok, body: data });
+        if (r.status === 401) {
+          // Bubble a clear message to UI
+          throw new Error('Sign-in required or token invalid. Please sign in and retry.');
+        }
         if (data.status === 'redirect') return { mode: 'redirect' };
         return { mode: 'fg', data };
       }
       const endpoint = '/.netlify/functions/analyze-images-bg-user';
       const body = JSON.stringify({ images: urls, batchSize: 12 });
-      const r = await fetch(endpoint, {
+      let r = await fetch(endpoint, {
         method: 'POST',
         headers: hdr,
         body,
       });
-      let jobResp = {};
+      if (r.status === 401) {
+        dbg('auth.retry', { reason: '401 on analyze-images-bg-user' });
+        const ok = await requireAuth();
+        if (ok) {
+          const t2 = await getToken();
+          const hdr2 = { 'Content-Type': 'application/json', Authorization: `Bearer ${t2}` };
+          r = await fetch(endpoint, { method: 'POST', headers: hdr2, body });
+        }
+      }
+  let jobResp = {};
       try { jobResp = await r.json(); } catch { jobResp = { parse: 'failed', text: await r.text().catch(()=> '') }; }
       dbg('analyze.bg.enqueue', { endpoint, status: r.status, ok: r.ok, body: jobResp });
+      if (r.status === 401) {
+        throw new Error('Sign-in required or token invalid. Please sign in and retry.');
+      }
       const { jobId } = jobResp;
       return { mode: 'bg', jobId };
     }
