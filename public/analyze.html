@@ -140,6 +140,11 @@
         try { data = await r.json(); } catch { data = { parse: 'failed', text: await r.text().catch(()=> '') }; }
         dbg('analyze.fg.response', { endpoint, status: r.status, ok: r.ok, body: data });
         if (r.status === 401) {
+          // Try to fetch auth diagnostics to aid debugging
+          try {
+            const diag = await fetch('/.netlify/functions/auth-debug-user', { headers: { Authorization: hdr.Authorization } }).then(r => r.json()).catch(() => null);
+            dbg('auth.debug', diag || { error: 'auth-debug failed' });
+          } catch {}
           // Bubble a clear message to UI
           throw new Error('Sign-in required or token invalid. Please sign in and retry.');
         }
@@ -166,6 +171,10 @@
       try { jobResp = await r.json(); } catch { jobResp = { parse: 'failed', text: await r.text().catch(()=> '') }; }
       dbg('analyze.bg.enqueue', { endpoint, status: r.status, ok: r.ok, body: jobResp });
       if (r.status === 401) {
+        try {
+          const diag = await fetch('/.netlify/functions/auth-debug-user', { headers: { Authorization: hdr.Authorization } }).then(r => r.json()).catch(() => null);
+          dbg('auth.debug', diag || { error: 'auth-debug failed' });
+        } catch {}
         throw new Error('Sign-in required or token invalid. Please sign in and retry.');
       }
       const { jobId } = jobResp;
