@@ -8,14 +8,45 @@ import crypto from "crypto";
 export function toDirectDropbox(url: string): string {
   try {
     if (!url) return url;
-    let clean = url.trim();
-    clean = clean
-      .replace("www.dropbox.com", "dl.dropboxusercontent.com")
-      .replace("dropbox.com", "dl.dropboxusercontent.com");
-    clean = clean.replace(/\?dl=\d/, "");
-    return clean;
+    const trimmed = url.trim();
+
+    // Fast path: if not a Dropbox URL, return as-is
+    if (!/dropbox\.com/i.test(trimmed)) return trimmed;
+
+    // Use URL API to safely manipulate host and query params
+    const u = new URL(trimmed);
+    // Normalize host to direct-content endpoint
+    if (u.hostname.endsWith("dropbox.com")) {
+      u.hostname = "dl.dropboxusercontent.com";
+    }
+
+    // Remove the ambiguous dl param if present (dl=0 or dl=1)
+    if (u.searchParams.has("dl")) {
+      u.searchParams.delete("dl");
+    }
+
+    // Ensure raw=1 to nudge consistent content delivery (harmless if redundant)
+    if (!u.searchParams.has("raw")) {
+      u.searchParams.set("raw", "1");
+    }
+
+    return u.toString();
   } catch {
-    return url;
+    // Fallback to string replacements if URL parsing fails
+    try {
+      let clean = url.trim();
+      clean = clean
+        .replace("www.dropbox.com", "dl.dropboxusercontent.com")
+        .replace("dropbox.com", "dl.dropboxusercontent.com")
+        .replace(/([?&])dl=\d(&|$)/, "$1")
+        .replace(/[?&]$/, "");
+      if (!/[?&]raw=1(?!\d)/.test(clean)) {
+        clean += (clean.includes("?") ? "&" : "?") + "raw=1";
+      }
+      return clean;
+    } catch {
+      return url;
+    }
   }
 }
 
