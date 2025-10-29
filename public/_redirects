@@ -1,1 +1,4 @@
 / /welcome.html 200!
+# Consolidate analyze UI
+/admin/analyze /analyze.html 301
+/admin/analyze.html /analyze.html 301
