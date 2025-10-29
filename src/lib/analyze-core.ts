@@ -139,6 +139,21 @@ async function analyzeBatchViaVision(batch: string[]) {
 
   try {
     const result = await withRetry(() => runVision({ images: batch, prompt }));
+    // Post-process images: some providers may return placeholders or omit URLs.
+    try {
+      const validHttp = (u: unknown) => typeof u === "string" && /^https?:\/\//i.test(u.trim());
+      if (Array.isArray((result as any)?.groups)) {
+        for (const g of (result as any).groups) {
+          const raw = Array.isArray(g?.images) ? g.images : [];
+          let imgs = raw.filter(validHttp);
+          const hasPlaceholder = raw.some((u: unknown) => typeof u === "string" && /placeholder/i.test(u));
+          if (imgs.length === 0 || hasPlaceholder) {
+            imgs = batch.slice(0, 12);
+          }
+          g.images = imgs.map((u: string) => toDirectDropbox(u));
+        }
+      }
+    } catch {}
     if (cacheEligible) {
       await setCachedBatch(batch, result);
     }
