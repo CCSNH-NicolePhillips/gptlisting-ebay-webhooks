@@ -4,8 +4,8 @@ import { getOrigin, isOriginAllowed, json } from "../../src/lib/http.js";
 import { mapGroupToDraft, type TaxonomyMappedDraft } from "../../src/lib/map-group-to-draft.js";
 import { putBinding } from "../../src/lib/bind-store.js";
 import { getEbayAccessToken } from "../../src/lib/ebay-auth.js";
-import { tokensStore } from "../../functions/_blobs.js";
-import { userScopedKey } from "../../functions/_auth.js";
+import { tokensStore } from "../../src/lib/_blobs.js";
+import { userScopedKey } from "../../src/lib/_auth.js";
 import { createOffer, putInventoryItem } from "../../src/lib/ebay-sell.js";
 
 async function fetchOfferById(token: string, apiHost: string, offerId: string, marketplaceId: string) {
