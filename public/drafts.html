@@ -365,7 +365,31 @@
               flash.textContent = `Draft ${offer.offerId} had errors and was deleted.`;
               return;
             }
-            flash.textContent = `Publish error: ${data.error || ''}`;
+            // Improve error details: surface common onboarding/privilege errors with a direct link
+            try {
+              const errs = (data?.publish?.detail?.errors && Array.isArray(data.publish.detail.errors)) ? data.publish.detail.errors : [];
+              const e25018 = errs.find((e) => Number(e?.errorId) === 25018);
+              if (e25018) {
+                const params = Array.isArray(e25018.parameters) ? e25018.parameters : [];
+                const urlParam = params.find((p) => typeof p?.value === 'string' && /^https:\/\//i.test(p.value));
+                const url = urlParam?.value || 'https://ebaypayonboardingweb.ebay.com/seller-reg?client=THIRD_PARTY_API';
+                flash.innerHTML = '';
+                const span = document.createElement('span');
+                span.textContent = 'Publish error: Selling privileges required. ';
+                const a = document.createElement('a');
+                a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = 'Complete eBay onboarding';
+                flash.appendChild(span);
+                flash.appendChild(a);
+              } else {
+                const detail =
+                  typeof data?.publish?.detail === 'string'
+                    ? data.publish.detail
+                    : data?.publish?.detail?.message || JSON.stringify(data?.publish?.detail || data);
+                flash.textContent = `Publish error: ${data.error || ''}${detail ? ' — ' + detail : ''}`;
+              }
+            } catch {
+              flash.textContent = `Publish error: ${data.error || ''}`;
+            }
             pub.disabled = del.disabled = false;
           } catch (e) {
             flash.textContent = 'Publish error: ' + e.message;
