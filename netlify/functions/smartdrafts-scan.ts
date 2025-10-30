@@ -259,6 +259,7 @@ export const handler: Handler = async (event) => {
   }
 
   const folder = typeof body?.path === "string" ? body.path.trim() : "";
+  const force = Boolean(body?.force);
   const limitRaw = Number(body?.limit);
   const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, MAX_IMAGES) : MAX_IMAGES;
 
@@ -291,7 +292,7 @@ export const handler: Handler = async (event) => {
     const signature = makeSignature(limitedFiles);
     const cacheKey = makeCacheKey(user.userId, folder);
     const cached = await getCachedSmartDraftGroups(cacheKey);
-    if (cached && cached.signature === signature && Array.isArray(cached.groups) && cached.groups.length) {
+    if (!force && cached && cached.signature === signature && Array.isArray(cached.groups) && cached.groups.length) {
       return jsonResponse(200, {
         ok: true,
         cached: true,

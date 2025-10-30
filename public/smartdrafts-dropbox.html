@@ -45,6 +45,7 @@
       <select id="folderSelect"></select>
       <div class="controls">
         <button id="btnScanFolder">Scan Folder</button>
+        <button id="btnRescanFolder" style="background:#555;">Force Rescan</button>
       </div>
       <div style="margin:12px 0; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
         <input id="defaultBrand" type="text" placeholder="Default Brand (optional)" style="width:260px;" autocomplete="off" />
@@ -94,6 +95,7 @@
       }
   const folderSelect = $('#folderSelect');
   const btnScanFolder = $('#btnScanFolder');
+  const btnRescanFolder = $('#btnRescanFolder');
   const statusEl = $('#status');
   const warningsEl = $('#warnings');
   const grid = $('#grid');
@@ -362,7 +364,7 @@
         });
       }
 
-      async function runScan(payload, description) {
+  async function runScan(payload, description) {
         if (isScanning) return;
         isScanning = true;
         clearGptResults();
@@ -379,6 +381,7 @@
             return;
           }
           const payloadWithLimit = { ...payload, limit: 100 };
+          if (payload.force) payloadWithLimit.force = true;
           const data = await fetchSmartDraftGroups(payloadWithLimit);
           const groups = Array.isArray(data.groups) ? data.groups : [];
           window.smartDraftGroups = groups;
@@ -584,6 +587,17 @@
         setStoredFolder(path);
         if (folderInfo) folderInfo.textContent = `Selected folder: ${path}`;
         runScan({ path }, `Scanning ${path}…`);
+      });
+
+      btnRescanFolder?.addEventListener('click', () => {
+        const path = (folderSelect?.value || '').trim();
+        if (!path) {
+          setStatus('Select a Dropbox folder first.');
+          return;
+        }
+        setStoredFolder(path);
+        if (folderInfo) folderInfo.textContent = `Selected folder: ${path}`;
+        runScan({ path, force: true }, `Rescanning ${path} (forcing refresh)…`);
       });
 
       folderSelect?.addEventListener('change', () => {
