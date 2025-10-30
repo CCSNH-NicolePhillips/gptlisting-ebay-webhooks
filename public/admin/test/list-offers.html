@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Offers Debug</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; padding: 1rem; background:#0b1020; color:#f4f6fb }
+      a { color:#9db2ff; text-decoration:none }
+      a:hover { text-decoration:underline }
+      .row { display:flex; gap:.5rem; align-items:center; margin-bottom:1rem }
+      .btn { background:#4f7cff; color:#fff; border:none; border-radius:10px; padding:.45rem .7rem; font-weight:600; cursor:pointer }
+      pre { background:#0f1530; border:1px solid #2a335c; border-radius:10px; padding:1rem; overflow:auto }
+      .muted { color:#a2a9c8 }
+      label { font-weight:600 }
+      input { background:#0f1530; color:#f4f6fb; border:1px solid #2a335c; border-radius:8px; padding:.35rem .5rem }
+    </style>
+  </head>
+  <body>
+    <script src="/auth-client.js"></script>
+    <h1>Offers Debug</h1>
+    <div class="row">
+      <label>Status filter:</label>
+      <input id="status" value="UNPUBLISHED,DRAFT,INACTIVE" size="36" />
+      <label>Limit:</label>
+      <input id="limit" value="100" size="6" />
+      <button id="run" class="btn">Fetch</button>
+      <button id="debug" class="btn">Debug account</button>
+    </div>
+    <div class="row">
+      <label>SKU (optional):</label>
+      <input id="sku" placeholder="alphanumeric up to 50 chars" size="32" />
+    </div>
+    <div class="muted" id="info"></div>
+    <h3>Response</h3>
+    <pre id="out">(click Fetch)</pre>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const out = $('out');
+      const info = $('info');
+
+      async function fetchJSON(url) {
+        const exec = authClient && typeof authClient.authFetch === 'function' ? authClient.authFetch : fetch;
+        const r = await exec(url);
+        const t = await r.text();
+        try { return JSON.parse(t); } catch { return { raw: t, status: r.status }; }
+      }
+
+      async function run() {
+        out.textContent = 'Loading…';
+        info.textContent = '';
+        const limit = encodeURIComponent(($('limit').value || '100').trim());
+        const status = encodeURIComponent(($('status').value || '').trim());
+        const rawSku = ($('sku').value || '').trim();
+        const skuOk = /^[A-Za-z0-9]{1,50}$/.test(rawSku);
+        const sku = skuOk ? '&sku=' + encodeURIComponent(rawSku) : '';
+        const url = `/.netlify/functions/ebay-list-offers?limit=${limit}${status ? '&status='+status : ''}${sku}`;
+        info.textContent = url;
+        try {
+          const j = await fetchJSON(url);
+          out.textContent = JSON.stringify(j, null, 2);
+        } catch (e) {
+          out.textContent = String(e?.message || e);
+        }
+      }
+
+      async function dbg() {
+        out.textContent = 'Debugging…';
+        info.textContent = '/.netlify/functions/ebay-debug-account';
+        try {
+          const j = await fetchJSON('/.netlify/functions/ebay-debug-account');
+          out.textContent = JSON.stringify(j, null, 2);
+        } catch (e) {
+          out.textContent = String(e?.message || e);
+        }
+      }
+
+      $('run').addEventListener('click', run);
+      $('debug').addEventListener('click', dbg);
+
+      (async () => { try { const ok = await authClient.requireAuth(); if (ok) run(); } catch {} })();
+    </script>
+  </body>
+</html>

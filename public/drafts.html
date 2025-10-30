@@ -430,22 +430,20 @@
             '/.netlify/functions/ebay-list-offers?limit=100' +
             (skuOk ? '&sku=' + encodeURIComponent(rawSku) : '');
 
-          const statuses = ['UNPUBLISHED', 'DRAFT', 'INACTIVE'];
-          // Try fetching each status explicitly; tolerate endpoints that reject offer_status
-          const parts = await Promise.all(
-            statuses.map((st) =>
-              fetchJSON(base + '&status=' + encodeURIComponent(st)).catch(() => ({ offers: [] }))
-            )
-          );
-          const combined = parts.flatMap((p) => (Array.isArray(p.offers) ? p.offers : []));
-          // Deduplicate by offerId
-          const seen = new Set();
-          let offers = combined.filter((o) => {
-            const id = o?.offerId || o?.offer_id || '';
-            if (!id || seen.has(id)) return false;
-            seen.add(id);
-            return true;
-          });
+          // Prefer aggregated status query to reduce network calls
+          let offers = [];
+          try {
+            const agg = await fetchJSON(base + '&status=' + encodeURIComponent('UNPUBLISHED,DRAFT,INACTIVE'));
+            const arr = Array.isArray(agg.offers) ? agg.offers : [];
+            // Deduplicate by offerId
+            const seen = new Set();
+            offers = arr.filter((o) => {
+              const id = o?.offerId || o?.offer_id || '';
+              if (!id || seen.has(id)) return false;
+              seen.add(id);
+              return true;
+            });
+          } catch {}
 
           // Fallback: if explicit queries yielded nothing, do a broad fetch and client-filter
           if (!offers.length) {
