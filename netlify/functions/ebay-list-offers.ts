@@ -55,6 +55,11 @@ export const handler: Handler = async (event) => {
 			const agg: any[] = [];
 			let pageOffset = 0;
 			const pageLimit = Math.min(Math.max(limit, 20), 200);
+			// Build an allow-list of statuses if provided (supports comma-separated)
+			const allowStatuses = String(status || '')
+				.split(',')
+				.map((s) => s.trim().toUpperCase())
+				.filter(Boolean);
 			for (let pages = 0; pages < 10; pages++) {
 				// cap pages to avoid runaway
 				const invParams = new URLSearchParams({
@@ -91,8 +96,8 @@ export const handler: Handler = async (event) => {
 					if (!r.ok) continue;
 					const arr = Array.isArray(j?.offers) ? j.offers : [];
 					for (const o of arr) {
-						if (!status || String(o?.status || '').toUpperCase() === String(status).toUpperCase())
-							agg.push(o);
+						const st = String(o?.status || '').toUpperCase();
+						if (!allowStatuses.length || allowStatuses.includes(st)) agg.push(o);
 					}
 					if (agg.length >= limit) break;
 				}

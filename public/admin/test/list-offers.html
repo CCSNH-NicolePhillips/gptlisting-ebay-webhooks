@@ -30,15 +30,19 @@
     <div class="row">
       <label>SKU (optional):</label>
       <input id="sku" placeholder="alphanumeric up to 50 chars" size="32" />
+      <button id="conn" class="btn">Connections</button>
     </div>
     <div class="muted" id="info"></div>
-    <h3>Response</h3>
-    <pre id="out">(click Fetch)</pre>
+  <h3>Response</h3>
+  <pre id="out">(click Fetch)</pre>
+  <h3>Connections</h3>
+  <pre id="conns">(click Connections)</pre>
 
     <script>
       const $ = (id) => document.getElementById(id);
-      const out = $('out');
-      const info = $('info');
+  const out = $('out');
+  const info = $('info');
+  const conns = $('conns');
 
       async function fetchJSON(url) {
         const exec = authClient && typeof authClient.authFetch === 'function' ? authClient.authFetch : fetch;
@@ -76,8 +80,19 @@
         }
       }
 
+      async function connections() {
+        conns.textContent = 'Loading connections…';
+        try {
+          const j = await fetchJSON('/.netlify/functions/connections');
+          conns.textContent = JSON.stringify(j, null, 2);
+        } catch (e) {
+          conns.textContent = String(e?.message || e);
+        }
+      }
+
       $('run').addEventListener('click', run);
-      $('debug').addEventListener('click', dbg);
+  $('debug').addEventListener('click', dbg);
+  $('conn').addEventListener('click', connections);
 
       (async () => { try { const ok = await authClient.requireAuth(); if (ok) run(); } catch {} })();
     </script>
