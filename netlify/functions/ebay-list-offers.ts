@@ -109,7 +109,6 @@ export const handler: Handler = async (event) => {
 			.map((s) => s.trim())
 			.filter(Boolean);
 
-		const attempts: any[] = [];
 
 		// Helper to read offers length safely
 		const getOffers = (body: any) => (Array.isArray(body?.offers) ? body.offers : []);
