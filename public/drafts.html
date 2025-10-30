@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Draft offers</title>
+  <title>Drafts</title>
     <style>
       :root {
         --bg: #0b1020;
@@ -251,7 +251,7 @@
     <script src="/auth-client.js"></script>
     <div class="wrap">
       <header>
-        <h1>Draft offers</h1>
+  <h1>Drafts</h1>
         <div class="toolbar">
           <button id="btnClean" class="btn danger" title="Delete ALL UNPUBLISHED drafts">
             Delete all drafts
@@ -268,7 +268,9 @@
     <script>
       async function fetchJSON(url, opts) {
         const exec = authClient && typeof authClient.authFetch === 'function' ? authClient.authFetch : fetch;
-        const r = await exec(url, opts);
+        // Add cache-buster and force no-store to avoid stale CDN/browser caches
+        const bust = (url.includes('?') ? '&' : '?') + '_ts=' + Date.now();
+        const r = await exec(url + bust, Object.assign({ cache: 'no-store' }, opts));
         const t = await r.text();
         let j;
         try {
@@ -377,7 +379,7 @@
             const data = await r.json();
             if (r.ok && data.ok) {
               el.remove();
-              flash.textContent = `Deleted ${offer.offerId}`;
+              flash.textContent = `Deleted draft ${offer.offerId}`;
             } else {
               flash.textContent = `Delete error: ${data.error || ''}`;
               pub.disabled = del.disabled = false;
@@ -430,20 +432,22 @@
             '/.netlify/functions/ebay-list-offers?limit=100' +
             (skuOk ? '&sku=' + encodeURIComponent(rawSku) : '');
 
-          // Prefer aggregated status query to reduce network calls
-          let offers = [];
-          try {
-            const agg = await fetchJSON(base + '&status=' + encodeURIComponent('UNPUBLISHED,DRAFT,INACTIVE'));
-            const arr = Array.isArray(agg.offers) ? agg.offers : [];
-            // Deduplicate by offerId
-            const seen = new Set();
-            offers = arr.filter((o) => {
-              const id = o?.offerId || o?.offer_id || '';
-              if (!id || seen.has(id)) return false;
-              seen.add(id);
-              return true;
-            });
-          } catch {}
+          const statuses = ['UNPUBLISHED', 'DRAFT', 'INACTIVE'];
+          // Try fetching each status explicitly; tolerate endpoints that reject offer_status
+          const parts = await Promise.all(
+            statuses.map((st) =>
+              fetchJSON(base + '&status=' + encodeURIComponent(st)).catch(() => ({ offers: [] }))
+            )
+          );
+          const combined = parts.flatMap((p) => (Array.isArray(p.offers) ? p.offers : []));
+          // Deduplicate by offerId
+          const seen = new Set();
+          let offers = combined.filter((o) => {
+            const id = o?.offerId || o?.offer_id || '';
+            if (!id || seen.has(id)) return false;
+            seen.add(id);
+            return true;
+          });
 
           // Fallback: if explicit queries yielded nothing, do a broad fetch and client-filter
           if (!offers.length) {
@@ -454,10 +458,11 @@
           }
           if (!offers.length) {
             list.innerHTML =
-              '<div class="empty">No saved offers in UNPUBLISHED/DRAFT/INACTIVE. Create your first listing draft from the wizard.</div>';
+              '<div class="empty">No drafts found (UNPUBLISHED/DRAFT/INACTIVE). Create your first listing draft from the wizard.</div>';
             return;
           }
           list.innerHTML = '';
+          try { if (flash) flash.textContent = `Found ${offers.length} drafts`; } catch {}
           offers.forEach((o) => list.appendChild(card(o)));
           // lazy-load thumbnails with small concurrency to stay snappy and enrich titles
           lazyLoadThumbs();
@@ -623,7 +628,7 @@
           const res = await fetch('/.netlify/functions/ebay-clean-broken-drafts' + q);
           const j = await res.json();
           if (res.ok && j.ok) {
-            flash.textContent = `Deleted offers: ${j.deletedOffers?.length || 0}`;
+            flash.textContent = `Deleted drafts: ${j.deletedOffers?.length || 0}`;
             load();
           } else {
             flash.textContent = 'Delete failed';
