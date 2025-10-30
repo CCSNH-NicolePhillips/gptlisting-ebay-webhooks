@@ -347,6 +347,7 @@ export const handler: Handler = async (event) => {
     }
 
     const usedUrls = new Set<string>();
+    let reassignedCount = 0;
     const normalizedGroups = groups.map((group) => {
       const images = Array.isArray(group?.images) ? group.images : [];
       const cleaned = images
@@ -361,11 +362,34 @@ export const handler: Handler = async (event) => {
         })
         .map((item: { url: string }) => item.url)
         .slice(0, 12);
-      ordered.forEach((url: string) => usedUrls.add(url));
-      return { ...group, images: ordered };
+      const seenLocal = new Set<string>();
+      const unique: string[] = [];
+      for (const url of ordered) {
+        if (seenLocal.has(url)) continue;
+        seenLocal.add(url);
+        if (usedUrls.has(url)) {
+          reassignedCount++;
+          continue;
+        }
+        usedUrls.add(url);
+        unique.push(url);
+      }
+
+      if (!unique.length) {
+        const fallback = fileTuples.find((tuple) => !usedUrls.has(tuple.url));
+        if (fallback) {
+          usedUrls.add(fallback.url);
+          unique.push(fallback.url);
+        }
+      }
+
+      return { ...group, images: unique };
     });
 
     const orphanTuples = fileTuples.filter((tuple) => !usedUrls.has(tuple.url));
+    if (reassignedCount > 0) {
+      warnings = [...warnings, `Trimmed duplicate image references across groups (${reassignedCount} reassigned).`];
+    }
     const orphans = hydrateOrphans(orphanTuples, folder);
 
     const payloadGroups = hydrateGroups(normalizedGroups, folder);

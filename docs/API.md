@@ -142,10 +142,201 @@ curl -s -X POST "$BASE/.netlify/functions/ai-gpt-drafts" \
 ```
 
 ## POST /.netlify/functions/smartdrafts-scan
-Body: {"path":"/EBAY", "limit":100}
-Resp: { ok:true, folder, signature?, cached?, count, warnings?, groups:[{ groupId, name, brand?, product?, variant?, size?, confidence?, claims?, category?, images[] }], orphans?:[{ url, name, folder }] }
-Notes: Auth required (Bearer). Fetches up to 100 images from the user’s Dropbox folder, groups them via the vision pipeline, caches the result in Upstash, and falls back to folder-based grouping when vision is unavailable.
-Warnings include analyzer notices and fallback messages. `signature` is a SHA1 of Dropbox rev metadata; when unchanged, cached results are returned with `cached:true`. `orphans` lists images that failed to map to any group (useful for refiling). Use `limit` to throttle scanning when testing.
+**Purpose**: Build SmartDraft product groupings from a connected Dropbox folder. Utilises the vision analyzer, normalizes filenames, and persists cached results keyed by Dropbox revision metadata.
+
+**Request Body**
+
+```json
+{
+	"path": "/EBAY",
+	"limit": 100,
+	"force": false
+}
+```
+
+- `path` — Dropbox folder to scan; defaults to `/EBAY` when omitted.
+- `limit` — optional safety ceiling (max 100) to reduce image fetches during testing.
+- `force` — when `true`, bypasses the cached result even if the Dropbox signature matches.
+
+**Response**
+
+```json
+{
+	"ok": true,
+	"folder": "/EBAY",
+	"count": 6,
+	"cached": false,
+	"signature": "sha1:...",
+	"warnings": ["Vision fallback used"],
+	"groups": [
+		{
+			"groupId": "grp_abc123",
+			"name": "Acme Vitamin C (120ct)",
+			"brand": "Acme",
+			"claims": ["Immune support"],
+			"images": ["https://..."],
+			"category": { "title": "Vitamins", "id": "180959" }
+		}
+	],
+	"orphans": [
+		{ "url": "https://.../loose.jpg", "name": "loose.jpg", "folder": "/EBAY/Loose" }
+	]
+}
+```
+
+- `cached:true` indicates the analyzer result was served from Upstash based on matching Dropbox file revisions.
+- `orphans` enumerates files that failed to map to any product group so the user can refile them.
+- When the vision service is unavailable the function flags `_fallback` on each group and falls back to structured folder names.
+
+**Example**
+
+```bash
+curl -s -X POST "$BASE/.netlify/functions/smartdrafts-scan" \
+	-H "Authorization: Bearer $TOKEN" \
+	-H "Content-Type: application/json" \
+	-d '{"path":"/EBAY","force":true}' | jq .
+```
+
+## GET /.netlify/functions/dropbox-list-folders
+**Purpose**: Enumerate Dropbox folders for the signed-in merchant. Backed by the saved OAuth refresh token and intended for folder pickers.
+
+**Query Parameters**
+
+| Name      | Type    | Notes |
+|-----------|---------|-------|
+| `path`    | string  | Optional root path (`""` lists drive root); defaults to empty string. |
+| `recursive` | boolean | Accepts `1`/`true`; when set, walks the entire subtree. |
+
+**Response**
+
+```json
+{
+	"ok": true,
+	"path": "",
+	"recursive": true,
+	"count": 42,
+	"folders": [ { ".tag": "folder", "path_display": "/EBAY" }, ... ]
+}
+```
+
+- Requires an authenticated bearer token tied to a user who previously connected Dropbox.
+- Returns `400` with `Connect Dropbox first` if no refresh token is on file.
+
+**Example**
+
+```bash
+curl -s "$BASE/.netlify/functions/dropbox-list-folders?recursive=1" \
+	-H "Authorization: Bearer $TOKEN" | jq '.count'
+```
+
+## GET /.netlify/functions/dropbox-list-images
+**Purpose**: Produce direct (and proxied) image URLs for a Dropbox folder so SmartDrafts and listing tools can preview photos.
+
+**Query Parameters**
+
+| Name        | Type    | Notes |
+|-------------|---------|-------|
+| `path`      | string  | Folder to scan; defaults to `/EBAY`. |
+| `recursive` | boolean | When `true`, includes nested folders. |
+| `limit`     | number  | Optional hard cap on returned images. |
+| `useProxy`  | boolean | Defaults to `1`; wraps URLs via `/.netlify/functions/image-proxy` when enabled. |
+
+**Response**
+
+```json
+{
+	"ok": true,
+	"folder": "/EBAY",
+	"count": 12,
+	"items": [
+		{
+			"name": "sku123_01.jpg",
+			"path": "/EBAY/sku123_01.jpg",
+			"url": "https://dl.dropboxusercontent.com/...",
+			"proxiedUrl": "https://app/.netlify/functions/image-proxy?..."
+		}
+	]
+}
+```
+
+- Only lists files matching common image extensions; price sheets and non-images are omitted.
+- Uses Dropbox shared links behind the scenes; repeated calls reuse existing links when present.
+
+**Example**
+
+```bash
+curl -s "$BASE/.netlify/functions/dropbox-list-images?path=/EBAY/ToList&limit=5" \
+	-H "Authorization: Bearer $TOKEN" | jq '.items[].proxiedUrl'
+```
+
+## GET /.netlify/functions/dropbox-list-grouped
+**Purpose**: Legacy SKU-based grouping for Dropbox assets (`SKU_01.jpg`, `SKU_02.jpg`, `SKU_price.png`, …). Useful for the original listing wizard.
+
+**Query Parameters**
+
+| Name        | Type    | Notes |
+|-------------|---------|-------|
+| `path`      | string  | Folder prefix (default `/EBAY`). |
+| `recursive` | boolean | Deep scan toggle. |
+| `limit`     | number  | Optional group limit when testing. |
+| `useProxy`  | boolean | Wraps image URLs via `image-proxy` when `1` (default). |
+| `sku` / `skuPrefix` | string | When provided, filters to SKUs beginning with this prefix. |
+
+**Response**
+
+```json
+{
+	"ok": true,
+	"folder": "/EBAY",
+	"count": 3,
+	"items": [
+		{
+			"sku": "SKU123",
+			"images": ["https://.../SKU123_01.jpg", "https://.../SKU123_02.jpg"],
+			"priceImage": "https://.../SKU123_price.png",
+			"raw": { "main": "https://...", "others": ["https://..."], "price": "https://..." }
+		}
+	]
+}
+```
+
+- Requires the same Dropbox OAuth context as other Dropbox endpoints.
+- Ignores files without an underscore and enforces that at least one image exists per SKU.
+
+**Example**
+
+```bash
+curl -s "$BASE/.netlify/functions/dropbox-list-grouped?path=/EBAY&sku=SKU" \
+	-H "Authorization: Bearer $TOKEN" | jq '.items[0].images'
+```
+
+## GET|POST /.netlify/functions/dropbox-oauth-start
+**Purpose**: Kick off the Dropbox OAuth 2.0 consent screen for the signed-in user.
+
+- Accepts `returnTo` as either a JSON body field or query string; must be a relative path starting with `/`.
+- When the client sends `Accept: application/json` (or `?mode=json=1`) the handler responds with `{ "redirect": "https://www.dropbox.com/oauth2/authorize?..." }`; otherwise it issues a `302` redirect.
+- Requires a valid user bearer token so the issued OAuth state can be bound to that user.
+
+**Example**
+
+```bash
+curl -s "$BASE/.netlify/functions/dropbox-oauth-start?mode=json=1" \
+	-H "Authorization: Bearer $TOKEN" | jq '.redirect'
+```
+
+## GET /.netlify/functions/dropbox-oauth-callback
+**Purpose**: Complete the Dropbox OAuth flow, persist the refresh token in Netlify Blobs, and send the user back to the app.
+
+- Expects `code` and `state` query parameters from Dropbox.
+- Validates and consumes the opaque state generated by `dropbox-oauth-start`; responds with `400` if the state is invalid or expired.
+- On success stores `{ refresh_token }` under `users/{sub}/dropbox.json` and redirects (302) to the original `returnTo` value (default `/index.html`).
+
+**Example**
+
+```text
+GET /.netlify/functions/dropbox-oauth-callback?code=...&state=...
+302 Location: /setup.html
+```
 
 ## POST /.netlify/functions/ebay-create-draft
 Body: {
