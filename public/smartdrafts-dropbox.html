@@ -55,6 +55,7 @@
     </div>
 
     <div id="status" class="muted"></div>
+    <div id="warnings" class="muted"></div>
     <div id="grid" class="grid"></div>
 
     <h3>GPT Results</h3>
@@ -87,11 +88,12 @@
         });
         return node;
       }
-      const folderSelect = $('#folderSelect');
-      const btnScanFolder = $('#btnScanFolder');
-      const statusEl = $('#status');
-      const grid = $('#grid');
-      const folderInfo = $('#folderInfo');
+  const folderSelect = $('#folderSelect');
+  const btnScanFolder = $('#btnScanFolder');
+  const statusEl = $('#status');
+  const warningsEl = $('#warnings');
+  const grid = $('#grid');
+  const folderInfo = $('#folderInfo');
   const defaultBrandInput = $('#defaultBrand');
   const keywordsInput = $('#keywords');
   const btnGenerate = $('#btnGenerate');
@@ -119,10 +121,24 @@
         if (statusEl) statusEl.textContent = message || '';
       }
 
-      async function scanDropbox(payload) {
+      function setWarnings(list) {
+        if (!warningsEl) return;
+        const hasWarnings = Array.isArray(list) && list.length > 0;
+        if (!hasWarnings) {
+          warningsEl.textContent = '';
+          warningsEl.style.display = 'none';
+          return;
+        }
+        warningsEl.style.display = 'block';
+        warningsEl.innerHTML = list
+          .map((warning) => `<div>• ${String(warning).replace(/[<>]/g, '')}</div>`)
+          .join('');
+      }
+
+      async function fetchSmartDraftGroups(payload) {
         const exec = window.authClient?.authFetch ?? fetch;
         const body = JSON.stringify(payload);
-        const res = await exec('/.netlify/functions/dbx-list-tree-user', {
+        const res = await exec('/.netlify/functions/smartdrafts-scan', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body,
@@ -208,23 +224,33 @@
       }
 
       function makeSeedsFromGroups(groups) {
-        const brand = (defaultBrandInput?.value || '').trim() || undefined;
+        const brandOverride = (defaultBrandInput?.value || '').trim() || undefined;
         const keywordRaw = (keywordsInput?.value || '').trim();
         const keywordList = keywordRaw
           ? dedupeStrings(keywordRaw.split(',').map((entry) => entry.trim())).slice(0, 12)
           : [];
         return groups.map((group) => {
-          const parsed = parseGroupName(group?.name || group?.folder || 'Product');
-          const features = collectFolderFeatures(group);
-          if (parsed.variant) features.push(parsed.variant);
-          if (parsed.size) features.push(parsed.size);
+          const parsed = parseGroupName(group?.name || group?.product || group?.folder || 'Product');
+          const variant = (typeof group?.variant === 'string' && group.variant.trim()) || parsed.variant;
+          const size = (typeof group?.size === 'string' && group.size.trim()) || parsed.size;
+          const productName =
+            (typeof group?.product === 'string' && group.product.trim()) || parsed.product || group?.name || 'Product';
+          const brand = brandOverride || (typeof group?.brand === 'string' && group.brand.trim()) || undefined;
+          const features = [
+            ...collectFolderFeatures(group),
+            ...(Array.isArray(group?.claims) ? group.claims : []),
+            ...(Array.isArray(group?.features) ? group.features : []),
+          ];
+          if (variant) features.push(variant);
+          if (size) features.push(size);
+          if (group?.category?.title) features.push(group.category.title);
           const mergedFeatures = dedupeStrings(features).slice(0, 12);
           return {
             id: group?.groupId,
             brand,
-            product: parsed.product || group?.name || 'Product',
-            variant: parsed.variant,
-            size: parsed.size,
+            product: productName,
+            variant,
+            size,
             features: mergedFeatures,
             keywords: keywordList,
             folder: typeof group?.folder === 'string' ? group.folder : undefined,
@@ -299,9 +325,9 @@
         isScanning = true;
         clearGptResults();
         window.smartDraftGroups = [];
-        window._dbxGroups = [];
         updateGenerateState();
         setStatus(description);
+        setWarnings([]);
         grid.innerHTML = '';
         try {
           const authed = await ensureAuth();
@@ -309,15 +335,21 @@
             setStatus('Please sign in to scan Dropbox.');
             return;
           }
-          const data = await scanDropbox(payload);
+          const payloadWithLimit = { ...payload, limit: 100 };
+          const data = await fetchSmartDraftGroups(payloadWithLimit);
           const groups = Array.isArray(data.groups) ? data.groups : [];
           window.smartDraftGroups = groups;
-          window._dbxGroups = groups;
           updateGenerateState();
-          setStatus(`Found ${groups.length} group(s) under "${data.root || '/'}".`);
+          const folder = data.folder || payload.path || '/';
+          const cachedNote = data.cached ? ' (cached)' : '';
+          const fallback = groups.some((group) => group && group._fallback);
+          const baseMessage = `Found ${groups.length} product group${groups.length === 1 ? '' : 's'} in "${folder}"${cachedNote}.`;
+          setStatus(fallback ? `${baseMessage} Vision fallback in use.` : baseMessage);
+          setWarnings(Array.isArray(data.warnings) ? data.warnings : []);
           renderGroups(groups);
         } catch (err) {
           setStatus(`Error: ${err?.message || err}`);
+          setWarnings([]);
         } finally {
           isScanning = false;
           updateGenerateState();
@@ -390,6 +422,73 @@
         }
         groups.forEach((group) => {
           const card = el('div', { class: 'card' });
+          const checkbox = el('input', {
+            type: 'checkbox',
+            value: group.groupId,
+            'data-group-id': group.groupId,
+            'data-pick': group.groupId,
+            checked: 'checked',
+          });
+          const toggle = el('label', { class: 'group-toggle' }, [checkbox, 'Use group']);
+          card.appendChild(toggle);
+
+          const titleParts = [`<strong>${group.name || '(unnamed)'}</strong>`];
+          if (group.folder) {
+            titleParts.push(`<span class="muted">${group.folder}</span>`);
+          }
+          card.appendChild(el('div', { html: titleParts.join(' ') }));
+
+          const metaParts = [];
+          if (group.brand) metaParts.push(`Brand: <code>${group.brand}</code>`);
+          if (group.product && group.product !== group.name) metaParts.push(`Product: <code>${group.product}</code>`);
+          if (group.variant) metaParts.push(`Variant: <code>${group.variant}</code>`);
+          if (group.size) metaParts.push(`Size: <code>${group.size}</code>`);
+          if (typeof group.confidence === 'number' && Number.isFinite(group.confidence)) {
+            const pct = Math.round(group.confidence * 100);
+            metaParts.push(`Confidence: ${pct}%`);
+          }
+          const categoryMeta = (() => {
+            if (!group.category) return null;
+            if (typeof group.category === 'string') {
+              return { label: group.category, id: '' };
+            }
+            if (typeof group.category === 'object') {
+              const label = group.category.title || group.category.name || '';
+              const id = group.category.id ? ` (${group.category.id})` : '';
+              if (label) return { label, id };
+            }
+            return null;
+          })();
+          if (categoryMeta) {
+            metaParts.push(`Category: <code>${categoryMeta.label}${categoryMeta.id}</code>`);
+          }
+          if (group._fallback) metaParts.push('<span style="color:#a00">Vision fallback</span>');
+          if (metaParts.length) {
+            card.appendChild(el('div', { class: 'muted', html: metaParts.join(' • ') }));
+          }
+
+          const thumbs = el('div', { class: 'thumbs' });
+          (Array.isArray(group.images) ? group.images : []).slice(0, 8).forEach((url) => {
+            thumbs.appendChild(el('img', { src: url, alt: 'preview' }));
+          });
+          card.appendChild(thumbs);
+
+          const claims = Array.isArray(group.claims) ? group.claims : [];
+          if (claims.length) {
+            const list = document.createElement('ul');
+            list.className = 'bullet-list';
+            claims.slice(0, 4).forEach((claim) => {
+              const li = document.createElement('li');
+              li.textContent = claim;
+              list.appendChild(li);
+            });
+            card.appendChild(list);
+          }
+
+          grid.appendChild(card);
+        });
+        updateGenerateState();
+      }
 
       btnGenerate?.addEventListener('click', async () => {
         if (isGenerating) return;
@@ -431,26 +530,6 @@
           updateGenerateState();
         }
       });
-          const checkbox = el('input', {
-            type: 'checkbox',
-            value: group.groupId,
-            'data-group-id': group.groupId,
-            'data-pick': group.groupId,
-            checked: 'checked',
-          });
-          const toggle = el('label', { class: 'group-toggle' }, [checkbox, 'Use group']);
-          card.appendChild(toggle);
-          const title = el('div', { html: `<strong>${group.name || '(unnamed)'}</strong> <span class="muted">${group.folder || '/'}</span>` });
-          card.appendChild(title);
-          const thumbs = el('div', { class: 'thumbs' });
-          group.images.slice(0, 8).forEach((url) => {
-            thumbs.appendChild(el('img', { src: url, alt: 'preview' }));
-          });
-          card.appendChild(thumbs);
-          grid.appendChild(card);
-        });
-        updateGenerateState();
-      }
       btnScanFolder?.addEventListener('click', () => {
         const path = (folderSelect?.value || '').trim();
         if (!path) {
@@ -472,6 +551,7 @@
       });
 
       updateGenerateState();
+      setWarnings([]);
 
       (async () => {
         const authed = await ensureAuth();

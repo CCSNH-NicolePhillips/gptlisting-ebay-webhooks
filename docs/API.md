@@ -29,6 +29,11 @@ Body: {"seeds":[{ id?, brand?, product, variant?, size?, features?, keywords?, p
 Resp: { ok:true, count, drafts:[{ id?, title, bullets, description, aspects, category }] }
 Notes: Auth required (Bearer). Calls OpenAI to generate listing copy with aspects & category suggestion.
 
+## POST /.netlify/functions/smartdrafts-scan
+Body: {"path":"/EBAY", "limit":100}
+Resp: { ok:true, folder, signature?, cached?, count, warnings?, groups:[{ groupId, name, brand?, product?, variant?, size?, confidence?, claims?, category?, images[] }] }
+Notes: Auth required (Bearer). Fetches up to 100 images from the user’s Dropbox folder, groups them via the vision pipeline, caches the result in Upstash, and falls back to folder-based grouping when vision is unavailable.
+
 ## POST /.netlify/functions/ebay-create-draft
 Body: {
 	items?: [ { inventory:{...}, offer:{...} } ],
