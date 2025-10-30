@@ -1,6 +1,6 @@
 import type { Handler } from '@netlify/functions';
 import { tokensStore } from '../../src/lib/_blobs.js';
-import { accessTokenFromRefresh, tokenHosts } from '../../src/lib/_common.js';
+import { accessTokenFromRefresh, tokenHosts, resolveEbayEnv } from '../../src/lib/_common.js';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
 
 export const handler: Handler = async (event) => {
@@ -19,7 +19,7 @@ export const handler: Handler = async (event) => {
       'https://api.ebay.com/oauth/api_scope/sell.account',
     ];
     const { access_token } = await accessTokenFromRefresh(refresh, scopes);
-    const ENV = String(process.env.EBAY_ENV || 'production').toLowerCase();
+  const ENV = resolveEbayEnv(process.env.EBAY_ENV);
     const { apiHost } = tokenHosts(process.env.EBAY_ENV);
     const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || process.env.DEFAULT_MARKETPLACE_ID || 'EBAY_US';
 

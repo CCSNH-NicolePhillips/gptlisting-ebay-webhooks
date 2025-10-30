@@ -46,3 +46,39 @@ export async function getEbayAccessToken(userId?: string): Promise<EbayAccessTok
   const { apiHost } = tokenHosts(process.env.EBAY_ENV);
   return { token: access_token, apiHost };
 }
+
+// Strict variant: when userId is provided, require a per-user refresh token and do NOT silently fall back
+// to a global token. In admin mode (no userId), use the global env/blob token as before.
+export async function getEbayAccessTokenStrict(userId?: string): Promise<EbayAccessToken> {
+  if (userId) {
+    // Require per-user token
+    try {
+      const store = tokensStore();
+      const saved = (await store.get(userScopedKey(userId, "ebay.json"), { type: "json" })) as any;
+      const refreshToken = typeof saved?.refresh_token === "string" ? saved.refresh_token.trim() : "";
+      if (!refreshToken) throw new Error("No eBay token for this user. Connect eBay in Setup.");
+      const { access_token } = await accessTokenFromRefresh(refreshToken);
+      const { apiHost } = tokenHosts(process.env.EBAY_ENV);
+      return { token: access_token, apiHost };
+    } catch (e: any) {
+      const msg = e?.message || String(e ?? "");
+      throw new Error(msg || "No eBay token for this user. Connect eBay in Setup.");
+    }
+  }
+  // Admin/global mode
+  let refreshToken = (process.env.EBAY_REFRESH_TOKEN || "").trim();
+  if (!refreshToken) {
+    try {
+      const store = tokensStore();
+      const saved = (await store.get("ebay.json", { type: "json" })) as any;
+      const candidate = typeof saved?.refresh_token === "string" ? saved.refresh_token.trim() : "";
+      if (candidate) refreshToken = candidate;
+    } catch {
+      // ignore
+    }
+  }
+  if (!refreshToken) throw new Error("EBAY_REFRESH_TOKEN env var is required");
+  const { access_token } = await accessTokenFromRefresh(refreshToken);
+  const { apiHost } = tokenHosts(process.env.EBAY_ENV);
+  return { token: access_token, apiHost };
+}
