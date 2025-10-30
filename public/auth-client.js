@@ -193,7 +193,9 @@
       const isAuth = state.auth0 && (await state.auth0.isAuthenticated());
       if (!isAuth) return false;
       state.user = await state.auth0.getUser();
-      state.token = await state.auth0.getTokenSilently().catch(() => null);
+      // Prefer a freshly refreshed token to avoid expired JWTs in subsequent calls
+      state.token = (await state.auth0.getTokenSilently({ cacheMode: 'off' }).catch(() => null))
+        || (await state.auth0.getTokenSilently().catch(() => null));
       attachAuthFetch();
       return true;
     }
@@ -275,13 +277,28 @@
 
   async function getToken() {
     if (state.mode === 'auth0' && state.auth0) {
-      // Prefer ID token for first-party function auth (stable 'aud' = CLIENT_ID). If missing, try access token.
+      // Prefer ID token only if it's still valid; otherwise, acquire a fresh access token.
+      const nowSec = Math.floor(Date.now() / 1000);
+      const isJwtValid = (raw) => {
+        try {
+          const parts = String(raw || '').split('.');
+          if (parts.length < 2) return false;
+          const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+          const exp = Number(payload?.exp || 0);
+          return Number.isFinite(exp) && exp > nowSec + 30; // 30s skew
+        } catch { return false; }
+      };
       try {
         const idc = await state.auth0.getIdTokenClaims();
         const idRaw = (idc && (idc.__raw || idc.raw)) || null;
-        if (idRaw) return idRaw;
+        if (idRaw && isJwtValid(idRaw)) return idRaw;
       } catch {}
-      if (state.idTokenRaw) return state.idTokenRaw;
+      if (state.idTokenRaw && isJwtValid(state.idTokenRaw)) return state.idTokenRaw;
+      // Try to force-refresh the access token
+      try {
+        const atFresh = await state.auth0.getTokenSilently({ cacheMode: 'off' });
+        if (atFresh) return atFresh;
+      } catch {}
       try {
         const at = await state.auth0.getTokenSilently();
         if (at) return at;
