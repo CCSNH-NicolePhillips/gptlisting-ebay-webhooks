@@ -8,6 +8,24 @@ import { tokensStore } from "../../functions/_blobs.js";
 import { userScopedKey } from "../../functions/_auth.js";
 import { createOffer, putInventoryItem } from "../../src/lib/ebay-sell.js";
 
+async function fetchOfferById(token: string, apiHost: string, offerId: string, marketplaceId: string) {
+  const url = `${apiHost}/sell/inventory/v1/offer/${encodeURIComponent(offerId)}`;
+  const r = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+      "Accept-Language": "en-US",
+      "Content-Language": "en-US",
+      "X-EBAY-C-MARKETPLACE-ID": marketplaceId,
+    },
+  });
+  const txt = await r.text().catch(() => "");
+  let json: any = null;
+  try { json = txt ? JSON.parse(txt) : null; } catch { json = { raw: txt }; }
+  if (!r.ok) throw new Error(`get-offer ${r.status}: ${txt}`);
+  return json;
+}
+
 async function fetchInventoryLocationKeys(accessToken: string, apiHost: string, marketplaceId: string): Promise<string[]> {
   const url = `${apiHost}/sell/inventory/v1/location?limit=200`;
   const r = await fetch(url, {
@@ -253,7 +271,9 @@ export const handler: Handler = async (event) => {
 
   await putInventoryItem(access.token, access.apiHost, mapped.sku, mapped.inventory, mapped.offer.quantity, marketplaceId);
 
-      const offerResult = await createOffer(access.token, access.apiHost, {
+      let offerResult;
+      try {
+        offerResult = await createOffer(access.token, access.apiHost, {
         sku: mapped.sku,
         marketplaceId,
         categoryId: mapped.offer.categoryId,
@@ -265,9 +285,58 @@ export const handler: Handler = async (event) => {
         returnPolicyId: mapped.offer.returnPolicyId ?? userPolicyDefaults.return ?? null,
         merchantLocationKey,
         description: mapped.offer.description,
-      });
+        });
+      } catch (e: any) {
+        const msg = String(e?.message || e || "");
+        // Handle idempotency: offer already exists (errorId 25002)
+        if (/\berrorId\"?\s*:\s*25002\b/.test(msg)) {
+          let existingOfferId = "";
+          try {
+            // Attempt to parse offerId from the error JSON
+            const jsonStart = msg.indexOf("{");
+            if (jsonStart >= 0) {
+              const jsonText = msg.slice(jsonStart);
+              const parsed = JSON.parse(jsonText);
+              const errs = Array.isArray(parsed?.errors) ? parsed.errors : [];
+              const first = errs[0] || {};
+              const params = Array.isArray(first.parameters) ? first.parameters : [];
+              const p = params.find((x: any) => String(x?.name || "") === "offerId");
+              if (p && typeof p.value === "string" && p.value.trim()) existingOfferId = p.value.trim();
+            }
+          } catch {
+            // ignore parse failure
+          }
+          if (existingOfferId) {
+            try {
+              const off = await fetchOfferById(access.token, access.apiHost, existingOfferId, marketplaceId);
+              results.push({ sku: mapped.sku, offerId: existingOfferId, warnings: [], ...(off?.status ? { status: off.status } : {}) });
+              try {
+                await putBinding(user.userId, jobId, groupId, {
+                  sku: mapped.sku,
+                  offerId: existingOfferId,
+                  jobId,
+                  groupId,
+                  warnings: [],
+                  createdAt: Date.now(),
+                });
+              } catch (bindErr) {
+                console.warn("[create-ebay-draft-user] failed to persist binding (existing)", bindErr);
+              }
+              // Proceed to next group without treating as error
+              continue;
+            } catch (fetchErr: any) {
+              // If fetching fails, still return a graceful error below
+              console.warn("[create-ebay-draft-user] idempotent fetch failed", fetchErr?.message || fetchErr);
+            }
+          }
+        }
+        // Non-idempotent or unhandled error: bubble up
+        throw e;
+      }
 
-      results.push({ sku: mapped.sku, offerId: offerResult.offerId, warnings: offerResult.warnings });
+      // Push success; include status if we have it in raw response
+      const status = (offerResult as any)?.raw?.offer?.status || (offerResult as any)?.raw?.status || undefined;
+      results.push({ sku: mapped.sku, offerId: offerResult.offerId, warnings: offerResult.warnings, ...(status ? { status } : {}) });
 
       try {
         await putBinding(user.userId, jobId, groupId, {
