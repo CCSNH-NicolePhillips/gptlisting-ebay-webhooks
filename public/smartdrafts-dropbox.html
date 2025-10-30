@@ -58,6 +58,10 @@
     <div id="warnings" class="muted"></div>
     <div id="grid" class="grid"></div>
 
+  <h3 id="orphansTitle" style="display:none;">Unsorted Images</h3>
+  <div id="orphansInfo" class="muted" style="display:none;"></div>
+  <div id="orphansGrid" class="grid" style="display:none;"></div>
+
     <h3>GPT Results</h3>
     <div id="gptStatus" class="muted"></div>
     <div id="gptGrid" class="grid"></div>
@@ -93,6 +97,9 @@
   const statusEl = $('#status');
   const warningsEl = $('#warnings');
   const grid = $('#grid');
+  const orphansTitle = $('#orphansTitle');
+  const orphansInfo = $('#orphansInfo');
+  const orphansGrid = $('#orphansGrid');
   const folderInfo = $('#folderInfo');
   const defaultBrandInput = $('#defaultBrand');
   const keywordsInput = $('#keywords');
@@ -185,6 +192,41 @@
               .filter(Boolean),
           ),
         );
+      }
+      function renderOrphans(orphans) {
+        if (!orphansGrid) return;
+        const list = Array.isArray(orphans) ? orphans : [];
+        window.smartDraftOrphans = list;
+        orphansGrid.innerHTML = '';
+        if (!list.length) {
+          if (orphansTitle) orphansTitle.style.display = 'none';
+          if (orphansInfo) {
+            orphansInfo.style.display = 'none';
+            orphansInfo.textContent = '';
+          }
+          orphansGrid.style.display = 'none';
+          return;
+        }
+        if (orphansTitle) orphansTitle.style.display = 'block';
+        if (orphansInfo) {
+          orphansInfo.style.display = 'block';
+          orphansInfo.textContent = `${list.length} image${list.length === 1 ? '' : 's'} could not be matched to a product.`;
+        }
+        orphansGrid.style.display = 'grid';
+        list.forEach((item) => {
+          const card = el('div', { class: 'card' });
+          if (item?.url) {
+            const img = el('img', { src: item.url, alt: item?.name || 'unsorted image', style: 'width:100%;max-width:260px;border-radius:8px;border:1px solid #eee;background:#f5f5f5;' });
+            card.appendChild(img);
+          }
+          card.appendChild(
+            el('div', {
+              class: 'muted',
+              html: `<strong>${item?.name || 'Image'}</strong>${item?.folder ? ` <span class="muted">(${item.folder})</span>` : ''}`,
+            }),
+          );
+          orphansGrid.appendChild(card);
+        });
       }
 
       function parseGroupName(name) {
@@ -329,6 +371,7 @@
         setStatus(description);
         setWarnings([]);
         grid.innerHTML = '';
+  renderOrphans([]);
         try {
           const authed = await ensureAuth();
           if (!authed) {
@@ -347,9 +390,11 @@
           setStatus(fallback ? `${baseMessage} Vision fallback in use.` : baseMessage);
           setWarnings(Array.isArray(data.warnings) ? data.warnings : []);
           renderGroups(groups);
+          renderOrphans(Array.isArray(data.orphans) ? data.orphans : []);
         } catch (err) {
           setStatus(`Error: ${err?.message || err}`);
           setWarnings([]);
+          renderOrphans([]);
         } finally {
           isScanning = false;
           updateGenerateState();

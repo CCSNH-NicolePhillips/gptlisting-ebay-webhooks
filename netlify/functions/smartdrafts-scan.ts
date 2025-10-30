@@ -28,6 +28,12 @@ type DropboxEntry = {
   size?: number;
 };
 
+type OrphanImage = {
+  url: string;
+  name: string;
+  folder: string;
+};
+
 const METHODS = "POST, OPTIONS";
 const MAX_IMAGES = Math.max(1, Math.min(100, Number(process.env.SMARTDRAFT_MAX_IMAGES || 100)));
 
@@ -198,9 +204,18 @@ function buildFallbackGroups(files: Array<{ entry: DropboxEntry; url: string }>)
   return groups;
 }
 
+function hydrateOrphans(unused: Array<{ entry: DropboxEntry; url: string }>, folder: string): OrphanImage[] {
+  return unused.map(({ entry, url }) => ({
+    url,
+    name: entry.name,
+    folder: folderPath(entry) || folder,
+  }));
+}
+
 function hydrateGroups(groups: any[], folder: string) {
   return groups.map((group) => {
     const titleParts = [group.brand, group.product].filter((part: string) => typeof part === "string" && part.trim());
+
     const displayName = titleParts.length ? titleParts.join(" — ") : group.name || group.product || "Product";
     return {
       ...group,
@@ -295,6 +310,11 @@ export const handler: Handler = async (event) => {
       return { entry, url: toDirectDropbox(url) };
     });
 
+    const urlOrder = new Map<string, number>();
+    fileTuples.forEach((tuple, idx) => {
+      urlOrder.set(tuple.url, idx);
+    });
+
     const urls = sanitizeUrls(fileTuples.map((tuple) => tuple.url));
     if (!urls.length) {
       const fallbackGroups = buildFallbackGroups(fileTuples);
@@ -305,6 +325,7 @@ export const handler: Handler = async (event) => {
         count: fallbackGroups.length,
         warnings: ["No usable image URLs; generated fallback groups."],
         groups: hydrateGroups(fallbackGroups, folder),
+        orphans: hydrateOrphans(fileTuples, folder),
       }, originHdr, METHODS);
     }
 
@@ -324,11 +345,34 @@ export const handler: Handler = async (event) => {
       warnings = [...warnings, "Vision grouping returned no results; falling back to folder grouping."];
     }
 
-    const payloadGroups = hydrateGroups(groups, folder);
+    const usedUrls = new Set<string>();
+    const normalizedGroups = groups.map((group) => {
+      const images = Array.isArray(group?.images) ? group.images : [];
+      const cleaned = images
+        .map((img: unknown) => (typeof img === "string" ? toDirectDropbox(img) : ""))
+        .filter((img: string) => img.length > 0);
+      const ordered = cleaned
+        .map((url: string, idx: number) => ({ url, idx }))
+        .sort((a: { url: string; idx: number }, b: { url: string; idx: number }) => {
+          const orderA = urlOrder.has(a.url) ? urlOrder.get(a.url)! : Number.MAX_SAFE_INTEGER + a.idx;
+          const orderB = urlOrder.has(b.url) ? urlOrder.get(b.url)! : Number.MAX_SAFE_INTEGER + b.idx;
+          return orderA - orderB;
+        })
+        .map((item: { url: string }) => item.url)
+        .slice(0, 12);
+      ordered.forEach((url: string) => usedUrls.add(url));
+      return { ...group, images: ordered };
+    });
+
+    const orphanTuples = fileTuples.filter((tuple) => !usedUrls.has(tuple.url));
+    const orphans = hydrateOrphans(orphanTuples, folder);
+
+    const payloadGroups = hydrateGroups(normalizedGroups, folder);
 
     const cachePayload: SmartDraftGroupCache = {
       signature,
       groups: payloadGroups,
+      orphans,
       warnings,
       updatedAt: Date.now(),
     };
@@ -341,6 +385,7 @@ export const handler: Handler = async (event) => {
       count: payloadGroups.length,
       warnings,
       groups: payloadGroups,
+      orphans,
     }, originHdr, METHODS);
   } catch (err: any) {
     return jsonResponse(500, { ok: false, error: err?.message || String(err) }, originHdr, METHODS);

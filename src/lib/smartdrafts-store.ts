@@ -38,6 +38,7 @@ async function redisCall(...parts: string[]): Promise<any> {
 export type SmartDraftGroupCache = {
   signature: string;
   groups: any[];
+  orphans?: any[];
   warnings?: string[];
   updatedAt: number;
 };
@@ -59,6 +60,7 @@ export async function getCachedSmartDraftGroups(key: string): Promise<SmartDraft
     return {
       signature: parsed.signature,
       groups: Array.isArray(parsed.groups) ? parsed.groups : [],
+      orphans: Array.isArray(parsed.orphans) ? parsed.orphans : undefined,
       warnings: Array.isArray(parsed.warnings) ? parsed.warnings : undefined,
       updatedAt: Number(parsed.updatedAt) || Date.now(),
     };
@@ -72,6 +74,7 @@ export async function setCachedSmartDraftGroups(key: string, payload: SmartDraft
   const safePayload = {
     signature: payload.signature,
     groups: Array.isArray(payload.groups) ? payload.groups : [],
+    orphans: Array.isArray(payload.orphans) ? payload.orphans : undefined,
     warnings: Array.isArray(payload.warnings) ? payload.warnings : undefined,
     updatedAt: payload.updatedAt || Date.now(),
   };
