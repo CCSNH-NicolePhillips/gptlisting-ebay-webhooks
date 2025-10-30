@@ -7,6 +7,12 @@ import { openai } from "../../src/lib/openai.js";
 const METHODS = "POST, OPTIONS";
 const MODEL = process.env.GPT_MODEL || "gpt-3.5-turbo";
 const MAX_TOKENS = Number(process.env.GPT_MAX_TOKENS || 700);
+const GPT_RETRY_ATTEMPTS = Math.max(1, Number(process.env.GPT_RETRY_ATTEMPTS || 2));
+const GPT_RETRY_DELAY_MS = Math.max(250, Number(process.env.GPT_RETRY_DELAY_MS || 1500));
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
  type Seed = {
   id?: string;
@@ -80,21 +86,33 @@ async function callOpenAI(prompt: string): Promise<string> {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error("Missing OPENAI_API_KEY");
   }
-  const completion = await openai.chat.completions.create({
-    model: MODEL,
-    temperature: 0.7,
-    max_tokens: Math.max(100, Math.min(4000, MAX_TOKENS || 700)),
-    response_format: { type: "json_object" },
-    messages: [
-      {
-        role: "system",
-        content:
-          "You are an expert eBay listing writer.\nReturn ONLY strict JSON with keys: title, bullets, description, aspects, category.\n- title: <=80 chars, high-signal, no emojis, no fluff.\n- bullets: array of 3 short points.\n- description: 2-4 sentences, neutral claims (no medical).\n- aspects: include Brand if given; use keys like Brand, Flavor, Size, Type, Features.\n- category: {name:\"<best>\", id:\"\"} (leave id blank if unsure).",
-      },
-      { role: "user", content: prompt },
-    ],
-  });
-  return completion.choices?.[0]?.message?.content || "{}";
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= GPT_RETRY_ATTEMPTS; attempt++) {
+    try {
+      const completion = await openai.chat.completions.create({
+        model: MODEL,
+        temperature: 0.7,
+        max_tokens: Math.max(100, Math.min(4000, MAX_TOKENS || 700)),
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are an expert eBay listing writer.\nReturn ONLY strict JSON with keys: title, bullets, description, aspects, category.\n- title: <=80 chars, high-signal, no emojis, no fluff.\n- bullets: array of 3 short points.\n- description: 2-4 sentences, neutral claims (no medical).\n- aspects: include Brand if given; use keys like Brand, Flavor, Size, Type, Features.\n- category: {name:\"<best>\", id:\"\"} (leave id blank if unsure).",
+          },
+          { role: "user", content: prompt },
+        ],
+      });
+      return completion.choices?.[0]?.message?.content || "{}";
+    } catch (err) {
+      lastError = err;
+      if (attempt >= GPT_RETRY_ATTEMPTS) break;
+      const delay = GPT_RETRY_DELAY_MS * attempt;
+      await sleep(delay);
+    }
+  }
+  const message = lastError instanceof Error ? lastError.message : String(lastError || "OpenAI error");
+  throw new Error(message);
 }
 
 function buildPrompt(seed: Seed, categoryHint: { id: string; title: string } | null) {
