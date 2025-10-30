@@ -9,7 +9,7 @@ export const handler: Handler = async (event) => {
 		const SKU_OK = (s: string) => /^[A-Za-z0-9]{1,50}$/.test(s || '');
 		const sku = rawSku && SKU_OK(rawSku) ? rawSku : undefined;
 		const limit = Number(event.queryStringParameters?.limit || 20);
-		const status = event.queryStringParameters?.status; // e.g., DRAFT, PUBLISHED
+		const status = event.queryStringParameters?.status; // e.g., DRAFT, PUBLISHED or comma-separated
 		const offset = Number(event.queryStringParameters?.offset || 0);
 		const store = tokensStore();
 		const bearer = getBearerToken(event);
@@ -103,17 +103,73 @@ export const handler: Handler = async (event) => {
 		}
 		const attempts: any[] = [];
 
-		// 1) Try with status + marketplace
-		let res = await listOnce(true, true);
-		attempts.push(res);
+		// Support comma-separated statuses by aggregating multiple calls
+		const normalizedStatuses = (status || '')
+			.split(',')
+			.map((s) => s.trim())
+			.filter(Boolean);
+
+		const attempts: any[] = [];
+
+		// Helper to read offers length safely
+		const getOffers = (body: any) => (Array.isArray(body?.offers) ? body.offers : []);
+
+		async function aggregateForStatuses(sts: string[], includeMarketplace: boolean) {
+			const agg: any[] = [];
+			for (const st of sts) {
+				const r = await listOnce(true, includeMarketplace);
+				attempts.push(r);
+				if (!r.ok) continue;
+				const arr = getOffers(r.body);
+				for (const o of arr) agg.push(o);
+			}
+			return agg;
+		}
+
+		let res: any;
+		let offers: any[] = [];
+
+		if (normalizedStatuses.length > 1) {
+			// Try with marketplace first
+			offers = await aggregateForStatuses(normalizedStatuses, true);
+			if (offers.length === 0) {
+				// Try again without marketplace filter
+				offers = await aggregateForStatuses(normalizedStatuses, false);
+			}
+			if (offers.length > 0) {
+				const seen = new Set<string>();
+				const unique = offers.filter((o) => {
+					const id = o?.offerId || o?.offer_id || '';
+					if (!id || seen.has(id)) return false;
+					seen.add(id);
+					return true;
+				});
+				return {
+					statusCode: 200,
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ ok: true, total: unique.length, offers: unique, attempts }),
+				};
+			}
+			// Fall through to single-call strategy if still nothing
+		}
+
+		// Single status or none
+		if (status) {
+			res = await listOnce(true, true);
+			attempts.push(res);
+		} else {
+			res = await listOnce(false, true);
+			attempts.push(res);
+		}
+
 		// If failure with status present, try without status (some accounts/APIs reject offer_status)
 		if (!res.ok && status) {
 			res = await listOnce(false, true);
 			attempts.push(res);
 		}
-		// If still bad (e.g., 400 invalid SKU spurious), try without marketplace_id
+		// If still bad, try without marketplace_id
 		if (!res.ok) {
-			res = await listOnce(false, false);
+			res = await listOnce(Boolean(status), false);
 			attempts.push(res);
 		}
 
@@ -145,21 +201,60 @@ export const handler: Handler = async (event) => {
 			};
 		}
 
-		// Success path
-		const body = res.body || {};
-		const offers = Array.isArray(body.offers) ? body.offers : [];
+		// Success path: consider empty results as a trigger to broaden filters
+		let body = res.body || {};
+		offers = getOffers(body);
+		if (offers.length === 0) {
+			// 1) If we had a status filter, try dropping it (keep marketplace)
+			if (status) {
+				const r1 = await listOnce(false, true);
+				attempts.push(r1);
+				if (r1.ok && getOffers(r1.body).length) {
+					body = r1.body;
+					offers = getOffers(body);
+				}
+			}
+			// 2) If still empty, drop marketplace, keep status if present
+			if (offers.length === 0) {
+				const r2 = await listOnce(Boolean(status), false);
+				attempts.push(r2);
+				if (r2.ok && getOffers(r2.body).length) {
+					body = r2.body;
+					offers = getOffers(body);
+				}
+			}
+			// 3) If still empty, drop both status and marketplace
+			if (offers.length === 0) {
+				const r3 = await listOnce(false, false);
+				attempts.push(r3);
+				if (r3.ok && getOffers(r3.body).length) {
+					body = r3.body;
+					offers = getOffers(body);
+				}
+			}
+			// 4) Last resort: safe aggregation by inventory
+			if (offers.length === 0) {
+				const safe = await safeAggregateByInventory();
+				return {
+					statusCode: 200,
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ ok: true, total: safe.offers.length, offers: safe.offers, attempts }),
+				};
+			}
+		}
+
 		// If we removed the status filter, apply client-side filtering now
 		const final = status
 			? offers.filter(
 					(o: any) => String(o?.status || '').toUpperCase() === String(status).toUpperCase()
 				)
 			: offers;
-		if (res.url.includes('offer_status=') && body.offers) {
+		if (String(status || '') && res?.url?.includes('offer_status=')) {
 			// Already filtered by server; return upstream shape
 			return {
 				statusCode: 200,
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ ok: true, ...body }),
+				body: JSON.stringify({ ok: true, ...body, offers: final, total: final.length }),
 			};
 		}
 		const meta: any = {
@@ -169,6 +264,7 @@ export const handler: Handler = async (event) => {
 			href: body.href,
 			next: body.next,
 			prev: body.prev,
+			attempts,
 		};
 		if (rawSku && !sku) meta.note = 'sku filter ignored due to invalid characters';
 		return {
