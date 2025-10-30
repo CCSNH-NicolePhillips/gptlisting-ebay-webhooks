@@ -12,5 +12,10 @@
     "types": ["@netlify/functions", "node"],
     "lib": ["ES2022", "DOM"]
   },
-  "include": ["src", "functions/**/*.ts", "netlify/functions/**/*.ts"]
+  "include": [
+    "src",
+    "functions/**/*.ts",
+    "functions/**/*.d.ts",
+    "netlify/functions/**/*.ts"
+  ]
 }
