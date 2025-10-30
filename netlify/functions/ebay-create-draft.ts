@@ -27,6 +27,9 @@ type DraftItem = {
   returnPolicyId?: string | null;
   merchantLocationKey?: string | null;
   marketplaceId?: string;
+  // Optional shipping weight (from wizard UI)
+  weightLbs?: number;
+  weightOz?: number;
 };
 
 type DraftMeta = {
@@ -470,6 +473,12 @@ function normalizeItem(raw: any): DraftItem {
   const merchantLocationKey =
     offer.merchantLocationKey || offer.locationKey || raw.merchantLocationKey || raw.locationKey || null;
 
+  // Optional weight from payload (separate lbs/oz from wizard)
+  const weightLbsRaw = Number((raw as any).weightLbs ?? (offer as any)?.weightLbs ?? 0);
+  const weightOzRaw = Number((raw as any).weightOz ?? (offer as any)?.weightOz ?? 0);
+  const weightLbs = Number.isFinite(weightLbsRaw) && weightLbsRaw > 0 ? Math.round(weightLbsRaw * 100) / 100 : undefined;
+  const weightOz = Number.isFinite(weightOzRaw) && weightOzRaw > 0 ? Math.round(weightOzRaw * 10) / 10 : undefined;
+
   return {
     sku,
     title,
@@ -486,6 +495,7 @@ function normalizeItem(raw: any): DraftItem {
     returnPolicyId: offer.returnPolicyId || raw.returnPolicyId || null,
     merchantLocationKey: merchantLocationKey ? String(merchantLocationKey) : null,
     marketplaceId,
+    ...(weightLbs != null || weightOz != null ? { weightLbs, weightOz } : {}),
   };
 }
 
@@ -753,6 +763,20 @@ async function processItem(item: DraftItem, ctx: ProcessContext) {
     },
     availability: { shipToLocationAvailability: { quantity: item.quantity } },
   };
+  // If weight was provided, set package weight in ounces to satisfy shipping requirements
+  try {
+    const lbs = Number(item.weightLbs ?? 0);
+    const oz = Number(item.weightOz ?? 0);
+    const totalOz = (Number.isFinite(lbs) && lbs > 0 ? lbs * 16 : 0) + (Number.isFinite(oz) && oz > 0 ? oz : 0);
+    if (totalOz > 0) {
+      const rounded = Math.round(totalOz * 10) / 10; // 0.1 oz precision
+      (inventoryPayload as any).packageWeightAndSize = {
+        weight: { value: rounded, unit: 'OUNCE' },
+      };
+    }
+  } catch {
+    // ignore weight issues
+  }
   if (item.inventoryCondition) inventoryPayload.condition = item.inventoryCondition;
   if (item.aspects) (inventoryPayload.product as any).aspects = item.aspects;
 
