@@ -553,15 +553,21 @@
                 const first = Array.isArray(data.results) ? data.results[0] : null;
                 const offerId = first?.offerId || data.draftOffer?.offerId || null;
                 const status = (first?.status || data.status || 'UNPUBLISHED').toString();
+                const sUp = status.toUpperCase();
+                const draftStatuses = new Set(['UNPUBLISHED','DRAFT','INACTIVE']);
                 if (offerId) {
-                  msg.textContent = `Draft created: Offer ${offerId} (status: ${status})`;
+                  if (draftStatuses.has(sUp)) {
+                    msg.textContent = `Draft created: Offer ${offerId} (status: ${sUp})`;
+                  } else {
+                    msg.textContent = `Offer status: ${sUp} (Offer ${offerId})`;
+                  }
                   return;
                 }
                 const parts = [];
                 if (resultsCount) parts.push(`${resultsCount} draft${resultsCount>1?'s':''} created`);
                 if (failuresCount) parts.push(`${failuresCount} failed`);
-                const summary = parts.join(', ') || 'Draft created';
-                msg.textContent = `${summary} (${status}).`;
+                const summary = parts.join(', ') || (draftStatuses.has(sUp) ? 'Draft created' : 'Offer result');
+                msg.textContent = `${summary} (${sUp}).`;
                 return;
               }
               const detail = data?.detail

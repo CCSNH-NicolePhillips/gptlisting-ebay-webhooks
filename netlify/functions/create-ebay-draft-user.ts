@@ -3,7 +3,7 @@ import { requireUserAuth } from "../../src/lib/auth-user.js";
 import { getOrigin, isOriginAllowed, json } from "../../src/lib/http.js";
 import { mapGroupToDraft, type TaxonomyMappedDraft } from "../../src/lib/map-group-to-draft.js";
 import { putBinding } from "../../src/lib/bind-store.js";
-import { getEbayAccessToken } from "../../src/lib/ebay-auth.js";
+import { getEbayAccessTokenStrict } from "../../src/lib/ebay-auth.js";
 import { tokensStore } from "../../src/lib/_blobs.js";
 import { userScopedKey } from "../../src/lib/_auth.js";
 import { createOffer, putInventoryItem } from "../../src/lib/ebay-sell.js";
@@ -206,7 +206,7 @@ export const handler: Handler = async (event) => {
 
   let access;
   try {
-    access = await getEbayAccessToken(user.userId);
+    access = await getEbayAccessTokenStrict(user.userId);
   } catch (err: any) {
     return json(502, { error: "eBay auth failed", detail: err?.message || String(err ?? "") }, originHdr, METHODS);
   }

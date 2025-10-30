@@ -1,6 +1,17 @@
 // Shared helpers for eBay OAuth in TS (uses global fetch in Node 18+)
+
+// Normalize environment values to canonical strings used for host selection
+export function resolveEbayEnv(str?: string): 'production' | 'sandbox' {
+  const v = String(str || '').trim().toLowerCase();
+  if (['prod', 'production', 'live'].includes(v)) return 'production';
+  if (['sb', 'sandbox', 'san'].includes(v)) return 'sandbox';
+  // Default to production if unspecified or unrecognized
+  return 'production';
+}
+
 export function tokenHosts(env: string | undefined) {
-  const isSb = (env || 'PROD') === 'SANDBOX';
+  const normalized = resolveEbayEnv(env);
+  const isSb = normalized === 'sandbox';
   const defaultApi = isSb ? 'https://api.sandbox.ebay.com' : 'https://api.ebay.com';
   // Allow an explicit API host override, but only if it looks like an eBay host.
   // Some environments set EBAY_ENDPOINT_URL to the site origin; that should NOT be used here.

@@ -1,8 +1,9 @@
 import type { Handler } from '@netlify/functions';
+import { resolveEbayEnv } from '../../src/lib/_common.js';
 
 export const handler: Handler = async () => {
   try {
-    const EBAY_ENV = String(process.env.EBAY_ENV || 'production').toLowerCase();
+    const EBAY_ENV = resolveEbayEnv(process.env.EBAY_ENV);
     const DEFAULT_MARKETPLACE_ID = process.env.DEFAULT_MARKETPLACE_ID || process.env.EBAY_MARKETPLACE_ID || 'EBAY_US';
     const MERCHANT_LOCATION_KEY = process.env.EBAY_MERCHANT_LOCATION_KEY || null;
     const SITE_URL = process.env.URL || process.env.DEPLOY_URL || null;

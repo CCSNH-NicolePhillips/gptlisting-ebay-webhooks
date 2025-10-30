@@ -1,6 +1,6 @@
 import type { Handler } from '@netlify/functions';
 import { tokensStore } from '../../src/lib/_blobs.js';
-import { accessTokenFromRefresh, tokenHosts } from '../../src/lib/_common.js';
+import { accessTokenFromRefresh, tokenHosts, resolveEbayEnv } from '../../src/lib/_common.js';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
 
 export const handler: Handler = async (event) => {
@@ -41,7 +41,7 @@ export const handler: Handler = async (event) => {
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ env: String(process.env.EBAY_ENV || 'production').toLowerCase(), offers: mapped }),
+      body: JSON.stringify({ env: resolveEbayEnv(process.env.EBAY_ENV), offers: mapped }),
     };
   } catch (e: any) {
     return { statusCode: 500, body: JSON.stringify({ error: e?.message || 'diag-offers failed' }) };
