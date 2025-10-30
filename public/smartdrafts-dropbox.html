@@ -6,7 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
       body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:24px;color:#111;max-width:1040px}
-      input[type=text]{width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:16px}
+  input[type=text]{width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:16px}
+  select{width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:16px;background:#fff}
       button{padding:8px 14px;border:1px solid #111;border-radius:8px;cursor:pointer;background:#111;color:#fff;font-weight:600}
       button:disabled{opacity:.5;cursor:not-allowed}
       .muted{color:#666;font-size:15px}
@@ -20,7 +21,11 @@
       header{margin-bottom:18px}
       header h1{margin:0 0 6px;font-size:26px}
       .controls{margin:12px 0;display:flex;gap:8px;flex-wrap:wrap}
-      label.group-toggle{display:flex;align-items:center;gap:6px;font-weight:600;font-size:15px}
+  label.group-toggle{display:flex;align-items:center;gap:6px;font-weight:600;font-size:15px}
+  h3{margin:28px 0 12px;font-size:20px}
+  .bullet-list{margin:8px 0;padding-left:18px;color:#444;font-size:14px}
+  .bullet-list li{margin:0}
+  .gpt-meta{margin-top:8px;font-size:14px;color:#444}
     </style>
   </head>
   <body>
@@ -30,6 +35,47 @@
     </script>
 
     <header>
+      btnGenerate?.addEventListener('click', async () => {
+        if (isGenerating) return;
+        const groups = Array.isArray(window.smartDraftGroups) ? window.smartDraftGroups : [];
+        if (!groups.length) {
+          if (gptStatus) gptStatus.textContent = 'Scan a Dropbox folder before generating.';
+          return;
+        }
+        const selectedIds = getSelectedGroupIds();
+        const selectedGroups = groups.filter((group) => selectedIds.includes(group.groupId));
+        if (!selectedGroups.length) {
+          if (gptStatus) gptStatus.textContent = 'Select at least one group above.';
+          return;
+        }
+        isGenerating = true;
+        updateGenerateState();
+        clearGptResults();
+        if (gptStatus) gptStatus.textContent = 'Generating with GPT…';
+        try {
+          const seeds = makeSeedsFromGroups(selectedGroups);
+          const exec = window.authClient?.authFetch ?? fetch;
+          const res = await exec('/.netlify/functions/ai-gpt-drafts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ seeds }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data?.ok) {
+            throw new Error(data?.error || `ai-gpt-drafts failed (${res.status})`);
+          }
+          const drafts = Array.isArray(data.drafts) ? data.drafts : [];
+          window._gptDrafts = drafts;
+          renderGptDrafts(drafts);
+          if (gptStatus) gptStatus.textContent = `Generated ${drafts.length} draft(s).`;
+        } catch (err) {
+          if (gptStatus) gptStatus.textContent = `GPT error: ${err?.message || err}`;
+        } finally {
+          isGenerating = false;
+          updateGenerateState();
+        }
+      });
+
       <h1>SmartDrafts - Dropbox Ingest</h1>
       <p class="muted">We pre-fill the Dropbox folder you selected on the Connect page. Scan it or pick another folder from the dropdown to build SmartDraft groups.</p>
     </header>
@@ -41,11 +87,20 @@
       <div class="controls">
         <button id="btnScanFolder">Scan Folder</button>
       </div>
+      <div style="margin:12px 0; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <input id="defaultBrand" type="text" placeholder="Default Brand (optional)" style="width:260px;" autocomplete="off" />
+        <input id="keywords" type="text" placeholder="Keywords (comma separated, optional)" style="width:320px;" autocomplete="off" />
+        <button id="btnGenerate">Generate with GPT</button>
+      </div>
       <div class="muted" id="folderInfo"></div>
     </div>
 
     <div id="status" class="muted"></div>
     <div id="grid" class="grid"></div>
+
+    <h3>GPT Results</h3>
+    <div id="gptStatus" class="muted"></div>
+    <div id="gptGrid" class="grid"></div>
 
     <script type="module">
       const $ = (sel) => document.querySelector(sel);
@@ -78,6 +133,11 @@
       const statusEl = $('#status');
       const grid = $('#grid');
       const folderInfo = $('#folderInfo');
+  const defaultBrandInput = $('#defaultBrand');
+  const keywordsInput = $('#keywords');
+  const btnGenerate = $('#btnGenerate');
+  const gptStatus = $('#gptStatus');
+  const gptGrid = $('#gptGrid');
 
       async function ensureAuth() {
         try {
@@ -117,10 +177,171 @@
       }
 
       let isScanning = false;
+      let isGenerating = false;
+
+      function clearGptResults() {
+        if (gptGrid) gptGrid.innerHTML = '';
+        if (gptStatus) gptStatus.textContent = '';
+        window._gptDrafts = [];
+      }
+
+      function updateGenerateState() {
+        if (!btnGenerate) return;
+        const groups = Array.isArray(window.smartDraftGroups) ? window.smartDraftGroups : [];
+        btnGenerate.disabled = isGenerating || !groups.length;
+      }
+
+      function getSelectedGroupIds() {
+        const nodes = Array.from(document.querySelectorAll('input[type=checkbox][data-pick]:checked'));
+        return nodes
+          .map((node) =>
+            node instanceof HTMLInputElement ? node.value || node.getAttribute('data-group-id') || '' : ''
+          )
+          .map((value) => String(value || '').trim())
+          .filter((value) => value.length > 0);
+      }
+
+      function dedupeStrings(list) {
+        return Array.from(
+          new Set(
+            (Array.isArray(list) ? list : [])
+              .filter((entry) => typeof entry === 'string')
+              .map((entry) => entry.trim())
+              .filter(Boolean),
+          ),
+        );
+      }
+
+      function parseGroupName(name) {
+        const raw = String(name || '').replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
+        if (!raw) return { product: 'Product', variant: undefined, size: undefined };
+        let working = raw;
+        let variant;
+        const parenMatch = raw.match(/\(([^)]+)\)\s*$/);
+        if (parenMatch) {
+          variant = parenMatch[1].trim();
+          working = raw.slice(0, -parenMatch[0].length).trim();
+        }
+        if (!variant) {
+          const split = working.split(/\s*[|:/–—-]\s*/);
+          if (split.length > 1) {
+            variant = split.pop()?.trim();
+            working = split.join(' - ').trim();
+          }
+        }
+        const sizeMatch = raw.match(/(\d+(?:\.\d+)?\s?(?:oz|fl oz|g|kg|lb|lbs|ml|ct|count|pack|pk))/i);
+        const size = sizeMatch ? sizeMatch[0].replace(/\s+/g, ' ').trim() : undefined;
+        if (variant && size && variant.toLowerCase() === size.toLowerCase()) {
+          variant = undefined;
+        }
+        const product = working || raw;
+        return { product, variant, size };
+      }
+
+      function collectFolderFeatures(group) {
+        const features = [];
+        const folder = typeof group?.folder === 'string' ? group.folder : '';
+        if (folder) {
+          const parts = folder.split('/').filter(Boolean);
+          parts.slice(-3).forEach((part) => features.push(part));
+        }
+        return dedupeStrings(features).slice(0, 10);
+      }
+
+      function makeSeedsFromGroups(groups) {
+        const brand = (defaultBrandInput?.value || '').trim() || undefined;
+        const keywordRaw = (keywordsInput?.value || '').trim();
+        const keywordList = keywordRaw
+          ? dedupeStrings(keywordRaw.split(',').map((entry) => entry.trim())).slice(0, 12)
+          : [];
+        return groups.map((group) => {
+          const parsed = parseGroupName(group?.name || group?.folder || 'Product');
+          const features = collectFolderFeatures(group);
+          if (parsed.variant) features.push(parsed.variant);
+          if (parsed.size) features.push(parsed.size);
+          const mergedFeatures = dedupeStrings(features).slice(0, 12);
+          return {
+            id: group?.groupId,
+            brand,
+            product: parsed.product || group?.name || 'Product',
+            variant: parsed.variant,
+            size: parsed.size,
+            features: mergedFeatures,
+            keywords: keywordList,
+            folder: typeof group?.folder === 'string' ? group.folder : undefined,
+            groupName: typeof group?.name === 'string' ? group.name : undefined,
+          };
+        });
+      }
+
+      function renderGptDrafts(drafts) {
+        if (!gptGrid) return;
+        gptGrid.innerHTML = '';
+        if (!Array.isArray(drafts) || !drafts.length) {
+          return;
+        }
+        drafts.forEach((draft) => {
+          const card = el('div', { class: 'card' });
+          const checkboxAttrs = {
+            type: 'checkbox',
+            value: draft?.id || '',
+            'data-gpt-pick': draft?.id || '',
+          };
+          if (!String(draft?.description || '').startsWith('ERROR')) {
+            checkboxAttrs.checked = 'checked';
+          }
+          const toggle = el('label', { class: 'group-toggle' }, [el('input', checkboxAttrs), 'Use draft']);
+          card.appendChild(toggle);
+
+          const titleWrap = document.createElement('div');
+          const strong = document.createElement('strong');
+          strong.textContent = (draft?.title || '').slice(0, 80);
+          titleWrap.appendChild(strong);
+          card.appendChild(titleWrap);
+
+          const bullets = Array.isArray(draft?.bullets) ? draft.bullets : [];
+          if (bullets.length) {
+            const bulletList = document.createElement('ul');
+            bulletList.className = 'bullet-list';
+            bullets.slice(0, 3).forEach((bullet) => {
+              const li = document.createElement('li');
+              li.textContent = bullet;
+              bulletList.appendChild(li);
+            });
+            card.appendChild(bulletList);
+          }
+
+          if (draft?.description) {
+            card.appendChild(el('div', { class: 'muted', text: String(draft.description) }));
+          }
+
+          const aspectEntries = Object.entries(draft?.aspects || {});
+          const aspectsText = aspectEntries.length
+            ? aspectEntries
+                .map(([key, values]) => `${key}: ${(Array.isArray(values) ? values : []).join(', ')}`)
+                .join(' | ')
+            : '(none)';
+          card.appendChild(el('div', { class: 'gpt-meta', text: `Aspects: ${aspectsText}` }));
+
+          const catName = draft?.category?.name || '(suggested)';
+          const catId = draft?.category?.id ? ` (${draft.category.id})` : '';
+          card.appendChild(el('div', { class: 'gpt-meta', text: `Category: ${catName}${catId}` }));
+
+          if (draft?.id) {
+            card.appendChild(el('div', { class: 'gpt-meta', text: `Group ID: ${draft.id}` }));
+          }
+
+          gptGrid.appendChild(card);
+        });
+      }
 
       async function runScan(payload, description) {
         if (isScanning) return;
         isScanning = true;
+        clearGptResults();
+        window.smartDraftGroups = [];
+        window._dbxGroups = [];
+        updateGenerateState();
         setStatus(description);
         grid.innerHTML = '';
         try {
@@ -132,12 +353,15 @@
           const data = await scanDropbox(payload);
           const groups = Array.isArray(data.groups) ? data.groups : [];
           window.smartDraftGroups = groups;
+          window._dbxGroups = groups;
+          updateGenerateState();
           setStatus(`Found ${groups.length} group(s) under "${data.root || '/'}".`);
           renderGroups(groups);
         } catch (err) {
           setStatus(`Error: ${err?.message || err}`);
         } finally {
           isScanning = false;
+          updateGenerateState();
         }
       }
 
@@ -202,6 +426,7 @@
       function renderGroups(groups) {
         grid.innerHTML = '';
         if (!groups.length) {
+          updateGenerateState();
           return;
         }
         groups.forEach((group) => {
@@ -210,6 +435,7 @@
             type: 'checkbox',
             value: group.groupId,
             'data-group-id': group.groupId,
+            'data-pick': group.groupId,
             checked: 'checked',
           });
           const toggle = el('label', { class: 'group-toggle' }, [checkbox, 'Use group']);
@@ -223,6 +449,7 @@
           card.appendChild(thumbs);
           grid.appendChild(card);
         });
+        updateGenerateState();
       }
       btnScanFolder?.addEventListener('click', () => {
         const path = (folderSelect?.value || '').trim();
@@ -243,6 +470,8 @@
           setStatus(`Ready to scan ${path}.`);
         }
       });
+
+      updateGenerateState();
 
       (async () => {
         const authed = await ensureAuth();

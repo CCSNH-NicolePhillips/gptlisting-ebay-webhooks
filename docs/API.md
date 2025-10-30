@@ -24,6 +24,11 @@ Notes: Auth required. Returns 503 if Redis (Upstash) not configured.
 Resp: { job }
 Notes: 404 when the job is missing/expired.
 
+## POST /.netlify/functions/ai-gpt-drafts
+Body: {"seeds":[{ id?, brand?, product, variant?, size?, features?, keywords?, price? }]}
+Resp: { ok:true, count, drafts:[{ id?, title, bullets, description, aspects, category }] }
+Notes: Auth required (Bearer). Calls OpenAI to generate listing copy with aspects & category suggestion.
+
 ## POST /.netlify/functions/ebay-create-draft
 Body: {
 	items?: [ { inventory:{...}, offer:{...} } ],
