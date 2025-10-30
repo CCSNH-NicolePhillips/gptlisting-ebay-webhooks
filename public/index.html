@@ -305,7 +305,14 @@
           if (ebayWho) {
             const mp = cj?.ebay?.marketplaceId || '';
             const host = cj?.ebay?.apiHost || '';
-            ebayWho.textContent = cj?.ebay ? `Signed in${mp ? ` (${mp})` : ''}${host ? ` • ${host.replace(/^https?:\/\//,'')}` : ''}` : '';
+            const uname = cj?.ebay?.username || cj?.ebay?.userId || '';
+            if (cj?.ebay) {
+              ebayWho.textContent = uname
+                ? `Signed in as: ${uname}${mp ? ` (${mp})` : ''}${host ? ` • ${host.replace(/^https?:\/\//,'')}` : ''}`
+                : `Signed in${mp ? ` (${mp})` : ''}${host ? ` • ${host.replace(/^https?:\/\//,'')}` : ''}`;
+            } else {
+              ebayWho.textContent = '';
+            }
           }
         } catch {}
         return connected;
