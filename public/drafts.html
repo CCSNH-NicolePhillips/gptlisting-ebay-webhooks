@@ -249,6 +249,7 @@
   </head>
   <body>
     <script src="/auth-client.js"></script>
+    <script src="/auth-client.js"></script>
     <div class="wrap">
       <header>
   <h1>Drafts</h1>
@@ -347,7 +348,8 @@
           del.disabled = true;
           flash.textContent = 'Publishing…';
           try {
-            const r = await fetch('/.netlify/functions/ebay-publish-offer', {
+            const exec = (window.authClient && typeof window.authClient.authFetch === 'function') ? window.authClient.authFetch : fetch;
+            const r = await exec('/.netlify/functions/ebay-publish-offer', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ offerId: offer.offerId }),
@@ -376,7 +378,8 @@
           del.disabled = true;
           flash.textContent = 'Deleting…';
           try {
-            const r = await fetch(
+            const exec = (window.authClient && typeof window.authClient.authFetch === 'function') ? window.authClient.authFetch : fetch;
+            const r = await exec(
               '/.netlify/functions/ebay-delete-offer?offerId=' + encodeURIComponent(offer.offerId)
             );
             const data = await r.json();
