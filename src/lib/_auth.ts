@@ -1,5 +1,4 @@
 import type { HandlerEvent } from '@netlify/functions';
-import { tokensStore } from './_blobs.js';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN;
@@ -50,7 +49,7 @@ export async function requireAuthVerified(event: HandlerEvent): Promise<{ sub: s
   }
 }
 
-// Simple helper required by the task contract: verifies ID token against Auth0 and returns basic identity
+// Verifies ID token against Auth0 and returns basic identity
 export async function requireAuth(event: HandlerEvent): Promise<{ sub: string; email?: string; name?: string } | null> {
   const v = await requireAuthVerified(event);
   if (!v) return null;
@@ -62,43 +61,6 @@ export async function requireAuth(event: HandlerEvent): Promise<{ sub: string; e
 // JSON response helper
 export function json(body: any, status: number = 200) {
   return { statusCode: status, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
-}
-
-export async function createOAuthStateForUser(
-  event: HandlerEvent,
-  provider: string,
-  extras: Partial<OAuthStateRecord> = {}
-): Promise<string | null> {
-  const sub = getJwtSubUnverified(event);
-  if (!sub) return null;
-  // Random opaque ID
-  const nonce = (globalThis as any).crypto?.randomUUID ? (globalThis as any).crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36);
-  const store = tokensStore();
-  const record: OAuthStateRecord = {
-    sub,
-    provider,
-    createdAt: Date.now(),
-    ...extras,
-  };
-  await store.setJSON(`oauth-state/${nonce}.json`, record);
-  return nonce;
-}
-
-export async function consumeOAuthState(state: string | null): Promise<OAuthStateRecord | null> {
-  if (!state) return null;
-  try {
-    const store = tokensStore();
-    const key = `oauth-state/${state}.json`;
-    const j = (await store.get(key, { type: 'json' })) as OAuthStateRecord | null;
-    if (j && j.sub) {
-      // best-effort cleanup
-      try { await (store as any).delete?.(key as any); } catch {}
-      return { ...j, sub: String(j.sub) };
-    }
-    return null;
-  } catch {
-    return null;
-  }
 }
 
 export function userScopedKey(sub: string | null, key: string): string {
