@@ -30,26 +30,18 @@
     </script>
 
     <header>
-    <h1>SmartDrafts - Dropbox Ingest</h1>
-    <p class="muted">We pre-fill the Dropbox folder you selected on the Connect page. Scan it or pick another folder via shared link to build SmartDraft groups.</p>
+      <h1>SmartDrafts - Dropbox Ingest</h1>
+      <p class="muted">We pre-fill the Dropbox folder you selected on the Connect page. Scan it or pick another folder from the dropdown to build SmartDraft groups.</p>
     </header>
 
     <div class="panel">
-      <h2>Saved Dropbox folder</h2>
-      <p class="muted" id="defaultPathInfo">Checking for saved folder…</p>
-      <input id="pathInput" type="text" placeholder="/EBAY" autocomplete="off" />
+      <h2>Pick a Dropbox folder</h2>
+      <p class="muted">We load your Dropbox folders, defaulting to the path saved on the Connect page. Change the selection to scan a different folder.</p>
+      <select id="folderSelect"></select>
       <div class="controls">
-        <button id="btnScanPath">Scan Saved Folder</button>
+        <button id="btnScanFolder">Scan Folder</button>
       </div>
-    </div>
-
-    <div class="panel">
-      <h2>Scan a different folder (shared link)</h2>
-      <p class="muted">Paste a Dropbox shared folder link if you want to scan something other than your saved default.</p>
-      <input id="sharedLink" type="text" placeholder="https://www.dropbox.com/scl/fo/..." autocomplete="off" />
-      <div class="controls">
-        <button id="btnScanLink">Scan Shared Link</button>
-      </div>
+      <div class="muted" id="folderInfo"></div>
     </div>
 
     <div id="status" class="muted"></div>
@@ -81,14 +73,11 @@
         });
         return node;
       }
-
-      const pathInput = $('#pathInput');
-      const linkInput = $('#sharedLink');
-      const btnScanPath = $('#btnScanPath');
-      const btnScanLink = $('#btnScanLink');
+      const folderSelect = $('#folderSelect');
+      const btnScanFolder = $('#btnScanFolder');
       const statusEl = $('#status');
       const grid = $('#grid');
-      const defaultPathInfo = $('#defaultPathInfo');
+      const folderInfo = $('#folderInfo');
 
       async function ensureAuth() {
         try {
@@ -152,19 +141,62 @@
         }
       }
 
-      const storedPath = getStoredFolder();
-      if (pathInput && storedPath) {
-        pathInput.value = storedPath;
+      function setStoredFolder(path) {
+        try {
+          localStorage.setItem('dbxDefaultFolder', path || '');
+        } catch {}
       }
-      if (defaultPathInfo) {
-        defaultPathInfo.textContent = storedPath
-          ? `Saved default folder: ${storedPath}`
-          : 'No saved default folder found. Set one on the Connect page.';
-      }
-      if (storedPath) {
-        setStatus(`Ready to scan ${storedPath}.`);
-      } else {
-        setStatus('Save a default Dropbox folder on the Connect page or paste a shared link below.');
+
+      async function loadFolders() {
+        if (!folderSelect) return;
+        folderSelect.disabled = true;
+        folderSelect.innerHTML = '<option>Loading folders…</option>';
+        try {
+          const exec = window.authClient?.authFetch ?? fetch;
+          const url = new URL('/.netlify/functions/dropbox-list-folders', window.location.origin);
+          url.searchParams.set('recursive', '1');
+          const res = await exec(url.toString());
+          const data = await res.json();
+          const entries = Array.isArray(data?.folders) ? data.folders : [];
+          const unique = new Map();
+          entries.forEach((entry) => {
+            const path = entry?.path_display || entry?.path_lower || entry?.name || '';
+            if (path) {
+              unique.set(path, path);
+            }
+          });
+          const options = Array.from(unique.keys()).sort((a, b) => a.localeCompare(b));
+          const stored = getStoredFolder();
+          folderSelect.innerHTML = '';
+          options.forEach((path) => {
+            const opt = document.createElement('option');
+            opt.value = path;
+            opt.textContent = path;
+            folderSelect.appendChild(opt);
+          });
+          if (stored && options.includes(stored)) {
+            folderSelect.value = stored;
+          } else if (options.length) {
+            folderSelect.value = options[0];
+            setStoredFolder(options[0]);
+          }
+          folderSelect.disabled = false;
+          const current = folderSelect.value || stored;
+          if (folderInfo) {
+            folderInfo.textContent = current
+              ? `Selected folder: ${current}`
+              : 'No folder selected.';
+          }
+          if (current) {
+            setStatus(`Ready to scan ${current}.`);
+          } else {
+            setStatus('Select a Dropbox folder to scan.');
+          }
+        } catch (err) {
+          folderSelect.innerHTML = '<option>Failed to load folders</option>';
+          if (folderInfo) folderInfo.textContent = err?.message || 'Error loading folders';
+          setStatus('Unable to load folders from Dropbox.');
+        }
       }
 
       function renderGroups(groups) {
@@ -192,40 +224,34 @@
           grid.appendChild(card);
         });
       }
-
-      btnScanPath?.addEventListener('click', () => {
-        const path = (pathInput?.value || '').trim();
+      btnScanFolder?.addEventListener('click', () => {
+        const path = (folderSelect?.value || '').trim();
         if (!path) {
-          setStatus('Enter a Dropbox folder path (e.g. /EBAY).');
-          pathInput?.focus?.();
+          setStatus('Select a Dropbox folder first.');
           return;
         }
+        setStoredFolder(path);
+        if (folderInfo) folderInfo.textContent = `Selected folder: ${path}`;
         runScan({ path }, `Scanning ${path}…`);
       });
 
-      btnScanLink?.addEventListener('click', () => {
-        const link = (linkInput?.value || '').trim();
-        if (!link) {
-          setStatus('Paste a Dropbox shared folder link first.');
-          linkInput?.focus?.();
+      folderSelect?.addEventListener('change', () => {
+        const path = (folderSelect.value || '').trim();
+        if (path) {
+          setStoredFolder(path);
+          if (folderInfo) folderInfo.textContent = `Selected folder: ${path}`;
+          setStatus(`Ready to scan ${path}.`);
+        }
+      });
+
+      (async () => {
+        const authed = await ensureAuth();
+        if (!authed) {
+          setStatus('Please sign in to load Dropbox folders.');
           return;
         }
-        runScan({ sharedLink: link }, 'Scanning Dropbox shared link…');
-      });
-
-      pathInput?.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') {
-          event.preventDefault();
-          btnScanPath?.click();
-        }
-      });
-
-      linkInput?.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') {
-          event.preventDefault();
-          btnScanLink?.click();
-        }
-      });
+        await loadFolders();
+      })();
     </script>
   </body>
 </html>
