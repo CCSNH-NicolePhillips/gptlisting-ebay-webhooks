@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+  <title>SmartDrafts - Dropbox</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:24px;color:#111;max-width:1040px}
+      input[type=text]{width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:16px}
+      button{padding:8px 14px;border:1px solid #111;border-radius:8px;cursor:pointer;background:#111;color:#fff;font-weight:600}
+      button:disabled{opacity:.5;cursor:not-allowed}
+      .muted{color:#666;font-size:15px}
+      .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;margin-top:16px}
+      .card{border:1px solid #eee;border-radius:12px;padding:12px;background:#fff;box-shadow:0 1px 2px rgba(17,17,17,0.05)}
+      .thumbs{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+      .thumbs img{width:64px;height:64px;object-fit:cover;border:1px solid #eee;border-radius:8px;background:#f5f5f5}
+      header{margin-bottom:18px}
+      header h1{margin:0 0 6px;font-size:26px}
+      .controls{margin:12px 0;display:flex;gap:8px;flex-wrap:wrap}
+      label.group-toggle{display:flex;align-items:center;gap:6px;font-weight:600;font-size:15px}
+    </style>
+  </head>
+  <body>
+    <script src="/auth-client.js"></script>
+    <script>
+      try { window.authClient?.requireAuth?.(); } catch {}
+    </script>
+
+    <header>
+  <h1>SmartDrafts - Dropbox Ingest</h1>
+      <p class="muted">Paste a Dropbox shared folder link. We will look through all subfolders, group the images, and prepare them for SmartDrafts.</p>
+    </header>
+
+    <input id="sharedLink" type="text" placeholder="https://www.dropbox.com/scl/fo/..." autocomplete="off" />
+    <div class="controls">
+      <button id="btnScan">Scan Folder</button>
+      <span id="status" class="muted"></span>
+    </div>
+    <div id="grid" class="grid"></div>
+
+    <script type="module">
+      const $ = (sel) => document.querySelector(sel);
+      function el(tag, attrs = {}, children = []) {
+        const node = document.createElement(tag);
+        Object.entries(attrs).forEach(([key, value]) => {
+          if (value === null || value === undefined || value === false) return;
+          if (key === 'text') {
+            node.textContent = String(value);
+            return;
+          }
+          if (key === 'html') {
+            node.innerHTML = String(value);
+            return;
+          }
+          node.setAttribute(key, String(value === true ? '' : value));
+        });
+        children.forEach((child) => {
+          if (child === null || child === undefined) return;
+          if (typeof child === 'string') {
+            node.appendChild(document.createTextNode(child));
+          } else {
+            node.appendChild(child);
+          }
+        });
+        return node;
+      }
+
+      const sharedInput = $('#sharedLink');
+      const btnScan = $('#btnScan');
+      const statusEl = $('#status');
+      const grid = $('#grid');
+
+      async function ensureAuth() {
+        try {
+          const ok = await (window.authClient?.ensureAuth?.() ?? Promise.resolve(false));
+          return !!ok;
+        } catch {
+          return false;
+        }
+      }
+
+      async function scanDropbox(sharedLink) {
+        const exec = window.authClient?.authFetch ?? fetch;
+        const res = await exec('/.netlify/functions/dbx-list-tree-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sharedLink }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data?.ok) {
+          const errMsg = data?.error || `Scan failed (${res.status})`;
+          throw new Error(errMsg);
+        }
+        return data;
+      }
+
+      function renderGroups(groups) {
+        grid.innerHTML = '';
+        if (!groups.length) {
+          return;
+        }
+        groups.forEach((group) => {
+          const card = el('div', { class: 'card' });
+          const checkbox = el('input', {
+            type: 'checkbox',
+            value: group.groupId,
+            'data-group-id': group.groupId,
+            checked: 'checked',
+          });
+          const toggle = el('label', { class: 'group-toggle' }, [checkbox, 'Use group']);
+          card.appendChild(toggle);
+          const title = el('div', { html: `<strong>${group.name || '(unnamed)'}</strong> <span class="muted">${group.folder || '/'}</span>` });
+          card.appendChild(title);
+          const thumbs = el('div', { class: 'thumbs' });
+          group.images.slice(0, 8).forEach((url) => {
+            thumbs.appendChild(el('img', { src: url, alt: 'preview' }));
+          });
+          card.appendChild(thumbs);
+          grid.appendChild(card);
+        });
+      }
+
+      btnScan.addEventListener('click', async () => {
+        const link = sharedInput.value.trim();
+        if (!link) {
+          statusEl.textContent = 'Paste a Dropbox shared folder link first.';
+          sharedInput.focus();
+          return;
+        }
+        btnScan.disabled = true;
+        statusEl.textContent = 'Scanning Dropbox…';
+        grid.innerHTML = '';
+        try {
+          const authed = await ensureAuth();
+          if (!authed) {
+            statusEl.textContent = 'Unable to authenticate. Please sign in and try again.';
+            return;
+          }
+          const data = await scanDropbox(link);
+          const groups = Array.isArray(data.groups) ? data.groups : [];
+          window.smartDraftGroups = groups;
+          statusEl.textContent = `Found ${groups.length} group(s) under "${data.root || '/'}".`;
+          renderGroups(groups);
+        } catch (err) {
+          statusEl.textContent = `Error: ${err?.message || err}`;
+        } finally {
+          btnScan.disabled = false;
+        }
+      });
+
+      sharedInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          btnScan.click();
+        }
+      });
+    </script>
+  </body>
+</html>
