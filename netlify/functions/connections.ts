@@ -1,5 +1,5 @@
 import type { Handler } from '@netlify/functions';
-import { requireAuth, getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
+import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
 import { tokensStore } from '../../src/lib/_blobs.js';
 import { tokenHosts, accessTokenFromRefresh } from '../../src/lib/_common.js';
 
@@ -26,14 +26,16 @@ async function dropboxAccessToken(refresh: string) {
 
 export const handler: Handler = async (event) => {
   try {
-    const auth = await requireAuth(event);
-    if (!auth?.sub) return json(401, { ok: false, error: 'Unauthorized' });
+    const bearer = getBearerToken(event);
+    let sub = (await requireAuthVerified(event))?.sub || null;
+    if (!sub) sub = getJwtSubUnverified(event);
+    if (!bearer || !sub) return json(401, { ok: false, error: 'Unauthorized' });
 
     const store = tokensStore();
     // eBay connection info
     let ebay: any = { connected: false };
     try {
-      const saved = (await store.get(userScopedKey(auth.sub, 'ebay.json'), { type: 'json' })) as any;
+      const saved = (await store.get(userScopedKey(sub, 'ebay.json'), { type: 'json' })) as any;
       const refresh = saved?.refresh_token as string | undefined;
       if (refresh) {
         const { apiHost } = tokenHosts(process.env.EBAY_ENV);
@@ -41,10 +43,11 @@ export const handler: Handler = async (event) => {
         const { access_token } = await accessTokenFromRefresh(refresh, [
           'https://api.ebay.com/oauth/api_scope',
           'https://api.ebay.com/oauth/api_scope/sell.account',
+          'https://api.ebay.com/oauth/api_scope/sell.inventory',
         ]);
-        // Light probe: list payment policies to verify token works
-        const url = `${apiHost}/sell/account/v1/payment_policy?marketplace_id=${MARKETPLACE_ID}`;
-        const r = await fetch(url, {
+        // Light probe: list payment policies and locations to verify token works and identify account context
+        const polUrl = `${apiHost}/sell/account/v1/payment_policy?marketplace_id=${MARKETPLACE_ID}`;
+        const polRes = await fetch(polUrl, {
           headers: {
             Authorization: `Bearer ${access_token}`,
             Accept: 'application/json',
@@ -53,8 +56,40 @@ export const handler: Handler = async (event) => {
             'X-EBAY-C-MARKETPLACE-ID': MARKETPLACE_ID,
           },
         });
-        let count = 0; try { const jj = await r.json(); count = Array.isArray(jj?.paymentPolicies) ? jj.paymentPolicies.length : 0; } catch {}
-        ebay = { connected: true, apiHost, marketplaceId: MARKETPLACE_ID, ok: r.ok, policyCount: count };
+        let policies: Array<{ id: string; name: string }> = [];
+        try {
+          const jj = await polRes.json();
+          const arr = Array.isArray(jj?.paymentPolicies) ? jj.paymentPolicies : [];
+          policies = arr.map((p: any) => ({ id: String(p?.paymentPolicyId || ''), name: String(p?.name || '') }));
+        } catch {}
+
+        const locUrl = `${apiHost}/sell/inventory/v1/location?limit=200`;
+        const locRes = await fetch(locUrl, {
+          headers: {
+            Authorization: `Bearer ${access_token}`,
+            Accept: 'application/json',
+            'Accept-Language': 'en-US',
+            'Content-Language': 'en-US',
+            'X-EBAY-C-MARKETPLACE-ID': MARKETPLACE_ID,
+          },
+        });
+        let locations: Array<{ key: string; name: string }> = [];
+        try {
+          const jj = await locRes.json();
+          const list = Array.isArray(jj?.locations) ? jj.locations : Array.isArray(jj?.locationResponses) ? jj.locationResponses : [];
+          locations = list.map((l: any) => ({ key: String(l?.merchantLocationKey || ''), name: String(l?.name || '') }));
+        } catch {}
+
+        ebay = {
+          connected: true,
+          ok: polRes.ok && locRes.ok,
+          apiHost,
+          marketplaceId: MARKETPLACE_ID,
+          policies,
+          policyCount: policies.length,
+          locations,
+          locationCount: locations.length,
+        };
       }
     } catch (e: any) {
       ebay = { connected: false, error: e?.message || String(e) };
@@ -63,7 +98,7 @@ export const handler: Handler = async (event) => {
     // Dropbox connection info
     let dropbox: any = { connected: false };
     try {
-      const saved = (await store.get(userScopedKey(auth.sub, 'dropbox.json'), { type: 'json' })) as any;
+      const saved = (await store.get(userScopedKey(sub, 'dropbox.json'), { type: 'json' })) as any;
       const refresh = saved?.refresh_token as string | undefined;
       if (refresh) {
         const access = await dropboxAccessToken(refresh);
@@ -86,7 +121,7 @@ export const handler: Handler = async (event) => {
 
     return json(200, {
       ok: true,
-      user: { sub: auth.sub, email: auth.email || null, name: auth.name || null },
+      user: { sub, /* email/name redacted unless verified */ },
       ebay,
       dropbox,
     });
