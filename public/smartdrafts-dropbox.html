@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-  <title>SmartDrafts - Dropbox</title>
+    <title>SmartDrafts - Dropbox</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
       body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:24px;color:#111;max-width:1040px}
@@ -14,6 +14,9 @@
       .card{border:1px solid #eee;border-radius:12px;padding:12px;background:#fff;box-shadow:0 1px 2px rgba(17,17,17,0.05)}
       .thumbs{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
       .thumbs img{width:64px;height:64px;object-fit:cover;border:1px solid #eee;border-radius:8px;background:#f5f5f5}
+      .panel{border:1px solid #ececec;border-radius:12px;padding:16px;margin:18px 0;background:#fafafa}
+      .panel h2{margin:0 0 8px;font-size:20px}
+      .panel p{margin:4px 0 12px}
       header{margin-bottom:18px}
       header h1{margin:0 0 6px;font-size:26px}
       .controls{margin:12px 0;display:flex;gap:8px;flex-wrap:wrap}
@@ -27,15 +30,29 @@
     </script>
 
     <header>
-  <h1>SmartDrafts - Dropbox Ingest</h1>
-      <p class="muted">Paste a Dropbox shared folder link. We will look through all subfolders, group the images, and prepare them for SmartDrafts.</p>
+    <h1>SmartDrafts - Dropbox Ingest</h1>
+    <p class="muted">We pre-fill the Dropbox folder you selected on the Connect page. Scan it or pick another folder via shared link to build SmartDraft groups.</p>
     </header>
 
-    <input id="sharedLink" type="text" placeholder="https://www.dropbox.com/scl/fo/..." autocomplete="off" />
-    <div class="controls">
-      <button id="btnScan">Scan Folder</button>
-      <span id="status" class="muted"></span>
+    <div class="panel">
+      <h2>Saved Dropbox folder</h2>
+      <p class="muted" id="defaultPathInfo">Checking for saved folder…</p>
+      <input id="pathInput" type="text" placeholder="/EBAY" autocomplete="off" />
+      <div class="controls">
+        <button id="btnScanPath">Scan Saved Folder</button>
+      </div>
     </div>
+
+    <div class="panel">
+      <h2>Scan a different folder (shared link)</h2>
+      <p class="muted">Paste a Dropbox shared folder link if you want to scan something other than your saved default.</p>
+      <input id="sharedLink" type="text" placeholder="https://www.dropbox.com/scl/fo/..." autocomplete="off" />
+      <div class="controls">
+        <button id="btnScanLink">Scan Shared Link</button>
+      </div>
+    </div>
+
+    <div id="status" class="muted"></div>
     <div id="grid" class="grid"></div>
 
     <script type="module">
@@ -65,10 +82,13 @@
         return node;
       }
 
-      const sharedInput = $('#sharedLink');
-      const btnScan = $('#btnScan');
+      const pathInput = $('#pathInput');
+      const linkInput = $('#sharedLink');
+      const btnScanPath = $('#btnScanPath');
+      const btnScanLink = $('#btnScanLink');
       const statusEl = $('#status');
       const grid = $('#grid');
+      const defaultPathInfo = $('#defaultPathInfo');
 
       async function ensureAuth() {
         try {
@@ -79,12 +99,25 @@
         }
       }
 
-      async function scanDropbox(sharedLink) {
+      function getStoredFolder() {
+        try {
+          return localStorage.getItem('dbxDefaultFolder') || '';
+        } catch {
+          return '';
+        }
+      }
+
+      function setStatus(message) {
+        if (statusEl) statusEl.textContent = message || '';
+      }
+
+      async function scanDropbox(payload) {
         const exec = window.authClient?.authFetch ?? fetch;
+        const body = JSON.stringify(payload);
         const res = await exec('/.netlify/functions/dbx-list-tree-user', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sharedLink }),
+          body,
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data?.ok) {
@@ -92,6 +125,46 @@
           throw new Error(errMsg);
         }
         return data;
+      }
+
+      let isScanning = false;
+
+      async function runScan(payload, description) {
+        if (isScanning) return;
+        isScanning = true;
+        setStatus(description);
+        grid.innerHTML = '';
+        try {
+          const authed = await ensureAuth();
+          if (!authed) {
+            setStatus('Please sign in to scan Dropbox.');
+            return;
+          }
+          const data = await scanDropbox(payload);
+          const groups = Array.isArray(data.groups) ? data.groups : [];
+          window.smartDraftGroups = groups;
+          setStatus(`Found ${groups.length} group(s) under "${data.root || '/'}".`);
+          renderGroups(groups);
+        } catch (err) {
+          setStatus(`Error: ${err?.message || err}`);
+        } finally {
+          isScanning = false;
+        }
+      }
+
+      const storedPath = getStoredFolder();
+      if (pathInput && storedPath) {
+        pathInput.value = storedPath;
+      }
+      if (defaultPathInfo) {
+        defaultPathInfo.textContent = storedPath
+          ? `Saved default folder: ${storedPath}`
+          : 'No saved default folder found. Set one on the Connect page.';
+      }
+      if (storedPath) {
+        setStatus(`Ready to scan ${storedPath}.`);
+      } else {
+        setStatus('Save a default Dropbox folder on the Connect page or paste a shared link below.');
       }
 
       function renderGroups(groups) {
@@ -120,38 +193,37 @@
         });
       }
 
-      btnScan.addEventListener('click', async () => {
-        const link = sharedInput.value.trim();
-        if (!link) {
-          statusEl.textContent = 'Paste a Dropbox shared folder link first.';
-          sharedInput.focus();
+      btnScanPath?.addEventListener('click', () => {
+        const path = (pathInput?.value || '').trim();
+        if (!path) {
+          setStatus('Enter a Dropbox folder path (e.g. /EBAY).');
+          pathInput?.focus?.();
           return;
         }
-        btnScan.disabled = true;
-        statusEl.textContent = 'Scanning Dropbox…';
-        grid.innerHTML = '';
-        try {
-          const authed = await ensureAuth();
-          if (!authed) {
-            statusEl.textContent = 'Unable to authenticate. Please sign in and try again.';
-            return;
-          }
-          const data = await scanDropbox(link);
-          const groups = Array.isArray(data.groups) ? data.groups : [];
-          window.smartDraftGroups = groups;
-          statusEl.textContent = `Found ${groups.length} group(s) under "${data.root || '/'}".`;
-          renderGroups(groups);
-        } catch (err) {
-          statusEl.textContent = `Error: ${err?.message || err}`;
-        } finally {
-          btnScan.disabled = false;
+        runScan({ path }, `Scanning ${path}…`);
+      });
+
+      btnScanLink?.addEventListener('click', () => {
+        const link = (linkInput?.value || '').trim();
+        if (!link) {
+          setStatus('Paste a Dropbox shared folder link first.');
+          linkInput?.focus?.();
+          return;
+        }
+        runScan({ sharedLink: link }, 'Scanning Dropbox shared link…');
+      });
+
+      pathInput?.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          btnScanPath?.click();
         }
       });
 
-      sharedInput.addEventListener('keydown', (event) => {
+      linkInput?.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
           event.preventDefault();
-          btnScan.click();
+          btnScanLink?.click();
         }
       });
     </script>
