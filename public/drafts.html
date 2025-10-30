@@ -261,6 +261,9 @@
       </header>
       <div class="topbar">
         <div id="flash" class="flash"></div>
+        <div>
+          <button id="btnRefresh" class="btn secondary" title="Reload drafts">Refresh</button>
+        </div>
       </div>
       <div id="list" class="grid" aria-live="polite"></div>
     </div>
@@ -432,22 +435,9 @@
             '/.netlify/functions/ebay-list-offers?limit=100' +
             (skuOk ? '&sku=' + encodeURIComponent(rawSku) : '');
 
-          const statuses = ['UNPUBLISHED', 'DRAFT', 'INACTIVE'];
-          // Try fetching each status explicitly; tolerate endpoints that reject offer_status
-          const parts = await Promise.all(
-            statuses.map((st) =>
-              fetchJSON(base + '&status=' + encodeURIComponent(st)).catch(() => ({ offers: [] }))
-            )
-          );
-          const combined = parts.flatMap((p) => (Array.isArray(p.offers) ? p.offers : []));
-          // Deduplicate by offerId
-          const seen = new Set();
-          let offers = combined.filter((o) => {
-            const id = o?.offerId || o?.offer_id || '';
-            if (!id || seen.has(id)) return false;
-            seen.add(id);
-            return true;
-          });
+          // Single aggregated query to rely on server-side multi-status handling and safe-aggregate fallback
+          const agg = await fetchJSON(base + '&status=' + encodeURIComponent('UNPUBLISHED,DRAFT,INACTIVE'));
+          let offers = Array.isArray(agg?.offers) ? agg.offers : [];
 
           // Fallback: if explicit queries yielded nothing, do a broad fetch and client-filter
           if (!offers.length) {
@@ -647,6 +637,7 @@
         }
         load();
       }
+      document.getElementById('btnRefresh')?.addEventListener('click', () => { try { load(); } catch {} });
       bootstrap();
     </script>
   </body>
