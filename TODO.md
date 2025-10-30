@@ -7,6 +7,7 @@
 - [ ] PHASE-1: Enforce per-user quotas (daily images + running jobs).
 - [ ] PHASE-1: Frontend hook-up for user analyze flow (token storage + calls).
 - [ ] PHASE-1: Document Auth0 + quota env vars.
+- [ ] PHASE SD-2: SmartDrafts GPT generation endpoint + UI wiring.
 
 ## Next
 - [ ] Provider router + vision batch cache (env switch OpenAI/Anthropic/Gemini)
