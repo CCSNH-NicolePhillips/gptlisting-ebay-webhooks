@@ -1,7 +1,7 @@
 import type { Handler } from '@netlify/functions';
-import { tokensStore } from './_blobs.js';
-import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from './_auth.js';
-import { accessTokenFromRefresh, tokenHosts } from './_common.js';
+import { tokensStore } from '../src/lib/_blobs.js';
+import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../src/lib/_auth.js';
+import { accessTokenFromRefresh, tokenHosts } from '../src/lib/_common.js';
 
 function json(body: unknown, status = 200) {
   return { statusCode: status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, body: JSON.stringify(body) };
