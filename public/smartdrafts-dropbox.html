@@ -35,47 +35,6 @@
     </script>
 
     <header>
-      btnGenerate?.addEventListener('click', async () => {
-        if (isGenerating) return;
-        const groups = Array.isArray(window.smartDraftGroups) ? window.smartDraftGroups : [];
-        if (!groups.length) {
-          if (gptStatus) gptStatus.textContent = 'Scan a Dropbox folder before generating.';
-          return;
-        }
-        const selectedIds = getSelectedGroupIds();
-        const selectedGroups = groups.filter((group) => selectedIds.includes(group.groupId));
-        if (!selectedGroups.length) {
-          if (gptStatus) gptStatus.textContent = 'Select at least one group above.';
-          return;
-        }
-        isGenerating = true;
-        updateGenerateState();
-        clearGptResults();
-        if (gptStatus) gptStatus.textContent = 'Generating with GPT…';
-        try {
-          const seeds = makeSeedsFromGroups(selectedGroups);
-          const exec = window.authClient?.authFetch ?? fetch;
-          const res = await exec('/.netlify/functions/ai-gpt-drafts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ seeds }),
-          });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok || !data?.ok) {
-            throw new Error(data?.error || `ai-gpt-drafts failed (${res.status})`);
-          }
-          const drafts = Array.isArray(data.drafts) ? data.drafts : [];
-          window._gptDrafts = drafts;
-          renderGptDrafts(drafts);
-          if (gptStatus) gptStatus.textContent = `Generated ${drafts.length} draft(s).`;
-        } catch (err) {
-          if (gptStatus) gptStatus.textContent = `GPT error: ${err?.message || err}`;
-        } finally {
-          isGenerating = false;
-          updateGenerateState();
-        }
-      });
-
       <h1>SmartDrafts - Dropbox Ingest</h1>
       <p class="muted">We pre-fill the Dropbox folder you selected on the Connect page. Scan it or pick another folder from the dropdown to build SmartDraft groups.</p>
     </header>
@@ -431,6 +390,47 @@
         }
         groups.forEach((group) => {
           const card = el('div', { class: 'card' });
+
+      btnGenerate?.addEventListener('click', async () => {
+        if (isGenerating) return;
+        const groups = Array.isArray(window.smartDraftGroups) ? window.smartDraftGroups : [];
+        if (!groups.length) {
+          if (gptStatus) gptStatus.textContent = 'Scan a Dropbox folder before generating.';
+          return;
+        }
+        const selectedIds = getSelectedGroupIds();
+        const selectedGroups = groups.filter((group) => selectedIds.includes(group.groupId));
+        if (!selectedGroups.length) {
+          if (gptStatus) gptStatus.textContent = 'Select at least one group above.';
+          return;
+        }
+        isGenerating = true;
+        updateGenerateState();
+        clearGptResults();
+        if (gptStatus) gptStatus.textContent = 'Generating with GPT…';
+        try {
+          const seeds = makeSeedsFromGroups(selectedGroups);
+          const exec = window.authClient?.authFetch ?? fetch;
+          const res = await exec('/.netlify/functions/ai-gpt-drafts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ seeds }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data?.ok) {
+            throw new Error(data?.error || `ai-gpt-drafts failed (${res.status})`);
+          }
+          const drafts = Array.isArray(data.drafts) ? data.drafts : [];
+          window._gptDrafts = drafts;
+          renderGptDrafts(drafts);
+          if (gptStatus) gptStatus.textContent = `Generated ${drafts.length} draft(s).`;
+        } catch (err) {
+          if (gptStatus) gptStatus.textContent = `GPT error: ${err?.message || err}`;
+        } finally {
+          isGenerating = false;
+          updateGenerateState();
+        }
+      });
           const checkbox = el('input', {
             type: 'checkbox',
             value: group.groupId,
