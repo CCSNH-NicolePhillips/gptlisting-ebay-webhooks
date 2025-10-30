@@ -95,7 +95,6 @@ async function dropboxApi(token: string, url: string, body?: unknown) {
 async function listFromSharedLink(token: string, link: string, password?: string): Promise<ListResult> {
   const meta = await dropboxApi(token, 'https://api.dropboxapi.com/2/sharing/get_shared_link_metadata', {
     url: link,
-    direct_only: false,
     ...(password ? { password } : {}),
   });
   const root = typeof meta?.path_lower === 'string' && meta.path_lower
