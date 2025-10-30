@@ -324,9 +324,10 @@
         ]
           .filter(Boolean)
           .join(' • ');
-        const badge = document.createElement('div');
-        badge.className = 'badge';
-        badge.innerHTML = '<span class="dot"></span> Unpublished';
+  const badge = document.createElement('div');
+  badge.className = 'badge';
+  const st = String(offer?.status || 'UNPUBLISHED');
+  badge.innerHTML = `<span class="dot"></span> ${st}`;
         const row = document.createElement('div');
         row.className = 'row';
         const pub = document.createElement('button');
@@ -421,17 +422,19 @@
           '<div class="spinner" role="status" aria-label="Loading"></div><div class="label">Loading drafts…</div>';
         list.appendChild(loader);
         try {
-          // eBay treats saved offers awaiting publish as UNPUBLISHED
+          // Load offers without server-side status filter, then include common draft-like statuses.
           const rawSku = new URL(location.href).searchParams.get('sku') || '';
           const skuOk = /^[A-Za-z0-9]{1,50}$/.test(rawSku);
           const url =
-            '/.netlify/functions/ebay-list-offers?status=UNPUBLISHED&limit=100' +
+            '/.netlify/functions/ebay-list-offers?limit=100' +
             (skuOk ? '&sku=' + encodeURIComponent(rawSku) : '');
           const j = await fetchJSON(url);
-          const offers = j.offers || [];
+          const all = Array.isArray(j.offers) ? j.offers : [];
+          const allowed = new Set(['UNPUBLISHED', 'DRAFT', 'INACTIVE']);
+          const offers = all.filter((o) => allowed.has(String(o?.status || '').toUpperCase()));
           if (!offers.length) {
             list.innerHTML =
-              '<div class="empty">No drafts yet. Create your first listing draft from the wizard.</div>';
+              '<div class="empty">No saved offers in UNPUBLISHED/DRAFT/INACTIVE. Create your first listing draft from the wizard.</div>';
             return;
           }
           list.innerHTML = '';
