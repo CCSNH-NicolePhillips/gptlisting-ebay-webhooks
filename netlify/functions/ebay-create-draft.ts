@@ -1,7 +1,7 @@
 import type { Handler } from "@netlify/functions";
-import { accessTokenFromRefresh, tokenHosts } from "../../functions/_common.js";
-import { tokensStore } from "../../functions/_blobs.js";
-import { userScopedKey } from "../../functions/_auth.js";
+import { accessTokenFromRefresh, tokenHosts } from "../../src/lib/_common.js";
+import { tokensStore } from "../../src/lib/_blobs.js";
+import { userScopedKey } from "../../src/lib/_auth.js";
 import { getOrigin, isAuthorized, isOriginAllowed, jsonResponse } from "../../src/lib/http.js";
 import { maybeRequireUserAuth } from "../../src/lib/auth-user.js";
 import type { UserAuth } from "../../src/lib/auth-user.js";
