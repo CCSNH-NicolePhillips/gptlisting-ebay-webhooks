@@ -1,6 +1,6 @@
-import { accessTokenFromRefresh, tokenHosts } from "../../functions/_common.js";
-import { tokensStore } from "../../functions/_blobs.js";
-import { userScopedKey } from "../../functions/_auth.js";
+import { accessTokenFromRefresh, tokenHosts } from "./_common.js";
+import { tokensStore } from "./_blobs.js";
+import { userScopedKey } from "./_auth.js";
 
 export type EbayAccessToken = {
   token: string;
