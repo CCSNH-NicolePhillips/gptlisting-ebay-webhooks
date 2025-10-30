@@ -43,8 +43,56 @@ export const handler: Handler = async (event) => {
 		}
 
 		let pub = await publishOnce();
-		// If publish fails due to invalid/missing condition (25021), attempt to update offer with numeric condition and retry once
+		// If publish fails, inspect common fixable errors
 		const errors = ([] as any[]).concat(pub.body?.errors || pub.body || []);
+		// 25020: Missing/invalid package weight — set a default weight on the inventory item and retry
+		const needsWeightFix = !pub.ok && errors.some((e) => Number(e?.errorId) === 25020);
+		if (needsWeightFix) {
+			// Fetch current offer to get SKU
+			const getOfferUrl = `${apiHost}/sell/inventory/v1/offer/${encodeURIComponent(offerId)}`;
+			const getOfferRes = await fetch(getOfferUrl, { headers });
+			const getOfferTxt = await getOfferRes.text();
+			let off: any = {};
+			try { off = JSON.parse(getOfferTxt); } catch { off = {}; }
+			const sku = (off && (off.sku || off?.offer?.sku)) ? String(off.sku || off.offer?.sku) : '';
+			if (getOfferRes.ok && sku) {
+				// Fetch inventory item, add a reasonable default weight if missing/zero, then PUT back
+				const getInvUrl = `${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
+				const invRes = await fetch(getInvUrl, { headers });
+				const invTxt = await invRes.text();
+				let inv: any = {};
+				try { inv = JSON.parse(invTxt); } catch { inv = {}; }
+				if (invRes.ok) {
+					const existingW = inv?.packageWeightAndSize?.weight?.value;
+					const unit = (inv?.packageWeightAndSize?.weight?.unit || 'OUNCE').toString().toUpperCase();
+					const current = Number(existingW || 0);
+					// Default to 16 oz (1 lb) when absent or invalid
+					const newWeight = Number.isFinite(current) && current > 0 ? current : 16;
+					const patched: any = {
+						sku,
+						product: inv?.product,
+						availability: inv?.availability,
+						condition: inv?.condition,
+						packageWeightAndSize: {
+							...(inv?.packageWeightAndSize || {}),
+							weight: { value: Math.round(newWeight * 10) / 10, unit: unit || 'OUNCE' },
+						},
+					};
+					const putInvUrl = getInvUrl;
+					const putInvRes = await fetch(putInvUrl, {
+						method: 'PUT',
+						headers,
+						body: JSON.stringify(patched),
+					});
+					// Even if update fails, proceed to return the original publish error; else retry publish once
+					if (putInvRes.ok) {
+						pub = await publishOnce();
+					}
+				}
+			}
+		}
+
+		// If publish fails due to invalid/missing condition (25021), attempt to update offer with numeric condition and retry once
 		const needsCondFix = !pub.ok && errors.some((e) => Number(e?.errorId) === 25021);
 		if (needsCondFix) {
 			// Fetch current offer
