@@ -682,16 +682,29 @@
             }),
           });
           const data = await r.json();
-          if (r.ok && data.ok) {
-            const offerId = data.draftOffer?.offerId;
-            // Redirect to drafts page listing all drafts; include created id for flash
+          const resultsCount = Array.isArray(data?.results) ? data.results.length : 0;
+          const failuresCount = Array.isArray(data?.failures) ? data.failures.length : 0;
+          const ok = r.ok && (data?.ok !== false);
+          if (ok && resultsCount > 0) {
+            const first = Array.isArray(data.results) ? data.results[0] : null;
+            const offerId = first?.offerId || data.draftOffer?.offerId || null;
+            const status = (first?.status || data.status || 'UNPUBLISHED').toString();
+            const sUp = status.toUpperCase();
+            const draftStatuses = new Set(['UNPUBLISHED','DRAFT','INACTIVE']);
+            // Redirect to drafts page listing all drafts; include created id for flash if we have an id
             if (offerId) {
+              // Set a quick message before redirect (best-effort)
+              if (draftStatuses.has(sUp)) msg.textContent = `Draft created: Offer ${offerId} (status: ${sUp})`;
+              else msg.textContent = `Offer status: ${sUp} (Offer ${offerId})`;
               location.href = `/drafts.html?created=${encodeURIComponent(offerId)}`;
               return;
             }
-            // Fallback: show message if no offerId (shouldn't happen)
-            const note = data.status === 'UNPUBLISHED' ? ' — (unpublished offer)' : '';
-            msg.textContent = `Draft created (${data.env || 'PROD'} ${data.marketplaceId || ''}): ${offerId || 'unknown'}${note}`;
+            // No offerId came back; summarize outcome
+            const parts = [];
+            if (resultsCount) parts.push(`${resultsCount} draft${resultsCount>1?'s':''} created`);
+            if (failuresCount) parts.push(`${failuresCount} failed`);
+            const summary = parts.join(', ') || (draftStatuses.has(sUp) ? 'Draft created' : 'Offer result');
+            msg.textContent = `${summary} (${sUp}).`;
           } else {
             const detail =
               typeof data.detail === 'string'
