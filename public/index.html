@@ -154,7 +154,8 @@
       <p class="muted">Preparing your workspace</p>
     </div>
     <div class="card" id="mainCard" style="display:none;">
-      <h1>Connect your accounts</h1>
+  <h1>Connect your accounts</h1>
+  <p class="small muted" id="signedInAs" style="margin-top:-.5rem; margin-bottom: .75rem;"></p>
       <p class="muted">
         Link Dropbox to read photos, and eBay to create draft listings in your production account.
       </p>
@@ -168,6 +169,7 @@
         <div class="col">
           <h3>Dropbox</h3>
           <p class="status" id="dbxStatus">Loading…</p>
+          <p class="small muted" id="dbxWho" style="margin-top:-.5rem"></p>
           <div>
             <a id="dbxConnect" class="btn" href="/.netlify/functions/dropbox-oauth-start">Connect Dropbox</a>
             <button id="dbxDisconnect" class="secondary">Disconnect</button>
@@ -181,8 +183,9 @@
           </div>
         </div>
         <div class="col">
-          <h3>eBay (Production)</h3>
+          <h3>eBay</h3>
           <p class="status" id="ebayStatus">Loading…</p>
+          <p class="small muted" id="ebayWho" style="margin-top:-.5rem"></p>
           <div>
             <a id="ebayConnect" class="btn" href="/.netlify/functions/ebay-oauth-start">Connect eBay</a>
             <button id="ebayDisconnect" class="secondary">Disconnect</button>
@@ -264,6 +267,10 @@
   const banner = document.getElementById('authBanner');
   if (banner) banner.style.display = 'none';
         lastStatus = s;
+        // Signed-in user (Auth0)
+        try {
+          const user = (await (window.auth0 && authClient.ensureAuth ? authClient.ensureAuth() && (authClient && authClient.user) : null)) || null;
+        } catch {}
         dbxStatus.textContent = s.dropbox?.connected ? 'Connected' : 'Not connected';
         ebayStatus.textContent = s.ebay?.connected ? 'Connected' : 'Not connected';
         const chkDropbox = document.getElementById('chkDropbox');
@@ -278,6 +285,28 @@
         // Load folders when Dropbox is connected
         try {
           await loadDropboxFolders(!!s.dropbox?.connected);
+        } catch {}
+        // Also load connection identities to display 'Signed in as'
+        try {
+          const cr = await authClient.authFetch('/.netlify/functions/connections');
+          const cj = await cr.json().catch(() => ({}));
+          const who = document.getElementById('signedInAs');
+          if (who && cj?.user) {
+            const name = cj.user?.name || cj.user?.email || cj.user?.sub || '';
+            who.textContent = name ? `Signed in as: ${name}` : '';
+          }
+          const dbxWho = document.getElementById('dbxWho');
+          if (dbxWho) {
+            const nm = cj?.dropbox?.account?.name?.display_name || cj?.dropbox?.account?.name || '';
+            const em = cj?.dropbox?.account?.email || '';
+            dbxWho.textContent = cj?.dropbox ? (nm || em ? `Signed in as: ${nm || em}` : 'Connected') : '';
+          }
+          const ebayWho = document.getElementById('ebayWho');
+          if (ebayWho) {
+            const mp = cj?.ebay?.marketplaceId || '';
+            const host = cj?.ebay?.apiHost || '';
+            ebayWho.textContent = cj?.ebay ? `Signed in${mp ? ` (${mp})` : ''}${host ? ` • ${host.replace(/^https?:\/\//,'')}` : ''}` : '';
+          }
         } catch {}
         return connected;
       }
