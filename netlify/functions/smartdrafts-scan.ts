@@ -26,22 +26,20 @@ type DropboxEntry = {
   server_modified?: string;
   rev?: string;
   size?: number;
+  media_info?: {
+    metadata?: {
+      dimensions?: {
+        width?: number;
+        height?: number;
+      };
+    };
+  };
 };
 
 type OrphanImage = {
   url: string;
   name: string;
   folder: string;
-};
-
-type GroupScoringMeta = {
-  weights: Map<string, number>;
-  phrases: Array<{ text: string; weight: number }>;
-};
-
-type TupleTokenInfo = {
-  tokens: Set<string>;
-  haystack: string;
 };
 
 const METHODS = "POST, OPTIONS";
@@ -98,6 +96,7 @@ async function listFolder(token: string, path: string): Promise<DropboxEntry[]> 
   let entries: DropboxEntry[] = [];
   let resp: any = await dropboxApi(token, "https://api.dropboxapi.com/2/files/list_folder", {
     include_deleted: false,
+    include_media_info: true,
     recursive: true,
     path,
   });
@@ -235,81 +234,6 @@ function hydrateGroups(groups: any[], folder: string) {
       claims: Array.isArray(group.claims) ? group.claims.slice(0, 8) : [],
     };
   });
-}
-
-function tokenizeText(input: string | undefined, minLength = 3): string[] {
-  if (!input) return [];
-  return String(input)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .split(/\s+/)
-    .map((part) => part.trim())
-    .filter((part) => part.length >= minLength);
-}
-
-function addWeightedTokens(weights: Map<string, number>, value: string | undefined, weight: number, minLength = 3) {
-  if (!value) return;
-  for (const token of tokenizeText(value, minLength)) {
-    const existing = weights.get(token) || 0;
-    if (weight > existing) weights.set(token, weight);
-  }
-}
-
-function addPhrase(phrases: Array<{ text: string; weight: number }>, value: string | undefined, weight: number) {
-  if (!value) return;
-  const clean = value.toLowerCase().replace(/\s+/g, " ").trim();
-  if (clean.length < 3) return;
-  phrases.push({ text: clean, weight });
-}
-
-function buildGroupMeta(group: any): GroupScoringMeta {
-  const weights = new Map<string, number>();
-  const phrases: Array<{ text: string; weight: number }> = [];
-
-  addWeightedTokens(weights, group.brand, 6);
-  addWeightedTokens(weights, group.product, 5);
-  addWeightedTokens(weights, group.variant, 4);
-  addWeightedTokens(weights, group.size, 3, 2);
-  addWeightedTokens(weights, group.name, 4);
-  addWeightedTokens(weights, group.folder, 2);
-  if (Array.isArray(group.claims)) {
-    for (const claim of group.claims) addWeightedTokens(weights, String(claim || ""), 2);
-  }
-  if (Array.isArray(group.features)) {
-    for (const feat of group.features) addWeightedTokens(weights, String(feat || ""), 2);
-  }
-  if (Array.isArray(group.keywords)) {
-    for (const kw of group.keywords) addWeightedTokens(weights, String(kw || ""), 2);
-  }
-  if (group.category) {
-    const catLabel = typeof group.category === "object" ? group.category.title || group.category.name : group.category;
-    addWeightedTokens(weights, catLabel, 2);
-  }
-
-  addPhrase(phrases, group.brand, 4);
-  addPhrase(phrases, group.product, 4);
-  addPhrase(phrases, group.variant, 3);
-  addPhrase(phrases, group.name, 3);
-
-  return { weights, phrases };
-}
-
-function buildTupleInfo(tuple: { entry: DropboxEntry; url: string }): TupleTokenInfo {
-  const textParts = [tuple.entry.name || "", tuple.entry.path_display || "", tuple.entry.path_lower || ""];
-  const haystack = textParts.join(" ").toLowerCase();
-  const tokens = new Set(tokenizeText(haystack, 2));
-  return { tokens, haystack };
-}
-
-function scoreTuple(meta: GroupScoringMeta, tupleInfo: TupleTokenInfo): number {
-  let score = 0;
-  meta.weights.forEach((weight, token) => {
-    if (tupleInfo.tokens.has(token)) score += weight;
-  });
-  for (const phrase of meta.phrases) {
-    if (tupleInfo.haystack.includes(phrase.text)) score += phrase.weight;
-  }
-  return score;
 }
 
 export const handler: Handler = async (event) => {
@@ -452,33 +376,81 @@ export const handler: Handler = async (event) => {
       });
     });
 
+    const tokenize = (value: string): string[] =>
+      String(value || "")
+        .toLowerCase()
+        .replace(/[_\-]+/g, " ")
+        .replace(/[^a-z0-9]+/g, " ")
+        .split(" ")
+        .filter(Boolean);
+
+    const groupTokens: string[][] = groups.map((group) => {
+      const parts: string[] = [];
+      if (group?.brand) parts.push(String(group.brand));
+      if (group?.product) parts.push(String(group.product));
+      if (group?.variant) parts.push(String(group.variant));
+      if (Array.isArray(group?.claims)) parts.push(...group.claims.slice(0, 8).map(String));
+      return tokenize(parts.join(" "));
+    });
+
+    const isLikelyDummy = (entry: DropboxEntry): boolean => {
+      const name = String(entry?.name || "");
+      const size = Number(entry?.size || 0);
+      const nameTokens = tokenize(name);
+      const badNames = ["dummy", "placeholder", "test", "black", "white", "bw", "barcode", "back", "_bg", "blank"];
+      if (badNames.some((token) => nameTokens.includes(token))) return true;
+      if (size > 0 && size < 10 * 1024) return true;
+      const dims = entry?.media_info?.metadata?.dimensions;
+      const width = Number(dims?.width || 0);
+      const height = Number(dims?.height || 0);
+      if (width && height && (width < 200 || height < 200)) return true;
+      return false;
+    };
+
+    const scoreImageForGroup = (tuple: { entry: DropboxEntry; url: string }, gi: number): number => {
+      let score = 0;
+      const path = String(tuple.entry?.path_display || tuple.entry?.path_lower || "");
+      const base = String(tuple.entry?.name || "");
+      const imgTokens = new Set<string>([...tokenize(path), ...tokenize(base)]);
+      const tokens = groupTokens[gi] || [];
+      for (const token of tokens) {
+        if (imgTokens.has(token)) score += 3;
+      }
+      if ((desiredByGroup[gi] || []).includes(tuple.url)) score += 10;
+      const confidence = typeof groups[gi]?.confidence === "number" ? groups[gi]!.confidence : 0;
+      score += Math.min(5, Math.max(0, Math.round(confidence)));
+      if (isLikelyDummy(tuple.entry)) score -= 8;
+      return score;
+    };
+
     const assignedByGroup: string[][] = groups.map(() => []);
     const assignmentCounts = groups.map(() => 0);
-    const groupMeta = groups.map((group) => buildGroupMeta(group));
-    const tupleInfoCache = new Map<string, TupleTokenInfo>();
-  let reassignedCount = 0;
-  const usedUrls = new Set<string>();
+    let reassignedCount = 0;
+    const usedUrls = new Set<string>();
 
-    const pickTargetGroup = (candidates: number[]): number => {
-      let best = candidates[0];
-      for (const idx of candidates.slice(1)) {
-        if (assignmentCounts[idx] < assignmentCounts[best]) {
-          best = idx;
+    const pickTargetGroupByScore = (tuple: { entry: DropboxEntry; url: string }, candidates: number[]): number => {
+      const scored = candidates.map((idx) => ({ idx, score: scoreImageForGroup(tuple, idx) }));
+      let bestScore = scored.reduce((acc, item) => Math.max(acc, item.score), Number.NEGATIVE_INFINITY);
+      const top = scored.filter((item) => item.score === bestScore).map((item) => item.idx);
+      let winner = top[0];
+      for (const idx of top.slice(1)) {
+        if (assignmentCounts[idx] < assignmentCounts[winner]) {
+          winner = idx;
           continue;
         }
-        if (assignmentCounts[idx] === assignmentCounts[best]) {
-          const confIdx = typeof groups[idx]?.confidence === "number" ? groups[idx]!.confidence : 0;
-          const confBest = typeof groups[best]?.confidence === "number" ? groups[best]!.confidence : 0;
-          if (confIdx > confBest) {
-            best = idx;
+        if (assignmentCounts[idx] === assignmentCounts[winner]) {
+          const confIdx = Number(groups[idx]?.confidence || 0);
+          const confWin = Number(groups[winner]?.confidence || 0);
+          if (confIdx > confWin) {
+            winner = idx;
             continue;
           }
-          if (confIdx === confBest && idx < best) {
-            best = idx;
+          if (confIdx === confWin && idx < winner) {
+            winner = idx;
           }
         }
       }
-      return best;
+      return winner;
     };
 
     for (const tuple of fileTuples) {
@@ -486,49 +458,11 @@ export const handler: Handler = async (event) => {
       if (usedUrls.has(url)) continue;
       const candidates = (urlToGroups.get(url) || []).filter((gi) => assignmentCounts[gi] < 12);
       if (!candidates.length) continue;
-      let target = candidates.length === 1 ? candidates[0] : -1;
-      let assignExclusively = candidates.length === 1;
-      if (candidates.length > 1) {
-        const info = tupleInfoCache.get(url) || buildTupleInfo(tuple);
-        if (!tupleInfoCache.has(url)) tupleInfoCache.set(url, info);
-        let bestScore = -1;
-        let bestIdx = candidates[0];
-        let bestConfidence = typeof groups[bestIdx]?.confidence === "number" ? groups[bestIdx]!.confidence : 0;
-        for (const idx of candidates) {
-          const score = scoreTuple(groupMeta[idx], info);
-          const confidence = typeof groups[idx]?.confidence === "number" ? groups[idx]!.confidence : 0;
-          if (score > bestScore) {
-            bestScore = score;
-            bestIdx = idx;
-            bestConfidence = confidence;
-          } else if (score === bestScore) {
-            if (confidence > bestConfidence) {
-              bestIdx = idx;
-              bestConfidence = confidence;
-            } else if (confidence === bestConfidence && assignmentCounts[idx] < assignmentCounts[bestIdx]) {
-              bestIdx = idx;
-            }
-          }
-        }
-        if (bestScore <= 0) {
-          bestIdx = pickTargetGroup(candidates);
-          assignExclusively = false;
-        } else {
-          assignExclusively = true;
-        }
-        target = bestIdx;
-        if (assignExclusively) reassignedCount++;
-      }
-      if (assignExclusively) {
-        assignedByGroup[target].push(url);
-        assignmentCounts[target] = Math.min(12, assignedByGroup[target].length);
-        usedUrls.add(url);
-      } else {
-        for (const idx of candidates) {
-          assignedByGroup[idx].push(url);
-          assignmentCounts[idx] = Math.min(12, assignedByGroup[idx].length);
-        }
-      }
+      const target = candidates.length === 1 ? candidates[0] : pickTargetGroupByScore(tuple, candidates);
+      if (candidates.length > 1) reassignedCount++;
+      assignedByGroup[target].push(url);
+      assignmentCounts[target] = Math.min(12, assignedByGroup[target].length);
+      usedUrls.add(url);
     }
 
     const normalizedGroups = groups.map((group, gi) => {
@@ -549,14 +483,11 @@ export const handler: Handler = async (event) => {
 
       // Fill gaps with closest matches from remaining files
       if (unique.length < Math.min(12, Math.max(desiredByGroup[gi].length, 3))) {
-        const infoForGroup = groupMeta[gi];
         const targetCount = Math.min(12, Math.max(desiredByGroup[gi].length || 0, 3));
         const available = fileTuples
           .filter((tuple) => !usedUrls.has(tuple.url))
           .map((tuple) => {
-            const info = tupleInfoCache.get(tuple.url) || buildTupleInfo(tuple);
-            if (!tupleInfoCache.has(tuple.url)) tupleInfoCache.set(tuple.url, info);
-            const score = scoreTuple(infoForGroup, info);
+            const score = scoreImageForGroup(tuple, gi);
             return {
               tuple,
               score,
