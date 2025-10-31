@@ -402,6 +402,11 @@ export const handler: Handler = async (event) => {
     });
 
     const urls = sanitizeUrls(fileTuples.map((tuple) => tuple.url));
+    const analysisMeta = fileTuples.map((tuple) => ({
+      url: tuple.url,
+      name: tuple.entry?.name || "",
+      folder: folderPath(tuple.entry) || folder,
+    }));
     if (!urls.length) {
       const fallbackGroups = buildFallbackGroups(fileTuples);
       return jsonResponse(200, {
@@ -421,7 +426,7 @@ export const handler: Handler = async (event) => {
     }
     await consumeImages(user.userId, urls.length);
 
-    const analysis = await runAnalysis(urls, 12, { skipPricing: true });
+    const analysis = await runAnalysis(urls, 12, { skipPricing: true, metadata: analysisMeta });
     let groups = Array.isArray(analysis?.groups) ? analysis.groups : [];
     let warnings: string[] = Array.isArray(analysis?.warnings) ? analysis.warnings : [];
 

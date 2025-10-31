@@ -119,7 +119,7 @@ async function verifyUrl(url: string): Promise<boolean> {
 
 const BYPASS_VISION_CACHE = (process.env.VISION_BYPASS_CACHE || "false").toLowerCase() === "true";
 
-async function analyzeBatchViaVision(batch: string[]) {
+async function analyzeBatchViaVision(batch: string[], metadata: Array<{ url: string; name: string; folder: string }>) {
   const cacheEligible = !BYPASS_VISION_CACHE;
 
   if (cacheEligible) {
@@ -147,16 +147,30 @@ async function analyzeBatchViaVision(batch: string[]) {
     }
   }
 
+  const hints = metadata
+    .map((meta, idx) => {
+      const parts = [meta.folder, meta.name]
+        .filter(Boolean)
+        .map((part) => part.replace(/\s+/g, " ").trim())
+        .filter((part) => part.length > 0)
+        .join(" | ");
+      return parts ? `#${idx + 1}: ${parts}` : `#${idx + 1}: ${meta.url}`;
+    })
+    .join("\n");
+
   const prompt = [
     "You are a product photo analyst.",
     "Group visually identical products (front/back/side).",
+    "EXTRA CONTEXT PER IMAGE (filenames, parent folders):",
+    hints || "(no hints)",
+    "Use those hints to split groups by product/variant even when packaging looks similar.",
     "Extract: brand, product, variant/flavor, size/servings, best-fit category label, categoryPath (parent > child), options object of item specifics (e.g. { Flavor, Formulation, Features, Ingredients, Dietary Feature }), short claims[].",
     "Return STRICT JSON: { groups: [{ groupId, brand, product, variant, size, category, categoryPath, options, claims, confidence, images[] }] }.",
-    "If uncertain, group best-guess and lower confidence.",
+    "If uncertain, group best-guess and lower confidence, but avoid mixing images whose hints differ (e.g. different folder or filename).",
   ].join("\n");
 
   try {
-    const result = await withRetry(() => runVision({ images: batch, prompt }));
+  const result = await withRetry(() => runVision({ images: batch, prompt }));
     // Post-process images: some providers may return placeholders or omit URLs.
     try {
       const validHttp = (u: unknown) => typeof u === "string" && /^https?:\/\//i.test(u.trim());
@@ -199,7 +213,7 @@ export type AnalysisResult = {
 export async function runAnalysis(
   inputUrls: string[],
   rawBatchSize = 12,
-  opts: { skipPricing?: boolean } = {}
+  opts: { skipPricing?: boolean; metadata?: Array<{ url: string; name: string; folder: string }> } = {}
 ): Promise<AnalysisResult> {
   const { skipPricing = false } = opts;
   let images = sanitizeUrls(inputUrls).map(toDirectDropbox);
@@ -234,6 +248,18 @@ export async function runAnalysis(
     preflightWarnings.push(`Skipped ${skipped} unreachable image${skipped === 1 ? '' : 's'}.`);
   }
 
+  const metaLookup = new Map<string, { url: string; name: string; folder: string }>();
+  if (Array.isArray(opts.metadata)) {
+    for (const meta of opts.metadata) {
+      if (!meta?.url) continue;
+      metaLookup.set(toDirectDropbox(meta.url), {
+        url: toDirectDropbox(meta.url),
+        name: meta.name || "",
+        folder: meta.folder || "",
+      });
+    }
+  }
+
   const verifiedBatches = chunkArray(verified, batchSize);
 
   const analyzedResults: any[] = [];
@@ -241,7 +267,8 @@ export async function runAnalysis(
 
   for (const [idx, batch] of verifiedBatches.entries()) {
     console.log(`🧠 Analyzing batch ${idx + 1}/${verifiedBatches.length} (${batch.length} images)`);
-    const result = await analyzeBatchViaVision(batch);
+    const metaForBatch = batch.map((url) => metaLookup.get(url) || { url, name: "", folder: "" });
+    const result = await analyzeBatchViaVision(batch, metaForBatch);
     if (result?._error) {
       warnings.push(`Batch ${idx + 1}: ${result._error}`);
     }
