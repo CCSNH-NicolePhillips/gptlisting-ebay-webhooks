@@ -43,6 +43,26 @@ type OrphanImage = {
   folder: string;
 };
 
+type DebugComponent = {
+  label: string;
+  value: number;
+  detail?: string;
+};
+
+type DebugCandidate = {
+  url: string;
+  name: string;
+  path?: string;
+  order: number;
+  base: number;
+  total: number;
+  clipContribution: number;
+  clipSimilarity?: number | null;
+  passedThreshold: boolean;
+  assigned?: boolean;
+  components: DebugComponent[];
+};
+
 const METHODS = "POST, OPTIONS";
 const MAX_IMAGES = Math.max(1, Math.min(100, Number(process.env.SMARTDRAFT_MAX_IMAGES || 100)));
 
@@ -272,6 +292,10 @@ export const handler: Handler = async (event) => {
   const force = Boolean(body?.force);
   const limitRaw = Number(body?.limit);
   const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, MAX_IMAGES) : MAX_IMAGES;
+  const debugRaw = body?.debug;
+  const debugEnabled = typeof debugRaw === "string"
+    ? ["1", "true", "yes", "debug"].includes(debugRaw.toLowerCase())
+    : Boolean(debugRaw);
 
   if (!folder) {
     return jsonResponse(400, { ok: false, error: "Provide folder path" }, originHdr, METHODS);
@@ -302,7 +326,7 @@ export const handler: Handler = async (event) => {
     const signature = makeSignature(limitedFiles);
     const cacheKey = makeCacheKey(user.userId, folder);
     const cached = await getCachedSmartDraftGroups(cacheKey);
-    if (!force && cached && cached.signature === signature && Array.isArray(cached.groups) && cached.groups.length) {
+    if (!force && !debugEnabled && cached && cached.signature === signature && Array.isArray(cached.groups) && cached.groups.length) {
       return jsonResponse(200, {
         ok: true,
         cached: true,
@@ -369,6 +393,8 @@ export const handler: Handler = async (event) => {
       groups = fallback;
       warnings = [...warnings, "Vision grouping returned no results; falling back to folder grouping."];
     }
+
+    const debugCandidatesPerGroup = debugEnabled ? groups.map(() => [] as DebugCandidate[]) : null;
 
     const desiredByGroup: string[][] = groups.map((group) => {
       const images = Array.isArray(group?.images) ? group.images : [];
@@ -518,9 +544,18 @@ export const handler: Handler = async (event) => {
       return false;
     };
 
-    const scoreImageForGroup = (tuple: { entry: DropboxEntry; url: string }, gi: number): number => {
+    const scoreImageForGroup = (
+      tuple: { entry: DropboxEntry; url: string },
+      gi: number,
+      captureDetails = false
+    ): { score: number; components?: DebugComponent[] } => {
       const insight = insightMap.get(tuple.url);
       let score = 0;
+      const components = captureDetails ? ([] as DebugComponent[]) : undefined;
+      const add = (label: string, value: number, detail?: string) => {
+        score += value;
+        if (components && value !== 0) components.push({ label, value, detail });
+      };
 
       const path = String(tuple.entry?.path_display || tuple.entry?.path_lower || "");
       const base = String(tuple.entry?.name || "");
@@ -528,52 +563,56 @@ export const handler: Handler = async (event) => {
       const allTokens = new Set<string>([...tokenize(path), ...nameTokens]);
 
       for (const token of groupTokens[gi] || []) {
-        if (allTokens.has(token)) score += 3;
+        if (allTokens.has(token)) add("token-match", 3, token);
       }
 
       for (const token of nameTokens) {
-        if (POS_NAME_TOKENS.has(token)) score += 12;
-        if (NEG_NAME_TOKENS.has(token)) score -= 10;
+        if (POS_NAME_TOKENS.has(token)) add("name-positive", 12, token);
+        if (NEG_NAME_TOKENS.has(token)) add("name-negative", -10, token);
       }
 
-  if (insight?.hasVisibleText === true) score += 6;
-  else if (insight?.hasVisibleText === false) score -= 5;
+      if (insight?.hasVisibleText === true) add("visible-text", 6);
+      else if (insight?.hasVisibleText === false) add("no-visible-text", -5);
 
       if (insight?.role && ROLE_WEIGHTS[insight.role] !== undefined) {
-        score += ROLE_WEIGHTS[insight.role];
+        add("role", ROLE_WEIGHTS[insight.role], insight.role);
       }
 
       if (insight?.dominantColor && COLOR_WEIGHTS[insight.dominantColor] !== undefined) {
-        score += COLOR_WEIGHTS[insight.dominantColor];
+        add("color", COLOR_WEIGHTS[insight.dominantColor], insight.dominantColor);
       }
 
-      if ((desiredByGroup[gi] || []).includes(tuple.url)) score += 10;
+      if ((desiredByGroup[gi] || []).includes(tuple.url)) add("vision-suggested", 10);
 
       const confidence = Number(groups[gi]?.confidence || 0);
-      score += Math.min(5, Math.max(0, Math.round(confidence)));
+      const confBoost = Math.min(5, Math.max(0, Math.round(confidence)));
+      if (confBoost) add("group-confidence", confBoost, String(confidence));
 
-      if (looksDummyByMeta(tuple.entry)) score -= 8;
+      if (looksDummyByMeta(tuple.entry)) add("metadata-dummy", -8);
 
       const dims = tuple.entry?.media_info?.metadata?.dimensions;
       const width = Number(dims?.width || 0);
       const height = Number(dims?.height || 0);
       if (width > 0 && height > 0) {
         const megaPixels = (width * height) / 1_000_000;
-        if (megaPixels >= 3.5) score += 8;
-        else if (megaPixels >= 2) score += 6;
-        else if (megaPixels >= 1) score += 4;
-        else if (megaPixels >= 0.6) score += 1;
-        else score -= 6;
+        if (megaPixels >= 3.5) add("resolution", 8, `mp:${megaPixels.toFixed(2)}`);
+        else if (megaPixels >= 2) add("resolution", 6, `mp:${megaPixels.toFixed(2)}`);
+        else if (megaPixels >= 1) add("resolution", 4, `mp:${megaPixels.toFixed(2)}`);
+        else if (megaPixels >= 0.6) add("resolution", 1, `mp:${megaPixels.toFixed(2)}`);
+        else add("resolution", -6, `mp:${megaPixels.toFixed(2)}`);
 
         const aspect = width / height;
         if (aspect > 0) {
-          if (aspect >= 0.8 && aspect <= 1.25) score += 3;
-          else if (aspect >= 0.6 && aspect <= 1.45) score += 1;
-          else if (aspect <= 0.45 || aspect >= 1.8) score -= 4;
+          if (aspect >= 0.8 && aspect <= 1.25) add("aspect", 3, `ratio:${aspect.toFixed(2)}`);
+          else if (aspect >= 0.6 && aspect <= 1.45) add("aspect", 1, `ratio:${aspect.toFixed(2)}`);
+          else if (aspect <= 0.45 || aspect >= 1.8) add("aspect", -4, `ratio:${aspect.toFixed(2)}`);
         }
       }
 
-      return score;
+      if (components) {
+        return { score, components };
+      }
+      return { score };
     };
 
     const targetPerGroup = groups.map((group, gi) => {
@@ -591,17 +630,22 @@ export const handler: Handler = async (event) => {
     for (let ti = 0; ti < fileTuples.length; ti++) {
       const tuple = fileTuples[ti];
       for (let gi = 0; gi < groups.length; gi++) {
-        const base = scoreImageForGroup(tuple, gi);
+        const baseResult = scoreImageForGroup(tuple, gi, debugEnabled);
+        const base = baseResult.score;
         if (!Number.isFinite(base)) continue;
 
         let combined = base;
+        let clipContribution = 0;
+        let clipSimilarity: number | null = null;
         if (clipEnabled) {
           const textEmb = textEmbeddings[gi];
           const imageEmb = imageEmbeddings[ti];
           if (textEmb && imageEmb && textEmb.length === imageEmb.length) {
             const similarity = cosine(imageEmb, textEmb);
             if (Number.isFinite(similarity)) {
-              combined += similarity < CLIP_MIN_SIM ? -2 : CLIP_WEIGHT * similarity;
+              clipSimilarity = similarity;
+              clipContribution = similarity < CLIP_MIN_SIM ? -2 : CLIP_WEIGHT * similarity;
+              combined += clipContribution;
             }
           }
         }
@@ -609,6 +653,22 @@ export const handler: Handler = async (event) => {
         if (!Number.isFinite(combined)) continue;
         pairScores.push({ tupleIndex: ti, groupIndex: gi, score: combined });
         pairsByGroup[gi].push({ tupleIndex: ti, score: combined });
+
+        if (debugCandidatesPerGroup) {
+          const components = baseResult.components ? [...baseResult.components] : [];
+          debugCandidatesPerGroup[gi].push({
+            url: tuple.url,
+            name: tuple.entry?.name || "",
+            path: tuple.entry?.path_display || tuple.entry?.path_lower || "",
+            order: urlOrder.has(tuple.url) ? urlOrder.get(tuple.url)! : Number.MAX_SAFE_INTEGER,
+            base,
+            total: combined,
+            clipContribution,
+            clipSimilarity,
+            passedThreshold: combined >= MIN_ASSIGN,
+            components,
+          });
+        }
       }
     }
 
@@ -660,6 +720,15 @@ export const handler: Handler = async (event) => {
 
     tryAssign(MIN_ASSIGN);
     tryAssign(Number.NEGATIVE_INFINITY);
+
+    if (debugCandidatesPerGroup) {
+      for (let gi = 0; gi < groups.length; gi++) {
+        const assignedSet = new Set(assignedByGroup[gi]);
+        debugCandidatesPerGroup[gi] = debugCandidatesPerGroup[gi]
+          .map((entry) => ({ ...entry, assigned: assignedSet.has(entry.url) }))
+          .sort((a, b) => b.total - a.total);
+      }
+    }
 
     const usedUrls = new Set<string>();
     assignedByGroup.forEach((urls) => urls.forEach((url) => usedUrls.add(url)));
@@ -729,7 +798,7 @@ export const handler: Handler = async (event) => {
     };
     await setCachedSmartDraftGroups(cacheKey, cachePayload);
 
-    return jsonResponse(200, {
+    const responsePayload: any = {
       ok: true,
       folder,
       signature,
@@ -737,7 +806,30 @@ export const handler: Handler = async (event) => {
       warnings,
       groups: payloadGroups,
       orphans,
-    }, originHdr, METHODS);
+    };
+
+    if (debugCandidatesPerGroup) {
+      const debugGroups = debugCandidatesPerGroup.map((entries, gi) => {
+        const group = groups[gi];
+        const displayName =
+          (typeof group?.name === "string" && group.name) ||
+          (typeof group?.product === "string" && group.product) ||
+          `group_${gi + 1}`;
+        return {
+          groupId: group?.groupId || `group_${gi + 1}`,
+          name: displayName,
+          candidates: entries.slice(0, 20),
+        };
+      });
+
+      responsePayload.debug = {
+        minAssign: MIN_ASSIGN,
+        clip: clipEnabled ? { weight: CLIP_WEIGHT, minSimilarity: CLIP_MIN_SIM } : null,
+        groups: debugGroups,
+      };
+    }
+
+    return jsonResponse(200, responsePayload, originHdr, METHODS);
   } catch (err: any) {
     return jsonResponse(500, { ok: false, error: err?.message || String(err) }, originHdr, METHODS);
   }
