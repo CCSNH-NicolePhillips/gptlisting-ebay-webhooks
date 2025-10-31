@@ -3,6 +3,8 @@ import { lookupMarketPrice } from "./price-lookup.js";
 import { applyPricingFormula } from "./price-formula.js";
 import { runVision } from "./vision-router.js";
 import { getCachedBatch, setCachedBatch } from "./vision-cache.js";
+import type { ImageInsight } from "./image-insight.js";
+import { applyVisionSortV2 } from "./vision-sort-v2.js";
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -233,13 +235,6 @@ async function analyzeBatchViaVision(batch: string[], metadata: Array<{ url: str
   }
 }
 
-export type ImageInsight = {
-  url: string;
-  hasVisibleText?: boolean;
-  dominantColor?: string;
-  role?: string;
-};
-
 export type AnalysisResult = {
   info: string;
   summary: {
@@ -249,6 +244,7 @@ export type AnalysisResult = {
   warnings: string[];
   groups: any[];
   imageInsights: Record<string, ImageInsight>;
+  orphans: Array<{ url: string; name?: string; folder?: string }>;
 };
 
 export async function runAnalysis(
@@ -259,6 +255,10 @@ export async function runAnalysis(
   const { skipPricing = false } = opts;
   let images = sanitizeUrls(inputUrls).map(toDirectDropbox);
   const insightMap = new Map<string, ImageInsight>();
+  const useLegacyAssignment = (process.env.USE_LEGACY_IMAGE_ASSIGNMENT || "false").toLowerCase() === "true";
+  const visionSortDebug = (process.env.VISION_SORT_DEBUG || "false").toLowerCase() === "true";
+  const minScoreEnv = Number(process.env.VISION_SORT_MIN_SIM);
+  const visionSortMinScore = Number.isFinite(minScoreEnv) ? minScoreEnv : undefined;
 
   if (images.length === 0) {
     return {
@@ -267,6 +267,7 @@ export async function runAnalysis(
       warnings: ["No valid image URLs"],
       groups: [],
       imageInsights: {},
+      orphans: [],
     };
   }
 
@@ -325,6 +326,103 @@ export async function runAnalysis(
   }
 
   const merged = mergeGroups(analyzedResults);
+  let orphanDetails: Array<{ url: string; name?: string; folder?: string }> = [];
+
+  if (!useLegacyAssignment && merged.groups.length) {
+    const candidateMap = new Map<string, { url: string; name?: string; folder?: string; order: number }>();
+    let orderCounter = 0;
+
+    const addCandidate = (rawUrl: string, name?: string, folder?: string) => {
+      if (!rawUrl) return;
+      const cleanUrl = toDirectDropbox(rawUrl);
+      if (!cleanUrl) return;
+      const existing = candidateMap.get(cleanUrl);
+      if (existing) {
+        if (!existing.name && name) existing.name = name;
+        if (!existing.folder && folder) existing.folder = folder;
+        return;
+      }
+      candidateMap.set(cleanUrl, {
+        url: cleanUrl,
+        name,
+        folder,
+        order: orderCounter++,
+      });
+    };
+
+    verified.forEach((url) => {
+      const meta = metaLookup.get(url);
+      addCandidate(url, meta?.name, meta?.folder);
+    });
+
+    for (const meta of metaLookup.values()) {
+      addCandidate(meta.url, meta.name, meta.folder);
+    }
+
+    for (const group of merged.groups) {
+      const imgs = Array.isArray(group?.images) ? group.images : [];
+      for (const img of imgs) {
+        addCandidate(typeof img === "string" ? img : "");
+      }
+    }
+
+    const candidates = Array.from(candidateMap.values())
+      .sort((a, b) => a.order - b.order)
+      .map((entry, index) => ({ ...entry, index }));
+    const originalImageSets = merged.groups.map((group) => {
+      const imgs = Array.isArray(group?.images) ? group.images : [];
+      const normalized = imgs
+        .filter((img: unknown): img is string => typeof img === "string" && img.length > 0)
+        .map((img: string) => toDirectDropbox(img));
+      return new Set<string>(normalized);
+    });
+
+    if (candidates.length) {
+      const sortResult = await applyVisionSortV2({
+        groups: merged.groups,
+        candidates,
+        insightMap,
+        originalImageSets,
+        minScore: visionSortMinScore,
+        debug: visionSortDebug,
+      });
+
+      merged.groups = sortResult.groups;
+      orphanDetails = sortResult.orphans.map((entry: { url: string; name?: string; folder?: string }) => ({
+        url: entry.url,
+        name: entry.name,
+        folder: entry.folder,
+      }));
+
+      if (visionSortDebug && sortResult.debugLogs.length) {
+        for (const log of sortResult.debugLogs) {
+          console.log(JSON.stringify({ evt: "vision-sort", ...log }));
+        }
+      }
+
+      if (orphanDetails.length) {
+        warnings.push(
+          `Vision sort left ${orphanDetails.length} image${orphanDetails.length === 1 ? "" : "s"} unassigned.`
+        );
+      }
+    }
+  } else {
+    orphanDetails = [];
+    for (const group of merged.groups) {
+      const seen = new Set<string>();
+      const imgs = Array.isArray(group?.images) ? group.images : [];
+      const unique: string[] = [];
+      for (const raw of imgs) {
+        if (typeof raw !== "string") continue;
+        const normalized = toDirectDropbox(raw);
+        if (!normalized || seen.has(normalized)) continue;
+        seen.add(normalized);
+        unique.push(normalized);
+      }
+      group.images = unique;
+    }
+  }
+
   console.log("🧩 Merge complete. Groups:", merged.groups.length);
   console.log(
     JSON.stringify({
@@ -345,6 +443,7 @@ export async function runAnalysis(
       warnings,
       groups: merged.groups,
       imageInsights: Object.fromEntries(insightMap),
+      orphans: orphanDetails,
     };
   }
 
@@ -396,5 +495,6 @@ export async function runAnalysis(
     warnings,
     groups: finalGroups,
     imageInsights: Object.fromEntries(insightMap),
+    orphans: orphanDetails,
   };
 }
