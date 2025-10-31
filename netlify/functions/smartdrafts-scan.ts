@@ -508,22 +508,6 @@ export const handler: Handler = async (event) => {
       return imageEmbeddingCache.get(normalized)!;
     };
 
-    const clipBonus = async (url: string, gi: number): Promise<number> => {
-      if (!clipEnabled) return 0;
-      const textEmb = textEmbeddings[gi];
-      if (!textEmb || !textEmb.length) return 0;
-      try {
-        const imageEmb = await getImageEmbedding(url);
-        if (!imageEmb || !imageEmb.length) return 0;
-        const similarity = cosine(imageEmb, textEmb);
-        if (!Number.isFinite(similarity)) return 0;
-        if (similarity < CLIP_MIN_SIM) return -2;
-        return CLIP_WEIGHT * similarity;
-      } catch {
-        return 0;
-      }
-    };
-
     const looksDummyByMeta = (entry: DropboxEntry): boolean => {
       const size = Number(entry?.size || 0);
       if (size > 0 && size < 10 * 1024) return true;
@@ -593,78 +577,69 @@ export const handler: Handler = async (event) => {
       return score;
     };
 
-    const assignedByGroup: string[][] = groups.map(() => []);
-    const assignmentCounts = groups.map(() => 0);
-    let reassignedCount = 0;
-    const usedUrls = new Set<string>();
+    const targetPerGroup = groups.map((group, gi) => {
+      const desired = desiredByGroup[gi]?.length || 0;
+      return Math.min(12, Math.max(desired, 1));
+    });
 
-    const scoreCandidates = async (
-      tuple: { entry: DropboxEntry; url: string },
-      candidateIdxs: number[]
-    ): Promise<Array<{ idx: number; score: number }>> => {
-      const results = await Promise.all(
-        candidateIdxs.map(async (idx) => {
-          const base = scoreImageForGroup(tuple, idx);
-          if (!Number.isFinite(base)) {
-            return { idx, score: Number.NEGATIVE_INFINITY };
+    const imageEmbeddings = await Promise.all(
+      fileTuples.map((tuple) => (clipEnabled ? getImageEmbedding(tuple.url) : Promise.resolve(null)))
+    );
+
+    const pairScores: Array<{ tupleIndex: number; groupIndex: number; score: number }> = [];
+
+    for (let ti = 0; ti < fileTuples.length; ti++) {
+      const tuple = fileTuples[ti];
+      for (let gi = 0; gi < groups.length; gi++) {
+        const base = scoreImageForGroup(tuple, gi);
+        if (!Number.isFinite(base)) continue;
+
+        let combined = base;
+        if (clipEnabled) {
+          const textEmb = textEmbeddings[gi];
+          const imageEmb = imageEmbeddings[ti];
+          if (textEmb && imageEmb && textEmb.length === imageEmb.length) {
+            const similarity = cosine(imageEmb, textEmb);
+            if (Number.isFinite(similarity)) {
+              combined += similarity < CLIP_MIN_SIM ? -2 : CLIP_WEIGHT * similarity;
+            }
           }
-          const bonus = await clipBonus(tuple.url, idx);
-          return { idx, score: base + bonus };
-        })
-      );
-      return results;
+        }
+
+        if (!Number.isFinite(combined)) continue;
+        pairScores.push({ tupleIndex: ti, groupIndex: gi, score: combined });
+      }
+    }
+
+    pairScores.sort((a, b) => b.score - a.score);
+
+    const assignedByGroup: string[][] = groups.map(() => []);
+    const groupCounts = groups.map(() => 0);
+    const tupleAssigned = new Array<boolean>(fileTuples.length).fill(false);
+
+    const tryAssign = (minScore: number) => {
+      for (const pair of pairScores) {
+        if (tupleAssigned[pair.tupleIndex]) continue;
+        if (groupCounts[pair.groupIndex] >= targetPerGroup[pair.groupIndex]) continue;
+        if (pair.score < minScore) continue;
+
+        assignedByGroup[pair.groupIndex].push(fileTuples[pair.tupleIndex].url);
+        tupleAssigned[pair.tupleIndex] = true;
+        groupCounts[pair.groupIndex]++;
+      }
     };
 
-    for (const tuple of fileTuples) {
-      const url = tuple.url;
-      if (usedUrls.has(url)) continue;
-      const candidates = (urlToGroups.get(url) || []).filter((gi) => assignmentCounts[gi] < 12);
-      if (!candidates.length) continue;
+    tryAssign(MIN_ASSIGN);
+    tryAssign(Number.NEGATIVE_INFINITY);
 
-      const scored = await scoreCandidates(tuple, candidates);
-      const valid = scored.filter((entry) => Number.isFinite(entry.score));
-      if (!valid.length) continue;
+    const usedUrls = new Set<string>();
+    assignedByGroup.forEach((urls) => urls.forEach((url) => usedUrls.add(url)));
 
-      let bestEntry = valid[0];
-      for (const entry of valid.slice(1)) {
-        if (entry.score > bestEntry.score) {
-          bestEntry = entry;
-        }
-      }
-
-      const bestScore = bestEntry.score;
-      if (!Number.isFinite(bestScore) || bestScore < MIN_ASSIGN) continue;
-
-      const tiedIndices = valid
-        .filter((entry) => Math.abs(entry.score - bestScore) < 1e-3)
-        .map((entry) => entry.idx);
-
-      let target = bestEntry.idx;
-      if (tiedIndices.length > 1) {
-        let winner = tiedIndices[0];
-        for (const idx of tiedIndices.slice(1)) {
-          if (assignmentCounts[idx] < assignmentCounts[winner]) {
-            winner = idx;
-            continue;
-          }
-          if (assignmentCounts[idx] === assignmentCounts[winner]) {
-            const confIdx = Number(groups[idx]?.confidence || 0);
-            const confWin = Number(groups[winner]?.confidence || 0);
-            if (confIdx > confWin) {
-              winner = idx;
-              continue;
-            }
-            if (confIdx === confWin && idx < winner) winner = idx;
-          }
-        }
-        target = winner;
-      }
-
+    let reassignedCount = 0;
+    fileTuples.forEach((tuple) => {
+      const candidates = urlToGroups.get(tuple.url) || [];
       if (candidates.length > 1) reassignedCount++;
-      assignedByGroup[target].push(url);
-      assignmentCounts[target] = Math.min(12, assignedByGroup[target].length);
-      usedUrls.add(url);
-    }
+    });
 
     const normalizedGroups: any[] = [];
 
@@ -678,58 +653,8 @@ export const handler: Handler = async (event) => {
       });
 
       if (!unique.length) {
-        let bestFallback: { url: string; score: number } | null = null;
-        for (const tuple of fileTuples) {
-          if (usedUrls.has(tuple.url)) continue;
-          const base = scoreImageForGroup(tuple, gi);
-          if (!Number.isFinite(base)) continue;
-          const combined = base + (await clipBonus(tuple.url, gi));
-          if (combined >= MIN_ASSIGN && (!bestFallback || combined > bestFallback.score)) {
-            bestFallback = { url: tuple.url, score: combined };
-          }
-        }
-        if (bestFallback) {
-          unique = [bestFallback.url];
-          usedUrls.add(bestFallback.url);
-        } else {
-          const label = group?.name || group?.product || `group_${gi + 1}`;
-          warnings.push(`No text-bearing hero found for ${label}; leaving group images empty.`);
-        }
-      }
-
-      const desiredCount = Math.max(1, desiredByGroup[gi].length || 0);
-      if (unique.length < Math.min(12, desiredCount)) {
-        const targetCount = Math.min(12, desiredCount);
-        const scoredAvailable = await Promise.all(
-          fileTuples
-            .filter((tuple) => !usedUrls.has(tuple.url))
-            .map(async (tuple) => {
-              const base = scoreImageForGroup(tuple, gi);
-              if (!Number.isFinite(base)) return null;
-              const combined = base + (await clipBonus(tuple.url, gi));
-              return {
-                tuple,
-                score: combined,
-                order: urlOrder.has(tuple.url) ? urlOrder.get(tuple.url)! : Number.MAX_SAFE_INTEGER,
-              };
-            })
-        );
-
-        const available = scoredAvailable
-          .filter((item): item is { tuple: { entry: DropboxEntry; url: string }; score: number; order: number } => {
-            return Boolean(item) && Number.isFinite(item!.score) && item!.score >= MIN_ASSIGN;
-          })
-          .sort((a, b) => {
-            if (b.score !== a.score) return b.score - a.score;
-            return a.order - b.order;
-          });
-
-        for (const item of available) {
-          if (unique.length >= targetCount) break;
-          if (usedUrls.has(item.tuple.url)) continue;
-          unique.push(item.tuple.url);
-          usedUrls.add(item.tuple.url);
-        }
+        const label = group?.name || group?.product || `group_${gi + 1}`;
+        warnings.push(`No text-bearing hero found for ${label}; leaving group images empty.`);
       }
 
       unique = unique
@@ -754,8 +679,6 @@ export const handler: Handler = async (event) => {
         })
         .map((item) => item.url)
         .slice(0, 12);
-
-      unique.forEach((url) => usedUrls.add(url));
 
       normalizedGroups.push({ ...group, images: unique });
     }
