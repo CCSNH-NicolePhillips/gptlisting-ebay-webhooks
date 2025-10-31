@@ -586,6 +586,7 @@ export const handler: Handler = async (event) => {
     );
 
     const pairScores: Array<{ tupleIndex: number; groupIndex: number; score: number }> = [];
+    const pairsByGroup: Array<Array<{ tupleIndex: number; score: number }>> = groups.map(() => []);
 
     for (let ti = 0; ti < fileTuples.length; ti++) {
       const tuple = fileTuples[ti];
@@ -607,24 +608,53 @@ export const handler: Handler = async (event) => {
 
         if (!Number.isFinite(combined)) continue;
         pairScores.push({ tupleIndex: ti, groupIndex: gi, score: combined });
+        pairsByGroup[gi].push({ tupleIndex: ti, score: combined });
       }
     }
 
     pairScores.sort((a, b) => b.score - a.score);
+    pairsByGroup.forEach((entries) => entries.sort((a, b) => b.score - a.score));
 
     const assignedByGroup: string[][] = groups.map(() => []);
     const groupCounts = groups.map(() => 0);
     const tupleAssigned = new Array<boolean>(fileTuples.length).fill(false);
+
+    const recordAssignment = (groupIndex: number, tupleIndex: number) => {
+      assignedByGroup[groupIndex].push(fileTuples[tupleIndex].url);
+      tupleAssigned[tupleIndex] = true;
+      groupCounts[groupIndex]++;
+    };
+
+    const assignBestForGroup = (groupIndex: number, minScore: number): boolean => {
+      if (targetPerGroup[groupIndex] <= 0) return false;
+      const candidates = pairsByGroup[groupIndex];
+      if (!candidates.length) return false;
+      if (candidates[0].score < minScore) return false;
+      for (const candidate of candidates) {
+        if (candidate.score < minScore) break;
+        if (tupleAssigned[candidate.tupleIndex]) continue;
+        recordAssignment(groupIndex, candidate.tupleIndex);
+        return true;
+      }
+      return false;
+    };
+
+    for (let gi = 0; gi < groups.length; gi++) {
+      if (groupCounts[gi] >= Math.max(1, targetPerGroup[gi])) continue;
+      assignBestForGroup(gi, MIN_ASSIGN);
+    }
+
+    for (let gi = 0; gi < groups.length; gi++) {
+      if (groupCounts[gi] >= Math.max(1, targetPerGroup[gi])) continue;
+      assignBestForGroup(gi, Number.NEGATIVE_INFINITY);
+    }
 
     const tryAssign = (minScore: number) => {
       for (const pair of pairScores) {
         if (tupleAssigned[pair.tupleIndex]) continue;
         if (groupCounts[pair.groupIndex] >= targetPerGroup[pair.groupIndex]) continue;
         if (pair.score < minScore) continue;
-
-        assignedByGroup[pair.groupIndex].push(fileTuples[pair.tupleIndex].url);
-        tupleAssigned[pair.tupleIndex] = true;
-        groupCounts[pair.groupIndex]++;
+        recordAssignment(pair.groupIndex, pair.tupleIndex);
       }
     };
 

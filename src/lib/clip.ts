@@ -2,7 +2,7 @@ import { Buffer } from "node:buffer";
 
 const HF_API_TOKEN = process.env.HF_API_TOKEN || "";
 const CLIP_MODEL = process.env.CLIP_MODEL || "openai/clip-vit-base-patch32";
-const HF_BASE_URL = "https://api-inference.huggingface.co/pipeline/feature-extraction/";
+const HF_BASE_URL = "https://api-inference.huggingface.co/models/";
 
 if (!HF_API_TOKEN) {
   console.warn("[clip] HF_API_TOKEN not set — CLIP scoring disabled");
