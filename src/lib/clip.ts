@@ -1,23 +1,19 @@
-import { Buffer } from "node:buffer";
+import OpenAI from "openai";
 
-const HF_API_TOKEN = process.env.HF_API_TOKEN || "";
-const CLIP_MODEL = process.env.CLIP_MODEL || "openai/clip-vit-base-patch32";
-const HF_BASE_URL = "https://api-inference.huggingface.co/models/";
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
+const DEFAULT_TEXT_MODEL = process.env.OPENAI_CLIP_TEXT_MODEL || "text-embedding-3-small";
+const DEFAULT_IMAGE_MODEL = process.env.OPENAI_CLIP_IMAGE_MODEL || "gpt-4o-mini-embed";
 
-if (!HF_API_TOKEN) {
-  console.warn("[clip] HF_API_TOKEN not set — CLIP scoring disabled");
+const openaiClient = OPENAI_API_KEY ? new OpenAI({ apiKey: OPENAI_API_KEY }) : null;
+
+if (!OPENAI_API_KEY) {
+  console.warn("[clip] OPENAI_API_KEY not set — CLIP scoring disabled");
 }
 
-function normalizeEmbedding(raw: any): number[] | null {
-  if (!Array.isArray(raw)) return null;
-  if (raw.length && typeof raw[0] === "number") {
+function normalizeEmbedding(raw: unknown): number[] | null {
+  if (!raw) return null;
+  if (Array.isArray(raw) && raw.length && typeof raw[0] === "number") {
     return raw.map((val) => Number(val) || 0);
-  }
-  if (raw.length && Array.isArray(raw[0])) {
-    const first = raw[0] as any[];
-    if (first.length && typeof first[0] === "number") {
-      return first.map((val) => Number(val) || 0);
-    }
   }
   return null;
 }
@@ -30,25 +26,14 @@ export function toUnit(vector: number[]): number[] {
   return vector.map((value) => value * inv);
 }
 
-async function postJson(body: unknown): Promise<any> {
-  const res = await fetch(`${HF_BASE_URL}${CLIP_MODEL}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${HF_API_TOKEN}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ inputs: body }),
-  });
-  const data: any = await res.json().catch(() => null);
-  if (!res.ok || !Array.isArray(data)) return null;
-  return data;
-}
-
 export async function clipTextEmbedding(text: string): Promise<number[] | null> {
-  if (!HF_API_TOKEN) return null;
+  if (!openaiClient) return null;
   try {
-    const raw = await postJson(text);
-    const embedding = normalizeEmbedding(raw);
+    const response = await openaiClient.embeddings.create({
+      model: DEFAULT_TEXT_MODEL,
+      input: text,
+    });
+    const embedding = response.data?.[0]?.embedding;
     return embedding ? toUnit(embedding) : null;
   } catch (err) {
     console.warn("[clip] text embedding failed", err);
@@ -57,23 +42,19 @@ export async function clipTextEmbedding(text: string): Promise<number[] | null> 
 }
 
 export async function clipImageEmbedding(imageUrl: string): Promise<number[] | null> {
-  if (!HF_API_TOKEN) return null;
+  if (!openaiClient) return null;
   try {
-    const imageResponse = await fetch(imageUrl);
-    if (!imageResponse.ok) return null;
-    const arrayBuffer = await imageResponse.arrayBuffer();
-    const res = await fetch(`${HF_BASE_URL}${CLIP_MODEL}`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${HF_API_TOKEN}`,
-        "Content-Type": "application/octet-stream",
-      },
-      body: Buffer.from(arrayBuffer),
+    const client: any = openaiClient;
+    if (!client?.images?.embeddings) {
+      console.warn("[clip] openai.images.embeddings unavailable");
+      return null;
+    }
+    const response = await client.images.embeddings({
+      model: DEFAULT_IMAGE_MODEL,
+      image: imageUrl,
     });
-    const data: any = await res.json().catch(() => null);
-    if (!res.ok || !Array.isArray(data)) return null;
-    const embedding = normalizeEmbedding(data);
-    return embedding ? toUnit(embedding) : null;
+    const embedding = response?.data?.[0]?.embedding;
+    return Array.isArray(embedding) ? toUnit(embedding as number[]) : null;
   } catch (err) {
     console.warn("[clip] image embedding failed", err);
     return null;
