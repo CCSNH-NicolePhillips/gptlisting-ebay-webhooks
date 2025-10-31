@@ -320,8 +320,10 @@ export const handler: Handler = async (event) => {
       return { entry, url: toDirectDropbox(url) };
     });
 
+    const tupleByUrl = new Map<string, { entry: DropboxEntry; url: string }>();
     const urlOrder = new Map<string, number>();
     fileTuples.forEach((tuple, idx) => {
+      tupleByUrl.set(tuple.url, tuple);
       urlOrder.set(tuple.url, idx);
     });
 
@@ -379,10 +381,55 @@ export const handler: Handler = async (event) => {
     const tokenize = (value: string): string[] =>
       String(value || "")
         .toLowerCase()
-        .replace(/[_\-]+/g, " ")
+        .replace(/[_\-.]+/g, " ")
         .replace(/[^a-z0-9]+/g, " ")
         .split(" ")
         .filter(Boolean);
+
+    const POS_NAME_TOKENS = new Set([
+      "front",
+      "hero",
+      "main",
+      "primary",
+      "01",
+      "1",
+      "cover",
+      "label",
+      "face",
+      "pack",
+      "box",
+      "bag",
+    ]);
+
+    const NEG_NAME_TOKENS = new Set([
+      "back",
+      "side",
+      "barcode",
+      "qrcode",
+      "qr",
+      "ingredients",
+      "ingredient",
+      "nutrition",
+      "facts",
+      "supplement",
+      "panel",
+      "blur",
+      "blurry",
+      "low",
+      "res",
+      "lowres",
+      "placeholder",
+      "dummy",
+      "bw",
+      "black",
+      "white",
+      "mono",
+      "background",
+      "_bg",
+    ]);
+
+    const rawMinAssign = Number(process.env.SMARTDRAFT_MIN_ASSIGN ?? 3);
+    const MIN_ASSIGN = Number.isFinite(rawMinAssign) ? rawMinAssign : 3;
 
     const groupTokens: string[][] = groups.map((group) => {
       const parts: string[] = [];
@@ -393,12 +440,8 @@ export const handler: Handler = async (event) => {
       return tokenize(parts.join(" "));
     });
 
-    const isLikelyDummy = (entry: DropboxEntry): boolean => {
-      const name = String(entry?.name || "");
+    const looksDummyByMeta = (entry: DropboxEntry): boolean => {
       const size = Number(entry?.size || 0);
-      const nameTokens = tokenize(name);
-      const badNames = ["dummy", "placeholder", "test", "black", "white", "bw", "barcode", "back", "_bg", "blank"];
-      if (badNames.some((token) => nameTokens.includes(token))) return true;
       if (size > 0 && size < 10 * 1024) return true;
       const dims = entry?.media_info?.metadata?.dimensions;
       const width = Number(dims?.width || 0);
@@ -408,19 +451,29 @@ export const handler: Handler = async (event) => {
     };
 
     const scoreImageForGroup = (tuple: { entry: DropboxEntry; url: string }, gi: number): number => {
-      if (isLikelyDummy(tuple.entry)) return -50;
-
       let score = 0;
+
       const path = String(tuple.entry?.path_display || tuple.entry?.path_lower || "");
       const base = String(tuple.entry?.name || "");
-      const imgTokens = new Set<string>([...tokenize(path), ...tokenize(base)]);
-      const tokens = groupTokens[gi] || [];
-      for (const token of tokens) {
-        if (imgTokens.has(token)) score += 3;
+      const nameTokens = new Set(tokenize(base));
+      const allTokens = new Set<string>([...tokenize(path), ...nameTokens]);
+
+      for (const token of groupTokens[gi] || []) {
+        if (allTokens.has(token)) score += 3;
       }
+
+      for (const token of nameTokens) {
+        if (POS_NAME_TOKENS.has(token)) score += 12;
+        if (NEG_NAME_TOKENS.has(token)) score -= 10;
+      }
+
       if ((desiredByGroup[gi] || []).includes(tuple.url)) score += 10;
-      const confidence = typeof groups[gi]?.confidence === "number" ? groups[gi]!.confidence : 0;
+
+      const confidence = Number(groups[gi]?.confidence || 0);
       score += Math.min(5, Math.max(0, Math.round(confidence)));
+
+      if (looksDummyByMeta(tuple.entry)) score -= 8;
+
       return score;
     };
 
@@ -429,37 +482,53 @@ export const handler: Handler = async (event) => {
     let reassignedCount = 0;
     const usedUrls = new Set<string>();
 
-    const pickTargetGroupByScore = (tuple: { entry: DropboxEntry; url: string }, candidates: number[]): number => {
-      const scored = candidates.map((idx) => ({ idx, score: scoreImageForGroup(tuple, idx) }));
-      let bestScore = scored.reduce((acc, item) => Math.max(acc, item.score), Number.NEGATIVE_INFINITY);
-      const top = scored.filter((item) => item.score === bestScore).map((item) => item.idx);
-      let winner = top[0];
-      for (const idx of top.slice(1)) {
-        if (assignmentCounts[idx] < assignmentCounts[winner]) {
-          winner = idx;
-          continue;
-        }
-        if (assignmentCounts[idx] === assignmentCounts[winner]) {
-          const confIdx = Number(groups[idx]?.confidence || 0);
-          const confWin = Number(groups[winner]?.confidence || 0);
-          if (confIdx > confWin) {
-            winner = idx;
-            continue;
-          }
-          if (confIdx === confWin && idx < winner) {
-            winner = idx;
-          }
-        }
-      }
-      return winner;
-    };
-
     for (const tuple of fileTuples) {
       const url = tuple.url;
       if (usedUrls.has(url)) continue;
       const candidates = (urlToGroups.get(url) || []).filter((gi) => assignmentCounts[gi] < 12);
       if (!candidates.length) continue;
-      const target = candidates.length === 1 ? candidates[0] : pickTargetGroupByScore(tuple, candidates);
+      const candidateScores = new Map<number, number>();
+      const scoreFor = (idx: number): number => {
+        if (!candidateScores.has(idx)) {
+          candidateScores.set(idx, scoreImageForGroup(tuple, idx));
+        }
+        return candidateScores.get(idx)!;
+      };
+
+      let bestIdx = candidates[0];
+      let bestScore = scoreFor(bestIdx);
+      for (const idx of candidates.slice(1)) {
+        const score = scoreFor(idx);
+        if (score > bestScore) {
+          bestScore = score;
+          bestIdx = idx;
+        }
+      }
+
+      if (bestScore < MIN_ASSIGN) continue;
+
+      const tied = candidates.filter((idx) => scoreFor(idx) === bestScore);
+      let target = bestIdx;
+      if (tied.length > 1) {
+        let winner = tied[0];
+        for (const idx of tied.slice(1)) {
+          if (assignmentCounts[idx] < assignmentCounts[winner]) {
+            winner = idx;
+            continue;
+          }
+          if (assignmentCounts[idx] === assignmentCounts[winner]) {
+            const confIdx = Number(groups[idx]?.confidence || 0);
+            const confWin = Number(groups[winner]?.confidence || 0);
+            if (confIdx > confWin) {
+              winner = idx;
+              continue;
+            }
+            if (confIdx === confWin && idx < winner) winner = idx;
+          }
+        }
+        target = winner;
+      }
+
       if (candidates.length > 1) reassignedCount++;
       assignedByGroup[target].push(url);
       assignmentCounts[target] = Math.min(12, assignedByGroup[target].length);
@@ -516,16 +585,26 @@ export const handler: Handler = async (event) => {
         }
       }
 
-      unique = unique.slice(0, 12);
+      unique = unique
+        .map((url, idx) => ({ url, idx }))
+        .sort((a, b) => {
+          const entryA = tupleByUrl.get(a.url);
+          const entryB = tupleByUrl.get(b.url);
+          const tokensA = tokenize(entryA?.entry?.name || a.url);
+          const tokensB = tokenize(entryB?.entry?.name || b.url);
+          const biasA = tokensA.some((token) => POS_NAME_TOKENS.has(token)) ? -1 : 0;
+          const biasB = tokensB.some((token) => POS_NAME_TOKENS.has(token)) ? -1 : 0;
+          if (biasA !== biasB) return biasA - biasB;
+          const orderA = urlOrder.has(a.url) ? urlOrder.get(a.url)! : Number.MAX_SAFE_INTEGER + a.idx;
+          const orderB = urlOrder.has(b.url) ? urlOrder.get(b.url)! : Number.MAX_SAFE_INTEGER + b.idx;
+          return orderA - orderB;
+        })
+        .map((item) => item.url)
+        .slice(0, 12);
+
       unique.forEach((url) => usedUrls.add(url));
 
-      const sorted = unique.sort((a, b) => {
-        const orderA = urlOrder.has(a) ? urlOrder.get(a)! : Number.MAX_SAFE_INTEGER;
-        const orderB = urlOrder.has(b) ? urlOrder.get(b)! : Number.MAX_SAFE_INTEGER;
-        return orderA - orderB;
-      });
-
-      return { ...group, images: sorted };
+      return { ...group, images: unique };
     });
 
     const orphanTuples = fileTuples.filter((tuple) => !usedUrls.has(tuple.url));
