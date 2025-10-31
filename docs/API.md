@@ -338,6 +338,113 @@ GET /.netlify/functions/dropbox-oauth-callback?code=...&state=...
 302 Location: /setup.html
 ```
 
+## GET /.netlify/functions/ebay-category-browse
+**Purpose**: Browse eBay’s taxonomy tree for the configured marketplace (defaults to `EBAY_US`). Used by the listing wizard’s category picker.
+
+**Query Parameters**
+
+| Name         | Type   | Notes |
+|--------------|--------|-------|
+| `categoryId` | string | Optional. When absent, returns the root node and immediate children. When supplied, returns that subtree plus its breadcrumb trail. |
+
+**Response**
+
+```json
+{
+	"ok": true,
+	"treeId": "0",
+	"node": { "id": "0", "name": "Root", "path": "Root", "leaf": false },
+	"children": [
+		{ "id": "183454", "name": "Health & Beauty", "path": "Root > Health & Beauty", "leaf": false }
+	],
+	"breadcrumbs": [{ "id": "0", "name": "Root", "path": "Root", "leaf": false }]
+}
+```
+
+- Uses the eBay application token, so no user auth is required.
+- Returns `500` if the marketplace tree id cannot be resolved.
+
+**Example**
+
+```bash
+curl -s "$BASE/.netlify/functions/ebay-category-browse?categoryId=177735" | jq '.children[].name'
+```
+
+## GET /.netlify/functions/ebay-category-suggestions
+**Purpose**: Fetch keyword-based category suggestions from eBay’s taxonomy service.
+
+**Query Parameters**
+
+| Name | Type   | Notes |
+|------|--------|-------|
+| `q`  | string | Required search phrase (1–350 chars). |
+
+**Response**
+
+```json
+{
+	"ok": true,
+	"treeId": "0",
+	"suggestions": [
+		{
+			"categoryId": "180947",
+			"categoryName": "Dietary Supplements",
+			"categoryPath": "Health & Beauty > Vitamins & Lifestyle Supplements > Dietary Supplements",
+			"relevance": 0.82
+		}
+	]
+}
+```
+
+- Responds with `400` when `q` is missing.
+- Internally reuses the default marketplace tree and eBay app token; no user auth needed.
+
+**Example**
+
+```bash
+curl -s "$BASE/.netlify/functions/ebay-category-suggestions?q=protein" | jq '.suggestions[0]'
+```
+
+## GET /.netlify/functions/ebay-category-requirements
+**Purpose**: Retrieve required item specifics and allowed conditions for a leaf category. Prefers a stored user OAuth token to reach the eBay Sell Metadata APIs but falls back to the app token when available.
+
+**Query Parameters**
+
+| Name       | Type   | Notes |
+|------------|--------|-------|
+| `categoryId` | string | Required eBay taxonomy id. Must reference a leaf category or a `400 category-not-leaf` error is returned. |
+| `treeId`     | string | Optional override for non-default trees. When omitted the handler resolves the marketplace’s default tree. |
+
+**Response**
+
+```json
+{
+	"ok": true,
+	"marketplaceId": "EBAY_US",
+	"treeId": "0",
+	"categoryId": "180947",
+	"allowedConditions": [ { "id": "1000", "name": "New" } ],
+	"requiredAspects": [
+		{
+			"localizedAspectName": "Brand",
+			"aspectConstraint": { "aspectRequired": true }
+		}
+	],
+	"optionalAspects": [ ... ],
+	"raw": { "aspects": [...] }
+}
+```
+
+- Returns `400` if `categoryId` is missing or if the category still has children.
+- Proxies errors from eBay taxonomy/metadata endpoints (propagates HTTP status and body when non-OK).
+- Requires the server to have either the app credentials configured or a stored user refresh token (for richer condition data).
+
+**Example**
+
+```bash
+curl -s "$BASE/.netlify/functions/ebay-category-requirements?categoryId=180947" | jq '.requiredAspects[].localizedAspectName'
+```
+
 ## POST /.netlify/functions/ebay-create-draft
 Body: {
 	items?: [ { inventory:{...}, offer:{...} } ],

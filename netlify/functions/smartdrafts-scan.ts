@@ -346,49 +346,86 @@ export const handler: Handler = async (event) => {
       warnings = [...warnings, "Vision grouping returned no results; falling back to folder grouping."];
     }
 
-    const usedUrls = new Set<string>();
-    let reassignedCount = 0;
-    const normalizedGroups = groups.map((group) => {
+    const desiredByGroup: string[][] = groups.map((group) => {
       const images = Array.isArray(group?.images) ? group.images : [];
-      const cleaned = images
+      return images
         .map((img: unknown) => (typeof img === "string" ? toDirectDropbox(img) : ""))
         .filter((img: string) => img.length > 0);
-      const ordered = cleaned
-        .map((url: string, idx: number) => ({ url, idx }))
-        .sort((a: { url: string; idx: number }, b: { url: string; idx: number }) => {
-          const orderA = urlOrder.has(a.url) ? urlOrder.get(a.url)! : Number.MAX_SAFE_INTEGER + a.idx;
-          const orderB = urlOrder.has(b.url) ? urlOrder.get(b.url)! : Number.MAX_SAFE_INTEGER + b.idx;
-          return orderA - orderB;
-        })
-        .map((item: { url: string }) => item.url)
-        .slice(0, 12);
-      const seenLocal = new Set<string>();
-      const unique: string[] = [];
-      for (const url of ordered) {
-        if (seenLocal.has(url)) continue;
-        seenLocal.add(url);
-        if (usedUrls.has(url)) {
-          reassignedCount++;
+    });
+
+    const urlToGroups = new Map<string, number[]>();
+    desiredByGroup.forEach((urls, gi) => {
+      urls.forEach((url) => {
+        const list = urlToGroups.get(url) || [];
+        list.push(gi);
+        urlToGroups.set(url, list);
+      });
+    });
+
+    const assignedByGroup: string[][] = groups.map(() => []);
+    const assignmentCounts = groups.map(() => 0);
+    let reassignedCount = 0;
+    const usedUrls = new Set<string>();
+
+    const pickTargetGroup = (candidates: number[]): number => {
+      let best = candidates[0];
+      for (const idx of candidates.slice(1)) {
+        if (assignmentCounts[idx] < assignmentCounts[best]) {
+          best = idx;
           continue;
         }
-        usedUrls.add(url);
-        unique.push(url);
+        if (assignmentCounts[idx] === assignmentCounts[best]) {
+          const confIdx = typeof groups[idx]?.confidence === "number" ? groups[idx]!.confidence : 0;
+          const confBest = typeof groups[best]?.confidence === "number" ? groups[best]!.confidence : 0;
+          if (confIdx > confBest) {
+            best = idx;
+            continue;
+          }
+          if (confIdx === confBest && idx < best) {
+            best = idx;
+          }
+        }
       }
+      return best;
+    };
+
+    for (const tuple of fileTuples) {
+      const url = tuple.url;
+      if (usedUrls.has(url)) continue;
+      const candidates = (urlToGroups.get(url) || []).filter((gi) => assignmentCounts[gi] < 12);
+      if (!candidates.length) continue;
+      const target = candidates.length === 1 ? candidates[0] : pickTargetGroup(candidates);
+      if (candidates.length > 1) reassignedCount++;
+      assignedByGroup[target].push(url);
+      assignmentCounts[target] = assignedByGroup[target].length;
+      usedUrls.add(url);
+    }
+
+    const normalizedGroups = groups.map((group, gi) => {
+      const seen = new Set<string>();
+      let unique = assignedByGroup[gi].filter((url) => {
+        if (seen.has(url)) return false;
+        seen.add(url);
+        return true;
+      });
 
       if (!unique.length) {
         const fallback = fileTuples.find((tuple) => !usedUrls.has(tuple.url));
         if (fallback) {
+          unique = [fallback.url];
           usedUrls.add(fallback.url);
-          unique.push(fallback.url);
         }
       }
+
+      unique = unique.slice(0, 12);
+      unique.forEach((url) => usedUrls.add(url));
 
       return { ...group, images: unique };
     });
 
     const orphanTuples = fileTuples.filter((tuple) => !usedUrls.has(tuple.url));
     if (reassignedCount > 0) {
-      warnings = [...warnings, `Trimmed duplicate image references across groups (${reassignedCount} reassigned).`];
+      warnings = [...warnings, `Rebalanced duplicate image references across groups (${reassignedCount} adjusted).`];
     }
     const orphans = hydrateOrphans(orphanTuples, folder);
 
