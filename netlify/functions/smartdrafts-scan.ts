@@ -408,6 +408,8 @@ export const handler: Handler = async (event) => {
     };
 
     const scoreImageForGroup = (tuple: { entry: DropboxEntry; url: string }, gi: number): number => {
+      if (isLikelyDummy(tuple.entry)) return -50;
+
       let score = 0;
       const path = String(tuple.entry?.path_display || tuple.entry?.path_lower || "");
       const base = String(tuple.entry?.name || "");
@@ -419,7 +421,6 @@ export const handler: Handler = async (event) => {
       if ((desiredByGroup[gi] || []).includes(tuple.url)) score += 10;
       const confidence = typeof groups[gi]?.confidence === "number" ? groups[gi]!.confidence : 0;
       score += Math.min(5, Math.max(0, Math.round(confidence)));
-      if (isLikelyDummy(tuple.entry)) score -= 8;
       return score;
     };
 
@@ -474,16 +475,23 @@ export const handler: Handler = async (event) => {
       });
 
       if (!unique.length) {
-        const fallback = fileTuples.find((tuple) => !usedUrls.has(tuple.url));
-        if (fallback) {
-          unique = [fallback.url];
-          usedUrls.add(fallback.url);
+        const primary = fileTuples.find((tuple) => !usedUrls.has(tuple.url) && scoreImageForGroup(tuple, gi) > 0);
+        if (primary) {
+          unique = [primary.url];
+          usedUrls.add(primary.url);
+        } else {
+          const fallback = fileTuples.find((tuple) => !usedUrls.has(tuple.url));
+          if (fallback) {
+            unique = [fallback.url];
+            usedUrls.add(fallback.url);
+          }
         }
       }
 
       // Fill gaps with closest matches from remaining files
-      if (unique.length < Math.min(12, Math.max(desiredByGroup[gi].length, 3))) {
-        const targetCount = Math.min(12, Math.max(desiredByGroup[gi].length || 0, 3));
+      const desiredCount = Math.max(1, desiredByGroup[gi].length || 0);
+      if (unique.length < Math.min(12, desiredCount)) {
+        const targetCount = Math.min(12, desiredCount);
         const available = fileTuples
           .filter((tuple) => !usedUrls.has(tuple.url))
           .map((tuple) => {
