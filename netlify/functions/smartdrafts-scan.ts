@@ -6,7 +6,7 @@ import { tokensStore } from "../../src/lib/_blobs.js";
 import { userScopedKey } from "../../src/lib/_auth.js";
 import { runAnalysis } from "../../src/lib/analyze-core.js";
 import type { ImageInsight } from "../../src/lib/image-insight.js";
-import { clipTextEmbedding, clipImageEmbedding, cosine } from "../../src/lib/clip.js";
+import { getTextEmb, getImageEmb, cosine } from "../../src/lib/clip-provider.js";
 import { sanitizeUrls, toDirectDropbox } from "../../src/lib/merge.js";
 import { canConsumeImages, consumeImages } from "../../src/lib/quota.js";
 import {
@@ -513,7 +513,7 @@ export const handler: Handler = async (event) => {
     const textEmbeddings = await Promise.all(
       groupPrompts.map(async (prompt) => {
         try {
-          return await clipTextEmbedding(prompt);
+          return await getTextEmb(prompt);
         } catch {
           return null;
         }
@@ -531,7 +531,7 @@ export const handler: Handler = async (event) => {
     const getImageEmbedding = (url: string): Promise<number[] | null> => {
       const normalized = toDirectDropbox(url);
       if (!imageEmbeddingCache.has(normalized)) {
-        const promise = clipImageEmbedding(normalized).catch(() => null);
+        const promise = getImageEmb(normalized).catch(() => null);
         imageEmbeddingCache.set(normalized, promise);
       }
       return imageEmbeddingCache.get(normalized)!;
@@ -666,6 +666,13 @@ export const handler: Handler = async (event) => {
 
         if (debugCandidatesPerGroup) {
           const components = baseResult.components ? [...baseResult.components] : [];
+          if (clipSimilarity !== null || clipContribution !== 0) {
+            components.push({
+              label: "clip",
+              value: clipContribution,
+              detail: clipSimilarity === null ? undefined : clipSimilarity.toFixed(3),
+            });
+          }
           debugCandidatesPerGroup[gi].push({
             url: tuple.url,
             name: tuple.entry?.name || "",
