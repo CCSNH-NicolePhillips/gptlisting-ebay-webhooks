@@ -4,7 +4,7 @@ import { requireUserAuth } from "../../src/lib/auth-user.js";
 import { getOrigin, jsonResponse } from "../../src/lib/http.js";
 import { tokensStore } from "../../src/lib/_blobs.js";
 import { userScopedKey } from "../../src/lib/_auth.js";
-import { runAnalysis } from "../../src/lib/analyze-core.js";
+import { runAnalysis, type ImageInsight } from "../../src/lib/analyze-core.js";
 import { sanitizeUrls, toDirectDropbox } from "../../src/lib/merge.js";
 import { canConsumeImages, consumeImages } from "../../src/lib/quota.js";
 import {
@@ -353,6 +353,13 @@ export const handler: Handler = async (event) => {
     await consumeImages(user.userId, urls.length);
 
     const analysis = await runAnalysis(urls, 12, { skipPricing: true, metadata: analysisMeta });
+    const insightMap = new Map<string, ImageInsight>();
+    const rawInsights = analysis?.imageInsights || {};
+    Object.entries(rawInsights).forEach(([url, insight]) => {
+      if (!url || !insight) return;
+      const normalized = toDirectDropbox(url);
+      insightMap.set(normalized, { ...insight, url: normalized });
+    });
     let groups = Array.isArray(analysis?.groups) ? analysis.groups : [];
     let warnings: string[] = Array.isArray(analysis?.warnings) ? analysis.warnings : [];
 
@@ -431,6 +438,30 @@ export const handler: Handler = async (event) => {
     const rawMinAssign = Number(process.env.SMARTDRAFT_MIN_ASSIGN ?? 3);
     const MIN_ASSIGN = Number.isFinite(rawMinAssign) ? rawMinAssign : 3;
 
+    const COLOR_WEIGHTS: Record<string, number> = {
+      black: -8,
+      white: -6,
+      gray: -5,
+      brown: -1,
+      red: 3,
+      orange: 3,
+      yellow: 3,
+      green: 3,
+      blue: 3,
+      purple: 2,
+      multi: 2,
+    };
+
+    const ROLE_WEIGHTS: Record<string, number> = {
+      front: 12,
+      packaging: 8,
+      side: 4,
+      detail: -1,
+      accessory: -4,
+      back: -8,
+      other: 0,
+    };
+
     const groupTokens: string[][] = groups.map((group) => {
       const parts: string[] = [];
       if (group?.brand) parts.push(String(group.brand));
@@ -451,6 +482,9 @@ export const handler: Handler = async (event) => {
     };
 
     const scoreImageForGroup = (tuple: { entry: DropboxEntry; url: string }, gi: number): number => {
+      const insight = insightMap.get(tuple.url);
+      if (insight && insight.hasVisibleText === false) return Number.NEGATIVE_INFINITY;
+
       let score = 0;
 
       const path = String(tuple.entry?.path_display || tuple.entry?.path_lower || "");
@@ -467,12 +501,41 @@ export const handler: Handler = async (event) => {
         if (NEG_NAME_TOKENS.has(token)) score -= 10;
       }
 
+      if (insight?.hasVisibleText === true) score += 6;
+
+      if (insight?.role && ROLE_WEIGHTS[insight.role] !== undefined) {
+        score += ROLE_WEIGHTS[insight.role];
+      }
+
+      if (insight?.dominantColor && COLOR_WEIGHTS[insight.dominantColor] !== undefined) {
+        score += COLOR_WEIGHTS[insight.dominantColor];
+      }
+
       if ((desiredByGroup[gi] || []).includes(tuple.url)) score += 10;
 
       const confidence = Number(groups[gi]?.confidence || 0);
       score += Math.min(5, Math.max(0, Math.round(confidence)));
 
       if (looksDummyByMeta(tuple.entry)) score -= 8;
+
+      const dims = tuple.entry?.media_info?.metadata?.dimensions;
+      const width = Number(dims?.width || 0);
+      const height = Number(dims?.height || 0);
+      if (width > 0 && height > 0) {
+        const megaPixels = (width * height) / 1_000_000;
+        if (megaPixels >= 3.5) score += 8;
+        else if (megaPixels >= 2) score += 6;
+        else if (megaPixels >= 1) score += 4;
+        else if (megaPixels >= 0.6) score += 1;
+        else score -= 6;
+
+        const aspect = width / height;
+        if (aspect > 0) {
+          if (aspect >= 0.8 && aspect <= 1.25) score += 3;
+          else if (aspect >= 0.6 && aspect <= 1.45) score += 1;
+          else if (aspect <= 0.45 || aspect >= 1.8) score -= 4;
+        }
+      }
 
       return score;
     };
@@ -544,16 +607,17 @@ export const handler: Handler = async (event) => {
       });
 
       if (!unique.length) {
-        const primary = fileTuples.find((tuple) => !usedUrls.has(tuple.url) && scoreImageForGroup(tuple, gi) > 0);
+        const primary = fileTuples.find((tuple) => {
+          if (usedUrls.has(tuple.url)) return false;
+          const score = scoreImageForGroup(tuple, gi);
+          return score >= MIN_ASSIGN;
+        });
         if (primary) {
           unique = [primary.url];
           usedUrls.add(primary.url);
         } else {
-          const fallback = fileTuples.find((tuple) => !usedUrls.has(tuple.url));
-          if (fallback) {
-            unique = [fallback.url];
-            usedUrls.add(fallback.url);
-          }
+          const label = group?.name || group?.product || `group_${gi + 1}`;
+          warnings = [...warnings, `No text-bearing hero found for ${label}; leaving group images empty.`];
         }
       }
 
@@ -571,7 +635,7 @@ export const handler: Handler = async (event) => {
               order: urlOrder.has(tuple.url) ? urlOrder.get(tuple.url)! : Number.MAX_SAFE_INTEGER,
             };
           })
-          .filter((item) => item.score > 0)
+          .filter((item) => item.score >= MIN_ASSIGN)
           .sort((a, b) => {
             if (b.score !== a.score) return b.score - a.score;
             return a.order - b.order;
@@ -592,8 +656,14 @@ export const handler: Handler = async (event) => {
           const entryB = tupleByUrl.get(b.url);
           const tokensA = tokenize(entryA?.entry?.name || a.url);
           const tokensB = tokenize(entryB?.entry?.name || b.url);
-          const biasA = tokensA.some((token) => POS_NAME_TOKENS.has(token)) ? -1 : 0;
-          const biasB = tokensB.some((token) => POS_NAME_TOKENS.has(token)) ? -1 : 0;
+          let biasA = tokensA.some((token) => POS_NAME_TOKENS.has(token)) ? -1 : 0;
+          let biasB = tokensB.some((token) => POS_NAME_TOKENS.has(token)) ? -1 : 0;
+          const insightA = insightMap.get(a.url);
+          const insightB = insightMap.get(b.url);
+          if (insightA?.role === "front") biasA -= 2;
+          if (insightB?.role === "front") biasB -= 2;
+          if (insightA?.role === "back") biasA += 2;
+          if (insightB?.role === "back") biasB += 2;
           if (biasA !== biasB) return biasA - biasB;
           const orderA = urlOrder.has(a.url) ? urlOrder.get(a.url)! : Number.MAX_SAFE_INTEGER + a.idx;
           const orderB = urlOrder.has(b.url) ? urlOrder.get(b.url)! : Number.MAX_SAFE_INTEGER + b.idx;
