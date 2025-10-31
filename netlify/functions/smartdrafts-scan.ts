@@ -629,6 +629,9 @@ export const handler: Handler = async (event) => {
 
     const pairScores: Array<{ tupleIndex: number; groupIndex: number; score: number }> = [];
     const pairsByGroup: Array<Array<{ tupleIndex: number; score: number }>> = groups.map(() => []);
+    const clipPairsByGroup = clipEnabled
+      ? groups.map(() => [] as Array<{ tupleIndex: number; clipScore: number; total: number }>)
+      : null;
 
     for (let ti = 0; ti < fileTuples.length; ti++) {
       const tuple = fileTuples[ti];
@@ -657,6 +660,10 @@ export const handler: Handler = async (event) => {
         pairScores.push({ tupleIndex: ti, groupIndex: gi, score: combined });
         pairsByGroup[gi].push({ tupleIndex: ti, score: combined });
 
+        if (clipPairsByGroup && clipSimilarity !== null && Number.isFinite(clipContribution)) {
+          clipPairsByGroup[gi].push({ tupleIndex: ti, clipScore: clipContribution, total: combined });
+        }
+
         if (debugCandidatesPerGroup) {
           const components = baseResult.components ? [...baseResult.components] : [];
           debugCandidatesPerGroup[gi].push({
@@ -677,6 +684,14 @@ export const handler: Handler = async (event) => {
 
     pairScores.sort((a, b) => b.score - a.score);
     pairsByGroup.forEach((entries) => entries.sort((a, b) => b.score - a.score));
+    if (clipPairsByGroup) {
+      clipPairsByGroup.forEach((entries) =>
+        entries.sort((a, b) => {
+          if (b.clipScore !== a.clipScore) return b.clipScore - a.clipScore;
+          return b.total - a.total;
+        })
+      );
+    }
 
     const assignedByGroup: string[][] = groups.map(() => []);
     const groupCounts = groups.map(() => 0);
@@ -701,6 +716,36 @@ export const handler: Handler = async (event) => {
       }
       return false;
     };
+
+    const assignBestFromClip = (groupIndex: number, minClipScore: number): boolean => {
+      if (!clipPairsByGroup || targetPerGroup[groupIndex] <= 0) return false;
+      const candidates = clipPairsByGroup[groupIndex];
+      if (!candidates.length) return false;
+      if (candidates[0].clipScore < minClipScore) return false;
+      for (const candidate of candidates) {
+        if (candidate.clipScore < minClipScore) break;
+        if (tupleAssigned[candidate.tupleIndex]) continue;
+        recordAssignment(groupIndex, candidate.tupleIndex);
+        return true;
+      }
+      return false;
+    };
+
+    const fillFromClip = (threshold: number) => {
+      if (!clipPairsByGroup) return;
+      for (let gi = 0; gi < groups.length; gi++) {
+        while (groupCounts[gi] < Math.max(1, targetPerGroup[gi])) {
+          const assigned = assignBestFromClip(gi, threshold);
+          if (!assigned) break;
+        }
+      }
+    };
+
+    if (clipPairsByGroup) {
+      const preferredClip = Math.max(CLIP_WEIGHT * CLIP_MIN_SIM, MIN_ASSIGN);
+      fillFromClip(preferredClip);
+      fillFromClip(Number.NEGATIVE_INFINITY);
+    }
 
     for (let gi = 0; gi < groups.length; gi++) {
       if (groupCounts[gi] >= Math.max(1, targetPerGroup[gi])) continue;
