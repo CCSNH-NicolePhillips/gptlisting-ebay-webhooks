@@ -5,27 +5,34 @@
     <title>SmartDrafts - Dropbox</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
-      body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:24px;color:#111;max-width:1040px}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:24px;color:#111;max-width:1040px}
   input[type=text]{width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:16px}
   select{width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:16px;background:#fff}
-      button{padding:8px 14px;border:1px solid #111;border-radius:8px;cursor:pointer;background:#111;color:#fff;font-weight:600}
-      button:disabled{opacity:.5;cursor:not-allowed}
-      .muted{color:#666;font-size:15px}
-      .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;margin-top:16px}
-      .card{border:1px solid #eee;border-radius:12px;padding:12px;background:#fff;box-shadow:0 1px 2px rgba(17,17,17,0.05)}
-      .thumbs{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
-      .thumbs img{width:64px;height:64px;object-fit:cover;border:1px solid #eee;border-radius:8px;background:#f5f5f5}
-      .panel{border:1px solid #ececec;border-radius:12px;padding:16px;margin:18px 0;background:#fafafa}
-      .panel h2{margin:0 0 8px;font-size:20px}
-      .panel p{margin:4px 0 12px}
-      header{margin-bottom:18px}
-      header h1{margin:0 0 6px;font-size:26px}
-      .controls{margin:12px 0;display:flex;gap:8px;flex-wrap:wrap}
+    button{padding:8px 14px;border:1px solid #111;border-radius:8px;cursor:pointer;background:#111;color:#fff;font-weight:600}
+    button:disabled{opacity:.5;cursor:not-allowed}
+    .muted{color:#666;font-size:15px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;margin-top:16px}
+    .card{border:1px solid #eee;border-radius:12px;padding:12px;background:#fff;box-shadow:0 1px 2px rgba(17,17,17,0.05)}
+    .thumbs{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+    .thumbs img{width:64px;height:64px;object-fit:cover;border:1px solid #eee;border-radius:8px;background:#f5f5f5}
+    .panel{border:1px solid #ececec;border-radius:12px;padding:16px;margin:18px 0;background:#fafafa}
+    .panel h2{margin:0 0 8px;font-size:20px}
+    .panel p{margin:4px 0 12px}
+    header{margin-bottom:18px}
+    header h1{margin:0 0 6px;font-size:26px}
+    .controls{margin:12px 0;display:flex;gap:8px;flex-wrap:wrap}
   label.group-toggle{display:flex;align-items:center;gap:6px;font-weight:600;font-size:15px}
   h3{margin:28px 0 12px;font-size:20px}
   .bullet-list{margin:8px 0;padding-left:18px;color:#444;font-size:14px}
   .bullet-list li{margin:0}
   .gpt-meta{margin-top:8px;font-size:14px;color:#444}
+    .raw{white-space:pre-wrap;word-break:break-word;background:#111;color:#f5f5f5;padding:12px;border-radius:8px;font-size:13px;max-height:320px;overflow:auto}
+    details{margin-top:8px;border:1px solid #ececec;border-radius:8px;padding:8px 10px;background:#f8f8f8}
+    details summary{cursor:pointer;font-weight:600}
+    table{width:100%;border-collapse:collapse;margin-top:8px;font-size:13px}
+    table th,table td{border:1px solid #ddd;padding:6px 8px;text-align:left}
+    table th{background:#f5f5f5}
+    .debug-note{color:#666;font-size:14px;margin:8px 0}
     </style>
   </head>
   <body>
@@ -46,6 +53,10 @@
       <div class="controls">
         <button id="btnScanFolder">Scan Folder</button>
         <button id="btnRescanFolder" style="background:#555;">Force Rescan</button>
+        <label class="muted" style="display:flex;align-items:center;gap:6px;">
+          <input id="includeDebug" type="checkbox" />
+          Include debug output
+        </label>
       </div>
       <div style="margin:12px 0; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
         <input id="defaultBrand" type="text" placeholder="Default Brand (optional)" style="width:260px;" autocomplete="off" />
@@ -62,6 +73,16 @@
   <h3 id="orphansTitle" style="display:none;">Unsorted Images</h3>
   <div id="orphansInfo" class="muted" style="display:none;"></div>
   <div id="orphansGrid" class="grid" style="display:none;"></div>
+
+  <h3>Debug Details</h3>
+  <div id="debugNote" class="muted debug-note">Enable debug output to inspect candidate scoring.</div>
+  <div id="debugGrid" class="grid"></div>
+
+  <h3>Raw Response</h3>
+  <div class="controls" style="margin-top:0;">
+    <button id="btnCopyRaw" type="button" disabled>Copy JSON</button>
+  </div>
+  <pre id="rawOutput" class="raw">Run a scan to populate this section.</pre>
 
     <h3>GPT Results</h3>
     <div id="gptStatus" class="muted"></div>
@@ -108,6 +129,11 @@
   const btnGenerate = $('#btnGenerate');
   const gptStatus = $('#gptStatus');
   const gptGrid = $('#gptGrid');
+  const includeDebug = $('#includeDebug');
+  const debugNote = $('#debugNote');
+  const debugGrid = $('#debugGrid');
+  const rawOutput = $('#rawOutput');
+  const btnCopyRaw = $('#btnCopyRaw');
 
       async function ensureAuth() {
         try {
@@ -160,8 +186,9 @@
         return data;
       }
 
-      let isScanning = false;
-      let isGenerating = false;
+  let isScanning = false;
+  let isGenerating = false;
+  let lastScanResult = null;
 
       function clearGptResults() {
         if (gptGrid) gptGrid.innerHTML = '';
@@ -230,6 +257,99 @@
           orphansGrid.appendChild(card);
         });
       }
+
+      function setRawOutput(value, allowCopy = false) {
+        if (!rawOutput) return;
+        if (value === null || value === undefined) {
+          rawOutput.textContent = 'Run a scan to populate this section.';
+          if (btnCopyRaw) btnCopyRaw.disabled = true;
+          return;
+        }
+        const text = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+        rawOutput.textContent = text;
+        if (btnCopyRaw) btnCopyRaw.disabled = !allowCopy;
+      }
+
+      function renderDebugData(debugPayload, emptyMessage) {
+        if (!debugGrid || !debugNote) return;
+        debugGrid.innerHTML = '';
+        if (!includeDebug || !includeDebug.checked) {
+          debugNote.textContent = 'Enable debug output to inspect candidate scoring.';
+          debugNote.style.display = 'block';
+          return;
+        }
+        if (!debugPayload || !Array.isArray(debugPayload.groups) || !debugPayload.groups.length) {
+          debugNote.textContent = emptyMessage || 'Run a scan with debug enabled to see candidate scoring.';
+          debugNote.style.display = 'block';
+          return;
+        }
+        debugNote.style.display = 'none';
+        debugPayload.groups.forEach((entry, index) => {
+          const card = el('div', { class: 'card' });
+          const heading = document.createElement('h4');
+          heading.textContent = entry?.name || entry?.groupId || `Group ${index + 1}`;
+          card.appendChild(heading);
+
+          const clipInfo = debugPayload.clip
+            ? `CLIP weight ${debugPayload.clip.weight}, min sim ${debugPayload.clip.minSimilarity}`
+            : 'CLIP disabled';
+          card.appendChild(el('div', { class: 'muted', text: `${clipInfo} • MIN_ASSIGN ${debugPayload.minAssign}` }));
+
+          const table = document.createElement('table');
+          table.innerHTML = `
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Name</th>
+                <th>Total</th>
+                <th>Base</th>
+                <th>CLIP</th>
+                <th>Sim</th>
+                <th>Assigned</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          `;
+          const tbody = table.querySelector('tbody');
+          (Array.isArray(entry?.candidates) ? entry.candidates : []).forEach((candidate, idx) => {
+            const row = document.createElement('tr');
+            const cells = [
+              idx + 1,
+              candidate?.name || '(image)',
+              Number(candidate?.total ?? 0).toFixed(2),
+              Number(candidate?.base ?? 0).toFixed(2),
+              Number(candidate?.clipContribution ?? 0).toFixed(2),
+              candidate?.clipSimilarity === null || candidate?.clipSimilarity === undefined
+                ? '—'
+                : Number(candidate.clipSimilarity).toFixed(3),
+              candidate?.assigned ? 'yes' : 'no',
+            ];
+            cells.forEach((value) => {
+              const cell = document.createElement('td');
+              cell.textContent = String(value);
+              row.appendChild(cell);
+            });
+            tbody?.appendChild(row);
+          });
+          card.appendChild(table);
+
+          const detailsEl = document.createElement('details');
+          const summary = document.createElement('summary');
+          summary.textContent = 'Show candidate JSON';
+          const pre = document.createElement('pre');
+          pre.className = 'raw';
+          pre.style.background = '#f4f4f4';
+          pre.style.color = '#222';
+          pre.style.maxHeight = '200px';
+          pre.textContent = JSON.stringify(entry?.candidates || [], null, 2);
+          detailsEl.appendChild(summary);
+          detailsEl.appendChild(pre);
+          card.appendChild(detailsEl);
+
+          debugGrid.appendChild(card);
+        });
+      }
+
 
       function parseGroupName(name) {
         const raw = String(name || '').replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
@@ -364,7 +484,7 @@
         });
       }
 
-  async function runScan(payload, description) {
+      async function runScan(payload, description) {
         if (isScanning) return;
         isScanning = true;
         clearGptResults();
@@ -373,16 +493,25 @@
         setStatus(description);
         setWarnings([]);
         grid.innerHTML = '';
-  renderOrphans([]);
+        renderOrphans([]);
+        lastScanResult = null;
+  setRawOutput('Fetching response...');
+  renderDebugData(null, 'Waiting for scan results...');
         try {
           const authed = await ensureAuth();
           if (!authed) {
             setStatus('Please sign in to scan Dropbox.');
+            setRawOutput(null);
+            renderDebugData(null, 'Sign in to request debug data.');
             return;
           }
+
           const payloadWithLimit = { ...payload, limit: 100 };
           if (payload.force) payloadWithLimit.force = true;
+          if (includeDebug?.checked) payloadWithLimit.debug = true;
+
           const data = await fetchSmartDraftGroups(payloadWithLimit);
+          lastScanResult = data;
           const groups = Array.isArray(data.groups) ? data.groups : [];
           window.smartDraftGroups = groups;
           updateGenerateState();
@@ -394,10 +523,16 @@
           setWarnings(Array.isArray(data.warnings) ? data.warnings : []);
           renderGroups(groups);
           renderOrphans(Array.isArray(data.orphans) ? data.orphans : []);
+          renderDebugData(data.debug, 'No debug data returned.');
+          setRawOutput(data, true);
         } catch (err) {
-          setStatus(`Error: ${err?.message || err}`);
+          const message = err?.message || String(err);
+          setStatus(`Error: ${message}`);
           setWarnings([]);
           renderOrphans([]);
+          lastScanResult = { ok: false, error: message };
+          renderDebugData(null, 'Debug data unavailable for the last scan.');
+          setRawOutput(lastScanResult, true);
         } finally {
           isScanning = false;
           updateGenerateState();
@@ -413,7 +548,7 @@
       async function loadFolders() {
         if (!folderSelect) return;
         folderSelect.disabled = true;
-        folderSelect.innerHTML = '<option>Loading folders…</option>';
+  folderSelect.innerHTML = '<option>Loading folders...</option>';
         try {
           const exec = window.authClient?.authFetch ?? fetch;
           const url = new URL('/.netlify/functions/dropbox-list-folders', window.location.origin);
@@ -538,6 +673,42 @@
         updateGenerateState();
       }
 
+      includeDebug?.addEventListener('change', () => {
+        if (!includeDebug.checked) {
+          renderDebugData(null);
+          return;
+        }
+        if (lastScanResult && typeof lastScanResult === 'object' && lastScanResult !== null && lastScanResult.debug) {
+          renderDebugData(lastScanResult.debug, 'No debug data returned.');
+        } else {
+          renderDebugData(null, 'Run a scan with debug enabled to see candidate scoring.');
+        }
+      });
+
+      btnCopyRaw?.addEventListener('click', async () => {
+        if (!lastScanResult) return;
+        const text = typeof lastScanResult === 'string'
+          ? lastScanResult
+          : JSON.stringify(lastScanResult, null, 2);
+        try {
+          if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
+            throw new Error('Clipboard unavailable');
+          }
+          const previousStatus = statusEl?.textContent || '';
+          await navigator.clipboard.writeText(text);
+          if (statusEl) {
+            statusEl.textContent = 'Copied raw response to clipboard.';
+            setTimeout(() => {
+              if (statusEl && statusEl.textContent === 'Copied raw response to clipboard.') {
+                statusEl.textContent = previousStatus;
+              }
+            }, 2000);
+          }
+        } catch (error) {
+          if (statusEl) statusEl.textContent = 'Unable to copy raw JSON (clipboard blocked).';
+        }
+      });
+
       btnGenerate?.addEventListener('click', async () => {
         if (isGenerating) return;
         const groups = Array.isArray(window.smartDraftGroups) ? window.smartDraftGroups : [];
@@ -554,7 +725,7 @@
         isGenerating = true;
         updateGenerateState();
         clearGptResults();
-        if (gptStatus) gptStatus.textContent = 'Generating with GPT…';
+  if (gptStatus) gptStatus.textContent = 'Generating with GPT...';
         try {
           const seeds = makeSeedsFromGroups(selectedGroups);
           const exec = window.authClient?.authFetch ?? fetch;
@@ -586,7 +757,7 @@
         }
         setStoredFolder(path);
         if (folderInfo) folderInfo.textContent = `Selected folder: ${path}`;
-        runScan({ path }, `Scanning ${path}…`);
+  runScan({ path }, `Scanning ${path}...`);
       });
 
       btnRescanFolder?.addEventListener('click', () => {
@@ -597,7 +768,7 @@
         }
         setStoredFolder(path);
         if (folderInfo) folderInfo.textContent = `Selected folder: ${path}`;
-        runScan({ path, force: true }, `Rescanning ${path} (forcing refresh)…`);
+  runScan({ path, force: true }, `Rescanning ${path} (forcing refresh)...`);
       });
 
       folderSelect?.addEventListener('change', () => {
@@ -609,8 +780,10 @@
         }
       });
 
-      updateGenerateState();
-      setWarnings([]);
+  updateGenerateState();
+  setWarnings([]);
+  renderDebugData(null);
+  setRawOutput(null);
 
       (async () => {
         const authed = await ensureAuth();
