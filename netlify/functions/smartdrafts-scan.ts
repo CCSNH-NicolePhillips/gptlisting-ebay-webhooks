@@ -520,8 +520,6 @@ export const handler: Handler = async (event) => {
 
     const scoreImageForGroup = (tuple: { entry: DropboxEntry; url: string }, gi: number): number => {
       const insight = insightMap.get(tuple.url);
-      if (insight && insight.hasVisibleText === false) return Number.NEGATIVE_INFINITY;
-
       let score = 0;
 
       const path = String(tuple.entry?.path_display || tuple.entry?.path_lower || "");
@@ -538,7 +536,8 @@ export const handler: Handler = async (event) => {
         if (NEG_NAME_TOKENS.has(token)) score -= 10;
       }
 
-      if (insight?.hasVisibleText === true) score += 6;
+  if (insight?.hasVisibleText === true) score += 6;
+  else if (insight?.hasVisibleText === false) score -= 5;
 
       if (insight?.role && ROLE_WEIGHTS[insight.role] !== undefined) {
         score += ROLE_WEIGHTS[insight.role];
