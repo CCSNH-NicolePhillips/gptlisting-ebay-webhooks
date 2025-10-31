@@ -34,6 +34,16 @@ type OrphanImage = {
   folder: string;
 };
 
+type GroupScoringMeta = {
+  weights: Map<string, number>;
+  phrases: Array<{ text: string; weight: number }>;
+};
+
+type TupleTokenInfo = {
+  tokens: Set<string>;
+  haystack: string;
+};
+
 const METHODS = "POST, OPTIONS";
 const MAX_IMAGES = Math.max(1, Math.min(100, Number(process.env.SMARTDRAFT_MAX_IMAGES || 100)));
 
@@ -227,6 +237,81 @@ function hydrateGroups(groups: any[], folder: string) {
   });
 }
 
+function tokenizeText(input: string | undefined, minLength = 3): string[] {
+  if (!input) return [];
+  return String(input)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter((part) => part.length >= minLength);
+}
+
+function addWeightedTokens(weights: Map<string, number>, value: string | undefined, weight: number, minLength = 3) {
+  if (!value) return;
+  for (const token of tokenizeText(value, minLength)) {
+    const existing = weights.get(token) || 0;
+    if (weight > existing) weights.set(token, weight);
+  }
+}
+
+function addPhrase(phrases: Array<{ text: string; weight: number }>, value: string | undefined, weight: number) {
+  if (!value) return;
+  const clean = value.toLowerCase().replace(/\s+/g, " ").trim();
+  if (clean.length < 3) return;
+  phrases.push({ text: clean, weight });
+}
+
+function buildGroupMeta(group: any): GroupScoringMeta {
+  const weights = new Map<string, number>();
+  const phrases: Array<{ text: string; weight: number }> = [];
+
+  addWeightedTokens(weights, group.brand, 6);
+  addWeightedTokens(weights, group.product, 5);
+  addWeightedTokens(weights, group.variant, 4);
+  addWeightedTokens(weights, group.size, 3, 2);
+  addWeightedTokens(weights, group.name, 4);
+  addWeightedTokens(weights, group.folder, 2);
+  if (Array.isArray(group.claims)) {
+    for (const claim of group.claims) addWeightedTokens(weights, String(claim || ""), 2);
+  }
+  if (Array.isArray(group.features)) {
+    for (const feat of group.features) addWeightedTokens(weights, String(feat || ""), 2);
+  }
+  if (Array.isArray(group.keywords)) {
+    for (const kw of group.keywords) addWeightedTokens(weights, String(kw || ""), 2);
+  }
+  if (group.category) {
+    const catLabel = typeof group.category === "object" ? group.category.title || group.category.name : group.category;
+    addWeightedTokens(weights, catLabel, 2);
+  }
+
+  addPhrase(phrases, group.brand, 4);
+  addPhrase(phrases, group.product, 4);
+  addPhrase(phrases, group.variant, 3);
+  addPhrase(phrases, group.name, 3);
+
+  return { weights, phrases };
+}
+
+function buildTupleInfo(tuple: { entry: DropboxEntry; url: string }): TupleTokenInfo {
+  const textParts = [tuple.entry.name || "", tuple.entry.path_display || "", tuple.entry.path_lower || ""];
+  const haystack = textParts.join(" ").toLowerCase();
+  const tokens = new Set(tokenizeText(haystack, 2));
+  return { tokens, haystack };
+}
+
+function scoreTuple(meta: GroupScoringMeta, tupleInfo: TupleTokenInfo): number {
+  let score = 0;
+  meta.weights.forEach((weight, token) => {
+    if (tupleInfo.tokens.has(token)) score += weight;
+  });
+  for (const phrase of meta.phrases) {
+    if (tupleInfo.haystack.includes(phrase.text)) score += phrase.weight;
+  }
+  return score;
+}
+
 export const handler: Handler = async (event) => {
   const headers = event.headers as HeadersRecord;
   const originHdr = getOrigin(headers);
@@ -364,6 +449,8 @@ export const handler: Handler = async (event) => {
 
     const assignedByGroup: string[][] = groups.map(() => []);
     const assignmentCounts = groups.map(() => 0);
+    const groupMeta = groups.map((group) => buildGroupMeta(group));
+    const tupleInfoCache = new Map<string, TupleTokenInfo>();
     let reassignedCount = 0;
     const usedUrls = new Set<string>();
 
@@ -394,8 +481,35 @@ export const handler: Handler = async (event) => {
       if (usedUrls.has(url)) continue;
       const candidates = (urlToGroups.get(url) || []).filter((gi) => assignmentCounts[gi] < 12);
       if (!candidates.length) continue;
-      const target = candidates.length === 1 ? candidates[0] : pickTargetGroup(candidates);
-      if (candidates.length > 1) reassignedCount++;
+      let target = candidates.length === 1 ? candidates[0] : -1;
+      if (candidates.length > 1) {
+        const info = tupleInfoCache.get(url) || buildTupleInfo(tuple);
+        if (!tupleInfoCache.has(url)) tupleInfoCache.set(url, info);
+        let bestScore = -1;
+        let bestIdx = candidates[0];
+        let bestConfidence = typeof groups[bestIdx]?.confidence === "number" ? groups[bestIdx]!.confidence : 0;
+        for (const idx of candidates) {
+          const score = scoreTuple(groupMeta[idx], info);
+          const confidence = typeof groups[idx]?.confidence === "number" ? groups[idx]!.confidence : 0;
+          if (score > bestScore) {
+            bestScore = score;
+            bestIdx = idx;
+            bestConfidence = confidence;
+          } else if (score === bestScore) {
+            if (confidence > bestConfidence) {
+              bestIdx = idx;
+              bestConfidence = confidence;
+            } else if (confidence === bestConfidence && assignmentCounts[idx] < assignmentCounts[bestIdx]) {
+              bestIdx = idx;
+            }
+          }
+        }
+        if (bestScore <= 0) {
+          bestIdx = pickTargetGroup(candidates);
+        }
+        target = bestIdx;
+        reassignedCount++;
+      }
       assignedByGroup[target].push(url);
       assignmentCounts[target] = assignedByGroup[target].length;
       usedUrls.add(url);
@@ -417,10 +531,46 @@ export const handler: Handler = async (event) => {
         }
       }
 
+      // Fill gaps with closest matches from remaining files
+      if (unique.length < Math.min(12, Math.max(desiredByGroup[gi].length, 3))) {
+        const infoForGroup = groupMeta[gi];
+        const targetCount = Math.min(12, Math.max(desiredByGroup[gi].length || 0, 3));
+        const available = fileTuples
+          .filter((tuple) => !usedUrls.has(tuple.url))
+          .map((tuple) => {
+            const info = tupleInfoCache.get(tuple.url) || buildTupleInfo(tuple);
+            if (!tupleInfoCache.has(tuple.url)) tupleInfoCache.set(tuple.url, info);
+            const score = scoreTuple(infoForGroup, info);
+            return {
+              tuple,
+              score,
+              order: urlOrder.has(tuple.url) ? urlOrder.get(tuple.url)! : Number.MAX_SAFE_INTEGER,
+            };
+          })
+          .filter((item) => item.score > 0)
+          .sort((a, b) => {
+            if (b.score !== a.score) return b.score - a.score;
+            return a.order - b.order;
+          });
+
+        for (const item of available) {
+          if (unique.length >= targetCount) break;
+          if (usedUrls.has(item.tuple.url)) continue;
+          unique.push(item.tuple.url);
+          usedUrls.add(item.tuple.url);
+        }
+      }
+
       unique = unique.slice(0, 12);
       unique.forEach((url) => usedUrls.add(url));
 
-      return { ...group, images: unique };
+      const sorted = unique.sort((a, b) => {
+        const orderA = urlOrder.has(a) ? urlOrder.get(a)! : Number.MAX_SAFE_INTEGER;
+        const orderB = urlOrder.has(b) ? urlOrder.get(b)! : Number.MAX_SAFE_INTEGER;
+        return orderA - orderB;
+      });
+
+      return { ...group, images: sorted };
     });
 
     const orphanTuples = fileTuples.filter((tuple) => !usedUrls.has(tuple.url));
