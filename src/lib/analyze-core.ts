@@ -140,6 +140,21 @@ async function analyzeBatchViaVision(batch: string[], metadata: Array<{ url: str
             g.images = imgs.map((u: string) => toDirectDropbox(u));
           }
         }
+        if (Array.isArray(result?.imageInsights)) {
+          result.imageInsights = result.imageInsights
+            .map((ins: any) => {
+              if (!ins || typeof ins !== "object") return null;
+              const rawUrl = typeof ins.url === "string" ? ins.url : "";
+              if (!rawUrl) return null;
+              return {
+                url: toDirectDropbox(rawUrl),
+                hasVisibleText: typeof ins.hasVisibleText === "boolean" ? ins.hasVisibleText : undefined,
+                dominantColor: typeof ins.dominantColor === "string" ? ins.dominantColor.toLowerCase().trim() : undefined,
+                role: typeof ins.role === "string" ? ins.role.toLowerCase().trim() : undefined,
+              };
+            })
+            .filter(Boolean);
+        }
         return result;
       } catch {
         return { ...cached, _cache: true };
@@ -163,9 +178,11 @@ async function analyzeBatchViaVision(batch: string[], metadata: Array<{ url: str
     "Group visually identical products (front/back/side).",
     "EXTRA CONTEXT PER IMAGE (filenames, parent folders):",
     hints || "(no hints)",
-    "Use those hints to split groups by product/variant even when packaging looks similar.",
+    "Use those hints and your visual judgement to split groups by product/variant even when packaging looks similar.",
     "Extract: brand, product, variant/flavor, size/servings, best-fit category label, categoryPath (parent > child), options object of item specifics (e.g. { Flavor, Formulation, Features, Ingredients, Dietary Feature }), short claims[].",
-    "Return STRICT JSON: { groups: [{ groupId, brand, product, variant, size, category, categoryPath, options, claims, confidence, images[] }] }.",
+    "For EVERY image also include quick insights so downstream code can reason about it: hasVisibleText (true/false), dominantColor (one of: black, white, gray, red, orange, yellow, green, blue, purple, brown, multi), role (front, back, side, detail, accessory, packaging, other).",
+    "Return STRICT JSON: { groups: [{ groupId, brand, product, variant, size, category, categoryPath, options, claims, confidence, images[] }], imageInsights: [{ url, hasVisibleText, dominantColor, role }] }.",
+    "Ensure group.images entries are strings (exact image URLs). imageInsights.url must match one of those URLs.",
     "If uncertain, group best-guess and lower confidence, but avoid mixing images whose hints differ (e.g. different folder or filename).",
   ].join("\n");
 
@@ -174,8 +191,9 @@ async function analyzeBatchViaVision(batch: string[], metadata: Array<{ url: str
     // Post-process images: some providers may return placeholders or omit URLs.
     try {
       const validHttp = (u: unknown) => typeof u === "string" && /^https?:\/\//i.test(u.trim());
-      if (Array.isArray((result as any)?.groups)) {
-        for (const g of (result as any).groups) {
+      const anyResult = result as any;
+      if (Array.isArray(anyResult?.groups)) {
+        for (const g of anyResult.groups) {
           const raw = Array.isArray(g?.images) ? g.images : [];
           let imgs = raw.filter(validHttp);
           const hasPlaceholder = raw.some((u: unknown) => typeof u === "string" && /placeholder/i.test(u));
@@ -184,6 +202,21 @@ async function analyzeBatchViaVision(batch: string[], metadata: Array<{ url: str
           }
           g.images = imgs.map((u: string) => toDirectDropbox(u));
         }
+      }
+      if (Array.isArray(anyResult?.imageInsights)) {
+        anyResult.imageInsights = anyResult.imageInsights
+          .map((ins: any) => {
+            if (!ins || typeof ins !== "object") return null;
+            const rawUrl = typeof ins.url === "string" ? ins.url : "";
+            if (!rawUrl) return null;
+            return {
+              url: toDirectDropbox(rawUrl),
+              hasVisibleText: typeof ins.hasVisibleText === "boolean" ? ins.hasVisibleText : undefined,
+              dominantColor: typeof ins.dominantColor === "string" ? ins.dominantColor.toLowerCase().trim() : undefined,
+              role: typeof ins.role === "string" ? ins.role.toLowerCase().trim() : undefined,
+            };
+          })
+          .filter(Boolean);
       }
     } catch {}
     if (cacheEligible) {
@@ -200,6 +233,13 @@ async function analyzeBatchViaVision(batch: string[], metadata: Array<{ url: str
   }
 }
 
+export type ImageInsight = {
+  url: string;
+  hasVisibleText?: boolean;
+  dominantColor?: string;
+  role?: string;
+};
+
 export type AnalysisResult = {
   info: string;
   summary: {
@@ -208,6 +248,7 @@ export type AnalysisResult = {
   };
   warnings: string[];
   groups: any[];
+  imageInsights: Record<string, ImageInsight>;
 };
 
 export async function runAnalysis(
@@ -217,6 +258,7 @@ export async function runAnalysis(
 ): Promise<AnalysisResult> {
   const { skipPricing = false } = opts;
   let images = sanitizeUrls(inputUrls).map(toDirectDropbox);
+  const insightMap = new Map<string, ImageInsight>();
 
   if (images.length === 0) {
     return {
@@ -224,6 +266,7 @@ export async function runAnalysis(
       summary: { batches: 0, totalGroups: 0 },
       warnings: ["No valid image URLs"],
       groups: [],
+      imageInsights: {},
     };
   }
 
@@ -272,6 +315,12 @@ export async function runAnalysis(
     if (result?._error) {
       warnings.push(`Batch ${idx + 1}: ${result._error}`);
     }
+    if (Array.isArray((result as any)?.imageInsights)) {
+      for (const insight of (result as any).imageInsights as ImageInsight[]) {
+        if (!insight?.url) continue;
+        insightMap.set(insight.url, insight);
+      }
+    }
     analyzedResults.push(result);
   }
 
@@ -295,6 +344,7 @@ export async function runAnalysis(
       },
       warnings,
       groups: merged.groups,
+      imageInsights: Object.fromEntries(insightMap),
     };
   }
 
@@ -345,5 +395,6 @@ export async function runAnalysis(
     },
     warnings,
     groups: finalGroups,
+    imageInsights: Object.fromEntries(insightMap),
   };
 }
