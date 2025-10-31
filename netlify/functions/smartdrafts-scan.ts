@@ -456,8 +456,8 @@ export const handler: Handler = async (event) => {
     const assignmentCounts = groups.map(() => 0);
     const groupMeta = groups.map((group) => buildGroupMeta(group));
     const tupleInfoCache = new Map<string, TupleTokenInfo>();
-    let reassignedCount = 0;
-    const usedUrls = new Set<string>();
+  let reassignedCount = 0;
+  const usedUrls = new Set<string>();
 
     const pickTargetGroup = (candidates: number[]): number => {
       let best = candidates[0];
@@ -487,6 +487,7 @@ export const handler: Handler = async (event) => {
       const candidates = (urlToGroups.get(url) || []).filter((gi) => assignmentCounts[gi] < 12);
       if (!candidates.length) continue;
       let target = candidates.length === 1 ? candidates[0] : -1;
+      let assignExclusively = candidates.length === 1;
       if (candidates.length > 1) {
         const info = tupleInfoCache.get(url) || buildTupleInfo(tuple);
         if (!tupleInfoCache.has(url)) tupleInfoCache.set(url, info);
@@ -511,13 +512,23 @@ export const handler: Handler = async (event) => {
         }
         if (bestScore <= 0) {
           bestIdx = pickTargetGroup(candidates);
+          assignExclusively = false;
+        } else {
+          assignExclusively = true;
         }
         target = bestIdx;
-        reassignedCount++;
+        if (assignExclusively) reassignedCount++;
       }
-      assignedByGroup[target].push(url);
-      assignmentCounts[target] = assignedByGroup[target].length;
-      usedUrls.add(url);
+      if (assignExclusively) {
+        assignedByGroup[target].push(url);
+        assignmentCounts[target] = Math.min(12, assignedByGroup[target].length);
+        usedUrls.add(url);
+      } else {
+        for (const idx of candidates) {
+          assignedByGroup[idx].push(url);
+          assignmentCounts[idx] = Math.min(12, assignedByGroup[idx].length);
+        }
+      }
     }
 
     const normalizedGroups = groups.map((group, gi) => {
