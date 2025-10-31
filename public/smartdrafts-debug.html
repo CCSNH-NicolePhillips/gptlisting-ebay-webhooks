@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>SmartDrafts Debug</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        margin: 24px;
+        color: #111;
+        background: #fafafa;
+      }
+      h1 {
+        margin-top: 0;
+      }
+      .panel {
+        border: 1px solid #e5e5e5;
+        border-radius: 12px;
+        padding: 16px;
+        background: #fff;
+        box-shadow: 0 1px 2px rgba(17, 17, 17, 0.05);
+      }
+      .panel label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 6px;
+      }
+      input[type="text"],
+      input[type="number"] {
+        width: 100%;
+        padding: 8px 10px;
+        border: 1px solid #d0d0d0;
+        border-radius: 8px;
+        font-size: 15px;
+        box-sizing: border-box;
+      }
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+        margin-top: 12px;
+      }
+      button {
+        padding: 8px 16px;
+        border-radius: 8px;
+        border: 1px solid #111;
+        background: #111;
+        color: #fff;
+        cursor: pointer;
+        font-weight: 600;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .muted {
+        color: #666;
+        font-size: 14px;
+      }
+      .grid {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        margin-top: 16px;
+      }
+      .card {
+        border: 1px solid #ececec;
+        border-radius: 12px;
+        padding: 12px;
+        background: #fff;
+        box-shadow: 0 1px 2px rgba(17, 17, 17, 0.04);
+      }
+      .card h3 {
+        margin: 0 0 6px;
+        font-size: 18px;
+      }
+      .thumbs {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-top: 8px;
+      }
+      .thumbs img {
+        width: 72px;
+        height: 72px;
+        object-fit: cover;
+        border-radius: 8px;
+        border: 1px solid #ddd;
+        background: #f3f3f3;
+      }
+      pre.raw {
+        white-space: pre-wrap;
+        word-break: break-word;
+        background: #111;
+        color: #e6e6e6;
+        padding: 12px;
+        border-radius: 8px;
+        max-height: 320px;
+        overflow: auto;
+        font-size: 13px;
+      }
+      details {
+        background: #f9f9f9;
+        border-radius: 8px;
+        border: 1px solid #ececec;
+        padding: 8px 10px;
+        margin-top: 8px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 8px;
+        font-size: 13px;
+      }
+      table th,
+      table td {
+        border: 1px solid #e0e0e0;
+        padding: 6px 8px;
+        text-align: left;
+      }
+      table th {
+        background: #f5f5f5;
+      }
+      .flex-gap {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .badge {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 999px;
+        background: #eef2ff;
+        color: #3446a0;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .section-title {
+        margin-top: 32px;
+        margin-bottom: 12px;
+      }
+      .hidden {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <script src="/auth-client.js"></script>
+    <h1>SmartDrafts Debug</h1>
+    <p class="muted">Run <code>smartdrafts-scan</code> against any Dropbox folder and inspect image assignments, debug scores, and orphaned assets.</p>
+
+    <div class="panel">
+      <label for="folderPath">Dropbox folder path</label>
+      <input id="folderPath" type="text" placeholder="/Path/To/Folder" autocomplete="off" />
+      <div class="controls">
+        <label class="muted" style="display:flex;align-items:center;gap:6px;">
+          <input id="forceRescan" type="checkbox" /> Force rescan
+        </label>
+        <label class="muted" style="display:flex;align-items:center;gap:6px;">
+          <input id="debugMode" type="checkbox" checked /> Include debug payload
+        </label>
+        <label class="muted" style="display:flex;align-items:center;gap:6px;">
+          Limit
+          <input id="limitInput" type="number" min="1" max="100" value="60" style="width:90px;" />
+        </label>
+        <button id="btnRun">Run Scan</button>
+        <button id="btnCopyRaw" type="button" title="Copy raw JSON" disabled>Copy JSON</button>
+      </div>
+      <div id="status" class="muted" style="margin-top:8px;"></div>
+    </div>
+
+    <div id="warnings" class="muted" style="margin-top:12px;"></div>
+
+    <h2 class="section-title">Groups</h2>
+    <div id="groupsGrid" class="grid"></div>
+
+    <h2 class="section-title">Debug Candidates</h2>
+    <div id="debugSection" class="muted hidden">Enable debug payload to see candidate scoring.</div>
+    <div id="debugGroups" class="grid"></div>
+
+    <h2 class="section-title">Orphan Images</h2>
+    <div id="orphansInfo" class="muted"></div>
+    <div id="orphansGrid" class="grid"></div>
+
+    <h2 class="section-title">Raw Response</h2>
+    <pre id="rawOutput" class="raw">Run a scan to populate this section.</pre>
+
+    <script type="module">
+      const qs = (sel) => document.querySelector(sel);
+      const pathInput = qs('#folderPath');
+      const forceCheck = qs('#forceRescan');
+      const debugCheck = qs('#debugMode');
+      const limitInput = qs('#limitInput');
+      const btnRun = qs('#btnRun');
+      const btnCopyRaw = qs('#btnCopyRaw');
+      const statusEl = qs('#status');
+      const warningsEl = qs('#warnings');
+      const groupsGrid = qs('#groupsGrid');
+      const debugSection = qs('#debugSection');
+      const debugGrid = qs('#debugGroups');
+      const orphansInfo = qs('#orphansInfo');
+      const orphansGrid = qs('#orphansGrid');
+      const rawOutput = qs('#rawOutput');
+
+      let lastResponse = null;
+
+      function setStatus(text) {
+        if (!statusEl) return;
+        statusEl.textContent = text || '';
+      }
+
+      function setWarnings(list) {
+        if (!warningsEl) return;
+        const items = Array.isArray(list) ? list.filter(Boolean) : [];
+        if (!items.length) {
+          warningsEl.textContent = '';
+          warningsEl.style.display = 'none';
+          return;
+        }
+        warningsEl.style.display = 'block';
+        warningsEl.innerHTML = items.map((msg) => `<div>• ${String(msg).replace(/[<>]/g, '')}</div>`).join('');
+      }
+
+      function renderGroups(groups) {
+        if (!groupsGrid) return;
+        groupsGrid.innerHTML = '';
+        const list = Array.isArray(groups) ? groups : [];
+        if (!list.length) {
+          groupsGrid.innerHTML = '<div class="muted">No groups returned.</div>';
+          return;
+        }
+        list.forEach((group) => {
+          const card = document.createElement('div');
+          card.className = 'card';
+          const nameParts = [group?.brand, group?.product].filter((part) => typeof part === 'string' && part.trim());
+          const title = nameParts.length ? nameParts.join(' — ') : group?.name || group?.product || 'Group';
+          const claims = Array.isArray(group?.claims) ? group.claims.filter(Boolean) : [];
+          const metaLines = [];
+          if (group?.variant) metaLines.push(`<strong>Variant:</strong> ${group.variant}`);
+          if (group?.size) metaLines.push(`<strong>Size:</strong> ${group.size}`);
+          if (typeof group?.confidence === 'number') metaLines.push(`<strong>Confidence:</strong> ${group.confidence}`);
+          if (group?.folder) metaLines.push(`<strong>Folder:</strong> ${group.folder}`);
+
+          card.innerHTML = `
+            <h3>${title}</h3>
+            <div class="muted">Group ID: ${group?.groupId || '—'}</div>
+            <div class="muted" style="margin-top:6px;">${metaLines.join(' · ') || 'No metadata'}</div>
+          `;
+
+          const thumbWrap = document.createElement('div');
+          thumbWrap.className = 'thumbs';
+          (Array.isArray(group?.images) ? group.images : []).slice(0, 8).forEach((url) => {
+            const img = document.createElement('img');
+            img.src = url;
+            img.alt = 'Group image';
+            thumbWrap.appendChild(img);
+          });
+          card.appendChild(thumbWrap);
+
+          if (claims.length) {
+            const claimWrap = document.createElement('div');
+            claimWrap.className = 'flex-gap';
+            claimWrap.style.marginTop = '8px';
+            claims.slice(0, 8).forEach((claim) => {
+              const span = document.createElement('span');
+              span.className = 'badge';
+              span.textContent = claim;
+              claimWrap.appendChild(span);
+            });
+            card.appendChild(claimWrap);
+          }
+
+          const details = document.createElement('details');
+          const summary = document.createElement('summary');
+          summary.textContent = 'View raw group JSON';
+          const pre = document.createElement('pre');
+          pre.className = 'raw';
+          pre.style.background = '#f4f4f4';
+          pre.style.color = '#222';
+          pre.style.maxHeight = '200px';
+          pre.textContent = JSON.stringify(group, null, 2);
+          details.appendChild(summary);
+          details.appendChild(pre);
+          card.appendChild(details);
+
+          groupsGrid.appendChild(card);
+        });
+      }
+
+      function renderDebug(debug) {
+        if (!debugSection || !debugGrid) return;
+        debugGrid.innerHTML = '';
+        if (!debug || !Array.isArray(debug?.groups) || !debug.groups.length) {
+          debugSection.classList.remove('hidden');
+          debugSection.textContent = debugCheck?.checked
+            ? 'No debug candidates returned.'
+            : 'Enable debug payload to see candidate scoring.';
+          return;
+        }
+        debugSection.classList.add('hidden');
+        debug.groups.forEach((entry) => {
+          const card = document.createElement('div');
+          card.className = 'card';
+          const title = document.createElement('h3');
+          title.textContent = entry?.name || entry?.groupId || 'Group';
+          card.appendChild(title);
+          const meta = document.createElement('div');
+          meta.className = 'muted';
+          const clipInfo = debug?.clip
+            ? `CLIP weight ${debug.clip.weight}, min sim ${debug.clip.minSimilarity}`
+            : 'CLIP disabled';
+          meta.textContent = `${clipInfo} · MIN_ASSIGN ${debug?.minAssign}`;
+          card.appendChild(meta);
+
+          const table = document.createElement('table');
+          const thead = document.createElement('thead');
+          thead.innerHTML = `
+            <tr>
+              <th>#</th>
+              <th>Name</th>
+              <th>Total</th>
+              <th>Base</th>
+              <th>Clip</th>
+              <th>Sim</th>
+              <th>Assigned</th>
+            </tr>
+          `;
+          table.appendChild(thead);
+          const tbody = document.createElement('tbody');
+          (Array.isArray(entry?.candidates) ? entry.candidates : []).forEach((cand, idx) => {
+            const tr = document.createElement('tr');
+            const cells = [
+              idx + 1,
+              cand?.name || '(image)',
+              Number(cand?.total ?? 0).toFixed(2),
+              Number(cand?.base ?? 0).toFixed(2),
+              Number(cand?.clipContribution ?? 0).toFixed(2),
+              cand?.clipSimilarity === null || cand?.clipSimilarity === undefined
+                ? '—'
+                : Number(cand.clipSimilarity).toFixed(3),
+              cand?.assigned ? 'yes' : 'no',
+            ];
+            cells.forEach((value) => {
+              const td = document.createElement('td');
+              td.textContent = value;
+              tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+          });
+          table.appendChild(tbody);
+
+          const details = document.createElement('details');
+          const summary = document.createElement('summary');
+          summary.textContent = 'Show candidate JSON';
+          const pre = document.createElement('pre');
+          pre.className = 'raw';
+          pre.style.background = '#f4f4f4';
+          pre.style.color = '#222';
+          pre.style.maxHeight = '200px';
+          pre.textContent = JSON.stringify(entry?.candidates || [], null, 2);
+          details.appendChild(summary);
+          details.appendChild(pre);
+
+          card.appendChild(table);
+          card.appendChild(details);
+          debugGrid.appendChild(card);
+        });
+      }
+
+      function renderOrphans(list) {
+        if (!orphansGrid || !orphansInfo) return;
+        const items = Array.isArray(list) ? list : [];
+        orphansGrid.innerHTML = '';
+        if (!items.length) {
+          orphansInfo.textContent = 'No orphan images.';
+          return;
+        }
+        orphansInfo.textContent = `${items.length} image${items.length === 1 ? '' : 's'} were not assigned to any group.`;
+        items.forEach((item) => {
+          const card = document.createElement('div');
+          card.className = 'card';
+          const title = document.createElement('h3');
+          title.textContent = item?.name || 'Image';
+          card.appendChild(title);
+          const meta = document.createElement('div');
+          meta.className = 'muted';
+          meta.textContent = item?.folder ? `Folder: ${item.folder}` : 'Folder unknown';
+          card.appendChild(meta);
+          if (item?.url) {
+            const img = document.createElement('img');
+            img.src = item.url;
+            img.alt = item?.name || 'Orphan image';
+            img.style.width = '100%';
+            img.style.maxWidth = '320px';
+            img.style.borderRadius = '12px';
+            img.style.marginTop = '8px';
+            img.style.border = '1px solid #ddd';
+            card.appendChild(img);
+          }
+          orphansGrid.appendChild(card);
+        });
+      }
+
+      function renderRaw(response) {
+        if (!rawOutput) return;
+        rawOutput.textContent = response ? JSON.stringify(response, null, 2) : 'No data.';
+      }
+
+      async function runScan() {
+        const path = (pathInput?.value || '').trim();
+        if (!path) {
+          setStatus('Enter a Dropbox folder path first.');
+          return;
+        }
+        const limitRaw = Number(limitInput?.value ?? 0);
+        const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 100) : 60;
+        const payload = { path, limit };
+        if (forceCheck?.checked) payload.force = true;
+        if (debugCheck?.checked) payload.debug = true;
+        setStatus('Scanning…');
+        setWarnings([]);
+        groupsGrid.innerHTML = '';
+        debugGrid.innerHTML = '';
+        orphansGrid.innerHTML = '';
+        orphansInfo.textContent = '';
+        btnRun.disabled = true;
+        btnCopyRaw.disabled = true;
+        renderRaw(null);
+        lastResponse = null;
+        try {
+          const ok = await (window.authClient?.requireAuth?.() ?? Promise.resolve(false));
+          if (!ok) {
+            setStatus('Authentication required.');
+            return;
+          }
+          const exec = window.authClient?.authFetch ?? fetch;
+          const res = await exec('/.netlify/functions/smartdrafts-scan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          const json = await res.json().catch(() => ({}));
+          lastResponse = json;
+          btnCopyRaw.disabled = !json;
+          if (!res.ok || !json?.ok) {
+            const message = json?.error || `Scan failed (${res.status})`;
+            setStatus(`Error: ${message}`);
+            setWarnings([]);
+            renderRaw(json);
+            return;
+          }
+          const groups = Array.isArray(json.groups) ? json.groups : [];
+          setStatus(`Found ${groups.length} group${groups.length === 1 ? '' : 's'} in ${json.folder || path}.`);
+          setWarnings(json.warnings);
+          renderGroups(groups);
+          renderDebug(json.debug);
+          renderOrphans(json.orphans);
+          renderRaw(json);
+        } catch (err) {
+          setStatus(`Error: ${err?.message || err}`);
+          setWarnings([]);
+        } finally {
+          btnRun.disabled = false;
+        }
+      }
+
+      btnRun?.addEventListener('click', runScan);
+      btnCopyRaw?.addEventListener('click', async () => {
+        if (!lastResponse) return;
+        try {
+          await navigator.clipboard.writeText(JSON.stringify(lastResponse, null, 2));
+          setStatus('Copied response JSON to clipboard.');
+          setTimeout(() => setStatus(''), 1500);
+        } catch (err) {
+          setStatus(`Copy failed: ${err?.message || err}`);
+        }
+      });
+
+      // Support ?path=/foo&force=1&debug=1
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const initialPath = params.get('path');
+        if (initialPath) {
+          if (pathInput) pathInput.value = initialPath;
+        }
+        if (params.get('force') === '1') {
+          if (forceCheck) forceCheck.checked = true;
+        }
+        if (params.get('debug') === '0') {
+          if (debugCheck) debugCheck.checked = false;
+        }
+        const limitParam = Number(params.get('limit'));
+        if (Number.isFinite(limitParam) && limitParam > 0) {
+          if (limitInput) limitInput.value = String(Math.min(limitParam, 100));
+        }
+        if (initialPath) {
+          runScan();
+        }
+      } catch {}
+    </script>
+  </body>
+</html>
