@@ -371,11 +371,13 @@ export const handler: Handler = async (event) => {
       }, originHdr, METHODS);
     }
 
-    const allowed = await canConsumeImages(user.userId, urls.length);
-    if (!allowed) {
-      return jsonResponse(429, { ok: false, error: "Daily image quota exceeded" }, originHdr, METHODS);
+    if (!debugEnabled) {
+      const allowed = await canConsumeImages(user.userId, urls.length);
+      if (!allowed) {
+        return jsonResponse(429, { ok: false, error: "Daily image quota exceeded" }, originHdr, METHODS);
+      }
+      await consumeImages(user.userId, urls.length);
     }
-    await consumeImages(user.userId, urls.length);
 
     const analysis = await runAnalysis(urls, 12, { skipPricing: true, metadata: analysisMeta });
     const insightMap = new Map<string, ImageInsight>();
