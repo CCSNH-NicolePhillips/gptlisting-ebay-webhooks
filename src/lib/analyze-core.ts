@@ -10,6 +10,12 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function envFlag(value?: string | null): boolean {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized.length > 0 && ["1", "true", "yes", "on"].includes(normalized);
+}
+
 type RetryOptions = {
   maxRetries?: number;
   baseDelayMs?: number;
@@ -119,8 +125,8 @@ async function verifyUrl(url: string): Promise<boolean> {
   }
 }
 
-const BYPASS_VISION_CACHE = (process.env.VISION_BYPASS_CACHE || "false").toLowerCase() === "true";
-const LOG_VISION_RESPONSES = (process.env.VISION_LOG_RESPONSES || process.env.SMARTDRAFT_LOG_VISION || "false").toLowerCase() === "true";
+const BYPASS_VISION_CACHE = envFlag(process.env.VISION_BYPASS_CACHE);
+const LOG_VISION_RESPONSES = envFlag(process.env.VISION_LOG_RESPONSES || process.env.SMARTDRAFT_LOG_VISION);
 
 async function analyzeBatchViaVision(
   batch: string[],
@@ -373,8 +379,8 @@ export async function runAnalysis(
   const { skipPricing = false, metadata, debugVisionResponse = false } = opts;
   let images = sanitizeUrls(inputUrls).map(toDirectDropbox);
   const insightMap = new Map<string, ImageInsight>();
-  const useLegacyAssignment = (process.env.USE_LEGACY_IMAGE_ASSIGNMENT || "false").toLowerCase() === "true";
-  const visionSortDebug = (process.env.VISION_SORT_DEBUG || "false").toLowerCase() === "true";
+  const useLegacyAssignment = envFlag(process.env.USE_LEGACY_IMAGE_ASSIGNMENT);
+  const visionSortDebug = envFlag(process.env.VISION_SORT_DEBUG);
   const minScoreEnv = Number(process.env.VISION_SORT_MIN_SIM);
   const visionSortMinScore = Number.isFinite(minScoreEnv) ? minScoreEnv : undefined;
 
