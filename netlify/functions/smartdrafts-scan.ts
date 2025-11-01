@@ -73,6 +73,14 @@ type AnalyzedGroup = {
   [key: string]: unknown;
 };
 
+type CandidateDetail = {
+  url: string;
+  name: string;
+  folder: string;
+  order: number;
+  ocrText: string;
+};
+
 const METHODS = "POST, OPTIONS";
 const MAX_IMAGES = Math.max(1, Math.min(100, Number(process.env.SMARTDRAFT_MAX_IMAGES || 100)));
 
@@ -476,6 +484,7 @@ export const handler: Handler = async (event) => {
       "_bg",
     ]);
 
+  const STRICT_TWO_IF_SMALL = (process.env.STRICT_TWO_IF_SMALL ?? "true").toLowerCase() === "true";
   const CLIP_WEIGHT_RAW = Number(process.env.CLIP_WEIGHT ?? 20);
   const CLIP_WEIGHT = Number.isFinite(CLIP_WEIGHT_RAW) ? CLIP_WEIGHT_RAW : 20;
   const CLIP_MIN_SIM_RAW = Number(process.env.CLIP_MIN_SIM ?? 0.12);
@@ -491,8 +500,8 @@ export const handler: Handler = async (event) => {
   const HERO_WEIGHT = Number.isFinite(HERO_WEIGHT_RAW) ? HERO_WEIGHT_RAW : 0.7;
   const BACK_WEIGHT_RAW = Number(process.env.BACK_WEIGHT ?? 0.3);
   const BACK_WEIGHT = Number.isFinite(BACK_WEIGHT_RAW) ? BACK_WEIGHT_RAW : 0.3;
-  const BACK_MIN_SIM_RAW = Number(process.env.BACK_MIN_SIM ?? 0.4);
-  const BACK_MIN_SIM = Number.isFinite(BACK_MIN_SIM_RAW) ? BACK_MIN_SIM_RAW : 0.4;
+  const BACK_MIN_SIM_RAW = Number(process.env.BACK_MIN_SIM ?? 0.35);
+  const BACK_MIN_SIM = Number.isFinite(BACK_MIN_SIM_RAW) ? BACK_MIN_SIM_RAW : 0.35;
   const BACK_KEYWORDS = (process.env.BACK_KEYWORDS ?? "supplement facts,nutrition facts,ingredients,active ingredients,directions,drug facts")
     .split(",")
     .map((value) => value.trim().toLowerCase())
@@ -538,21 +547,108 @@ export const handler: Handler = async (event) => {
       return { group, index: gi, groupId };
     });
 
-    let firstImageDim = 0;
-    let lastClipError: string | null = null;
+  let firstImageDim = 0;
+  let lastClipError: string | null = null;
+  let clipEnabled = false;
 
     const imageVectorCache = new Map<string, Promise<number[] | null>>();
     const imageVectors = new Map<string, number[] | null>();
     const heroVectors = new Map<string, number[] | null>();
     const backVectors = new Map<string, number[] | null>();
     const heroOwnerByImage = new Map<string, string>();
+    const folderCandidatesByGroup = new Map<string, CandidateDetail[]>();
+  const fallbackAssignments = new Map<string, string[]>();
 
-    const looksLikeBack = (ocrText: string, fileName: string): boolean => {
-      const text = (ocrText || "").toLowerCase();
-      const name = (fileName || "").toLowerCase();
-      if (BACK_KEYWORDS.some((keyword) => keyword && text.includes(keyword))) return true;
-      if (FILENAME_BACK_HINTS.some((hint) => hint && name.includes(hint))) return true;
+    const looksLikeBack = (ocrText: string | undefined, fileName: string | undefined): boolean => {
+      const t = (ocrText || "").toLowerCase();
+      const f = (fileName || "").toLowerCase();
+      if (BACK_KEYWORDS.some((keyword) => keyword && t.includes(keyword))) return true;
+      if (FILENAME_BACK_HINTS.some((hint) => hint && f.includes(hint))) return true;
       return false;
+    };
+
+    const normalizeUrl = (value: unknown): string | null => {
+      if (typeof value === "string" && value.trim()) {
+        return toDirectDropbox(value.trim());
+      }
+      return null;
+    };
+
+    const extractScanSourceImageUrl = (group: AnalyzedGroup): string | null => {
+      const normalize = (value: unknown): string | null => {
+        if (typeof value === "string" && value.trim()) {
+          return toDirectDropbox(value.trim());
+        }
+        return null;
+      };
+
+      const directChecks: unknown[] = [
+        (group as any)?.scanSourceImageUrl,
+        (group as any)?.scan?.sourceImageUrl,
+        (group as any)?.scan?.imageUrl,
+        (group as any)?.seed?.scanSourceImageUrl,
+        (group as any)?.seed?.sourceImageUrl,
+        (group as any)?.seed?.imageUrl,
+        (group as any)?.text?.sourceImageUrl,
+        (group as any)?.text?.imageUrl,
+      ];
+
+      for (const candidate of directChecks) {
+        const found = normalize(candidate);
+        if (found) return found;
+      }
+
+      const arrayChecks: unknown[] = [
+        (group as any)?.scanSources,
+        (group as any)?.textSources,
+        (group as any)?.textAnchors,
+        (group as any)?.texts,
+        (group as any)?.anchors,
+      ];
+
+      for (const collection of arrayChecks) {
+        if (!Array.isArray(collection)) continue;
+        for (const item of collection) {
+          const found =
+            normalize((item as any)?.sourceImageUrl) ||
+            normalize((item as any)?.imageUrl) ||
+            normalize(item);
+          if (found) return found;
+        }
+      }
+
+      return null;
+    };
+
+    const collectGroupTextForImage = (group: AnalyzedGroup, imageUrl: string): string[] => {
+      const normalized = toDirectDropbox(imageUrl);
+      const matches: string[] = [];
+      const maybeCollections: unknown[] = [
+        (group as any)?.textSources,
+        (group as any)?.textAnchors,
+        (group as any)?.texts,
+        (group as any)?.scanSources,
+      ];
+
+      for (const collection of maybeCollections) {
+        if (!Array.isArray(collection)) continue;
+        for (const item of collection) {
+          const sourceUrl = normalizeUrl((item as any)?.sourceImageUrl) || normalizeUrl((item as any)?.imageUrl);
+          if (sourceUrl && sourceUrl === normalized) {
+            const textFields = [
+              (item as any)?.text,
+              (item as any)?.content,
+              (item as any)?.value,
+              (item as any)?.label,
+            ];
+            for (const field of textFields) {
+              if (typeof field === "string" && field.trim()) matches.push(field.trim());
+            }
+          }
+        }
+      }
+
+      return matches;
     };
 
     const getImageVector = (url: string): Promise<number[] | null> => {
@@ -584,41 +680,60 @@ export const handler: Handler = async (event) => {
         .map((img: unknown) => (typeof img === "string" ? toDirectDropbox(img) : ""))
         .filter((img: string) => img.length > 0);
 
+      const scanSource = extractScanSourceImageUrl(group);
       let heroUrl = typeof group?.heroUrl === "string" && group.heroUrl ? toDirectDropbox(group.heroUrl) : "";
+      if (!heroUrl && scanSource) heroUrl = scanSource;
       if (!heroUrl) heroUrl = cleaned[0] || "";
       if (heroUrl) {
         group.heroUrl = heroUrl;
         heroOwnerByImage.set(heroUrl, groupId);
-        if (!cleaned.includes(heroUrl)) cleaned.unshift(heroUrl);
+        const existingIndex = cleaned.indexOf(heroUrl);
+        if (existingIndex === -1) cleaned.unshift(heroUrl);
+        else if (existingIndex > 0) {
+          cleaned.splice(existingIndex, 1);
+          cleaned.unshift(heroUrl);
+        }
       } else {
         group.heroUrl = undefined;
       }
 
-      const candidateDetails = cleaned.map((url) => {
+      const candidateDetails: CandidateDetail[] = cleaned.map((url) => {
         const tuple = tupleByUrl.get(url);
         const entry = tuple?.entry;
         const name = entry?.name || "";
-        const insight = insightMap.get(url);
+        const insight = insightMap.get(url) as any;
         const textParts: string[] = [];
-        if (insight?.role) textParts.push(insight.role);
+        if (typeof insight?.ocrText === "string") textParts.push(insight.ocrText);
+        if (Array.isArray(insight?.textBlocks)) textParts.push(insight.textBlocks.join(" "));
+        if (insight?.role) textParts.push(String(insight.role));
         if (insight?.hasVisibleText) textParts.push("visible text");
+        const groupedText = collectGroupTextForImage(group, url);
+        if (groupedText.length) textParts.push(groupedText.join(" "));
         return {
           url,
           name,
-          insight,
-          ocrText: textParts.join(" "),
+          folder: entry ? folderPath(entry) || folder : folder,
+          order: urlOrder.has(url) ? urlOrder.get(url)! : Number.MAX_SAFE_INTEGER,
+          ocrText: textParts.join(" ").trim(),
         };
       });
 
+      const heroUrlCurrent = group.heroUrl || "";
+      const heroEntry = heroUrlCurrent ? tupleByUrl.get(heroUrlCurrent) : undefined;
+      const heroFolder = heroEntry?.entry
+        ? folderPath(heroEntry.entry) || folder
+        : (typeof group?.folder === "string" && group.folder) || candidateDetails[0]?.folder || folder;
+      const groupCandidates = candidateDetails.filter((candidate) => candidate.folder === heroFolder);
+      folderCandidatesByGroup.set(groupId, groupCandidates);
+      const folderCandidates = groupCandidates.filter((candidate) => candidate.url !== heroUrlCurrent);
+
       const heroVec = group.heroUrl ? await getImageVector(group.heroUrl) : null;
 
-      const heroUrlCurrent = group.heroUrl || "";
-      const nonHero = candidateDetails.filter((candidate) => candidate.url !== heroUrlCurrent);
-      let backGuess = nonHero.find((candidate) => looksLikeBack(candidate.ocrText, candidate.name));
+      let backGuess = folderCandidates.find((candidate) => looksLikeBack(candidate.ocrText, candidate.name));
 
-      if (!backGuess && heroVec) {
+      if (!backGuess && heroVec && folderCandidates.length) {
         const scored = await Promise.all(
-          nonHero.map(async (candidate) => {
+          folderCandidates.map(async (candidate) => {
             const vec = await getImageVector(candidate.url);
             const sim = vec && heroVec && vec.length === heroVec.length ? cosine(vec, heroVec) : 0;
             const len = (candidate.ocrText || "").length;
@@ -637,6 +752,8 @@ export const handler: Handler = async (event) => {
       if (backGuess) {
         group.backUrl = backGuess.url;
         await getImageVector(backGuess.url);
+      } else if (typeof group.backUrl === "string" && group.backUrl) {
+        group.backUrl = toDirectDropbox(group.backUrl);
       } else {
         group.backUrl = undefined;
       }
@@ -652,6 +769,43 @@ export const handler: Handler = async (event) => {
       await mapLimit(fileTuples, 4, async (tuple) => {
         await getImageVector(tuple.url);
       });
+    }
+    clipEnabled = firstImageDim > 0;
+    if (!clipEnabled && !lastClipError) {
+      lastClipError = "Image embedding unavailable";
+    }
+
+    if (!clipEnabled) {
+      for (const { group, groupId } of allGroups) {
+        const heroUrl = typeof group?.heroUrl === "string" ? group.heroUrl : "";
+        const folderCandidates = folderCandidatesByGroup.get(groupId) || [];
+        const folderUrls = [heroUrl, ...folderCandidates.map((candidate) => candidate.url)].filter(
+          (url): url is string => Boolean(url)
+        );
+
+        let second: string | undefined;
+        if (typeof group?.backUrl === "string" && group.backUrl && group.backUrl !== heroUrl) {
+          second = group.backUrl;
+        }
+        if (!second) {
+          const hinted = folderCandidates.find((candidate) => looksLikeBack(candidate.ocrText, candidate.name));
+          if (hinted) second = hinted.url;
+        }
+        if (!second) {
+          second = folderUrls.find((url) => url !== heroUrl);
+        }
+
+        const fallbackPrimary = [heroUrl, second].filter((url): url is string => Boolean(url));
+        const fallbackImages = STRICT_TWO_IF_SMALL
+          ? fallbackPrimary.slice(0, 2)
+          : Array.from(new Set(folderUrls.length ? folderUrls : fallbackPrimary));
+
+        const uniqueFallback = Array.from(new Set(fallbackImages.length ? fallbackImages : fallbackPrimary));
+        group.backUrl = uniqueFallback.length > 1 ? uniqueFallback[1] : undefined;
+
+        group.images = uniqueFallback;
+        fallbackAssignments.set(groupId, uniqueFallback);
+      }
     }
 
     const looksDummyByMeta = (entry: DropboxEntry): boolean => {
@@ -745,7 +899,7 @@ export const handler: Handler = async (event) => {
       let simHero = 0;
       let simBack = 0;
       let clipSim = 0;
-      if (CLIP_WEIGHT > 0) {
+      if (CLIP_WEIGHT > 0 && clipEnabled) {
         const heroVec = heroVectors.get(groupId) || null;
         const backVec = backVectors.get(groupId) || null;
         const imgVec = imageVectors.get(tuple.url) ?? null;
@@ -755,7 +909,7 @@ export const handler: Handler = async (event) => {
       }
 
       let clipContribution = 0;
-      if (CLIP_WEIGHT > 0 && clipSim >= CLIP_MIN_SIM) {
+      if (CLIP_WEIGHT > 0 && clipEnabled && clipSim >= CLIP_MIN_SIM) {
         clipContribution = Math.round(clipSim * CLIP_WEIGHT);
       }
 
@@ -835,116 +989,127 @@ export const handler: Handler = async (event) => {
     const assignedImageTo = new Map<string, string>();
     const dupesUsed = new Map<string, number>();
 
-    const ensureGroupSet = (groupId: string): Set<string> => {
-      let set = assignedByGroup.get(groupId);
-      if (!set) {
-        set = new Set<string>();
-        assignedByGroup.set(groupId, set);
-      }
-      return set;
-    };
+    if (clipEnabled) {
+      const ensureGroupSet = (groupId: string): Set<string> => {
+        let set = assignedByGroup.get(groupId);
+        if (!set) {
+          set = new Set<string>();
+          assignedByGroup.set(groupId, set);
+        }
+        return set;
+      };
 
-    const addToGroup = (groupId: string, imageUrl: string): boolean => {
-      const set = ensureGroupSet(groupId);
-      const before = set.size;
-      set.add(imageUrl);
-      assignedImageTo.set(imageUrl, groupId);
-      return set.size !== before;
-    };
+      const addToGroup = (groupId: string, imageUrl: string): boolean => {
+        const set = ensureGroupSet(groupId);
+        const before = set.size;
+        set.add(imageUrl);
+        assignedImageTo.set(imageUrl, groupId);
+        return set.size !== before;
+      };
 
-    const canUseDuplicate = (groupId: string) => {
-      const used = dupesUsed.get(groupId) ?? 0;
-      return used < MAX_DUPES_PER_GROUP;
-    };
+      const canUseDuplicate = (groupId: string) => {
+        const used = dupesUsed.get(groupId) ?? 0;
+        return used < MAX_DUPES_PER_GROUP;
+      };
 
-    if (HERO_LOCK) {
-      for (const { group, groupId } of allGroups) {
-        if (group.heroUrl) {
-          addToGroup(groupId, group.heroUrl);
+      if (HERO_LOCK) {
+        for (const { group, groupId } of allGroups) {
+          if (group.heroUrl) {
+            addToGroup(groupId, group.heroUrl);
+          }
         }
       }
-    }
-
-    // Pass A: decisive winners claim their images outright.
-    for (const [imageUrl, ranks] of ranksByImage.entries()) {
-      if (!ranks.length) continue;
-      const best = ranks[0];
-      const next = ranks[1];
-      const decisive = !next || best.sim - next.sim >= CLIP_MARGIN;
-      if (decisive && !assignedImageTo.has(imageUrl)) {
-        addToGroup(best.groupId, imageUrl);
-      }
-    }
-
-    // Pass B: satisfy minimum coverage, allowing limited duplicates when required.
-    for (const { groupId } of allGroups) {
-      const set = ensureGroupSet(groupId);
-      let remaining = Math.max(0, MIN_ASSIGN - set.size);
-      if (!remaining) continue;
 
       for (const [imageUrl, ranks] of ranksByImage.entries()) {
-        if (remaining <= 0) break;
-        const rank = ranks.find((entry) => entry.groupId === groupId);
-        if (!rank || rank.sim < CLIP_MIN_SIM) continue;
+        if (!ranks.length) continue;
+        const best = ranks[0];
+        const next = ranks[1];
+        const decisive = !next || best.sim - next.sim >= CLIP_MARGIN;
+        if (decisive && !assignedImageTo.has(imageUrl)) {
+          addToGroup(best.groupId, imageUrl);
+        }
+      }
 
-        const existing = assignedImageTo.get(imageUrl);
-        if (!existing) {
-          if (addToGroup(groupId, imageUrl)) remaining--;
+      for (const { groupId } of allGroups) {
+        const set = ensureGroupSet(groupId);
+        let remaining = Math.max(0, MIN_ASSIGN - set.size);
+        if (!remaining) continue;
+
+        for (const [imageUrl, ranks] of ranksByImage.entries()) {
+          if (remaining <= 0) break;
+          const rank = ranks.find((entry) => entry.groupId === groupId);
+          if (!rank || rank.sim < CLIP_MIN_SIM) continue;
+
+          const existing = assignedImageTo.get(imageUrl);
+          if (!existing) {
+            if (addToGroup(groupId, imageUrl)) remaining--;
+            continue;
+          }
+
+          if (existing === groupId) continue;
+          if (!canUseDuplicate(groupId)) continue;
+          const beforeCount = set.size;
+          set.add(imageUrl);
+          if (set.size !== beforeCount) {
+            dupesUsed.set(groupId, (dupesUsed.get(groupId) ?? 0) + 1);
+            remaining--;
+          }
+        }
+      }
+
+      for (const [imageUrl, ranks] of ranksByImage.entries()) {
+        const holders = allGroups.filter((entry) => ensureGroupSet(entry.groupId).has(imageUrl));
+        if (holders.length <= 1) {
+          if (holders.length === 1) assignedImageTo.set(imageUrl, holders[0].groupId);
           continue;
         }
 
-        if (existing === groupId) continue;
-        if (!canUseDuplicate(groupId)) continue;
-        const beforeCount = set.size;
-        set.add(imageUrl);
-        if (set.size !== beforeCount) {
-          dupesUsed.set(groupId, (dupesUsed.get(groupId) ?? 0) + 1);
-          remaining--;
-        }
-      }
-    }
-
-    // Pass C: resolve conflicts by similarity and scarcity.
-    for (const [imageUrl, ranks] of ranksByImage.entries()) {
-      const holders = allGroups.filter((entry) => ensureGroupSet(entry.groupId).has(imageUrl));
-      if (holders.length <= 1) {
-        if (holders.length === 1) assignedImageTo.set(imageUrl, holders[0].groupId);
-        continue;
-      }
-
-      const heroOwner = HERO_LOCK ? heroOwnerByImage.get(imageUrl) : undefined;
-      if (heroOwner) {
-        assignedImageTo.set(imageUrl, heroOwner);
-        for (const holder of holders) {
-          if (holder.groupId !== heroOwner) {
-            ensureGroupSet(holder.groupId).delete(imageUrl);
+        const heroOwner = HERO_LOCK ? heroOwnerByImage.get(imageUrl) : undefined;
+        if (heroOwner) {
+          assignedImageTo.set(imageUrl, heroOwner);
+          for (const holder of holders) {
+            if (holder.groupId !== heroOwner) {
+              ensureGroupSet(holder.groupId).delete(imageUrl);
+            }
           }
+          continue;
         }
-        continue;
+
+        holders.sort((g1, g2) => {
+          const s1 = ranks.find((r) => r.groupId === g1.groupId)?.sim ?? 0;
+          const s2 = ranks.find((r) => r.groupId === g2.groupId)?.sim ?? 0;
+          if (Math.abs(s2 - s1) > 1e-6) return s2 - s1;
+          const c1 = ensureGroupSet(g1.groupId).size;
+          const c2 = ensureGroupSet(g2.groupId).size;
+          return c1 - c2;
+        });
+
+        const keeper = holders[0].groupId;
+        assignedImageTo.set(imageUrl, keeper);
+        for (let i = 1; i < holders.length; i++) {
+          ensureGroupSet(holders[i].groupId).delete(imageUrl);
+        }
       }
 
-      holders.sort((g1, g2) => {
-        const s1 = ranks.find((r) => r.groupId === g1.groupId)?.sim ?? 0;
-        const s2 = ranks.find((r) => r.groupId === g2.groupId)?.sim ?? 0;
-        if (Math.abs(s2 - s1) > 1e-6) return s2 - s1;
-        const c1 = ensureGroupSet(g1.groupId).size;
-        const c2 = ensureGroupSet(g2.groupId).size;
-        return c1 - c2;
-      });
-
-      const keeper = holders[0].groupId;
-      assignedImageTo.set(imageUrl, keeper);
-      for (let i = 1; i < holders.length; i++) {
-        ensureGroupSet(holders[i].groupId).delete(imageUrl);
+      for (const { groupId } of allGroups) {
+        const set = assignedByGroup.get(groupId);
+        if (!set) continue;
+        for (const imageUrl of set) {
+          if (!assignedImageTo.has(imageUrl)) assignedImageTo.set(imageUrl, groupId);
+        }
       }
-    }
-
-    // Ensure every retained image has a recorded owner post-resolution.
-    for (const { groupId } of allGroups) {
-      const set = assignedByGroup.get(groupId);
-      if (!set) continue;
-      for (const imageUrl of set) {
-        if (!assignedImageTo.has(imageUrl)) assignedImageTo.set(imageUrl, groupId);
+    } else {
+      for (const { group, groupId } of allGroups) {
+        const fallback = fallbackAssignments.get(groupId) || (
+          Array.isArray(group?.images) ? group.images.slice(0, STRICT_TWO_IF_SMALL ? 2 : group.images.length) : []
+        );
+        const uniqueSet = new Set<string>();
+        for (const url of fallback) {
+          if (!url) continue;
+          uniqueSet.add(url);
+          assignedImageTo.set(url, groupId);
+        }
+        assignedByGroup.set(groupId, uniqueSet);
       }
     }
 
@@ -1063,6 +1228,10 @@ export const handler: Handler = async (event) => {
           name: displayName,
           heroUrl: typeof group?.heroUrl === "string" ? group.heroUrl : null,
           backUrl: typeof group?.backUrl === "string" ? group.backUrl : null,
+          clipEnabled,
+          reason: clipEnabled
+            ? "CLIP image enabled"
+            : "CLIP image disabled; used fallback (hero + back hint)",
           candidates: entries.slice(0, 20),
         };
       });
@@ -1073,7 +1242,7 @@ export const handler: Handler = async (event) => {
         weight: CLIP_WEIGHT,
         minSimilarity: CLIP_MIN_SIM,
         imgDim: firstImageDim,
-        enabled: Boolean(firstImageDim),
+        enabled: clipEnabled,
         anchors: {
           heroWeight: HERO_WEIGHT,
           backWeight: BACK_WEIGHT,
