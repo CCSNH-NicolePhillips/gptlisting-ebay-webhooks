@@ -6,7 +6,8 @@ import { tokensStore } from "../../src/lib/_blobs.js";
 import { userScopedKey } from "../../src/lib/_auth.js";
 import { runAnalysis } from "../../src/lib/analyze-core.js";
 import type { ImageInsight } from "../../src/lib/image-insight.js";
-import { getTextEmb, getImageEmb, cosine } from "../../src/lib/clip-provider.js";
+import { getTextEmb, getImageEmb } from "../../src/lib/clip-provider.js";
+import { cosine } from "../../src/lib/clip-client.js";
 import { sanitizeUrls, toDirectDropbox } from "../../src/lib/merge.js";
 import { canConsumeImages, consumeImages } from "../../src/lib/quota.js";
 import {
@@ -510,11 +511,20 @@ export const handler: Handler = async (event) => {
       return "product";
     });
 
+    let firstTextDim = 0;
+    let firstImageDim = 0;
+    let lastClipError: string | null = null;
+
     const textEmbeddings = await Promise.all(
       groupPrompts.map(async (prompt) => {
         try {
-          return await getTextEmb(prompt);
-        } catch {
+          const vector = await getTextEmb(prompt);
+          if (vector && !firstTextDim) firstTextDim = vector.length;
+          return vector;
+        } catch (err: any) {
+          if (!lastClipError) {
+            lastClipError = err?.message ? String(err.message) : String(err ?? "text embedding failed");
+          }
           return null;
         }
       })
@@ -531,7 +541,17 @@ export const handler: Handler = async (event) => {
     const getImageEmbedding = (url: string): Promise<number[] | null> => {
       const normalized = toDirectDropbox(url);
       if (!imageEmbeddingCache.has(normalized)) {
-        const promise = getImageEmb(normalized).catch(() => null);
+        const promise = getImageEmb(normalized)
+          .then((vector) => {
+            if (vector && !firstImageDim) firstImageDim = vector.length;
+            return vector;
+          })
+          .catch((err: any) => {
+            if (!lastClipError) {
+              lastClipError = err?.message ? String(err.message) : String(err ?? "image embedding failed");
+            }
+            return null;
+          });
         imageEmbeddingCache.set(normalized, promise);
       }
       return imageEmbeddingCache.get(normalized)!;
@@ -627,6 +647,17 @@ export const handler: Handler = async (event) => {
       fileTuples.map((tuple) => (clipEnabled ? getImageEmbedding(tuple.url) : Promise.resolve(null)))
     );
 
+    if (!firstImageDim && fileTuples.length) {
+      try {
+        const probe = await getImageEmbedding(fileTuples[0].url);
+        if (probe && !firstImageDim) firstImageDim = probe.length;
+      } catch (err: any) {
+        if (!lastClipError) {
+          lastClipError = err?.message ? String(err.message) : String(err ?? "image embedding probe failed");
+        }
+      }
+    }
+
     const pairScores: Array<{ tupleIndex: number; groupIndex: number; score: number }> = [];
     const pairsByGroup: Array<Array<{ tupleIndex: number; score: number }>> = groups.map(() => []);
     const clipPairsByGroup = clipEnabled
@@ -647,11 +678,13 @@ export const handler: Handler = async (event) => {
           const textEmb = textEmbeddings[gi];
           const imageEmb = imageEmbeddings[ti];
           if (textEmb && imageEmb && textEmb.length === imageEmb.length) {
-            const similarity = cosine(imageEmb, textEmb);
+            const similarity = cosine(textEmb, imageEmb);
             if (Number.isFinite(similarity)) {
               clipSimilarity = similarity;
-              clipContribution = similarity < CLIP_MIN_SIM ? -2 : CLIP_WEIGHT * similarity;
-              combined += clipContribution;
+              if (similarity >= CLIP_MIN_SIM) {
+                clipContribution = Math.round(similarity * CLIP_WEIGHT);
+                combined += clipContribution;
+              }
             }
           }
         }
@@ -660,7 +693,7 @@ export const handler: Handler = async (event) => {
         pairScores.push({ tupleIndex: ti, groupIndex: gi, score: combined });
         pairsByGroup[gi].push({ tupleIndex: ti, score: combined });
 
-        if (clipPairsByGroup && clipSimilarity !== null && Number.isFinite(clipContribution)) {
+        if (clipPairsByGroup && clipSimilarity !== null && clipContribution > 0) {
           clipPairsByGroup[gi].push({ tupleIndex: ti, clipScore: clipContribution, total: combined });
         }
 
@@ -877,9 +910,31 @@ export const handler: Handler = async (event) => {
         };
       });
 
+      const clipModel = process.env.CLIP_MODEL || "laion/CLIP-ViT-B-32-laion2B-s34B-b79K";
+      const clipProvider = (process.env.CLIP_PROVIDER || "hf").toLowerCase() || "hf";
+      const clipDebug: Record<string, unknown> = {
+        provider: clipProvider,
+        model: clipModel,
+        weight: CLIP_WEIGHT,
+        minSimilarity: CLIP_MIN_SIM,
+        textDim: firstTextDim,
+        imgDim: firstImageDim,
+      };
+      clipDebug.enabled = Boolean(clipDebug.textDim && clipDebug.imgDim);
+      const fallbackClipError =
+        lastClipError ||
+        (!process.env.HF_API_TOKEN
+          ? "HF_API_TOKEN missing"
+          : !firstTextDim
+          ? "Text embedding unavailable"
+          : !firstImageDim
+          ? "Image embedding unavailable"
+          : undefined);
+      if (fallbackClipError) clipDebug.error = fallbackClipError;
+
       responsePayload.debug = {
         minAssign: MIN_ASSIGN,
-        clip: clipEnabled ? { weight: CLIP_WEIGHT, minSimilarity: CLIP_MIN_SIM } : null,
+        clip: clipDebug,
         groups: debugGroups,
       };
     }
