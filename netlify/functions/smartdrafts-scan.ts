@@ -7,7 +7,7 @@ import { userScopedKey } from "../../src/lib/_auth.js";
 import { runAnalysis } from "../../src/lib/analyze-core.js";
 import type { ImageInsight } from "../../src/lib/image-insight.js";
 import { getTextEmb, getImageEmb } from "../../src/lib/clip-provider.js";
-import { cosine, clipProviderInfo } from "../../src/lib/clip-client.js";
+import { cosine, clipProviderInfo } from "../../src/lib/clip-client-split.js";
 import { sanitizeUrls, toDirectDropbox } from "../../src/lib/merge.js";
 import { canConsumeImages, consumeImages } from "../../src/lib/quota.js";
 import {

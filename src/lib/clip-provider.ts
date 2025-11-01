@@ -1,4 +1,4 @@
-import { clipTextEmbedding, clipImageEmbedding } from "./clip-client.js";
+import { clipTextEmbedding, clipImageEmbedding } from "./clip-client-split.js";
 import { getCached, putCached, textKey, imageKey } from "./clip-cache.js";
 import { toDirectDropbox } from "./merge.js";
 
