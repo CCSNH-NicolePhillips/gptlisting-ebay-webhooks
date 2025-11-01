@@ -736,6 +736,8 @@ export const handler: Handler = async (event) => {
     const assignedByGroup: string[][] = groups.map(() => []);
     const groupCounts = groups.map(() => 0);
     const tupleAssigned = new Array<boolean>(fileTuples.length).fill(false);
+  let duplicateAssignments = 0;
+  const duplicateGroups = new Set<number>();
 
     const recordAssignment = (groupIndex: number, tupleIndex: number) => {
       assignedByGroup[groupIndex].push(fileTuples[tupleIndex].url);
@@ -809,6 +811,25 @@ export const handler: Handler = async (event) => {
     tryAssign(MIN_ASSIGN);
     tryAssign(Number.NEGATIVE_INFINITY);
 
+    for (let gi = 0; gi < groups.length; gi++) {
+      // Safety valve: reuse high scoring images if a group cannot reach the minimum coverage target.
+      const minimumTarget = Math.max(1, Math.min(targetPerGroup[gi], MIN_ASSIGN));
+      if (groupCounts[gi] >= minimumTarget) continue;
+      if (!pairsByGroup[gi]?.length) continue;
+      const assignedSet = new Set(assignedByGroup[gi]);
+      for (const candidate of pairsByGroup[gi]) {
+        if (groupCounts[gi] >= minimumTarget) break;
+        if (groupCounts[gi] >= targetPerGroup[gi]) break;
+        const url = fileTuples[candidate.tupleIndex].url;
+        if (assignedSet.has(url)) continue;
+        assignedByGroup[gi].push(url);
+        groupCounts[gi]++;
+        assignedSet.add(url);
+        duplicateAssignments++;
+        duplicateGroups.add(gi);
+      }
+    }
+
     if (debugCandidatesPerGroup) {
       for (let gi = 0; gi < groups.length; gi++) {
         const assignedSet = new Set(assignedByGroup[gi]);
@@ -870,6 +891,12 @@ export const handler: Handler = async (event) => {
     }
 
     const orphanTuples = fileTuples.filter((tuple) => !usedUrls.has(tuple.url));
+    if (duplicateAssignments > 0) {
+      warnings = [
+        ...warnings,
+        `Allowed ${duplicateAssignments} duplicate image assignments across ${duplicateGroups.size} group(s) to satisfy minimum coverage.`,
+      ];
+    }
     if (reassignedCount > 0) {
       warnings = [...warnings, `Rebalanced duplicate image references across groups (${reassignedCount} adjusted).`];
     }
@@ -930,10 +957,21 @@ export const handler: Handler = async (event) => {
           : undefined);
       if (fallbackClipError) clipDebug.error = fallbackClipError;
 
+      const duplicatesDebug = duplicateAssignments > 0
+        ? {
+            count: duplicateAssignments,
+            groups: [...duplicateGroups].map((gi) => {
+              const group = groups[gi];
+              return group?.groupId || `group_${gi + 1}`;
+            }),
+          }
+        : undefined;
+
       responsePayload.debug = {
         minAssign: MIN_ASSIGN,
         clip: clipDebug,
         groups: debugGroups,
+        ...(duplicatesDebug ? { duplicates: duplicatesDebug } : {}),
       };
     }
 
