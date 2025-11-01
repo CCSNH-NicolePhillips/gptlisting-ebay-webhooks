@@ -87,6 +87,11 @@ type CandidateDetail = {
 const METHODS = "POST, OPTIONS";
 const MAX_IMAGES = Math.max(1, Math.min(100, Number(process.env.SMARTDRAFT_MAX_IMAGES || 100)));
 
+const normalizeFolderKey = (value: string | null | undefined): string => {
+  if (!value) return "";
+  return value.replace(/^[\\/]+/, "").trim();
+};
+
 function isImage(name: string) {
   return /\.(jpe?g|png|gif|webp|tiff?|bmp)$/i.test(name);
 }
@@ -689,12 +694,15 @@ export const handler: Handler = async (event) => {
           ? toDirectDropbox(group.primaryImageUrl)
           : "";
       if (!cleaned.length) {
-        const fallbackFolder =
-          (typeof group?.folder === "string" && group.folder.trim()) ||
-          (scanSource ? folderPath(tupleByUrl.get(scanSource)?.entry as DropboxEntry) : "") ||
-          folder;
+        const requestFolderKey = normalizeFolderKey(folder);
+        const normalizedGroupFolder = normalizeFolderKey(typeof group?.folder === "string" ? group.folder : "");
+        const scanSourceFolder = scanSource
+          ? folderPath(tupleByUrl.get(scanSource)?.entry as DropboxEntry)
+          : "";
+        const fallbackFolderKey =
+          normalizedGroupFolder || normalizeFolderKey(scanSourceFolder) || requestFolderKey;
         const folderMatches = fileTuples
-          .filter((tuple) => (folderPath(tuple.entry) || folder) === fallbackFolder)
+          .filter((tuple) => normalizeFolderKey(folderPath(tuple.entry) || folder) === fallbackFolderKey)
           .map((tuple) => tuple.url);
         if (folderMatches.length) {
           const additions = folderMatches.filter((url) => !cleaned.includes(url));
