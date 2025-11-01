@@ -6,8 +6,7 @@ import { tokensStore } from "../../src/lib/_blobs.js";
 import { userScopedKey } from "../../src/lib/_auth.js";
 import { runAnalysis } from "../../src/lib/analyze-core.js";
 import type { ImageInsight } from "../../src/lib/image-insight.js";
-import { getTextEmb, getImageEmb } from "../../src/lib/clip-provider.js";
-import { cosine, clipProviderInfo } from "../../src/lib/clip-client-split.js";
+import { clipImageEmbedding, cosine, clipProviderInfo } from "../../src/lib/clip-client-split.js";
 import { sanitizeUrls, toDirectDropbox } from "../../src/lib/merge.js";
 import { canConsumeImages, consumeImages } from "../../src/lib/quota.js";
 import {
@@ -62,20 +61,20 @@ type DebugCandidate = {
   clipSimilarity?: number | null;
   passedThreshold: boolean;
   assigned?: boolean;
+  margin?: number | null;
   components: DebugComponent[];
+};
+
+type AnalyzedGroup = {
+  groupId?: string;
+  images?: string[];
+  heroUrl?: string;
+  backUrl?: string;
+  [key: string]: unknown;
 };
 
 const METHODS = "POST, OPTIONS";
 const MAX_IMAGES = Math.max(1, Math.min(100, Number(process.env.SMARTDRAFT_MAX_IMAGES || 100)));
-
-function toUnit(v: number[]): number[] {
-  let mag = 0;
-  for (const x of v) mag += x * x;
-  if (!mag) return v.map(() => 0);
-  const inv = 1 / Math.sqrt(mag);
-  return v.map((x) => x * inv);
-}
-
 
 function isImage(name: string) {
   return /\.(jpe?g|png|gif|webp|tiff?|bmp)$/i.test(name);
@@ -398,7 +397,9 @@ export const handler: Handler = async (event) => {
       const normalized = toDirectDropbox(url);
       insightMap.set(normalized, { ...insight, url: normalized });
     });
-    let groups = Array.isArray(analysis?.groups) ? analysis.groups : [];
+    let groups = Array.isArray(analysis?.groups)
+      ? (analysis.groups as AnalyzedGroup[])
+      : [];
     let warnings: string[] = Array.isArray(analysis?.warnings) ? analysis.warnings : [];
 
     if (!groups.length) {
@@ -485,8 +486,18 @@ export const handler: Handler = async (event) => {
   const MIN_ASSIGN = Number.isFinite(MIN_ASSIGN_RAW) ? MIN_ASSIGN_RAW : 3;
   const MAX_DUPES_RAW = Number(process.env.SMARTDRAFT_MAX_DUPES ?? 1);
   const MAX_DUPES_PER_GROUP = Number.isFinite(MAX_DUPES_RAW) ? MAX_DUPES_RAW : 1;
-  const BRAND_SEP_ALPHA_RAW = Number(process.env.BRAND_SEP_ALPHA ?? 0.25);
-  const BRAND_SEP_ALPHA = Number.isFinite(BRAND_SEP_ALPHA_RAW) ? BRAND_SEP_ALPHA_RAW : 0.25;
+  const HERO_LOCK = true;
+  const HERO_WEIGHT_RAW = Number(process.env.HERO_WEIGHT ?? 0.7);
+  const HERO_WEIGHT = Number.isFinite(HERO_WEIGHT_RAW) ? HERO_WEIGHT_RAW : 0.7;
+  const BACK_WEIGHT_RAW = Number(process.env.BACK_WEIGHT ?? 0.3);
+  const BACK_WEIGHT = Number.isFinite(BACK_WEIGHT_RAW) ? BACK_WEIGHT_RAW : 0.3;
+  const BACK_MIN_SIM_RAW = Number(process.env.BACK_MIN_SIM ?? 0.4);
+  const BACK_MIN_SIM = Number.isFinite(BACK_MIN_SIM_RAW) ? BACK_MIN_SIM_RAW : 0.4;
+  const BACK_KEYWORDS = (process.env.BACK_KEYWORDS ?? "supplement facts,nutrition facts,ingredients,active ingredients,directions,drug facts")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter((value) => value.length > 0);
+  const FILENAME_BACK_HINTS = ["back", "facts", "ingredients", "supplement", "nutrition", "drug"];
 
     const COLOR_WEIGHTS: Record<string, number> = {
       black: -8,
@@ -524,95 +535,124 @@ export const handler: Handler = async (event) => {
     const allGroups = groups.map((group, gi) => {
       const groupId =
         typeof group?.groupId === "string" && group.groupId ? String(group.groupId) : `group_${gi + 1}`;
-      const brand = typeof group?.brand === "string" ? group.brand.trim() : "";
-      return { group, index: gi, groupId, brand };
+      return { group, index: gi, groupId };
     });
 
-    const groupTextVecs = new Map<string, number[] | null>();
-    let firstTextDim = 0;
     let firstImageDim = 0;
     let lastClipError: string | null = null;
 
-    const brandEmbeddingCache = new Map<string, Promise<number[] | null>>();
-    const getBrandEmbedding = (brand: string): Promise<number[] | null> => {
-      const key = brand.trim().toLowerCase();
-      if (!key) return Promise.resolve(null);
-      if (!brandEmbeddingCache.has(key)) {
-        brandEmbeddingCache.set(
-          key,
-          getTextEmb(brand).catch((err: any) => {
-            if (!lastClipError) {
-              lastClipError = err?.message ? String(err.message) : String(err ?? "brand text embedding failed");
-            }
-            return null;
-          })
+    const imageVectorCache = new Map<string, Promise<number[] | null>>();
+    const imageVectors = new Map<string, number[] | null>();
+    const heroVectors = new Map<string, number[] | null>();
+    const backVectors = new Map<string, number[] | null>();
+    const heroOwnerByImage = new Map<string, string>();
+
+    const looksLikeBack = (ocrText: string, fileName: string): boolean => {
+      const text = (ocrText || "").toLowerCase();
+      const name = (fileName || "").toLowerCase();
+      if (BACK_KEYWORDS.some((keyword) => keyword && text.includes(keyword))) return true;
+      if (FILENAME_BACK_HINTS.some((hint) => hint && name.includes(hint))) return true;
+      return false;
+    };
+
+    const getImageVector = (url: string): Promise<number[] | null> => {
+      const normalized = toDirectDropbox(url);
+      if (!imageVectorCache.has(normalized)) {
+        imageVectorCache.set(
+          normalized,
+          clipImageEmbedding(normalized)
+            .then((vector) => {
+              if (vector && !firstImageDim) firstImageDim = vector.length;
+              imageVectors.set(normalized, vector);
+              return vector;
+            })
+            .catch((err: any) => {
+              if (!lastClipError) {
+                lastClipError = err?.message ? String(err.message) : String(err ?? "image embedding failed");
+              }
+              imageVectors.set(normalized, null);
+              return null;
+            })
         );
       }
-      return brandEmbeddingCache.get(key)!;
+      return imageVectorCache.get(normalized)!;
     };
 
     for (const { group, groupId } of allGroups) {
-      const seedParts = [group?.brand, group?.product, group?.variant, group?.size, "bottle packaging photo"]
-        .map((part) => (typeof part === "string" ? part.trim() : ""))
-        .filter(Boolean);
-      const seedText = seedParts.join(" ") || "product bottle packaging photo";
+      const rawImages = Array.isArray(group?.images) ? group.images : [];
+      const cleaned = rawImages
+        .map((img: unknown) => (typeof img === "string" ? toDirectDropbox(img) : ""))
+        .filter((img: string) => img.length > 0);
 
-      try {
-        let seedVec = await getTextEmb(seedText);
-        if (seedVec && !firstTextDim) firstTextDim = seedVec.length;
-
-        if (seedVec) {
-          const otherBrands = allGroups
-            .filter((entry) => entry.groupId !== groupId)
-            .map((entry) => entry.brand)
-            .filter((value) => Boolean(value));
-
-          if (otherBrands.length) {
-            const otherVecsRaw = await Promise.all(otherBrands.map((brand) => getBrandEmbedding(brand)));
-            const otherVecs = otherVecsRaw.filter((vec): vec is number[] => Array.isArray(vec) && vec.length > 0);
-            if (otherVecs.length && seedVec.length === otherVecs[0].length) {
-              const meanOther = toUnit(
-                otherVecs[0].map((_, idx) => otherVecs.reduce((sum, vec) => sum + vec[idx], 0) / otherVecs.length)
-              );
-              if (meanOther.length === seedVec.length) {
-                seedVec = toUnit(seedVec.map((value, idx) => value - BRAND_SEP_ALPHA * meanOther[idx]));
-              }
-            }
-          }
-        }
-
-        groupTextVecs.set(groupId, seedVec);
-      } catch (err: any) {
-        if (!lastClipError) {
-          lastClipError = err?.message ? String(err.message) : String(err ?? "text embedding failed");
-        }
-        groupTextVecs.set(groupId, null);
+      let heroUrl = typeof group?.heroUrl === "string" && group.heroUrl ? toDirectDropbox(group.heroUrl) : "";
+      if (!heroUrl) heroUrl = cleaned[0] || "";
+      if (heroUrl) {
+        group.heroUrl = heroUrl;
+        heroOwnerByImage.set(heroUrl, groupId);
+        if (!cleaned.includes(heroUrl)) cleaned.unshift(heroUrl);
+      } else {
+        group.heroUrl = undefined;
       }
+
+      const candidateDetails = cleaned.map((url) => {
+        const tuple = tupleByUrl.get(url);
+        const entry = tuple?.entry;
+        const name = entry?.name || "";
+        const insight = insightMap.get(url);
+        const textParts: string[] = [];
+        if (insight?.role) textParts.push(insight.role);
+        if (insight?.hasVisibleText) textParts.push("visible text");
+        return {
+          url,
+          name,
+          insight,
+          ocrText: textParts.join(" "),
+        };
+      });
+
+      const heroVec = group.heroUrl ? await getImageVector(group.heroUrl) : null;
+
+      const heroUrlCurrent = group.heroUrl || "";
+      const nonHero = candidateDetails.filter((candidate) => candidate.url !== heroUrlCurrent);
+      let backGuess = nonHero.find((candidate) => looksLikeBack(candidate.ocrText, candidate.name));
+
+      if (!backGuess && heroVec) {
+        const scored = await Promise.all(
+          nonHero.map(async (candidate) => {
+            const vec = await getImageVector(candidate.url);
+            const sim = vec && heroVec && vec.length === heroVec.length ? cosine(vec, heroVec) : 0;
+            const len = (candidate.ocrText || "").length;
+            return { candidate, sim, len };
+          })
+        );
+        scored.sort((a, b) => {
+          if (b.len !== a.len) return b.len - a.len;
+          return b.sim - a.sim;
+        });
+        if (scored[0] && scored[0].sim >= BACK_MIN_SIM) {
+          backGuess = scored[0].candidate;
+        }
+      }
+
+      if (backGuess) {
+        group.backUrl = backGuess.url;
+        await getImageVector(backGuess.url);
+      } else {
+        group.backUrl = undefined;
+      }
+
+      heroVectors.set(groupId, heroVec);
+      const backVec = group.backUrl ? await getImageVector(group.backUrl) : null;
+      backVectors.set(groupId, backVec);
+
+      group.images = cleaned;
     }
 
-    const clipEnabled =
-      CLIP_WEIGHT > 0 && [...groupTextVecs.values()].some((emb) => Array.isArray(emb) && emb.length > 0);
-
-    const imageEmbeddingCache = new Map<string, Promise<number[] | null>>();
-
-    const getImageEmbedding = (url: string): Promise<number[] | null> => {
-      const normalized = toDirectDropbox(url);
-      if (!imageEmbeddingCache.has(normalized)) {
-        const promise = getImageEmb(normalized)
-          .then((vector) => {
-            if (vector && !firstImageDim) firstImageDim = vector.length;
-            return vector;
-          })
-          .catch((err: any) => {
-            if (!lastClipError) {
-              lastClipError = err?.message ? String(err.message) : String(err ?? "image embedding failed");
-            }
-            return null;
-          });
-        imageEmbeddingCache.set(normalized, promise);
-      }
-      return imageEmbeddingCache.get(normalized)!;
-    };
+    if (CLIP_WEIGHT > 0) {
+      await mapLimit(fileTuples, 4, async (tuple) => {
+        await getImageVector(tuple.url);
+      });
+    }
 
     const looksDummyByMeta = (entry: DropboxEntry): boolean => {
       const size = Number(entry?.size || 0);
@@ -624,22 +664,35 @@ export const handler: Handler = async (event) => {
       return false;
     };
 
+    type ScoreResult = {
+      base: number;
+      total: number;
+      clipContribution: number;
+      clipSim: number;
+      clipHero: number;
+      clipBack: number;
+      components?: DebugComponent[];
+    };
+
+    const clipSimByGroup = new Map<string, Map<string, number>>();
+
     const scoreImageForGroup = (
       tuple: { entry: DropboxEntry; url: string },
       gi: number,
       captureDetails = false
-    ): { score: number; components?: DebugComponent[] } => {
+    ): ScoreResult => {
+      const groupId = allGroups[gi].groupId;
       const insight = insightMap.get(tuple.url);
-      let score = 0;
+      let baseScore = 0;
       const components = captureDetails ? ([] as DebugComponent[]) : undefined;
       const add = (label: string, value: number, detail?: string) => {
-        score += value;
+        baseScore += value;
         if (components && value !== 0) components.push({ label, value, detail });
       };
 
       const path = String(tuple.entry?.path_display || tuple.entry?.path_lower || "");
-      const base = String(tuple.entry?.name || "");
-      const nameTokens = new Set(tokenize(base));
+      const baseName = String(tuple.entry?.name || "");
+      const nameTokens = new Set(tokenize(baseName));
       const allTokens = new Set<string>([...tokenize(path), ...nameTokens]);
 
       for (const token of groupTokens[gi] || []) {
@@ -689,88 +742,93 @@ export const handler: Handler = async (event) => {
         }
       }
 
+      let simHero = 0;
+      let simBack = 0;
+      let clipSim = 0;
+      if (CLIP_WEIGHT > 0) {
+        const heroVec = heroVectors.get(groupId) || null;
+        const backVec = backVectors.get(groupId) || null;
+        const imgVec = imageVectors.get(tuple.url) ?? null;
+        if (imgVec && heroVec && imgVec.length === heroVec.length) simHero = cosine(imgVec, heroVec);
+        if (imgVec && backVec && imgVec.length === backVec.length) simBack = cosine(imgVec, backVec);
+        clipSim = backVec ? HERO_WEIGHT * simHero + BACK_WEIGHT * simBack : simHero;
+      }
+
+      let clipContribution = 0;
+      if (CLIP_WEIGHT > 0 && clipSim >= CLIP_MIN_SIM) {
+        clipContribution = Math.round(clipSim * CLIP_WEIGHT);
+      }
+
       if (components) {
-        return { score, components };
-      }
-      return { score };
-    };
-
-    const imageEmbeddings = await Promise.all(
-      fileTuples.map((tuple) => (clipEnabled ? getImageEmbedding(tuple.url) : Promise.resolve(null)))
-    );
-
-    if (!firstImageDim && fileTuples.length) {
-      try {
-        const probe = await getImageEmbedding(fileTuples[0].url);
-        if (probe && !firstImageDim) firstImageDim = probe.length;
-      } catch (err: any) {
-        if (!lastClipError) {
-          lastClipError = err?.message ? String(err.message) : String(err ?? "image embedding probe failed");
+        components.push({ label: "clip-hero", value: Number((simHero * 100).toFixed(1)), detail: simHero.toFixed(3) });
+        if (backVectors.get(groupId)) {
+          components.push({ label: "clip-back", value: Number((simBack * 100).toFixed(1)), detail: simBack.toFixed(3) });
         }
+        components.push({ label: "clip", value: clipContribution, detail: clipSim.toFixed(3) });
       }
-    }
+
+      const total = baseScore + clipContribution;
+
+      return { base: baseScore, total, clipContribution, clipSim, clipHero: simHero, clipBack: simBack, components };
+    };
 
     type Rank = { groupId: string; sim: number };
     const ranksByImage = new Map<string, Rank[]>();
+  const marginByGroupImage = new Map<string, Map<string, number>>();
 
-    for (let ti = 0; ti < fileTuples.length; ti++) {
-      const tuple = fileTuples[ti];
+    for (const tuple of fileTuples) {
       for (let gi = 0; gi < groups.length; gi++) {
-        const baseResult = scoreImageForGroup(tuple, gi, debugEnabled);
-        const base = baseResult.score;
-        if (!Number.isFinite(base)) continue;
+        const result = scoreImageForGroup(tuple, gi, debugEnabled);
+        const groupId = allGroups[gi].groupId;
 
-        let combined = base;
-        let clipContribution = 0;
-        let clipSimilarity: number | null = null;
-    const groupId = allGroups[gi].groupId;
-        if (clipEnabled) {
-          const textEmb = groupTextVecs.get(groupId);
-          const imageEmb = imageEmbeddings[ti];
-          if (textEmb && imageEmb && textEmb.length === imageEmb.length) {
-            const similarity = cosine(textEmb, imageEmb);
-            if (Number.isFinite(similarity)) {
-              clipSimilarity = similarity;
-              if (similarity >= CLIP_MIN_SIM) {
-                clipContribution = Math.round(similarity * CLIP_WEIGHT);
-                combined += clipContribution;
-                const ranks = ranksByImage.get(tuple.url) || [];
-                ranks.push({ groupId, sim: similarity });
-                ranksByImage.set(tuple.url, ranks);
-              }
-            }
-          }
+        if (!clipSimByGroup.has(groupId)) clipSimByGroup.set(groupId, new Map<string, number>());
+        clipSimByGroup.get(groupId)!.set(tuple.url, result.clipSim);
+
+        if (result.clipSim >= CLIP_MIN_SIM) {
+          const ranks = ranksByImage.get(tuple.url) || [];
+          ranks.push({ groupId, sim: result.clipSim });
+          ranksByImage.set(tuple.url, ranks);
         }
 
         if (debugCandidatesPerGroup) {
-          const components = baseResult.components ? [...baseResult.components] : [];
-          if (clipSimilarity !== null || clipContribution !== 0) {
-            components.push({
-              label: "clip",
-              value: clipContribution,
-              detail: clipSimilarity === null ? undefined : clipSimilarity.toFixed(3),
-            });
-          }
+          const components = result.components ? [...result.components] : [];
           debugCandidatesPerGroup[gi].push({
             url: tuple.url,
             name: tuple.entry?.name || "",
             path: tuple.entry?.path_display || tuple.entry?.path_lower || "",
             order: urlOrder.has(tuple.url) ? urlOrder.get(tuple.url)! : Number.MAX_SAFE_INTEGER,
-            base,
-            total: combined,
-            clipContribution,
-            clipSimilarity,
-            passedThreshold: combined >= MIN_ASSIGN,
+            base: result.base,
+            total: result.total,
+            clipContribution: result.clipContribution,
+            clipSimilarity: result.clipSim,
+            passedThreshold: result.total >= MIN_ASSIGN,
             components,
           });
         }
       }
+      if (!ranksByImage.has(tuple.url)) {
+        ranksByImage.set(tuple.url, []);
+      }
     }
-    fileTuples.forEach((tuple) => {
-      if (!ranksByImage.has(tuple.url)) ranksByImage.set(tuple.url, []);
-    });
-    for (const ranks of ranksByImage.values()) {
+
+    for (const [imageUrl, ranks] of ranksByImage.entries()) {
       ranks.sort((a, b) => b.sim - a.sim);
+      if (!ranks.length) continue;
+      for (const rank of ranks) {
+        let bestOther = Number.NEGATIVE_INFINITY;
+        for (const contender of ranks) {
+          if (contender.groupId === rank.groupId) continue;
+          if (contender.sim > bestOther) bestOther = contender.sim;
+        }
+        const comparable = Number.isFinite(bestOther) ? bestOther : 0;
+        const margin = rank.sim - comparable;
+        let groupMargins = marginByGroupImage.get(rank.groupId);
+        if (!groupMargins) {
+          groupMargins = new Map<string, number>();
+          marginByGroupImage.set(rank.groupId, groupMargins);
+        }
+        groupMargins.set(imageUrl, margin);
+      }
     }
 
     const assignedByGroup = new Map<string, Set<string>>();
@@ -799,14 +857,21 @@ export const handler: Handler = async (event) => {
       return used < MAX_DUPES_PER_GROUP;
     };
 
+    if (HERO_LOCK) {
+      for (const { group, groupId } of allGroups) {
+        if (group.heroUrl) {
+          addToGroup(groupId, group.heroUrl);
+        }
+      }
+    }
+
     // Pass A: decisive winners claim their images outright.
     for (const [imageUrl, ranks] of ranksByImage.entries()) {
       if (!ranks.length) continue;
       const best = ranks[0];
       const next = ranks[1];
       const decisive = !next || best.sim - next.sim >= CLIP_MARGIN;
-      if (!decisive) continue;
-      if (!assignedImageTo.has(imageUrl)) {
+      if (decisive && !assignedImageTo.has(imageUrl)) {
         addToGroup(best.groupId, imageUrl);
       }
     }
@@ -814,8 +879,7 @@ export const handler: Handler = async (event) => {
     // Pass B: satisfy minimum coverage, allowing limited duplicates when required.
     for (const { groupId } of allGroups) {
       const set = ensureGroupSet(groupId);
-      const minTarget = Math.max(0, Math.round(MIN_ASSIGN));
-      let remaining = Math.max(0, minTarget - set.size);
+      let remaining = Math.max(0, MIN_ASSIGN - set.size);
       if (!remaining) continue;
 
       for (const [imageUrl, ranks] of ranksByImage.entries()) {
@@ -845,6 +909,17 @@ export const handler: Handler = async (event) => {
       const holders = allGroups.filter((entry) => ensureGroupSet(entry.groupId).has(imageUrl));
       if (holders.length <= 1) {
         if (holders.length === 1) assignedImageTo.set(imageUrl, holders[0].groupId);
+        continue;
+      }
+
+      const heroOwner = HERO_LOCK ? heroOwnerByImage.get(imageUrl) : undefined;
+      if (heroOwner) {
+        assignedImageTo.set(imageUrl, heroOwner);
+        for (const holder of holders) {
+          if (holder.groupId !== heroOwner) {
+            ensureGroupSet(holder.groupId).delete(imageUrl);
+          }
+        }
         continue;
       }
 
@@ -881,8 +956,13 @@ export const handler: Handler = async (event) => {
     if (debugCandidatesPerGroup) {
       for (let gi = 0; gi < groups.length; gi++) {
         const assignedSet = new Set(assignedLists[gi]);
+        const marginMap = marginByGroupImage.get(allGroups[gi].groupId);
         debugCandidatesPerGroup[gi] = debugCandidatesPerGroup[gi]
-          .map((entry) => ({ ...entry, assigned: assignedSet.has(entry.url) }))
+          .map((entry) => ({
+            ...entry,
+            assigned: assignedSet.has(entry.url),
+            margin: marginMap?.get(entry.url) ?? null,
+          }))
           .sort((a, b) => b.total - a.total);
       }
     }
@@ -912,28 +992,34 @@ export const handler: Handler = async (event) => {
         warnings.push(`No text-bearing hero found for ${label}; leaving group images empty.`);
       }
 
+      const heroUrl = typeof group?.heroUrl === "string" ? group.heroUrl : null;
+      const clipScores = clipSimByGroup.get(allGroups[gi].groupId) || new Map<string, number>();
+
       unique = unique
-        .map((url, idx) => ({ url, idx }))
-        .sort((a, b) => {
-          const entryA = tupleByUrl.get(a.url);
-          const entryB = tupleByUrl.get(b.url);
-          const tokensA = tokenize(entryA?.entry?.name || a.url);
-          const tokensB = tokenize(entryB?.entry?.name || b.url);
-          let biasA = tokensA.some((token) => POS_NAME_TOKENS.has(token)) ? -1 : 0;
-          let biasB = tokensB.some((token) => POS_NAME_TOKENS.has(token)) ? -1 : 0;
-          const insightA = insightMap.get(a.url);
-          const insightB = insightMap.get(b.url);
-          if (insightA?.role === "front") biasA -= 2;
-          if (insightB?.role === "front") biasB -= 2;
-          if (insightA?.role === "back") biasA += 2;
-          if (insightB?.role === "back") biasB += 2;
-          if (biasA !== biasB) return biasA - biasB;
-          const orderA = urlOrder.has(a.url) ? urlOrder.get(a.url)! : Number.MAX_SAFE_INTEGER + a.idx;
-          const orderB = urlOrder.has(b.url) ? urlOrder.get(b.url)! : Number.MAX_SAFE_INTEGER + b.idx;
-          return orderA - orderB;
+        .map((url, idx) => {
+          const entry = tupleByUrl.get(url);
+          const tokens = tokenize(entry?.entry?.name || url);
+          let bias = 0;
+          if (tokens.some((token) => POS_NAME_TOKENS.has(token))) bias -= 1;
+          if (tokens.some((token) => NEG_NAME_TOKENS.has(token))) bias += 1;
+          const insight = insightMap.get(url);
+          if (insight?.role === "front") bias -= 2;
+          if (insight?.role === "back") bias += 2;
+          const order = urlOrder.has(url) ? urlOrder.get(url)! : Number.MAX_SAFE_INTEGER + idx;
+          const sim = clipScores.get(url) ?? Number.NEGATIVE_INFINITY;
+          return { url, idx, bias, order, sim };
         })
-  .map((item) => item.url)
-    .slice(0, 12);
+        .sort((a, b) => {
+          if (heroUrl) {
+            if (a.url === heroUrl && b.url !== heroUrl) return -1;
+            if (b.url === heroUrl && a.url !== heroUrl) return 1;
+          }
+          if (b.sim !== a.sim) return b.sim - a.sim;
+          if (a.bias !== b.bias) return a.bias - b.bias;
+          return a.order - b.order;
+        })
+        .map((item) => item.url)
+        .slice(0, 12);
 
       normalizedGroups.push({ ...group, images: unique });
     }
@@ -975,6 +1061,8 @@ export const handler: Handler = async (event) => {
         return {
           groupId: group?.groupId || `group_${gi + 1}`,
           name: displayName,
+          heroUrl: typeof group?.heroUrl === "string" ? group.heroUrl : null,
+          backUrl: typeof group?.backUrl === "string" ? group.backUrl : null,
           candidates: entries.slice(0, 20),
         };
       });
@@ -984,16 +1072,19 @@ export const handler: Handler = async (event) => {
         ...providerMeta,
         weight: CLIP_WEIGHT,
         minSimilarity: CLIP_MIN_SIM,
-        textDim: firstTextDim,
         imgDim: firstImageDim,
-        enabled: Boolean(firstTextDim && firstImageDim),
+        enabled: Boolean(firstImageDim),
+        anchors: {
+          heroWeight: HERO_WEIGHT,
+          backWeight: BACK_WEIGHT,
+          backMinSim: BACK_MIN_SIM,
+          margin: CLIP_MARGIN,
+        },
       };
       const fallbackClipError =
         lastClipError ||
         (!process.env.HF_API_TOKEN
           ? "HF_API_TOKEN missing"
-          : !firstTextDim
-          ? "Text embedding unavailable"
           : !firstImageDim
           ? "Image embedding unavailable"
           : undefined);
