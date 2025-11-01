@@ -1269,7 +1269,38 @@ export const handler: Handler = async (event) => {
         .map((item) => item.url)
         .slice(0, 12);
 
-      normalizedGroups.push({ ...group, images: unique });
+      const heroPref = typeof group?.heroUrl === "string" ? group.heroUrl : null;
+      const backPref = typeof group?.backUrl === "string" ? group.backUrl : null;
+      const secondaryPref = typeof group?.secondaryImageUrl === "string" ? group.secondaryImageUrl : null;
+      const supportingPrefs = Array.isArray(group?.supportingImageUrls)
+        ? group.supportingImageUrls.filter((url): url is string => typeof url === "string" && url.length > 0)
+        : [];
+
+      const preferenceOrder = [heroPref, backPref, secondaryPref, ...supportingPrefs]
+        .filter((url): url is string => Boolean(url))
+        .filter((url, index, list) => list.indexOf(url) === index);
+
+      const orderedImages: string[] = [];
+      const seenImages = new Set<string>();
+
+      const pushIfValid = (url?: string | null) => {
+        if (!url) return;
+        if (!unique.includes(url)) return;
+        if (seenImages.has(url)) return;
+        orderedImages.push(url);
+        seenImages.add(url);
+      };
+
+      preferenceOrder.forEach((url) => pushIfValid(url));
+      unique.forEach((url) => pushIfValid(url));
+
+      const finalImages = orderedImages.slice(0, 12);
+      if (heroPref && !finalImages.includes(heroPref)) finalImages.unshift(heroPref);
+      if (backPref && !finalImages.includes(backPref) && finalImages.length < 12) finalImages.push(backPref);
+
+      const trimmed = finalImages.slice(0, 12);
+
+      normalizedGroups.push({ ...group, images: trimmed });
     }
 
     const orphanTuples = fileTuples.filter((tuple) => !usedUrls.has(tuple.url));
