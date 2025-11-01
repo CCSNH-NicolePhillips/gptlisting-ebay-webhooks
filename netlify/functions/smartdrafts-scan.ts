@@ -68,6 +68,35 @@ type DebugCandidate = {
 const METHODS = "POST, OPTIONS";
 const MAX_IMAGES = Math.max(1, Math.min(100, Number(process.env.SMARTDRAFT_MAX_IMAGES || 100)));
 
+function envNumber(raw: unknown, fallback: number): number {
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function toUnit(v: number[]): number[] {
+  let mag = 0;
+  for (const x of v) mag += x * x;
+  if (!mag) return v.map(() => 0);
+  const inv = 1 / Math.sqrt(mag);
+  return v.map((x) => x * inv);
+}
+
+function averageUnit(vectors: number[][]): number[] | null {
+  if (!vectors.length) return null;
+  const dim = vectors[0].length;
+  if (!Number.isInteger(dim) || dim <= 0) return null;
+  const total = new Array<number>(dim).fill(0);
+  let count = 0;
+  for (const vec of vectors) {
+    if (!Array.isArray(vec) || vec.length !== dim) continue;
+    for (let i = 0; i < dim; i++) total[i] += vec[i];
+    count++;
+  }
+  if (!count) return null;
+  const mean = total.map((value) => value / count);
+  return toUnit(mean);
+}
+
 function isImage(name: string) {
   return /\.(jpe?g|png|gif|webp|tiff?|bmp)$/i.test(name);
 }
@@ -466,8 +495,12 @@ export const handler: Handler = async (event) => {
       "_bg",
     ]);
 
-    const rawMinAssign = Number(process.env.SMARTDRAFT_MIN_ASSIGN ?? 3);
-    const MIN_ASSIGN = Number.isFinite(rawMinAssign) ? rawMinAssign : 3;
+    const CLIP_WEIGHT = envNumber(process.env.CLIP_WEIGHT, 20);
+    const CLIP_MIN_SIM = envNumber(process.env.CLIP_MIN_SIM, 0.12);
+    const CLIP_MARGIN = envNumber(process.env.CLIP_MARGIN, 0.06);
+    const MIN_ASSIGN = Math.max(1, Math.round(envNumber(process.env.SMARTDRAFT_MIN_ASSIGN, 3)));
+    const MAX_ASSIGN = Math.max(1, Math.round(envNumber(process.env.SMARTDRAFT_MAX_PER_GROUP, 12)));
+    const MAX_DUPES_PER_GROUP = Math.max(0, Math.round(envNumber(process.env.SMARTDRAFT_MAX_DUPES, 1)));
 
     const COLOR_WEIGHTS: Record<string, number> = {
       black: -8,
@@ -502,39 +535,74 @@ export const handler: Handler = async (event) => {
       return tokenize(parts.join(" "));
     });
 
-    const groupPrompts = groups.map((group) => {
-      const promptParts = [group?.brand, group?.product, group?.variant]
-        .map((part) => (typeof part === "string" ? part.trim() : ""))
-        .filter(Boolean);
-      if (promptParts.length) return promptParts.join(" ");
-      if (typeof group?.product === "string" && group.product.trim()) return group.product.trim();
-      return "product";
+    const allGroups = groups.map((group, gi) => {
+      const groupId =
+        typeof group?.groupId === "string" && group.groupId ? String(group.groupId) : `group_${gi + 1}`;
+      const brand = typeof group?.brand === "string" ? group.brand.trim() : "";
+      return { group, index: gi, groupId, brand };
     });
 
+    const groupIndexById = new Map<string, number>();
+    allGroups.forEach(({ groupId, index }) => groupIndexById.set(groupId, index));
+
+    const groupTextVecs = new Map<string, number[] | null>();
     let firstTextDim = 0;
     let firstImageDim = 0;
     let lastClipError: string | null = null;
 
-    const textEmbeddings = await Promise.all(
-      groupPrompts.map(async (prompt) => {
-        try {
-          const vector = await getTextEmb(prompt);
-          if (vector && !firstTextDim) firstTextDim = vector.length;
-          return vector;
-        } catch (err: any) {
-          if (!lastClipError) {
-            lastClipError = err?.message ? String(err.message) : String(err ?? "text embedding failed");
-          }
-          return null;
-        }
-      })
-    );
+    const brandEmbeddingCache = new Map<string, Promise<number[] | null>>();
+    const getBrandEmbedding = (brand: string): Promise<number[] | null> => {
+      const key = brand.trim().toLowerCase();
+      if (!key) return Promise.resolve(null);
+      if (!brandEmbeddingCache.has(key)) {
+        brandEmbeddingCache.set(
+          key,
+          getTextEmb(brand).catch((err: any) => {
+            if (!lastClipError) {
+              lastClipError = err?.message ? String(err.message) : String(err ?? "brand text embedding failed");
+            }
+            return null;
+          })
+        );
+      }
+      return brandEmbeddingCache.get(key)!;
+    };
 
-    const clipWeightRaw = Number(process.env.CLIP_WEIGHT ?? 20);
-    const CLIP_WEIGHT = Number.isFinite(clipWeightRaw) ? clipWeightRaw : 20;
-    const clipMinSimRaw = Number(process.env.CLIP_MIN_SIM ?? 0.12);
-    const CLIP_MIN_SIM = Number.isFinite(clipMinSimRaw) ? clipMinSimRaw : 0.12;
-    const clipEnabled = CLIP_WEIGHT > 0 && textEmbeddings.some((emb) => Array.isArray(emb) && emb.length > 0);
+  for (const { group, groupId } of allGroups) {
+      const seedParts = [group?.brand, group?.product, group?.variant, group?.size]
+        .map((part) => (typeof part === "string" ? part.trim() : ""))
+        .filter(Boolean);
+      const seedText = seedParts.length ? seedParts.join(" ") : "product";
+      const otherBrands = allGroups
+        .filter((entry) => entry.groupId !== groupId)
+        .map((entry) => entry.brand)
+        .filter((value) => Boolean(value));
+
+      let meanOther: number[] | null = null;
+      if (otherBrands.length) {
+        const otherVectorsRaw = await Promise.all(otherBrands.map((b) => getBrandEmbedding(b)));
+        const usable = otherVectorsRaw.filter((vec): vec is number[] => Array.isArray(vec) && vec.length > 0);
+        if (usable.length) meanOther = averageUnit(usable) || null;
+      }
+
+      try {
+        let seedVec = await getTextEmb(`${seedText} packaging photo`);
+        if (seedVec && !firstTextDim) firstTextDim = seedVec.length;
+        if (seedVec && meanOther && seedVec.length === meanOther.length) {
+          const alpha = 0.25;
+          seedVec = toUnit(seedVec.map((v, idx) => v - alpha * meanOther![idx]));
+        }
+        groupTextVecs.set(groupId, seedVec);
+      } catch (err: any) {
+        if (!lastClipError) {
+          lastClipError = err?.message ? String(err.message) : String(err ?? "text embedding failed");
+        }
+        groupTextVecs.set(groupId, null);
+      }
+    }
+
+    const clipEnabled =
+      CLIP_WEIGHT > 0 && [...groupTextVecs.values()].some((emb) => Array.isArray(emb) && emb.length > 0);
 
     const imageEmbeddingCache = new Map<string, Promise<number[] | null>>();
 
@@ -640,7 +708,7 @@ export const handler: Handler = async (event) => {
 
     const targetPerGroup = groups.map((group, gi) => {
       const desired = desiredByGroup[gi]?.length || 0;
-      return Math.min(12, Math.max(desired, 1));
+      return Math.min(MAX_ASSIGN, Math.max(desired, 1));
     });
 
     const imageEmbeddings = await Promise.all(
@@ -658,11 +726,8 @@ export const handler: Handler = async (event) => {
       }
     }
 
-    const pairScores: Array<{ tupleIndex: number; groupIndex: number; score: number }> = [];
-    const pairsByGroup: Array<Array<{ tupleIndex: number; score: number }>> = groups.map(() => []);
-    const clipPairsByGroup = clipEnabled
-      ? groups.map(() => [] as Array<{ tupleIndex: number; clipScore: number; total: number }>)
-      : null;
+    type Rank = { groupId: string; sim: number };
+    const ranksByImage = new Map<string, Rank[]>();
 
     for (let ti = 0; ti < fileTuples.length; ti++) {
       const tuple = fileTuples[ti];
@@ -674,8 +739,9 @@ export const handler: Handler = async (event) => {
         let combined = base;
         let clipContribution = 0;
         let clipSimilarity: number | null = null;
+  const groupId = allGroups[gi].groupId;
         if (clipEnabled) {
-          const textEmb = textEmbeddings[gi];
+          const textEmb = groupTextVecs.get(groupId);
           const imageEmb = imageEmbeddings[ti];
           if (textEmb && imageEmb && textEmb.length === imageEmb.length) {
             const similarity = cosine(textEmb, imageEmb);
@@ -684,17 +750,12 @@ export const handler: Handler = async (event) => {
               if (similarity >= CLIP_MIN_SIM) {
                 clipContribution = Math.round(similarity * CLIP_WEIGHT);
                 combined += clipContribution;
+                const ranks = ranksByImage.get(tuple.url) || [];
+                ranks.push({ groupId, sim: similarity });
+                ranksByImage.set(tuple.url, ranks);
               }
             }
           }
-        }
-
-        if (!Number.isFinite(combined)) continue;
-        pairScores.push({ tupleIndex: ti, groupIndex: gi, score: combined });
-        pairsByGroup[gi].push({ tupleIndex: ti, score: combined });
-
-        if (clipPairsByGroup && clipSimilarity !== null && clipContribution > 0) {
-          clipPairsByGroup[gi].push({ tupleIndex: ti, clipScore: clipContribution, total: combined });
         }
 
         if (debugCandidatesPerGroup) {
@@ -721,118 +782,130 @@ export const handler: Handler = async (event) => {
         }
       }
     }
-
-    pairScores.sort((a, b) => b.score - a.score);
-    pairsByGroup.forEach((entries) => entries.sort((a, b) => b.score - a.score));
-    if (clipPairsByGroup) {
-      clipPairsByGroup.forEach((entries) =>
-        entries.sort((a, b) => {
-          if (b.clipScore !== a.clipScore) return b.clipScore - a.clipScore;
-          return b.total - a.total;
-        })
-      );
+    fileTuples.forEach((tuple) => {
+      if (!ranksByImage.has(tuple.url)) ranksByImage.set(tuple.url, []);
+    });
+    for (const ranks of ranksByImage.values()) {
+      ranks.sort((a, b) => b.sim - a.sim);
     }
 
-    const assignedByGroup: string[][] = groups.map(() => []);
-    const groupCounts = groups.map(() => 0);
-    const tupleAssigned = new Array<boolean>(fileTuples.length).fill(false);
-  let duplicateAssignments = 0;
-  const duplicateGroups = new Set<number>();
+    const assignedByGroup = new Map<string, Set<string>>();
+    const assignedImageTo = new Map<string, string>();
+    const dupesUsed = new Map<string, number>();
 
-    const recordAssignment = (groupIndex: number, tupleIndex: number) => {
-      assignedByGroup[groupIndex].push(fileTuples[tupleIndex].url);
-      tupleAssigned[tupleIndex] = true;
-      groupCounts[groupIndex]++;
-    };
-
-    const assignBestForGroup = (groupIndex: number, minScore: number): boolean => {
-      if (targetPerGroup[groupIndex] <= 0) return false;
-      const candidates = pairsByGroup[groupIndex];
-      if (!candidates.length) return false;
-      if (candidates[0].score < minScore) return false;
-      for (const candidate of candidates) {
-        if (candidate.score < minScore) break;
-        if (tupleAssigned[candidate.tupleIndex]) continue;
-        recordAssignment(groupIndex, candidate.tupleIndex);
-        return true;
+    const ensureGroupSet = (groupId: string): Set<string> => {
+      let set = assignedByGroup.get(groupId);
+      if (!set) {
+        set = new Set<string>();
+        assignedByGroup.set(groupId, set);
       }
-      return false;
+      return set;
     };
 
-    const assignBestFromClip = (groupIndex: number, minClipScore: number): boolean => {
-      if (!clipPairsByGroup || targetPerGroup[groupIndex] <= 0) return false;
-      const candidates = clipPairsByGroup[groupIndex];
-      if (!candidates.length) return false;
-      if (candidates[0].clipScore < minClipScore) return false;
-      for (const candidate of candidates) {
-        if (candidate.clipScore < minClipScore) break;
-        if (tupleAssigned[candidate.tupleIndex]) continue;
-        recordAssignment(groupIndex, candidate.tupleIndex);
-        return true;
+    const groupCapacity = (groupId: string): number => {
+      const idx = groupIndexById.get(groupId);
+      const baseTarget = idx === undefined ? MAX_ASSIGN : targetPerGroup[idx] ?? MAX_ASSIGN;
+      const minTarget = Math.min(MAX_ASSIGN, Math.max(MIN_ASSIGN, 1));
+      return Math.min(MAX_ASSIGN, Math.max(baseTarget, minTarget));
+    };
+
+    const addImageToGroup = (groupId: string, imageUrl: string): boolean => {
+      const set = ensureGroupSet(groupId);
+      const capacity = groupCapacity(groupId);
+      if (set.size >= capacity) return false;
+      const before = set.size;
+      set.add(imageUrl);
+      return set.size !== before;
+    };
+
+    const canUseDuplicate = (groupId: string) => {
+      const used = dupesUsed.get(groupId) ?? 0;
+      return used < MAX_DUPES_PER_GROUP;
+    };
+
+    // Pass A: decisive winners claim their images outright.
+    for (const [imageUrl, ranks] of ranksByImage.entries()) {
+      if (!ranks.length) continue;
+      const best = ranks[0];
+      const next = ranks[1];
+      const decisive = !next || best.sim - next.sim >= CLIP_MARGIN;
+      if (!decisive) continue;
+      if (addImageToGroup(best.groupId, imageUrl)) {
+        assignedImageTo.set(imageUrl, best.groupId);
       }
-      return false;
-    };
+    }
 
-    const fillFromClip = (threshold: number) => {
-      if (!clipPairsByGroup) return;
-      for (let gi = 0; gi < groups.length; gi++) {
-        while (groupCounts[gi] < Math.max(1, targetPerGroup[gi])) {
-          const assigned = assignBestFromClip(gi, threshold);
-          if (!assigned) break;
+    // Pass B: satisfy minimum coverage, allowing limited duplicates when required.
+    for (const { groupId } of allGroups) {
+      const set = ensureGroupSet(groupId);
+      const capacity = groupCapacity(groupId);
+      let remaining = Math.max(0, MIN_ASSIGN - set.size);
+      if (!remaining) continue;
+
+      for (const [imageUrl, ranks] of ranksByImage.entries()) {
+        if (remaining <= 0 || set.size >= capacity) break;
+        const rank = ranks.find((entry) => entry.groupId === groupId);
+        if (!rank || rank.sim < CLIP_MIN_SIM) continue;
+
+        const existing = assignedImageTo.get(imageUrl);
+        if (!existing) {
+          if (addImageToGroup(groupId, imageUrl)) {
+            assignedImageTo.set(imageUrl, groupId);
+            remaining--;
+          }
+          continue;
+        }
+
+        if (existing === groupId) continue;
+        if (!canUseDuplicate(groupId)) continue;
+        if (addImageToGroup(groupId, imageUrl)) {
+          dupesUsed.set(groupId, (dupesUsed.get(groupId) ?? 0) + 1);
+          remaining--;
         }
       }
-    };
-
-    if (clipPairsByGroup) {
-      const preferredClip = Math.max(CLIP_WEIGHT * CLIP_MIN_SIM, MIN_ASSIGN);
-      fillFromClip(preferredClip);
-      fillFromClip(Number.NEGATIVE_INFINITY);
     }
 
-    for (let gi = 0; gi < groups.length; gi++) {
-      if (groupCounts[gi] >= Math.max(1, targetPerGroup[gi])) continue;
-      assignBestForGroup(gi, MIN_ASSIGN);
-    }
-
-    for (let gi = 0; gi < groups.length; gi++) {
-      if (groupCounts[gi] >= Math.max(1, targetPerGroup[gi])) continue;
-      assignBestForGroup(gi, Number.NEGATIVE_INFINITY);
-    }
-
-    const tryAssign = (minScore: number) => {
-      for (const pair of pairScores) {
-        if (tupleAssigned[pair.tupleIndex]) continue;
-        if (groupCounts[pair.groupIndex] >= targetPerGroup[pair.groupIndex]) continue;
-        if (pair.score < minScore) continue;
-        recordAssignment(pair.groupIndex, pair.tupleIndex);
+    // Pass C: resolve conflicts by similarity and scarcity.
+    for (const [imageUrl, ranks] of ranksByImage.entries()) {
+      const holders = allGroups.filter((entry) => ensureGroupSet(entry.groupId).has(imageUrl));
+      if (holders.length <= 1) {
+        if (holders.length === 1) assignedImageTo.set(imageUrl, holders[0].groupId);
+        continue;
       }
-    };
 
-    tryAssign(MIN_ASSIGN);
-    tryAssign(Number.NEGATIVE_INFINITY);
+      holders.sort((g1, g2) => {
+        const s1 = ranks.find((r) => r.groupId === g1.groupId)?.sim ?? 0;
+        const s2 = ranks.find((r) => r.groupId === g2.groupId)?.sim ?? 0;
+        if (Math.abs(s2 - s1) > 1e-6) return s2 - s1;
+        const c1 = ensureGroupSet(g1.groupId).size;
+        const c2 = ensureGroupSet(g2.groupId).size;
+        return c1 - c2;
+      });
 
-    for (let gi = 0; gi < groups.length; gi++) {
-      // Safety valve: reuse high scoring images if a group cannot reach the minimum coverage target.
-      const minimumTarget = Math.max(1, Math.min(targetPerGroup[gi], MIN_ASSIGN));
-      if (groupCounts[gi] >= minimumTarget) continue;
-      if (!pairsByGroup[gi]?.length) continue;
-      const assignedSet = new Set(assignedByGroup[gi]);
-      for (const candidate of pairsByGroup[gi]) {
-        if (groupCounts[gi] >= minimumTarget) break;
-        if (groupCounts[gi] >= targetPerGroup[gi]) break;
-        const url = fileTuples[candidate.tupleIndex].url;
-        if (assignedSet.has(url)) continue;
-        assignedByGroup[gi].push(url);
-        groupCounts[gi]++;
-        assignedSet.add(url);
-        duplicateAssignments++;
-        duplicateGroups.add(gi);
+      const keeper = holders[0].groupId;
+      assignedImageTo.set(imageUrl, keeper);
+      for (let i = 1; i < holders.length; i++) {
+        ensureGroupSet(holders[i].groupId).delete(imageUrl);
       }
     }
+
+    // Ensure every retained image has a recorded owner post-resolution.
+    for (const { groupId } of allGroups) {
+      const set = assignedByGroup.get(groupId);
+      if (!set) continue;
+      for (const imageUrl of set) {
+        if (!assignedImageTo.has(imageUrl)) assignedImageTo.set(imageUrl, groupId);
+      }
+    }
+
+    const assignedLists = groups.map((_, gi) => {
+      const groupId = allGroups[gi].groupId;
+      return Array.from(assignedByGroup.get(groupId) ?? []);
+    });
 
     if (debugCandidatesPerGroup) {
       for (let gi = 0; gi < groups.length; gi++) {
-        const assignedSet = new Set(assignedByGroup[gi]);
+        const assignedSet = new Set(assignedLists[gi]);
         debugCandidatesPerGroup[gi] = debugCandidatesPerGroup[gi]
           .map((entry) => ({ ...entry, assigned: assignedSet.has(entry.url) }))
           .sort((a, b) => b.total - a.total);
@@ -840,7 +913,7 @@ export const handler: Handler = async (event) => {
     }
 
     const usedUrls = new Set<string>();
-    assignedByGroup.forEach((urls) => urls.forEach((url) => usedUrls.add(url)));
+    assignedLists.forEach((urls) => urls.forEach((url) => usedUrls.add(url)));
 
     let reassignedCount = 0;
     fileTuples.forEach((tuple) => {
@@ -853,7 +926,7 @@ export const handler: Handler = async (event) => {
     for (let gi = 0; gi < groups.length; gi++) {
       const group = groups[gi];
       const seen = new Set<string>();
-      let unique = assignedByGroup[gi].filter((url) => {
+      let unique = assignedLists[gi].filter((url) => {
         if (seen.has(url)) return false;
         seen.add(url);
         return true;
@@ -884,19 +957,13 @@ export const handler: Handler = async (event) => {
           const orderB = urlOrder.has(b.url) ? urlOrder.get(b.url)! : Number.MAX_SAFE_INTEGER + b.idx;
           return orderA - orderB;
         })
-        .map((item) => item.url)
-        .slice(0, 12);
+  .map((item) => item.url)
+  .slice(0, MAX_ASSIGN);
 
       normalizedGroups.push({ ...group, images: unique });
     }
 
     const orphanTuples = fileTuples.filter((tuple) => !usedUrls.has(tuple.url));
-    if (duplicateAssignments > 0) {
-      warnings = [
-        ...warnings,
-        `Allowed ${duplicateAssignments} duplicate image assignments across ${duplicateGroups.size} group(s) to satisfy minimum coverage.`,
-      ];
-    }
     if (reassignedCount > 0) {
       warnings = [...warnings, `Rebalanced duplicate image references across groups (${reassignedCount} adjusted).`];
     }
@@ -957,14 +1024,14 @@ export const handler: Handler = async (event) => {
           : undefined);
       if (fallbackClipError) clipDebug.error = fallbackClipError;
 
-      const duplicatesDebug = duplicateAssignments > 0
-        ? {
-            count: duplicateAssignments,
-            groups: [...duplicateGroups].map((gi) => {
-              const group = groups[gi];
-              return group?.groupId || `group_${gi + 1}`;
-            }),
-          }
+      const totalAssigned = assignedLists.reduce((sum, urls) => sum + urls.length, 0);
+      const uniqueAssignedImages = new Set(assignedImageTo.keys());
+      const duplicateCount = Math.max(0, totalAssigned - uniqueAssignedImages.size);
+      const duplicateGroupsList = [...dupesUsed.entries()]
+        .filter(([, count]) => (count ?? 0) > 0)
+        .map(([groupId]) => groupId);
+      const duplicatesDebug = duplicateCount > 0 || duplicateGroupsList.length > 0
+        ? { count: duplicateCount, groups: duplicateGroupsList }
         : undefined;
 
       responsePayload.debug = {
