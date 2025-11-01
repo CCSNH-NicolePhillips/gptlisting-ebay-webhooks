@@ -538,67 +538,81 @@ export async function runAnalysis(
   let orphanDetails: Array<{ url: string; name?: string; folder?: string }> = [];
 
   if (!useLegacyAssignment && merged.groups.length) {
-    type GroupCandidate = {
+    type FolderState = {
+      key: string;
+      label: string;
+      urls: string[];
+      remaining: Set<string>;
+    };
+
+    type SnapshotCandidate = {
       url: string;
       name: string;
-      folder: string;
       folderKey: string;
-      order: number;
       _role?: "front" | "back";
-      _hasText?: boolean;
       _ocr: string;
+      _hasText: boolean;
     };
 
-    const candidateMap = new Map<string, GroupCandidate>();
-    const folderCandidates = new Map<string, GroupCandidate[]>();
-    let orderCounter = 0;
+    const metaByUrl = new Map<string, { name: string; folder: string }>();
+    const folderState = new Map<string, FolderState>();
+    const folderOrder: string[] = [];
 
-    const registerFolderCandidate = (folderKey: string, candidate: GroupCandidate) => {
-      if (!folderCandidates.has(folderKey)) folderCandidates.set(folderKey, []);
-      folderCandidates.get(folderKey)!.push(candidate);
+    const ensureFolderState = (key: string, label?: string): FolderState => {
+      const normalizedKey = normalizeFolder(key);
+      if (!folderState.has(normalizedKey)) {
+        folderState.set(normalizedKey, {
+          key: normalizedKey,
+          label: label ?? key ?? "",
+          urls: [],
+          remaining: new Set<string>(),
+        });
+        folderOrder.push(normalizedKey);
+      } else if (label && !folderState.get(normalizedKey)!.label) {
+        folderState.get(normalizedKey)!.label = label;
+      }
+      return folderState.get(normalizedKey)!;
     };
 
-    const addCandidate = (rawUrl: string, name?: string, folder?: string) => {
+    const registerUrl = (rawUrl: string, name = "", folderLabel = "") => {
       if (!rawUrl) return;
-      const cleanUrl = toDirectDropbox(rawUrl);
-      if (!cleanUrl || candidateMap.has(cleanUrl)) return;
-      const folderLabel = folder || "";
-      const folderKey = normalizeFolder(folderLabel);
-      const candidate: GroupCandidate = {
-        url: cleanUrl,
-        name: name || "",
-        folder: folderLabel,
-        folderKey,
-        order: orderCounter++,
-        _ocr: "",
-      };
-      candidateMap.set(cleanUrl, candidate);
-      registerFolderCandidate(folderKey, candidate);
+      const url = toDirectDropbox(rawUrl);
+      if (!url) return;
+      const key = normalizeFolder(folderLabel);
+      const state = ensureFolderState(key, folderLabel);
+      if (!state.remaining.has(url)) {
+        state.urls.push(url);
+        state.remaining.add(url);
+      }
+      if (!metaByUrl.has(url)) {
+        metaByUrl.set(url, { name, folder: folderLabel });
+      }
     };
 
     if (metadataList.length) {
       for (const meta of metadataList) {
-        addCandidate(meta.url, meta.name, meta.folder);
+        registerUrl(meta.url, meta.name, meta.folder);
       }
     }
 
     for (const url of verified) {
-      if (!candidateMap.has(url)) {
+      if (!metaByUrl.has(url)) {
         const meta = metaLookup.get(url);
-        addCandidate(url, meta?.name, meta?.folder);
+        registerUrl(url, meta?.name || "", meta?.folder || "");
       }
     }
 
-    const folderOrder = metadataList
-      .map((entry) => normalizeFolder(entry.folder))
-      .filter((value, index, array) => value && array.indexOf(value) === index);
-    const unusedFolders = new Set(folderOrder);
+    if (!folderState.size) {
+      ensureFolderState("");
+      for (const url of verified) {
+        registerUrl(url, "", "");
+      }
+    }
 
     const roleByBase = new Map<string, RoleInfo>();
     for (const insight of insightMap.values()) {
       if (!insight?.url) continue;
-      const key = base(insight.url);
-      if (!key) continue;
+      const key = base(insight.url).toLowerCase();
       const rawRole = typeof insight.role === "string" ? insight.role.toLowerCase().trim() : "";
       const role = rawRole === "front" || rawRole === "back" ? (rawRole as "front" | "back") : undefined;
       roleByBase.set(key, {
@@ -607,6 +621,11 @@ export async function runAnalysis(
         ocr: extractInsightOcr(insight),
       });
     }
+
+    const infoFor = (url: string): RoleInfo => {
+      const key = base(url).toLowerCase();
+      return roleByBase.get(key) || {};
+    };
 
     const vectorCache = new Map<string, Promise<number[] | null>>();
     const getImageVector = (url: string): Promise<number[] | null> => {
@@ -626,52 +645,6 @@ export async function runAnalysis(
       return vectorCache.get(normalized)!;
     };
 
-    const resolveScanSourceImageUrl = (group: any): string | null => {
-      const normalize = (value: unknown): string | null => {
-        if (typeof value !== "string") return null;
-        const trimmed = value.trim();
-        if (!trimmed) return null;
-        return toDirectDropbox(trimmed);
-      };
-
-      const directChecks: unknown[] = [
-        group?.scanSourceImageUrl,
-        group?.scan?.sourceImageUrl,
-        group?.scan?.imageUrl,
-        group?.seed?.scanSourceImageUrl,
-        group?.seed?.sourceImageUrl,
-        group?.seed?.imageUrl,
-        group?.text?.sourceImageUrl,
-        group?.text?.imageUrl,
-      ];
-
-      for (const entry of directChecks) {
-        const found = normalize(entry);
-        if (found) return found;
-      }
-
-      const arrayChecks: unknown[] = [
-        group?.scanSources,
-        group?.textSources,
-        group?.textAnchors,
-        group?.texts,
-        group?.anchors,
-      ];
-
-      for (const collection of arrayChecks) {
-        if (!Array.isArray(collection)) continue;
-        for (const item of collection) {
-          const found =
-            normalize((item as any)?.sourceImageUrl) ||
-            normalize((item as any)?.imageUrl) ||
-            normalize(item);
-          if (found) return found;
-        }
-      }
-
-      return null;
-    };
-
     const looksBack = (text: string | undefined, name: string | undefined): boolean => {
       const lowerText = (text || "").toLowerCase();
       const lowerName = (name || "").toLowerCase();
@@ -688,66 +661,70 @@ export async function runAnalysis(
       );
     };
 
-    const assignedUrls = new Set<string>();
     const debugSelection: {
       groups: Array<{
         groupId?: string;
         name?: string;
         heroUrl: string | null;
         backUrl: string | null;
-        roles: Array<{ url: string; role: string | null; brandScore: number }>;
+        roles: Array<{ url: string; role: string | null }>;
       }>;
     } = { groups: [] };
 
     const backMinEnv = Number(process.env.BACK_MIN_SIM);
     const BACK_MIN_SIM = Number.isFinite(backMinEnv) ? backMinEnv : 0.35;
 
-    for (const group of merged.groups) {
-      let folderKey = normalizeFolder(typeof group.folder === "string" ? group.folder : "");
+    const folderKeysWithRemaining = (): string[] =>
+      folderOrder.filter((key) => (folderState.get(key)?.remaining.size ?? 0) > 0);
 
-      if (!folderKey) {
-        const hints = [group.primaryImageUrl, group.heroUrl, group.secondaryImageUrl, group.backUrl]
-          .map((value) => (typeof value === "string" ? toDirectDropbox(value) : ""))
-          .filter(Boolean);
-        for (const hint of hints) {
-          const meta = metaLookup.get(hint);
-          if (meta?.folder) {
-            folderKey = normalizeFolder(meta.folder);
-            break;
-          }
+    for (const group of merged.groups) {
+      const preferredFolders: string[] = [];
+      if (typeof group.folder === "string" && group.folder.trim()) {
+        preferredFolders.push(normalizeFolder(group.folder));
+      }
+
+      const hintedUrls = [group.primaryImageUrl, group.heroUrl, group.secondaryImageUrl, group.backUrl]
+        .map((value) => (typeof value === "string" ? toDirectDropbox(value) : ""))
+        .filter(Boolean);
+      for (const url of hintedUrls) {
+        const meta = metaByUrl.get(url);
+        if (meta?.folder) {
+          preferredFolders.push(normalizeFolder(meta.folder));
         }
       }
 
-      if (folderKey) {
-        unusedFolders.delete(folderKey);
-      } else if (unusedFolders.size) {
-        const [firstUnused] = Array.from(unusedFolders);
-        folderKey = firstUnused || "";
-        if (firstUnused) unusedFolders.delete(firstUnused);
+      let folderKey: string | undefined;
+      const uniquePreferred = preferredFolders.filter((value, index, array) => array.indexOf(value) === index);
+      for (const key of uniquePreferred) {
+        const state = folderState.get(key);
+        if (state && state.remaining.size) {
+          folderKey = key;
+          break;
+        }
       }
 
-      let groupCandidates = (folderCandidates.get(folderKey) || []).filter(
-        (candidate) => !assignedUrls.has(candidate.url)
-      );
-
-      if (!groupCandidates.length && folderCandidates.size === 1) {
-        groupCandidates = Array.from(folderCandidates.values())[0].filter(
-          (candidate) => !assignedUrls.has(candidate.url)
-        );
+      if (!folderKey) {
+        const availableKeys = folderKeysWithRemaining();
+        folderKey = availableKeys[0] ?? folderOrder[0] ?? "";
       }
 
-      if (!groupCandidates.length) {
-        groupCandidates = Array.from(candidateMap.values()).filter((candidate) => !assignedUrls.has(candidate.url));
-      }
+      const state = ensureFolderState(folderKey || "");
+      const snapshot = state.urls.filter((url) => state.remaining.has(url));
 
-      groupCandidates = groupCandidates.slice().sort((a, b) => a.order - b.order);
-
-      for (const candidate of groupCandidates) {
-        const info = roleByBase.get(base(candidate.url)) || roleByBase.get(base(candidate.name || ""));
-        candidate._role = info?.role;
-        candidate._hasText = info?.hasVisibleText ?? false;
-        candidate._ocr = info?.ocr || candidate._ocr || "";
-      }
+      const candidates: SnapshotCandidate[] = snapshot.map((url) => {
+        const info = infoFor(url);
+        const role = info.role === "front" || info.role === "back" ? info.role : undefined;
+        const meta = metaByUrl.get(url);
+        const name = meta?.name || base(url);
+        return {
+          url,
+          name,
+          folderKey: state.key,
+          _role: role,
+          _ocr: info.ocr || "",
+          _hasText: info.hasVisibleText === true,
+        };
+      });
 
       const brand = typeof group.brand === "string" ? group.brand.toLowerCase() : "";
       const product = typeof group.product === "string" ? group.product.toLowerCase() : "";
@@ -761,41 +738,34 @@ export async function runAnalysis(
         return score;
       };
 
-      const scanSource = resolveScanSourceImageUrl(group);
-
-      let heroCandidate = groupCandidates
+      let heroCandidate: SnapshotCandidate | undefined = candidates
         .filter((candidate) => candidate._role === "front")
         .sort((a, b) => brandScore(b._ocr) - brandScore(a._ocr))[0];
 
-      if (!heroCandidate) {
-        heroCandidate = groupCandidates
+      if (!heroCandidate && candidates.length) {
+        heroCandidate = candidates
           .slice()
           .sort((a, b) => {
             const brandDelta = brandScore(b._ocr) - brandScore(a._ocr);
             if (brandDelta !== 0) return brandDelta;
             const textDelta = Number(b._hasText) - Number(a._hasText);
             if (textDelta !== 0) return textDelta;
-            return a.order - b.order;
+            return 0;
           })[0];
       }
 
-      if (!heroCandidate && scanSource) {
-        const scanBase = base(scanSource);
-        heroCandidate = groupCandidates.find((candidate) => base(candidate.url) === scanBase) || heroCandidate;
-      }
-
       if (!heroCandidate) {
-        heroCandidate = groupCandidates[0];
+        heroCandidate = candidates[0];
       }
 
-      const heroUrl = heroCandidate ? heroCandidate.url : null;
+      const heroUrl = heroCandidate?.url ?? null;
 
-      let backCandidate = groupCandidates.find(
+      let backCandidate: SnapshotCandidate | undefined = candidates.find(
         (candidate) => candidate.url !== heroUrl && candidate._role === "back"
       );
 
       if (!backCandidate) {
-        backCandidate = groupCandidates
+        backCandidate = candidates
           .filter((candidate) => candidate.url !== heroUrl)
           .sort((a, b) => {
             const looksDelta = Number(looksBack(b._ocr, b.name)) - Number(looksBack(a._ocr, a.name));
@@ -808,7 +778,7 @@ export async function runAnalysis(
         const heroVec = await getImageVector(heroUrl);
         if (heroVec) {
           const scored = await Promise.all(
-            groupCandidates
+            candidates
               .filter((candidate) => candidate.url !== heroUrl)
               .map(async (candidate) => {
                 const vec = await getImageVector(candidate.url);
@@ -823,39 +793,35 @@ export async function runAnalysis(
         }
       }
 
-      const backUrl = backCandidate ? backCandidate.url : null;
+      const backUrl = backCandidate?.url ?? null;
 
-      const rest = groupCandidates
-        .map((candidate) => candidate.url)
-        .filter((url) => url !== heroUrl && url !== backUrl);
+      const finalTwo = [heroUrl, backUrl]
+        .filter((value): value is string => typeof value === "string" && value.length > 0)
+        .filter((url, index, array) => array.indexOf(url) === index)
+        .slice(0, 2);
 
-      const ordered = [heroUrl, backUrl, ...rest].filter((url): url is string => Boolean(url));
-      const uniqueOrdered = Array.from(new Set(ordered));
-      const finalImages =
-        groupCandidates.length <= 2 ? uniqueOrdered.slice(0, Math.min(2, uniqueOrdered.length)) : uniqueOrdered;
-
-      group.heroUrl = heroUrl;
-      group.primaryImageUrl = heroUrl;
-      group.backUrl = backUrl;
-      group.secondaryImageUrl = backUrl;
-      group.images = finalImages;
-      const supporting = finalImages.filter((url) => url !== heroUrl && url !== backUrl);
-      group.supportingImageUrls = supporting.length ? supporting : undefined;
-      if (!group.folder && groupCandidates[0]?.folder) {
-        group.folder = groupCandidates[0].folder;
+      group.heroUrl = heroUrl || null;
+      group.primaryImageUrl = heroUrl || null;
+      group.backUrl = backUrl || null;
+      group.secondaryImageUrl = backUrl || null;
+      group.images = finalTwo;
+      if (group.supportingImageUrls) delete group.supportingImageUrls;
+      if (!group.folder) {
+        group.folder = folderState.get(state.key)?.label || "";
       }
 
-      finalImages.forEach((url) => assignedUrls.add(url));
+      for (const url of finalTwo) {
+        state.remaining.delete(url);
+      }
 
       debugSelection.groups.push({
         groupId: typeof group.groupId === "string" ? group.groupId : undefined,
         name: typeof group.product === "string" ? group.product : undefined,
         heroUrl,
         backUrl,
-        roles: groupCandidates.map((candidate) => ({
+        roles: candidates.map((candidate) => ({
           url: candidate.url,
           role: candidate._role ?? null,
-          brandScore: brandScore(candidate._ocr),
         })),
       });
     }
@@ -864,12 +830,21 @@ export async function runAnalysis(
       console.log(JSON.stringify({ evt: "vision-role-selection", groups: debugSelection.groups }));
     }
 
-    const leftovers = Array.from(candidateMap.values()).filter((candidate) => !assignedUrls.has(candidate.url));
-    orphanDetails = leftovers.map((candidate) => ({
-      url: candidate.url,
-      name: candidate.name,
-      folder: candidate.folder,
-    }));
+    const orphanSet = new Set<string>();
+    for (const state of folderState.values()) {
+      for (const url of state.remaining) {
+        orphanSet.add(url);
+      }
+    }
+
+    orphanDetails = Array.from(orphanSet).map((url) => {
+      const meta = metaByUrl.get(url);
+      return {
+        url,
+        name: meta?.name,
+        folder: meta?.folder,
+      };
+    });
   } else {
     orphanDetails = [];
     for (const group of merged.groups) {
