@@ -510,6 +510,15 @@ export const handler: Handler = async (event) => {
         insightByName.set(base, payload);
       }
     });
+
+    for (const tuple of fileTuples) {
+      const name = (tuple.entry?.name || "").toLowerCase();
+      if (!name) continue;
+      const match = insightByName.get(name);
+      if (match) {
+        insightMap.set(tuple.url, match);
+      }
+    }
     let groups = Array.isArray(analysis?.groups)
       ? (analysis.groups as AnalyzedGroup[])
       : [];
