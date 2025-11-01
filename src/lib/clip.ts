@@ -1,4 +1,5 @@
-import { getTextEmb, getImageEmb, cosine as providerCosine } from "./clip-provider.js";
+import { getTextEmb, getImageEmb } from "./clip-provider.js";
+import { cosine as clientCosine } from "./clip-client.js";
 
 export async function clipTextEmbedding(text: string): Promise<number[] | null> {
   return getTextEmb(text);
@@ -8,4 +9,4 @@ export async function clipImageEmbedding(imageUrl: string): Promise<number[] | n
   return getImageEmb(imageUrl);
 }
 
-export const cosine = providerCosine;
+export const cosine = clientCosine;

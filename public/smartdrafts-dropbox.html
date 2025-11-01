@@ -290,10 +290,25 @@
           heading.textContent = entry?.name || entry?.groupId || `Group ${index + 1}`;
           card.appendChild(heading);
 
-          const clipInfo = debugPayload.clip
-            ? `CLIP weight ${debugPayload.clip.weight}, min sim ${debugPayload.clip.minSimilarity}`
-            : 'CLIP disabled';
-          card.appendChild(el('div', { class: 'muted', text: `${clipInfo} • MIN_ASSIGN ${debugPayload.minAssign}` }));
+          const clipMeta = debugPayload.clip || {};
+          const clipPieces = [
+            clipMeta.enabled ? 'enabled' : 'disabled',
+            `provider ${clipMeta.provider ?? 'hf'}`,
+            `model ${clipMeta.model ?? 'n/a'}`,
+            `text ${clipMeta.textDim ?? 0}`,
+            `img ${clipMeta.imgDim ?? 0}`,
+            `weight ${clipMeta.weight ?? '—'}`,
+            `min sim ${clipMeta.minSimilarity ?? '—'}`,
+          ];
+          if (clipMeta.error) {
+            clipPieces.push(`error ${clipMeta.error}`);
+          }
+          card.appendChild(
+            el('div', {
+              class: 'muted',
+              text: `CLIP ${clipPieces.join(' • ')} • MIN_ASSIGN ${debugPayload.minAssign}`,
+            }),
+          );
 
           const table = document.createElement('table');
           table.innerHTML = `
