@@ -120,8 +120,13 @@ async function verifyUrl(url: string): Promise<boolean> {
 }
 
 const BYPASS_VISION_CACHE = (process.env.VISION_BYPASS_CACHE || "false").toLowerCase() === "true";
+const LOG_VISION_RESPONSES = (process.env.VISION_LOG_RESPONSES || process.env.SMARTDRAFT_LOG_VISION || "false").toLowerCase() === "true";
 
-async function analyzeBatchViaVision(batch: string[], metadata: Array<{ url: string; name: string; folder: string }>) {
+async function analyzeBatchViaVision(
+  batch: string[],
+  metadata: Array<{ url: string; name: string; folder: string }>,
+  debugLog = false
+) {
   const cacheEligible = !BYPASS_VISION_CACHE;
 
   if (cacheEligible) {
@@ -190,7 +195,14 @@ async function analyzeBatchViaVision(batch: string[], metadata: Array<{ url: str
   ].join("\n");
 
   try {
-  const result = await withRetry(() => runVision({ images: batch, prompt }));
+    const result = await withRetry(() => runVision({ images: batch, prompt }));
+    if (debugLog || LOG_VISION_RESPONSES) {
+      try {
+        console.log("🤖 Vision raw response:", JSON.stringify(result, null, 2));
+      } catch {
+        console.log("🤖 Vision raw response (non-serializable):", result);
+      }
+    }
     // Post-process images: some providers may return placeholders or omit URLs.
     try {
       const validHttp = (u: unknown) => typeof u === "string" && /^https?:\/\//i.test(u.trim());
@@ -337,9 +349,13 @@ export type AnalysisResult = {
 export async function runAnalysis(
   inputUrls: string[],
   rawBatchSize = 12,
-  opts: { skipPricing?: boolean; metadata?: Array<{ url: string; name: string; folder: string }> } = {}
+  opts: {
+    skipPricing?: boolean;
+    metadata?: Array<{ url: string; name: string; folder: string }>;
+    debugVisionResponse?: boolean;
+  } = {}
 ): Promise<AnalysisResult> {
-  const { skipPricing = false } = opts;
+  const { skipPricing = false, metadata, debugVisionResponse = false } = opts;
   let images = sanitizeUrls(inputUrls).map(toDirectDropbox);
   const insightMap = new Map<string, ImageInsight>();
   const useLegacyAssignment = (process.env.USE_LEGACY_IMAGE_ASSIGNMENT || "false").toLowerCase() === "true";
@@ -380,8 +396,8 @@ export async function runAnalysis(
   }
 
   const metaLookup = new Map<string, { url: string; name: string; folder: string }>();
-  if (Array.isArray(opts.metadata)) {
-    for (const meta of opts.metadata) {
+  if (Array.isArray(metadata)) {
+    for (const meta of metadata) {
       if (!meta?.url) continue;
       metaLookup.set(toDirectDropbox(meta.url), {
         url: toDirectDropbox(meta.url),
@@ -398,8 +414,8 @@ export async function runAnalysis(
 
   for (const [idx, batch] of verifiedBatches.entries()) {
     console.log(`🧠 Analyzing batch ${idx + 1}/${verifiedBatches.length} (${batch.length} images)`);
-    const metaForBatch = batch.map((url) => metaLookup.get(url) || { url, name: "", folder: "" });
-    const result = await analyzeBatchViaVision(batch, metaForBatch);
+  const metaForBatch = batch.map((url) => metaLookup.get(url) || { url, name: "", folder: "" });
+  const result = await analyzeBatchViaVision(batch, metaForBatch, debugVisionResponse);
     if (result?._error) {
       warnings.push(`Batch ${idx + 1}: ${result._error}`);
     }
