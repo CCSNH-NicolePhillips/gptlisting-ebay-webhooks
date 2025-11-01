@@ -82,6 +82,8 @@ type CandidateDetail = {
   folder: string;
   order: number;
   ocrText: string;
+  _role?: "front" | "back";
+  _hasText?: boolean;
 };
 
 const METHODS = "POST, OPTIONS";
@@ -91,6 +93,21 @@ const normalizeFolderKey = (value: string | null | undefined): string => {
   if (!value) return "";
   return value.replace(/^[\\/]+/, "").trim();
 };
+
+function basenameFrom(u: string): string {
+  try {
+    if (!u) return "";
+    const trimmed = u.trim();
+    if (!trimmed) return "";
+    const noQuery = trimmed.split("?")[0];
+    const parts = noQuery.split("/");
+    return parts[parts.length - 1] || "";
+  } catch {
+    return u;
+  }
+}
+
+type RoleInfo = { role?: "front" | "back"; hasVisibleText?: boolean };
 
 function isImage(name: string) {
   return /\.(jpe?g|png|gif|webp|tiff?|bmp)$/i.test(name);
@@ -498,27 +515,74 @@ export const handler: Handler = async (event) => {
       debugVisionResponse: debugEnabled,
     });
     const insightMap = new Map<string, ImageInsight>();
-    const insightByName = new Map<string, ImageInsight>();
+    const insightByBase = new Map<string, ImageInsight>();
+    const roleByBase = new Map<string, RoleInfo>();
     const rawInsights = analysis?.imageInsights || {};
-    Object.entries(rawInsights).forEach(([url, insight]) => {
-      if (!url || !insight) return;
-      const normalized = toDirectDropbox(url);
-      const payload: ImageInsight = { ...insight, url: normalized } as ImageInsight;
-      insightMap.set(normalized, payload);
-      const base = normalized.split("/").pop()?.toLowerCase();
-      if (base && !insightByName.has(base)) {
-        insightByName.set(base, payload);
+    const insightList: ImageInsight[] = Array.isArray(rawInsights)
+      ? (rawInsights as ImageInsight[])
+      : Object.entries(rawInsights)
+          .map(([url, insight]) => {
+            if (!insight) return null;
+            return { ...(insight as ImageInsight), url };
+          })
+          .filter((value): value is ImageInsight => Boolean(value));
+
+    insightList.forEach((insight) => {
+      const normalizedUrl = typeof insight.url === "string" ? toDirectDropbox(insight.url) : "";
+      if (!normalizedUrl) return;
+      const payload: ImageInsight = { ...insight, url: normalizedUrl };
+      insightMap.set(normalizedUrl, payload);
+      const base = basenameFrom(normalizedUrl).toLowerCase();
+      if (base) {
+        if (!insightByBase.has(base)) {
+          insightByBase.set(base, payload);
+        }
+        const roleRaw = typeof payload.role === "string" ? payload.role.toLowerCase().trim() : "";
+        const info: RoleInfo = {};
+        if (roleRaw === "front" || roleRaw === "back") {
+          info.role = roleRaw;
+        }
+        if (typeof payload.hasVisibleText === "boolean") {
+          info.hasVisibleText = payload.hasVisibleText;
+        }
+        if (info.role || info.hasVisibleText !== undefined) {
+          roleByBase.set(base, info);
+        }
       }
     });
 
     for (const tuple of fileTuples) {
-      const name = (tuple.entry?.name || "").toLowerCase();
-      if (!name) continue;
-      const match = insightByName.get(name);
-      if (match) {
-        insightMap.set(tuple.url, match);
+      const bases = [basenameFrom(tuple.url), basenameFrom(tuple.entry?.name || "")]
+        .map((value) => value.toLowerCase())
+        .filter(Boolean);
+      for (const base of bases) {
+        const match = insightByBase.get(base);
+        if (match) {
+          insightMap.set(tuple.url, match);
+          if (!roleByBase.has(base)) {
+            const roleRaw = typeof match.role === "string" ? match.role.toLowerCase().trim() : "";
+            const info: RoleInfo = {};
+            if (roleRaw === "front" || roleRaw === "back") info.role = roleRaw;
+            if (typeof match.hasVisibleText === "boolean") info.hasVisibleText = match.hasVisibleText;
+            if (info.role || info.hasVisibleText !== undefined) roleByBase.set(base, info);
+          }
+          break;
+        }
       }
     }
+
+    const roleInfoFor = (value: string | null | undefined): RoleInfo | undefined => {
+      if (!value) return undefined;
+      const base = basenameFrom(value).toLowerCase();
+      if (!base) return undefined;
+      return roleByBase.get(base);
+    };
+
+    const insightForUrl = (value: string | null | undefined): ImageInsight | undefined => {
+      if (!value) return undefined;
+      const normalized = toDirectDropbox(value);
+      return insightMap.get(normalized) || insightMap.get(value) || insightByBase.get(basenameFrom(value).toLowerCase());
+    };
     let groups = Array.isArray(analysis?.groups)
       ? (analysis.groups as AnalyzedGroup[])
       : [];
@@ -816,48 +880,6 @@ export const handler: Handler = async (event) => {
           group.images = cleaned.slice();
         }
       }
-      const heroCandidates: string[] = [];
-      const pushHeroCandidate = (value: string | null) => {
-        if (!value) return;
-        if (!heroCandidates.includes(value)) heroCandidates.push(value);
-      };
-
-      pushHeroCandidate(typeof group?.heroUrl === "string" && group.heroUrl ? toDirectDropbox(group.heroUrl) : null);
-      pushHeroCandidate(scanSource);
-      pushHeroCandidate(primaryHint);
-      cleaned.forEach((url) => pushHeroCandidate(url));
-
-      let heroUrl = "";
-      for (const candidate of heroCandidates) {
-        const owner = heroOwnerByImage.get(candidate);
-        if (!owner || owner === groupId) {
-          heroUrl = candidate;
-          if (!owner) heroOwnerByImage.set(candidate, groupId);
-          break;
-        }
-      }
-
-      if (!heroUrl && heroCandidates.length) {
-        heroUrl = heroCandidates[0];
-      }
-
-      if (heroUrl) {
-        const existingOwner = heroOwnerByImage.get(heroUrl);
-        if (!existingOwner) {
-          heroOwnerByImage.set(heroUrl, groupId);
-        }
-        group.heroUrl = heroUrl;
-        group.primaryImageUrl = heroUrl;
-        const existingIndex = cleaned.indexOf(heroUrl);
-        if (existingIndex === -1) cleaned.unshift(heroUrl);
-        else if (existingIndex > 0) {
-          cleaned.splice(existingIndex, 1);
-          cleaned.unshift(heroUrl);
-        }
-      } else {
-        group.heroUrl = undefined;
-      }
-
       const candidateDetails: CandidateDetail[] = cleaned.map((url) => {
         const tuple = tupleByUrl.get(url);
         const entry = tuple?.entry;
@@ -878,59 +900,96 @@ export const handler: Handler = async (event) => {
           ocrText: textParts.join(" ").trim(),
         };
       });
+      let folderKey = normalizeFolderKey(typeof group?.folder === "string" ? group.folder : "");
+      if (!folderKey && scanSource) {
+        const scanEntry = tupleByUrl.get(scanSource)?.entry;
+        if (scanEntry) folderKey = normalizeFolderKey(folderPath(scanEntry));
+      }
+      if (!folderKey && candidateDetails.length) {
+        folderKey = normalizeFolderKey(candidateDetails[0].folder);
+      }
+      if (!folderKey) folderKey = normalizeFolderKey(folder);
 
-      const heroUrlCurrent = group.heroUrl || "";
-      const heroEntry = heroUrlCurrent ? tupleByUrl.get(heroUrlCurrent) : undefined;
-      const heroFolder = heroEntry?.entry
-        ? folderPath(heroEntry.entry) || folder
-        : (typeof group?.folder === "string" && group.folder) || candidateDetails[0]?.folder || folder;
-      const groupCandidates = candidateDetails.filter((candidate) => candidate.folder === heroFolder);
-      folderCandidatesByGroup.set(groupId, groupCandidates);
-      const folderCandidates = groupCandidates.filter((candidate) => candidate.url !== heroUrlCurrent);
+      let groupCandidates = folderKey
+        ? candidateDetails.filter((candidate) => normalizeFolderKey(candidate.folder) === folderKey)
+        : candidateDetails.slice();
+      if (!groupCandidates.length) {
+        groupCandidates = candidateDetails.slice();
+      }
 
-      const heroVec = group.heroUrl ? await getImageVector(group.heroUrl) : null;
+      for (const candidate of groupCandidates) {
+        const info = roleInfoFor(candidate.url) || roleInfoFor(candidate.name);
+        candidate._role = info?.role;
+        candidate._hasText = info?.hasVisibleText;
+      }
+
+      let front = groupCandidates.find((c) => c._role === "front");
+      if (!front && scanSource) {
+        const base = basenameFrom(scanSource);
+        front = groupCandidates.find((c) => basenameFrom(c.url) === base);
+      }
+      if (!front) {
+        front = groupCandidates
+          .slice()
+          .sort((a, b) => (b.ocrText?.length || 0) - (a.ocrText?.length || 0))[0];
+      }
+      if (!front) {
+        front = groupCandidates[0] || candidateDetails[0];
+      }
+
+      const heroUrl = front?.url ? toDirectDropbox(front.url) : "";
+      if (heroUrl) {
+        group.heroUrl = heroUrl;
+        group.primaryImageUrl = heroUrl;
+        const existingIndex = cleaned.indexOf(heroUrl);
+        if (existingIndex === -1) cleaned.unshift(heroUrl);
+        else if (existingIndex > 0) {
+          cleaned.splice(existingIndex, 1);
+          cleaned.unshift(heroUrl);
+        }
+        heroOwnerByImage.set(heroUrl, groupId);
+      } else {
+        group.heroUrl = undefined;
+      }
 
       const secondaryHint =
         typeof group?.secondaryImageUrl === "string" && group.secondaryImageUrl
           ? toDirectDropbox(group.secondaryImageUrl)
           : "";
-      let backGuess = secondaryHint
-        ? folderCandidates.find((candidate) => candidate.url === secondaryHint)
-        : undefined;
-      if (!backGuess) {
-        backGuess = folderCandidates.find((candidate) => looksLikeBack(candidate.ocrText, candidate.name));
+
+      let back = groupCandidates.find((c) => c._role === "back" && c.url !== group.heroUrl);
+      const heroVec = group.heroUrl ? await getImageVector(group.heroUrl) : null;
+
+      if (!back) {
+        back = groupCandidates.find((c) => c.url !== group.heroUrl && looksLikeBack(c.ocrText, c.name));
       }
 
-      if (!backGuess && heroVec && folderCandidates.length) {
+      if (!back && heroVec) {
         const scored = await Promise.all(
-          folderCandidates.map(async (candidate) => {
-            const vec = await getImageVector(candidate.url);
-            const sim = vec && heroVec && vec.length === heroVec.length ? cosine(vec, heroVec) : 0;
-            const len = (candidate.ocrText || "").length;
-            return { candidate, sim, len };
-          })
+          groupCandidates
+            .filter((candidate) => candidate.url !== group.heroUrl)
+            .map(async (candidate) => {
+              const vec = await getImageVector(candidate.url);
+              const sim = vec && heroVec && vec.length === heroVec.length ? cosine(vec, heroVec) : 0;
+              return { candidate, sim };
+            })
         );
-        scored.sort((a, b) => {
-          if (b.len !== a.len) return b.len - a.len;
-          return b.sim - a.sim;
-        });
-        if (scored[0] && scored[0].sim >= BACK_MIN_SIM) {
-          backGuess = scored[0].candidate;
-        }
+        scored.sort((a, b) => b.sim - a.sim);
+        if (scored[0]) back = scored[0].candidate;
       }
 
-      if (backGuess) {
-        group.backUrl = backGuess.url;
-        if (!group.secondaryImageUrl) group.secondaryImageUrl = backGuess.url;
-        await getImageVector(backGuess.url);
-      } else if (secondaryHint && secondaryHint !== heroUrlCurrent) {
+      if (back) {
+        group.backUrl = back.url;
+        group.secondaryImageUrl = back.url;
+        await getImageVector(back.url);
+      } else if (secondaryHint && secondaryHint !== group.heroUrl) {
         group.backUrl = secondaryHint;
         group.secondaryImageUrl = secondaryHint;
-      } else if (typeof group.backUrl === "string" && group.backUrl) {
-        group.backUrl = toDirectDropbox(group.backUrl);
       } else {
         group.backUrl = undefined;
       }
+
+      folderCandidatesByGroup.set(groupId, groupCandidates);
 
       heroVectors.set(groupId, heroVec);
       const backVec = group.backUrl ? await getImageVector(group.backUrl) : null;
@@ -1345,6 +1404,9 @@ export const handler: Handler = async (event) => {
       const heroUrl = typeof group?.heroUrl === "string" ? group.heroUrl : null;
       const clipScores = clipSimByGroup.get(allGroups[gi].groupId) || new Map<string, number>();
 
+      const heroPref = typeof group?.heroUrl === "string" ? group.heroUrl : null;
+      const backPref = typeof group?.backUrl === "string" ? group.backUrl : null;
+
       unique = unique
         .map((url, idx) => {
           const entry = tupleByUrl.get(url);
@@ -1352,7 +1414,7 @@ export const handler: Handler = async (event) => {
           let bias = 0;
           if (tokens.some((token) => POS_NAME_TOKENS.has(token))) bias -= 1;
           if (tokens.some((token) => NEG_NAME_TOKENS.has(token))) bias += 1;
-          const insight = insightMap.get(url);
+          const insight = insightForUrl(url);
           if (insight?.role === "front") bias -= 2;
           if (insight?.role === "back") bias += 2;
           const order = urlOrder.has(url) ? urlOrder.get(url)! : Number.MAX_SAFE_INTEGER + idx;
@@ -1360,9 +1422,9 @@ export const handler: Handler = async (event) => {
           return { url, idx, bias, order, sim };
         })
         .sort((a, b) => {
-          if (heroUrl) {
-            if (a.url === heroUrl && b.url !== heroUrl) return -1;
-            if (b.url === heroUrl && a.url !== heroUrl) return 1;
+          if (heroPref) {
+            if (a.url === heroPref && b.url !== heroPref) return -1;
+            if (b.url === heroPref && a.url !== heroPref) return 1;
           }
           if (b.sim !== a.sim) return b.sim - a.sim;
           if (a.bias !== b.bias) return a.bias - b.bias;
@@ -1371,78 +1433,30 @@ export const handler: Handler = async (event) => {
         .map((item) => item.url)
         .slice(0, 12);
 
-      let heroPref = typeof group?.heroUrl === "string" ? group.heroUrl : null;
-      let backPref = typeof group?.backUrl === "string" ? group.backUrl : null;
-      const secondaryPref = typeof group?.secondaryImageUrl === "string" ? group.secondaryImageUrl : null;
-      const supportingPrefs = Array.isArray(group?.supportingImageUrls)
-        ? group.supportingImageUrls.filter((url): url is string => typeof url === "string" && url.length > 0)
-        : [];
-
-      const lookupInsight = (url: string | undefined | null): ImageInsight | undefined => {
-        if (!url) return undefined;
-        const direct = insightMap.get(url);
-        if (direct) return direct;
-        const base = url.split("/").pop()?.toLowerCase();
-        if (base && insightByName.has(base)) {
-          return insightByName.get(base);
-        }
-        return undefined;
-      };
-
-      const roleForUrl = (url: string | undefined | null) => {
-        const insight = lookupInsight(url || undefined);
-        return insight?.role ? String(insight.role).toLowerCase() : null;
-      };
-
-      if (!heroPref) {
-        const frontCandidate = unique.find((url) => {
-          const role = roleForUrl(url);
-          return role === "front" || role === "primary" || role === "main";
-        });
-        if (frontCandidate) {
-          heroPref = frontCandidate;
-          group.heroUrl = frontCandidate;
-          group.primaryImageUrl = frontCandidate;
-        }
-      }
-
-      if (!backPref) {
-        const backCandidate = unique.find((url) => {
-          const role = roleForUrl(url);
-          return role === "back" || role === "rear" || role === "label";
-        });
-        if (backCandidate && backCandidate !== heroPref) {
-          backPref = backCandidate;
-          group.backUrl = backCandidate;
-          if (!group.secondaryImageUrl) group.secondaryImageUrl = backCandidate;
-        }
-      }
-
-      const preferenceOrder = [heroPref, backPref, secondaryPref, ...supportingPrefs]
-        .filter((url): url is string => Boolean(url))
-        .filter((url, index, list) => list.indexOf(url) === index);
-
+      const rest = unique.filter((url) => url !== heroPref && url !== backPref);
       const orderedImages: string[] = [];
       const seenImages = new Set<string>();
-
-      const pushIfValid = (url?: string | null) => {
+      const pushOrdered = (url: string | null) => {
         if (!url) return;
-        if (!unique.includes(url)) return;
         if (seenImages.has(url)) return;
-        orderedImages.push(url);
         seenImages.add(url);
+        orderedImages.push(url);
       };
 
-      preferenceOrder.forEach((url) => pushIfValid(url));
-      unique.forEach((url) => pushIfValid(url));
+      pushOrdered(heroPref);
+      pushOrdered(backPref);
+      rest.forEach((url) => pushOrdered(url));
 
-      const finalImages = orderedImages.slice(0, 12);
-      if (heroPref && !finalImages.includes(heroPref)) finalImages.unshift(heroPref);
-      if (backPref && !finalImages.includes(backPref) && finalImages.length < 12) finalImages.push(backPref);
+      let finalImages = orderedImages.slice(0, 12);
+      const candidateCount = (folderCandidatesByGroup.get(allGroups[gi].groupId) || []).length;
+      if (candidateCount <= 2) {
+        finalImages = finalImages.slice(0, 2);
+      }
 
-      const trimmed = finalImages.slice(0, 12);
+      if (heroPref) group.primaryImageUrl = heroPref;
+      if (backPref && backPref !== heroPref) group.secondaryImageUrl = backPref;
 
-      normalizedGroups.push({ ...group, images: trimmed });
+      normalizedGroups.push({ ...group, images: finalImages });
     }
 
     const orphanTuples = fileTuples.filter((tuple) => !usedUrls.has(tuple.url));
@@ -1480,6 +1494,7 @@ export const handler: Handler = async (event) => {
           (typeof group?.name === "string" && group.name) ||
           (typeof group?.product === "string" && group.product) ||
           `group_${gi + 1}`;
+        const roleCandidates = folderCandidatesByGroup.get(allGroups[gi].groupId) || [];
         return {
           groupId: group?.groupId || `group_${gi + 1}`,
           name: displayName,
@@ -1492,6 +1507,11 @@ export const handler: Handler = async (event) => {
           reason: clipEnabled
             ? "CLIP image enabled"
             : "CLIP image disabled; used fallback (hero + back hint)",
+          roles: roleCandidates.map((candidate) => ({
+            url: candidate.url,
+            role: candidate._role ?? null,
+            hasText: Boolean(candidate._hasText),
+          })),
           candidates: entries.slice(0, 20),
         };
       });
