@@ -107,7 +107,7 @@ function basenameFrom(u: string): string {
   }
 }
 
-type RoleInfo = { role?: "front" | "back"; hasVisibleText?: boolean };
+type RoleInfo = { role?: "front" | "back"; hasVisibleText?: boolean; ocr?: string };
 
 function isImage(name: string) {
   return /\.(jpe?g|png|gif|webp|tiff?|bmp)$/i.test(name);
@@ -514,9 +514,9 @@ export const handler: Handler = async (event) => {
       metadata: analysisMeta,
       debugVisionResponse: debugEnabled,
     });
-    const insightMap = new Map<string, ImageInsight>();
-    const insightByBase = new Map<string, ImageInsight>();
-    const roleByBase = new Map<string, RoleInfo>();
+  const insightMap = new Map<string, ImageInsight>();
+  const insightByBase = new Map<string, ImageInsight>();
+  const roleByBase = new Map<string, RoleInfo>();
     const rawInsights = analysis?.imageInsights || {};
     const insightList: ImageInsight[] = Array.isArray(rawInsights)
       ? (rawInsights as ImageInsight[])
@@ -526,6 +526,21 @@ export const handler: Handler = async (event) => {
             return { ...(insight as ImageInsight), url };
           })
           .filter((value): value is ImageInsight => Boolean(value));
+
+    const extractInsightOcr = (insight: ImageInsight | undefined): string => {
+      if (!insight) return "";
+      const data = insight as any;
+      const parts: string[] = [];
+      const push = (value: unknown) => {
+        if (typeof value === "string" && value.trim()) parts.push(value.trim());
+      };
+      push(data?.ocrText);
+      if (Array.isArray(data?.textBlocks)) push(data.textBlocks.join(" "));
+      push(data?.text);
+      if (typeof data?.ocr?.text === "string") push(data.ocr.text);
+      if (Array.isArray(data?.ocr?.lines)) push(data.ocr.lines.join(" "));
+      return parts.join(" ").trim();
+    };
 
     insightList.forEach((insight) => {
       const normalizedUrl = typeof insight.url === "string" ? toDirectDropbox(insight.url) : "";
@@ -545,7 +560,9 @@ export const handler: Handler = async (event) => {
         if (typeof payload.hasVisibleText === "boolean") {
           info.hasVisibleText = payload.hasVisibleText;
         }
-        if (info.role || info.hasVisibleText !== undefined) {
+        const ocrText = extractInsightOcr(payload);
+        if (ocrText) info.ocr = ocrText;
+        if (info.role || info.hasVisibleText !== undefined || info.ocr) {
           roleByBase.set(base, info);
         }
       }
@@ -564,7 +581,9 @@ export const handler: Handler = async (event) => {
             const info: RoleInfo = {};
             if (roleRaw === "front" || roleRaw === "back") info.role = roleRaw;
             if (typeof match.hasVisibleText === "boolean") info.hasVisibleText = match.hasVisibleText;
-            if (info.role || info.hasVisibleText !== undefined) roleByBase.set(base, info);
+            const ocrText = extractInsightOcr(match);
+            if (ocrText) info.ocr = ocrText;
+            if (info.role || info.hasVisibleText !== undefined || info.ocr) roleByBase.set(base, info);
           }
           break;
         }
