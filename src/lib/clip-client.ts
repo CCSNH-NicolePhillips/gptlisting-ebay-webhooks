@@ -1,3 +1,5 @@
+import { Buffer } from "node:buffer";
+
 // src/lib/clip-client.ts
 const HF_API_TOKEN = process.env.HF_API_TOKEN || "";
 const CLIP_MODEL = process.env.CLIP_MODEL || "laion/CLIP-ViT-B-32-DataComp.XL-s13B-b90K";
@@ -44,9 +46,14 @@ function normalizeEmbedding(raw: any, { pool = false }: { pool?: boolean } = {})
   return null;
 }
 
+function buildUrl() {
+  const isPrivate = /endpoints\.huggingface\.cloud$/.test(HF_ENDPOINT_BASE);
+  return isPrivate ? HF_ENDPOINT_BASE : `${HF_ENDPOINT_BASE}/models/${encodeURIComponent(CLIP_MODEL)}`;
+}
+
 async function hfCall(body: BodyInit, contentType: string, retries = 2): Promise<any> {
   // For HF Inference Endpoint, the route is <BASE>/models/<MODEL>
-  const url = `${HF_ENDPOINT_BASE}/models/${encodeURIComponent(CLIP_MODEL)}`;
+  const url = buildUrl();
   const res = await fetch(url, {
     method: "POST",
     headers: {
@@ -80,12 +87,33 @@ export async function clipTextEmbedding(text: string): Promise<number[] | null> 
 
 export async function clipImageEmbedding(imageUrl: string): Promise<number[] | null> {
   if (!HF_API_TOKEN) return null;
+  // 1) Fetch original image bytes
   const imgRes = await fetch(imageUrl, { redirect: "follow" });
   if (!imgRes.ok) return null;
   const bytes = new Uint8Array(await imgRes.arrayBuffer());
-  const out = await hfCall(bytes, "application/octet-stream");
-  const vec = normalizeEmbedding(out);
-  return vec ? toUnit(vec) : null;
+
+  // 2) Try data-URL JSON via {"inputs":"data:image/jpeg;base64,..."}
+  try {
+    const b64 = typeof Buffer !== "undefined"
+      ? Buffer.from(bytes).toString("base64")
+      : (globalThis as any).btoa(String.fromCharCode(...bytes));
+    const payload = JSON.stringify({ inputs: `data:image/jpeg;base64,${b64}` });
+    const outJsonFirst = await hfCall(payload, "application/json");
+    const vecFirst = normalizeEmbedding(outJsonFirst);
+    if (vecFirst) return toUnit(vecFirst);
+  } catch (e) {
+    // swallow; try raw
+  }
+
+  // 3) Fallback: raw bytes (some endpoints accept image/* or octet-stream)
+  try {
+    const out = await hfCall(bytes, "application/octet-stream");
+    const vec = normalizeEmbedding(out);
+    if (vec) return toUnit(vec);
+  } catch (e) {
+    // leave null
+  }
+  return null;
 }
 
 // Optional introspection for debug blocks

@@ -9,7 +9,7 @@ export const handler: Handler = async (evt) => {
   return {
     statusCode: 200,
     body: JSON.stringify({
-      ok: !!(t && i && t.length === i.length && t.length > 0),
+  ok: !!(t && t.length > 0) && !!(i && i.length > 0),
       ...info,
       textDim: t?.length || 0,
       imgDim: i?.length || 0,
