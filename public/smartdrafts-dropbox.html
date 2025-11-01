@@ -13,8 +13,13 @@
     .muted{color:#666;font-size:15px}
     .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;margin-top:16px}
     .card{border:1px solid #eee;border-radius:12px;padding:12px;background:#fff;box-shadow:0 1px 2px rgba(17,17,17,0.05)}
-    .thumbs{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
-    .thumbs img{width:64px;height:64px;object-fit:cover;border:1px solid #eee;border-radius:8px;background:#f5f5f5}
+  .thumbs{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .thumb{position:relative}
+  .thumbs img{width:64px;height:64px;object-fit:cover;border:1px solid #eee;border-radius:8px;background:#f5f5f5}
+  .thumb-badge{position:absolute;left:4px;bottom:4px;padding:2px 4px;border-radius:6px;background:rgba(17,17,17,0.82);color:#fff;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.02em}
+  .thumb-badge.secondary{background:rgba(34,102,221,0.82)}
+  .thumb-badge.back{background:rgba(17,17,17,0.72)}
+  .thumb-badge.supporting{background:rgba(85,85,85,0.78)}
     .panel{border:1px solid #ececec;border-radius:12px;padding:16px;margin:18px 0;background:#fafafa}
     .panel h2{margin:0 0 8px;font-size:20px}
     .panel p{margin:4px 0 12px}
@@ -441,6 +446,54 @@
         });
       }
 
+      function derivePreferredImages(group) {
+        const base = Array.isArray(group?.images) ? group.images : [];
+        const hero = typeof group?.heroUrl === 'string' ? group.heroUrl : group?.primaryImageUrl;
+        const back = typeof group?.backUrl === 'string' ? group.backUrl : null;
+        const secondary = typeof group?.secondaryImageUrl === 'string' ? group.secondaryImageUrl : null;
+        const supporting = Array.isArray(group?.supportingImageUrls)
+          ? group.supportingImageUrls.filter((url) => typeof url === 'string' && url.length > 0)
+          : [];
+        const ordered = [hero, back, secondary, ...supporting];
+        const seen = new Set();
+        const result = [];
+        const push = (url) => {
+          if (!url || typeof url !== 'string') return;
+          if (seen.has(url)) return;
+          seen.add(url);
+          result.push(url);
+        };
+        ordered.forEach((url) => push(url));
+        base.forEach((url) => push(url));
+        return result;
+      }
+
+      function imageRole(group, url) {
+        if (!group || !url) return null;
+        const match = (value) => typeof value === 'string' && value === url;
+        if (match(group?.heroUrl) || match(group?.primaryImageUrl)) return 'hero';
+        if (match(group?.backUrl)) return 'back';
+        if (match(group?.secondaryImageUrl)) return 'secondary';
+        if (Array.isArray(group?.supportingImageUrls) && group.supportingImageUrls.includes(url)) return 'supporting';
+        return null;
+      }
+
+      function formatRoleLabel(role) {
+        if (!role) return null;
+        switch (role) {
+          case 'hero':
+            return 'Hero';
+          case 'back':
+            return 'Back';
+          case 'secondary':
+            return 'Alt';
+          case 'supporting':
+            return 'Support';
+          default:
+            return null;
+        }
+      }
+
       function renderGptDrafts(drafts) {
         if (!gptGrid) return;
         gptGrid.innerHTML = '';
@@ -669,9 +722,23 @@
           }
 
           const thumbs = el('div', { class: 'thumbs' });
-          (Array.isArray(group.images) ? group.images : []).slice(0, 8).forEach((url) => {
-            thumbs.appendChild(el('img', { src: url, alt: 'preview' }));
-          });
+          const previewImages = derivePreferredImages(group).slice(0, 8);
+          if (!previewImages.length) {
+            thumbs.appendChild(el('div', { class: 'muted', text: 'No images selected.' }));
+          } else {
+            previewImages.forEach((url) => {
+              const role = imageRole(group, url);
+              const label = formatRoleLabel(role);
+              const badge = label ? el('span', { class: `thumb-badge ${role}`, text: label }) : null;
+              const img = el('img', {
+                src: url,
+                alt: label ? `${label} preview` : 'preview',
+                title: label ? `${label} image` : 'preview',
+              });
+              const children = badge ? [img, badge] : [img];
+              thumbs.appendChild(el('div', { class: 'thumb' }, children));
+            });
+          }
           card.appendChild(thumbs);
 
           const claims = Array.isArray(group.claims) ? group.claims : [];
