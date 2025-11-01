@@ -364,11 +364,98 @@ export const handler: Handler = async (event) => {
       }, originHdr, METHODS);
     }
 
-    const fileTuples = await mapLimit(limitedFiles, 5, async (entry) => {
+    const cachedLinks = cached?.links && typeof cached.links === "object" ? cached.links : undefined;
+    const linkLookup = new Map<string, string>();
+    const linkPersist = new Map<string, string>();
+    if (cachedLinks) {
+      for (const [key, value] of Object.entries(cachedLinks)) {
+        if (typeof key === "string" && typeof value === "string" && key && value) {
+          try {
+            const direct = toDirectDropbox(value);
+            linkLookup.set(key, direct);
+            linkPersist.set(key, direct);
+          } catch {
+            // ignore malformed cached link
+          }
+        }
+      }
+    }
+
+    const missingEntries: Array<{ entry: DropboxEntry; key: string }> = [];
+
+    const resolveKey = (entry: DropboxEntry): string => entry.id || entry.path_lower || entry.path_display || entry.name || "";
+
+    for (const entry of limitedFiles) {
+      const key = resolveKey(entry);
+      if (!key) {
+        missingEntries.push({ entry, key: entry.id || entry.path_lower || entry.path_display || entry.name || "" });
+        continue;
+      }
+      if (linkLookup.has(key)) {
+        const cachedUrl = linkLookup.get(key)!;
+        if (entry.id) {
+          linkPersist.set(entry.id, cachedUrl);
+        } else if (key) {
+          linkPersist.set(key, cachedUrl);
+        }
+        continue;
+      }
+      missingEntries.push({ entry, key });
+    }
+
+    const fetchedTuples = await mapLimit(missingEntries, 5, async ({ entry, key }) => {
+      if (key && linkLookup.has(key)) {
+        const cachedUrl = linkLookup.get(key)!;
+        if (entry.id) {
+          linkPersist.set(entry.id, cachedUrl);
+        } else if (key) {
+          linkPersist.set(key, cachedUrl);
+        }
+        return { entry, url: cachedUrl };
+      }
       const path = entry.path_lower || entry.path_display || entry.id;
       if (!path) throw new Error("Missing Dropbox path for image");
       const url = await dbxSharedRawLink(access, path);
-      return { entry, url: toDirectDropbox(url) };
+      const direct = toDirectDropbox(url);
+      if (key) linkLookup.set(key, direct);
+      if (entry.id) {
+        linkLookup.set(entry.id, direct);
+        linkPersist.set(entry.id, direct);
+      } else if (key) {
+        linkPersist.set(key, direct);
+      }
+      if (entry.path_lower && entry.path_lower !== key) linkLookup.set(entry.path_lower, direct);
+      if (entry.path_display && entry.path_display !== key) linkLookup.set(entry.path_display, direct);
+      return { entry, url: direct };
+    });
+
+    const fetchedByKey = new Map<string, string>();
+    fetchedTuples.forEach(({ entry, url }) => {
+      const key = resolveKey(entry);
+      if (key && !linkLookup.has(key)) linkLookup.set(key, url);
+      fetchedByKey.set(key, url);
+    });
+
+    const fileTuples = limitedFiles.map((entry) => {
+      const key = resolveKey(entry);
+      let url = (key && linkLookup.get(key)) || null;
+      if (!url && entry.id) url = linkLookup.get(entry.id) || null;
+      if (!url && entry.path_lower) url = linkLookup.get(entry.path_lower) || null;
+      if (!url && entry.path_display) url = linkLookup.get(entry.path_display) || null;
+      if (!url) {
+        const fallback =
+          fetchedByKey.get(key) || fetchedByKey.get(entry.id || "") || fetchedByKey.get(entry.path_lower || "");
+        if (fallback) {
+          url = fallback;
+        }
+      }
+      if (!url) throw new Error(`Unable to resolve Dropbox share link for ${entry.name || entry.id || "image"}`);
+      if (entry.id) {
+        linkPersist.set(entry.id, url);
+      } else if (key) {
+        linkPersist.set(key, url);
+      }
+      return { entry, url };
     });
 
     const tupleByUrl = new Map<string, { entry: DropboxEntry; url: string }>();
@@ -1269,12 +1356,39 @@ export const handler: Handler = async (event) => {
         .map((item) => item.url)
         .slice(0, 12);
 
-      const heroPref = typeof group?.heroUrl === "string" ? group.heroUrl : null;
-      const backPref = typeof group?.backUrl === "string" ? group.backUrl : null;
+      let heroPref = typeof group?.heroUrl === "string" ? group.heroUrl : null;
+      let backPref = typeof group?.backUrl === "string" ? group.backUrl : null;
       const secondaryPref = typeof group?.secondaryImageUrl === "string" ? group.secondaryImageUrl : null;
       const supportingPrefs = Array.isArray(group?.supportingImageUrls)
         ? group.supportingImageUrls.filter((url): url is string => typeof url === "string" && url.length > 0)
         : [];
+
+      const roleForUrl = (url: string | undefined | null) => {
+        if (!url) return null;
+        const insight = insightMap.get(url);
+        return insight?.role ? String(insight.role).toLowerCase() : null;
+      };
+
+      if (!heroPref) {
+        const frontCandidate = unique.find((url) => roleForUrl(url) === "front");
+        if (frontCandidate) {
+          heroPref = frontCandidate;
+          group.heroUrl = frontCandidate;
+          group.primaryImageUrl = frontCandidate;
+        }
+      }
+
+      if (!backPref) {
+        const backCandidate = unique.find((url) => {
+          const role = roleForUrl(url);
+          return role === "back" || role === "rear";
+        });
+        if (backCandidate && backCandidate !== heroPref) {
+          backPref = backCandidate;
+          group.backUrl = backCandidate;
+          if (!group.secondaryImageUrl) group.secondaryImageUrl = backCandidate;
+        }
+      }
 
       const preferenceOrder = [heroPref, backPref, secondaryPref, ...supportingPrefs]
         .filter((url): url is string => Boolean(url))
@@ -1316,6 +1430,7 @@ export const handler: Handler = async (event) => {
       groups: payloadGroups,
       orphans,
       warnings,
+  links: linkPersist.size ? Object.fromEntries(linkPersist) : undefined,
       updatedAt: Date.now(),
     };
     await setCachedSmartDraftGroups(cacheKey, cachePayload);
