@@ -162,9 +162,24 @@ async function analyzeBatchViaVision(
             })
             .filter(Boolean);
         }
+        if (debugLog || LOG_VISION_RESPONSES) {
+          try {
+            console.log("🤖 Vision cached response:", JSON.stringify(result, null, 2));
+          } catch {
+            console.log("🤖 Vision cached response (non-serializable):", result);
+          }
+        }
         return result;
       } catch {
-        return { ...cached, _cache: true };
+        const fallback = { ...cached, _cache: true } as any;
+        if (debugLog || LOG_VISION_RESPONSES) {
+          try {
+            console.log("🤖 Vision cached response:", JSON.stringify(fallback, null, 2));
+          } catch {
+            console.log("🤖 Vision cached response (non-serializable):", fallback);
+          }
+        }
+        return fallback;
       }
     }
   }
