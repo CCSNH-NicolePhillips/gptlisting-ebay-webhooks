@@ -498,11 +498,17 @@ export const handler: Handler = async (event) => {
       debugVisionResponse: debugEnabled,
     });
     const insightMap = new Map<string, ImageInsight>();
+    const insightByName = new Map<string, ImageInsight>();
     const rawInsights = analysis?.imageInsights || {};
     Object.entries(rawInsights).forEach(([url, insight]) => {
       if (!url || !insight) return;
       const normalized = toDirectDropbox(url);
-      insightMap.set(normalized, { ...insight, url: normalized });
+      const payload: ImageInsight = { ...insight, url: normalized } as ImageInsight;
+      insightMap.set(normalized, payload);
+      const base = normalized.split("/").pop()?.toLowerCase();
+      if (base && !insightByName.has(base)) {
+        insightByName.set(base, payload);
+      }
     });
     let groups = Array.isArray(analysis?.groups)
       ? (analysis.groups as AnalyzedGroup[])
@@ -1363,14 +1369,27 @@ export const handler: Handler = async (event) => {
         ? group.supportingImageUrls.filter((url): url is string => typeof url === "string" && url.length > 0)
         : [];
 
+      const lookupInsight = (url: string | undefined | null): ImageInsight | undefined => {
+        if (!url) return undefined;
+        const direct = insightMap.get(url);
+        if (direct) return direct;
+        const base = url.split("/").pop()?.toLowerCase();
+        if (base && insightByName.has(base)) {
+          return insightByName.get(base);
+        }
+        return undefined;
+      };
+
       const roleForUrl = (url: string | undefined | null) => {
-        if (!url) return null;
-        const insight = insightMap.get(url);
+        const insight = lookupInsight(url || undefined);
         return insight?.role ? String(insight.role).toLowerCase() : null;
       };
 
       if (!heroPref) {
-        const frontCandidate = unique.find((url) => roleForUrl(url) === "front");
+        const frontCandidate = unique.find((url) => {
+          const role = roleForUrl(url);
+          return role === "front" || role === "primary" || role === "main";
+        });
         if (frontCandidate) {
           heroPref = frontCandidate;
           group.heroUrl = frontCandidate;
@@ -1381,7 +1400,7 @@ export const handler: Handler = async (event) => {
       if (!backPref) {
         const backCandidate = unique.find((url) => {
           const role = roleForUrl(url);
-          return role === "back" || role === "rear";
+          return role === "back" || role === "rear" || role === "label";
         });
         if (backCandidate && backCandidate !== heroPref) {
           backPref = backCandidate;
