@@ -183,8 +183,9 @@ async function analyzeBatchViaVision(batch: string[], metadata: Array<{ url: str
     "Use those hints and your visual judgement to split groups by product/variant even when packaging looks similar.",
     "Extract: brand, product, variant/flavor, size/servings, best-fit category label, categoryPath (parent > child), options object of item specifics (e.g. { Flavor, Formulation, Features, Ingredients, Dietary Feature }), short claims[].",
     "For EVERY image also include quick insights so downstream code can reason about it: hasVisibleText (true/false), dominantColor (one of: black, white, gray, red, orange, yellow, green, blue, purple, brown, multi), role (front, back, side, detail, accessory, packaging, other).",
-    "Return STRICT JSON: { groups: [{ groupId, brand, product, variant, size, category, categoryPath, options, claims, confidence, images[] }], imageInsights: [{ url, hasVisibleText, dominantColor, role }] }.",
-    "Ensure group.images entries are strings (exact image URLs). imageInsights.url must match one of those URLs.",
+    "Return STRICT JSON: { groups: [{ groupId, brand, product, variant, size, category, categoryPath, options, claims, confidence, images[], primaryImageUrl, secondaryImageUrl, supportingImageUrls }], imageInsights: [{ url, hasVisibleText, dominantColor, role }] }.",
+    "primaryImageUrl must point to the best hero/front image (always include when available). secondaryImageUrl should reference the clearest back/label view. supportingImageUrls is an array of other helpful angles (use [] or omit when none).",
+    "Ensure every listed URL is an exact image URL and appears in group.images. imageInsights.url must match one of those URLs.",
     "If uncertain, group best-guess and lower confidence, but avoid mixing images whose hints differ (e.g. different folder or filename).",
   ].join("\n");
 
@@ -193,6 +194,16 @@ async function analyzeBatchViaVision(batch: string[], metadata: Array<{ url: str
     // Post-process images: some providers may return placeholders or omit URLs.
     try {
       const validHttp = (u: unknown) => typeof u === "string" && /^https?:\/\//i.test(u.trim());
+      const normalizeUrl = (value: unknown): string | null => {
+        if (typeof value !== "string") return null;
+        const trimmed = value.trim();
+        if (!trimmed) return null;
+        try {
+          return toDirectDropbox(trimmed);
+        } catch {
+          return null;
+        }
+      };
       const anyResult = result as any;
       if (Array.isArray(anyResult?.groups)) {
         for (const g of anyResult.groups) {
@@ -203,6 +214,82 @@ async function analyzeBatchViaVision(batch: string[], metadata: Array<{ url: str
             imgs = batch.slice(0, 12);
           }
           g.images = imgs.map((u: string) => toDirectDropbox(u));
+          const imageSet = new Set<string>(g.images);
+
+          const maybePrimary =
+            normalizeUrl(g?.primaryImageUrl) ||
+            normalizeUrl(g?.primary_image_url) ||
+            normalizeUrl(g?.heroImageUrl) ||
+            normalizeUrl(g?.heroUrl);
+          if (maybePrimary) {
+            g.primaryImageUrl = maybePrimary;
+            if (!g.heroUrl) g.heroUrl = maybePrimary;
+            if (!imageSet.has(maybePrimary)) {
+              g.images.unshift(maybePrimary);
+              imageSet.add(maybePrimary);
+            }
+          } else if (g?.primaryImageUrl !== undefined) {
+            delete g.primaryImageUrl;
+          }
+
+          const maybeSecondary =
+            normalizeUrl(g?.secondaryImageUrl) ||
+            normalizeUrl(g?.secondary_image_url) ||
+            normalizeUrl(g?.backImageUrl) ||
+            normalizeUrl(g?.backUrl);
+          if (maybeSecondary && maybeSecondary !== g.primaryImageUrl) {
+            g.secondaryImageUrl = maybeSecondary;
+            if (!g.backUrl) g.backUrl = maybeSecondary;
+            if (!imageSet.has(maybeSecondary)) {
+              g.images.push(maybeSecondary);
+              imageSet.add(maybeSecondary);
+            }
+          } else if (g?.secondaryImageUrl !== undefined) {
+            delete g.secondaryImageUrl;
+          }
+
+          if (typeof g?.heroUrl === "string") {
+            const normalizedHero = normalizeUrl(g.heroUrl);
+            if (normalizedHero) {
+              g.heroUrl = normalizedHero;
+              if (!imageSet.has(normalizedHero)) {
+                g.images.unshift(normalizedHero);
+                imageSet.add(normalizedHero);
+              }
+            } else {
+              delete g.heroUrl;
+            }
+          }
+
+          if (typeof g?.backUrl === "string") {
+            const normalizedBack = normalizeUrl(g.backUrl);
+            if (normalizedBack) {
+              g.backUrl = normalizedBack;
+              if (!imageSet.has(normalizedBack)) {
+                g.images.push(normalizedBack);
+                imageSet.add(normalizedBack);
+              }
+            } else {
+              delete g.backUrl;
+            }
+          }
+
+          const supportingRaw = Array.isArray(g?.supportingImageUrls)
+            ? (g.supportingImageUrls as unknown[])
+            : Array.isArray(g?.supporting_image_urls)
+            ? (g.supporting_image_urls as unknown[])
+            : null;
+          if (supportingRaw) {
+            const supporting: string[] = supportingRaw
+              .map((value: unknown) => normalizeUrl(value))
+              .filter((value): value is string => Boolean(value));
+            const deduped = Array.from(new Set<string>(supporting.filter((url: string) => imageSet.has(url))));
+            if (deduped.length) {
+              g.supportingImageUrls = deduped;
+            } else {
+              delete g.supportingImageUrls;
+            }
+          }
         }
       }
       if (Array.isArray(anyResult?.imageInsights)) {
