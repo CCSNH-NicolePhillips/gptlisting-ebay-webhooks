@@ -688,6 +688,20 @@ export const handler: Handler = async (event) => {
         typeof group?.primaryImageUrl === "string" && group.primaryImageUrl
           ? toDirectDropbox(group.primaryImageUrl)
           : "";
+      if (!cleaned.length) {
+        const fallbackFolder =
+          (typeof group?.folder === "string" && group.folder.trim()) ||
+          (scanSource ? folderPath(tupleByUrl.get(scanSource)?.entry as DropboxEntry) : "") ||
+          folder;
+        const folderMatches = fileTuples
+          .filter((tuple) => (folderPath(tuple.entry) || folder) === fallbackFolder)
+          .map((tuple) => tuple.url);
+        if (folderMatches.length) {
+          const additions = folderMatches.filter((url) => !cleaned.includes(url));
+          cleaned.push(...additions);
+          group.images = cleaned.slice();
+        }
+      }
       let heroUrl = typeof group?.heroUrl === "string" && group.heroUrl ? toDirectDropbox(group.heroUrl) : "";
       if (!heroUrl && scanSource) heroUrl = scanSource;
       if (!heroUrl && primaryHint) heroUrl = primaryHint;
