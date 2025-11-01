@@ -3,4 +3,11 @@ export type ImageInsight = {
   hasVisibleText?: boolean;
   dominantColor?: string;
   role?: string;
+  ocrText?: string;
+  textBlocks?: string[];
+  text?: string;
+  ocr?: {
+    text?: string;
+    lines?: string[];
+  };
 };
