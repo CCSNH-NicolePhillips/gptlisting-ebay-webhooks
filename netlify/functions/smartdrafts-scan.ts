@@ -405,7 +405,11 @@ export const handler: Handler = async (event) => {
       await consumeImages(user.userId, urls.length);
     }
 
-    const analysis = await runAnalysis(urls, 12, { skipPricing: true, metadata: analysisMeta });
+    const analysis = await runAnalysis(urls, 12, {
+      skipPricing: true,
+      metadata: analysisMeta,
+      debugVisionResponse: debugEnabled,
+    });
     const insightMap = new Map<string, ImageInsight>();
     const rawInsights = analysis?.imageInsights || {};
     Object.entries(rawInsights).forEach(([url, insight]) => {
@@ -710,14 +714,38 @@ export const handler: Handler = async (event) => {
           group.images = cleaned.slice();
         }
       }
-      let heroUrl = typeof group?.heroUrl === "string" && group.heroUrl ? toDirectDropbox(group.heroUrl) : "";
-      if (!heroUrl && scanSource) heroUrl = scanSource;
-      if (!heroUrl && primaryHint) heroUrl = primaryHint;
-      if (!heroUrl) heroUrl = cleaned[0] || "";
+      const heroCandidates: string[] = [];
+      const pushHeroCandidate = (value: string | null) => {
+        if (!value) return;
+        if (!heroCandidates.includes(value)) heroCandidates.push(value);
+      };
+
+      pushHeroCandidate(typeof group?.heroUrl === "string" && group.heroUrl ? toDirectDropbox(group.heroUrl) : null);
+      pushHeroCandidate(scanSource);
+      pushHeroCandidate(primaryHint);
+      cleaned.forEach((url) => pushHeroCandidate(url));
+
+      let heroUrl = "";
+      for (const candidate of heroCandidates) {
+        const owner = heroOwnerByImage.get(candidate);
+        if (!owner || owner === groupId) {
+          heroUrl = candidate;
+          if (!owner) heroOwnerByImage.set(candidate, groupId);
+          break;
+        }
+      }
+
+      if (!heroUrl && heroCandidates.length) {
+        heroUrl = heroCandidates[0];
+      }
+
       if (heroUrl) {
+        const existingOwner = heroOwnerByImage.get(heroUrl);
+        if (!existingOwner) {
+          heroOwnerByImage.set(heroUrl, groupId);
+        }
         group.heroUrl = heroUrl;
-        if (!group.primaryImageUrl) group.primaryImageUrl = heroUrl;
-        heroOwnerByImage.set(heroUrl, groupId);
+        group.primaryImageUrl = heroUrl;
         const existingIndex = cleaned.indexOf(heroUrl);
         if (existingIndex === -1) cleaned.unshift(heroUrl);
         else if (existingIndex > 0) {
