@@ -1,7 +1,5 @@
 import { Buffer } from "node:buffer";
 
-import { Buffer } from "node:buffer";
-
 const HF_TOKEN = process.env.HF_API_TOKEN || "";
 const TEXT_BASE = (process.env.HF_TEXT_ENDPOINT_BASE || "").replace(/\/+$/, "");
 const IMAGE_BASE = (process.env.HF_IMAGE_ENDPOINT_BASE || "").replace(/\/+$/, "");
