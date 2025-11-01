@@ -70,6 +70,9 @@ type AnalyzedGroup = {
   images?: string[];
   heroUrl?: string;
   backUrl?: string;
+  primaryImageUrl?: string;
+  secondaryImageUrl?: string;
+  supportingImageUrls?: string[];
   [key: string]: unknown;
 };
 
@@ -681,11 +684,17 @@ export const handler: Handler = async (event) => {
         .filter((img: string) => img.length > 0);
 
       const scanSource = extractScanSourceImageUrl(group);
+      const primaryHint =
+        typeof group?.primaryImageUrl === "string" && group.primaryImageUrl
+          ? toDirectDropbox(group.primaryImageUrl)
+          : "";
       let heroUrl = typeof group?.heroUrl === "string" && group.heroUrl ? toDirectDropbox(group.heroUrl) : "";
       if (!heroUrl && scanSource) heroUrl = scanSource;
+      if (!heroUrl && primaryHint) heroUrl = primaryHint;
       if (!heroUrl) heroUrl = cleaned[0] || "";
       if (heroUrl) {
         group.heroUrl = heroUrl;
+        if (!group.primaryImageUrl) group.primaryImageUrl = heroUrl;
         heroOwnerByImage.set(heroUrl, groupId);
         const existingIndex = cleaned.indexOf(heroUrl);
         if (existingIndex === -1) cleaned.unshift(heroUrl);
@@ -729,7 +738,16 @@ export const handler: Handler = async (event) => {
 
       const heroVec = group.heroUrl ? await getImageVector(group.heroUrl) : null;
 
-      let backGuess = folderCandidates.find((candidate) => looksLikeBack(candidate.ocrText, candidate.name));
+      const secondaryHint =
+        typeof group?.secondaryImageUrl === "string" && group.secondaryImageUrl
+          ? toDirectDropbox(group.secondaryImageUrl)
+          : "";
+      let backGuess = secondaryHint
+        ? folderCandidates.find((candidate) => candidate.url === secondaryHint)
+        : undefined;
+      if (!backGuess) {
+        backGuess = folderCandidates.find((candidate) => looksLikeBack(candidate.ocrText, candidate.name));
+      }
 
       if (!backGuess && heroVec && folderCandidates.length) {
         const scored = await Promise.all(
@@ -751,7 +769,11 @@ export const handler: Handler = async (event) => {
 
       if (backGuess) {
         group.backUrl = backGuess.url;
+        if (!group.secondaryImageUrl) group.secondaryImageUrl = backGuess.url;
         await getImageVector(backGuess.url);
+      } else if (secondaryHint && secondaryHint !== heroUrlCurrent) {
+        group.backUrl = secondaryHint;
+        group.secondaryImageUrl = secondaryHint;
       } else if (typeof group.backUrl === "string" && group.backUrl) {
         group.backUrl = toDirectDropbox(group.backUrl);
       } else {
@@ -779,13 +801,23 @@ export const handler: Handler = async (event) => {
       for (const { group, groupId } of allGroups) {
         const heroUrl = typeof group?.heroUrl === "string" ? group.heroUrl : "";
         const folderCandidates = folderCandidatesByGroup.get(groupId) || [];
-        const folderUrls = [heroUrl, ...folderCandidates.map((candidate) => candidate.url)].filter(
-          (url): url is string => Boolean(url)
-        );
+        const secondaryHint =
+          typeof group?.secondaryImageUrl === "string" && group.secondaryImageUrl
+            ? group.secondaryImageUrl
+            : "";
+        const supportingHints = Array.isArray(group?.supportingImageUrls)
+          ? group.supportingImageUrls.filter((url): url is string => typeof url === "string" && url.length > 0)
+          : [];
+        const folderUrls = [heroUrl, secondaryHint, ...supportingHints, ...folderCandidates.map((candidate) => candidate.url)]
+          .filter((url): url is string => Boolean(url))
+          .filter((url, idx, list) => list.indexOf(url) === idx);
 
         let second: string | undefined;
         if (typeof group?.backUrl === "string" && group.backUrl && group.backUrl !== heroUrl) {
           second = group.backUrl;
+        }
+        if (!second && secondaryHint && secondaryHint !== heroUrl) {
+          second = secondaryHint;
         }
         if (!second) {
           const hinted = folderCandidates.find((candidate) => looksLikeBack(candidate.ocrText, candidate.name));
@@ -802,6 +834,7 @@ export const handler: Handler = async (event) => {
 
         const uniqueFallback = Array.from(new Set(fallbackImages.length ? fallbackImages : fallbackPrimary));
         group.backUrl = uniqueFallback.length > 1 ? uniqueFallback[1] : undefined;
+        group.secondaryImageUrl = group.backUrl || (secondaryHint && secondaryHint !== heroUrl ? secondaryHint : undefined);
 
         group.images = uniqueFallback;
         fallbackAssignments.set(groupId, uniqueFallback);
@@ -1228,6 +1261,9 @@ export const handler: Handler = async (event) => {
           name: displayName,
           heroUrl: typeof group?.heroUrl === "string" ? group.heroUrl : null,
           backUrl: typeof group?.backUrl === "string" ? group.backUrl : null,
+          primaryImageUrl: typeof group?.primaryImageUrl === "string" ? group.primaryImageUrl : null,
+          secondaryImageUrl: typeof group?.secondaryImageUrl === "string" ? group.secondaryImageUrl : null,
+          supportingImageUrls: Array.isArray(group?.supportingImageUrls) ? group.supportingImageUrls.slice(0, 6) : [],
           clipEnabled,
           reason: clipEnabled
             ? "CLIP image enabled"
