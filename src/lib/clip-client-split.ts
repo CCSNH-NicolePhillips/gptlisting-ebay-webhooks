@@ -3,7 +3,6 @@ import { Buffer } from "node:buffer";
 const HF_TOKEN = process.env.HF_API_TOKEN || "";
 const TEXT_BASE = (process.env.HF_TEXT_ENDPOINT_BASE || "").replace(/\/+$/, "");
 const IMAGE_BASE = (process.env.HF_IMAGE_ENDPOINT_BASE || "").replace(/\/+$/, "");
-const CLIP_MODEL = process.env.CLIP_MODEL || "";
 
 function toUnit(v: number[]): number[] {
   let n = 0;
@@ -20,21 +19,23 @@ export function cosine(a: number[] | null, b: number[] | null): number {
   return d;
 }
 
+function meanPool(mat: number[][]) {
+  const r = mat.length;
+  const c = mat[0].length;
+  const out = new Array<number>(c).fill(0);
+  for (let i = 0; i < r; i++) {
+    for (let j = 0; j < c; j++) out[j] += mat[i][j] || 0;
+  }
+  for (let j = 0; j < c; j++) out[j] /= r;
+  return out;
+}
+
 function normalize(raw: any, pool = false): number[] | null {
   if (!raw) return null;
   if (Array.isArray(raw) && typeof raw[0] === "number") return raw as number[];
   if (Array.isArray(raw) && Array.isArray(raw[0]) && typeof raw[0][0] === "number") {
-    const mat = raw as number[][];
-    if (mat.length === 1) return mat[0];
-    if (!pool) return null;
-    const rows = mat.length;
-    const cols = mat[0].length;
-    const out = new Array<number>(cols).fill(0);
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) out[c] += mat[r][c] || 0;
-    }
-    for (let c = 0; c < cols; c++) out[c] /= rows || 1;
-    return out;
+    if (raw.length === 1) return raw[0] as number[];
+    return pool ? meanPool(raw as number[][]) : null;
   }
   if (raw && Array.isArray(raw.embeddings)) return normalize(raw.embeddings, pool);
   if (raw && Array.isArray(raw.embedding)) return normalize(raw.embedding, pool);
@@ -55,13 +56,11 @@ async function post(url: string, headers: Record<string, string>, body: BodyInit
 }
 
 export async function clipTextEmbedding(text: string): Promise<number[] | null> {
-  const base = TEXT_BASE;
-  const token = HF_TOKEN;
-  if (!base || !token) return null;
+  if (!HF_TOKEN || !TEXT_BASE) return null;
   const json = await post(
-    base,
+    TEXT_BASE,
     {
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${HF_TOKEN}`,
       Accept: "application/json",
       "Content-Type": "application/json",
     },
@@ -72,9 +71,7 @@ export async function clipTextEmbedding(text: string): Promise<number[] | null> 
 }
 
 export async function clipImageEmbedding(imageUrl: string): Promise<number[] | null> {
-  const base = IMAGE_BASE;
-  const token = HF_TOKEN;
-  if (!base || !token) return null;
+  if (!HF_TOKEN || !IMAGE_BASE) return null;
 
   const r = await fetch(imageUrl, { redirect: "follow" });
   if (!r.ok) return null;
@@ -84,32 +81,32 @@ export async function clipImageEmbedding(imageUrl: string): Promise<number[] | n
     : (globalThis as any).btoa(String.fromCharCode(...bytes));
 
   try {
-    const json1 = await post(
-      base,
+    const j1 = await post(
+      IMAGE_BASE,
       {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${HF_TOKEN}`,
         Accept: "application/json",
         "Content-Type": "application/json",
       },
       JSON.stringify({ inputs: `data:image/jpeg;base64,${b64}` })
     );
-    const v1 = normalize(json1);
+    const v1 = normalize(j1);
     if (v1) return toUnit(v1);
   } catch {
     // continue to fallback
   }
 
   try {
-    const json2 = await post(
-      base,
+    const j2 = await post(
+      IMAGE_BASE,
       {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${HF_TOKEN}`,
         Accept: "application/json",
         "Content-Type": "image/jpeg",
       },
       bytes
     );
-    const v2 = normalize(json2);
+    const v2 = normalize(j2);
     if (v2) return toUnit(v2);
   } catch {
     // leave null
@@ -119,9 +116,5 @@ export async function clipImageEmbedding(imageUrl: string): Promise<number[] | n
 }
 
 export function clipProviderInfo() {
-  return {
-    provider: "hf-single-endpoint",
-    model: CLIP_MODEL,
-    base: TEXT_BASE,
-  };
+  return { provider: "hf-split-endpoints", textBase: TEXT_BASE, imageBase: IMAGE_BASE };
 }
