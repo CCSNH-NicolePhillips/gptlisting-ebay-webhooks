@@ -1,5 +1,5 @@
 import { getTextEmb, getImageEmb } from "./clip-provider.js";
-import { cosine as clientCosine } from "./clip-client.js";
+import { cosine as clientCosine } from "./clip-client-split.js";
 
 export async function clipTextEmbedding(text: string): Promise<number[] | null> {
   return getTextEmb(text);

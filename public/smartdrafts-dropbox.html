@@ -296,6 +296,8 @@
             `provider ${clipMeta.provider ?? 'hf'}`,
             `model ${clipMeta.model ?? 'n/a'}`,
             clipMeta.base ? `base ${clipMeta.base}` : null,
+            clipMeta.textBase ? `text ${clipMeta.textBase}` : null,
+            clipMeta.imageBase ? `image ${clipMeta.imageBase}` : null,
             `text ${clipMeta.textDim ?? 0}`,
             `img ${clipMeta.imgDim ?? 0}`,
             `weight ${clipMeta.weight ?? '—'}`,
