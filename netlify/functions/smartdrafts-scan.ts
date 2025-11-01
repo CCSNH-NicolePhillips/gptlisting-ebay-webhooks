@@ -7,7 +7,7 @@ import { userScopedKey } from "../../src/lib/_auth.js";
 import { runAnalysis } from "../../src/lib/analyze-core.js";
 import type { ImageInsight } from "../../src/lib/image-insight.js";
 import { getTextEmb, getImageEmb } from "../../src/lib/clip-provider.js";
-import { cosine } from "../../src/lib/clip-client.js";
+import { cosine, clipProviderInfo } from "../../src/lib/clip-client.js";
 import { sanitizeUrls, toDirectDropbox } from "../../src/lib/merge.js";
 import { canConsumeImages, consumeImages } from "../../src/lib/quota.js";
 import {
@@ -910,17 +910,15 @@ export const handler: Handler = async (event) => {
         };
       });
 
-      const clipModel = process.env.CLIP_MODEL || "laion/CLIP-ViT-B-32-laion2B-s34B-b79K";
-      const clipProvider = (process.env.CLIP_PROVIDER || "hf").toLowerCase() || "hf";
+      const providerMeta = clipProviderInfo();
       const clipDebug: Record<string, unknown> = {
-        provider: clipProvider,
-        model: clipModel,
+        ...providerMeta,
         weight: CLIP_WEIGHT,
         minSimilarity: CLIP_MIN_SIM,
         textDim: firstTextDim,
         imgDim: firstImageDim,
+        enabled: Boolean(firstTextDim && firstImageDim),
       };
-      clipDebug.enabled = Boolean(clipDebug.textDim && clipDebug.imgDim);
       const fallbackClipError =
         lastClipError ||
         (!process.env.HF_API_TOKEN

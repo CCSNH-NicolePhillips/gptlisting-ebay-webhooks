@@ -295,6 +295,7 @@
             clipMeta.enabled ? 'enabled' : 'disabled',
             `provider ${clipMeta.provider ?? 'hf'}`,
             `model ${clipMeta.model ?? 'n/a'}`,
+            clipMeta.base ? `base ${clipMeta.base}` : null,
             `text ${clipMeta.textDim ?? 0}`,
             `img ${clipMeta.imgDim ?? 0}`,
             `weight ${clipMeta.weight ?? '—'}`,
@@ -306,7 +307,7 @@
           card.appendChild(
             el('div', {
               class: 'muted',
-              text: `CLIP ${clipPieces.join(' • ')} • MIN_ASSIGN ${debugPayload.minAssign}`,
+              text: `CLIP ${clipPieces.filter(Boolean).join(' • ')} • MIN_ASSIGN ${debugPayload.minAssign}`,
             }),
           );
 
