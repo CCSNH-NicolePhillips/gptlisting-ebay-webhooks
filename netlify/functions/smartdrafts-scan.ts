@@ -68,11 +68,6 @@ type DebugCandidate = {
 const METHODS = "POST, OPTIONS";
 const MAX_IMAGES = Math.max(1, Math.min(100, Number(process.env.SMARTDRAFT_MAX_IMAGES || 100)));
 
-function envNumber(raw: unknown, fallback: number): number {
-  const value = Number(raw);
-  return Number.isFinite(value) ? value : fallback;
-}
-
 function toUnit(v: number[]): number[] {
   let mag = 0;
   for (const x of v) mag += x * x;
@@ -81,21 +76,6 @@ function toUnit(v: number[]): number[] {
   return v.map((x) => x * inv);
 }
 
-function averageUnit(vectors: number[][]): number[] | null {
-  if (!vectors.length) return null;
-  const dim = vectors[0].length;
-  if (!Number.isInteger(dim) || dim <= 0) return null;
-  const total = new Array<number>(dim).fill(0);
-  let count = 0;
-  for (const vec of vectors) {
-    if (!Array.isArray(vec) || vec.length !== dim) continue;
-    for (let i = 0; i < dim; i++) total[i] += vec[i];
-    count++;
-  }
-  if (!count) return null;
-  const mean = total.map((value) => value / count);
-  return toUnit(mean);
-}
 
 function isImage(name: string) {
   return /\.(jpe?g|png|gif|webp|tiff?|bmp)$/i.test(name);
@@ -495,12 +475,18 @@ export const handler: Handler = async (event) => {
       "_bg",
     ]);
 
-    const CLIP_WEIGHT = envNumber(process.env.CLIP_WEIGHT, 20);
-    const CLIP_MIN_SIM = envNumber(process.env.CLIP_MIN_SIM, 0.12);
-    const CLIP_MARGIN = envNumber(process.env.CLIP_MARGIN, 0.06);
-    const MIN_ASSIGN = Math.max(1, Math.round(envNumber(process.env.SMARTDRAFT_MIN_ASSIGN, 3)));
-    const MAX_ASSIGN = Math.max(1, Math.round(envNumber(process.env.SMARTDRAFT_MAX_PER_GROUP, 12)));
-    const MAX_DUPES_PER_GROUP = Math.max(0, Math.round(envNumber(process.env.SMARTDRAFT_MAX_DUPES, 1)));
+  const CLIP_WEIGHT_RAW = Number(process.env.CLIP_WEIGHT ?? 20);
+  const CLIP_WEIGHT = Number.isFinite(CLIP_WEIGHT_RAW) ? CLIP_WEIGHT_RAW : 20;
+  const CLIP_MIN_SIM_RAW = Number(process.env.CLIP_MIN_SIM ?? 0.12);
+  const CLIP_MIN_SIM = Number.isFinite(CLIP_MIN_SIM_RAW) ? CLIP_MIN_SIM_RAW : 0.12;
+  const CLIP_MARGIN_RAW = Number(process.env.CLIP_MARGIN ?? 0.06);
+  const CLIP_MARGIN = Number.isFinite(CLIP_MARGIN_RAW) ? CLIP_MARGIN_RAW : 0.06;
+  const MIN_ASSIGN_RAW = Number(process.env.SMARTDRAFT_MIN_ASSIGN ?? 3);
+  const MIN_ASSIGN = Number.isFinite(MIN_ASSIGN_RAW) ? MIN_ASSIGN_RAW : 3;
+  const MAX_DUPES_RAW = Number(process.env.SMARTDRAFT_MAX_DUPES ?? 1);
+  const MAX_DUPES_PER_GROUP = Number.isFinite(MAX_DUPES_RAW) ? MAX_DUPES_RAW : 1;
+  const BRAND_SEP_ALPHA_RAW = Number(process.env.BRAND_SEP_ALPHA ?? 0.25);
+  const BRAND_SEP_ALPHA = Number.isFinite(BRAND_SEP_ALPHA_RAW) ? BRAND_SEP_ALPHA_RAW : 0.25;
 
     const COLOR_WEIGHTS: Record<string, number> = {
       black: -8,
@@ -542,9 +528,6 @@ export const handler: Handler = async (event) => {
       return { group, index: gi, groupId, brand };
     });
 
-    const groupIndexById = new Map<string, number>();
-    allGroups.forEach(({ groupId, index }) => groupIndexById.set(groupId, index));
-
     const groupTextVecs = new Map<string, number[] | null>();
     let firstTextDim = 0;
     let firstImageDim = 0;
@@ -568,30 +551,36 @@ export const handler: Handler = async (event) => {
       return brandEmbeddingCache.get(key)!;
     };
 
-  for (const { group, groupId } of allGroups) {
-      const seedParts = [group?.brand, group?.product, group?.variant, group?.size]
+    for (const { group, groupId } of allGroups) {
+      const seedParts = [group?.brand, group?.product, group?.variant, group?.size, "bottle packaging photo"]
         .map((part) => (typeof part === "string" ? part.trim() : ""))
         .filter(Boolean);
-      const seedText = seedParts.length ? seedParts.join(" ") : "product";
-      const otherBrands = allGroups
-        .filter((entry) => entry.groupId !== groupId)
-        .map((entry) => entry.brand)
-        .filter((value) => Boolean(value));
-
-      let meanOther: number[] | null = null;
-      if (otherBrands.length) {
-        const otherVectorsRaw = await Promise.all(otherBrands.map((b) => getBrandEmbedding(b)));
-        const usable = otherVectorsRaw.filter((vec): vec is number[] => Array.isArray(vec) && vec.length > 0);
-        if (usable.length) meanOther = averageUnit(usable) || null;
-      }
+      const seedText = seedParts.join(" ") || "product bottle packaging photo";
 
       try {
-        let seedVec = await getTextEmb(`${seedText} packaging photo`);
+        let seedVec = await getTextEmb(seedText);
         if (seedVec && !firstTextDim) firstTextDim = seedVec.length;
-        if (seedVec && meanOther && seedVec.length === meanOther.length) {
-          const alpha = 0.25;
-          seedVec = toUnit(seedVec.map((v, idx) => v - alpha * meanOther![idx]));
+
+        if (seedVec) {
+          const otherBrands = allGroups
+            .filter((entry) => entry.groupId !== groupId)
+            .map((entry) => entry.brand)
+            .filter((value) => Boolean(value));
+
+          if (otherBrands.length) {
+            const otherVecsRaw = await Promise.all(otherBrands.map((brand) => getBrandEmbedding(brand)));
+            const otherVecs = otherVecsRaw.filter((vec): vec is number[] => Array.isArray(vec) && vec.length > 0);
+            if (otherVecs.length && seedVec.length === otherVecs[0].length) {
+              const meanOther = toUnit(
+                otherVecs[0].map((_, idx) => otherVecs.reduce((sum, vec) => sum + vec[idx], 0) / otherVecs.length)
+              );
+              if (meanOther.length === seedVec.length) {
+                seedVec = toUnit(seedVec.map((value, idx) => value - BRAND_SEP_ALPHA * meanOther[idx]));
+              }
+            }
+          }
         }
+
         groupTextVecs.set(groupId, seedVec);
       } catch (err: any) {
         if (!lastClipError) {
@@ -706,11 +695,6 @@ export const handler: Handler = async (event) => {
       return { score };
     };
 
-    const targetPerGroup = groups.map((group, gi) => {
-      const desired = desiredByGroup[gi]?.length || 0;
-      return Math.min(MAX_ASSIGN, Math.max(desired, 1));
-    });
-
     const imageEmbeddings = await Promise.all(
       fileTuples.map((tuple) => (clipEnabled ? getImageEmbedding(tuple.url) : Promise.resolve(null)))
     );
@@ -739,7 +723,7 @@ export const handler: Handler = async (event) => {
         let combined = base;
         let clipContribution = 0;
         let clipSimilarity: number | null = null;
-  const groupId = allGroups[gi].groupId;
+    const groupId = allGroups[gi].groupId;
         if (clipEnabled) {
           const textEmb = groupTextVecs.get(groupId);
           const imageEmb = imageEmbeddings[ti];
@@ -802,19 +786,11 @@ export const handler: Handler = async (event) => {
       return set;
     };
 
-    const groupCapacity = (groupId: string): number => {
-      const idx = groupIndexById.get(groupId);
-      const baseTarget = idx === undefined ? MAX_ASSIGN : targetPerGroup[idx] ?? MAX_ASSIGN;
-      const minTarget = Math.min(MAX_ASSIGN, Math.max(MIN_ASSIGN, 1));
-      return Math.min(MAX_ASSIGN, Math.max(baseTarget, minTarget));
-    };
-
-    const addImageToGroup = (groupId: string, imageUrl: string): boolean => {
+    const addToGroup = (groupId: string, imageUrl: string): boolean => {
       const set = ensureGroupSet(groupId);
-      const capacity = groupCapacity(groupId);
-      if (set.size >= capacity) return false;
       const before = set.size;
       set.add(imageUrl);
+      assignedImageTo.set(imageUrl, groupId);
       return set.size !== before;
     };
 
@@ -830,35 +806,34 @@ export const handler: Handler = async (event) => {
       const next = ranks[1];
       const decisive = !next || best.sim - next.sim >= CLIP_MARGIN;
       if (!decisive) continue;
-      if (addImageToGroup(best.groupId, imageUrl)) {
-        assignedImageTo.set(imageUrl, best.groupId);
+      if (!assignedImageTo.has(imageUrl)) {
+        addToGroup(best.groupId, imageUrl);
       }
     }
 
     // Pass B: satisfy minimum coverage, allowing limited duplicates when required.
     for (const { groupId } of allGroups) {
       const set = ensureGroupSet(groupId);
-      const capacity = groupCapacity(groupId);
-      let remaining = Math.max(0, MIN_ASSIGN - set.size);
+      const minTarget = Math.max(0, Math.round(MIN_ASSIGN));
+      let remaining = Math.max(0, minTarget - set.size);
       if (!remaining) continue;
 
       for (const [imageUrl, ranks] of ranksByImage.entries()) {
-        if (remaining <= 0 || set.size >= capacity) break;
+        if (remaining <= 0) break;
         const rank = ranks.find((entry) => entry.groupId === groupId);
         if (!rank || rank.sim < CLIP_MIN_SIM) continue;
 
         const existing = assignedImageTo.get(imageUrl);
         if (!existing) {
-          if (addImageToGroup(groupId, imageUrl)) {
-            assignedImageTo.set(imageUrl, groupId);
-            remaining--;
-          }
+          if (addToGroup(groupId, imageUrl)) remaining--;
           continue;
         }
 
         if (existing === groupId) continue;
         if (!canUseDuplicate(groupId)) continue;
-        if (addImageToGroup(groupId, imageUrl)) {
+        const beforeCount = set.size;
+        set.add(imageUrl);
+        if (set.size !== beforeCount) {
           dupesUsed.set(groupId, (dupesUsed.get(groupId) ?? 0) + 1);
           remaining--;
         }
@@ -958,7 +933,7 @@ export const handler: Handler = async (event) => {
           return orderA - orderB;
         })
   .map((item) => item.url)
-  .slice(0, MAX_ASSIGN);
+    .slice(0, 12);
 
       normalizedGroups.push({ ...group, images: unique });
     }
@@ -1024,14 +999,14 @@ export const handler: Handler = async (event) => {
           : undefined);
       if (fallbackClipError) clipDebug.error = fallbackClipError;
 
-      const totalAssigned = assignedLists.reduce((sum, urls) => sum + urls.length, 0);
-      const uniqueAssignedImages = new Set(assignedImageTo.keys());
-      const duplicateCount = Math.max(0, totalAssigned - uniqueAssignedImages.size);
+      const totalAssigned = [...assignedByGroup.values()].reduce((sum, set) => sum + set.size, 0);
+      const uniqueOwners = new Set(assignedImageTo.values());
+      const duplicateCount = Math.max(0, totalAssigned - uniqueOwners.size);
       const duplicateGroupsList = [...dupesUsed.entries()]
         .filter(([, count]) => (count ?? 0) > 0)
         .map(([groupId]) => groupId);
       const duplicatesDebug = duplicateCount > 0 || duplicateGroupsList.length > 0
-        ? { count: duplicateCount, groups: duplicateGroupsList }
+        ? { count: duplicateCount, groups: duplicateGroupsList, margin: CLIP_MARGIN }
         : undefined;
 
       responsePayload.debug = {
