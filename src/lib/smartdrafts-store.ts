@@ -40,6 +40,7 @@ export type SmartDraftGroupCache = {
   groups: any[];
   orphans?: any[];
   warnings?: string[];
+  links?: Record<string, string>;
   updatedAt: number;
 };
 
@@ -62,6 +63,16 @@ export async function getCachedSmartDraftGroups(key: string): Promise<SmartDraft
       groups: Array.isArray(parsed.groups) ? parsed.groups : [],
       orphans: Array.isArray(parsed.orphans) ? parsed.orphans : undefined,
       warnings: Array.isArray(parsed.warnings) ? parsed.warnings : undefined,
+      links:
+        parsed.links && typeof parsed.links === "object"
+          ? Object.fromEntries(
+              Object.entries(parsed.links)
+                .filter(([key, value]) =>
+                  typeof key === "string" && typeof value === "string" && key.length > 0 && value.length > 0,
+                )
+                .map(([key, value]) => [key, value as string]),
+            )
+          : undefined,
       updatedAt: Number(parsed.updatedAt) || Date.now(),
     };
   } catch (err) {
@@ -76,6 +87,7 @@ export async function setCachedSmartDraftGroups(key: string, payload: SmartDraft
     groups: Array.isArray(payload.groups) ? payload.groups : [],
     orphans: Array.isArray(payload.orphans) ? payload.orphans : undefined,
     warnings: Array.isArray(payload.warnings) ? payload.warnings : undefined,
+    links: payload.links && typeof payload.links === "object" ? payload.links : undefined,
     updatedAt: payload.updatedAt || Date.now(),
   };
   await redisCall("SET", key, JSON.stringify(safePayload));
