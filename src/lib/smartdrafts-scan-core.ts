@@ -3,7 +3,7 @@ import { tokensStore } from "./_blobs.js";
 import { userScopedKey } from "./_auth.js";
 import { runAnalysis } from "./analyze-core.js";
 import type { ImageInsight } from "./image-insight.js";
-import { clipImageEmbedding, cosine, clipProviderInfo } from "./clip-client-split.js";
+import { clipImageEmbedding, clipTextEmbedding, cosine, clipProviderInfo } from "./clip-client-split.js";
 import { sanitizeUrls, toDirectDropbox } from "./merge.js";
 import { canConsumeImages, consumeImages } from "./quota.js";
 import {
@@ -12,7 +12,8 @@ import {
   setCachedSmartDraftGroups,
   type SmartDraftGroupCache,
 } from "./smartdrafts-store.js";
-import { USE_ROLE_SORTING } from "../config.js";
+import { USE_ROLE_SORTING, USE_NEW_SORTER, STRICT_TWO_ONLY } from "../config.js";
+import { frontBackStrict } from "./sorter/frontBackStrict.js";
 
 type DropboxEntry = {
   ".tag": "file" | "folder";
@@ -746,7 +747,6 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       "_bg",
     ]);
 
-  const STRICT_TWO_IF_SMALL = (process.env.STRICT_TWO_IF_SMALL ?? "true").toLowerCase() === "true";
   const CLIP_WEIGHT_RAW = Number(process.env.CLIP_WEIGHT ?? 20);
   const CLIP_WEIGHT = Number.isFinite(CLIP_WEIGHT_RAW) ? CLIP_WEIGHT_RAW : 20;
   const CLIP_MIN_SIM_RAW = Number(process.env.CLIP_MIN_SIM ?? 0.12);
@@ -949,6 +949,15 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       return imageVectorCache.get(normalized)!;
     };
 
+    // Helper for new sorter
+    const getOCRForUrl = async (url: string): Promise<string> => {
+      const insight = insightMap.get(url);
+      if (insight?.ocrText) return insight.ocrText;
+      const parts: string[] = [];
+      if ((insight as any)?.textBlocks) parts.push(...(insight as any).textBlocks);
+      return parts.join(" ").trim();
+    };
+
     for (const { group, groupId } of allGroups) {
       const rawImages = Array.isArray(group?.images) ? group.images : [];
       const cleaned = rawImages
@@ -1031,8 +1040,49 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
         if (info?.hasVisibleText) candidate._hasText = true;
       }
 
+      // Phase R2: New pure sorter
+      if (USE_NEW_SORTER) {
+        const folderUrls = groupCandidates.map(c => c.url);
+        const imageInsights = insightList.map(ins => ({
+          role: (ins.role as "front" | "back" | null) || null,
+          hasVisibleText: ins.hasVisibleText,
+          ocr: (ins as any).ocrText || "",
+        }));
+        
+        const result = await frontBackStrict(
+          folderUrls,
+          imageInsights,
+          { 
+            brand: (group as any).brand, 
+            product: (group as any).product, 
+            variant: (group as any).variant, 
+            size: (group as any).size 
+          },
+          { getOCRForUrl, clipTextEmbedding, clipImageEmbedding, cosine }
+        );
+
+        group.heroUrl = result.heroUrl || undefined;
+        group.backUrl = result.backUrl || undefined;
+        group.primaryImageUrl = result.heroUrl || undefined;
+        group.secondaryImageUrl = result.backUrl || undefined;
+        group.images = result.images;
+
+        if (debugEnabled) {
+          console.log(`[Phase R2] Group ${groupId}:`, {
+            name: (group as any).name || (group as any).product,
+            heroUrl: result.heroUrl,
+            backUrl: result.backUrl,
+            images: result.images,
+            sample: result.debug.metas.slice(0, 4)
+          });
+        }
+
+        // IMPORTANT: skip any old code that would re-rank or merge extra images
+        continue;
+      }
+
       // Phase 4: Role-based hero/back selection with fallbacks
-      if (USE_ROLE_SORTING) {
+      if (USE_NEW_SORTER && USE_ROLE_SORTING) {
         // Phase 5: Filter out noisy/dummy images by filename
         const noisy = (n: string) => {
           const s = n.toLowerCase();
@@ -1406,7 +1456,7 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
         }
 
         const fallbackPrimary = [heroUrl, second].filter((url): url is string => Boolean(url));
-        const fallbackImages = STRICT_TWO_IF_SMALL
+        const fallbackImages = STRICT_TWO_ONLY
           ? fallbackPrimary.slice(0, 2)
           : Array.from(new Set(folderUrls.length ? folderUrls : fallbackPrimary));
 
@@ -1716,7 +1766,7 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
     } else {
       for (const { group, groupId } of allGroups) {
         const fallback = fallbackAssignments.get(groupId) || (
-          Array.isArray(group?.images) ? group.images.slice(0, STRICT_TWO_IF_SMALL ? 2 : group.images.length) : []
+          Array.isArray(group?.images) ? group.images.slice(0, STRICT_TWO_ONLY ? 2 : group.images.length) : []
         );
         const uniqueSet = new Set<string>();
         for (const url of fallback) {
@@ -1976,7 +2026,9 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
         groups: debugGroups,
         ...(duplicatesDebug ? { duplicates: duplicatesDebug } : {}),
         phase6: {
+          useNewSorter: USE_NEW_SORTER,
           useRoleSorting: USE_ROLE_SORTING,
+          strictTwoOnly: STRICT_TWO_ONLY,
           folderGateEnabled: true,
           visionSortDisabled: true,
           message: "Phase 0-5 complete: role-based sorting with folder isolation",
