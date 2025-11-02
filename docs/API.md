@@ -141,8 +141,8 @@ curl -s -X POST "$BASE/.netlify/functions/ai-gpt-drafts" \
 	-d '{"seeds":[{"product":"Demo","features":[]}]}'
 ```
 
-## POST /.netlify/functions/smartdrafts-scan
-**Purpose**: Build SmartDraft product groupings from a connected Dropbox folder. Utilises the vision analyzer, normalizes filenames, and persists cached results keyed by Dropbox revision metadata.
+## POST /.netlify/functions/smartdrafts-scan-bg
+**Purpose**: Enqueue a SmartDraft Dropbox scan as a background job. The caller immediately receives a `jobId` and should poll the status endpoint below until the job settles.
 
 **Request Body**
 
@@ -163,10 +163,40 @@ curl -s -X POST "$BASE/.netlify/functions/ai-gpt-drafts" \
 ```json
 {
 	"ok": true,
+	"jobId": "ad1a8bb4-0c8a-4a6b-b9c1-3f6d7405c9a1"
+}
+```
+
+The job will fail with `429 Too Many Requests` if the caller already has the maximum number of running SmartDraft jobs.
+
+**Example**
+
+```bash
+curl -s -X POST "$BASE/.netlify/functions/smartdrafts-scan-bg" \
+	-H "Authorization: Bearer $TOKEN" \
+	-H "Content-Type: application/json" \
+	-d '{"path":"/EBAY","force":true}' | jq .
+```
+
+## GET /.netlify/functions/smartdrafts-scan-status
+**Purpose**: Retrieve the latest state of an enqueued SmartDraft scan. Returns `state: "pending" | "running" | "complete" | "error"`.
+
+**Query Parameters**
+
+| Name   | Type   | Notes |
+|--------|--------|-------|
+| `jobId` | string | Required. The identifier returned by the enqueue endpoint. |
+
+**Response (complete)**
+
+```json
+{
+	"jobId": "ad1a8bb4-0c8a-4a6b-b9c1-3f6d7405c9a1",
+	"state": "complete",
 	"folder": "/EBAY",
-	"count": 6,
 	"cached": false,
 	"signature": "sha1:...",
+	"count": 6,
 	"warnings": ["Vision fallback used"],
 	"groups": [
 		{
@@ -184,18 +214,7 @@ curl -s -X POST "$BASE/.netlify/functions/ai-gpt-drafts" \
 }
 ```
 
-- `cached:true` indicates the analyzer result was served from Upstash based on matching Dropbox file revisions.
-- `orphans` enumerates files that failed to map to any product group so the user can refile them.
-- When the vision service is unavailable the function flags `_fallback` on each group and falls back to structured folder names.
-
-**Example**
-
-```bash
-curl -s -X POST "$BASE/.netlify/functions/smartdrafts-scan" \
-	-H "Authorization: Bearer $TOKEN" \
-	-H "Content-Type: application/json" \
-	-d '{"path":"/EBAY","force":true}' | jq .
-```
+Completed payloads mirror the historical synchronous API response. `state: "error"` includes an `error` field describing the failure.
 
 ## GET /.netlify/functions/dropbox-list-folders
 **Purpose**: Enumerate Dropbox folders for the signed-in merchant. Backed by the saved OAuth refresh token and intended for folder pickers.
