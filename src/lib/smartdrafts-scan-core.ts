@@ -12,6 +12,7 @@ import {
   setCachedSmartDraftGroups,
   type SmartDraftGroupCache,
 } from "./smartdrafts-store.js";
+import { USE_ROLE_SORTING } from "../config.js";
 
 type DropboxEntry = {
   ".tag": "file" | "folder";
@@ -994,90 +995,214 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
         if (info?.hasVisibleText) candidate._hasText = true;
       }
 
-      let front = groupCandidates.find((c) => c._role === "front");
-      if (!front && scanSource) {
-        const base = basenameFrom(scanSource);
-        front = groupCandidates.find((c) => basenameFrom(c.url) === base);
-      }
-      if (!front) {
-        front = groupCandidates
-          .slice()
-          .sort((a, b) => (b.ocrText?.length || 0) - (a.ocrText?.length || 0))[0];
-      }
-      if (!front) {
-        front = groupCandidates[0] || candidateDetails[0];
-      }
+      // Phase 4: Role-based hero/back selection with fallbacks
+      if (USE_ROLE_SORTING) {
+        const brand = String((group as any).brand || "").toLowerCase();
+        const prod = String((group as any).product || "").toLowerCase();
+        const tokens = [brand, prod].filter(Boolean);
 
-      const heroUrl = front?.url ? toDirectDropbox(front.url) : "";
-      if (heroUrl) {
-        group.heroUrl = heroUrl;
-        group.primaryImageUrl = heroUrl;
-        const existingIndex = cleaned.indexOf(heroUrl);
-        if (existingIndex === -1) cleaned.unshift(heroUrl);
-        else if (existingIndex > 0) {
-          cleaned.splice(existingIndex, 1);
-          cleaned.unshift(heroUrl);
+        const brandScore = (t: string) => {
+          const s = (t || "").toLowerCase();
+          let sc = 0;
+          for (const tk of tokens) if (tk && s.includes(tk)) sc++;
+          return sc;
+        };
+
+        const looksBack = (t: string, n?: string) => {
+          t = (t || "").toLowerCase();
+          n = (n || "").toLowerCase();
+          return (
+            t.includes("supplement facts") ||
+            t.includes("nutrition facts") ||
+            t.includes("ingredients") ||
+            t.includes("drug facts") ||
+            t.includes("directions") ||
+            n.includes("back") ||
+            n.includes("facts") ||
+            n.includes("ingredients") ||
+            n.includes("supplement")
+          );
+        };
+
+        // Phase 4: Build candidates with role/OCR from roleByBase
+        const candidates = groupCandidates.map((c) => {
+          const info = roleByBase.get(basenameFrom(c.url).toLowerCase()) || {};
+          return {
+            url: c.url,
+            name: c.name,
+            _role: info.role || c._role || null,
+            _ocr: info.ocr || c.ocrText || "",
+            _hasText: info.hasVisibleText ?? c._hasText ?? false,
+          };
+        });
+
+        // FRONT (hero): role 'front' > brand OCR > first
+        let hero =
+          candidates.find((c) => c._role === "front") ||
+          candidates.slice().sort((a, b) => brandScore(b._ocr) - brandScore(a._ocr))[0] ||
+          candidates[0];
+
+        group.heroUrl = hero?.url || undefined;
+        if (group.heroUrl) {
+          group.primaryImageUrl = group.heroUrl;
+          heroOwnerByImage.set(group.heroUrl, groupId);
+          const heroInsight = ensureInsightEntry(group.heroUrl);
+          if (heroInsight && !heroInsight.role) heroInsight.role = "front";
+          assignRoleInfo(group.heroUrl, { role: "front" });
         }
-        heroOwnerByImage.set(heroUrl, groupId);
-        const heroInsight = ensureInsightEntry(heroUrl);
-        if (heroInsight && !heroInsight.role) heroInsight.role = "front";
-        assignRoleInfo(heroUrl, { role: "front" });
-        if (front) front._role = "front";
+
+        // BACK: role 'back' > facts/ingredients OCR > CLIP-to-hero
+        let back = candidates.find((c) => c.url !== group.heroUrl && c._role === "back");
+        if (!back) {
+          back = candidates
+            .filter((c) => c.url !== group.heroUrl)
+            .sort(
+              (a, b) =>
+                Number(looksBack(b._ocr, b.name)) - Number(looksBack(a._ocr, a.name)) ||
+                brandScore(b._ocr) - brandScore(a._ocr)
+            )[0];
+        }
+        if (!back && group.heroUrl) {
+          const hv = await getImageVector(group.heroUrl);
+          if (hv) {
+            const scored = await Promise.all(
+              candidates
+                .filter((c) => c.url !== group.heroUrl)
+                .map(async (c) => {
+                  const v = await getImageVector(c.url);
+                  const s = v && v.length === hv.length ? cosine(v, hv) : 0;
+                  return { c, s };
+                })
+            );
+            scored.sort((a, b) => b.s - a.s);
+            if (scored[0]?.s >= BACK_MIN_SIM) back = scored[0].c;
+          }
+        }
+        group.backUrl = back?.url || undefined;
+        if (group.backUrl) {
+          group.secondaryImageUrl = group.backUrl;
+          const backInsight = ensureInsightEntry(group.backUrl);
+          if (backInsight && !backInsight.role) backInsight.role = "back";
+          assignRoleInfo(group.backUrl, { role: "back" });
+        }
+
+        // Strict order: [hero, back, ...rest]
+        const rest = candidates.map((c) => c.url).filter((u) => u !== group.heroUrl && u !== group.backUrl);
+        const orderedImages = [group.heroUrl, group.backUrl, ...rest].filter((url): url is string => Boolean(url));
+        group.images = orderedImages;
+
+        // 2-photo fast path when folder only had 2
+        if (candidates.length <= 2 && group.images) {
+          group.images = group.images.slice(0, 2);
+        }
+
+        // Debug
+        if (debugEnabled) {
+          console.log(`[Phase 4] Group ${groupId}:`, {
+            name: (group as any).name || (group as any).product,
+            heroUrl: group.heroUrl,
+            backUrl: group.backUrl,
+            roles: candidates.slice(0, 5).map((c) => ({
+              url: basenameFrom(c.url),
+              role: c._role,
+              brandScore: brandScore(c._ocr),
+              looksBack: looksBack(c._ocr, c.name),
+            })),
+          });
+        }
+
+        const heroVec = group.heroUrl ? await getImageVector(group.heroUrl) : null;
+        heroVectors.set(groupId, heroVec);
+        const backVec = group.backUrl ? await getImageVector(group.backUrl) : null;
+        backVectors.set(groupId, backVec);
+        folderCandidatesByGroup.set(groupId, groupCandidates);
       } else {
-        group.heroUrl = undefined;
+        // Original logic (pre-Phase 4)
+        let front = groupCandidates.find((c) => c._role === "front");
+        if (!front && scanSource) {
+          const base = basenameFrom(scanSource);
+          front = groupCandidates.find((c) => basenameFrom(c.url) === base);
+        }
+        if (!front) {
+          front = groupCandidates
+            .slice()
+            .sort((a, b) => (b.ocrText?.length || 0) - (a.ocrText?.length || 0))[0];
+        }
+        if (!front) {
+          front = groupCandidates[0] || candidateDetails[0];
+        }
+
+        const heroUrl = front?.url ? toDirectDropbox(front.url) : "";
+        if (heroUrl) {
+          group.heroUrl = heroUrl;
+          group.primaryImageUrl = heroUrl;
+          const existingIndex = cleaned.indexOf(heroUrl);
+          if (existingIndex === -1) cleaned.unshift(heroUrl);
+          else if (existingIndex > 0) {
+            cleaned.splice(existingIndex, 1);
+            cleaned.unshift(heroUrl);
+          }
+          heroOwnerByImage.set(heroUrl, groupId);
+          const heroInsight = ensureInsightEntry(heroUrl);
+          if (heroInsight && !heroInsight.role) heroInsight.role = "front";
+          assignRoleInfo(heroUrl, { role: "front" });
+          if (front) front._role = "front";
+        } else {
+          group.heroUrl = undefined;
+        }
+
+        const secondaryHint =
+          typeof group?.secondaryImageUrl === "string" && group.secondaryImageUrl
+            ? toDirectDropbox(group.secondaryImageUrl)
+            : "";
+
+        let back = groupCandidates.find((c) => c._role === "back" && c.url !== group.heroUrl);
+        const heroVec = group.heroUrl ? await getImageVector(group.heroUrl) : null;
+
+        if (!back) {
+          back = groupCandidates.find((c) => c.url !== group.heroUrl && looksLikeBack(c.ocrText, c.name));
+        }
+
+        if (!back && heroVec) {
+          const scored = await Promise.all(
+            groupCandidates
+              .filter((candidate) => candidate.url !== group.heroUrl)
+              .map(async (candidate) => {
+                const vec = await getImageVector(candidate.url);
+                const sim = vec && heroVec && vec.length === heroVec.length ? cosine(vec, heroVec) : 0;
+                return { candidate, sim };
+              })
+          );
+          scored.sort((a, b) => b.sim - a.sim);
+          if (scored[0]) back = scored[0].candidate;
+        }
+
+        if (back) {
+          group.backUrl = back.url;
+          group.secondaryImageUrl = back.url;
+          await getImageVector(back.url);
+          const backInsight = ensureInsightEntry(back.url);
+          if (backInsight && !backInsight.role) backInsight.role = "back";
+          assignRoleInfo(back.url, { role: "back" });
+          back._role = "back";
+        } else if (secondaryHint && secondaryHint !== group.heroUrl) {
+          group.backUrl = secondaryHint;
+          group.secondaryImageUrl = secondaryHint;
+          const backInsight = ensureInsightEntry(secondaryHint);
+          if (backInsight && !backInsight.role) backInsight.role = "back";
+          assignRoleInfo(secondaryHint, { role: "back" });
+        } else {
+          group.backUrl = undefined;
+        }
+
+        folderCandidatesByGroup.set(groupId, groupCandidates);
+
+        heroVectors.set(groupId, heroVec);
+        const backVec = group.backUrl ? await getImageVector(group.backUrl) : null;
+        backVectors.set(groupId, backVec);
+
+        group.images = cleaned;
       }
-
-      const secondaryHint =
-        typeof group?.secondaryImageUrl === "string" && group.secondaryImageUrl
-          ? toDirectDropbox(group.secondaryImageUrl)
-          : "";
-
-      let back = groupCandidates.find((c) => c._role === "back" && c.url !== group.heroUrl);
-      const heroVec = group.heroUrl ? await getImageVector(group.heroUrl) : null;
-
-      if (!back) {
-        back = groupCandidates.find((c) => c.url !== group.heroUrl && looksLikeBack(c.ocrText, c.name));
-      }
-
-      if (!back && heroVec) {
-        const scored = await Promise.all(
-          groupCandidates
-            .filter((candidate) => candidate.url !== group.heroUrl)
-            .map(async (candidate) => {
-              const vec = await getImageVector(candidate.url);
-              const sim = vec && heroVec && vec.length === heroVec.length ? cosine(vec, heroVec) : 0;
-              return { candidate, sim };
-            })
-        );
-        scored.sort((a, b) => b.sim - a.sim);
-        if (scored[0]) back = scored[0].candidate;
-      }
-
-      if (back) {
-        group.backUrl = back.url;
-        group.secondaryImageUrl = back.url;
-        await getImageVector(back.url);
-        const backInsight = ensureInsightEntry(back.url);
-        if (backInsight && !backInsight.role) backInsight.role = "back";
-        assignRoleInfo(back.url, { role: "back" });
-        back._role = "back";
-      } else if (secondaryHint && secondaryHint !== group.heroUrl) {
-        group.backUrl = secondaryHint;
-        group.secondaryImageUrl = secondaryHint;
-        const backInsight = ensureInsightEntry(secondaryHint);
-        if (backInsight && !backInsight.role) backInsight.role = "back";
-        assignRoleInfo(secondaryHint, { role: "back" });
-      } else {
-        group.backUrl = undefined;
-      }
-
-      folderCandidatesByGroup.set(groupId, groupCandidates);
-
-      heroVectors.set(groupId, heroVec);
-      const backVec = group.backUrl ? await getImageVector(group.backUrl) : null;
-      backVectors.set(groupId, backVec);
-
-      group.images = cleaned;
     }
 
     if (CLIP_WEIGHT > 0) {
