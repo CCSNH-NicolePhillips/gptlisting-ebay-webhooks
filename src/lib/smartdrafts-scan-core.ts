@@ -1033,15 +1033,17 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
 
       // Phase 4: Role-based hero/back selection with fallbacks
       if (USE_ROLE_SORTING) {
-        const brand = String((group as any).brand || "").toLowerCase();
-        const prod = String((group as any).product || "").toLowerCase();
-        const tokens = [brand, prod].filter(Boolean);
-
-        const brandScore = (t: string) => {
-          const s = (t || "").toLowerCase();
-          let sc = 0;
-          for (const tk of tokens) if (tk && s.includes(tk)) sc++;
-          return sc;
+        // Phase 5: Filter out noisy/dummy images by filename
+        const noisy = (n: string) => {
+          const s = n.toLowerCase();
+          return (
+            s.includes("dummy") ||
+            s.includes("placeholder") ||
+            s.includes("barcode") ||
+            s.includes("qrcode") ||
+            s.includes("sample") ||
+            s.includes("template")
+          );
         };
 
         const looksBack = (t: string, n?: string) => {
@@ -1057,19 +1059,6 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
             n.includes("facts") ||
             n.includes("ingredients") ||
             n.includes("supplement")
-          );
-        };
-
-        // Phase 5: Filter out noisy/dummy images by filename
-        const noisy = (n: string) => {
-          const s = n.toLowerCase();
-          return (
-            s.includes("dummy") ||
-            s.includes("placeholder") ||
-            s.includes("barcode") ||
-            s.includes("qrcode") ||
-            s.includes("sample") ||
-            s.includes("template")
           );
         };
 
@@ -1107,8 +1096,95 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
           );
         }
 
-        // Adapt candidates to legacy format for hero/back selection
-        const adaptedCandidates = candidates.map((c) => ({
+        // Phase 3: Apply hard gates before scoring
+        const brand = String((group as any).brand || "").toLowerCase();
+        const prod = String((group as any).product || "").toLowerCase();
+        const tokens = [brand, prod].filter(Boolean);
+
+        const brandScore = (t: string) => {
+          const s = (t || "").toLowerCase();
+          let sc = 0;
+          for (const tk of tokens) if (tk && s.includes(tk)) sc++;
+          return sc;
+        };
+
+        const isDummyName = (n: string) => {
+          const s = (n || "").toLowerCase();
+          return (
+            s.includes("dummy") ||
+            s.includes("placeholder") ||
+            s.includes("barcode") ||
+            s.includes("qrcode")
+          );
+        };
+
+        // Phase 3: Generic category matching - compare parent categories if both exist
+        const categoryMatches = (candidateCat: string, groupCat: string): boolean => {
+          if (!candidateCat || !groupCat) return true; // Skip gate if either is missing
+          const cLower = candidateCat.toLowerCase();
+          const gLower = groupCat.toLowerCase();
+          // Extract parent categories (text before '>')
+          const cParent = cLower.split('>')[0].trim();
+          const gParent = gLower.split('>')[0].trim();
+          // Match if parent categories overlap or full strings match
+          return cLower.includes(gParent) || gLower.includes(cParent) || cParent === gParent;
+        };
+
+        let gated = candidates.filter((c) => {
+          // Folder gate: only images from same folder
+          if (FOLDER_GATE && folderKey && c.folder !== folderKey) return false;
+
+          // Category gate: optional, skips if group.category is null
+          if (CATEGORY_GATE) {
+            const groupCat = (group as any).category || (group as any).categoryPath || "";
+            if (groupCat && c.category) {
+              if (!categoryMatches(c.category, groupCat)) return false;
+            }
+          }
+
+          // Brand gate: requires brand/product tokens in OCR
+          if (BRAND_GATE && tokens.length > 0 && brandScore(c.ocr) < OCR_BRAND_MIN) return false;
+
+          // Dummy filter: obvious dummies
+          if (isDummyName(c.name)) return false;
+
+          return true;
+        });
+
+        // If gating leaves 0, fall back to same-folder images (still safe)
+        if (gated.length === 0) {
+          gated = candidates.filter((c) => !folderKey || c.folder === folderKey);
+        }
+        if (gated.length === 0) {
+          gated = candidates; // Last resort fallback
+        }
+
+        // Phase 3: Debug log gating results
+        if (debugEnabled && gated.length !== candidates.length) {
+          console.log(
+            `[Phase 3] Group ${groupId} gating: ${candidates.length} → ${gated.length} (removed ${candidates.length - gated.length})`
+          );
+          const removed = candidates.filter((c) => !gated.includes(c));
+          if (removed.length > 0) {
+            console.log(
+              `[Phase 3] Removed:`,
+              removed.slice(0, 3).map((c) => ({
+                url: basenameFrom(c.url),
+                reason: [
+                  FOLDER_GATE && folderKey && c.folder !== folderKey ? "folder" : null,
+                  CATEGORY_GATE && !categoryMatches(c.category, (group as any).category || "") ? "category" : null,
+                  BRAND_GATE && tokens.length > 0 && brandScore(c.ocr) < OCR_BRAND_MIN ? "brand" : null,
+                  isDummyName(c.name) ? "dummy" : null,
+                ]
+                  .filter(Boolean)
+                  .join(","),
+              }))
+            );
+          }
+        }
+
+        // Adapt gated candidates to legacy format for hero/back selection
+        const adaptedCandidates = gated.map((c) => ({
           url: c.url,
           name: c.name,
           _role: c.role,
@@ -1177,14 +1253,15 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
           group.images = group.images.slice(0, 2);
         }
 
-        // Debug - Phase 2: Show snapshot metadata
+        // Debug - Phase 2/3: Show snapshot and gating results
         if (debugEnabled) {
           console.log(`[Phase 4] Group ${groupId}:`, {
             name: (group as any).name || (group as any).product,
             heroUrl: group.heroUrl,
             backUrl: group.backUrl,
-            snapshotSize: candidates.length,
-            roles: candidates.slice(0, 5).map((c) => ({
+            originalSize: candidates.length,
+            afterGating: gated.length,
+            roles: gated.slice(0, 5).map((c) => ({
               url: basenameFrom(c.url),
               role: c.role,
               category: c.category?.substring(0, 30) || "(none)",
