@@ -725,8 +725,8 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
   const CLIP_WEIGHT = Number.isFinite(CLIP_WEIGHT_RAW) ? CLIP_WEIGHT_RAW : 20;
   const CLIP_MIN_SIM_RAW = Number(process.env.CLIP_MIN_SIM ?? 0.12);
   const CLIP_MIN_SIM = Number.isFinite(CLIP_MIN_SIM_RAW) ? CLIP_MIN_SIM_RAW : 0.12;
-  const CLIP_MARGIN_RAW = Number(process.env.CLIP_MARGIN ?? 0.06);
-  const CLIP_MARGIN = Number.isFinite(CLIP_MARGIN_RAW) ? CLIP_MARGIN_RAW : 0.06;
+  const CLIP_MARGIN_RAW = Number(process.env.CLIP_MARGIN ?? 0.12);
+  const CLIP_MARGIN = Number.isFinite(CLIP_MARGIN_RAW) ? CLIP_MARGIN_RAW : 0.12;
   const MIN_ASSIGN_RAW = Number(process.env.SMARTDRAFT_MIN_ASSIGN ?? 3);
   const MIN_ASSIGN = Number.isFinite(MIN_ASSIGN_RAW) ? MIN_ASSIGN_RAW : 3;
   const MAX_DUPES_RAW = Number(process.env.SMARTDRAFT_MAX_DUPES ?? 1);
@@ -1088,6 +1088,10 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
     }
 
     if (!clipEnabled) {
+      // Add warning about CLIP fallback mode for debugging
+      const clipFallbackReason = lastClipError || "CLIP image embeddings unavailable";
+      warnings.push(`Using fallback sorting mode (${clipFallbackReason}). Results may be less accurate.`);
+
       for (const { group, groupId } of allGroups) {
         const heroUrl = typeof group?.heroUrl === "string" ? group.heroUrl : "";
         const folderCandidates = folderCandidatesByGroup.get(groupId) || [];
@@ -1118,9 +1122,19 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
         }
 
         const fallbackPrimary = [heroUrl, second].filter((url): url is string => Boolean(url));
-        const fallbackImages = STRICT_TWO_IF_SMALL
-          ? fallbackPrimary.slice(0, 2)
-          : Array.from(new Set(folderUrls.length ? folderUrls : fallbackPrimary));
+
+        // Improved fallback: use more images when available instead of limiting to 2
+        // This maintains better consistency with CLIP-enabled behavior
+        let fallbackImages: string[];
+        if (STRICT_TWO_IF_SMALL && folderUrls.length <= 3) {
+          // Only strict limit for very small groups
+          fallbackImages = fallbackPrimary.slice(0, 2);
+        } else {
+          // Use folder-based grouping for better consistency
+          const folderBased = Array.from(new Set(folderUrls.length ? folderUrls : fallbackPrimary));
+          // Limit to reasonable number (up to 6 images in fallback mode)
+          fallbackImages = folderBased.slice(0, 6);
+        }
 
         const uniqueFallback = Array.from(new Set(fallbackImages.length ? fallbackImages : fallbackPrimary));
         group.backUrl = uniqueFallback.length > 1 ? uniqueFallback[1] : undefined;
@@ -1133,11 +1147,36 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
 
     const looksDummyByMeta = (entry: DropboxEntry): boolean => {
       const size = Number(entry?.size || 0);
-      if (size > 0 && size < 10 * 1024) return true;
+      // Stricter file size threshold: < 15KB is likely a dummy/placeholder
+      if (size > 0 && size < 15 * 1024) return true;
+
       const dims = entry?.media_info?.metadata?.dimensions;
       const width = Number(dims?.width || 0);
       const height = Number(dims?.height || 0);
-      if (width && height && (width < 200 || height < 200)) return true;
+
+      // Stricter dimension thresholds
+      if (width && height) {
+        // Too small to be a product photo
+        if (width < 300 || height < 300) return true;
+
+        // Extreme aspect ratios are often placeholders (banners, thin lines)
+        const aspect = width / height;
+        if (aspect < 0.2 || aspect > 5) return true;
+
+        // Perfect squares at common placeholder sizes
+        if (width === height && (width === 100 || width === 200 || width === 250 || width === 500)) {
+          return true;
+        }
+      }
+
+      // Check filename for dummy patterns
+      const name = (entry?.name || "").toLowerCase();
+      const dummyPatterns = [
+        'dummy', 'placeholder', 'sample', 'template', 'blank',
+        'empty', 'default', 'temp', 'test', 'spacer'
+      ];
+      if (dummyPatterns.some(pattern => name.includes(pattern))) return true;
+
       return false;
     };
 
@@ -1176,9 +1215,43 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
         if (allTokens.has(token)) add("token-match", 3, token);
       }
 
+      // Track conflicting tokens to handle them deterministically
+      let hasPositiveToken = false;
+      let hasNegativeToken = false;
+      const positiveMatches: string[] = [];
+      const negativeMatches: string[] = [];
+
       for (const token of nameTokens) {
-        if (POS_NAME_TOKENS.has(token)) add("name-positive", 12, token);
-        if (NEG_NAME_TOKENS.has(token)) add("name-negative", -10, token);
+        if (POS_NAME_TOKENS.has(token)) {
+          hasPositiveToken = true;
+          positiveMatches.push(token);
+        }
+        if (NEG_NAME_TOKENS.has(token)) {
+          hasNegativeToken = true;
+          negativeMatches.push(token);
+        }
+      }
+
+      // Resolve conflicts: if both positive and negative tokens exist,
+      // prioritize based on specificity and role
+      if (hasPositiveToken && hasNegativeToken) {
+        // Check if this is explicitly marked with a role
+        const explicitRole = insight?.role;
+        if (explicitRole === "front") {
+          // Front role overrides negative tokens
+          positiveMatches.forEach(token => add("name-positive-resolved", 12, token));
+        } else if (explicitRole === "back") {
+          // Back role overrides positive tokens
+          negativeMatches.forEach(token => add("name-negative-resolved", -10, token));
+        } else {
+          // No explicit role: count both but reduce impact to avoid confusion
+          positiveMatches.forEach(token => add("name-positive-conflict", 6, token));
+          negativeMatches.forEach(token => add("name-negative-conflict", -5, token));
+        }
+      } else {
+        // No conflict: apply normal scoring
+        positiveMatches.forEach(token => add("name-positive", 12, token));
+        negativeMatches.forEach(token => add("name-negative", -10, token));
       }
 
       if (insight?.hasVisibleText === true) add("visible-text", 6);
@@ -1256,8 +1329,13 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
     type Rank = { groupId: string; sim: number };
     const ranksByImage = new Map<string, Rank[]>();
   const marginByGroupImage = new Map<string, Map<string, number>>();
+    const dummyPhotosDetected: string[] = [];
 
     for (const tuple of fileTuples) {
+      // Track dummy photos for debugging
+      if (looksDummyByMeta(tuple.entry)) {
+        dummyPhotosDetected.push(basenameFrom(tuple.url));
+      }
       for (let gi = 0; gi < groups.length; gi++) {
         const result = scoreImageForGroup(tuple, gi, debugEnabled);
         const groupId = allGroups[gi].groupId;
@@ -1405,10 +1483,17 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
         holders.sort((g1, g2) => {
           const s1 = ranks.find((r) => r.groupId === g1.groupId)?.sim ?? 0;
           const s2 = ranks.find((r) => r.groupId === g2.groupId)?.sim ?? 0;
+          // Primary sort: by similarity score
           if (Math.abs(s2 - s1) > 1e-6) return s2 - s1;
+
+          // Secondary sort: by group size (smaller groups get priority)
           const c1 = ensureGroupSet(g1.groupId).size;
           const c2 = ensureGroupSet(g2.groupId).size;
-          return c1 - c2;
+          if (c1 !== c2) return c1 - c2;
+
+          // Tertiary sort: deterministic tiebreaker using groupId
+          // This ensures consistent results across runs
+          return g1.groupId.localeCompare(g2.groupId);
         });
 
         const keeper = holders[0].groupId;
@@ -1505,13 +1590,19 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
           return { url, idx, bias, order, sim };
         })
         .sort((a, b) => {
+          // 1. Hero preference always comes first
           if (heroPref) {
             if (a.url === heroPref && b.url !== heroPref) return -1;
             if (b.url === heroPref && a.url !== heroPref) return 1;
           }
-          if (b.sim !== a.sim) return b.sim - a.sim;
+          // 2. Sort by CLIP similarity score
+          if (Math.abs(b.sim - a.sim) > 1e-6) return b.sim - a.sim;
+          // 3. Sort by bias (role/token preferences)
           if (a.bias !== b.bias) return a.bias - b.bias;
-          return a.order - b.order;
+          // 4. Sort by original order (folder position)
+          if (a.order !== b.order) return a.order - b.order;
+          // 5. Deterministic tiebreaker: alphabetical by URL
+          return a.url.localeCompare(b.url);
         })
         .map((item) => item.url)
         .slice(0, 12);
@@ -1546,6 +1637,17 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
     if (reassignedCount > 0) {
       warnings = [...warnings, `Rebalanced duplicate image references across groups (${reassignedCount} adjusted).`];
     }
+
+    // Add warning about dummy photos detected
+    if (dummyPhotosDetected.length > 0) {
+      const displayCount = Math.min(dummyPhotosDetected.length, 3);
+      const sampleNames = dummyPhotosDetected.slice(0, displayCount).join(", ");
+      const moreText = dummyPhotosDetected.length > displayCount
+        ? ` and ${dummyPhotosDetected.length - displayCount} more`
+        : "";
+      warnings.push(`Detected ${dummyPhotosDetected.length} potential dummy/placeholder image(s): ${sampleNames}${moreText}`);
+    }
+
     const orphans = hydrateOrphans(orphanTuples, folder);
 
     const payloadGroups = hydrateGroups(normalizedGroups, folder);
