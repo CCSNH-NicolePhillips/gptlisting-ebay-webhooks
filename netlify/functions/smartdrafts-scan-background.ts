@@ -1,0 +1,120 @@
+import type { Handler } from "@netlify/functions";
+import { runSmartDraftScan, type SmartDraftScanResponse } from "../../src/lib/smartdrafts-scan-core.js";
+import { putJob } from "../../src/lib/job-store.js";
+import { k } from "../../src/lib/user-keys.js";
+import { decRunning } from "../../src/lib/quota.js";
+
+type BackgroundPayload = {
+  jobId?: string;
+  userId?: string;
+  folder?: string;
+  force?: boolean;
+  limit?: number;
+  debug?: boolean;
+};
+
+function parsePayload(raw: string | null | undefined): BackgroundPayload {
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error("[smartdrafts-scan-background] invalid JSON", { preview: raw?.slice(0, 200) });
+    return {};
+  }
+}
+
+async function writeJob(jobId: string, userId: string | undefined, data: Record<string, unknown>) {
+  const jobKey = userId ? k.job(userId, jobId) : undefined;
+  await putJob(jobId, { jobId, userId, ...data }, { key: jobKey });
+}
+
+export const handler: Handler = async (event) => {
+  const body = parsePayload(event.body);
+  const jobId = typeof body.jobId === "string" ? body.jobId : undefined;
+  const userId = typeof body.userId === "string" ? body.userId : undefined;
+
+  if (!jobId || !userId) {
+    if (jobId) {
+      await writeJob(jobId, userId, {
+        state: "error",
+        error: "Missing job metadata",
+        finishedAt: Date.now(),
+      }).catch(() => {});
+    }
+    return { statusCode: 200 };
+  }
+
+  const folder = typeof body.folder === "string" ? body.folder.trim() : "";
+  const force = Boolean(body.force);
+  const limit = Number.isFinite(body.limit) ? Number(body.limit) : undefined;
+  const debugEnabled = Boolean(body.debug);
+
+  const jobKey = k.job(userId, jobId);
+
+  const release = async () => {
+    try {
+      await decRunning(userId);
+    } catch (err) {
+      console.warn("[smartdrafts-scan-background] failed to release running slot", err);
+    }
+  };
+
+  try {
+    await writeJob(jobId, userId, {
+      state: "running",
+      startedAt: Date.now(),
+      folder,
+    });
+
+    const response: SmartDraftScanResponse = await runSmartDraftScan({
+      userId,
+      folder,
+      force,
+      limit,
+      debug: debugEnabled,
+    });
+
+    const payload = response.body;
+
+    if (!payload?.ok) {
+      const errorMessage = typeof payload?.error === "string" && payload.error
+        ? payload.error
+        : `Scan failed with status ${response.status}`;
+      await writeJob(jobId, userId, {
+        state: "error",
+        folder,
+        finishedAt: Date.now(),
+        error: errorMessage,
+        status: response.status,
+      });
+      await release();
+      return { statusCode: 200 };
+    }
+
+    await writeJob(jobId, userId, {
+      state: "complete",
+      finishedAt: Date.now(),
+      status: "ok",
+      folder: payload.folder,
+      signature: payload.signature,
+      count: payload.count,
+      warnings: payload.warnings,
+      groups: payload.groups,
+      orphans: payload.orphans,
+      cached: payload.cached,
+      debug: payload.debug,
+    });
+    await release();
+  } catch (err: any) {
+    console.error("[smartdrafts-scan-background] execution failed", err);
+    await writeJob(jobId, userId, {
+      state: "error",
+      finishedAt: Date.now(),
+      folder,
+      error: err?.message || "Unknown error",
+    }).catch(() => {});
+    await release();
+  }
+
+  return { statusCode: 200 };
+};

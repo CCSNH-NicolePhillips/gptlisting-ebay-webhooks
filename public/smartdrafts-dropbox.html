@@ -175,20 +175,47 @@
           .join('');
       }
 
-      async function fetchSmartDraftGroups(payload) {
+      async function queueSmartDraftScan(payload) {
         const exec = window.authClient?.authFetch ?? fetch;
         const body = JSON.stringify(payload);
-        const res = await exec('/.netlify/functions/smartdrafts-scan', {
+        const res = await exec('/.netlify/functions/smartdrafts-scan-bg', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body,
         });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data?.ok) {
-          const errMsg = data?.error || `Scan failed (${res.status})`;
+        if (!res.ok || !data?.ok || !data?.jobId) {
+          const errMsg = data?.error || `Scan enqueue failed (${res.status})`;
           throw new Error(errMsg);
         }
-        return data;
+        return String(data.jobId);
+      }
+
+      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+      async function pollSmartDraftScan(jobId, { onUpdate, maxAttempts = 120 } = {}) {
+        const exec = window.authClient?.authFetch ?? fetch;
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+          const url = new URL('/.netlify/functions/smartdrafts-scan-status', window.location.origin);
+          url.searchParams.set('jobId', jobId);
+          const res = await exec(url.toString());
+          const data = await res.json().catch(() => ({}));
+          if (res.status === 404) {
+            throw new Error('Scan job not found');
+          }
+          if (!res.ok) {
+            throw new Error(data?.error || `Scan status failed (${res.status})`);
+          }
+          if (typeof onUpdate === 'function') {
+            try { onUpdate(data); } catch {}
+          }
+          if (data?.state === 'complete' || data?.state === 'error') {
+            return data;
+          }
+          const delay = Math.min(5000, 500 + attempt * 150);
+          await sleep(delay);
+        }
+        throw new Error('Timed out waiting for SmartDrafts scan results.');
       }
 
   let isScanning = false;
@@ -581,9 +608,36 @@
           if (payload.force) payloadWithLimit.force = true;
           if (includeDebug?.checked) payloadWithLimit.debug = true;
 
-          const data = await fetchSmartDraftGroups(payloadWithLimit);
+          const jobId = await queueSmartDraftScan(payloadWithLimit);
+          setStatus(`Scan job ${jobId} queued. Waiting for results...`);
+
+          const job = await pollSmartDraftScan(jobId, {
+            onUpdate: (update) => {
+              const state = String(update?.state || 'pending').toLowerCase();
+              const note = update?.warnings?.length ? ` (${update.warnings.length} warning${update.warnings.length === 1 ? '' : 's'})` : '';
+              setStatus(`Scan ${state}${note}...`);
+            },
+          });
+
+          if (!job || job.state === 'error') {
+            const message = job?.error || 'SmartDrafts scan failed';
+            throw new Error(message);
+          }
+
+          const data = {
+            ok: true,
+            folder: job.folder || payload.path || '/',
+            signature: job.signature ?? null,
+            count: Number.isFinite(job.count) ? Number(job.count) : (Array.isArray(job.groups) ? job.groups.length : 0),
+            warnings: Array.isArray(job.warnings) ? job.warnings : [],
+            groups: Array.isArray(job.groups) ? job.groups : [],
+            orphans: Array.isArray(job.orphans) ? job.orphans : [],
+            cached: Boolean(job.cached),
+            debug: job.debug,
+          };
+
           lastScanResult = data;
-          const groups = Array.isArray(data.groups) ? data.groups : [];
+          const groups = data.groups;
           window.smartDraftGroups = groups;
           updateGenerateState();
           const folder = data.folder || payload.path || '/';
@@ -591,11 +645,11 @@
           const fallback = groups.some((group) => group && group._fallback);
           const baseMessage = `Found ${groups.length} product group${groups.length === 1 ? '' : 's'} in "${folder}"${cachedNote}.`;
           setStatus(fallback ? `${baseMessage} Vision fallback in use.` : baseMessage);
-          setWarnings(Array.isArray(data.warnings) ? data.warnings : []);
+          setWarnings(data.warnings);
           renderGroups(groups);
           renderOrphans(Array.isArray(data.orphans) ? data.orphans : []);
           renderDebugData(data.debug, 'No debug data returned.');
-          setRawOutput(data, true);
+          setRawOutput({ jobId, ...job }, true);
         } catch (err) {
           const message = err?.message || String(err);
           setStatus(`Error: ${message}`);
