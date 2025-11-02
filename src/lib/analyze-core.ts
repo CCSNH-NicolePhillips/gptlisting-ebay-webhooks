@@ -465,6 +465,18 @@ export async function runAnalysis(
   const insightMap = new Map<string, ImageInsight>();
   const useLegacyAssignment = envFlag(process.env.USE_LEGACY_IMAGE_ASSIGNMENT);
 
+  const ensureInsightEntry = (value: string | null | undefined) => {
+    if (!value) return;
+    const normalized = toDirectDropbox(value);
+    if (!normalized) return;
+    const existing = insightMap.get(normalized);
+    if (existing) {
+      if (!existing.url) existing.url = normalized;
+      return;
+    }
+    insightMap.set(normalized, { url: normalized });
+  };
+
   if (images.length === 0) {
     return {
       info: "No valid images",
@@ -536,6 +548,9 @@ export async function runAnalysis(
 
   const merged = mergeGroups(analyzedResults);
   let orphanDetails: Array<{ url: string; name?: string; folder?: string }> = [];
+
+  const uniqueImages = new Set(images);
+  uniqueImages.forEach((url) => ensureInsightEntry(url));
 
   if (!useLegacyAssignment && merged.groups.length) {
     type FolderState = {

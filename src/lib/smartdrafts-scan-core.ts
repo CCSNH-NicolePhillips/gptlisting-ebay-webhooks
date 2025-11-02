@@ -103,6 +103,7 @@ export type SmartDraftScanBody = {
   groups?: any[];
   orphans?: any[];
   debug?: unknown;
+  imageInsights?: Record<string, ImageInsight>;
 };
 
 export type SmartDraftScanResponse = {
@@ -352,22 +353,23 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
     const access = await dropboxAccessToken(refresh);
     const files = (await listFolder(access, folder)).sort((a, b) => (a.path_lower || "").localeCompare(b.path_lower || ""));
     if (!files.length) {
-  return jsonEnvelope(200, {
+      return jsonEnvelope(200, {
         ok: true,
         folder,
         signature: null,
         count: 0,
         warnings: ["No images found in folder."],
         groups: [],
-  });
+        imageInsights: {},
+      });
     }
 
     const limitedFiles = files.slice(0, limit);
     const signature = makeSignature(limitedFiles);
-  const cacheKey = makeCacheKey(userId, folder);
+    const cacheKey = makeCacheKey(userId, folder);
     const cached = await getCachedSmartDraftGroups(cacheKey);
     if (!force && !debugEnabled && cached && cached.signature === signature && Array.isArray(cached.groups) && cached.groups.length) {
-  return jsonEnvelope(200, {
+      return jsonEnvelope(200, {
         ok: true,
         cached: true,
         folder,
@@ -375,7 +377,11 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
         count: cached.groups.length,
         warnings: cached.warnings || [],
         groups: hydrateGroups(cached.groups, folder),
-  });
+        imageInsights:
+          cached.imageInsights && typeof cached.imageInsights === "object"
+            ? cached.imageInsights
+            : {},
+      });
     }
 
     const cachedLinks = cached?.links && typeof cached.links === "object" ? cached.links : undefined;
@@ -487,7 +493,7 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
     }));
     if (!urls.length) {
       const fallbackGroups = buildFallbackGroups(fileTuples);
-  return jsonEnvelope(200, {
+      return jsonEnvelope(200, {
         ok: true,
         folder,
         signature,
@@ -495,7 +501,8 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
         warnings: ["No usable image URLs; generated fallback groups."],
         groups: hydrateGroups(fallbackGroups, folder),
         orphans: hydrateOrphans(fileTuples, folder),
-  });
+        imageInsights: {},
+      });
     }
 
     if (!debugEnabled) {
@@ -594,6 +601,39 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       const base = basenameFrom(value).toLowerCase();
       if (!base) return undefined;
       return roleByBase.get(base);
+    };
+
+    const ensureInsightEntry = (value: string | null | undefined): ImageInsight | undefined => {
+      if (!value) return undefined;
+      const normalized = toDirectDropbox(value);
+      let insight = insightMap.get(normalized) || insightMap.get(value);
+      if (insight) {
+        if (!insightMap.has(normalized)) insightMap.set(normalized, insight);
+      } else {
+        insight = { url: normalized };
+        insightMap.set(normalized, insight);
+      }
+      const base = basenameFrom(normalized).toLowerCase();
+      if (base && !insightByBase.has(base)) {
+        insightByBase.set(base, insight);
+      }
+      return insight;
+    };
+
+    const assignRoleInfo = (value: string | null | undefined, patch: RoleInfo) => {
+      if (!value) return;
+      const base = basenameFrom(value).toLowerCase();
+      if (!base) return;
+      const existing = roleByBase.get(base) || {};
+      const updated: RoleInfo = { ...existing };
+      if (patch.role && !updated.role) updated.role = patch.role;
+      if (patch.hasVisibleText !== undefined && updated.hasVisibleText === undefined) {
+        updated.hasVisibleText = patch.hasVisibleText;
+      }
+      if (patch.ocr && (!updated.ocr || updated.ocr.length < patch.ocr.length)) {
+        updated.ocr = patch.ocr;
+      }
+      roleByBase.set(base, updated);
     };
 
     const insightForUrl = (value: string | null | undefined): ImageInsight | undefined => {
@@ -902,21 +942,31 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
         const tuple = tupleByUrl.get(url);
         const entry = tuple?.entry;
         const name = entry?.name || "";
-        const insight = insightMap.get(url) as any;
+        const baseInsight = ensureInsightEntry(url) as any;
         const textParts: string[] = [];
-        if (typeof insight?.ocrText === "string") textParts.push(insight.ocrText);
-        if (Array.isArray(insight?.textBlocks)) textParts.push(insight.textBlocks.join(" "));
-        if (insight?.role) textParts.push(String(insight.role));
-        if (insight?.hasVisibleText) textParts.push("visible text");
+        if (typeof baseInsight?.ocrText === "string") textParts.push(baseInsight.ocrText);
+        if (Array.isArray(baseInsight?.textBlocks)) textParts.push(baseInsight.textBlocks.join(" "));
+        if (baseInsight?.role) textParts.push(String(baseInsight.role));
+        if (baseInsight?.hasVisibleText) textParts.push("visible text");
         const groupedText = collectGroupTextForImage(group, url);
         if (groupedText.length) textParts.push(groupedText.join(" "));
-        return {
+        const combinedText = textParts.join(" ").trim();
+        if (combinedText && baseInsight) {
+          if (!baseInsight.ocrText) baseInsight.ocrText = combinedText;
+          if (baseInsight.hasVisibleText === undefined) baseInsight.hasVisibleText = true;
+        }
+        if (combinedText) {
+          assignRoleInfo(url, { hasVisibleText: true, ocr: combinedText });
+        }
+        const detail: CandidateDetail = {
           url,
           name,
           folder: entry ? folderPath(entry) || folder : folder,
           order: urlOrder.has(url) ? urlOrder.get(url)! : Number.MAX_SAFE_INTEGER,
-          ocrText: textParts.join(" ").trim(),
+          ocrText: combinedText,
         };
+        if (combinedText) detail._hasText = true;
+        return detail;
       });
       let folderKey = normalizeFolderKey(typeof group?.folder === "string" ? group.folder : "");
       if (!folderKey && scanSource) {
@@ -937,8 +987,8 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
 
       for (const candidate of groupCandidates) {
         const info = roleInfoFor(candidate.url) || roleInfoFor(candidate.name);
-        candidate._role = info?.role;
-        candidate._hasText = info?.hasVisibleText;
+        if (info?.role && !candidate._role) candidate._role = info.role;
+        if (info?.hasVisibleText) candidate._hasText = true;
       }
 
       let front = groupCandidates.find((c) => c._role === "front");
@@ -966,6 +1016,10 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
           cleaned.unshift(heroUrl);
         }
         heroOwnerByImage.set(heroUrl, groupId);
+        const heroInsight = ensureInsightEntry(heroUrl);
+        if (heroInsight && !heroInsight.role) heroInsight.role = "front";
+        assignRoleInfo(heroUrl, { role: "front" });
+        if (front) front._role = "front";
       } else {
         group.heroUrl = undefined;
       }
@@ -1000,9 +1054,16 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
         group.backUrl = back.url;
         group.secondaryImageUrl = back.url;
         await getImageVector(back.url);
+        const backInsight = ensureInsightEntry(back.url);
+        if (backInsight && !backInsight.role) backInsight.role = "back";
+        assignRoleInfo(back.url, { role: "back" });
+        back._role = "back";
       } else if (secondaryHint && secondaryHint !== group.heroUrl) {
         group.backUrl = secondaryHint;
         group.secondaryImageUrl = secondaryHint;
+        const backInsight = ensureInsightEntry(secondaryHint);
+        if (backInsight && !backInsight.role) backInsight.role = "back";
+        assignRoleInfo(secondaryHint, { role: "back" });
       } else {
         group.backUrl = undefined;
       }
@@ -1485,12 +1546,61 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
 
     const payloadGroups = hydrateGroups(normalizedGroups, folder);
 
+    const insightOutput = new Map<string, ImageInsight>();
+    const mergeInsight = (url: string | null | undefined, source?: Partial<ImageInsight>) => {
+      if (!url) return;
+      const normalized = toDirectDropbox(url);
+      const current = insightOutput.get(normalized) || { url: normalized };
+      if (source) {
+        if (source.role && !current.role) current.role = source.role;
+        if (source.hasVisibleText !== undefined && current.hasVisibleText === undefined) {
+          current.hasVisibleText = source.hasVisibleText;
+        }
+        if (source.dominantColor && !current.dominantColor) current.dominantColor = source.dominantColor;
+        if (source.ocrText && !current.ocrText) current.ocrText = source.ocrText;
+        if (Array.isArray(source.textBlocks) && !current.textBlocks) current.textBlocks = source.textBlocks.slice();
+        if (source.text && !current.text) current.text = source.text;
+        if (source.ocr) {
+          current.ocr = current.ocr || {};
+          if (source.ocr.text && !current.ocr.text) current.ocr.text = source.ocr.text;
+          if (Array.isArray(source.ocr.lines) && (!current.ocr.lines || current.ocr.lines.length === 0)) {
+            current.ocr.lines = source.ocr.lines.slice();
+          }
+        }
+      }
+      insightOutput.set(normalized, current);
+    };
+
+    insightMap.forEach((insight, key) => {
+      const source = insight || { url: key };
+      mergeInsight(source.url || key, source);
+    });
+
+    fileTuples.forEach(({ url }) => mergeInsight(url));
+
+    normalizedGroups.forEach((group) => {
+      const hero = typeof group?.heroUrl === "string" ? group.heroUrl : null;
+      const back = typeof group?.backUrl === "string" ? group.backUrl : null;
+      if (hero) mergeInsight(hero, { role: "front" });
+      if (back && back !== hero) mergeInsight(back, { role: "back" });
+      const images = Array.isArray(group?.images) ? group.images : [];
+      images.forEach((img) => mergeInsight(img));
+    });
+
+    const imageInsightsRecord = Object.fromEntries(
+      Array.from(insightOutput.entries()).map(([key, value]) => {
+        const normalized = toDirectDropbox(key);
+        return [normalized, { ...value, url: normalized } as ImageInsight];
+      })
+    );
+
     const cachePayload: SmartDraftGroupCache = {
       signature,
       groups: payloadGroups,
       orphans,
       warnings,
-  links: linkPersist.size ? Object.fromEntries(linkPersist) : undefined,
+      imageInsights: Object.keys(imageInsightsRecord).length ? imageInsightsRecord : undefined,
+      links: linkPersist.size ? Object.fromEntries(linkPersist) : undefined,
       updatedAt: Date.now(),
     };
     await setCachedSmartDraftGroups(cacheKey, cachePayload);
@@ -1503,6 +1613,7 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       warnings,
       groups: payloadGroups,
       orphans,
+      imageInsights: imageInsightsRecord,
     };
 
     if (debugCandidatesPerGroup) {
