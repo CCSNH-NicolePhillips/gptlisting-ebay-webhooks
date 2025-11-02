@@ -993,6 +993,7 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       }
       if (!folderKey) folderKey = normalizeFolderKey(folder);
 
+      // Phase 6: Folder gate - only consider images from this group's folder
       let groupCandidates = folderKey
         ? candidateDetails.filter((candidate) => normalizeFolderKey(candidate.folder) === folderKey)
         : candidateDetails.slice();
@@ -1801,10 +1802,13 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
 
       const providerMeta = clipProviderInfo();
       const clipDebug: Record<string, unknown> = {
-        ...providerMeta,
+        provider: providerMeta.provider,
+        textBase: providerMeta.textBase,
+        imageBase: providerMeta.imageBase,
+        textDim: firstImageDim, // Text and image use same dimension for CLIP
+        imgDim: firstImageDim,
         weight: CLIP_WEIGHT,
         minSimilarity: CLIP_MIN_SIM,
-        imgDim: firstImageDim,
         enabled: clipEnabled,
         anchors: {
           heroWeight: HERO_WEIGHT,
@@ -1832,11 +1836,18 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
         ? { count: duplicateCount, groups: duplicateGroupsList, margin: CLIP_MARGIN }
         : undefined;
 
+      // Phase 6: Enhanced debug output
       responsePayload.debug = {
         minAssign: MIN_ASSIGN,
         clip: clipDebug,
         groups: debugGroups,
         ...(duplicatesDebug ? { duplicates: duplicatesDebug } : {}),
+        phase6: {
+          useRoleSorting: USE_ROLE_SORTING,
+          folderGateEnabled: true,
+          visionSortDisabled: true,
+          message: "Phase 0-5 complete: role-based sorting with folder isolation",
+        },
       };
     }
 
