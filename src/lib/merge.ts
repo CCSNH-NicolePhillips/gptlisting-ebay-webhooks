@@ -80,73 +80,151 @@ function mergeOptionMaps(existing: any, incoming: any): Record<string, string[]>
   return Object.keys(merged).length ? merged : undefined;
 }
 
+function collectImages(source: any, extras: unknown[] = []): { list: string[]; set: Set<string> } {
+  const seen = new Set<string>();
+  const list: string[] = [];
+  const add = (value: unknown) => {
+    if (typeof value !== "string") return;
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    const normalized = toDirectDropbox(trimmed);
+    if (!normalized || seen.has(normalized)) return;
+    seen.add(normalized);
+    list.push(normalized);
+  };
+
+  if (Array.isArray(source)) {
+    for (const entry of source) add(entry);
+  }
+
+  for (const extra of extras) add(extra);
+
+  return { list, set: seen };
+}
+
 /**
  * Merge multiple OpenAI Vision results into one clean groups array
  */
 export function mergeGroups(parts: { groups?: any[] }[]): { groups: any[] } {
-  const map = new Map<string, any>();
+  type BucketEntry = {
+    group: any;
+    images: string[];
+    imageSet: Set<string>;
+  };
+
+  const buckets = new Map<string, BucketEntry[]>();
 
   const key = (g: any) =>
     [g.brand, g.product, g.variant].map((x: string) => (x || "").toLowerCase().trim()).join("|");
 
+  const appendImages = (entry: BucketEntry, additions: string[]) => {
+    for (const url of additions) {
+      if (entry.imageSet.has(url)) continue;
+      entry.imageSet.add(url);
+      entry.images.push(url);
+    }
+    entry.group.images = entry.images.slice();
+  };
+
   for (const part of parts) {
     for (const g of part.groups || []) {
-      const k = key(g);
-      if (!map.has(k)) {
-        const normalizedClaims = Array.from(
-          new Set(
-            (Array.isArray(g.claims) ? g.claims : [])
-              .map((claim: unknown) => (claim === undefined || claim === null ? "" : String(claim).trim()))
-              .filter(Boolean)
-          )
-        );
-        map.set(k, {
-          ...g,
-          options: normalizeOptions(g.options),
-          images: [...(g.images || [])],
-          claims: normalizedClaims,
-        });
-      } else {
-        const existing = map.get(k);
-        const mergedImages = new Set([
-          ...(existing.images || []),
-          ...(g.images || []),
-        ]);
-        existing.images = Array.from(mergedImages);
-        const incomingClaims = Array.isArray(g.claims)
-          ? g.claims.map((claim: unknown) => (claim === undefined || claim === null ? "" : String(claim).trim()))
-          : [];
-        const mergedClaims = new Set([
-          ...(existing.claims || []),
-          ...incomingClaims.filter(Boolean),
-        ]);
-        existing.claims = Array.from(mergedClaims);
-        existing.options = mergeOptionMaps(existing.options, g.options);
-        if (!existing.category && g.category) existing.category = g.category;
-        const existingDepth = typeof existing.categoryPath === "string"
-          ? existing.categoryPath.split(">").filter((part: string) => part.trim()).length
-          : 0;
-        const newDepth = typeof g.categoryPath === "string"
-          ? g.categoryPath.split(">").filter((part: string) => part.trim()).length
-          : 0;
-        if (!existing.categoryPath && g.categoryPath) {
-          existing.categoryPath = g.categoryPath;
-        } else if (newDepth > existingDepth) {
-          existing.categoryPath = g.categoryPath;
-        }
-        existing.confidence = Math.max(existing.confidence || 0, g.confidence || 0);
+      const extras = [g.primaryImageUrl, g.heroUrl, g.secondaryImageUrl, g.backUrl];
+      const { list: candidateImages, set: candidateSet } = collectImages(g.images, extras);
+      const bucketKey = key(g);
+      const bucket = buckets.get(bucketKey) || [];
+
+      const normalizedClaims = Array.from(
+        new Set(
+          (Array.isArray(g.claims) ? g.claims : [])
+            .map((claim: unknown) => (claim === undefined || claim === null ? "" : String(claim).trim()))
+            .filter(Boolean)
+        )
+      );
+
+      let target: BucketEntry | undefined;
+      if (candidateImages.length) {
+        target = bucket.find((entry) => candidateImages.some((url) => entry.imageSet.has(url)));
+      }
+
+      if (!target) {
+        const entry: BucketEntry = {
+          group: {
+            ...g,
+            options: normalizeOptions(g.options),
+            images: candidateImages.slice(),
+            claims: normalizedClaims,
+          },
+          images: candidateImages.slice(),
+          imageSet: new Set(candidateImages),
+        };
+        bucket.push(entry);
+        buckets.set(bucketKey, bucket);
+        continue;
+      }
+
+      const existing = target.group;
+      appendImages(target, candidateImages);
+
+      const incomingClaims = Array.isArray(g.claims)
+        ? g.claims.map((claim: unknown) => (claim === undefined || claim === null ? "" : String(claim).trim()))
+        : [];
+      const mergedClaims = new Set([
+        ...(existing.claims || []),
+        ...incomingClaims.filter(Boolean),
+      ]);
+      existing.claims = Array.from(mergedClaims);
+
+      existing.options = mergeOptionMaps(existing.options, g.options);
+      if (!existing.brand && g.brand) existing.brand = g.brand;
+      if (!existing.product && g.product) existing.product = g.product;
+      if (!existing.variant && g.variant) existing.variant = g.variant;
+      if (!existing.category && g.category) existing.category = g.category;
+
+      const existingDepth = typeof existing.categoryPath === "string"
+        ? existing.categoryPath.split(">").filter((part: string) => part.trim()).length
+        : 0;
+      const newDepth = typeof g.categoryPath === "string"
+        ? g.categoryPath.split(">").filter((part: string) => part.trim()).length
+        : 0;
+      if (!existing.categoryPath && g.categoryPath) {
+        existing.categoryPath = g.categoryPath;
+      } else if (newDepth > existingDepth) {
+        existing.categoryPath = g.categoryPath;
+      }
+
+      existing.confidence = Math.max(existing.confidence || 0, g.confidence || 0);
+      if (!existing.primaryImageUrl && typeof g.primaryImageUrl === "string") {
+        existing.primaryImageUrl = g.primaryImageUrl;
+      }
+      if (!existing.secondaryImageUrl && typeof g.secondaryImageUrl === "string") {
+        existing.secondaryImageUrl = g.secondaryImageUrl;
+      }
+      if (!existing.heroUrl && typeof g.heroUrl === "string") {
+        existing.heroUrl = g.heroUrl;
+      }
+      if (!existing.backUrl && typeof g.backUrl === "string") {
+        existing.backUrl = g.backUrl;
       }
     }
   }
 
-  for (const g of map.values()) {
-    const sig = makeSignature(g);
-    g.groupId = `grp_${sig.slice(0, 8)}`;
+  const merged: any[] = [];
+
+  for (const bucket of buckets.values()) {
+    bucket.forEach((entry, index) => {
+      entry.group.images = entry.images.slice();
+      const sig = makeSignature(entry.group);
+      const suffix = bucket.length > 1 ? `_${index + 1}` : "";
+      entry.group.groupId = `grp_${sig.slice(0, 8)}${suffix}`;
+      merged.push(entry.group);
+    });
   }
 
-  const sorted = Array.from(map.values()).sort((a, b) =>
-    `${a.brand}${a.product}${a.variant}`.localeCompare(`${b.brand}${b.product}${b.variant}`)
-  );
+  merged.sort((a, b) => {
+    const left = `${a.brand || ""}${a.product || ""}${a.variant || ""}${a.groupId || ""}`.toLowerCase();
+    const right = `${b.brand || ""}${b.product || ""}${b.variant || ""}${b.groupId || ""}`.toLowerCase();
+    return left.localeCompare(right);
+  });
 
-  return { groups: sorted };
+  return { groups: merged };
 }
