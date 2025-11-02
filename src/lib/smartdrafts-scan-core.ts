@@ -1584,7 +1584,9 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       if (hero) mergeInsight(hero, { role: "front" });
       if (back && back !== hero) mergeInsight(back, { role: "back" });
       const images = Array.isArray(group?.images) ? group.images : [];
-      images.forEach((img) => mergeInsight(img));
+      images.forEach((img: unknown) => {
+        if (typeof img === "string") mergeInsight(img);
+      });
     });
 
     const imageInsightsRecord = Object.fromEntries(
