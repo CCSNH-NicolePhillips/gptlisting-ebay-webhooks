@@ -464,6 +464,20 @@ export async function runAnalysis(
   let images = sanitizeUrls(inputUrls).map(toDirectDropbox);
   const insightMap = new Map<string, ImageInsight>();
   const useLegacyAssignment = envFlag(process.env.USE_LEGACY_IMAGE_ASSIGNMENT);
+  const FRONT_NAME_TOKENS = [
+    "front",
+    "hero",
+    "main",
+    "primary",
+    "cover",
+    "label",
+    "face",
+    "pack",
+    "box",
+    "bag",
+    "01",
+    "1",
+  ];
 
   const ensureInsightEntry = (value: string | null | undefined) => {
     if (!value) return;
@@ -675,6 +689,39 @@ export async function runAnalysis(
         lowerName.includes("supplement")
       );
     };
+
+    metaByUrl.forEach((meta, url) => {
+      const normalized = toDirectDropbox(url);
+      if (!normalized) return;
+      const current = insightMap.get(normalized) || { url: normalized };
+      const label = meta?.name || base(normalized);
+      const labelLower = label ? label.toLowerCase() : "";
+      const existingOcr = extractInsightOcr(current);
+      if (!current.ocrText && label) current.ocrText = label;
+      if (current.hasVisibleText === undefined) {
+        current.hasVisibleText = Boolean(existingOcr) || (label ? /[a-z]/i.test(label) : false);
+      }
+      let role = current.role as "front" | "back" | undefined;
+      if (!role) {
+        if (looksBack(existingOcr, label)) {
+          role = "back";
+        } else if (labelLower) {
+          const hasFrontToken = FRONT_NAME_TOKENS.some((token) => labelLower.includes(token));
+          if (hasFrontToken) role = "front";
+        }
+        if (role) current.role = role;
+      }
+      insightMap.set(normalized, current);
+      const key = base(normalized).toLowerCase();
+      const info = roleByBase.get(key) || {};
+      if (role && !info.role) info.role = role;
+      if (current.hasVisibleText === true) info.hasVisibleText = true;
+      const updatedOcr = extractInsightOcr(current);
+      if (updatedOcr && (!info.ocr || info.ocr.length < updatedOcr.length)) {
+        info.ocr = updatedOcr;
+      }
+      roleByBase.set(key, info);
+    });
 
     const debugSelection: {
       groups: Array<{
