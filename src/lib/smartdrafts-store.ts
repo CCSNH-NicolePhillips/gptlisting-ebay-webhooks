@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import type { ImageInsight } from "./image-insight.js";
 
 const BASE = (process.env.UPSTASH_REDIS_REST_URL || "").replace(/\/$/, "");
 const TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || "";
@@ -41,6 +42,7 @@ export type SmartDraftGroupCache = {
   orphans?: any[];
   warnings?: string[];
   links?: Record<string, string>;
+  imageInsights?: Record<string, ImageInsight>;
   updatedAt: number;
 };
 
@@ -58,6 +60,15 @@ export async function getCachedSmartDraftGroups(key: string): Promise<SmartDraft
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return null;
     if (typeof parsed.signature !== "string" || !parsed.signature) return null;
+    const insights =
+      parsed.imageInsights && typeof parsed.imageInsights === "object"
+        ? Object.fromEntries(
+            Object.entries(parsed.imageInsights)
+              .filter(([key, value]) => typeof key === "string" && value && typeof value === "object")
+              .map(([key, value]) => [key, { ...(value as ImageInsight), url: key }])
+          )
+        : undefined;
+
     return {
       signature: parsed.signature,
       groups: Array.isArray(parsed.groups) ? parsed.groups : [],
@@ -73,6 +84,7 @@ export async function getCachedSmartDraftGroups(key: string): Promise<SmartDraft
                 .map(([key, value]) => [key, value as string]),
             )
           : undefined,
+      imageInsights: insights,
       updatedAt: Number(parsed.updatedAt) || Date.now(),
     };
   } catch (err) {
@@ -88,6 +100,8 @@ export async function setCachedSmartDraftGroups(key: string, payload: SmartDraft
     orphans: Array.isArray(payload.orphans) ? payload.orphans : undefined,
     warnings: Array.isArray(payload.warnings) ? payload.warnings : undefined,
     links: payload.links && typeof payload.links === "object" ? payload.links : undefined,
+    imageInsights:
+      payload.imageInsights && typeof payload.imageInsights === "object" ? payload.imageInsights : undefined,
     updatedAt: payload.updatedAt || Date.now(),
   };
   await redisCall("SET", key, JSON.stringify(safePayload));
