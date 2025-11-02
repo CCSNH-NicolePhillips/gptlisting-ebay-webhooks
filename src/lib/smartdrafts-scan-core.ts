@@ -613,6 +613,17 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       console.log("[smartdrafts-scan] Role lookup samples:", JSON.stringify(roleSamples.slice(0, 10), null, 2));
     }
 
+    // Phase 5: Handle dummy/missing-insight images - add dummy insights for any URL without one
+    for (const tuple of fileTuples) {
+      const b = basenameFrom(tuple.url).toLowerCase();
+      if (!roleByBase.has(b)) {
+        roleByBase.set(b, { role: undefined, hasVisibleText: false, ocr: "" });
+      }
+    }
+    if (debugEnabled) {
+      console.log(`[smartdrafts-scan] Phase 5: Role index after dummy fill (${roleByBase.size} files)`);
+    }
+
     const roleInfoFor = (value: string | null | undefined): RoleInfo | undefined => {
       if (!value) return undefined;
       const base = basenameFrom(value).toLowerCase();
@@ -1024,17 +1035,32 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
           );
         };
 
-        // Phase 4: Build candidates with role/OCR from roleByBase
-        const candidates = groupCandidates.map((c) => {
-          const info = roleByBase.get(basenameFrom(c.url).toLowerCase()) || {};
-          return {
-            url: c.url,
-            name: c.name,
-            _role: info.role || c._role || null,
-            _ocr: info.ocr || c.ocrText || "",
-            _hasText: info.hasVisibleText ?? c._hasText ?? false,
-          };
-        });
+        // Phase 5: Filter out noisy/dummy images by filename
+        const noisy = (n: string) => {
+          const s = n.toLowerCase();
+          return (
+            s.includes("dummy") ||
+            s.includes("placeholder") ||
+            s.includes("barcode") ||
+            s.includes("qrcode") ||
+            s.includes("sample") ||
+            s.includes("template")
+          );
+        };
+
+        // Phase 4: Build candidates with role/OCR from roleByBase, filtering noisy images
+        const candidates = groupCandidates
+          .filter((c) => !noisy(basenameFrom(c.url)))
+          .map((c) => {
+            const info = roleByBase.get(basenameFrom(c.url).toLowerCase()) || {};
+            return {
+              url: c.url,
+              name: c.name,
+              _role: info.role || c._role || null,
+              _ocr: info.ocr || c.ocrText || "",
+              _hasText: info.hasVisibleText ?? c._hasText ?? false,
+            };
+          });
 
         // FRONT (hero): role 'front' > brand OCR > first
         let hero =
