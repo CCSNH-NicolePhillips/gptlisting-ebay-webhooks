@@ -450,11 +450,27 @@
           const productName =
             (typeof group?.product === 'string' && group.product.trim()) || parsed.product || group?.name || 'Product';
           const brand = brandOverride || (typeof group?.brand === 'string' && group.brand.trim()) || undefined;
+          const optionHints = {};
           const features = [
             ...collectFolderFeatures(group),
             ...(Array.isArray(group?.claims) ? group.claims : []),
             ...(Array.isArray(group?.features) ? group.features : []),
           ];
+          if (group?.options && typeof group.options === 'object') {
+            Object.entries(group.options).forEach(([rawKey, rawValue]) => {
+              const key = typeof rawKey === 'string' ? rawKey.trim() : '';
+              if (!key) return;
+              const values = Array.isArray(rawValue) ? rawValue : [rawValue];
+              const normalized = dedupeStrings(
+                values
+                  .map((entry) => (entry === undefined || entry === null ? '' : String(entry).trim()))
+                  .filter(Boolean)
+              ).slice(0, 10);
+              if (!normalized.length) return;
+              optionHints[key] = normalized;
+              normalized.forEach((value) => features.push(`${key}: ${value}`));
+            });
+          }
           if (variant) features.push(variant);
           if (size) features.push(size);
           if (group?.category?.title) features.push(group.category.title);
@@ -467,6 +483,7 @@
             size,
             features: mergedFeatures,
             keywords: keywordList,
+            options: Object.keys(optionHints).length ? optionHints : undefined,
             folder: typeof group?.folder === 'string' ? group.folder : undefined,
             groupName: typeof group?.name === 'string' ? group.name : undefined,
           };

@@ -654,21 +654,8 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
 
     const debugCandidatesPerGroup = debugEnabled ? groups.map(() => [] as DebugCandidate[]) : null;
 
-    const desiredByGroup: string[][] = groups.map((group) => {
-      const images = Array.isArray(group?.images) ? group.images : [];
-      return images
-        .map((img: unknown) => (typeof img === "string" ? toDirectDropbox(img) : ""))
-        .filter((img: string) => img.length > 0);
-    });
-
-    const urlToGroups = new Map<string, number[]>();
-    desiredByGroup.forEach((urls, gi) => {
-      urls.forEach((url) => {
-        const list = urlToGroups.get(url) || [];
-        list.push(gi);
-        urlToGroups.set(url, list);
-      });
-    });
+    // Phase 1: Stop seeding from vision.groups[].images to prevent cross-pollution
+    const desiredByGroup: string[][] = groups.map(() => []);
 
     const tokenize = (value: string): string[] =>
       String(value || "")
@@ -1192,7 +1179,7 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
         add("color", COLOR_WEIGHTS[insight.dominantColor], insight.dominantColor);
       }
 
-      if ((desiredByGroup[gi] || []).includes(tuple.url)) add("vision-suggested", 10);
+      // Phase 1: Removed vision-suggested scoring (cross-pollution vector)
 
       const confidence = Number(groups[gi]?.confidence || 0);
       const confBoost = Math.min(5, Math.max(0, Math.round(confidence)));
@@ -1462,11 +1449,7 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
     const usedUrls = new Set<string>();
     assignedLists.forEach((urls) => urls.forEach((url) => usedUrls.add(url)));
 
-    let reassignedCount = 0;
-    fileTuples.forEach((tuple) => {
-      const candidates = urlToGroups.get(tuple.url) || [];
-      if (candidates.length > 1) reassignedCount++;
-    });
+    // Phase 1: Removed reassignedCount logic (relied on urlToGroups)
 
     const normalizedGroups: any[] = [];
 
@@ -1543,9 +1526,7 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
     }
 
     const orphanTuples = fileTuples.filter((tuple) => !usedUrls.has(tuple.url));
-    if (reassignedCount > 0) {
-      warnings = [...warnings, `Rebalanced duplicate image references across groups (${reassignedCount} adjusted).`];
-    }
+    // Phase 1: Removed reassignedCount warning (urlToGroups dependency)
     const orphans = hydrateOrphans(orphanTuples, folder);
 
     const payloadGroups = hydrateGroups(normalizedGroups, folder);
