@@ -596,6 +596,22 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       }
     }
 
+    // Phase 3: Debug log role lookups for the batch
+    if (debugEnabled && roleByBase.size > 0) {
+      console.log(`[smartdrafts-scan] Phase 3: Role index built (${roleByBase.size} files)`);
+      const roleSamples: Array<{ file: string; role: string | null; hasText: boolean; ocrLength: number }> = [];
+      for (const [base, info] of roleByBase.entries()) {
+        roleSamples.push({
+          file: base,
+          role: info.role || null,
+          hasText: info.hasVisibleText ?? false,
+          ocrLength: info.ocr?.length || 0,
+        });
+      }
+      // Show first 10 entries
+      console.log("[smartdrafts-scan] Role lookup samples:", JSON.stringify(roleSamples.slice(0, 10), null, 2));
+    }
+
     const roleInfoFor = (value: string | null | undefined): RoleInfo | undefined => {
       if (!value) return undefined;
       const base = basenameFrom(value).toLowerCase();
