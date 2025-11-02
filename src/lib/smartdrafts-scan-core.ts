@@ -1233,7 +1233,7 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
 
       let clipContribution = 0;
       if (CLIP_WEIGHT > 0 && clipEnabled && clipSim >= CLIP_MIN_SIM) {
-        clipContribution = Math.round(clipSim * CLIP_WEIGHT);
+        clipContribution = Math.round(clipSim * CLIP_WEIGHT * 100) / 100;
       }
 
       if (components) {
@@ -1241,7 +1241,11 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
         if (backVectors.get(groupId)) {
           components.push({ label: "clip-back", value: Number((simBack * 100).toFixed(1)), detail: simBack.toFixed(3) });
         }
-        components.push({ label: "clip", value: clipContribution, detail: clipSim.toFixed(3) });
+        components.push({
+          label: "clip",
+          value: Number(clipContribution.toFixed(2)),
+          detail: `${clipSim.toFixed(3)} × ${CLIP_WEIGHT}`,
+        });
       }
 
       const total = baseScore + clipContribution;
