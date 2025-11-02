@@ -309,20 +309,31 @@ function buildFallbackGroups(files: Array<{ entry: DropboxEntry; url: string }>)
 function buildPairwiseGroups(files: Array<{ entry: DropboxEntry; url: string }>, insightList: ImageInsight[]) {
   // Create groups by pairing images based on role detection (front finds its back)
   const roleByUrl = new Map<string, "front" | "back" | null>();
+  const roleByBasename = new Map<string, "front" | "back" | null>();
+  
   for (const insight of insightList) {
     if (insight.url && insight.role) {
-      roleByUrl.set(insight.url, insight.role as "front" | "back" | null);
+      const normalized = toDirectDropbox(insight.url);
+      roleByUrl.set(normalized, insight.role as "front" | "back" | null);
+      // Also index by basename for fallback matching
+      const base = basenameFrom(normalized).toLowerCase();
+      roleByBasename.set(base, insight.role as "front" | "back" | null);
     }
   }
   
   const sorted = files.slice().sort((a, b) => (a.entry.name || "").localeCompare(b.entry.name || ""));
   const groups: any[] = [];
-  const used = new Set<string>();
   
-  // Strategy: Find all fronts, then match each with the nearest unused back
-  const fronts = sorted.filter(f => roleByUrl.get(f.url) === "front");
-  const backs = sorted.filter(f => roleByUrl.get(f.url) === "back");
-  const neither = sorted.filter(f => !roleByUrl.has(f.url) || roleByUrl.get(f.url) === null);
+  // Strategy: Match by URL first, then by basename
+  const getRole = (url: string): "front" | "back" | null => {
+    if (roleByUrl.has(url)) return roleByUrl.get(url)!;
+    const base = basenameFrom(url).toLowerCase();
+    return roleByBasename.get(base) || null;
+  };
+  
+  const fronts = sorted.filter(f => getRole(f.url) === "front");
+  const backs = sorted.filter(f => getRole(f.url) === "back");
+  const neither = sorted.filter(f => getRole(f.url) === null);
   
   // Pair each front with next available back
   for (let i = 0; i < Math.max(fronts.length, backs.length, Math.ceil(neither.length / 2)); i++) {
@@ -337,7 +348,7 @@ function buildPairwiseGroups(files: Array<{ entry: DropboxEntry; url: string }>,
     
     if (images.length === 0) continue;
     
-    const primaryFile = front || back;
+    const primaryFile = front || back!;
     const folderName = folderPath(primaryFile.entry) || "";
     const baseName = (primaryFile.entry.name || "").replace(/\.[^.]+$/, "").replace(/_\d+$/, "");
     
