@@ -175,9 +175,10 @@ const LOG_VISION_RESPONSES = envFlag(process.env.VISION_LOG_RESPONSES || process
 async function analyzeBatchViaVision(
   batch: string[],
   metadata: Array<{ url: string; name: string; folder: string }>,
-  debugLog = false
+  debugLog = false,
+  force = false
 ) {
-  const cacheEligible = !BYPASS_VISION_CACHE;
+  const cacheEligible = !BYPASS_VISION_CACHE && !force;
 
   if (cacheEligible) {
     const cached = await getCachedBatch(batch);
@@ -458,9 +459,10 @@ export async function runAnalysis(
     skipPricing?: boolean;
     metadata?: Array<{ url: string; name: string; folder: string }>;
     debugVisionResponse?: boolean;
+    force?: boolean;
   } = {}
 ): Promise<AnalysisResult> {
-  const { skipPricing = false, metadata, debugVisionResponse = false } = opts;
+  const { skipPricing = false, metadata, debugVisionResponse = false, force = false } = opts;
   let images = sanitizeUrls(inputUrls).map(toDirectDropbox);
   const insightMap = new Map<string, ImageInsight>();
   const useLegacyAssignment = envFlag(process.env.USE_LEGACY_IMAGE_ASSIGNMENT);
@@ -547,7 +549,7 @@ export async function runAnalysis(
   for (const [idx, batch] of verifiedBatches.entries()) {
     console.log(`🧠 Analyzing batch ${idx + 1}/${verifiedBatches.length} (${batch.length} images)`);
   const metaForBatch = batch.map((url) => metaLookup.get(url) || { url, name: "", folder: "" });
-  const result = await analyzeBatchViaVision(batch, metaForBatch, debugVisionResponse);
+  const result = await analyzeBatchViaVision(batch, metaForBatch, debugVisionResponse, force);
     if (result?._error) {
       warnings.push(`Batch ${idx + 1}: ${result._error}`);
     }

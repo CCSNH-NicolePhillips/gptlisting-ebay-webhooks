@@ -522,6 +522,7 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       skipPricing: true,
       metadata: analysisMeta,
       debugVisionResponse: debugEnabled,
+      force,
     });
   const insightMap = new Map<string, ImageInsight>();
   const insightByBase = new Map<string, ImageInsight>();
@@ -1043,11 +1044,17 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       // Phase R2: New pure sorter
       if (USE_NEW_SORTER) {
         const folderUrls = groupCandidates.map(c => c.url);
-        const imageInsights = insightList.map(ins => ({
-          role: (ins.role as "front" | "back" | null) || null,
-          hasVisibleText: ins.hasVisibleText,
-          ocr: (ins as any).ocrText || "",
-        }));
+        
+        // Build insights with URL for matching in sorter
+        const imageInsights = folderUrls.map(url => {
+          const insight = insightMap.get(url);
+          return {
+            url,
+            role: (insight?.role as "front" | "back" | null) || null,
+            hasVisibleText: insight?.hasVisibleText ?? false,
+            ocr: (insight as any)?.ocrText || "",
+          };
+        });
         
         const result = await frontBackStrict(
           folderUrls,
@@ -1073,6 +1080,7 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
             heroUrl: result.heroUrl,
             backUrl: result.backUrl,
             images: result.images,
+            insightsReceived: imageInsights.map(i => ({ url: i.url.split('/').pop(), role: i.role })),
             sample: result.debug.metas.slice(0, 4)
           });
         }
