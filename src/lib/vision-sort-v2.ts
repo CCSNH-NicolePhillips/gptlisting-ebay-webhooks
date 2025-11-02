@@ -198,6 +198,8 @@ export async function applyVisionSortV2(args: VisionSortArgs): Promise<VisionSor
     orphans.push(...remaining);
   }
 
+  // Phase 2: Do NOT mutate groups[].images (prevents cross-pollution)
+  const debugLogs: DebugLog[] = [];
   for (let gi = 0; gi < groups.length; gi++) {
     const sorted = assignments[gi]
       .slice()
@@ -205,12 +207,10 @@ export async function applyVisionSortV2(args: VisionSortArgs): Promise<VisionSor
       .map((item) => toDirectDropbox(item.url))
       .filter(Boolean)
       .slice(0, MAX_IMAGES_PER_GROUP);
-    groups[gi].images = sorted;
-  }
-
-  const debugLogs: DebugLog[] = [];
-  if (debug) {
-    for (let gi = 0; gi < groups.length; gi++) {
+    
+    // REMOVED: groups[gi].images = sorted;
+    
+    if (debug) {
       const rawTop = pairScoresByGroup[gi]
         .slice()
         .sort((a, b) => b.score - a.score)
@@ -219,9 +219,10 @@ export async function applyVisionSortV2(args: VisionSortArgs): Promise<VisionSor
       debugLogs.push({
         groupId: String(groups[gi]?.groupId || `group_${gi + 1}`),
         prompt: prompts[gi],
-        top: rawTop
-          .filter((entry) => entry.url)
-          .map((entry) => ({ url: entry.url!, score: Number(entry.score.toFixed(4)) })),
+        top: sorted.slice(0, 3).map((url, idx) => ({ 
+          url, 
+          score: Number((pairScoresByGroup[gi].find(p => candidates[p.candidateIndex]?.url === url)?.score || 0).toFixed(4))
+        })),
       });
     }
   }
