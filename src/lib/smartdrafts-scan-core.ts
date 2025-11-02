@@ -134,7 +134,8 @@ function basenameFrom(u: string): string {
   }
 }
 
-type RoleInfo = { role?: "front" | "back"; hasVisibleText?: boolean; ocr?: string };
+// Phase 2: Extended RoleInfo to include category metadata
+type RoleInfo = { role?: "front" | "back"; hasVisibleText?: boolean; ocr?: string; category?: string };
 
 function isImage(name: string) {
   return /\.(jpe?g|png|gif|webp|tiff?|bmp)$/i.test(name);
@@ -569,7 +570,12 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
         }
         const ocrText = extractInsightOcr(payload);
         if (ocrText) info.ocr = ocrText;
-        if (info.role || info.hasVisibleText !== undefined || info.ocr) {
+        // Phase 2: Include category from vision/LLM if available
+        const categoryRaw = (payload as any).category || (payload as any).categoryPath;
+        if (typeof categoryRaw === "string" && categoryRaw.trim()) {
+          info.category = categoryRaw.trim();
+        }
+        if (info.role || info.hasVisibleText !== undefined || info.ocr || info.category) {
           roleByBase.set(base, info);
         }
       }
@@ -590,7 +596,12 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
             if (typeof match.hasVisibleText === "boolean") info.hasVisibleText = match.hasVisibleText;
             const ocrText = extractInsightOcr(match);
             if (ocrText) info.ocr = ocrText;
-            if (info.role || info.hasVisibleText !== undefined || info.ocr) roleByBase.set(base, info);
+            // Phase 2: Include category from vision/LLM if available
+            const categoryRaw = (match as any).category || (match as any).categoryPath;
+            if (typeof categoryRaw === "string" && categoryRaw.trim()) {
+              info.category = categoryRaw.trim();
+            }
+            if (info.role || info.hasVisibleText !== undefined || info.ocr || info.category) roleByBase.set(base, info);
           }
           break;
         }
@@ -1062,25 +1073,55 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
           );
         };
 
-        // Phase 4: Build candidates with role/OCR from roleByBase, filtering noisy images
+        // Phase 2: Build fresh per-group candidate snapshot (DO NOT mutate shared arrays)
+        // Include full metadata: folder, role, category, OCR
         const candidates = groupCandidates
           .filter((c) => !noisy(basenameFrom(c.url)))
           .map((c) => {
-            const info = roleByBase.get(basenameFrom(c.url).toLowerCase()) || {};
+            const b = basenameFrom(c.url).toLowerCase();
+            const info = roleByBase.get(b) || {};
+            const groupCategory = 
+              (group as any).category || 
+              (group as any).categoryPath || 
+              "";
             return {
               url: c.url,
               name: c.name,
-              _role: info.role || c._role || null,
-              _ocr: info.ocr || c.ocrText || "",
-              _hasText: info.hasVisibleText ?? c._hasText ?? false,
+              folder: folderKey || folder,
+              role: info.role || c._role || null,
+              hasText: info.hasVisibleText ?? c._hasText ?? false,
+              ocr: info.ocr || c.ocrText || "",
+              category: info.category || groupCategory,
             };
           });
 
+        // Phase 2: Debug log per-group snapshot
+        if (debugEnabled) {
+          console.log(`[Phase 2] Group ${groupId} snapshot (${candidates.length} candidates):`, 
+            candidates.slice(0, 5).map(c => ({
+              url: basenameFrom(c.url),
+              role: c.role,
+              category: c.category?.substring(0, 30) || "(none)",
+              ocrLength: c.ocr.length,
+            }))
+          );
+        }
+
+        // Adapt candidates to legacy format for hero/back selection
+        const adaptedCandidates = candidates.map((c) => ({
+          url: c.url,
+          name: c.name,
+          _role: c.role,
+          _ocr: c.ocr,
+          _hasText: c.hasText,
+          _category: c.category,
+        }));
+
         // FRONT (hero): role 'front' > brand OCR > first
         let hero =
-          candidates.find((c) => c._role === "front") ||
-          candidates.slice().sort((a, b) => brandScore(b._ocr) - brandScore(a._ocr))[0] ||
-          candidates[0];
+          adaptedCandidates.find((c) => c._role === "front") ||
+          adaptedCandidates.slice().sort((a, b) => brandScore(b._ocr) - brandScore(a._ocr))[0] ||
+          adaptedCandidates[0];
 
         group.heroUrl = hero?.url || undefined;
         if (group.heroUrl) {
@@ -1092,9 +1133,9 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
         }
 
         // BACK: role 'back' > facts/ingredients OCR > CLIP-to-hero
-        let back = candidates.find((c) => c.url !== group.heroUrl && c._role === "back");
+        let back = adaptedCandidates.find((c) => c.url !== group.heroUrl && c._role === "back");
         if (!back) {
-          back = candidates
+          back = adaptedCandidates
             .filter((c) => c.url !== group.heroUrl)
             .sort(
               (a, b) =>
@@ -1106,7 +1147,7 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
           const hv = await getImageVector(group.heroUrl);
           if (hv) {
             const scored = await Promise.all(
-              candidates
+              adaptedCandidates
                 .filter((c) => c.url !== group.heroUrl)
                 .map(async (c) => {
                   const v = await getImageVector(c.url);
@@ -1127,26 +1168,28 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
         }
 
         // Strict order: [hero, back, ...rest]
-        const rest = candidates.map((c) => c.url).filter((u) => u !== group.heroUrl && u !== group.backUrl);
+        const rest = adaptedCandidates.map((c) => c.url).filter((u) => u !== group.heroUrl && u !== group.backUrl);
         const orderedImages = [group.heroUrl, group.backUrl, ...rest].filter((url): url is string => Boolean(url));
         group.images = orderedImages;
 
         // 2-photo fast path when folder only had 2
-        if (candidates.length <= 2 && group.images) {
+        if (adaptedCandidates.length <= 2 && group.images) {
           group.images = group.images.slice(0, 2);
         }
 
-        // Debug
+        // Debug - Phase 2: Show snapshot metadata
         if (debugEnabled) {
           console.log(`[Phase 4] Group ${groupId}:`, {
             name: (group as any).name || (group as any).product,
             heroUrl: group.heroUrl,
             backUrl: group.backUrl,
+            snapshotSize: candidates.length,
             roles: candidates.slice(0, 5).map((c) => ({
               url: basenameFrom(c.url),
-              role: c._role,
-              brandScore: brandScore(c._ocr),
-              looksBack: looksBack(c._ocr, c.name),
+              role: c.role,
+              category: c.category?.substring(0, 30) || "(none)",
+              brandScore: brandScore(c.ocr),
+              looksBack: looksBack(c.ocr, c.name),
             })),
           });
         }
