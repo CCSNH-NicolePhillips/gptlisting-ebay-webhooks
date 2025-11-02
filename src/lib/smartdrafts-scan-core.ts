@@ -759,6 +759,19 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
     .filter((value) => value.length > 0);
   const FILENAME_BACK_HINTS = ["back", "facts", "ingredients", "supplement", "nutrition", "drug"];
 
+  // PHASE 1: HARD GATES & TUNABLES
+  const FOLDER_GATE = (process.env.FOLDER_GATE ?? "true") === "true";
+  const CATEGORY_GATE = (process.env.CATEGORY_GATE ?? "true") === "true";
+  const BRAND_GATE = (process.env.BRAND_GATE ?? "true") === "true";
+  const OUTLIER_GATE = (process.env.OUTLIER_GATE ?? "true") === "true";
+
+  // PHASE 1: THRESHOLDS
+  const OCR_BRAND_MIN_RAW = Number(process.env.OCR_BRAND_MIN ?? 1);
+  const OCR_BRAND_MIN = Number.isFinite(OCR_BRAND_MIN_RAW) ? OCR_BRAND_MIN_RAW : 1;
+  const OUTLIER_MIN_SIM_RAW = Number(process.env.OUTLIER_MIN_SIM ?? 0.35);
+  const OUTLIER_MIN_SIM = Number.isFinite(OUTLIER_MIN_SIM_RAW) ? OUTLIER_MIN_SIM_RAW : 0.35;
+  // Note: CLIP_MIN_SIM and BACK_MIN_SIM already defined above
+
     const COLOR_WEIGHTS: Record<string, number> = {
       black: -8,
       white: -6,
