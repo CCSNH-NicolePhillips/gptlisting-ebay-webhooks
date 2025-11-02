@@ -14,7 +14,7 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
- type Seed = {
+type Seed = {
   id?: string;
   brand?: string;
   product: string;
@@ -25,6 +25,7 @@ function sleep(ms: number) {
   price?: number;
   folder?: string;
   groupName?: string;
+  options?: Record<string, string[]>;
 };
 
 type Draft = {
@@ -53,6 +54,22 @@ function sanitizeStringArray(value: unknown, maxItems = 12): string[] | undefine
   return deduped.slice(0, maxItems);
 }
 
+function sanitizeOptionMap(value: unknown, maxItemsPerKey = 10): Record<string, string[]> | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const out: Record<string, string[]> = {};
+  Object.entries(value as Record<string, unknown>).forEach(([key, raw]) => {
+    const name = sanitizeString(key, 80);
+    if (!name) return;
+    const arr = Array.isArray(raw) ? raw : [raw];
+    const sanitized = arr
+      .map((entry: unknown) => sanitizeString(entry, 160))
+      .filter((entry): entry is string => typeof entry === "string");
+    if (!sanitized.length) return;
+    out[name] = Array.from(new Set(sanitized)).slice(0, maxItemsPerKey);
+  });
+  return Object.keys(out).length ? out : undefined;
+}
+
 function dedupeStrings(list: string[]): string[] {
   return Array.from(new Set(list));
 }
@@ -78,6 +95,7 @@ function normalizeSeed(input: any): Seed | null {
     price: sanitizePrice((input as any).price),
     folder: sanitizeString((input as any).folder, 240),
     groupName: sanitizeString((input as any).groupName, 160),
+    options: sanitizeOptionMap((input as any).options),
   };
   return seed;
 }
@@ -134,6 +152,14 @@ function buildPrompt(seed: Seed, categoryHint: { id: string; title: string } | n
   }
   if (seed.features?.length) {
     lines.push(`Features: ${seed.features.join(", ")}`);
+  }
+  if (seed.options && Object.keys(seed.options).length) {
+    const specifics = Object.entries(seed.options)
+      .map(([key, values]) => `${key}: ${values.join(" | ")}`)
+      .join("; ");
+    if (specifics) {
+      lines.push(`Detected specifics: ${specifics}`);
+    }
   }
   if (seed.keywords?.length) {
     lines.push(`Keywords: ${seed.keywords.join(", ")}`);

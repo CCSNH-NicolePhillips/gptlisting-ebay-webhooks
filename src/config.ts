@@ -32,3 +32,5 @@ export const cfg = {
     publishMode: (process.env.PUBLISH_MODE || 'draft') as 'draft' | 'post' | 'legacy-post',
   },
 };
+
+export const USE_ROLE_SORTING = (process.env.USE_ROLE_SORTING ?? 'true') === 'true';
