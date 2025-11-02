@@ -306,6 +306,61 @@ function buildFallbackGroups(files: Array<{ entry: DropboxEntry; url: string }>)
   return groups;
 }
 
+function buildPairwiseGroups(files: Array<{ entry: DropboxEntry; url: string }>, insightList: ImageInsight[]) {
+  // Create groups by pairing images based on role detection (front finds its back)
+  const roleByUrl = new Map<string, "front" | "back" | null>();
+  for (const insight of insightList) {
+    if (insight.url && insight.role) {
+      roleByUrl.set(insight.url, insight.role as "front" | "back" | null);
+    }
+  }
+  
+  const sorted = files.slice().sort((a, b) => (a.entry.name || "").localeCompare(b.entry.name || ""));
+  const groups: any[] = [];
+  const used = new Set<string>();
+  
+  // Strategy: Find all fronts, then match each with the nearest unused back
+  const fronts = sorted.filter(f => roleByUrl.get(f.url) === "front");
+  const backs = sorted.filter(f => roleByUrl.get(f.url) === "back");
+  const neither = sorted.filter(f => !roleByUrl.has(f.url) || roleByUrl.get(f.url) === null);
+  
+  // Pair each front with next available back
+  for (let i = 0; i < Math.max(fronts.length, backs.length, Math.ceil(neither.length / 2)); i++) {
+    const front = fronts[i] || neither[i * 2];
+    const back = backs[i] || neither[i * 2 + 1];
+    
+    if (!front && !back) break;
+    
+    const images: string[] = [];
+    if (front) images.push(front.url);
+    if (back) images.push(back.url);
+    
+    if (images.length === 0) continue;
+    
+    const primaryFile = front || back;
+    const folderName = folderPath(primaryFile.entry) || "";
+    const baseName = (primaryFile.entry.name || "").replace(/\.[^.]+$/, "").replace(/_\d+$/, "");
+    
+    groups.push({
+      groupId: `pair_${createHash("sha1").update(images.join("|")).digest("hex").slice(0, 10)}`,
+      name: baseName || `Product ${i + 1}`,
+      folder: folderName,
+      images,
+      primaryImageUrl: front?.url,
+      secondaryImageUrl: back?.url,
+      brand: undefined,
+      product: baseName || `Product ${i + 1}`,
+      variant: undefined,
+      size: undefined,
+      claims: [],
+      confidence: 0.5,
+      _pairwise: true,
+    });
+  }
+  
+  return groups;
+}
+
 function hydrateOrphans(unused: Array<{ entry: DropboxEntry; url: string }>, folder: string): OrphanImage[] {
   return unused.map(({ entry, url }) => ({
     url,
@@ -682,9 +737,19 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       const normalized = toDirectDropbox(value);
       return insightMap.get(normalized) || insightMap.get(value) || insightByBase.get(basenameFrom(value).toLowerCase());
     };
-    let groups = Array.isArray(analysis?.groups)
-      ? (analysis.groups as AnalyzedGroup[])
-      : [];
+    
+    // Phase R0: When USE_NEW_SORTER is enabled, use pairwise grouping instead of vision groups
+    let groups: AnalyzedGroup[];
+    if (USE_NEW_SORTER) {
+      groups = buildPairwiseGroups(fileTuples, insightList);
+      if (debugEnabled) {
+        console.log(`[Phase R0] Created ${groups.length} pairwise groups from ${fileTuples.length} images`);
+      }
+    } else {
+      groups = Array.isArray(analysis?.groups)
+        ? (analysis.groups as AnalyzedGroup[])
+        : [];
+    }
     let warnings: string[] = Array.isArray(analysis?.warnings) ? analysis.warnings : [];
 
     if (!groups.length) {
