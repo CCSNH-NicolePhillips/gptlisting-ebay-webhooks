@@ -506,8 +506,16 @@ async function buildHybridGroups(
   visionGroups: AnalyzedGroup[], 
   insightList: ImageInsight[]
 ) {
-  console.log(`[buildHybridGroups] REVISED v2: Trust Vision's grouping, use CLIP only for unassigned images`);
-  console.log(`[buildHybridGroups] Processing ${files.length} images, ${visionGroups.length} Vision groups`);
+  console.log(`[buildHybridGroups] NEW APPROACH: Individual image analysis → group by exact brand+product match`);
+  console.log(`[buildHybridGroups] Processing ${files.length} images, ${visionGroups.length} Vision analyses`);
+  
+  // Log what Vision identified for each image
+  console.log(`[buildHybridGroups] Vision identifications:`);
+  visionGroups.forEach((group, idx) => {
+    const imgUrl = group.images?.[0] || 'unknown';
+    const filename = imgUrl.split('/').pop()?.split('?')[0] || 'unknown';
+    console.log(`  [${idx + 1}] ${filename}: brand="${group.brand}", product="${group.product}", confidence=${group.confidence}`);
+  });
   
   // Build filename index for matching
   const filesByFilename = new Map<string, { entry: DropboxEntry; url: string; index: number }>();
@@ -516,105 +524,171 @@ async function buildHybridGroups(
     filesByFilename.set(filename, { ...file, index });
   });
   
-  console.log(`[buildHybridGroups] File index built with ${filesByFilename.size} files:`, Array.from(filesByFilename.keys()));
+  console.log(`[buildHybridGroups] File index built with ${filesByFilename.size} files`);
   
-  // Step 1: For each Vision group, collect the images by filename matching
-  const hybridGroups: any[] = [];
+  // Step 1: Group Vision analyses by exact brand+product match
+  const productGroups = new Map<string, { 
+    brand: string; 
+    product: string; 
+    visionGroup: AnalyzedGroup;
+    fileIndices: number[];
+    fileUrls: string[];
+  }>();
+  
   const assignedIndices = new Set<number>();
   
   for (const visionGroup of visionGroups) {
-    const groupImages: string[] = [];
-    const groupIndices: number[] = [];
+    const brand = String(visionGroup.brand || '').trim().toLowerCase();
+    const product = String(visionGroup.product || '').trim().toLowerCase();
     
-    console.log(`[buildHybridGroups] Processing Vision group "${visionGroup.brand} ${visionGroup.product}" with ${visionGroup.images?.length || 0} images`);
-    
-    // Match Vision's image list to our files
-    if (visionGroup.images) {
-      for (const visionImg of visionGroup.images) {
-        const filename = visionImg.split('/').pop()?.split('?')[0]?.toLowerCase() || '';
-        console.log(`[buildHybridGroups] Looking for filename: "${filename}"`);
-        const fileMatch = filesByFilename.get(filename);
-        
-        if (fileMatch && !assignedIndices.has(fileMatch.index)) {
-          groupImages.push(fileMatch.url);
-          groupIndices.push(fileMatch.index);
-          assignedIndices.add(fileMatch.index);
-          console.log(`[buildHybridGroups] ✓ Matched ${filename} to "${visionGroup.brand} ${visionGroup.product}"`);
-        } else if (!fileMatch) {
-          console.warn(`[buildHybridGroups] ✗ No file found for filename: ${filename}`);
-        } else {
-          console.warn(`[buildHybridGroups] ✗ File ${filename} already assigned`);
-        }
-      }
+    // Skip unknowns or empty
+    if (!brand || !product || brand === 'unknown' || product === 'unidentified item') {
+      console.log(`[buildHybridGroups] Skipping non-product: brand="${brand}", product="${product}"`);
+      continue;
     }
     
-    if (groupImages.length > 0) {
-      hybridGroups.push({
-        ...visionGroup,
-        images: groupImages,
-        indices: groupIndices,
-        primaryImageUrl: groupImages[0],
-        secondaryImageUrl: groupImages[1] || null,
-        supportingImageUrls: groupImages.slice(2),
+    // Extract filename from Vision's image URL
+    const visionImgUrl = visionGroup.images?.[0] || '';
+    const filename = visionImgUrl.split('/').pop()?.split('?')[0]?.toLowerCase() || '';
+    
+    if (!filename) {
+      console.warn(`[buildHybridGroups] No filename found in Vision group:`, visionGroup);
+      continue;
+    }
+    
+    console.log(`[buildHybridGroups] Processing: ${filename} → "${brand}" "${product}"`);
+    
+    const fileMatch = filesByFilename.get(filename);
+    
+    if (!fileMatch) {
+      console.warn(`[buildHybridGroups] ✗ File not found: ${filename}`);
+      continue;
+    }
+    
+    if (assignedIndices.has(fileMatch.index)) {
+      console.warn(`[buildHybridGroups] ✗ File already assigned: ${filename}`);
+      continue;
+    }
+    
+    // Create product key for grouping
+    const productKey = `${brand}|||${product}`;
+    
+    if (!productGroups.has(productKey)) {
+      console.log(`[buildHybridGroups] ✓ New product group: "${brand}" - "${product}"`);
+      productGroups.set(productKey, {
+        brand: String(visionGroup.brand || brand),
+        product: String(visionGroup.product || product),
+        visionGroup,
+        fileIndices: [],
+        fileUrls: []
       });
-      
-      console.log(`[buildHybridGroups] Created group "${visionGroup.brand} ${visionGroup.product}": ${groupImages.length} images`);
+    } else {
+      console.log(`[buildHybridGroups] ✓ Adding to existing group: "${brand}" - "${product}"`);
     }
+    
+    const group = productGroups.get(productKey)!;
+    group.fileIndices.push(fileMatch.index);
+    group.fileUrls.push(fileMatch.url);
+    assignedIndices.add(fileMatch.index);
+    
+    console.log(`[buildHybridGroups] ✓ Matched ${filename} to "${brand}" "${product}" (${group.fileUrls.length} images total)`);
   }
   
-  // Step 1.5: Remove outliers from Vision groups using CLIP similarity
-  console.log(`[buildHybridGroups] Checking for outliers in ${hybridGroups.length} groups...`);
+  console.log(`[buildHybridGroups] Created ${productGroups.size} product groups from exact brand+product matching`);
+  
+  // Step 2: Verify each group's images are similar using CLIP
+  console.log(`[buildHybridGroups] Step 2: Verifying groups with CLIP similarity...`);
   
   const allEmbeddings = await Promise.all(
-    files.map(async (file) => {
+    files.map(async (file, idx) => {
       try {
+        console.log(`[buildHybridGroups] Getting CLIP embedding for ${file.entry.name}...`);
         return await clipImageEmbedding(file.url);
-      } catch {
+      } catch (err) {
+        console.warn(`[buildHybridGroups] Failed to get embedding for ${file.entry.name}:`, err);
         return null;
       }
     })
   );
   
-  for (let g = 0; g < hybridGroups.length; g++) {
-    const group = hybridGroups[g];
-    if (!group.indices || group.indices.length < 2) continue; // Need at least 2 images to detect outliers
+  const hybridGroups: any[] = [];
+  
+  for (const [productKey, group] of productGroups.entries()) {
+    console.log(`[buildHybridGroups] Verifying group: "${group.brand}" - "${group.product}" (${group.fileUrls.length} images)`);
     
-    const groupEmbeddings = group.indices
-      .map((idx: number) => ({ idx, embedding: allEmbeddings[idx] }))
-      .filter((item: any) => item.embedding !== null);
+    if (group.fileIndices.length === 1) {
+      // Single image group - no verification needed
+      console.log(`[buildHybridGroups] Single image group - no verification needed`);
+      hybridGroups.push({
+        ...group.visionGroup,
+        images: group.fileUrls,
+        indices: group.fileIndices,
+        primaryImageUrl: group.fileUrls[0],
+        secondaryImageUrl: null,
+        supportingImageUrls: []
+      });
+      continue;
+    }
     
-    if (groupEmbeddings.length < 2) continue;
+    // Multi-image group - verify similarity
+    const groupEmbeddings = group.fileIndices
+      .map((idx) => ({ idx, embedding: allEmbeddings[idx], url: files[idx].url }))
+      .filter((item) => item.embedding !== null);
     
-    // Calculate average similarity of each image to all others in the group
-    const avgSimilarities = groupEmbeddings.map((item: any) => {
-      const similarities = groupEmbeddings
-        .filter((other: any) => other.idx !== item.idx)
-        .map((other: any) => cosine(item.embedding, other.embedding));
-      const avg = similarities.reduce((sum: number, sim: number) => sum + sim, 0) / similarities.length;
-      return { idx: item.idx, avgSim: avg };
-    });
+    if (groupEmbeddings.length < group.fileIndices.length) {
+      console.warn(`[buildHybridGroups] Missing embeddings for some images in group`);
+    }
     
-    // Find outliers: images with significantly lower average similarity than others
-    const avgOfAvgs = avgSimilarities.reduce((sum: number, item: any) => sum + item.avgSim, 0) / avgSimilarities.length;
-    const OUTLIER_THRESHOLD = 0.60; // Conservative - only catch really obvious mismatches like purses
+    // Calculate pairwise similarities
+    const MIN_SIMILARITY = 0.75; // Images in same group should be at least 0.75 similar
+    const verifiedIndices: number[] = [];
+    const rejectedIndices: number[] = [];
     
-    const outliers = avgSimilarities.filter((item: any) => item.avgSim < OUTLIER_THRESHOLD);
-    
-    // Only remove outliers if group will still have at least 1 image
-    if (outliers.length > 0 && outliers.length < groupEmbeddings.length) {
-      console.log(`[buildHybridGroups] Found ${outliers.length} outliers in "${group.brand} ${group.product}" (avgSim: ${avgOfAvgs.toFixed(3)})`);
+    if (groupEmbeddings.length >= 2) {
+      // Add first image as anchor
+      verifiedIndices.push(groupEmbeddings[0].idx);
       
-      // Remove outliers from group
-      const outlierIndices = new Set(outliers.map((o: any) => o.idx));
-      group.images = group.images.filter((_: string, i: number) => !outlierIndices.has(group.indices[i]));
-      group.indices = group.indices.filter((idx: number) => !outlierIndices.has(idx));
+      // Check each subsequent image against verified images
+      for (let i = 1; i < groupEmbeddings.length; i++) {
+        const candidate = groupEmbeddings[i];
+        let maxSim = 0;
+        
+        for (const verifiedIdx of verifiedIndices) {
+          const verifiedItem = groupEmbeddings.find(e => e.idx === verifiedIdx);
+          if (verifiedItem && verifiedItem.embedding && candidate.embedding) {
+            const sim = cosine(candidate.embedding, verifiedItem.embedding);
+            maxSim = Math.max(maxSim, sim);
+          }
+        }
+        
+        const filename = files[candidate.idx].entry.name;
+        if (maxSim >= MIN_SIMILARITY) {
+          console.log(`[buildHybridGroups] ✓ ${filename}: similarity=${maxSim.toFixed(3)} (verified)`);
+          verifiedIndices.push(candidate.idx);
+        } else {
+          console.warn(`[buildHybridGroups] ✗ ${filename}: similarity=${maxSim.toFixed(3)} (rejected - mismatch detected)`);
+          rejectedIndices.push(candidate.idx);
+          assignedIndices.delete(candidate.idx);
+        }
+      }
+    } else {
+      verifiedIndices.push(...group.fileIndices);
+    }
+    
+    if (verifiedIndices.length > 0) {
+      const verifiedUrls = verifiedIndices.map(idx => files[idx].url);
+      console.log(`[buildHybridGroups] ✓ Group verified: "${group.brand}" - "${group.product}" with ${verifiedUrls.length} images`);
       
-      // Mark outliers as unassigned
-      outliers.forEach((o: any) => assignedIndices.delete(o.idx));
-      
-      console.log(`[buildHybridGroups] Removed ${outliers.length} outliers, ${group.images.length} images remain`);
-    } else if (outliers.length >= groupEmbeddings.length) {
-      console.log(`[buildHybridGroups] Would remove all ${outliers.length} images from "${group.brand} ${group.product}" - skipping outlier removal`);
+      hybridGroups.push({
+        ...group.visionGroup,
+        images: verifiedUrls,
+        indices: verifiedIndices,
+        primaryImageUrl: verifiedUrls[0],
+        secondaryImageUrl: verifiedUrls[1] || null,
+        supportingImageUrls: verifiedUrls.slice(2)
+      });
+    } else {
+      console.warn(`[buildHybridGroups] ✗ Group rejected: "${group.brand}" - "${group.product}" (no verified images)`);
     }
   }
   
