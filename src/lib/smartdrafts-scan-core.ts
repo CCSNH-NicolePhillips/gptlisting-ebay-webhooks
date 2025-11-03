@@ -347,7 +347,7 @@ async function buildClipGroups(files: Array<{ entry: DropboxEntry; url: string }
   }
   
   // Step 3: Greedy clustering - group images with high similarity
-  const SIMILARITY_THRESHOLD = 0.25; // Adjust this based on testing
+  const SIMILARITY_THRESHOLD = 0.65; // Higher threshold = stricter clustering (only group very similar images)
   const assigned = new Set<number>();
   const clusters: number[][] = [];
   
