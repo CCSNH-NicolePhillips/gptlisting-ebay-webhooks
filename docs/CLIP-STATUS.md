@@ -1,6 +1,11 @@
 # CLIP Clustering Status - Nov 3, 2025
 
-## Current Issue
+## RESOLVED! ✅
+**Root cause found**: `USE_NEW_SORTER=false` in Netlify environment
+**Fix**: Added `USE_NEW_SORTER = "true"` to `netlify.toml` [build.environment]
+**Status**: Waiting for deployment, then CLIP clustering should work!
+
+## Previous Issue (FIXED)
 CLIP clustering is not running in production even though:
 - ✅ Local test shows CLIP endpoint is NOW WORKING (0.68 similarity for different products)
 - ✅ `USE_NEW_SORTER=true` by default (should enable CLIP)
