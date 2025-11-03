@@ -316,11 +316,16 @@ function buildPairwiseGroups(files: Array<{ entry: DropboxEntry; url: string }>,
     console.log(`[buildPairwiseGroups] DEBUG: insight.url=${insight.url}, role=${insight.role}`);
     if (insight.url && insight.role) {
       const normalized = toDirectDropbox(insight.url);
-      roleByUrl.set(normalized, insight.role as "front" | "back" | null);
-      // Also index by basename for fallback matching
       const base = basenameFrom(normalized).toLowerCase();
-      roleByBasename.set(base, insight.role as "front" | "back" | null);
-      console.log(`[buildPairwiseGroups] DEBUG: Set basename ${base} to role ${insight.role}`);
+      
+      // Only set role if not already set (first occurrence wins, handles duplicates)
+      if (!roleByBasename.has(base)) {
+        roleByUrl.set(normalized, insight.role as "front" | "back" | null);
+        roleByBasename.set(base, insight.role as "front" | "back" | null);
+        console.log(`[buildPairwiseGroups] DEBUG: Set basename ${base} to role ${insight.role}`);
+      } else {
+        console.log(`[buildPairwiseGroups] DEBUG: SKIPPING duplicate basename ${base} (already set to ${roleByBasename.get(base)})`);
+      }
     }
   }
   
@@ -343,30 +348,44 @@ function buildPairwiseGroups(files: Array<{ entry: DropboxEntry; url: string }>,
   console.log(`[buildPairwiseGroups] DEBUG: Backs:`, backs.map(f => basenameFrom(f.url)));
   console.log(`[buildPairwiseGroups] DEBUG: Neither:`, neither.map(f => basenameFrom(f.url)));
   
-  // Pair each front with next available back
-  for (let i = 0; i < Math.max(fronts.length, backs.length, Math.ceil(neither.length / 2)); i++) {
-    const front = fronts[i] || neither[i * 2];
-    const back = backs[i] || neither[i * 2 + 1];
+  // Simple strategy: Pair sequentially by filename order
+  // This works because filenames are timestamps - consecutive images are likely the same product
+  // Mix all images together and pair every 2
+  const allImages = [...fronts, ...neither, ...backs];
+  const halfCount = Math.ceil(allImages.length / 2);
+  
+  for (let i = 0; i < halfCount; i++) {
+    const img1 = allImages[i * 2];
+    const img2 = allImages[i * 2 + 1];
     
-    if (!front && !back) break;
+    if (!img1) break;
     
-    const images: string[] = [];
-    if (front) images.push(front.url);
-    if (back) images.push(back.url);
+    const images: string[] = [img1.url];
+    if (img2) images.push(img2.url);
     
-    if (images.length === 0) continue;
-    
-    const primaryFile = front || back!;
+    const primaryFile = img1;
     const folderName = folderPath(primaryFile.entry) || "";
     const baseName = (primaryFile.entry.name || "").replace(/\.[^.]+$/, "").replace(/_\d+$/, "");
+    
+    // Determine hero/back based on roles if available
+    const role1 = getRole(img1.url);
+    const role2 = img2 ? getRole(img2.url) : null;
+    let heroUrl = img1.url;
+    let backUrl = img2?.url || null;
+    
+    // If roles indicate reverse order, swap them
+    if (role1 === "back" && role2 === "front") {
+      heroUrl = img2.url;
+      backUrl = img1.url;
+    }
     
     groups.push({
       groupId: `pair_${createHash("sha1").update(images.join("|")).digest("hex").slice(0, 10)}`,
       name: baseName || `Product ${i + 1}`,
       folder: folderName,
       images,
-      primaryImageUrl: front?.url,
-      secondaryImageUrl: back?.url,
+      primaryImageUrl: heroUrl,
+      secondaryImageUrl: backUrl,
       brand: undefined,
       product: baseName || `Product ${i + 1}`,
       variant: undefined,
