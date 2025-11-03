@@ -387,9 +387,10 @@ async function buildClipGroups(files: Array<{ entry: DropboxEntry; url: string }
     return []; // Fall back to vision-based grouping
   }
   
-  // Step 3: Average-linkage clustering - group images with high similarity
-  // Using average similarity to all cluster members prevents chaining effect
-  const SIMILARITY_THRESHOLD = 0.85; // Increased from 0.75 - bottles/packages can be very similar across products
+  // Step 3: Complete-linkage clustering - most conservative approach
+  // Image must have high similarity to ALL existing cluster members
+  // This prevents false groupings when products look similar
+  const SIMILARITY_THRESHOLD = 0.90; // Raised to 0.90 for stricter matching
   const assigned = new Set<number>();
   const clusters: number[][] = [];
   
@@ -403,21 +404,20 @@ async function buildClipGroups(files: Array<{ entry: DropboxEntry; url: string }
     for (let j = i + 1; j < n; j++) {
       if (assigned.has(j)) continue;
       
-      // Check if j has high AVERAGE similarity to all images in the cluster
-      // This prevents chaining where dissimilar images join through intermediates
-      let avgSim = 0;
+      // Check if j has high similarity to ALL images in the cluster (complete-linkage)
+      // This is the most conservative approach - prevents chaining
+      let minSim = 1.0;
       for (const ci of cluster) {
-        avgSim += similarities[ci][j];
+        minSim = Math.min(minSim, similarities[ci][j]);
       }
-      avgSim /= cluster.length;
       
       // Debug: Log when we're close to the threshold
-      if (avgSim >= 0.80 && avgSim < 0.90) {
-        console.log(`[buildClipGroups] Considering ${files[j].entry.name} for cluster starting with ${files[i].entry.name}: avgSim=${avgSim.toFixed(3)}, threshold=${SIMILARITY_THRESHOLD}`);
+      if (minSim >= 0.80 && minSim < 0.95) {
+        console.log(`[buildClipGroups] Considering ${files[j].entry.name} for cluster starting with ${files[i].entry.name}: minSim=${minSim.toFixed(3)}, threshold=${SIMILARITY_THRESHOLD}`);
       }
       
-      if (avgSim >= SIMILARITY_THRESHOLD) {
-        console.log(`[buildClipGroups] ✓ Added ${files[j].entry.name} to cluster (avgSim=${avgSim.toFixed(3)})`);
+      if (minSim >= SIMILARITY_THRESHOLD) {
+        console.log(`[buildClipGroups] ✓ Added ${files[j].entry.name} to cluster (minSim=${minSim.toFixed(3)})`);
         cluster.push(j);
         assigned.add(j);
       }
