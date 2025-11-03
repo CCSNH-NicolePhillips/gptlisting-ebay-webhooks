@@ -773,48 +773,64 @@ async function buildHybridGroups(
     .filter(i => !assignedIndices.has(i));
     
   if (unassignedIndices.length > 0) {
-    console.log(`[buildHybridGroups] ${unassignedIndices.length} unassigned images, attempting CLIP matching`);
-    
-    // Get embeddings only for unassigned images
-    const embeddings = await Promise.all(
-      files.map(async (file, i) => {
-        if (!unassignedIndices.includes(i)) return null;
-        try {
-          return await clipImageEmbedding(file.url);
-        } catch (err) {
-          return null;
-        }
-      })
-    );
+    console.log(`[buildHybridGroups] ${unassignedIndices.length} unassigned images, attempting CLIP matching to existing groups`);
     
     // Try to match unassigned images to existing groups using CLIP
-    const HIGH_THRESHOLD = 0.90; // Very high - only match if very similar
+    const CLIP_MATCH_THRESHOLD = 0.75; // Match if similar to any image in group
     
     for (const unassignedIdx of unassignedIndices) {
-      if (!embeddings[unassignedIdx]) continue;
+      const unassignedEmb = allEmbeddings[unassignedIdx];
+      if (!unassignedEmb) {
+        console.log(`[buildHybridGroups] No embedding for unassigned image ${files[unassignedIdx].entry.name}`);
+        continue;
+      }
       
-      let bestMatch: { groupIdx: number; similarity: number } | null = null;
+      let bestMatch: { groupIdx: number; similarity: number; matchedImageName: string } | null = null;
       
-      // Compare to primary image of each existing group
+      // Compare to ALL images in each existing group
       for (let g = 0; g < hybridGroups.length; g++) {
         const group = hybridGroups[g];
-        const primaryFilename = group.primaryImageUrl?.split('/').pop()?.split('?')[0]?.toLowerCase() || '';
-        const primaryFile = filesByFilename.get(primaryFilename);
         
-        if (primaryFile && embeddings[primaryFile.index]) {
-          const similarity = cosine(embeddings[unassignedIdx], embeddings[primaryFile.index]);
-          
-          if (similarity >= HIGH_THRESHOLD && (!bestMatch || similarity > bestMatch.similarity)) {
-            bestMatch = { groupIdx: g, similarity };
+        // Check against all images in this group
+        if (group.indices && Array.isArray(group.indices)) {
+          for (const groupImageIdx of group.indices) {
+            const groupEmb = allEmbeddings[groupImageIdx];
+            if (groupEmb) {
+              const similarity = cosine(unassignedEmb, groupEmb);
+              
+              if (similarity >= CLIP_MATCH_THRESHOLD && (!bestMatch || similarity > bestMatch.similarity)) {
+                bestMatch = { 
+                  groupIdx: g, 
+                  similarity,
+                  matchedImageName: files[groupImageIdx].entry.name
+                };
+              }
+            }
           }
         }
       }
       
       if (bestMatch) {
         const file = files[unassignedIdx];
-        hybridGroups[bestMatch.groupIdx].images.push(file.url);
+        const group = hybridGroups[bestMatch.groupIdx];
+        
+        // Add to group
+        group.images.push(file.url);
+        if (group.indices) {
+          group.indices.push(unassignedIdx);
+        }
+        
+        // Update secondary/supporting URLs
+        if (!group.secondaryImageUrl) {
+          group.secondaryImageUrl = file.url;
+        } else if (group.supportingImageUrls) {
+          group.supportingImageUrls.push(file.url);
+        }
+        
         assignedIndices.add(unassignedIdx);
-        console.log(`[buildHybridGroups] ✓ CLIP matched ${file.entry.name} to group ${bestMatch.groupIdx} (sim=${bestMatch.similarity.toFixed(3)})`);
+        console.log(`[buildHybridGroups] ✓ CLIP matched ${file.entry.name} to "${group.brand}" - "${group.product}" (sim=${bestMatch.similarity.toFixed(3)} vs ${bestMatch.matchedImageName})`);
+      } else {
+        console.log(`[buildHybridGroups] ✗ No CLIP match found for ${files[unassignedIdx].entry.name} (best sim < ${CLIP_MATCH_THRESHOLD})`);
       }
     }
   }
