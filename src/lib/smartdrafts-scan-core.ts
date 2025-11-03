@@ -871,6 +871,7 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
     };
     
     // Phase R0: When USE_NEW_SORTER is enabled, use CLIP-based clustering instead of vision groups
+    console.log(`[Phase R0] Starting - USE_NEW_SORTER=${USE_NEW_SORTER}, fileTuples=${fileTuples.length}, insightList=${insightList.length}`);
     let groups: AnalyzedGroup[];
     if (USE_NEW_SORTER) {
       groups = await buildClipGroups(fileTuples, insightList);
