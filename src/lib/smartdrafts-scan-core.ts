@@ -310,11 +310,11 @@ async function buildClipGroups(files: Array<{ entry: DropboxEntry; url: string }
   // CLIP-based clustering: Group visually similar images together
   console.log(`[buildClipGroups] Clustering ${files.length} images using CLIP similarity`);
   
-  // Step 1: Compute embeddings for all images
+  // Step 1: Compute embeddings for all images (IMAGE endpoint only, no text fallback)
   const embeddings = await Promise.all(
     files.map(async (file) => {
       try {
-        const emb = await clipImageEmbedding(file.url);
+        const emb = await clipImageEmbedding(file.url); // MUST use image endpoint only
         return emb;
       } catch (err) {
         console.warn(`[buildClipGroups] Failed to get embedding for ${file.url}:`, err);
@@ -331,6 +331,23 @@ async function buildClipGroups(files: Array<{ entry: DropboxEntry; url: string }
   }
   
   console.log(`[buildClipGroups] Got ${validEmbeddings}/${files.length} valid CLIP embeddings`);
+  
+  // Phase C1: Log sample embeddings to verify they differ
+  if (embeddings[0]) console.info("[clipVec] sample A (first 5):", embeddings[0].slice(0, 5));
+  if (embeddings[1]) console.info("[clipVec] sample B (first 5):", embeddings[1].slice(0, 5));
+  
+  // Phase C2: Hash each vector to catch cache bugs
+  function h5(v: number[] | null) {
+    if (!v) return "null";
+    let s = 0;
+    for (let i = 0; i < Math.min(10, v.length); i++) s += (i + 1) * v[i];
+    return s.toFixed(6);
+  }
+  files.forEach((file, i) => {
+    const filename = file.entry.name;
+    const hash = h5(embeddings[i]);
+    console.info(`[clipVec] ${i} ${filename} -> ${hash}`);
+  });
   
   // Step 2: Build similarity matrix
   const n = files.length;
@@ -351,6 +368,23 @@ async function buildClipGroups(files: Array<{ entry: DropboxEntry; url: string }
   for (let i = 0; i < Math.min(n, 5); i++) {
     const row = similarities[i].slice(0, 5).map(s => s.toFixed(3)).join(', ');
     console.log(`  Image ${i} (${files[i].entry.name}): [${row}${n > 5 ? ', ...' : ''}]`);
+  }
+  
+  // Phase C4: Check for degenerate similarity matrix (all ~1.0)
+  function isDegenerateCosineMatrix(M: number[][]): boolean {
+    const n = M.length;
+    let maxOff = -1;
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        if (i !== j) maxOff = Math.max(maxOff, M[i][j]);
+      }
+    }
+    return maxOff > 0.98; // almost everyone ~1.0 ⇒ bad
+  }
+  
+  if (isDegenerateCosineMatrix(similarities)) {
+    console.warn("[buildClipGroups] Degenerate similarity (max off-diagonal > 0.98) — embeddings are identical. Falling back to vision grouping.");
+    return []; // Fall back to vision-based grouping
   }
   
   // Step 3: Greedy clustering - group images with high similarity
