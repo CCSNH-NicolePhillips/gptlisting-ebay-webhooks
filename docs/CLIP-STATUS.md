@@ -1,11 +1,24 @@
 # CLIP Clustering Status - Nov 3, 2025
 
-## RESOLVED! ✅
-**Root cause found**: `USE_NEW_SORTER=false` in Netlify environment
-**Fix**: Added `USE_NEW_SORTER = "true"` to `netlify.toml` [build.environment]
-**Status**: Waiting for deployment, then CLIP clustering should work!
+## LATEST: Clustering Algorithm Fix 🔧
+**Problem**: CLIP was running but grouping unrelated products together
+**Root cause**: Single-linkage clustering created "chaining effect"
+  - Example: Product A→B (0.886 ✅), then B→C (0.859 ❌), so A+B+C grouped
+  - R+Co front/back grouped with Nusava and other bottles (6 images in 1 group!)
+**Fix Applied**:
+  1. Switched from single-linkage to **average-linkage** clustering
+  2. Increased threshold from 0.75 → **0.85**
+  3. Rationale: Bottles/packages are very similar shapes; need stricter threshold
+**Status**: Built, ready to test
 
-## Previous Issue (FIXED)
+## Test Data (9 images, 4 products + 1 decoy)
+- `asd32q.jpg` + `azdfkuj.jpg` = R+Co hair oil (front/back)
+- `awef.jpg` + `awefawed.jpg` = myBrainCo Gut Repair (front/back)  
+- `frog_01.jpg` + `rgxbbg.jpg` = Frog Fuel greens (front/back)
+- `dfzdvzer.jpg` + `faeewfaw.jpg` = Nusava B-vitamin (front/back)
+- `IMG_20251102_144346.jpg` = Purse (decoy, should be separate)
+
+## Previous Issue: Environment Variable (FIXED ✅)
 CLIP clustering is not running in production even though:
 - ✅ Local test shows CLIP endpoint is NOW WORKING (0.68 similarity for different products)
 - ✅ `USE_NEW_SORTER=true` by default (should enable CLIP)

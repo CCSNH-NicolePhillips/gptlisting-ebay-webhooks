@@ -387,8 +387,9 @@ async function buildClipGroups(files: Array<{ entry: DropboxEntry; url: string }
     return []; // Fall back to vision-based grouping
   }
   
-  // Step 3: Greedy clustering - group images with high similarity
-  const SIMILARITY_THRESHOLD = 0.75; // Images of same product typically 0.75-0.90; different products 0.60-0.70
+  // Step 3: Average-linkage clustering - group images with high similarity
+  // Using average similarity to all cluster members prevents chaining effect
+  const SIMILARITY_THRESHOLD = 0.85; // Increased from 0.75 - bottles/packages can be very similar across products
   const assigned = new Set<number>();
   const clusters: number[][] = [];
   
@@ -402,13 +403,15 @@ async function buildClipGroups(files: Array<{ entry: DropboxEntry; url: string }
     for (let j = i + 1; j < n; j++) {
       if (assigned.has(j)) continue;
       
-      // Check if j is similar to ANY image in the cluster
-      let maxSim = 0;
+      // Check if j has high AVERAGE similarity to all images in the cluster
+      // This prevents chaining where dissimilar images join through intermediates
+      let avgSim = 0;
       for (const ci of cluster) {
-        maxSim = Math.max(maxSim, similarities[ci][j]);
+        avgSim += similarities[ci][j];
       }
+      avgSim /= cluster.length;
       
-      if (maxSim >= SIMILARITY_THRESHOLD) {
+      if (avgSim >= SIMILARITY_THRESHOLD) {
         cluster.push(j);
         assigned.add(j);
       }
