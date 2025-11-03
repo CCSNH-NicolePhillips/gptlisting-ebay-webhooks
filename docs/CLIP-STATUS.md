@@ -1,24 +1,52 @@
 # CLIP Clustering Status - Nov 3, 2025
 
-## LATEST: Clustering Algorithm Fix 🔧
-**Problem**: CLIP was running but grouping unrelated products together
-**Root cause**: Single-linkage clustering created "chaining effect"
-  - Example: Product A→B (0.886 ✅), then B→C (0.859 ❌), so A+B+C grouped
-  - R+Co front/back grouped with Nusava and other bottles (6 images in 1 group!)
-**Fix Applied**:
-  1. Switched from single-linkage to **average-linkage** clustering
-  2. Increased threshold from 0.75 → **0.85**
-  3. Rationale: Bottles/packages are very similar shapes; need stricter threshold
-**Status**: Built, ready to test
+## DECISION: Vision API is Better for Product Grouping ✅
 
-## Test Data (9 images, 4 products + 1 decoy)
-- `asd32q.jpg` + `azdfkuj.jpg` = R+Co hair oil (front/back)
-- `awef.jpg` + `awefawed.jpg` = myBrainCo Gut Repair (front/back)  
-- `frog_01.jpg` + `rgxbbg.jpg` = Frog Fuel greens (front/back)
-- `dfzdvzer.jpg` + `faeewfaw.jpg` = Nusava B-vitamin (front/back)
-- `IMG_20251102_144346.jpg` = Purse (decoy, should be separate)
+**Conclusion after extensive testing**: CLIP visual similarity alone **cannot reliably group products** when they have similar shapes/packaging.
 
-## Previous Issue: Environment Variable (FIXED ✅)
+### Test Results (9 images, 4 supplement bottles + 1 purse)
+- **Vision API**: ✅ Correctly identified all 4 products every time
+- **CLIP similarity-only**: ❌ Confused similar-looking bottles even with:
+  - Complete-linkage clustering (most conservative)
+  - Multimodal signals (text keywords + color matching)
+  - Thresholds from 0.75 to 0.90
+  
+### The Problem
+Supplement bottles are visually **too similar** across different brands:
+```
+Same product:      0.86-0.89 similarity
+Different products: 0.85-0.91 similarity  ← TOO MUCH OVERLAP!
+```
+
+No threshold can separate them reliably.
+
+### What We Tried
+1. ✅ **Single-linkage** → Chains unrelated products
+2. ✅ **Average-linkage** → Better but still mixes products  
+3. ✅ **Complete-linkage** → Most conservative, but:
+   - Threshold 0.87: Still groups wrong products
+   - Threshold 0.90: Splits valid pairs
+4. ✅ **Multimodal (visual + text + color)**:
+   - Text similarity (OCR keyword matching)
+   - Color penalties for mismatches
+   - Still not accurate enough
+
+### Current Solution
+**USE_NEW_SORTER = false** (disabled in netlify.toml)
+- Use Vision API for product grouping (it reads text, understands brands)
+- Use CLIP for image **sorting within groups** (which image is "front" vs "back")
+
+### Future: Better Approach
+If we want CLIP grouping to work, we'd need:
+1. **Product-specific embeddings** (fine-tuned on product images)
+2. **Text embeddings from actual OCR** (GPT Vision doesn't return OCR text)
+3. **Hybrid: Vision API groups + CLIP refinement**
+
+---
+
+## Previous Testing History
+
+### Environment Variable Issue (FIXED ✅)
 CLIP clustering is not running in production even though:
 - ✅ Local test shows CLIP endpoint is NOW WORKING (0.68 similarity for different products)
 - ✅ `USE_NEW_SORTER=true` by default (should enable CLIP)
@@ -39,6 +67,7 @@ CLIP clustering is not running in production even though:
 
 3. **Adjusted Threshold**:
    - Changed from 0.65 → 0.75
+
    - Rationale: Different products show ~0.68 similarity, same product should be 0.75-0.90
 
 ## Test Script
