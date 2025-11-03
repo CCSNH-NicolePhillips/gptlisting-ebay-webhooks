@@ -411,7 +411,13 @@ async function buildClipGroups(files: Array<{ entry: DropboxEntry; url: string }
       }
       avgSim /= cluster.length;
       
+      // Debug: Log when we're close to the threshold
+      if (avgSim >= 0.80 && avgSim < 0.90) {
+        console.log(`[buildClipGroups] Considering ${files[j].entry.name} for cluster starting with ${files[i].entry.name}: avgSim=${avgSim.toFixed(3)}, threshold=${SIMILARITY_THRESHOLD}`);
+      }
+      
       if (avgSim >= SIMILARITY_THRESHOLD) {
+        console.log(`[buildClipGroups] ✓ Added ${files[j].entry.name} to cluster (avgSim=${avgSim.toFixed(3)})`);
         cluster.push(j);
         assigned.add(j);
       }
