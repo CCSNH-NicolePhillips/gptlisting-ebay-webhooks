@@ -434,9 +434,9 @@ async function buildClipGroups(files: Array<{ entry: DropboxEntry; url: string }
   
   if (isDegenerateCosineMatrix(similarities)) {
     console.warn("[buildClipGroups] Degenerate similarity (max off-diagonal > 0.98) — embeddings are identical. Falling back to vision grouping.");
-    return []; // Fall back to vision-based grouping
+    return [];
   }
-  
+
   // Step 3: Complete-linkage clustering with multimodal similarity
   // Image must have high similarity to ALL existing cluster members
   // With text/color signals, we can use a slightly lower threshold
@@ -487,23 +487,124 @@ async function buildClipGroups(files: Array<{ entry: DropboxEntry; url: string }
     const baseName = (clusterFiles[0].entry.name || "").replace(/\.[^.]+$/, "").replace(/_\d+$/, "");
     
     return {
-      groupId: `clip_${createHash("sha1").update(images.join("|")).digest("hex").slice(0, 10)}`,
-      name: baseName || `Product ${idx + 1}`,
+      groupId: `clip_${createHash("sha256").update(images.join("|")).digest("hex").substring(0, 10)}`,
+      name: baseName,
       folder: folderName,
       images,
       primaryImageUrl: images[0] || null,
       secondaryImageUrl: images[1] || null,
-      brand: undefined,
-      product: baseName || `Product ${idx + 1}`,
-      variant: undefined,
-      size: undefined,
-      claims: [],
-      confidence: 0.5,
-      _clipClustered: true,
+      supportingImageUrls: images.slice(2),
     };
   });
   
   return groups;
+}
+
+// NEW: Hybrid approach - Trust Vision's product IDs, use CLIP to match images
+async function buildHybridGroups(
+  files: Array<{ entry: DropboxEntry; url: string }>, 
+  visionGroups: AnalyzedGroup[], 
+  insightList: ImageInsight[]
+) {
+  console.log(`[buildHybridGroups] Matching ${files.length} images to ${visionGroups.length} Vision-identified products using CLIP`);
+  
+  // Step 1: Get CLIP embeddings for all images
+  const embeddings = await Promise.all(
+    files.map(async (file) => {
+      try {
+        return await clipImageEmbedding(file.url);
+      } catch (err) {
+        console.warn(`[buildHybridGroups] Failed to get embedding for ${file.url}:`, err);
+        return null;
+      }
+    })
+  );
+  
+  const validEmbeddings = embeddings.filter(e => e !== null).length;
+  if (validEmbeddings === 0) {
+    console.warn(`[buildHybridGroups] CLIP unavailable, falling back to Vision groups as-is`);
+    return visionGroups;
+  }
+  
+  console.log(`[buildHybridGroups] Got ${validEmbeddings}/${files.length} valid CLIP embeddings`);
+  
+  // Step 2: For each Vision group, find the primaryImageUrl and use CLIP to match similar images
+  const hybridGroups: any[] = [];
+  const assignedIndices = new Set<number>();
+  const MATCH_THRESHOLD = 0.75; // Lower threshold - we're matching to a known product anchor
+  
+  for (const visionGroup of visionGroups) {
+    const primaryUrl = toDirectDropbox(visionGroup.primaryImageUrl as string);
+    if (!primaryUrl) {
+      console.warn(`[buildHybridGroups] Vision group ${visionGroup.groupId} missing primaryImageUrl, skipping`);
+      continue;
+    }
+    
+    // Find the primary image in our files list
+    const primaryIndex = files.findIndex(f => toDirectDropbox(f.url) === primaryUrl);
+    if (primaryIndex === -1 || !embeddings[primaryIndex]) {
+      console.warn(`[buildHybridGroups] Could not find/embed primary image ${primaryUrl}`);
+      continue;
+    }
+    
+    console.log(`[buildHybridGroups] Product "${visionGroup.brand} ${visionGroup.product}" anchor: ${files[primaryIndex].entry.name}`);
+    
+    // Find all unassigned images similar to the primary
+    const matchedIndices = [primaryIndex];
+    assignedIndices.add(primaryIndex);
+    
+    for (let i = 0; i < files.length; i++) {
+      if (assignedIndices.has(i) || !embeddings[i] || !embeddings[primaryIndex]) continue;
+      
+      const similarity = cosine(embeddings[primaryIndex], embeddings[i]);
+      
+      if (similarity >= MATCH_THRESHOLD) {
+        console.log(`[buildHybridGroups] ✓ Matched ${files[i].entry.name} to "${visionGroup.brand} ${visionGroup.product}" (sim=${similarity.toFixed(3)})`);
+        matchedIndices.push(i);
+        assignedIndices.add(i);
+      } else {
+        console.log(`[buildHybridGroups] ✗ Rejected ${files[i].entry.name} (sim=${similarity.toFixed(3)} < ${MATCH_THRESHOLD})`);
+      }
+    }
+    
+    // Build hybrid group
+    const matchedImages = matchedIndices.map(i => files[i].url);
+    hybridGroups.push({
+      ...visionGroup,
+      images: matchedImages,
+      primaryImageUrl: matchedImages[0],
+      secondaryImageUrl: matchedImages[1] || null,
+      supportingImageUrls: matchedImages.slice(2),
+    });
+    
+    console.log(`[buildHybridGroups] Product "${visionGroup.brand} ${visionGroup.product}": ${matchedImages.length} images`);
+  }
+  
+  // Step 3: Create "Uncategorized" group for unassigned images
+  const unassignedIndices = files
+    .map((_, i) => i)
+    .filter(i => !assignedIndices.has(i) && embeddings[i] !== null);
+    
+  if (unassignedIndices.length > 0) {
+    const uncategorizedImages = unassignedIndices.map(i => files[i].url);
+    console.log(`[buildHybridGroups] Created Uncategorized group with ${uncategorizedImages.length} images:`, 
+      unassignedIndices.map(i => files[i].entry.name));
+    
+    hybridGroups.push({
+      groupId: "uncategorized",
+      name: "Uncategorized",
+      brand: null,
+      product: "Uncategorized Items",
+      images: uncategorizedImages,
+      primaryImageUrl: uncategorizedImages[0],
+      secondaryImageUrl: null,
+      supportingImageUrls: uncategorizedImages.slice(1),
+      confidence: 0,
+    });
+  }
+  
+  console.log(`[buildHybridGroups] Final: ${hybridGroups.length} groups (${visionGroups.length} products + ${unassignedIndices.length > 0 ? 1 : 0} uncategorized)`);
+  return hybridGroups;
 }
 
 function buildPairwiseGroups(files: Array<{ entry: DropboxEntry; url: string }>, insightList: ImageInsight[]) {
@@ -929,23 +1030,33 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       return insightMap.get(normalized) || insightMap.get(value) || insightByBase.get(basenameFrom(value).toLowerCase());
     };
     
-    // Phase R0: When USE_NEW_SORTER is enabled, use CLIP-based clustering instead of vision groups
+    // Phase R0: Hybrid approach - Use Vision product IDs + CLIP similarity matching
     console.log(`[Phase R0] Starting - USE_NEW_SORTER=${USE_NEW_SORTER}, fileTuples=${fileTuples.length}, insightList=${insightList.length}`);
     let groups: AnalyzedGroup[];
     if (USE_NEW_SORTER) {
-      groups = await buildClipGroups(fileTuples, insightList);
-      if (debugEnabled) {
-        console.log(`[Phase R0] Created ${groups.length} CLIP-based groups from ${fileTuples.length} images`);
+      // NEW HYBRID APPROACH: Trust Vision's product identification, use CLIP for image matching
+      const visionGroups = Array.isArray(analysis?.groups) ? (analysis.groups as AnalyzedGroup[]) : [];
+      
+      if (visionGroups.length > 0) {
+        console.log(`[Phase R0] Using hybrid approach: Vision product IDs + CLIP similarity matching`);
+        groups = await buildHybridGroups(fileTuples, visionGroups, insightList);
+        
+        if (debugEnabled) {
+          console.log(`[Phase R0] Created ${groups.length} hybrid groups from ${fileTuples.length} images`);
+        }
+      } else {
+        // Fallback to pure CLIP if Vision returned nothing
+        groups = await buildClipGroups(fileTuples, insightList);
+        if (debugEnabled) {
+          console.log(`[Phase R0] Vision unavailable, using ${groups.length} CLIP-based groups`);
+        }
       }
       
-      // If CLIP failed (returned empty), fall back to vision groups
-      if (!groups.length) {
-        const visionGroups = Array.isArray(analysis?.groups) ? (analysis.groups as AnalyzedGroup[]) : [];
-        if (visionGroups.length > 0) {
-          groups = visionGroups;
-          if (debugEnabled) {
-            console.log(`[Phase R0] CLIP unavailable, falling back to ${visionGroups.length} vision groups`);
-          }
+      // If both failed (returned empty), fall back to vision groups as-is
+      if (!groups.length && visionGroups.length > 0) {
+        groups = visionGroups;
+        if (debugEnabled) {
+          console.log(`[Phase R0] Hybrid/CLIP unavailable, falling back to ${visionGroups.length} vision groups`);
         }
       }
     } else {
