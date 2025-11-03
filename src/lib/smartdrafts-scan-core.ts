@@ -538,14 +538,8 @@ async function buildHybridGroups(
   const assignedIndices = new Set<number>();
   
   for (const visionGroup of visionGroups) {
-    const brand = String(visionGroup.brand || '').trim().toLowerCase();
-    const product = String(visionGroup.product || '').trim().toLowerCase();
-    
-    // Skip unknowns or empty
-    if (!brand || !product || brand === 'unknown' || product === 'unidentified item') {
-      console.log(`[buildHybridGroups] Skipping non-product: brand="${brand}", product="${product}"`);
-      continue;
-    }
+    let brand = String(visionGroup.brand || '').trim().toLowerCase();
+    let product = String(visionGroup.product || '').trim().toLowerCase();
     
     // Extract filename from Vision's image URL
     const visionImgUrl = visionGroup.images?.[0] || '';
@@ -554,6 +548,47 @@ async function buildHybridGroups(
     if (!filename) {
       console.warn(`[buildHybridGroups] No filename found in Vision group:`, visionGroup);
       continue;
+    }
+    
+    // If Vision couldn't identify the product, try extracting brand from OCR text
+    if (!brand || !product || brand === 'unknown' || product === 'unidentified item') {
+      // Find the imageInsight for this image
+      const insight = insightList.find(ins => {
+        const insightFilename = ins.url?.split('/').pop()?.split('?')[0]?.toLowerCase() || '';
+        return insightFilename === filename;
+      });
+      
+      if (insight && (insight as any).textExtracted) {
+        const ocrText = (insight as any).textExtracted;
+        console.log(`[buildHybridGroups] Vision couldn't identify ${filename}, checking OCR: "${ocrText.substring(0, 100)}..."`);
+        
+        // Try to extract brand names from OCR text
+        // Common brand patterns for supplements/beauty products
+        const brandPatterns = [
+          /\b(R\+Co|myBrainCo\.?|Frog Fuel|Nusava|BrainCo)\b/i,
+          /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+(GUT REPAIR|STAY UNBREAKABLE|B12|Vitamin)/i,
+        ];
+        
+        for (const pattern of brandPatterns) {
+          const match = ocrText.match(pattern);
+          if (match) {
+            brand = match[1].toLowerCase();
+            // Try to extract product name from surrounding text
+            const productMatch = ocrText.match(/\b(GUT REPAIR|STAY UNBREAKABLE|ON A CLOUD|B12.*B6.*B1|Frog Fuel)\b/i);
+            if (productMatch) {
+              product = productMatch[1].toLowerCase();
+              console.log(`[buildHybridGroups] ✓ Extracted from OCR: brand="${brand}", product="${product}"`);
+              break;
+            }
+          }
+        }
+      }
+      
+      // If still unknown, skip
+      if (!brand || !product || brand === 'unknown' || product === 'unidentified item') {
+        console.log(`[buildHybridGroups] Skipping non-product: brand="${brand}", product="${product}"`);
+        continue;
+      }
     }
     
     console.log(`[buildHybridGroups] Processing: ${filename} → "${brand}" "${product}"`);
