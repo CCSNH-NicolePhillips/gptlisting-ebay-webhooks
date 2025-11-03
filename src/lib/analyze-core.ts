@@ -574,7 +574,9 @@ export async function runAnalysis(
   const uniqueImages = new Set(images);
   uniqueImages.forEach((url) => ensureInsightEntry(url));
 
-  if (!useLegacyAssignment && merged.groups.length) {
+  const useNewSorter = process.env.USE_NEW_SORTER === "true";
+  
+  if (!useLegacyAssignment && !useNewSorter && merged.groups.length) {
     type FolderState = {
       key: string;
       label: string;
