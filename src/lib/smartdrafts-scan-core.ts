@@ -596,11 +596,12 @@ async function buildHybridGroups(
     
     // Find outliers: images with significantly lower average similarity than others
     const avgOfAvgs = avgSimilarities.reduce((sum: number, item: any) => sum + item.avgSim, 0) / avgSimilarities.length;
-    const OUTLIER_THRESHOLD = 0.75; // If avg similarity < 0.75, likely an outlier
+    const OUTLIER_THRESHOLD = 0.60; // Conservative - only catch really obvious mismatches like purses
     
     const outliers = avgSimilarities.filter((item: any) => item.avgSim < OUTLIER_THRESHOLD);
     
-    if (outliers.length > 0) {
+    // Only remove outliers if group will still have at least 1 image
+    if (outliers.length > 0 && outliers.length < groupEmbeddings.length) {
       console.log(`[buildHybridGroups] Found ${outliers.length} outliers in "${group.brand} ${group.product}" (avgSim: ${avgOfAvgs.toFixed(3)})`);
       
       // Remove outliers from group
@@ -612,6 +613,8 @@ async function buildHybridGroups(
       outliers.forEach((o: any) => assignedIndices.delete(o.idx));
       
       console.log(`[buildHybridGroups] Removed ${outliers.length} outliers, ${group.images.length} images remain`);
+    } else if (outliers.length >= groupEmbeddings.length) {
+      console.log(`[buildHybridGroups] Would remove all ${outliers.length} images from "${group.brand} ${group.product}" - skipping outlier removal`);
     }
   }
   
