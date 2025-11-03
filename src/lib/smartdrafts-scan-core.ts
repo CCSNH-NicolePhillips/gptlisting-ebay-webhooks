@@ -323,6 +323,15 @@ async function buildClipGroups(files: Array<{ entry: DropboxEntry; url: string }
     })
   );
   
+  // Check if CLIP is actually working - if all embeddings are null, CLIP is unavailable
+  const validEmbeddings = embeddings.filter(e => e !== null).length;
+  if (validEmbeddings === 0) {
+    console.warn(`[buildClipGroups] CLIP embeddings unavailable (0/${files.length} succeeded). Returning empty to fall back to vision grouping.`);
+    return []; // Return empty array to signal failure - caller will use vision groups
+  }
+  
+  console.log(`[buildClipGroups] Got ${validEmbeddings}/${files.length} valid CLIP embeddings`);
+  
   // Step 2: Build similarity matrix
   const n = files.length;
   const similarities: number[][] = Array(n).fill(null).map(() => Array(n).fill(0));
@@ -826,6 +835,17 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       groups = await buildClipGroups(fileTuples, insightList);
       if (debugEnabled) {
         console.log(`[Phase R0] Created ${groups.length} CLIP-based groups from ${fileTuples.length} images`);
+      }
+      
+      // If CLIP failed (returned empty), fall back to vision groups
+      if (!groups.length) {
+        const visionGroups = Array.isArray(analysis?.groups) ? (analysis.groups as AnalyzedGroup[]) : [];
+        if (visionGroups.length > 0) {
+          groups = visionGroups;
+          if (debugEnabled) {
+            console.log(`[Phase R0] CLIP unavailable, falling back to ${visionGroups.length} vision groups`);
+          }
+        }
       }
     } else {
       groups = Array.isArray(analysis?.groups)
