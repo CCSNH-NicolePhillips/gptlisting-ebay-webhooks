@@ -306,6 +306,97 @@ function buildFallbackGroups(files: Array<{ entry: DropboxEntry; url: string }>)
   return groups;
 }
 
+async function buildClipGroups(files: Array<{ entry: DropboxEntry; url: string }>, insightList: ImageInsight[]) {
+  // CLIP-based clustering: Group visually similar images together
+  console.log(`[buildClipGroups] Clustering ${files.length} images using CLIP similarity`);
+  
+  // Step 1: Compute embeddings for all images
+  const embeddings = await Promise.all(
+    files.map(async (file) => {
+      try {
+        const emb = await clipImageEmbedding(file.url);
+        return emb;
+      } catch (err) {
+        console.warn(`[buildClipGroups] Failed to get embedding for ${file.url}:`, err);
+        return null;
+      }
+    })
+  );
+  
+  // Step 2: Build similarity matrix
+  const n = files.length;
+  const similarities: number[][] = Array(n).fill(null).map(() => Array(n).fill(0));
+  
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      if (embeddings[i] && embeddings[j]) {
+        const sim = cosine(embeddings[i], embeddings[j]);
+        similarities[i][j] = sim;
+        similarities[j][i] = sim;
+      }
+    }
+  }
+  
+  // Step 3: Greedy clustering - group images with high similarity
+  const SIMILARITY_THRESHOLD = 0.25; // Adjust this based on testing
+  const assigned = new Set<number>();
+  const clusters: number[][] = [];
+  
+  for (let i = 0; i < n; i++) {
+    if (assigned.has(i)) continue;
+    
+    const cluster = [i];
+    assigned.add(i);
+    
+    // Find all images similar to this one
+    for (let j = i + 1; j < n; j++) {
+      if (assigned.has(j)) continue;
+      
+      // Check if j is similar to ANY image in the cluster
+      let maxSim = 0;
+      for (const ci of cluster) {
+        maxSim = Math.max(maxSim, similarities[ci][j]);
+      }
+      
+      if (maxSim >= SIMILARITY_THRESHOLD) {
+        cluster.push(j);
+        assigned.add(j);
+      }
+    }
+    
+    clusters.push(cluster);
+  }
+  
+  console.log(`[buildClipGroups] Created ${clusters.length} clusters from ${files.length} images`);
+  
+  // Step 4: Convert clusters to groups
+  const groups: any[] = clusters.map((cluster, idx) => {
+    const clusterFiles = cluster.map(i => files[i]);
+    const images = clusterFiles.map(f => f.url);
+    
+    const folderName = folderPath(clusterFiles[0].entry) || "";
+    const baseName = (clusterFiles[0].entry.name || "").replace(/\.[^.]+$/, "").replace(/_\d+$/, "");
+    
+    return {
+      groupId: `clip_${createHash("sha1").update(images.join("|")).digest("hex").slice(0, 10)}`,
+      name: baseName || `Product ${idx + 1}`,
+      folder: folderName,
+      images,
+      primaryImageUrl: images[0] || null,
+      secondaryImageUrl: images[1] || null,
+      brand: undefined,
+      product: baseName || `Product ${idx + 1}`,
+      variant: undefined,
+      size: undefined,
+      claims: [],
+      confidence: 0.5,
+      _clipClustered: true,
+    };
+  });
+  
+  return groups;
+}
+
 function buildPairwiseGroups(files: Array<{ entry: DropboxEntry; url: string }>, insightList: ImageInsight[]) {
   // Simple strategy: Pair images sequentially by filename (timestamps)
   // Works best when user takes photos in order: front, back, front, back, etc.
@@ -729,12 +820,12 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       return insightMap.get(normalized) || insightMap.get(value) || insightByBase.get(basenameFrom(value).toLowerCase());
     };
     
-    // Phase R0: When USE_NEW_SORTER is enabled, use pairwise grouping instead of vision groups
+    // Phase R0: When USE_NEW_SORTER is enabled, use CLIP-based clustering instead of vision groups
     let groups: AnalyzedGroup[];
     if (USE_NEW_SORTER) {
-      groups = buildPairwiseGroups(fileTuples, insightList);
+      groups = await buildClipGroups(fileTuples, insightList);
       if (debugEnabled) {
-        console.log(`[Phase R0] Created ${groups.length} pairwise groups from ${fileTuples.length} images`);
+        console.log(`[Phase R0] Created ${groups.length} CLIP-based groups from ${fileTuples.length} images`);
       }
     } else {
       groups = Array.isArray(analysis?.groups)
