@@ -1,6 +1,49 @@
 # CLIP Clustering Status - Nov 3, 2025
 
-## DECISION: Vision API is Better for Product Grouping ✅
+## CURRENT SOLUTION: Hybrid Vision + CLIP + Visual Description Fallback ✅
+
+### Test Dataset (9 images)
+- `asd32q.jpg` - R+Co front
+- `azdfkuj.jpg` - R+Co back
+- `awef.jpg` - Gut Repair front
+- `awefawed.jpg` - Gut Repair back
+- `frog_01.jpg` - Frog Fuel back (has text, Vision reads it)
+- `faeewfaw.jpg` - **Frog Fuel front** (brown, Vision can't read text)
+- `rgxbbg.jpg` - Nusava front
+- `dfzdvzer.jpg` - **Nusava back** (brown, Vision can't read text)
+- `IMG_20251102_144346.jpg` - Purse (non-product)
+
+### Current Approach (Working)
+1. **Vision OCR**: Extract brand/product from text (works for 6/9 images)
+2. **Exact Brand+Product Matching**: Group images with matching identifications
+3. **CLIP Verification**: Verify groups with 0.75 similarity threshold
+4. **CLIP Fallback Matching**: Unidentified images matched to groups via CLIP (0.75 threshold)
+
+### Future Enhancement: Visual Description Fallback
+**Problem**: Some images have text Vision can't read (brown backgrounds, low contrast)
+- Example: `dfzdvzer.jpg` and `faeewfaw.jpg` return `textExtracted=""`
+
+**Proposed Solution (for future implementation)**:
+1. When OCR fails (`textExtracted="" or confidence < 0.5`), ask Vision: **"Describe what you see in this image visually"**
+2. Get response like: "Brown supplement pouch with green accents, nutritional information panel, ingredient list visible"
+3. Feed descriptions + known product fronts back to GPT: **"Which of these products does this description match?"**
+   - Known: "Frog Fuel - green supplement pouch with 'STAY UNBREAKABLE'"
+   - Known: "Nusava - pink/purple bottle with B12/B6/B1"
+   - Unknown description: "Brown pouch with nutritional facts, mentions collagen protein"
+4. GPT matches description → "This is likely the back of Frog Fuel based on collagen mention and green accents"
+
+**Benefits**:
+- Works when OCR completely fails
+- Uses visual features (color, shape, layout) instead of text
+- Can match front/back pairs even when back has no readable brand name
+- Relatively cheap (~2 extra Vision calls per unidentified image)
+
+**Cost Analysis**:
+- Current: 1 Vision call for all images (~$0.01/run)
+- With fallback: +2 Vision calls for unidentified images (~$0.015/run)
+- Still well within budget ($0.30/month target)
+
+## Previous: Vision API is Better for Product Grouping ✅
 
 **Conclusion after extensive testing**: CLIP visual similarity alone **cannot reliably group products** when they have similar shapes/packaging.
 

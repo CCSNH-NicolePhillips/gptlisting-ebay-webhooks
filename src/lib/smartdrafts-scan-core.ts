@@ -773,66 +773,15 @@ async function buildHybridGroups(
     .filter(i => !assignedIndices.has(i));
     
   if (unassignedIndices.length > 0) {
-    console.log(`[buildHybridGroups] ${unassignedIndices.length} unassigned images, attempting CLIP matching to existing groups`);
+    console.log(`[buildHybridGroups] ${unassignedIndices.length} unassigned images`);
+    console.warn(`[buildHybridGroups] CLIP matching disabled - visually similar products cause false matches`);
+    console.log(`[buildHybridGroups] Unidentified images will be placed in Uncategorized group`);
     
-    // Try to match unassigned images to existing groups using CLIP
-    const CLIP_MATCH_THRESHOLD = 0.75; // Match if similar to any image in group
-    
-    for (const unassignedIdx of unassignedIndices) {
-      const unassignedEmb = allEmbeddings[unassignedIdx];
-      if (!unassignedEmb) {
-        console.log(`[buildHybridGroups] No embedding for unassigned image ${files[unassignedIdx].entry.name}`);
-        continue;
-      }
-      
-      let bestMatch: { groupIdx: number; similarity: number; matchedImageName: string } | null = null;
-      
-      // Compare to ALL images in each existing group
-      for (let g = 0; g < hybridGroups.length; g++) {
-        const group = hybridGroups[g];
-        
-        // Check against all images in this group
-        if (group.indices && Array.isArray(group.indices)) {
-          for (const groupImageIdx of group.indices) {
-            const groupEmb = allEmbeddings[groupImageIdx];
-            if (groupEmb) {
-              const similarity = cosine(unassignedEmb, groupEmb);
-              
-              if (similarity >= CLIP_MATCH_THRESHOLD && (!bestMatch || similarity > bestMatch.similarity)) {
-                bestMatch = { 
-                  groupIdx: g, 
-                  similarity,
-                  matchedImageName: files[groupImageIdx].entry.name
-                };
-              }
-            }
-          }
-        }
-      }
-      
-      if (bestMatch) {
-        const file = files[unassignedIdx];
-        const group = hybridGroups[bestMatch.groupIdx];
-        
-        // Add to group
-        group.images.push(file.url);
-        if (group.indices) {
-          group.indices.push(unassignedIdx);
-        }
-        
-        // Update secondary/supporting URLs
-        if (!group.secondaryImageUrl) {
-          group.secondaryImageUrl = file.url;
-        } else if (group.supportingImageUrls) {
-          group.supportingImageUrls.push(file.url);
-        }
-        
-        assignedIndices.add(unassignedIdx);
-        console.log(`[buildHybridGroups] ✓ CLIP matched ${file.entry.name} to "${group.brand}" - "${group.product}" (sim=${bestMatch.similarity.toFixed(3)} vs ${bestMatch.matchedImageName})`);
-      } else {
-        console.log(`[buildHybridGroups] ✗ No CLIP match found for ${files[unassignedIdx].entry.name} (best sim < ${CLIP_MATCH_THRESHOLD})`);
-      }
-    }
+    // DISABLED: CLIP matching is too unreliable for visually similar supplement products
+    // In testing, brown Nusava pouch matched R+Co at 0.912 similarity (wrong!)
+    // TODO: Implement visual description fallback (ask Vision to describe, then match descriptions)
+    // const CLIP_MATCH_THRESHOLD = 0.75;
+    // const ENABLE_CLIP_MATCHING = false;
   }
   
   // Step 3: Create "Uncategorized" group for remaining unassigned images
