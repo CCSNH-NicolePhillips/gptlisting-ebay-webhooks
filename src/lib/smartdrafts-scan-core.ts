@@ -500,15 +500,33 @@ async function buildClipGroups(files: Array<{ entry: DropboxEntry; url: string }
   return groups;
 }
 
-// NEW: Hybrid approach - Trust Vision's product IDs, use CLIP to match images
+// NEW: Hybrid approach - Extract product info from Vision insights, use CLIP to cluster
 async function buildHybridGroups(
   files: Array<{ entry: DropboxEntry; url: string }>, 
   visionGroups: AnalyzedGroup[], 
   insightList: ImageInsight[]
 ) {
-  console.log(`[buildHybridGroups] Matching ${files.length} images to ${visionGroups.length} Vision-identified products using CLIP`);
+  console.log(`[buildHybridGroups] REVISED: Ignore Vision's grouping, trust only imageInsights + CLIP`);
+  console.log(`[buildHybridGroups] Processing ${files.length} images with ${insightList.length} Vision insights`);
   
-  // Step 1: Get CLIP embeddings for all images
+  // Step 1: Build map of which images Vision identified as "front" role
+  const insightsByUrl = new Map<string, ImageInsight>();
+  const frontImages: string[] = [];
+  
+  insightList.forEach(insight => {
+    const normalized = toDirectDropbox(insight.url);
+    insightsByUrl.set(normalized, insight);
+    insightsByUrl.set(insight.url, insight);
+    
+    if (insight.role === 'front') {
+      frontImages.push(normalized);
+      console.log(`[buildHybridGroups] Vision identified front image: ${insight.url.split('/').pop()}`);
+    }
+  });
+  
+  console.log(`[buildHybridGroups] Found ${frontImages.length} front images from Vision insights`);
+  
+  // Step 2: Get CLIP embeddings for all images
   const embeddings = await Promise.all(
     files.map(async (file) => {
       try {
@@ -528,28 +546,33 @@ async function buildHybridGroups(
   
   console.log(`[buildHybridGroups] Got ${validEmbeddings}/${files.length} valid CLIP embeddings`);
   
-  // Step 2: For each Vision group, find the primaryImageUrl and use CLIP to match similar images
+  // Step 3: For each front image, use CLIP to find similar images
   const hybridGroups: any[] = [];
   const assignedIndices = new Set<number>();
-  const MATCH_THRESHOLD = 0.75; // Lower threshold - we're matching to a known product anchor
+  const MATCH_THRESHOLD = 0.75;
   
-  for (const visionGroup of visionGroups) {
-    const primaryUrl = toDirectDropbox(visionGroup.primaryImageUrl as string);
-    if (!primaryUrl) {
-      console.warn(`[buildHybridGroups] Vision group ${visionGroup.groupId} missing primaryImageUrl, skipping`);
+  // Find file indices for front images
+  const frontIndices = frontImages
+    .map(url => files.findIndex(f => toDirectDropbox(f.url) === url))
+    .filter(idx => idx !== -1 && embeddings[idx] !== null);
+    
+  console.log(`[buildHybridGroups] Using ${frontIndices.length} front images as anchors`);
+  
+  for (const primaryIndex of frontIndices) {
+    if (assignedIndices.has(primaryIndex)) {
+      console.log(`[buildHybridGroups] Skipping ${files[primaryIndex].entry.name} - already assigned`);
       continue;
     }
     
-    // Find the primary image in our files list
-    const primaryIndex = files.findIndex(f => toDirectDropbox(f.url) === primaryUrl);
-    if (primaryIndex === -1 || !embeddings[primaryIndex]) {
-      console.warn(`[buildHybridGroups] Could not find/embed primary image ${primaryUrl}`);
-      continue;
-    }
+    const primaryFile = files[primaryIndex];
+    console.log(`[buildHybridGroups] Clustering around front image: ${primaryFile.entry.name}`);
     
-    console.log(`[buildHybridGroups] Product "${visionGroup.brand} ${visionGroup.product}" anchor: ${files[primaryIndex].entry.name}`);
+    // Find Vision group metadata for this image
+    const visionMeta = visionGroups.find(g => 
+      g.images?.some(img => toDirectDropbox(img) === toDirectDropbox(primaryFile.url))
+    );
     
-    // Find all unassigned images similar to the primary
+    // Find all unassigned images similar to this front image
     const matchedIndices = [primaryIndex];
     assignedIndices.add(primaryIndex);
     
@@ -559,7 +582,7 @@ async function buildHybridGroups(
       const similarity = cosine(embeddings[primaryIndex], embeddings[i]);
       
       if (similarity >= MATCH_THRESHOLD) {
-        console.log(`[buildHybridGroups] ✓ Matched ${files[i].entry.name} to "${visionGroup.brand} ${visionGroup.product}" (sim=${similarity.toFixed(3)})`);
+        console.log(`[buildHybridGroups] ✓ Matched ${files[i].entry.name} (sim=${similarity.toFixed(3)})`);
         matchedIndices.push(i);
         assignedIndices.add(i);
       } else {
@@ -567,20 +590,26 @@ async function buildHybridGroups(
       }
     }
     
-    // Build hybrid group
+    // Build hybrid group with Vision metadata
     const matchedImages = matchedIndices.map(i => files[i].url);
+    const folderName = folderPath(primaryFile.entry) || "";
+    const baseName = (primaryFile.entry.name || "").replace(/\.[^.]+$/, "").replace(/_\d+$/, "");
+    
     hybridGroups.push({
-      ...visionGroup,
+      ...(visionMeta || {}),
+      groupId: visionMeta?.groupId || `hybrid_${createHash("sha1").update(matchedImages.join("|")).digest("hex").slice(0, 10)}`,
+      name: visionMeta?.product || baseName || `Product ${hybridGroups.length + 1}`,
+      folder: folderName,
       images: matchedImages,
       primaryImageUrl: matchedImages[0],
       secondaryImageUrl: matchedImages[1] || null,
       supportingImageUrls: matchedImages.slice(2),
     });
     
-    console.log(`[buildHybridGroups] Product "${visionGroup.brand} ${visionGroup.product}": ${matchedImages.length} images`);
+    console.log(`[buildHybridGroups] Created group "${visionMeta?.brand || '?'} ${visionMeta?.product || baseName}": ${matchedImages.length} images`);
   }
   
-  // Step 3: Create "Uncategorized" group for unassigned images
+  // Step 4: Create "Uncategorized" group for unassigned images
   const unassignedIndices = files
     .map((_, i) => i)
     .filter(i => !assignedIndices.has(i) && embeddings[i] !== null);
@@ -603,7 +632,7 @@ async function buildHybridGroups(
     });
   }
   
-  console.log(`[buildHybridGroups] Final: ${hybridGroups.length} groups (${visionGroups.length} products + ${unassignedIndices.length > 0 ? 1 : 0} uncategorized)`);
+  console.log(`[buildHybridGroups] Final: ${hybridGroups.length} groups (${frontIndices.length} products + ${unassignedIndices.length > 0 ? 1 : 0} uncategorized)`);
   return hybridGroups;
 }
 
