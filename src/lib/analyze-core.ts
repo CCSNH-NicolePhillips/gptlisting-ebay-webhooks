@@ -268,16 +268,19 @@ async function analyzeBatchViaVision(
 
   const prompt = [
     "You are a product photo analyst.",
-    "Group visually identical products (front/back/side).",
+    "Group visually identical products (front/back/side views).",
+    "IMPORTANT: Some images may NOT be products at all (e.g. random objects, unrelated items). Do NOT force these into product groups. Only group images that clearly show the same product.",
     "EXTRA CONTEXT PER IMAGE (filenames, parent folders):",
     hints || "(no hints)",
     "Use those hints and your visual judgement to split groups by product/variant even when packaging looks similar.",
+    "Only group images together if they clearly show THE SAME PRODUCT. Different products should be in separate groups, even if packaging is similar.",
     "Extract: brand, product, variant/flavor, size/servings, best-fit category label, categoryPath (parent > child), options object of item specifics (e.g. { Flavor, Formulation, Features, Ingredients, Dietary Feature }), short claims[].",
     "For EVERY image also include quick insights so downstream code can reason about it: hasVisibleText (true/false), dominantColor (one of: black, white, gray, red, orange, yellow, green, blue, purple, brown, multi), role (front, back, side, detail, accessory, packaging, other).",
     "Return STRICT JSON: { groups: [{ groupId, brand, product, variant, size, category, categoryPath, options, claims, confidence, images[], primaryImageUrl, secondaryImageUrl, supportingImageUrls }], imageInsights: [{ url, hasVisibleText, dominantColor, role }] }.",
     "primaryImageUrl must point to the best hero/front image (always include when available). secondaryImageUrl should reference the clearest back/label view. supportingImageUrls is an array of other helpful angles (use [] or omit when none).",
     "Ensure every listed URL is an exact image URL and appears in group.images. imageInsights.url must match one of those URLs.",
     "If uncertain, group best-guess and lower confidence, but avoid mixing images whose hints differ (e.g. different folder or filename).",
+    "If an image is clearly NOT a product or doesn't match any other images, you can create a single-image group for it or omit it from groups entirely.",
   ].join("\n");
 
   try {
