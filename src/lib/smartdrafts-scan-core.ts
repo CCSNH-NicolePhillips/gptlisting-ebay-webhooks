@@ -1070,6 +1070,15 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       // NEW HYBRID APPROACH: Trust Vision's product identification, use CLIP for image matching
       const visionGroups = Array.isArray(analysis?.groups) ? (analysis.groups as AnalyzedGroup[]) : [];
       
+      console.log(`[Phase R0] DEBUG: visionGroups structure:`, JSON.stringify(visionGroups.map(g => ({
+        groupId: g.groupId,
+        brand: g.brand,
+        product: g.product,
+        hasImages: !!g.images,
+        imagesCount: g.images?.length || 0,
+        imagesSample: g.images?.slice(0, 2)
+      })), null, 2));
+      
       if (visionGroups.length > 0) {
         console.log(`[Phase R0] Using hybrid approach: Vision product IDs + CLIP similarity matching`);
         groups = await buildHybridGroups(fileTuples, visionGroups, insightList);
