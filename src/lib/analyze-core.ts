@@ -449,6 +449,7 @@ export type AnalysisResult = {
   warnings: string[];
   groups: any[];
   imageInsights: Record<string, ImageInsight>;
+  _rawVisionInsights?: ImageInsight[]; // Raw insights before old logic corrupts them
   orphans: Array<{ url: string; name?: string; folder?: string }>;
 };
 
@@ -515,6 +516,9 @@ export async function runAnalysis(
     return reachable;
   });
 
+  // Store raw vision insights before they get corrupted by old logic
+  const rawVisionInsights: ImageInsight[] = [];
+
   const preflightWarnings: string[] = [];
   if (verified.length === 0 && images.length > 0) {
     // If every preflight failed, proceed anyway (providers may still fetch successfully)
@@ -556,6 +560,8 @@ export async function runAnalysis(
     if (Array.isArray((result as any)?.imageInsights)) {
       for (const insight of (result as any).imageInsights as ImageInsight[]) {
         if (!insight?.url) continue;
+        // Store raw vision insights BEFORE old logic corrupts them
+        rawVisionInsights.push({ ...insight });
         insightMap.set(insight.url, insight);
       }
     }
@@ -946,6 +952,7 @@ export async function runAnalysis(
       warnings,
       groups: merged.groups,
       imageInsights: Object.fromEntries(insightMap),
+      _rawVisionInsights: rawVisionInsights, // Clean vision insights for new sorter
       orphans: orphanDetails,
     };
   }
@@ -998,6 +1005,7 @@ export async function runAnalysis(
     warnings,
     groups: finalGroups,
     imageInsights: Object.fromEntries(insightMap),
+    _rawVisionInsights: rawVisionInsights, // Clean vision insights for new sorter
     orphans: orphanDetails,
   };
 }

@@ -602,7 +602,11 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
   const insightByBase = new Map<string, ImageInsight>();
   const roleByBase = new Map<string, RoleInfo>();
     const rawInsights = analysis?.imageInsights || {};
-    const insightList: ImageInsight[] = Array.isArray(rawInsights)
+    
+    // When USE_NEW_SORTER is enabled, use raw vision insights to avoid corruption from old logic
+    const insightList: ImageInsight[] = USE_NEW_SORTER && Array.isArray(analysis?._rawVisionInsights)
+      ? (analysis._rawVisionInsights as ImageInsight[])
+      : Array.isArray(rawInsights)
       ? (rawInsights as ImageInsight[])
       : Object.entries(rawInsights)
           .map(([url, insight]) => {
