@@ -516,6 +516,8 @@ async function buildHybridGroups(
     filesByFilename.set(filename, { ...file, index });
   });
   
+  console.log(`[buildHybridGroups] File index built with ${filesByFilename.size} files:`, Array.from(filesByFilename.keys()));
+  
   // Step 1: For each Vision group, collect the images by filename matching
   const hybridGroups: any[] = [];
   const assignedIndices = new Set<number>();
@@ -524,10 +526,13 @@ async function buildHybridGroups(
     const groupImages: string[] = [];
     const groupIndices: number[] = [];
     
+    console.log(`[buildHybridGroups] Processing Vision group "${visionGroup.brand} ${visionGroup.product}" with ${visionGroup.images?.length || 0} images`);
+    
     // Match Vision's image list to our files
     if (visionGroup.images) {
       for (const visionImg of visionGroup.images) {
         const filename = visionImg.split('/').pop()?.toLowerCase() || '';
+        console.log(`[buildHybridGroups] Looking for filename: "${filename}"`);
         const fileMatch = filesByFilename.get(filename);
         
         if (fileMatch && !assignedIndices.has(fileMatch.index)) {
@@ -535,6 +540,10 @@ async function buildHybridGroups(
           groupIndices.push(fileMatch.index);
           assignedIndices.add(fileMatch.index);
           console.log(`[buildHybridGroups] ✓ Matched ${filename} to "${visionGroup.brand} ${visionGroup.product}"`);
+        } else if (!fileMatch) {
+          console.warn(`[buildHybridGroups] ✗ No file found for filename: ${filename}`);
+        } else {
+          console.warn(`[buildHybridGroups] ✗ File ${filename} already assigned`);
         }
       }
     }
