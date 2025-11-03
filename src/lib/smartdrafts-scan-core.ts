@@ -307,8 +307,8 @@ function buildFallbackGroups(files: Array<{ entry: DropboxEntry; url: string }>)
 }
 
 async function buildClipGroups(files: Array<{ entry: DropboxEntry; url: string }>, insightList: ImageInsight[]) {
-  // CLIP-based clustering: Group visually similar images together
-  console.log(`[buildClipGroups] Clustering ${files.length} images using CLIP similarity`);
+  // CLIP-based clustering with multimodal signals: visual + text + color
+  console.log(`[buildClipGroups] Clustering ${files.length} images using CLIP similarity + text/color signals`);
   
   // Step 1: Compute embeddings for all images (IMAGE endpoint only, no text fallback)
   const embeddings = await Promise.all(
@@ -349,14 +349,64 @@ async function buildClipGroups(files: Array<{ entry: DropboxEntry; url: string }
     console.info(`[clipVec] ${i} ${filename} -> ${hash}`);
   });
   
-  // Step 2: Build similarity matrix
+  // Step 1.5: Extract text and color from insights for multimodal matching
+  const insightsByUrl = new Map<string, ImageInsight>();
+  insightList.forEach(insight => {
+    const normalized = toDirectDropbox(insight.url);
+    insightsByUrl.set(normalized, insight);
+    insightsByUrl.set(insight.url, insight);
+  });
+  
+  const extractBrandKeywords = (text: string): Set<string> => {
+    const keywords = new Set<string>();
+    const words = text.toLowerCase().match(/\b\w{3,}\b/g) || [];
+    words.forEach(w => keywords.add(w));
+    return keywords;
+  };
+  
+  // Step 2: Build similarity matrix with multimodal signals
   const n = files.length;
   const similarities: number[][] = Array(n).fill(null).map(() => Array(n).fill(0));
   
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
       if (embeddings[i] && embeddings[j]) {
-        const sim = cosine(embeddings[i], embeddings[j]);
+        let sim = cosine(embeddings[i], embeddings[j]);
+        
+        // Multimodal boost: Adjust similarity based on text/color signals
+        const insightI = insightsByUrl.get(toDirectDropbox(files[i].url));
+        const insightJ = insightsByUrl.get(toDirectDropbox(files[j].url));
+        
+        if (insightI && insightJ) {
+          // Text similarity boost: Extract brand/product keywords from OCR
+          const textI = [insightI.ocrText, insightI.text, ...(insightI.textBlocks || [])].filter(Boolean).join(" ");
+          const textJ = [insightJ.ocrText, insightJ.text, ...(insightJ.textBlocks || [])].filter(Boolean).join(" ");
+          
+          if (textI && textJ && textI.length > 10 && textJ.length > 10) {
+            const keywordsI = extractBrandKeywords(textI);
+            const keywordsJ = extractBrandKeywords(textJ);
+            
+            // Jaccard similarity of keywords
+            const intersection = new Set([...keywordsI].filter(k => keywordsJ.has(k)));
+            const union = new Set([...keywordsI, ...keywordsJ]);
+            const textSim = union.size > 0 ? intersection.size / union.size : 0;
+            
+            // Boost similarity if text matches well
+            if (textSim > 0.3) {
+              sim = sim * 0.7 + textSim * 0.3; // Blend: 70% visual, 30% text
+              console.log(`[buildClipGroups] Text boost ${files[i].entry.name} <-> ${files[j].entry.name}: visual=${cosine(embeddings[i], embeddings[j]).toFixed(3)}, text=${textSim.toFixed(3)}, final=${sim.toFixed(3)}`);
+            }
+          }
+          
+          // Color penalty: Different dominant colors = likely different products
+          if (insightI.dominantColor && insightJ.dominantColor && 
+              insightI.dominantColor !== "multi" && insightJ.dominantColor !== "multi" &&
+              insightI.dominantColor !== insightJ.dominantColor) {
+            sim *= 0.90; // 10% penalty for mismatched colors
+            console.log(`[buildClipGroups] Color penalty ${files[i].entry.name} <-> ${files[j].entry.name}: ${insightI.dominantColor} vs ${insightJ.dominantColor}, sim reduced to ${sim.toFixed(3)}`);
+          }
+        }
+        
         similarities[i][j] = sim;
         similarities[j][i] = sim;
       }
@@ -387,10 +437,10 @@ async function buildClipGroups(files: Array<{ entry: DropboxEntry; url: string }
     return []; // Fall back to vision-based grouping
   }
   
-  // Step 3: Complete-linkage clustering - most conservative approach
+  // Step 3: Complete-linkage clustering with multimodal similarity
   // Image must have high similarity to ALL existing cluster members
-  // This prevents false groupings when products look similar
-  const SIMILARITY_THRESHOLD = 0.90; // Raised to 0.90 for stricter matching
+  // With text/color signals, we can use a slightly lower threshold
+  const SIMILARITY_THRESHOLD = 0.87; // Balanced threshold with multimodal signals
   const assigned = new Set<number>();
   const clusters: number[][] = [];
   
