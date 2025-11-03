@@ -531,7 +531,7 @@ async function buildHybridGroups(
     // Match Vision's image list to our files
     if (visionGroup.images) {
       for (const visionImg of visionGroup.images) {
-        const filename = visionImg.split('/').pop()?.toLowerCase() || '';
+        const filename = visionImg.split('/').pop()?.split('?')[0]?.toLowerCase() || '';
         console.log(`[buildHybridGroups] Looking for filename: "${filename}"`);
         const fileMatch = filesByFilename.get(filename);
         
