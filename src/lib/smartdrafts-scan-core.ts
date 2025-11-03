@@ -346,6 +346,13 @@ async function buildClipGroups(files: Array<{ entry: DropboxEntry; url: string }
     }
   }
   
+  // Log similarity matrix to help tune threshold
+  console.log(`[buildClipGroups] Similarity matrix:`);
+  for (let i = 0; i < Math.min(n, 5); i++) {
+    const row = similarities[i].slice(0, 5).map(s => s.toFixed(3)).join(', ');
+    console.log(`  Image ${i} (${files[i].entry.name}): [${row}${n > 5 ? ', ...' : ''}]`);
+  }
+  
   // Step 3: Greedy clustering - group images with high similarity
   const SIMILARITY_THRESHOLD = 0.65; // Higher threshold = stricter clustering (only group very similar images)
   const assigned = new Set<number>();
