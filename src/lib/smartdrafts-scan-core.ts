@@ -552,12 +552,66 @@ async function buildHybridGroups(
       hybridGroups.push({
         ...visionGroup,
         images: groupImages,
+        indices: groupIndices,
         primaryImageUrl: groupImages[0],
         secondaryImageUrl: groupImages[1] || null,
         supportingImageUrls: groupImages.slice(2),
       });
       
       console.log(`[buildHybridGroups] Created group "${visionGroup.brand} ${visionGroup.product}": ${groupImages.length} images`);
+    }
+  }
+  
+  // Step 1.5: Remove outliers from Vision groups using CLIP similarity
+  console.log(`[buildHybridGroups] Checking for outliers in ${hybridGroups.length} groups...`);
+  
+  const allEmbeddings = await Promise.all(
+    files.map(async (file) => {
+      try {
+        return await clipImageEmbedding(file.url);
+      } catch {
+        return null;
+      }
+    })
+  );
+  
+  for (let g = 0; g < hybridGroups.length; g++) {
+    const group = hybridGroups[g];
+    if (!group.indices || group.indices.length < 2) continue; // Need at least 2 images to detect outliers
+    
+    const groupEmbeddings = group.indices
+      .map((idx: number) => ({ idx, embedding: allEmbeddings[idx] }))
+      .filter((item: any) => item.embedding !== null);
+    
+    if (groupEmbeddings.length < 2) continue;
+    
+    // Calculate average similarity of each image to all others in the group
+    const avgSimilarities = groupEmbeddings.map((item: any) => {
+      const similarities = groupEmbeddings
+        .filter((other: any) => other.idx !== item.idx)
+        .map((other: any) => cosine(item.embedding, other.embedding));
+      const avg = similarities.reduce((sum: number, sim: number) => sum + sim, 0) / similarities.length;
+      return { idx: item.idx, avgSim: avg };
+    });
+    
+    // Find outliers: images with significantly lower average similarity than others
+    const avgOfAvgs = avgSimilarities.reduce((sum: number, item: any) => sum + item.avgSim, 0) / avgSimilarities.length;
+    const OUTLIER_THRESHOLD = 0.75; // If avg similarity < 0.75, likely an outlier
+    
+    const outliers = avgSimilarities.filter((item: any) => item.avgSim < OUTLIER_THRESHOLD);
+    
+    if (outliers.length > 0) {
+      console.log(`[buildHybridGroups] Found ${outliers.length} outliers in "${group.brand} ${group.product}" (avgSim: ${avgOfAvgs.toFixed(3)})`);
+      
+      // Remove outliers from group
+      const outlierIndices = new Set(outliers.map((o: any) => o.idx));
+      group.images = group.images.filter((_: string, i: number) => !outlierIndices.has(group.indices[i]));
+      group.indices = group.indices.filter((idx: number) => !outlierIndices.has(idx));
+      
+      // Mark outliers as unassigned
+      outliers.forEach((o: any) => assignedIndices.delete(o.idx));
+      
+      console.log(`[buildHybridGroups] Removed ${outliers.length} outliers, ${group.images.length} images remain`);
     }
   }
   
