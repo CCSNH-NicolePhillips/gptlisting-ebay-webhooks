@@ -500,135 +500,119 @@ async function buildClipGroups(files: Array<{ entry: DropboxEntry; url: string }
   return groups;
 }
 
-// NEW: Hybrid approach - Extract product info from Vision insights, use CLIP to cluster
+// NEW: Hybrid approach - Use Vision's product groups + CLIP for unmatched images
 async function buildHybridGroups(
   files: Array<{ entry: DropboxEntry; url: string }>, 
   visionGroups: AnalyzedGroup[], 
   insightList: ImageInsight[]
 ) {
-  console.log(`[buildHybridGroups] REVISED: Ignore Vision's grouping, trust only imageInsights + CLIP`);
-  console.log(`[buildHybridGroups] Processing ${files.length} images with ${insightList.length} Vision insights`);
+  console.log(`[buildHybridGroups] REVISED v2: Trust Vision's grouping, use CLIP only for unassigned images`);
+  console.log(`[buildHybridGroups] Processing ${files.length} images, ${visionGroups.length} Vision groups`);
   
-  // Step 1: Build map of which images Vision identified as "front" role
-  // Match by filename since Vision uses placeholder URLs
-  const insightsByFilename = new Map<string, ImageInsight>();
-  const frontFilenames: string[] = [];
-  
-  insightList.forEach(insight => {
-    const filename = insight.url.split('/').pop()?.toLowerCase() || '';
-    insightsByFilename.set(filename, insight);
-    
-    if (insight.role === 'front') {
-      frontFilenames.push(filename);
-      console.log(`[buildHybridGroups] Vision identified front image: ${filename}`);
-    }
+  // Build filename index for matching
+  const filesByFilename = new Map<string, { entry: DropboxEntry; url: string; index: number }>();
+  files.forEach((file, index) => {
+    const filename = file.entry.name?.toLowerCase() || '';
+    filesByFilename.set(filename, { ...file, index });
   });
   
-  console.log(`[buildHybridGroups] Found ${frontFilenames.length} front images from Vision insights`);
-  
-  // Step 2: Get CLIP embeddings for all images
-  const embeddings = await Promise.all(
-    files.map(async (file) => {
-      try {
-        return await clipImageEmbedding(file.url);
-      } catch (err) {
-        console.warn(`[buildHybridGroups] Failed to get embedding for ${file.url}:`, err);
-        return null;
-      }
-    })
-  );
-  
-  const validEmbeddings = embeddings.filter(e => e !== null).length;
-  if (validEmbeddings === 0) {
-    console.warn(`[buildHybridGroups] CLIP unavailable, falling back to Vision groups as-is`);
-    return visionGroups;
-  }
-  
-  console.log(`[buildHybridGroups] Got ${validEmbeddings}/${files.length} valid CLIP embeddings`);
-  
-  // Step 3: For each front image, use CLIP to find similar images
+  // Step 1: For each Vision group, collect the images by filename matching
   const hybridGroups: any[] = [];
   const assignedIndices = new Set<number>();
-  const MATCH_THRESHOLD = 0.75;
   
-  // Find file indices for front images by matching filenames
-  const frontIndices = frontFilenames
-    .map(filename => files.findIndex(f => {
-      const fileFilename = f.entry.name?.toLowerCase() || '';
-      return fileFilename === filename;
-    }))
-    .filter(idx => idx !== -1 && embeddings[idx] !== null);
+  for (const visionGroup of visionGroups) {
+    const groupImages: string[] = [];
+    const groupIndices: number[] = [];
     
-  console.log(`[buildHybridGroups] Using ${frontIndices.length} front images as anchors`);
-  
-  for (const primaryIndex of frontIndices) {
-    if (assignedIndices.has(primaryIndex)) {
-      console.log(`[buildHybridGroups] Skipping ${files[primaryIndex].entry.name} - already assigned`);
-      continue;
+    // Match Vision's image list to our files
+    if (visionGroup.images) {
+      for (const visionImg of visionGroup.images) {
+        const filename = visionImg.split('/').pop()?.toLowerCase() || '';
+        const fileMatch = filesByFilename.get(filename);
+        
+        if (fileMatch && !assignedIndices.has(fileMatch.index)) {
+          groupImages.push(fileMatch.url);
+          groupIndices.push(fileMatch.index);
+          assignedIndices.add(fileMatch.index);
+          console.log(`[buildHybridGroups] ✓ Matched ${filename} to "${visionGroup.brand} ${visionGroup.product}"`);
+        }
+      }
     }
     
-    const primaryFile = files[primaryIndex];
-    console.log(`[buildHybridGroups] Clustering around front image: ${primaryFile.entry.name}`);
+    if (groupImages.length > 0) {
+      hybridGroups.push({
+        ...visionGroup,
+        images: groupImages,
+        primaryImageUrl: groupImages[0],
+        secondaryImageUrl: groupImages[1] || null,
+        supportingImageUrls: groupImages.slice(2),
+      });
+      
+      console.log(`[buildHybridGroups] Created group "${visionGroup.brand} ${visionGroup.product}": ${groupImages.length} images`);
+    }
+  }
+  
+  // Step 2: For unassigned images, try CLIP clustering with high threshold
+  const unassignedIndices = files
+    .map((_, i) => i)
+    .filter(i => !assignedIndices.has(i));
     
-    // Find Vision group metadata for this image by matching filename
-    const primaryFilename = primaryFile.entry.name?.toLowerCase() || '';
-    const visionMeta = visionGroups.find(g => 
-      g.images?.some(img => {
-        const imgFilename = img.split('/').pop()?.toLowerCase() || '';
-        return imgFilename === primaryFilename;
+  if (unassignedIndices.length > 0) {
+    console.log(`[buildHybridGroups] ${unassignedIndices.length} unassigned images, attempting CLIP matching`);
+    
+    // Get embeddings only for unassigned images
+    const embeddings = await Promise.all(
+      files.map(async (file, i) => {
+        if (!unassignedIndices.includes(i)) return null;
+        try {
+          return await clipImageEmbedding(file.url);
+        } catch (err) {
+          return null;
+        }
       })
     );
     
-    if (visionMeta) {
-      console.log(`[buildHybridGroups] Found Vision metadata: ${visionMeta.brand} ${visionMeta.product}`);
-    }
+    // Try to match unassigned images to existing groups using CLIP
+    const HIGH_THRESHOLD = 0.90; // Very high - only match if very similar
     
-    // Find all unassigned images similar to this front image
-    const matchedIndices = [primaryIndex];
-    assignedIndices.add(primaryIndex);
-    
-    for (let i = 0; i < files.length; i++) {
-      if (assignedIndices.has(i) || !embeddings[i] || !embeddings[primaryIndex]) continue;
+    for (const unassignedIdx of unassignedIndices) {
+      if (!embeddings[unassignedIdx]) continue;
       
-      const similarity = cosine(embeddings[primaryIndex], embeddings[i]);
+      let bestMatch: { groupIdx: number; similarity: number } | null = null;
       
-      if (similarity >= MATCH_THRESHOLD) {
-        console.log(`[buildHybridGroups] ✓ Matched ${files[i].entry.name} (sim=${similarity.toFixed(3)})`);
-        matchedIndices.push(i);
-        assignedIndices.add(i);
-      } else {
-        console.log(`[buildHybridGroups] ✗ Rejected ${files[i].entry.name} (sim=${similarity.toFixed(3)} < ${MATCH_THRESHOLD})`);
+      // Compare to primary image of each existing group
+      for (let g = 0; g < hybridGroups.length; g++) {
+        const group = hybridGroups[g];
+        const primaryFilename = group.primaryImageUrl?.split('/').pop()?.split('?')[0]?.toLowerCase() || '';
+        const primaryFile = filesByFilename.get(primaryFilename);
+        
+        if (primaryFile && embeddings[primaryFile.index]) {
+          const similarity = cosine(embeddings[unassignedIdx], embeddings[primaryFile.index]);
+          
+          if (similarity >= HIGH_THRESHOLD && (!bestMatch || similarity > bestMatch.similarity)) {
+            bestMatch = { groupIdx: g, similarity };
+          }
+        }
+      }
+      
+      if (bestMatch) {
+        const file = files[unassignedIdx];
+        hybridGroups[bestMatch.groupIdx].images.push(file.url);
+        assignedIndices.add(unassignedIdx);
+        console.log(`[buildHybridGroups] ✓ CLIP matched ${file.entry.name} to group ${bestMatch.groupIdx} (sim=${bestMatch.similarity.toFixed(3)})`);
       }
     }
-    
-    // Build hybrid group with Vision metadata
-    const matchedImages = matchedIndices.map(i => files[i].url);
-    const folderName = folderPath(primaryFile.entry) || "";
-    const baseName = (primaryFile.entry.name || "").replace(/\.[^.]+$/, "").replace(/_\d+$/, "");
-    
-    hybridGroups.push({
-      ...(visionMeta || {}),
-      groupId: visionMeta?.groupId || `hybrid_${createHash("sha1").update(matchedImages.join("|")).digest("hex").slice(0, 10)}`,
-      name: visionMeta?.product || baseName || `Product ${hybridGroups.length + 1}`,
-      folder: folderName,
-      images: matchedImages,
-      primaryImageUrl: matchedImages[0],
-      secondaryImageUrl: matchedImages[1] || null,
-      supportingImageUrls: matchedImages.slice(2),
-    });
-    
-    console.log(`[buildHybridGroups] Created group "${visionMeta?.brand || '?'} ${visionMeta?.product || baseName}": ${matchedImages.length} images`);
   }
   
-  // Step 4: Create "Uncategorized" group for unassigned images
-  const unassignedIndices = files
+  // Step 3: Create "Uncategorized" group for remaining unassigned images
+  const finalUnassigned = files
     .map((_, i) => i)
-    .filter(i => !assignedIndices.has(i) && embeddings[i] !== null);
+    .filter(i => !assignedIndices.has(i));
     
-  if (unassignedIndices.length > 0) {
-    const uncategorizedImages = unassignedIndices.map(i => files[i].url);
+  if (finalUnassigned.length > 0) {
+    const uncategorizedImages = finalUnassigned.map(i => files[i].url);
     console.log(`[buildHybridGroups] Created Uncategorized group with ${uncategorizedImages.length} images:`, 
-      unassignedIndices.map(i => files[i].entry.name));
+      finalUnassigned.map(i => files[i].entry.name));
     
     hybridGroups.push({
       groupId: "uncategorized",
@@ -643,7 +627,7 @@ async function buildHybridGroups(
     });
   }
   
-  console.log(`[buildHybridGroups] Final: ${hybridGroups.length} groups (${frontIndices.length} products + ${unassignedIndices.length > 0 ? 1 : 0} uncategorized)`);
+  console.log(`[buildHybridGroups] Final: ${hybridGroups.length} groups (${visionGroups.length} Vision products + ${finalUnassigned.length > 0 ? 1 : 0} uncategorized)`);
   return hybridGroups;
 }
 
