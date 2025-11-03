@@ -71,10 +71,16 @@ export async function clipTextEmbedding(text: string): Promise<number[] | null> 
 }
 
 export async function clipImageEmbedding(imageUrl: string): Promise<number[] | null> {
-  if (!HF_TOKEN || !IMAGE_BASE) return null;
+  if (!HF_TOKEN || !IMAGE_BASE) {
+    console.warn("[clipImageEmbedding] Missing HF_TOKEN or IMAGE_BASE");
+    return null;
+  }
 
   const r = await fetch(imageUrl, { redirect: "follow" });
-  if (!r.ok) return null;
+  if (!r.ok) {
+    console.warn(`[clipImageEmbedding] Failed to fetch image: ${r.status} ${r.statusText}`);
+    return null;
+  }
   const bytes = new Uint8Array(await r.arrayBuffer());
   const b64 = typeof Buffer !== "undefined"
     ? Buffer.from(bytes).toString("base64")
@@ -92,7 +98,9 @@ export async function clipImageEmbedding(imageUrl: string): Promise<number[] | n
     );
     const v1 = normalize(j1);
     if (v1) return toUnit(v1);
-  } catch {
+    console.warn(`[clipImageEmbedding] Normalize returned null for base64 attempt. Response:`, j1);
+  } catch (err) {
+    console.warn(`[clipImageEmbedding] Base64 attempt failed:`, err);
     // continue to fallback
   }
 
@@ -108,7 +116,9 @@ export async function clipImageEmbedding(imageUrl: string): Promise<number[] | n
     );
     const v2 = normalize(j2);
     if (v2) return toUnit(v2);
-  } catch {
+    console.warn(`[clipImageEmbedding] Normalize returned null for binary attempt. Response:`, j2);
+  } catch (err) {
+    console.warn(`[clipImageEmbedding] Binary attempt failed:`, err);
     // leave null
   }
 
