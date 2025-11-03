@@ -510,21 +510,21 @@ async function buildHybridGroups(
   console.log(`[buildHybridGroups] Processing ${files.length} images with ${insightList.length} Vision insights`);
   
   // Step 1: Build map of which images Vision identified as "front" role
-  const insightsByUrl = new Map<string, ImageInsight>();
-  const frontImages: string[] = [];
+  // Match by filename since Vision uses placeholder URLs
+  const insightsByFilename = new Map<string, ImageInsight>();
+  const frontFilenames: string[] = [];
   
   insightList.forEach(insight => {
-    const normalized = toDirectDropbox(insight.url);
-    insightsByUrl.set(normalized, insight);
-    insightsByUrl.set(insight.url, insight);
+    const filename = insight.url.split('/').pop()?.toLowerCase() || '';
+    insightsByFilename.set(filename, insight);
     
     if (insight.role === 'front') {
-      frontImages.push(normalized);
-      console.log(`[buildHybridGroups] Vision identified front image: ${insight.url.split('/').pop()}`);
+      frontFilenames.push(filename);
+      console.log(`[buildHybridGroups] Vision identified front image: ${filename}`);
     }
   });
   
-  console.log(`[buildHybridGroups] Found ${frontImages.length} front images from Vision insights`);
+  console.log(`[buildHybridGroups] Found ${frontFilenames.length} front images from Vision insights`);
   
   // Step 2: Get CLIP embeddings for all images
   const embeddings = await Promise.all(
@@ -551,9 +551,12 @@ async function buildHybridGroups(
   const assignedIndices = new Set<number>();
   const MATCH_THRESHOLD = 0.75;
   
-  // Find file indices for front images
-  const frontIndices = frontImages
-    .map(url => files.findIndex(f => toDirectDropbox(f.url) === url))
+  // Find file indices for front images by matching filenames
+  const frontIndices = frontFilenames
+    .map(filename => files.findIndex(f => {
+      const fileFilename = f.entry.name?.toLowerCase() || '';
+      return fileFilename === filename;
+    }))
     .filter(idx => idx !== -1 && embeddings[idx] !== null);
     
   console.log(`[buildHybridGroups] Using ${frontIndices.length} front images as anchors`);
@@ -567,10 +570,18 @@ async function buildHybridGroups(
     const primaryFile = files[primaryIndex];
     console.log(`[buildHybridGroups] Clustering around front image: ${primaryFile.entry.name}`);
     
-    // Find Vision group metadata for this image
+    // Find Vision group metadata for this image by matching filename
+    const primaryFilename = primaryFile.entry.name?.toLowerCase() || '';
     const visionMeta = visionGroups.find(g => 
-      g.images?.some(img => toDirectDropbox(img) === toDirectDropbox(primaryFile.url))
+      g.images?.some(img => {
+        const imgFilename = img.split('/').pop()?.toLowerCase() || '';
+        return imgFilename === primaryFilename;
+      })
     );
+    
+    if (visionMeta) {
+      console.log(`[buildHybridGroups] Found Vision metadata: ${visionMeta.brand} ${visionMeta.product}`);
+    }
     
     // Find all unassigned images similar to this front image
     const matchedIndices = [primaryIndex];
