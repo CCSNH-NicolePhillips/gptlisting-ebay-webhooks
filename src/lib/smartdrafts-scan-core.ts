@@ -514,7 +514,17 @@ async function buildHybridGroups(
   visionGroups.forEach((group, idx) => {
     const imgUrl = group.images?.[0] || 'unknown';
     const filename = imgUrl.split('/').pop()?.split('?')[0] || 'unknown';
+    
+    // Also find and log the OCR text for this image
+    const insight = insightList.find(ins => {
+      const insightFilename = ins.url?.split('/').pop()?.split('?')[0]?.toLowerCase() || '';
+      return insightFilename === filename.toLowerCase();
+    });
+    const ocrText = (insight as any)?.textExtracted || '';
+    const ocrPreview = ocrText ? ocrText.substring(0, 80) : '(no text)';
+    
     console.log(`  [${idx + 1}] ${filename}: brand="${group.brand}", product="${group.product}", confidence=${group.confidence}`);
+    console.log(`      OCR: "${ocrPreview}${ocrText.length > 80 ? '...' : ''}"`);
   });
   
   // Build filename index for matching
@@ -560,27 +570,57 @@ async function buildHybridGroups(
       
       if (insight && (insight as any).textExtracted) {
         const ocrText = (insight as any).textExtracted;
-        console.log(`[buildHybridGroups] Vision couldn't identify ${filename}, checking OCR: "${ocrText.substring(0, 100)}..."`);
+        console.log(`[buildHybridGroups] Vision couldn't identify ${filename}, checking OCR: "${ocrText.substring(0, 150)}..."`);
         
         // Try to extract brand names from OCR text
         // Common brand patterns for supplements/beauty products
         const brandPatterns = [
-          /\b(R\+Co|myBrainCo\.?|Frog Fuel|Nusava|BrainCo)\b/i,
-          /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+(GUT REPAIR|STAY UNBREAKABLE|B12|Vitamin)/i,
+          /\b(R\+Co|R\s*\+\s*Co)\b/i,
+          /\b(myBrainCo\.?|my\s*Brain\s*Co\.?)\b/i,
+          /\b(Frog\s*Fuel)\b/i,
+          /\b(Nusava)\b/i,
+          /\b(BrainCo)\b/i,
+        ];
+        
+        const productPatterns = [
+          /\b(GUT\s*REPAIR)\b/i,
+          /\b(STAY\s*UNBREAKABLE)\b/i,
+          /\b(ON\s*A\s*CLOUD)\b/i,
+          /\b(B12[,\s]+B6[,\s]+B1)\b/i,
         ];
         
         for (const pattern of brandPatterns) {
           const match = ocrText.match(pattern);
           if (match) {
-            brand = match[1].toLowerCase();
-            // Try to extract product name from surrounding text
-            const productMatch = ocrText.match(/\b(GUT REPAIR|STAY UNBREAKABLE|ON A CLOUD|B12.*B6.*B1|Frog Fuel)\b/i);
-            if (productMatch) {
-              product = productMatch[1].toLowerCase();
-              console.log(`[buildHybridGroups] ✓ Extracted from OCR: brand="${brand}", product="${product}"`);
+            brand = match[1].toLowerCase().replace(/\s+/g, ' ').trim();
+            console.log(`[buildHybridGroups]   Found brand in OCR: "${brand}"`);
+            
+            // Try to extract product name
+            for (const prodPattern of productPatterns) {
+              const productMatch = ocrText.match(prodPattern);
+              if (productMatch) {
+                product = productMatch[1].toLowerCase().replace(/\s+/g, ' ').trim();
+                console.log(`[buildHybridGroups]   Found product in OCR: "${product}"`);
+                break;
+              }
+            }
+            
+            // If we found a brand, that might be enough
+            if (brand && brand !== 'unknown') {
+              // Use brand as product if no specific product found
+              if (!product || product === 'unidentified item') {
+                product = brand;
+                console.log(`[buildHybridGroups]   Using brand as product: "${product}"`);
+              }
               break;
             }
           }
+        }
+        
+        if (brand && brand !== 'unknown' && product && product !== 'unidentified item') {
+          console.log(`[buildHybridGroups] ✓ Extracted from OCR: brand="${brand}", product="${product}"`);
+        } else {
+          console.log(`[buildHybridGroups] ✗ OCR extraction failed for ${filename}`);
         }
       }
       
