@@ -307,87 +307,36 @@ function buildFallbackGroups(files: Array<{ entry: DropboxEntry; url: string }>)
 }
 
 function buildPairwiseGroups(files: Array<{ entry: DropboxEntry; url: string }>, insightList: ImageInsight[]) {
-  // Create groups by pairing images based on role detection (front finds its back)
-  const roleByUrl = new Map<string, "front" | "back" | null>();
-  const roleByBasename = new Map<string, "front" | "back" | null>();
-  
-  console.log(`[buildPairwiseGroups] DEBUG: Received ${insightList.length} insights`);
-  for (const insight of insightList) {
-    console.log(`[buildPairwiseGroups] DEBUG: insight.url=${insight.url}, role=${insight.role}`);
-    if (insight.url && insight.role) {
-      const normalized = toDirectDropbox(insight.url);
-      const base = basenameFrom(normalized).toLowerCase();
-      
-      // Only set role if not already set (first occurrence wins, handles duplicates)
-      if (!roleByBasename.has(base)) {
-        roleByUrl.set(normalized, insight.role as "front" | "back" | null);
-        roleByBasename.set(base, insight.role as "front" | "back" | null);
-        console.log(`[buildPairwiseGroups] DEBUG: Set basename ${base} to role ${insight.role}`);
-      } else {
-        console.log(`[buildPairwiseGroups] DEBUG: SKIPPING duplicate basename ${base} (already set to ${roleByBasename.get(base)})`);
-      }
-    }
-  }
+  // Simple strategy: Pair images sequentially by filename (timestamps)
+  // Works best when user takes photos in order: front, back, front, back, etc.
   
   const sorted = files.slice().sort((a, b) => (a.entry.name || "").localeCompare(b.entry.name || ""));
   const groups: any[] = [];
   
-  // Strategy: Match by URL first, then by basename
-  const getRole = (url: string): "front" | "back" | null => {
-    if (roleByUrl.has(url)) return roleByUrl.get(url)!;
-    const base = basenameFrom(url).toLowerCase();
-    return roleByBasename.get(base) || null;
-  };
+  console.log(`[buildPairwiseGroups] DEBUG: Pairing ${files.length} images sequentially`);
   
-  const fronts = sorted.filter(f => getRole(f.url) === "front");
-  const backs = sorted.filter(f => getRole(f.url) === "back");
-  const neither = sorted.filter(f => getRole(f.url) === null);
-  
-  console.log(`[buildPairwiseGroups] DEBUG: Sorted ${files.length} files into fronts=${fronts.length}, backs=${backs.length}, neither=${neither.length}`);
-  console.log(`[buildPairwiseGroups] DEBUG: Fronts:`, fronts.map(f => basenameFrom(f.url)));
-  console.log(`[buildPairwiseGroups] DEBUG: Backs:`, backs.map(f => basenameFrom(f.url)));
-  console.log(`[buildPairwiseGroups] DEBUG: Neither:`, neither.map(f => basenameFrom(f.url)));
-  
-  // Simple strategy: Pair sequentially by filename order
-  // This works because filenames are timestamps - consecutive images are likely the same product
-  // Mix all images together and pair every 2
-  const allImages = [...fronts, ...neither, ...backs];
-  const halfCount = Math.ceil(allImages.length / 2);
-  
-  for (let i = 0; i < halfCount; i++) {
-    const img1 = allImages[i * 2];
-    const img2 = allImages[i * 2 + 1];
+  // Pair every 2 consecutive images
+  for (let i = 0; i < sorted.length; i += 2) {
+    const img1 = sorted[i];
+    const img2 = sorted[i + 1];
     
     if (!img1) break;
     
     const images: string[] = [img1.url];
     if (img2) images.push(img2.url);
     
-    const primaryFile = img1;
-    const folderName = folderPath(primaryFile.entry) || "";
-    const baseName = (primaryFile.entry.name || "").replace(/\.[^.]+$/, "").replace(/_\d+$/, "");
-    
-    // Determine hero/back based on roles if available
-    const role1 = getRole(img1.url);
-    const role2 = img2 ? getRole(img2.url) : null;
-    let heroUrl = img1.url;
-    let backUrl = img2?.url || null;
-    
-    // If roles indicate reverse order, swap them
-    if (role1 === "back" && role2 === "front") {
-      heroUrl = img2.url;
-      backUrl = img1.url;
-    }
+    const folderName = folderPath(img1.entry) || "";
+    const baseName = (img1.entry.name || "").replace(/\.[^.]+$/, "").replace(/_\d+$/, "");
     
     groups.push({
       groupId: `pair_${createHash("sha1").update(images.join("|")).digest("hex").slice(0, 10)}`,
-      name: baseName || `Product ${i + 1}`,
+      name: baseName || `Product ${Math.floor(i / 2) + 1}`,
       folder: folderName,
       images,
-      primaryImageUrl: heroUrl,
-      secondaryImageUrl: backUrl,
+      primaryImageUrl: img1.url,
+      secondaryImageUrl: img2?.url || null,
       brand: undefined,
-      product: baseName || `Product ${i + 1}`,
+      product: baseName || `Product ${Math.floor(i / 2) + 1}`,
       variant: undefined,
       size: undefined,
       claims: [],
