@@ -772,21 +772,157 @@ async function buildHybridGroups(
     }
   }
   
-  // Step 2: For unassigned images, try CLIP clustering with high threshold
+  // Step 2: For unassigned images, try visual description matching
   const unassignedIndices = files
     .map((_, i) => i)
     .filter(i => !assignedIndices.has(i));
     
   if (unassignedIndices.length > 0) {
-    console.log(`[buildHybridGroups] ${unassignedIndices.length} unassigned images`);
-    console.warn(`[buildHybridGroups] CLIP matching disabled - visually similar products cause false matches`);
-    console.log(`[buildHybridGroups] Unidentified images will be placed in Uncategorized group`);
+    console.log(`[buildHybridGroups] ${unassignedIndices.length} unassigned images - attempting visual description matching`);
     
-    // DISABLED: CLIP matching is too unreliable for visually similar supplement products
-    // In testing, brown Nusava pouch matched R+Co at 0.912 similarity (wrong!)
-    // TODO: Implement visual description fallback (ask Vision to describe, then match descriptions)
-    // const CLIP_MATCH_THRESHOLD = 0.75;
-    // const ENABLE_CLIP_MATCHING = false;
+    // Build descriptions of all identified product fronts
+    const productDescriptions: Array<{
+      brand: string;
+      product: string;
+      productKey: string;
+      visualDescription: string;
+      dominantColor: string;
+      group: any;
+    }> = [];
+    
+    for (const [productKey, group] of productGroups.entries()) {
+      for (const fileIdx of group.fileIndices) {
+        const file = files[fileIdx];
+        const filename = file.entry.name?.toLowerCase() || '';
+        const insight = insightList.find(ins => {
+          const insightFilename = ins.url?.split('/').pop()?.split('?')[0]?.toLowerCase() || '';
+          return insightFilename === filename;
+        });
+        
+        if (insight && (insight as any).visualDescription && (insight as any).role === 'front') {
+          productDescriptions.push({
+            brand: group.brand,
+            product: group.product,
+            productKey,
+            visualDescription: (insight as any).visualDescription,
+            dominantColor: (insight as any).dominantColor || 'unknown',
+            group
+          });
+          console.log(`[buildHybridGroups] Front product: "${group.brand}" - "${group.product}"`);
+          console.log(`  Visual: "${(insight as any).visualDescription}"`);
+          console.log(`  Color: ${(insight as any).dominantColor}`);
+        }
+      }
+    }
+    
+    if (productDescriptions.length > 0) {
+      console.log(`[buildHybridGroups] Found ${productDescriptions.length} product front descriptions for matching`);
+      
+      // For each unassigned image, try to match by color and packaging type
+      for (const unassignedIdx of unassignedIndices) {
+        const file = files[unassignedIdx];
+        const filename = file.entry.name?.toLowerCase() || '';
+        const insight = insightList.find(ins => {
+          const insightFilename = ins.url?.split('/').pop()?.split('?')[0]?.toLowerCase() || '';
+          return insightFilename === filename;
+        });
+        
+        if (!insight || !(insight as any).visualDescription) {
+          console.log(`[buildHybridGroups] ${filename}: No visual description, skipping match`);
+          continue;
+        }
+        
+        const unassignedVisual = (insight as any).visualDescription || '';
+        const unassignedColor = (insight as any).dominantColor || 'unknown';
+        const unassignedRole = (insight as any).role || 'other';
+        
+        console.log(`[buildHybridGroups] Trying to match ${filename}:`);
+        console.log(`  Visual: "${unassignedVisual}"`);
+        console.log(`  Color: ${unassignedColor}`);
+        console.log(`  Role: ${unassignedRole}`);
+        
+        // Try to match by color + packaging keywords
+        const visualLower = unassignedVisual.toLowerCase();
+        let bestMatch: typeof productDescriptions[0] | null = null;
+        let matchReason = '';
+        
+        for (const product of productDescriptions) {
+          const productVisualLower = product.visualDescription.toLowerCase();
+          let score = 0;
+          const reasons: string[] = [];
+          
+          // Color match (most important)
+          if (product.dominantColor === unassignedColor) {
+            score += 10;
+            reasons.push(`color=${unassignedColor}`);
+          }
+          
+          // Packaging type match (pouch, bottle, box, etc.)
+          const packagingTypes = ['pouch', 'bottle', 'jar', 'box', 'tube', 'container', 'cylindrical'];
+          for (const pkg of packagingTypes) {
+            if (visualLower.includes(pkg) && productVisualLower.includes(pkg)) {
+              score += 5;
+              reasons.push(`packaging=${pkg}`);
+              break;
+            }
+          }
+          
+          // Specific features (nutrition panel, barcode, ingredients, etc.)
+          const backFeatures = ['nutrition', 'facts', 'panel', 'ingredient', 'barcode', 'supplement facts'];
+          for (const feature of backFeatures) {
+            if (visualLower.includes(feature)) {
+              score += 2;
+              reasons.push(`has-${feature}`);
+            }
+          }
+          
+          // Material match (matte, glossy, transparent, etc.)
+          const materials = ['matte', 'glossy', 'transparent', 'clear'];
+          for (const material of materials) {
+            if (visualLower.includes(material) && productVisualLower.includes(material)) {
+              score += 3;
+              reasons.push(`material=${material}`);
+            }
+          }
+          
+          if (score > 10 && (!bestMatch || score > (bestMatch as any)._score)) {
+            bestMatch = product;
+            (bestMatch as any)._score = score;
+            matchReason = reasons.join(', ');
+          }
+        }
+        
+        if (bestMatch && (bestMatch as any)._score >= 12) {
+          console.log(`[buildHybridGroups] ✓ Matched ${filename} to "${bestMatch.brand}" - "${bestMatch.product}"`);
+          console.log(`  Match score: ${(bestMatch as any)._score}, reasons: ${matchReason}`);
+          
+          bestMatch.group.fileIndices.push(unassignedIdx);
+          bestMatch.group.fileUrls.push(file.url);
+          assignedIndices.add(unassignedIdx);
+          
+          // Update the hybrid group that was already created
+          const existingGroup = hybridGroups.find(hg => 
+            hg.brand === bestMatch!.brand && hg.product === bestMatch!.product
+          );
+          if (existingGroup) {
+            existingGroup.images.push(file.url);
+            existingGroup.indices.push(unassignedIdx);
+            if (!existingGroup.secondaryImageUrl) {
+              existingGroup.secondaryImageUrl = file.url;
+            } else {
+              existingGroup.supportingImageUrls = existingGroup.supportingImageUrls || [];
+              existingGroup.supportingImageUrls.push(file.url);
+            }
+            console.log(`  Updated group to ${existingGroup.images.length} images`);
+          }
+        } else {
+          const scoreInfo = bestMatch ? `(best score: ${(bestMatch as any)._score})` : '(no matches found)';
+          console.log(`[buildHybridGroups] ✗ ${filename}: No confident match ${scoreInfo}`);
+        }
+      }
+    } else {
+      console.log(`[buildHybridGroups] No product front descriptions available for matching`);
+    }
   }
   
   // Step 3: Create "Uncategorized" group for remaining unassigned images
