@@ -1,13 +1,14 @@
 # CLIP Clustering Status - Nov 4, 2025
 
-## 🔧 CRITICAL FIX PENDING: Filename Mapping Bug (Nov 4, 2025)
+## ✅ CRITICAL FIX DEPLOYED: Filename Mapping Bug (Nov 4, 2025)
 
-### Current Status: **BROKEN - FIX READY TO DEPLOY**
+### Current Status: **FIXED AND DEPLOYED** ✅
 - **Problem**: Vision API correctly identifies all products, but filename mapping bug causes 100% failure
 - **Root Cause**: Vision returns placeholder URLs (`https://example.com/1.jpg`, `2.jpg`, etc.) but code tried to match these to real filenames (`asd32q.jpg`, `awef.jpg`, etc.)
 - **Fix**: Match by array INDEX instead of filename - `visionGroups[0]` = `files[0]`, `visionGroups[1]` = `files[1]`, etc.
-- **Status**: Code fixed, TypeScript compiled, **READY TO PUSH**
-- **Commit Message**: "Fix critical filename mapping bug in Vision response processing"
+- **Status**: ✅ DEPLOYED (commit `d467909`)
+- **Deployed**: Nov 4, 2025
+- **Expected Result**: 67-75% automatic grouping (same as last known working version)
 
 ### What Happened (Nov 4, 2025)
 1. **Enhanced Vision Prompt (commit `abeb2b8`)**: Added detailed visualDescription instructions
@@ -23,38 +24,44 @@
    - Vision identified products correctly but code couldn't match them to real files
    - **Root cause**: Array indexing bug in filename matching logic
 
-### The Fix (In Code, Not Yet Deployed)
-**File**: `src/lib/smartdrafts-scan-core.ts` lines ~545-620
+### The Fix (DEPLOYED ✅)
+**Commit**: `d467909` - "Fix critical filename mapping bug in Vision response processing"
+**Files Changed**:
+1. `src/lib/smartdrafts-scan-core.ts` - **5 locations fixed**
+2. `src/lib/vision-router.ts` - Added startup logging
+3. `.env.example` - Documented VISION_MODEL and GPT_MODEL
+
+**Locations Fixed in smartdrafts-scan-core.ts**:
+1. Lines ~514-533: Vision identifications logging
+2. Lines ~778-784: Product group visual description checking
+3. Lines ~813-818: Unassigned image matching
+4. Lines ~1008-1013: Orphan back insight lookup
+5. Lines ~1035-1046: Front group insight matching
 
 **Before** (BROKEN):
 ```typescript
-for (const visionGroup of visionGroups) {
-  // Extract filename from Vision's placeholder URL
-  const visionImgUrl = visionGroup.images?.[0] || '';
-  const filename = visionImgUrl.split('/').pop()?.toLowerCase(); // Gets "1.jpg"
-  
-  const fileMatch = filesByFilename.get(filename); // Tries to find "1.jpg" in map of "asd32q.jpg", "awef.jpg" etc.
-  if (!fileMatch) {
-    console.warn(`✗ File not found: ${filename}`); // ALWAYS FAILS!
-  }
-}
+// Tried to match by filename
+const insight = insightList.find(ins => {
+  const insightFilename = ins.url?.split('/').pop()?.toLowerCase();
+  return insightFilename === filename.toLowerCase();
+});
 ```
 
 **After** (FIXED):
 ```typescript
-// Vision groups are in SAME ORDER as input files array
-for (let groupIdx = 0; groupIdx < visionGroups.length; groupIdx++) {
-  const visionGroup = visionGroups[groupIdx];
-  const fileIdx = groupIdx; // Direct mapping!
-  const file = files[fileIdx]; // Gets actual file
-  const filename = file.entry.name; // Real filename: "asd32q.jpg"
-}
+// Use index-based matching: insightList[i] corresponds to files[i]
+const insight = insightList[fileIdx];
 ```
 
-### Expected Results After Deploy
+**Additional Changes**:
+- Added `console.log("[vision-router] Using", process.env.VISION_MODEL || "(default)");` for deployment verification
+- Documented `VISION_MODEL=openai:gpt-4o` and `GPT_MODEL=gpt-4o` in `.env.example`
+
+### Results After Deployment
 - **Before**: 0% success (all images → Uncategorized despite perfect Vision data)
-- **After**: 67-75% success (same as previous working version)
+- **After**: Expected 67-75% success (same as previous working version `232c858`)
 - Vision API working perfectly - problem was only in filename mapping
+- **Next**: Set `VISION_MODEL=openai:gpt-4o` and `GPT_MODEL=gpt-4o` in Netlify env vars (if not already set)
 
 ---
 
@@ -227,19 +234,30 @@ HF_API_TOKEN=<in prod.env>
 HF_TEXT_ENDPOINT_BASE=https://c4hp6rdkxs6bi333.us-east-1.aws.endpoints.huggingface.cloud
 HF_IMAGE_ENDPOINT_BASE=https://c4hp6rdkxs6bi333.us-east-1.aws.endpoints.huggingface.cloud
 USE_NEW_SORTER=true (default)
+VISION_MODEL=openai:gpt-4o (NEEDS TO BE SET IN NETLIFY)
+GPT_MODEL=gpt-4o (NEEDS TO BE SET IN NETLIFY)
 ```
 
 ## Next Steps for New AI Agent
 
-### IMMEDIATE ACTION REQUIRED
-1. **Deploy the filename mapping fix**: 
-   ```bash
-   git add -A
-   git commit -m "Fix critical filename mapping bug in Vision response processing"
-   git push
-   ```
-2. **Test with 9-image test set** to verify products group correctly
-3. **Expected result**: 3-4 product groups (67-75% pairing) instead of everything in Uncategorized
+### ✅ COMPLETED (Nov 4, 2025)
+1. ✅ **Deployed the filename mapping fix** (commit `d467909`)
+   - Fixed 5 locations in `smartdrafts-scan-core.ts`
+   - Added vision model startup logging
+   - Documented env vars in `.env.example`
+2. ⏳ **Waiting for test results** with 9-image test set
+3. ⏳ **Expected result**: 3-4 product groups (67-75% pairing) instead of everything in Uncategorized
+
+### NEXT IMMEDIATE ACTION
+1. **Set Environment Variables in Netlify** (if not already set):
+   - Go to: Netlify Dashboard → Site → Site Configuration → Environment Variables
+   - Add: `VISION_MODEL=openai:gpt-4o`
+   - Add: `GPT_MODEL=gpt-4o`
+2. **Test the fix** by running analyze-images with 9-image test set
+3. **Verify logs** show:
+   - `[vision-router] Using openai:gpt-4o` (confirms env var loaded)
+   - `[buildHybridGroups] ✓ Matched` messages (confirms filename mapping working)
+   - 3-4 product groups created instead of everything → Uncategorized
 
 ### Understanding the System
 - **Vision API is the primary grouping mechanism** (not CLIP)
@@ -267,17 +285,20 @@ git log --oneline -10
 
 ## Key Files
 - `src/lib/clip-client-split.ts` - CLIP API client
-- `src/lib/smartdrafts-scan-core.ts` - **Main scan logic (FILENAME MAPPING BUG FIX NEEDED HERE - lines ~545-620)**
+- `src/lib/smartdrafts-scan-core.ts` - **Main scan logic (✅ FILENAME MAPPING BUG FIXED - commit d467909)**
   - `buildHybridGroups()` function - Groups images by Vision brand+product match
-  - **BUG**: Tries to match Vision's placeholder URLs to real filenames
-  - **FIX**: Use array index matching instead: `visionGroups[i]` = `files[i]`
+  - **FIXED**: Now uses array index matching: `visionGroups[i]` = `files[i]` = `insightList[i]`
+  - Fixed in 5 locations (logging, product grouping, orphan back merging)
+- `src/lib/vision-router.ts` - Vision API provider router (✅ Added startup logging - commit d467909)
+  - `runVision()` function - Routes to OpenAI/Anthropic/Google vision models
+  - Now logs which model is active: `[vision-router] Using openai:gpt-4o`
 - `src/lib/analyze-core.ts` - Vision API prompt and response processing
   - Lines 273-288: Vision prompt (simplified Nov 4, complex version failed)
   - Lines 215-237, 418-440: Response normalization (fixed to preserve visualDescription)
 - `src/lib/image-insight.ts` - TypeScript type with `textExtracted?` and `visualDescription?` fields
 - `src/config.ts` - Feature flags (USE_NEW_SORTER default=true)
 - `scripts/test-clip-endpoint.mjs` - Local CLIP endpoint tester
-- `prod.env` - Environment variables (lines 63-66 for CLIP)
+- `.env.example` - ✅ Now documents VISION_MODEL and GPT_MODEL (commit d467909)
 
 ## Latest Commits (Chronological)
 - `232c858` (Nov 3) - Last known working version (67% success)
@@ -287,8 +308,8 @@ git log --oneline -10
 - `6f31466` (Nov 3) - Fix third location + add cache debugging
 - `02228a4` (Nov 3) - Add orphan back group merging
 - `abeb2b8` (Nov 3) - **BROKE EVERYTHING**: Massively enhanced Vision prompt (too complex)
-- `[pending]` (Nov 4) - **Simplify Vision prompt** - Fixed Vision API, but revealed filename bug
-- `[pending]` (Nov 4) - **Fix filename mapping bug** - READY TO DEPLOY
+- `f1bc145` (Nov 4) - **Simplify Vision prompt** - Fixed Vision API, but revealed filename bug
+- **`d467909` (Nov 4) - ✅ DEPLOYED: Fix filename mapping bug + add vision model logging + document env vars**
 
 ## Known Issues (Low Priority)
 
