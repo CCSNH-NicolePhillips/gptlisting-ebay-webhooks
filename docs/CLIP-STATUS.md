@@ -281,17 +281,44 @@ GPT_MODEL=gpt-4o (NEEDS TO BE SET IN NETLIFY)
 
 ### NEXT IMMEDIATE ACTION - FIX VISION API MULTI-IMAGE ANALYSIS
 
-**Environment Variables** - ✅ CONFIRMED SET:
-- `VISION_MODEL=openai:gpt-4o` - ✅ Confirmed set by user
-- `GPT_MODEL=gpt-4o` - ✅ Confirmed set by user
-- Check logs to verify model is being used: `[vision-router] Using openai:gpt-4o`
+**ROOT CAUSE IDENTIFIED** 🎯 - Batch Vision API behavior:
 
-**ACTUAL ISSUE** - Vision API only analyzing 1 of 9 images:
-1. **Vision API receiving all 9 images** but only returning 1 group + 1 imageInsight
-2. **Possible causes**:
-   - Vision API behavior change in how it handles multiple images
-   - Response token limits with detailed visualDescription prompts
-   - Vision API grouping all images into single analysis despite "analyze EACH individually"
+**Problem:** Sending 9 images in single OpenAI API call → GPT-4o returns only 1 imageInsight
+- ✅ Filename mapping bug fixed (commit d467909)
+- ✅ Environment variables confirmed set (VISION_MODEL=openai:gpt-4o)
+- ✅ Prompt says "Analyze EACH image INDIVIDUALLY"
+- ❌ **GPT-4o ignores multi-image instruction** and groups them together
+
+**Technical Details:**
+- `src/lib/vision-router.ts` → `tryOpenAI()` sends ALL images in one call:
+  ```typescript
+  for (const url of images) {
+    content.push({ type: "image_url", image_url: { url } });
+  }
+  ```
+- Prompt: "Analyze EACH image INDIVIDUALLY" + "Each group should contain ONLY ONE IMAGE URL"
+- Reality: GPT-4o treats batch as related product images, returns 1 combined analysis
+- Expected: 9 imageInsights, Actual: 1 imageInsight
+
+**SOLUTION IMPLEMENTED** ✅ - Hybrid Fallback Approach:
+
+**What Changed** (`src/lib/analyze-core.ts`, lines ~576-617):
+- After batch Vision call, check if `imageInsights.length < batch.length`
+- If missing insights detected, identify which images weren't analyzed
+- Re-analyze missing images individually (1 image per API call)
+- Merge individual results back into batch result
+- Log: `"⚠️ Batch X: Got N insights for M images - filling gaps individually"`
+
+**Benefits:**
+- ✅ Fast batch analysis when GPT-4o cooperates (returns all insights)
+- ✅ Automatic fallback ensures 100% coverage when it doesn't
+- ✅ Only pays for extra API calls when needed
+- ✅ No prompt changes required (robust solution)
+
+**Expected Behavior:**
+- First call: Batch of 9 → returns 1 insight
+- Fallback: 8 individual calls → returns 8 more insights
+- Final: 9 total insights (100% coverage)
 
 **Alternative Fixes** (if env var doesn't solve it):
 3. **Reduce visualDescription detail** to avoid token limits

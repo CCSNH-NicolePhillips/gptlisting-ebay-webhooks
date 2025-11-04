@@ -569,6 +569,56 @@ export async function runAnalysis(
     if (result?._error) {
       warnings.push(`Batch ${idx + 1}: ${result._error}`);
     }
+    
+    // Hybrid fallback: If batch returned fewer insights than images, fill in gaps with individual calls
+    const insightsReturned = Array.isArray((result as any)?.imageInsights) ? (result as any).imageInsights.length : 0;
+    if (insightsReturned < batch.length && !result?._error) {
+      console.log(`⚠️ Batch ${idx + 1}: Got ${insightsReturned} insights for ${batch.length} images - filling gaps individually`);
+      const insightUrls = new Set<string>();
+      if (Array.isArray((result as any)?.imageInsights)) {
+        for (const insight of (result as any).imageInsights) {
+          if (insight?.url) {
+            insightUrls.add(toDirectDropbox(insight.url));
+          }
+        }
+      }
+      
+      // Find images that didn't get analyzed
+      const missingImages = batch.filter(url => !insightUrls.has(url));
+      console.log(`🔄 Re-analyzing ${missingImages.length} missing images individually:`, missingImages.map(base));
+      
+      // Analyze each missing image individually
+      for (const missingUrl of missingImages) {
+        try {
+          const meta = metaLookup.get(missingUrl) || { url: missingUrl, name: "", folder: "" };
+          const individualResult = await analyzeBatchViaVision([missingUrl], [meta], debugVisionResponse, force);
+          
+          // Merge individual result into batch result
+          if (Array.isArray((individualResult as any)?.imageInsights) && (individualResult as any).imageInsights.length > 0) {
+            if (!Array.isArray((result as any)?.imageInsights)) {
+              (result as any).imageInsights = [];
+            }
+            (result as any).imageInsights.push(...(individualResult as any).imageInsights);
+            console.log(`  ✓ Got insight for ${base(missingUrl)}`);
+          } else {
+            console.log(`  ✗ No insight for ${base(missingUrl)}`);
+          }
+          
+          // Merge groups too
+          if (Array.isArray((individualResult as any)?.groups) && (individualResult as any).groups.length > 0) {
+            if (!Array.isArray((result as any)?.groups)) {
+              (result as any).groups = [];
+            }
+            (result as any).groups.push(...(individualResult as any).groups);
+          }
+        } catch (err: any) {
+          console.error(`  ✗ Failed to analyze ${base(missingUrl)}:`, err?.message || err);
+        }
+      }
+      
+      console.log(`📦 Batch ${idx + 1}: After fallback: ${(result as any)?.imageInsights?.length || 0} total insights`);
+    }
+    
     if (Array.isArray((result as any)?.imageInsights)) {
       console.log(`📦 Batch ${idx + 1}: Using ${(result as any)?._cache ? 'CACHED' : 'FRESH'} data, ${(result as any).imageInsights.length} insights`);
       for (const insight of (result as any).imageInsights as ImageInsight[]) {
