@@ -220,6 +220,8 @@ async function analyzeBatchViaVision(
                     lines: ocrLines,
                   }
                 : undefined;
+              const textExtracted = typeof ins.textExtracted === "string" ? ins.textExtracted : undefined;
+              const visualDescription = typeof ins.visualDescription === "string" ? ins.visualDescription : undefined;
               return {
                 url: normalizedUrl,
                 hasVisibleText,
@@ -229,6 +231,8 @@ async function analyzeBatchViaVision(
                 textBlocks,
                 text,
                 ocr: ocrPayload,
+                textExtracted,
+                visualDescription,
               };
             })
             .filter(Boolean);
