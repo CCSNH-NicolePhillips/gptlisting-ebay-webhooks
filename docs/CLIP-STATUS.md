@@ -281,18 +281,17 @@ GPT_MODEL=gpt-4o (NEEDS TO BE SET IN NETLIFY)
 
 ### NEXT IMMEDIATE ACTION - FIX VISION API MULTI-IMAGE ANALYSIS
 
-**MOST LIKELY FIX** - Set Environment Variables (CRITICAL):
-1. **`VISION_MODEL=openai:gpt-4o` NOT SET in Netlify** ← This is probably the issue!
-   - Without this, system uses default fallback: `gpt-4o-mini`
-   - `gpt-4o-mini` may not support multi-image vision analysis properly
-   - Or may have smaller token limits that truncate responses
-   - Check deployment logs for: `[vision-router] Using (default)` ← confirms env var missing
+**Environment Variables** - ✅ CONFIRMED SET:
+- `VISION_MODEL=openai:gpt-4o` - ✅ Confirmed set by user
+- `GPT_MODEL=gpt-4o` - ✅ Confirmed set by user
+- Check logs to verify model is being used: `[vision-router] Using openai:gpt-4o`
 
-2. **Set in Netlify Dashboard**:
-   - Go to: Site → Site Configuration → Environment Variables  
-   - Add: `VISION_MODEL=openai:gpt-4o` (NOT gpt-4o-mini!)
-   - Add: `GPT_MODEL=gpt-4o`
-   - Redeploy
+**ACTUAL ISSUE** - Vision API only analyzing 1 of 9 images:
+1. **Vision API receiving all 9 images** but only returning 1 group + 1 imageInsight
+2. **Possible causes**:
+   - Vision API behavior change in how it handles multiple images
+   - Response token limits with detailed visualDescription prompts
+   - Vision API grouping all images into single analysis despite "analyze EACH individually"
 
 **Alternative Fixes** (if env var doesn't solve it):
 3. **Reduce visualDescription detail** to avoid token limits

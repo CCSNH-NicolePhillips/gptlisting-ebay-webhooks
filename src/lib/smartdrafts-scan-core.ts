@@ -1,18 +1,18 @@
 import { createHash } from "node:crypto";
-import { tokensStore } from "./_blobs.js";
+import { STRICT_TWO_ONLY, USE_NEW_SORTER, USE_ROLE_SORTING } from "../config.js";
 import { userScopedKey } from "./_auth.js";
+import { tokensStore } from "./_blobs.js";
 import { runAnalysis } from "./analyze-core.js";
+import { clipImageEmbedding, clipProviderInfo, clipTextEmbedding, cosine } from "./clip-client-split.js";
 import type { ImageInsight } from "./image-insight.js";
-import { clipImageEmbedding, clipTextEmbedding, cosine, clipProviderInfo } from "./clip-client-split.js";
 import { sanitizeUrls, toDirectDropbox } from "./merge.js";
 import { canConsumeImages, consumeImages } from "./quota.js";
 import {
-  getCachedSmartDraftGroups,
-  makeCacheKey,
-  setCachedSmartDraftGroups,
-  type SmartDraftGroupCache,
+    getCachedSmartDraftGroups,
+    makeCacheKey,
+    setCachedSmartDraftGroups,
+    type SmartDraftGroupCache,
 } from "./smartdrafts-store.js";
-import { USE_ROLE_SORTING, USE_NEW_SORTER, STRICT_TWO_ONLY } from "../config.js";
 import { frontBackStrict } from "./sorter/frontBackStrict.js";
 
 type DropboxEntry = {
@@ -309,7 +309,7 @@ function buildFallbackGroups(files: Array<{ entry: DropboxEntry; url: string }>)
 async function buildClipGroups(files: Array<{ entry: DropboxEntry; url: string }>, insightList: ImageInsight[]) {
   // CLIP-based clustering with multimodal signals: visual + text + color
   console.log(`[buildClipGroups] Clustering ${files.length} images using CLIP similarity + text/color signals`);
-  
+
   // Step 1: Compute embeddings for all images (IMAGE endpoint only, no text fallback)
   const embeddings = await Promise.all(
     files.map(async (file) => {
@@ -322,20 +322,20 @@ async function buildClipGroups(files: Array<{ entry: DropboxEntry; url: string }
       }
     })
   );
-  
+
   // Check if CLIP is actually working - if all embeddings are null, CLIP is unavailable
   const validEmbeddings = embeddings.filter(e => e !== null).length;
   if (validEmbeddings === 0) {
     console.warn(`[buildClipGroups] CLIP embeddings unavailable (0/${files.length} succeeded). Returning empty to fall back to vision grouping.`);
     return []; // Return empty array to signal failure - caller will use vision groups
   }
-  
+
   console.log(`[buildClipGroups] Got ${validEmbeddings}/${files.length} valid CLIP embeddings`);
-  
+
   // Phase C1: Log sample embeddings to verify they differ
   if (embeddings[0]) console.info("[clipVec] sample A (first 5):", embeddings[0].slice(0, 5));
   if (embeddings[1]) console.info("[clipVec] sample B (first 5):", embeddings[1].slice(0, 5));
-  
+
   // Phase C2: Hash each vector to catch cache bugs
   function h5(v: number[] | null) {
     if (!v) return "null";
@@ -348,7 +348,7 @@ async function buildClipGroups(files: Array<{ entry: DropboxEntry; url: string }
     const hash = h5(embeddings[i]);
     console.info(`[clipVec] ${i} ${filename} -> ${hash}`);
   });
-  
+
   // Step 1.5: Extract text and color from insights for multimodal matching
   const insightsByUrl = new Map<string, ImageInsight>();
   insightList.forEach(insight => {
@@ -356,70 +356,70 @@ async function buildClipGroups(files: Array<{ entry: DropboxEntry; url: string }
     insightsByUrl.set(normalized, insight);
     insightsByUrl.set(insight.url, insight);
   });
-  
+
   const extractBrandKeywords = (text: string): Set<string> => {
     const keywords = new Set<string>();
     const words = text.toLowerCase().match(/\b\w{3,}\b/g) || [];
     words.forEach(w => keywords.add(w));
     return keywords;
   };
-  
+
   // Step 2: Build similarity matrix with multimodal signals
   const n = files.length;
   const similarities: number[][] = Array(n).fill(null).map(() => Array(n).fill(0));
-  
+
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
       if (embeddings[i] && embeddings[j]) {
         let sim = cosine(embeddings[i], embeddings[j]);
-        
+
         // Multimodal boost: Adjust similarity based on text/color signals
         const insightI = insightsByUrl.get(toDirectDropbox(files[i].url));
         const insightJ = insightsByUrl.get(toDirectDropbox(files[j].url));
-        
+
         if (insightI && insightJ) {
           // Text similarity boost: Extract brand/product keywords from OCR
           const textI = [insightI.ocrText, insightI.text, ...(insightI.textBlocks || [])].filter(Boolean).join(" ");
           const textJ = [insightJ.ocrText, insightJ.text, ...(insightJ.textBlocks || [])].filter(Boolean).join(" ");
-          
+
           if (textI && textJ && textI.length > 10 && textJ.length > 10) {
             const keywordsI = extractBrandKeywords(textI);
             const keywordsJ = extractBrandKeywords(textJ);
-            
+
             // Jaccard similarity of keywords
             const intersection = new Set([...keywordsI].filter(k => keywordsJ.has(k)));
             const union = new Set([...keywordsI, ...keywordsJ]);
             const textSim = union.size > 0 ? intersection.size / union.size : 0;
-            
+
             // Boost similarity if text matches well
             if (textSim > 0.3) {
               sim = sim * 0.7 + textSim * 0.3; // Blend: 70% visual, 30% text
               console.log(`[buildClipGroups] Text boost ${files[i].entry.name} <-> ${files[j].entry.name}: visual=${cosine(embeddings[i], embeddings[j]).toFixed(3)}, text=${textSim.toFixed(3)}, final=${sim.toFixed(3)}`);
             }
           }
-          
+
           // Color penalty: Different dominant colors = likely different products
-          if (insightI.dominantColor && insightJ.dominantColor && 
+          if (insightI.dominantColor && insightJ.dominantColor &&
               insightI.dominantColor !== "multi" && insightJ.dominantColor !== "multi" &&
               insightI.dominantColor !== insightJ.dominantColor) {
             sim *= 0.90; // 10% penalty for mismatched colors
             console.log(`[buildClipGroups] Color penalty ${files[i].entry.name} <-> ${files[j].entry.name}: ${insightI.dominantColor} vs ${insightJ.dominantColor}, sim reduced to ${sim.toFixed(3)}`);
           }
         }
-        
+
         similarities[i][j] = sim;
         similarities[j][i] = sim;
       }
     }
   }
-  
+
   // Log similarity matrix to help tune threshold
   console.log(`[buildClipGroups] Similarity matrix:`);
   for (let i = 0; i < Math.min(n, 5); i++) {
     const row = similarities[i].slice(0, 5).map(s => s.toFixed(3)).join(', ');
     console.log(`  Image ${i} (${files[i].entry.name}): [${row}${n > 5 ? ', ...' : ''}]`);
   }
-  
+
   // Phase C4: Check for degenerate similarity matrix (all ~1.0)
   function isDegenerateCosineMatrix(M: number[][]): boolean {
     const n = M.length;
@@ -431,7 +431,7 @@ async function buildClipGroups(files: Array<{ entry: DropboxEntry; url: string }
     }
     return maxOff > 0.98; // almost everyone ~1.0 ⇒ bad
   }
-  
+
   if (isDegenerateCosineMatrix(similarities)) {
     console.warn("[buildClipGroups] Degenerate similarity (max off-diagonal > 0.98) — embeddings are identical. Falling back to vision grouping.");
     return [];
@@ -443,49 +443,49 @@ async function buildClipGroups(files: Array<{ entry: DropboxEntry; url: string }
   const SIMILARITY_THRESHOLD = 0.87; // Balanced threshold with multimodal signals
   const assigned = new Set<number>();
   const clusters: number[][] = [];
-  
+
   for (let i = 0; i < n; i++) {
     if (assigned.has(i)) continue;
-    
+
     const cluster = [i];
     assigned.add(i);
-    
+
     // Find all images similar to this one
     for (let j = i + 1; j < n; j++) {
       if (assigned.has(j)) continue;
-      
+
       // Check if j has high similarity to ALL images in the cluster (complete-linkage)
       // This is the most conservative approach - prevents chaining
       let minSim = 1.0;
       for (const ci of cluster) {
         minSim = Math.min(minSim, similarities[ci][j]);
       }
-      
+
       // Debug: Log when we're close to the threshold
       if (minSim >= 0.80 && minSim < 0.95) {
         console.log(`[buildClipGroups] Considering ${files[j].entry.name} for cluster starting with ${files[i].entry.name}: minSim=${minSim.toFixed(3)}, threshold=${SIMILARITY_THRESHOLD}`);
       }
-      
+
       if (minSim >= SIMILARITY_THRESHOLD) {
         console.log(`[buildClipGroups] ✓ Added ${files[j].entry.name} to cluster (minSim=${minSim.toFixed(3)})`);
         cluster.push(j);
         assigned.add(j);
       }
     }
-    
+
     clusters.push(cluster);
   }
-  
+
   console.log(`[buildClipGroups] Created ${clusters.length} clusters from ${files.length} images`);
-  
+
   // Step 4: Convert clusters to groups
   const groups: any[] = clusters.map((cluster, idx) => {
     const clusterFiles = cluster.map(i => files[i]);
     const images = clusterFiles.map(f => f.url);
-    
+
     const folderName = folderPath(clusterFiles[0].entry) || "";
     const baseName = (clusterFiles[0].entry.name || "").replace(/\.[^.]+$/, "").replace(/_\d+$/, "");
-    
+
     return {
       groupId: `clip_${createHash("sha256").update(images.join("|")).digest("hex").substring(0, 10)}`,
       name: baseName,
@@ -496,32 +496,32 @@ async function buildClipGroups(files: Array<{ entry: DropboxEntry; url: string }
       supportingImageUrls: images.slice(2),
     };
   });
-  
+
   return groups;
 }
 
 // NEW: Hybrid approach - Use Vision's product groups + CLIP for unmatched images
 async function buildHybridGroups(
-  files: Array<{ entry: DropboxEntry; url: string }>, 
-  visionGroups: AnalyzedGroup[], 
+  files: Array<{ entry: DropboxEntry; url: string }>,
+  visionGroups: AnalyzedGroup[],
   insightList: ImageInsight[]
 ) {
   console.log(`[buildHybridGroups] NEW APPROACH: Individual image analysis → group by exact brand+product match`);
   console.log(`[buildHybridGroups] Processing ${files.length} images, ${visionGroups.length} Vision analyses`);
-  
+
   // Log what Vision identified for each image
   console.log(`[buildHybridGroups] Vision identifications:`);
   visionGroups.forEach((group, idx) => {
     // Vision groups are in same order as files array - use index-based matching
     const file = files[idx];
     const filename = file?.entry.name || 'unknown';
-    
+
     // Also get the insight for this image (also by index)
     const insight = insightList[idx];
     const ocrText = (insight as any)?.textExtracted || '';
     const visualDesc = (insight as any)?.visualDescription || '';
     const ocrPreview = ocrText ? ocrText.substring(0, 80) : '(no text)';
-    
+
     console.log(`  [${idx + 1}] ${filename}: brand="${group.brand}", product="${group.product}", confidence=${group.confidence}`);
     console.log(`      OCR: "${ocrPreview}${ocrText.length > 80 ? '...' : ''}"`);
     if (visualDesc) {
@@ -529,43 +529,43 @@ async function buildHybridGroups(
       console.log(`      Visual: "${visualPreview}${visualDesc.length > 150 ? '...' : ''}"`);
     }
   });
-  
+
   // Step 1: Group Vision analyses by exact brand+product match
-  const productGroups = new Map<string, { 
-    brand: string; 
-    product: string; 
+  const productGroups = new Map<string, {
+    brand: string;
+    product: string;
     visionGroup: AnalyzedGroup;
     fileIndices: number[];
     fileUrls: string[];
   }>();
-  
+
   const assignedIndices = new Set<number>();
-  
+
   // Vision groups are in the same order as the input files array
   for (let groupIdx = 0; groupIdx < visionGroups.length; groupIdx++) {
     const visionGroup = visionGroups[groupIdx];
     const fileIdx = groupIdx; // Direct mapping: visionGroups[i] = files[i]
-    
+
     if (fileIdx >= files.length) {
       console.warn(`[buildHybridGroups] Vision group index ${groupIdx} exceeds files array length ${files.length}`);
       continue;
     }
-    
+
     const file = files[fileIdx];
     const filename = file.entry.name || '';
-    
+
     let brand = String(visionGroup.brand || '').trim().toLowerCase();
     let product = String(visionGroup.product || '').trim().toLowerCase();
-    
+
     // If Vision couldn't identify the product, try extracting brand from OCR text
     if (!brand || !product || brand === 'unknown' || product === 'unidentified item') {
       // Find the imageInsight for this file (also by index)
       const insight = insightList[fileIdx];
-      
+
       if (insight && (insight as any).textExtracted) {
         const ocrText = (insight as any).textExtracted;
         console.log(`[buildHybridGroups] Vision couldn't identify ${filename}, checking OCR: "${ocrText.substring(0, 150)}..."`);
-        
+
         // Try to extract brand names from OCR text
         // Common brand patterns for supplements/beauty products
         const brandPatterns = [
@@ -575,20 +575,20 @@ async function buildHybridGroups(
           /\b(Nusava)\b/i,
           /\b(BrainCo)\b/i,
         ];
-        
+
         const productPatterns = [
           /\b(GUT\s*REPAIR)\b/i,
           /\b(STAY\s*UNBREAKABLE)\b/i,
           /\b(ON\s*A\s*CLOUD)\b/i,
           /\b(B12[,\s]+B6[,\s]+B1)\b/i,
         ];
-        
+
         for (const pattern of brandPatterns) {
           const match = ocrText.match(pattern);
           if (match) {
             brand = match[1].toLowerCase().replace(/\s+/g, ' ').trim();
             console.log(`[buildHybridGroups]   Found brand in OCR: "${brand}"`);
-            
+
             // Try to extract product name
             for (const prodPattern of productPatterns) {
               const productMatch = ocrText.match(prodPattern);
@@ -598,7 +598,7 @@ async function buildHybridGroups(
                 break;
               }
             }
-            
+
             // If we found a brand, that might be enough
             if (brand && brand !== 'unknown') {
               // Use brand as product if no specific product found
@@ -610,31 +610,31 @@ async function buildHybridGroups(
             }
           }
         }
-        
+
         if (brand && brand !== 'unknown' && product && product !== 'unidentified item') {
           console.log(`[buildHybridGroups] ✓ Extracted from OCR: brand="${brand}", product="${product}"`);
         } else {
           console.log(`[buildHybridGroups] ✗ OCR extraction failed for ${filename}`);
         }
       }
-      
+
       // If still unknown, skip
       if (!brand || !product || brand === 'unknown' || product === 'unidentified item') {
         console.log(`[buildHybridGroups] Skipping non-product: brand="${brand}", product="${product}"`);
         continue;
       }
     }
-    
+
     console.log(`[buildHybridGroups] Processing: ${filename} → "${brand}" "${product}"`);
-    
+
     if (assignedIndices.has(fileIdx)) {
       console.warn(`[buildHybridGroups] ✗ File already assigned: ${filename}`);
       continue;
     }
-    
+
     // Create product key for grouping
     const productKey = `${brand}|||${product}`;
-    
+
     if (!productGroups.has(productKey)) {
       console.log(`[buildHybridGroups] ✓ New product group: "${brand}" - "${product}"`);
       productGroups.set(productKey, {
@@ -647,20 +647,20 @@ async function buildHybridGroups(
     } else {
       console.log(`[buildHybridGroups] ✓ Adding to existing group: "${brand}" - "${product}"`);
     }
-    
+
     const group = productGroups.get(productKey)!;
     group.fileIndices.push(fileIdx);
     group.fileUrls.push(file.url);
     assignedIndices.add(fileIdx);
-    
+
     console.log(`[buildHybridGroups] ✓ Matched ${filename} to "${brand}" "${product}" (${group.fileUrls.length} images total)`);
   }
-  
+
   console.log(`[buildHybridGroups] Created ${productGroups.size} product groups from exact brand+product matching`);
-  
+
   // Step 2: Verify each group's images are similar using CLIP
   console.log(`[buildHybridGroups] Step 2: Verifying groups with CLIP similarity...`);
-  
+
   const allEmbeddings = await Promise.all(
     files.map(async (file, idx) => {
       try {
@@ -672,12 +672,12 @@ async function buildHybridGroups(
       }
     })
   );
-  
+
   const hybridGroups: any[] = [];
-  
+
   for (const [productKey, group] of productGroups.entries()) {
     console.log(`[buildHybridGroups] Verifying group: "${group.brand}" - "${group.product}" (${group.fileUrls.length} images)`);
-    
+
     if (group.fileIndices.length === 1) {
       // Single image group - no verification needed
       console.log(`[buildHybridGroups] Single image group - no verification needed`);
@@ -691,30 +691,30 @@ async function buildHybridGroups(
       });
       continue;
     }
-    
+
     // Multi-image group - verify similarity
     const groupEmbeddings = group.fileIndices
       .map((idx) => ({ idx, embedding: allEmbeddings[idx], url: files[idx].url }))
       .filter((item) => item.embedding !== null);
-    
+
     if (groupEmbeddings.length < group.fileIndices.length) {
       console.warn(`[buildHybridGroups] Missing embeddings for some images in group`);
     }
-    
+
     // Calculate pairwise similarities
     const MIN_SIMILARITY = 0.75; // Images in same group should be at least 0.75 similar
     const verifiedIndices: number[] = [];
     const rejectedIndices: number[] = [];
-    
+
     if (groupEmbeddings.length >= 2) {
       // Add first image as anchor
       verifiedIndices.push(groupEmbeddings[0].idx);
-      
+
       // Check each subsequent image against verified images
       for (let i = 1; i < groupEmbeddings.length; i++) {
         const candidate = groupEmbeddings[i];
         let maxSim = 0;
-        
+
         for (const verifiedIdx of verifiedIndices) {
           const verifiedItem = groupEmbeddings.find(e => e.idx === verifiedIdx);
           if (verifiedItem && verifiedItem.embedding && candidate.embedding) {
@@ -722,7 +722,7 @@ async function buildHybridGroups(
             maxSim = Math.max(maxSim, sim);
           }
         }
-        
+
         const filename = files[candidate.idx].entry.name;
         if (maxSim >= MIN_SIMILARITY) {
           console.log(`[buildHybridGroups] ✓ ${filename}: similarity=${maxSim.toFixed(3)} (verified)`);
@@ -736,11 +736,11 @@ async function buildHybridGroups(
     } else {
       verifiedIndices.push(...group.fileIndices);
     }
-    
+
     if (verifiedIndices.length > 0) {
       const verifiedUrls = verifiedIndices.map(idx => files[idx].url);
       console.log(`[buildHybridGroups] ✓ Group verified: "${group.brand}" - "${group.product}" with ${verifiedUrls.length} images`);
-      
+
       hybridGroups.push({
         ...group.visionGroup,
         images: verifiedUrls,
@@ -753,15 +753,15 @@ async function buildHybridGroups(
       console.warn(`[buildHybridGroups] ✗ Group rejected: "${group.brand}" - "${group.product}" (no verified images)`);
     }
   }
-  
+
   // Step 2: For unassigned images, try visual description matching
   const unassignedIndices = files
     .map((_, i) => i)
     .filter(i => !assignedIndices.has(i));
-    
+
   if (unassignedIndices.length > 0) {
     console.log(`[buildHybridGroups] ${unassignedIndices.length} unassigned images - attempting visual description matching`);
-    
+
     // Build descriptions of all identified product fronts
     const productDescriptions: Array<{
       brand: string;
@@ -771,7 +771,7 @@ async function buildHybridGroups(
       dominantColor: string;
       group: any;
     }> = [];
-    
+
     for (const [productKey, group] of productGroups.entries()) {
       console.log(`[buildHybridGroups] Checking group "${group.brand}" - "${group.product}" (${group.fileIndices.length} images)`);
       for (const fileIdx of group.fileIndices) {
@@ -779,14 +779,14 @@ async function buildHybridGroups(
         const filename = file.entry.name?.toLowerCase() || '';
         // Use index-based matching: insightList[i] corresponds to files[i]
         const insight = insightList[fileIdx];
-        
+
         console.log(`  Checking ${filename}: insight=${!!insight}, visualDesc=${!!(insight as any)?.visualDescription}, role=${(insight as any)?.role}`);
         if (insight) {
           console.log(`    Insight URL: ${insight.url}`);
           console.log(`    Has visualDescription field: ${Object.keys(insight).includes('visualDescription')}`);
           console.log(`    visualDescription value: ${(insight as any).visualDescription?.substring(0, 50)}...`);
         }
-        
+
         if (insight && (insight as any).visualDescription && (insight as any).role === 'front') {
           productDescriptions.push({
             brand: group.brand,
@@ -802,50 +802,50 @@ async function buildHybridGroups(
         }
       }
     }
-    
+
     if (productDescriptions.length > 0) {
       console.log(`[buildHybridGroups] Found ${productDescriptions.length} product front descriptions for matching`);
-      
+
       // For each unassigned image, try to match by color and packaging type
       for (const unassignedIdx of unassignedIndices) {
         const file = files[unassignedIdx];
         const filename = file.entry.name?.toLowerCase() || '';
         // Use index-based matching: insightList[i] corresponds to files[i]
         const insight = insightList[unassignedIdx];
-        
+
         if (!insight || !(insight as any).visualDescription) {
           console.log(`[buildHybridGroups] ${filename}: No visual description, skipping match`);
           continue;
         }
-        
+
         const unassignedVisual = (insight as any).visualDescription || '';
         const unassignedColor = (insight as any).dominantColor || 'unknown';
         const unassignedRole = (insight as any).role || 'other';
-        
+
         console.log(`[buildHybridGroups] Trying to match ${filename}:`);
         console.log(`  Visual: "${unassignedVisual}"`);
         console.log(`  Color: ${unassignedColor}`);
         console.log(`  Role: ${unassignedRole}`);
-        
+
         // Try to match using ALL available visual details
         const visualLower = unassignedVisual.toLowerCase();
         let bestMatch: typeof productDescriptions[0] | null = null;
         let matchReason = '';
-        
+
         for (const product of productDescriptions) {
           const productVisualLower = product.visualDescription.toLowerCase();
           let score = 0;
           const reasons: string[] = [];
-          
+
           // 1. DOMINANT COLOR MATCH (highest priority - 15 points)
           if (product.dominantColor === unassignedColor) {
             score += 15;
             reasons.push(`color=${unassignedColor}`);
           }
-          
+
           // 2. PACKAGING TYPE MATCH (very important - 10 points)
           const packagingTypes = [
-            'pouch', 'stand-up pouch', 'resealable pouch', 
+            'pouch', 'stand-up pouch', 'resealable pouch',
             'bottle', 'plastic bottle', 'glass bottle', 'cylindrical bottle',
             'jar', 'tube', 'squeeze tube', 'pump bottle',
             'box', 'rectangular box', 'canister', 'container'
@@ -859,7 +859,7 @@ async function buildHybridGroups(
               break;
             }
           }
-          
+
           // 3. MATERIAL/FINISH MATCH (important - 5 points)
           const materials = [
             'glossy', 'matte', 'metallic', 'foil',
@@ -873,7 +873,7 @@ async function buildHybridGroups(
               break;
             }
           }
-          
+
           // 4. SHAPE DESCRIPTORS (medium - 5 points)
           const shapes = [
             'cylindrical', 'rectangular', 'square', 'oval',
@@ -887,7 +887,7 @@ async function buildHybridGroups(
               break;
             }
           }
-          
+
           // 5. TEXT COLOR MATCH (helpful - 3 points each, max 6)
           const textColors = ['white text', 'black text', 'silver text', 'gold text', 'colored text'];
           let textColorPoints = 0;
@@ -899,7 +899,7 @@ async function buildHybridGroups(
             }
           }
           score += textColorPoints;
-          
+
           // 6. TEXT LAYOUT MATCH (helpful - 4 points)
           const layouts = [
             'vertical text', 'horizontal text', 'diagonal',
@@ -913,7 +913,7 @@ async function buildHybridGroups(
               break;
             }
           }
-          
+
           // 7. SPECIFIC PANELS/SECTIONS (confirms it's product back - 3 points each)
           const backFeatures = [
             'supplement facts', 'nutrition facts', 'nutrition panel',
@@ -930,7 +930,7 @@ async function buildHybridGroups(
             }
           }
           score += Math.min(panelPoints, 9); // Max 9 points from panels
-          
+
           // 8. SPECIAL FEATURES MATCH (nice to have - 2 points)
           const specialFeatures = [
             'tear notch', 'zip lock', 'resealable', 'tamper seal',
@@ -944,7 +944,7 @@ async function buildHybridGroups(
               break;
             }
           }
-          
+
           // 9. SIZE INDICATORS (helpful - 2 points)
           const sizeIndicators = ['large', 'small', 'medium', 'tall', 'short', 'wide', 'narrow'];
           for (const size of sizeIndicators) {
@@ -954,24 +954,24 @@ async function buildHybridGroups(
               break;
             }
           }
-          
+
           if (score > 0 && (!bestMatch || score > (bestMatch as any)._score)) {
             bestMatch = product;
             (bestMatch as any)._score = score;
             matchReason = reasons.join(', ');
           }
         }
-        
+
         if (bestMatch && (bestMatch as any)._score >= 20) {
           console.log(`[buildHybridGroups] ✓ Matched ${filename} to "${bestMatch.brand}" - "${bestMatch.product}"`);
           console.log(`  Match score: ${(bestMatch as any)._score}, reasons: ${matchReason}`);
-          
+
           bestMatch.group.fileIndices.push(unassignedIdx);
           bestMatch.group.fileUrls.push(file.url);
           assignedIndices.add(unassignedIdx);
-          
+
           // Update the hybrid group that was already created
-          const existingGroup = hybridGroups.find(hg => 
+          const existingGroup = hybridGroups.find(hg =>
             hg.brand === bestMatch!.brand && hg.product === bestMatch!.product
           );
           if (existingGroup) {
@@ -994,14 +994,14 @@ async function buildHybridGroups(
       console.log(`[buildHybridGroups] No product front descriptions available for matching`);
     }
   }
-  
+
   // Step 3: Try to merge orphan back-only groups with matching front groups
   console.log(`[buildHybridGroups] Step 3: Checking for orphan back-only groups to merge...`);
   const groupsToRemove: string[] = [];
-  
+
   for (let i = 0; i < hybridGroups.length; i++) {
     const backGroup = hybridGroups[i];
-    
+
     // Skip if not a single-image back-only group from same brand
     if (backGroup.images.length !== 1) continue;
     const backIdx = files.findIndex(f => f.url === backGroup.images[0]);
@@ -1010,23 +1010,23 @@ async function buildHybridGroups(
     const backInsight = insightList[backIdx];
     if (!backInsight?.role || backInsight.role !== 'back') continue;
     if (!backInsight.visualDescription) continue;
-    
+
     const backVisual = backInsight.visualDescription.toLowerCase();
     const backColor = (backInsight.dominantColor || '').toLowerCase();
-    
+
     console.log(`[buildHybridGroups]   Checking orphan back: ${files[backIdx].entry.name} (${backGroup.brand})`);
-    
+
     // Look for a front group from the same brand
     let bestFrontGroup: typeof hybridGroups[0] | null = null;
     let bestScore = 0;
-    
+
     for (let j = 0; j < hybridGroups.length; j++) {
       if (i === j) continue;
       const frontGroup = hybridGroups[j];
-      
+
       // Must be same brand
       if (frontGroup.brand?.toLowerCase() !== backGroup.brand?.toLowerCase()) continue;
-      
+
       // Find the front image in this group
       const frontIdx = frontGroup.images.findIndex((url: string) => {
         const idx = files.findIndex(f => f.url === url);
@@ -1035,27 +1035,27 @@ async function buildHybridGroups(
         const insight = insightList[idx];
         return insight?.role === 'front';
       });
-      
+
       if (frontIdx === -1) continue;
-      
+
       const frontUrl = frontGroup.images[frontIdx];
       const frontFileIdx = files.findIndex(f => f.url === frontUrl);
       // Use index-based matching: insightList[i] corresponds to files[i]
       const frontInsight = insightList[frontFileIdx];
-      
+
       if (!frontInsight?.visualDescription) continue;
-      
+
       const frontVisual = frontInsight.visualDescription.toLowerCase();
       const frontColor = (frontInsight.dominantColor || '').toLowerCase();
-      
+
       let score = 0;
-      
+
       // Use the same enhanced scoring system
       // 1. Color match (15 points)
       if (backColor && frontColor && backColor === frontColor) {
         score += 15;
       }
-      
+
       // 2. Packaging type match (10 points)
       const packagingTypes = [
         'pouch', 'stand-up pouch', 'resealable pouch',
@@ -1069,7 +1069,7 @@ async function buildHybridGroups(
           break;
         }
       }
-      
+
       // 3. Material match (5 points)
       const materials = [
         'glossy', 'matte', 'metallic', 'foil',
@@ -1082,7 +1082,7 @@ async function buildHybridGroups(
           break;
         }
       }
-      
+
       // 4. Shape match (5 points)
       const shapes = [
         'cylindrical', 'rectangular', 'square', 'oval',
@@ -1095,7 +1095,7 @@ async function buildHybridGroups(
           break;
         }
       }
-      
+
       // 5. Text color match (3 points)
       const textColors = ['white text', 'black text', 'silver text', 'gold text'];
       for (const textColor of textColors) {
@@ -1104,7 +1104,7 @@ async function buildHybridGroups(
           break;
         }
       }
-      
+
       // 6. Special features (2 points)
       const specialFeatures = [
         'tear notch', 'zip lock', 'resealable', 'tamper seal',
@@ -1122,18 +1122,18 @@ async function buildHybridGroups(
           break;
         }
       }
-      
+
       // Material match (old code, remove this section)
-      
+
       if (score > bestScore) {
         bestScore = score;
         bestFrontGroup = frontGroup;
       }
     }
-    
+
     if (bestFrontGroup && bestScore >= 20) {
       console.log(`[buildHybridGroups]   ✓ Merging "${backGroup.name}" back into "${bestFrontGroup.name}" (score: ${bestScore})`);
-      
+
       // Add back image to front group
       bestFrontGroup.images.push(backGroup.images[0]);
       if (!bestFrontGroup.secondaryImageUrl) {
@@ -1142,7 +1142,7 @@ async function buildHybridGroups(
         bestFrontGroup.supportingImageUrls = bestFrontGroup.supportingImageUrls || [];
         bestFrontGroup.supportingImageUrls.push(backGroup.images[0]);
       }
-      
+
       // Mark back group for removal
       groupsToRemove.push(backGroup.groupId);
       assignedIndices.add(backIdx);
@@ -1150,7 +1150,7 @@ async function buildHybridGroups(
       console.log(`[buildHybridGroups]   ✗ No match found for orphan back (best score: ${bestScore})`);
     }
   }
-  
+
   // Remove merged groups
   if (groupsToRemove.length > 0) {
     console.log(`[buildHybridGroups]   Removing ${groupsToRemove.length} merged groups`);
@@ -1160,17 +1160,17 @@ async function buildHybridGroups(
       }
     }
   }
-  
+
   // Step 4: Create "Uncategorized" group for remaining unassigned images
   const finalUnassigned = files
     .map((_, i) => i)
     .filter(i => !assignedIndices.has(i));
-    
+
   if (finalUnassigned.length > 0) {
     const uncategorizedImages = finalUnassigned.map(i => files[i].url);
-    console.log(`[buildHybridGroups] Created Uncategorized group with ${uncategorizedImages.length} images:`, 
+    console.log(`[buildHybridGroups] Created Uncategorized group with ${uncategorizedImages.length} images:`,
       finalUnassigned.map(i => files[i].entry.name));
-    
+
     hybridGroups.push({
       groupId: "uncategorized",
       name: "Uncategorized",
@@ -1183,7 +1183,7 @@ async function buildHybridGroups(
       confidence: 0,
     });
   }
-  
+
   console.log(`[buildHybridGroups] Final: ${hybridGroups.length} groups (${visionGroups.length} Vision products + ${finalUnassigned.length > 0 ? 1 : 0} uncategorized)`);
   return hybridGroups;
 }
@@ -1191,25 +1191,25 @@ async function buildHybridGroups(
 function buildPairwiseGroups(files: Array<{ entry: DropboxEntry; url: string }>, insightList: ImageInsight[]) {
   // Simple strategy: Pair images sequentially by filename (timestamps)
   // Works best when user takes photos in order: front, back, front, back, etc.
-  
+
   const sorted = files.slice().sort((a, b) => (a.entry.name || "").localeCompare(b.entry.name || ""));
   const groups: any[] = [];
-  
+
   console.log(`[buildPairwiseGroups] DEBUG: Pairing ${files.length} images sequentially`);
-  
+
   // Pair every 2 consecutive images
   for (let i = 0; i < sorted.length; i += 2) {
     const img1 = sorted[i];
     const img2 = sorted[i + 1];
-    
+
     if (!img1) break;
-    
+
     const images: string[] = [img1.url];
     if (img2) images.push(img2.url);
-    
+
     const folderName = folderPath(img1.entry) || "";
     const baseName = (img1.entry.name || "").replace(/\.[^.]+$/, "").replace(/_\d+$/, "");
-    
+
     groups.push({
       groupId: `pair_${createHash("sha1").update(images.join("|")).digest("hex").slice(0, 10)}`,
       name: baseName || `Product ${Math.floor(i / 2) + 1}`,
@@ -1226,7 +1226,7 @@ function buildPairwiseGroups(files: Array<{ entry: DropboxEntry; url: string }>,
       _pairwise: true,
     });
   }
-  
+
   return groups;
 }
 
@@ -1452,7 +1452,7 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
   const insightByBase = new Map<string, ImageInsight>();
   const roleByBase = new Map<string, RoleInfo>();
     const rawInsights = analysis?.imageInsights || {};
-    
+
     // When USE_NEW_SORTER is enabled, use raw vision insights to avoid corruption from old logic
     const insightList: ImageInsight[] = USE_NEW_SORTER && Array.isArray(analysis?._rawVisionInsights)
       ? (analysis._rawVisionInsights as ImageInsight[])
@@ -1610,14 +1610,14 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       const normalized = toDirectDropbox(value);
       return insightMap.get(normalized) || insightMap.get(value) || insightByBase.get(basenameFrom(value).toLowerCase());
     };
-    
+
     // Phase R0: Hybrid approach - Use Vision product IDs + CLIP similarity matching
     console.log(`[Phase R0] Starting - USE_NEW_SORTER=${USE_NEW_SORTER}, fileTuples=${fileTuples.length}, insightList=${insightList.length}`);
     let groups: AnalyzedGroup[];
     if (USE_NEW_SORTER) {
       // NEW HYBRID APPROACH: Trust Vision's product identification, use CLIP for image matching
       const visionGroups = Array.isArray(analysis?.groups) ? (analysis.groups as AnalyzedGroup[]) : [];
-      
+
       console.log(`[Phase R0] DEBUG: visionGroups structure:`, JSON.stringify(visionGroups.map(g => ({
         groupId: g.groupId,
         brand: g.brand,
@@ -1626,11 +1626,11 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
         imagesCount: g.images?.length || 0,
         imagesSample: g.images?.slice(0, 2)
       })), null, 2));
-      
+
       if (visionGroups.length > 0) {
         console.log(`[Phase R0] Using hybrid approach: Vision product IDs + CLIP similarity matching`);
         groups = await buildHybridGroups(fileTuples, visionGroups, insightList);
-        
+
         if (debugEnabled) {
           console.log(`[Phase R0] Created ${groups.length} hybrid groups from ${fileTuples.length} images`);
         }
@@ -1641,7 +1641,7 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
           console.log(`[Phase R0] Vision unavailable, using ${groups.length} CLIP-based groups`);
         }
       }
-      
+
       // If both failed (returned empty), fall back to vision groups as-is
       if (!groups.length && visionGroups.length > 0) {
         groups = visionGroups;
@@ -2013,7 +2013,7 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       // Phase R2: New pure sorter
       if (USE_NEW_SORTER) {
         const folderUrls = groupCandidates.map(c => c.url);
-        
+
         // Build insights with URL for matching in sorter
         const imageInsights = folderUrls.map(url => {
           const insight = insightMap.get(url);
@@ -2024,15 +2024,15 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
             ocr: (insight as any)?.ocrText || "",
           };
         });
-        
+
         const result = await frontBackStrict(
           folderUrls,
           imageInsights,
-          { 
-            brand: (group as any).brand, 
-            product: (group as any).product, 
-            variant: (group as any).variant, 
-            size: (group as any).size 
+          {
+            brand: (group as any).brand,
+            product: (group as any).product,
+            variant: (group as any).variant,
+            size: (group as any).size
           },
           { getOCRForUrl, clipTextEmbedding, clipImageEmbedding, cosine }
         );
@@ -2096,9 +2096,9 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
           .map((c) => {
             const b = basenameFrom(c.url).toLowerCase();
             const info = roleByBase.get(b) || {};
-            const groupCategory = 
-              (group as any).category || 
-              (group as any).categoryPath || 
+            const groupCategory =
+              (group as any).category ||
+              (group as any).categoryPath ||
               "";
             return {
               url: c.url,
@@ -2113,7 +2113,7 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
 
         // Phase 2: Debug log per-group snapshot
         if (debugEnabled) {
-          console.log(`[Phase 2] Group ${groupId} snapshot (${candidates.length} candidates):`, 
+          console.log(`[Phase 2] Group ${groupId} snapshot (${candidates.length} candidates):`,
             candidates.slice(0, 5).map(c => ({
               url: basenameFrom(c.url),
               role: c.role,
