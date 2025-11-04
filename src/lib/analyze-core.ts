@@ -420,6 +420,8 @@ async function analyzeBatchViaVision(
                   lines: ocrLines,
                 }
               : undefined;
+            const textExtracted = typeof ins.textExtracted === "string" ? ins.textExtracted : undefined;
+            const visualDescription = typeof ins.visualDescription === "string" ? ins.visualDescription : undefined;
             return {
               url: normalizedUrl,
               hasVisibleText,
@@ -429,6 +431,8 @@ async function analyzeBatchViaVision(
               textBlocks,
               text,
               ocr: ocrPayload,
+              textExtracted,
+              visualDescription,
             };
           })
           .filter(Boolean);
@@ -566,8 +570,14 @@ export async function runAnalysis(
       warnings.push(`Batch ${idx + 1}: ${result._error}`);
     }
     if (Array.isArray((result as any)?.imageInsights)) {
+      console.log(`📦 Batch ${idx + 1}: Using ${(result as any)?._cache ? 'CACHED' : 'FRESH'} data, ${(result as any).imageInsights.length} insights`);
       for (const insight of (result as any).imageInsights as ImageInsight[]) {
         if (!insight?.url) continue;
+        // Debug first insight to see what fields we have
+        if (rawVisionInsights.length === 0) {
+          console.log(`🔍 First insight keys:`, Object.keys(insight));
+          console.log(`🔍 First insight visualDescription:`, (insight as any).visualDescription?.substring(0, 100));
+        }
         // Store raw vision insights BEFORE old logic corrupts them
         rawVisionInsights.push({ ...insight });
         insightMap.set(insight.url, insight);
