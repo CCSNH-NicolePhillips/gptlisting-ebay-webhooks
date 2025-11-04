@@ -209,6 +209,10 @@ async function analyzeBatchViaVision(
               const dominantColor =
                 typeof ins.dominantColor === "string" ? ins.dominantColor.toLowerCase().trim() : undefined;
               const role = typeof ins.role === "string" ? ins.role.toLowerCase().trim() : undefined;
+              const roleScore = typeof ins.roleScore === "number" ? ins.roleScore : undefined;
+              const evidenceTriggers = Array.isArray(ins.evidenceTriggers) 
+                ? ins.evidenceTriggers.filter((t: any) => typeof t === "string")
+                : undefined;
               const textBlocks = normalizeTextArray(ins.textBlocks);
               const ocrText = typeof ins.ocrText === "string" ? ins.ocrText : undefined;
               const text = typeof ins.text === "string" ? ins.text : undefined;
@@ -227,6 +231,8 @@ async function analyzeBatchViaVision(
                 hasVisibleText,
                 dominantColor,
                 role,
+                roleScore,
+                evidenceTriggers,
                 ocrText,
                 textBlocks,
                 text,
@@ -272,20 +278,71 @@ async function analyzeBatchViaVision(
 
   const prompt = [
     "You are a product photo analyst. Analyze EACH image INDIVIDUALLY.",
-    "For each image, identify: brand, product name, variant/flavor, size.",
-    "IMPORTANT: Some images may NOT be products at all (e.g. random objects, purses, furniture). For non-product images, set brand='Unknown' and product='Unidentified Item'.",
-    "Do NOT try to group images. Analyze each one separately and report what you see.",
+    "",
+    "Step 1 — ROLE CLASSIFICATION (Front/Back/Side/Other):",
+    "• Compute a backness roleScore ∈ [−1, +1] using these rules:",
+    "  BACK +0.35 each: 'Nutrition Facts', 'Supplement Facts', 'Drug Facts', '% Daily Value', 'Serving Size', 'Other Ingredients', 'Inactive Ingredients', 'Directions', 'Warnings', 'Caution', 'Distributed by', 'Manufactured for', 'Lot', 'LOT', 'Batch', 'EXP', 'Expiration', 'Barcode', 'UPC', 'EAN', 'QR code', 'Scan for more'.",
+    "  BACK +0.2 each: FDA-style facts table (monochrome box with rows/columns), dense paragraphs in small font, barcode block at bottom/right, multi-language fine print clusters, recycling icons with fine print.",
+    "  FRONT −0.35 each: large centered brand logo, large product name as hero text, large flavor/variant text, lifestyle/food imagery, bold marketing badges ('Keto', 'Non-GMO', 'Organic', 'Gluten Free', 'NEW!', 'Vegan').",
+    "  FRONT −0.2 each: short punchy marketing lines, diagonal ribbons, foil stamps, hero cluster (logo+name+variant) with Net Wt/fl oz.",
+    "• Special case: narrow vertical panel with nutrition or barcode → role='side'.",
+    "• Map score to role:",
+    "  score ≥ +0.35 → 'back'",
+    "  score ≤ −0.35 → 'front'",
+    "  +0.2 ≤ score < +0.35 → 'back' (lower confidence)",
+    "  −0.35 < score ≤ −0.2 → 'front' (lower confidence)",
+    "  |score| < 0.2 → 'other' (low confidence)",
+    "",
+    "Step 2 — TEXT & VISUAL EVIDENCE:",
+    "• Extract ALL legible text (preserve case, line breaks). Include brand if visible anywhere (front or back).",
+    "• List evidenceTriggers: exact words/visual cues that affected roleScore (e.g., 'Supplement Facts' header, barcode block near bottom-right, large hero logo).",
+    "",
+    "Step 3 — PRODUCT FIELDS:",
+    "• Extract: brand, product, variant/flavor, size/servings, best-fit category, categoryPath (parent > child), options { Flavor, Formulation, Features, Ingredients, Dietary Feature }, claims[].",
+    "• Non-product images (purses, furniture, random objects): brand='Unknown', product='Unidentified Item'.",
+    "• If name unclear, set confidence ≤ 0.5.",
+    "",
+    "Step 4 — COLOR & DESCRIPTION:",
+    "• hasVisibleText (true/false), dominantColor (specific shade like 'dark-forest-green', 'burgundy', 'tan'), visualDescription (VERY specific: packaging type, shape, materials/finish, all colors, text layout, tables/panels, barcode placement, seals/tear notches/zip, windows, emboss/hologram, panel seams).",
+    "",
     "EXTRA CONTEXT PER IMAGE (filenames, parent folders):",
     hints || "(no hints)",
-    "Read ALL visible text on each image carefully. Product names are usually prominently displayed.",
-    "Extract: brand (company name), product (product line/name), variant/flavor, size/servings, best-fit category label, categoryPath (parent > child), options object of item specifics (e.g. { Flavor, Formulation, Features, Ingredients, Dietary Feature }), short claims[].",
-    "For EVERY image also include quick insights: hasVisibleText (true/false), dominantColor (SPECIFIC color like 'dark-green', 'bright-pink', 'tan', 'beige', 'forest-green', 'burgundy', etc.), role (front, back, side, detail, accessory, packaging, other), textExtracted (ALL visible text you can read), and visualDescription.",
-    "CRITICAL FOR textExtracted: Extract EVERY word you can see, especially brand names. Even if it's a product back with ingredient lists, nutrition facts, etc., capture the brand name that appears on it. Brand names usually appear on both front AND back of products.",
-    "CRITICAL FOR visualDescription: Be extremely detailed and specific. Describe EVERYTHING you see as if explaining to another AI that needs to match this image with other images of the same product. Ignore hands holding the product. Include: exact packaging type (resealable pouch, stand-up pouch, plastic bottle, glass bottle, tube, jar, box, canister, etc.), shape (cylindrical, rectangular, oval, flat, bulging, etc.), materials (glossy plastic, matte finish, metallic foil, transparent, frosted, etc.), ALL visible colors with specific shades (not 'green' but 'dark forest green with lime green accent'), text colors, text layout (vertical, horizontal, diagonal, in panels, wraparound), logos and graphics, distinct panels or sections (supplement facts table, nutrition panel, ingredients list, barcode location, etc.), text size hierarchy (large brand name, medium product name, small fine print), special features (tear notch, zip lock, transparent window, embossed logo, holographic elements), and any distinctive design elements that make this specific product recognizable.",
-    "Return STRICT JSON: { groups: [{ groupId, brand, product, variant, size, category, categoryPath, options, claims, confidence, images[url], primaryImageUrl, secondaryImageUrl }], imageInsights: [{ url, hasVisibleText, dominantColor, role, textExtracted, visualDescription }] }.",
-    "Each group should contain ONLY ONE IMAGE URL (the image you're analyzing). Set primaryImageUrl to that same URL.",
-    "Ensure every listed URL is an exact image URL. imageInsights.url must match the image URL.",
-    "If you cannot read the product name clearly, set confidence=0.5 or lower.",
+    "",
+    "STRICT JSON OUTPUT:",
+    "{",
+    '  "groups": [{',
+    '    "groupId": "...",',
+    '    "brand": "...",',
+    '    "product": "...",',
+    '    "variant": "...",',
+    '    "size": "...",',
+    '    "category": "...",',
+    '    "categoryPath": "...",',
+    '    "options": {...},',
+    '    "claims": ["..."],',
+    '    "confidence": 0.0,',
+    '    "images": ["<imgUrl>"],',
+    '    "primaryImageUrl": "<imgUrl>",',
+    '    "secondaryImageUrl": null',
+    "  }],",
+    '  "imageInsights": [{',
+    '    "url": "<imgUrl>",',
+    '    "hasVisibleText": true,',
+    '    "dominantColor": "forest-green",',
+    '    "role": "front" | "back" | "side" | "other",',
+    '    "roleScore": 0.00,',
+    '    "evidenceTriggers": ["exact texts or visual cues here"],',
+    '    "textExtracted": "<ALL visible text>",',
+    '    "visualDescription": "<high-detail description>"',
+    "  }]",
+    "}",
+    "",
+    "IMPORTANT:",
+    "• imageInsights.url must exactly match the image URL used in groups.",
+    "• Each group contains ONLY that image's URL.",
+    "• If both front and back cues appear, choose the role with larger absolute roleScore; if |score| < 0.2 → role='other'.",
+    "• Recognize multilingual cues: Spanish('Información Nutricional', 'Ingredientes', 'Lote', 'Caducidad'), French('Valeurs Nutritionnelles', 'Ingrédients', 'Lot'), German('Nährwertangaben', 'Zutaten', 'Los', 'MHD').",
+    "• If role='back' but evidenceTriggers lacks strong back keywords or barcode/facts-table description, reduce confidence ≤ 0.6.",
   ].join("\n");
 
   try {
@@ -409,6 +466,10 @@ async function analyzeBatchViaVision(
             const dominantColor =
               typeof ins.dominantColor === "string" ? ins.dominantColor.toLowerCase().trim() : undefined;
             const role = typeof ins.role === "string" ? ins.role.toLowerCase().trim() : undefined;
+            const roleScore = typeof ins.roleScore === "number" ? ins.roleScore : undefined;
+            const evidenceTriggers = Array.isArray(ins.evidenceTriggers)
+              ? ins.evidenceTriggers.filter((t: any) => typeof t === "string")
+              : undefined;
             const textBlocks = normalizeTextArray(ins.textBlocks);
             const ocrText = typeof ins.ocrText === "string" ? ins.ocrText : undefined;
             const text = typeof ins.text === "string" ? ins.text : undefined;
@@ -427,6 +488,8 @@ async function analyzeBatchViaVision(
               hasVisibleText,
               dominantColor,
               role,
+              roleScore,
+              evidenceTriggers,
               ocrText,
               textBlocks,
               text,
