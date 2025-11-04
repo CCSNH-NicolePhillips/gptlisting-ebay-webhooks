@@ -849,7 +849,7 @@ async function buildHybridGroups(
         console.log(`  Color: ${unassignedColor}`);
         console.log(`  Role: ${unassignedRole}`);
         
-        // Try to match by color + packaging keywords
+        // Try to match using ALL available visual details
         const visualLower = unassignedVisual.toLowerCase();
         let bestMatch: typeof productDescriptions[0] | null = null;
         let matchReason = '';
@@ -859,48 +859,132 @@ async function buildHybridGroups(
           let score = 0;
           const reasons: string[] = [];
           
-          // Color match (most important)
+          // 1. DOMINANT COLOR MATCH (highest priority - 15 points)
           if (product.dominantColor === unassignedColor) {
-            score += 10;
+            score += 15;
             reasons.push(`color=${unassignedColor}`);
           }
           
-          // Packaging type match (pouch, bottle, box, etc.)
-          const packagingTypes = ['pouch', 'bottle', 'jar', 'box', 'tube', 'container', 'cylindrical'];
+          // 2. PACKAGING TYPE MATCH (very important - 10 points)
+          const packagingTypes = [
+            'pouch', 'stand-up pouch', 'resealable pouch', 
+            'bottle', 'plastic bottle', 'glass bottle', 'cylindrical bottle',
+            'jar', 'tube', 'squeeze tube', 'pump bottle',
+            'box', 'rectangular box', 'canister', 'container'
+          ];
+          let foundPackaging = false;
           for (const pkg of packagingTypes) {
             if (visualLower.includes(pkg) && productVisualLower.includes(pkg)) {
-              score += 5;
+              score += 10;
               reasons.push(`packaging=${pkg}`);
+              foundPackaging = true;
               break;
             }
           }
           
-          // Specific features (nutrition panel, barcode, ingredients, etc.)
-          const backFeatures = ['nutrition', 'facts', 'panel', 'ingredient', 'barcode', 'supplement facts'];
+          // 3. MATERIAL/FINISH MATCH (important - 5 points)
+          const materials = [
+            'glossy', 'matte', 'metallic', 'foil',
+            'transparent', 'clear', 'frosted',
+            'plastic', 'glass', 'paper'
+          ];
+          for (const material of materials) {
+            if (visualLower.includes(material) && productVisualLower.includes(material)) {
+              score += 5;
+              reasons.push(`material=${material}`);
+              break;
+            }
+          }
+          
+          // 4. SHAPE DESCRIPTORS (medium - 5 points)
+          const shapes = [
+            'cylindrical', 'rectangular', 'square', 'oval',
+            'tall and narrow', 'short and wide', 'flat',
+            'rounded corners', 'bulging'
+          ];
+          for (const shape of shapes) {
+            if (visualLower.includes(shape) && productVisualLower.includes(shape)) {
+              score += 5;
+              reasons.push(`shape=${shape}`);
+              break;
+            }
+          }
+          
+          // 5. TEXT COLOR MATCH (helpful - 3 points each, max 6)
+          const textColors = ['white text', 'black text', 'silver text', 'gold text', 'colored text'];
+          let textColorPoints = 0;
+          for (const textColor of textColors) {
+            if (visualLower.includes(textColor) && productVisualLower.includes(textColor)) {
+              textColorPoints += 3;
+              reasons.push(`text=${textColor}`);
+              if (textColorPoints >= 6) break;
+            }
+          }
+          score += textColorPoints;
+          
+          // 6. TEXT LAYOUT MATCH (helpful - 4 points)
+          const layouts = [
+            'vertical text', 'horizontal text', 'diagonal',
+            'text in center', 'text at top', 'text at bottom',
+            'text in panels', 'text in sections'
+          ];
+          for (const layout of layouts) {
+            if (visualLower.includes(layout) && productVisualLower.includes(layout)) {
+              score += 4;
+              reasons.push(`layout=${layout}`);
+              break;
+            }
+          }
+          
+          // 7. SPECIFIC PANELS/SECTIONS (confirms it's product back - 3 points each)
+          const backFeatures = [
+            'supplement facts', 'nutrition facts', 'nutrition panel',
+            'ingredient list', 'ingredients section',
+            'directions', 'directions panel',
+            'barcode', 'upc code',
+            'warnings', 'allergen', 'storage instructions'
+          ];
+          let panelPoints = 0;
           for (const feature of backFeatures) {
             if (visualLower.includes(feature)) {
-              score += 2;
+              panelPoints += 3;
               reasons.push(`has-${feature}`);
             }
           }
+          score += Math.min(panelPoints, 9); // Max 9 points from panels
           
-          // Material match (matte, glossy, transparent, etc.)
-          const materials = ['matte', 'glossy', 'transparent', 'clear'];
-          for (const material of materials) {
-            if (visualLower.includes(material) && productVisualLower.includes(material)) {
-              score += 3;
-              reasons.push(`material=${material}`);
+          // 8. SPECIAL FEATURES MATCH (nice to have - 2 points)
+          const specialFeatures = [
+            'tear notch', 'zip lock', 'resealable', 'tamper seal',
+            'embossed', 'holographic', 'foil accent',
+            'transparent window', 'hanging hole'
+          ];
+          for (const feature of specialFeatures) {
+            if (visualLower.includes(feature) && productVisualLower.includes(feature)) {
+              score += 2;
+              reasons.push(`feature=${feature}`);
+              break;
             }
           }
           
-          if (score > 10 && (!bestMatch || score > (bestMatch as any)._score)) {
+          // 9. SIZE INDICATORS (helpful - 2 points)
+          const sizeIndicators = ['large', 'small', 'medium', 'tall', 'short', 'wide', 'narrow'];
+          for (const size of sizeIndicators) {
+            if (visualLower.includes(size) && productVisualLower.includes(size)) {
+              score += 2;
+              reasons.push(`size=${size}`);
+              break;
+            }
+          }
+          
+          if (score > 0 && (!bestMatch || score > (bestMatch as any)._score)) {
             bestMatch = product;
             (bestMatch as any)._score = score;
             matchReason = reasons.join(', ');
           }
         }
         
-        if (bestMatch && (bestMatch as any)._score >= 12) {
+        if (bestMatch && (bestMatch as any)._score >= 20) {
           console.log(`[buildHybridGroups] ✓ Matched ${filename} to "${bestMatch.brand}" - "${bestMatch.product}"`);
           console.log(`  Match score: ${(bestMatch as any)._score}, reasons: ${matchReason}`);
           
@@ -997,13 +1081,72 @@ async function buildHybridGroups(
       
       let score = 0;
       
-      // Color match (highest weight)
+      // Use the same enhanced scoring system
+      // 1. Color match (15 points)
       if (backColor && frontColor && backColor === frontColor) {
-        score += 10;
+        score += 15;
       }
       
-      // Packaging type match
-      const packagingTypes = ['pouch', 'bottle', 'jar', 'box', 'tube', 'can', 'container'];
+      // 2. Packaging type match (10 points)
+      const packagingTypes = [
+        'pouch', 'stand-up pouch', 'resealable pouch',
+        'bottle', 'plastic bottle', 'glass bottle', 'cylindrical bottle',
+        'jar', 'tube', 'squeeze tube', 'pump bottle',
+        'box', 'rectangular box', 'canister', 'container'
+      ];
+      for (const pkg of packagingTypes) {
+        if (backVisual.includes(pkg) && frontVisual.includes(pkg)) {
+          score += 10;
+          break;
+        }
+      }
+      
+      // 3. Material match (5 points)
+      const materials = [
+        'glossy', 'matte', 'metallic', 'foil',
+        'transparent', 'clear', 'frosted',
+        'plastic', 'glass', 'paper'
+      ];
+      for (const material of materials) {
+        if (backVisual.includes(material) && frontVisual.includes(material)) {
+          score += 5;
+          break;
+        }
+      }
+      
+      // 4. Shape match (5 points)
+      const shapes = [
+        'cylindrical', 'rectangular', 'square', 'oval',
+        'tall and narrow', 'short and wide', 'flat',
+        'rounded corners', 'bulging'
+      ];
+      for (const shape of shapes) {
+        if (backVisual.includes(shape) && frontVisual.includes(shape)) {
+          score += 5;
+          break;
+        }
+      }
+      
+      // 5. Text color match (3 points)
+      const textColors = ['white text', 'black text', 'silver text', 'gold text'];
+      for (const textColor of textColors) {
+        if (backVisual.includes(textColor) && frontVisual.includes(textColor)) {
+          score += 3;
+          break;
+        }
+      }
+      
+      // 6. Special features (2 points)
+      const specialFeatures = [
+        'tear notch', 'zip lock', 'resealable', 'tamper seal',
+        'embossed', 'holographic', 'foil accent'
+      ];
+      for (const feature of specialFeatures) {
+        if (backVisual.includes(feature) && frontVisual.includes(feature)) {
+          score += 2;
+          break;
+        }
+      }
       for (const pkg of packagingTypes) {
         if (backVisual.includes(pkg) && frontVisual.includes(pkg)) {
           score += 5;
@@ -1011,14 +1154,7 @@ async function buildHybridGroups(
         }
       }
       
-      // Material match
-      const materials = ['matte', 'glossy', 'transparent', 'clear', 'glass'];
-      for (const material of materials) {
-        if (backVisual.includes(material) && frontVisual.includes(material)) {
-          score += 3;
-          break;
-        }
-      }
+      // Material match (old code, remove this section)
       
       if (score > bestScore) {
         bestScore = score;
@@ -1026,7 +1162,7 @@ async function buildHybridGroups(
       }
     }
     
-    if (bestFrontGroup && bestScore >= 12) {
+    if (bestFrontGroup && bestScore >= 20) {
       console.log(`[buildHybridGroups]   ✓ Merging "${backGroup.name}" back into "${bestFrontGroup.name}" (score: ${bestScore})`);
       
       // Add back image to front group
