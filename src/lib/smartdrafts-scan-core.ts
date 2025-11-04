@@ -512,14 +512,12 @@ async function buildHybridGroups(
   // Log what Vision identified for each image
   console.log(`[buildHybridGroups] Vision identifications:`);
   visionGroups.forEach((group, idx) => {
-    const imgUrl = group.images?.[0] || 'unknown';
-    const filename = imgUrl.split('/').pop()?.split('?')[0] || 'unknown';
+    // Vision groups are in same order as files array - use index-based matching
+    const file = files[idx];
+    const filename = file?.entry.name || 'unknown';
     
-    // Also find and log the OCR text and visual description for this image
-    const insight = insightList.find(ins => {
-      const insightFilename = ins.url?.split('/').pop()?.split('?')[0]?.toLowerCase() || '';
-      return insightFilename === filename.toLowerCase();
-    });
+    // Also get the insight for this image (also by index)
+    const insight = insightList[idx];
     const ocrText = (insight as any)?.textExtracted || '';
     const visualDesc = (insight as any)?.visualDescription || '';
     const ocrPreview = ocrText ? ocrText.substring(0, 80) : '(no text)';
@@ -779,10 +777,8 @@ async function buildHybridGroups(
       for (const fileIdx of group.fileIndices) {
         const file = files[fileIdx];
         const filename = file.entry.name?.toLowerCase() || '';
-        const insight = insightList.find(ins => {
-          const insightFilename = ins.url?.split('/').pop()?.split('?')[0]?.toLowerCase() || '';
-          return insightFilename === filename.toLowerCase();
-        });
+        // Use index-based matching: insightList[i] corresponds to files[i]
+        const insight = insightList[fileIdx];
         
         console.log(`  Checking ${filename}: insight=${!!insight}, visualDesc=${!!(insight as any)?.visualDescription}, role=${(insight as any)?.role}`);
         if (insight) {
@@ -814,10 +810,8 @@ async function buildHybridGroups(
       for (const unassignedIdx of unassignedIndices) {
         const file = files[unassignedIdx];
         const filename = file.entry.name?.toLowerCase() || '';
-        const insight = insightList.find(ins => {
-          const insightFilename = ins.url?.split('/').pop()?.split('?')[0]?.toLowerCase() || '';
-          return insightFilename === filename;
-        });
+        // Use index-based matching: insightList[i] corresponds to files[i]
+        const insight = insightList[unassignedIdx];
         
         if (!insight || !(insight as any).visualDescription) {
           console.log(`[buildHybridGroups] ${filename}: No visual description, skipping match`);
@@ -1012,11 +1006,8 @@ async function buildHybridGroups(
     if (backGroup.images.length !== 1) continue;
     const backIdx = files.findIndex(f => f.url === backGroup.images[0]);
     if (backIdx === -1) continue;
-    const backInsight = insightList.find(ins => {
-      const insUrl = ins.url?.split('/').pop()?.split('?')[0]?.toLowerCase();
-      const fileUrl = files[backIdx].url.split('/').pop()?.split('?')[0]?.toLowerCase();
-      return insUrl === fileUrl;
-    });
+    // Use index-based matching: insightList[i] corresponds to files[i]
+    const backInsight = insightList[backIdx];
     if (!backInsight?.role || backInsight.role !== 'back') continue;
     if (!backInsight.visualDescription) continue;
     
@@ -1040,11 +1031,8 @@ async function buildHybridGroups(
       const frontIdx = frontGroup.images.findIndex((url: string) => {
         const idx = files.findIndex(f => f.url === url);
         if (idx === -1) return false;
-        const insight = insightList.find(ins => {
-          const insUrl = ins.url?.split('/').pop()?.split('?')[0]?.toLowerCase();
-          const fileUrl = files[idx].url.split('/').pop()?.split('?')[0]?.toLowerCase();
-          return insUrl === fileUrl;
-        });
+        // Use index-based matching: insightList[i] corresponds to files[i]
+        const insight = insightList[idx];
         return insight?.role === 'front';
       });
       
@@ -1052,11 +1040,8 @@ async function buildHybridGroups(
       
       const frontUrl = frontGroup.images[frontIdx];
       const frontFileIdx = files.findIndex(f => f.url === frontUrl);
-      const frontInsight = insightList.find(ins => {
-        const insUrl = ins.url?.split('/').pop()?.split('?')[0]?.toLowerCase();
-        const fileUrl = files[frontFileIdx].url.split('/').pop()?.split('?')[0]?.toLowerCase();
-        return insUrl === fileUrl;
-      });
+      // Use index-based matching: insightList[i] corresponds to files[i]
+      const frontInsight = insightList[frontFileIdx];
       
       if (!frontInsight?.visualDescription) continue;
       
