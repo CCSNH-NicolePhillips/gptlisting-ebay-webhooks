@@ -1,14 +1,45 @@
 # CLIP Clustering Status - Nov 4, 2025
 
-## ✅ CRITICAL FIX DEPLOYED: Filename Mapping Bug (Nov 4, 2025)
+## 🔧 NEW CRITICAL ISSUE: Vision API Only Analyzing 1 of 9 Images (Nov 4, 2025)
 
-### Current Status: **FIXED AND DEPLOYED** ✅
+### Current Status: **DEPLOYED FIX WORKING, BUT NEW ISSUE DISCOVERED** ⚠️
+- **Good News**: Filename mapping fix (commit `d467909`) is working correctly ✅
+  - Index-based matching works: `visionGroups[0]` = `files[0]`
+  - No more "✗ File not found" errors
+- **New Problem**: Vision API only returned 1 imageInsight out of 9 images
+  - Log shows: `"groups": [1 group]` and `"imageInsights": [1 insight]`
+  - Expected: 9 imageInsights (one per image)
+  - Result: Only `asd32q.jpg` was analyzed, other 8 images got `role: null`
+  - All 8 unanalyzed images → Uncategorized group
+
+### Root Cause (INVESTIGATED)
+- ✅ **Verified**: All 9 images ARE being sent to Vision API (line 292: `runVision({ images: batch, prompt })`)
+- ✅ **Verified**: Prompt correctly says "Analyze EACH image INDIVIDUALLY" and "Each group should contain ONLY ONE IMAGE URL"
+- ✅ **Verified**: Prompt is nearly identical to last working version (`232c858`)
+- ❌ **Problem**: Vision API (GPT-4o) is only returning 1 group + 1 imageInsight for 9 images
+
+Possibilities:
+1. **Vision API behavior change**: GPT-4o may have changed how it handles multiple images in vision requests
+2. **Token limit**: Response might be getting truncated due to detailed visualDescription requests
+3. **Missing model specification**: `VISION_MODEL` env var not set, using wrong model/fallback
+4. **Prompt confusion**: Despite instructions, Vision groups all images into one analysis
+
+### Evidence from Logs (Nov 4, 11:07 AM)
+```
+🤖 Vision raw response: {
+  "groups": [1 group],
+  "imageInsights": [1 insight]  // ❌ Should be 9!
+}
+📦 Batch 1: Using FRESH data, 1 insights  // ❌ Should be 9!
+[buildHybridGroups] Processing 9 images, 1 Vision analyses  // ❌ Should be 9!
+```
+
+### Previous Issue (FIXED) ✅
 - **Problem**: Vision API correctly identifies all products, but filename mapping bug causes 100% failure
-- **Root Cause**: Vision returns placeholder URLs (`https://example.com/1.jpg`, `2.jpg`, etc.) but code tried to match these to real filenames (`asd32q.jpg`, `awef.jpg`, etc.)
-- **Fix**: Match by array INDEX instead of filename - `visionGroups[0]` = `files[0]`, `visionGroups[1]` = `files[1]`, etc.
+- **Root Cause**: Vision returns placeholder URLs but code tried to match by filename
+- **Fix**: Match by array INDEX instead of filename
 - **Status**: ✅ DEPLOYED (commit `d467909`)
 - **Deployed**: Nov 4, 2025
-- **Expected Result**: 67-75% automatic grouping (same as last known working version)
 
 ### What Happened (Nov 4, 2025)
 1. **Enhanced Vision Prompt (commit `abeb2b8`)**: Added detailed visualDescription instructions
@@ -248,16 +279,43 @@ GPT_MODEL=gpt-4o (NEEDS TO BE SET IN NETLIFY)
 2. ⏳ **Waiting for test results** with 9-image test set
 3. ⏳ **Expected result**: 3-4 product groups (67-75% pairing) instead of everything in Uncategorized
 
-### NEXT IMMEDIATE ACTION
-1. **Set Environment Variables in Netlify** (if not already set):
-   - Go to: Netlify Dashboard → Site → Site Configuration → Environment Variables
-   - Add: `VISION_MODEL=openai:gpt-4o`
+### NEXT IMMEDIATE ACTION - FIX VISION API MULTI-IMAGE ANALYSIS
+
+**MOST LIKELY FIX** - Set Environment Variables (CRITICAL):
+1. **`VISION_MODEL=openai:gpt-4o` NOT SET in Netlify** ← This is probably the issue!
+   - Without this, system uses default fallback: `gpt-4o-mini`
+   - `gpt-4o-mini` may not support multi-image vision analysis properly
+   - Or may have smaller token limits that truncate responses
+   - Check deployment logs for: `[vision-router] Using (default)` ← confirms env var missing
+
+2. **Set in Netlify Dashboard**:
+   - Go to: Site → Site Configuration → Environment Variables  
+   - Add: `VISION_MODEL=openai:gpt-4o` (NOT gpt-4o-mini!)
    - Add: `GPT_MODEL=gpt-4o`
-2. **Test the fix** by running analyze-images with 9-image test set
-3. **Verify logs** show:
-   - `[vision-router] Using openai:gpt-4o` (confirms env var loaded)
-   - `[buildHybridGroups] ✓ Matched` messages (confirms filename mapping working)
-   - 3-4 product groups created instead of everything → Uncategorized
+   - Redeploy
+
+**Alternative Fixes** (if env var doesn't solve it):
+3. **Reduce visualDescription detail** to avoid token limits
+   - Current prompt has very verbose visualDescription instructions
+   - May be hitting response token limits with 9 images
+   - Could simplify to see if more images get analyzed
+
+4. **Test with smaller batches**
+   - Try 3 images at a time instead of 9
+   - See if Vision API handles smaller batches better
+
+5. **Check Vision API logs**
+   - Look for token limit warnings
+   - Check if request is actually using gpt-4o or falling back to gpt-4o-mini
+
+### What's Working ✅
+- Filename mapping fix is deployed and working
+- `[buildHybridGroups] ✓ Matched asd32q.jpg` (no more "File not found" errors)
+- Vision API correctly identified the 1 image it analyzed
+
+### What's Broken ❌
+- Only 1 of 9 images being analyzed by Vision API
+- 8 images have `role: null` → all go to Uncategorized
 
 ### Understanding the System
 - **Vision API is the primary grouping mechanism** (not CLIP)
