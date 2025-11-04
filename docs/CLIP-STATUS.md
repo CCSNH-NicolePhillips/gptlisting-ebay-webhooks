@@ -155,7 +155,16 @@ USE_NEW_SORTER=true (default)
 - `prod.env` - Environment variables (lines 63-66 for CLIP)
 
 ## Latest Commit
-`bb63061` - "Add Phase R0 entry log to diagnose CLIP clustering execution"
+`fafcb4c` - "Document final working solution: 67% automatic grouping with 0% false positives"
+
+## Known Issues (Low Priority)
+
+1. **Uncategorized Group Hero/Back Selection**: 
+   - The Uncategorized group currently goes through hero/back selection logic (Phase R2)
+   - Since these aren't products, they don't need heroUrl/backUrl classification
+   - Should skip role selection for uncategorized items
+   - Impact: Minor - doesn't cause errors, just unnecessary processing
+   - Fix: Add check in Phase R2 to skip hero/back logic if groupId === 'uncategorized'
 
 ## What ChatGPT Said (Summary)
 The 99.9% similarity issue was caused by:
