@@ -604,12 +604,8 @@ async function buildHybridGroups(
     brand: string;
     product: string;
     visionGroup: AnalyzedGroup;
-    frontIdx: number;
-    frontUrl: string;
-    backIndices: number[];
-    backUrls: string[];
-    otherIndices: number[];
-    otherUrls: string[];
+    fileIndices: number[];
+    fileUrls: string[];
   }>();
 
   const assignedIndices = new Set<number>();
