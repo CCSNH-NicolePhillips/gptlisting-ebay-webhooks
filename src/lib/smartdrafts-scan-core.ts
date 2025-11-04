@@ -500,13 +500,13 @@ async function buildClipGroups(files: Array<{ entry: DropboxEntry; url: string }
   return groups;
 }
 
-// NEW: Hybrid approach - Use Vision's product groups + CLIP for unmatched images
+// NEW: Trust Vision's role assignments - No CLIP overrides
 async function buildHybridGroups(
   files: Array<{ entry: DropboxEntry; url: string }>,
   visionGroups: AnalyzedGroup[],
   insightList: ImageInsight[]
 ) {
-  console.log(`[buildHybridGroups] NEW APPROACH: Individual image analysis → group by exact brand+product match`);
+  console.log(`[buildHybridGroups] TRUST VISION ROLES: front/back assignments are final - no CLIP overrides`);
   console.log(`[buildHybridGroups] Processing ${files.length} images, ${visionGroups.length} Vision analyses`);
 
   // Log what Vision identified for each image
@@ -520,23 +520,96 @@ async function buildHybridGroups(
     const insight = insightList[idx];
     const ocrText = (insight as any)?.textExtracted || '';
     const visualDesc = (insight as any)?.visualDescription || '';
+    const role = (insight as any)?.role || 'unknown';
     const ocrPreview = ocrText ? ocrText.substring(0, 80) : '(no text)';
 
-    console.log(`  [${idx + 1}] ${filename}: brand="${group.brand}", product="${group.product}", confidence=${group.confidence}`);
+    console.log(`  [${idx + 1}] ${filename}: brand="${group.brand}", product="${group.product}", role="${role}", confidence=${group.confidence}`);
     console.log(`      OCR: "${ocrPreview}${ocrText.length > 80 ? '...' : ''}"`);
     if (visualDesc) {
       const visualPreview = visualDesc.substring(0, 150);
       console.log(`      Visual: "${visualPreview}${visualDesc.length > 150 ? '...' : ''}"`);
     }
+
+    // CRITICAL CHECK: If Vision says role="front", this MUST be locked as the product front
+    if (role === 'front') {
+      console.log(`      ✓ LOCKED AS FRONT - Vision role assignment is final`);
+    } else if (role === 'back') {
+      console.log(`      ✓ LOCKED AS BACK - Vision role assignment is final`);
+    }
   });
 
-  // Step 1: Group Vision analyses by exact brand+product match
+  // Step 1: Extract fronts and backs based on Vision role assignments (TRUST VISION!)
+  const frontImages: Array<{
+    idx: number;
+    filename: string;
+    url: string;
+    brand: string;
+    product: string;
+    visionGroup: AnalyzedGroup;
+    insight: ImageInsight;
+  }> = [];
+
+  const backImages: Array<{
+    idx: number;
+    filename: string;
+    url: string;
+    brand: string;
+    product: string;
+    visionGroup: AnalyzedGroup;
+    insight: ImageInsight;
+  }> = [];
+
+  const otherImages: Array<{
+    idx: number;
+    filename: string;
+    url: string;
+    brand: string;
+    product: string;
+    visionGroup: AnalyzedGroup;
+    insight: ImageInsight;
+  }> = [];
+
+  // Separate images by role FIRST (role is truth!)
+  for (let idx = 0; idx < files.length; idx++) {
+    if (idx >= visionGroups.length || idx >= insightList.length) continue;
+
+    const file = files[idx];
+    const visionGroup = visionGroups[idx];
+    const insight = insightList[idx];
+    const role = (insight as any)?.role || 'unknown';
+
+    const imageData = {
+      idx,
+      filename: file.entry.name,
+      url: file.url,
+      brand: String(visionGroup.brand || 'Unknown'),
+      product: String(visionGroup.product || 'Unknown'),
+      visionGroup,
+      insight
+    };
+
+    if (role === 'front') {
+      frontImages.push(imageData);
+    } else if (role === 'back') {
+      backImages.push(imageData);
+    } else {
+      otherImages.push(imageData);
+    }
+  }
+
+  console.log(`[buildHybridGroups] Role-based separation: ${frontImages.length} fronts, ${backImages.length} backs, ${otherImages.length} other`);
+
+  // Step 2: Group fronts by brand+product (fronts become product groups)
   const productGroups = new Map<string, {
     brand: string;
     product: string;
     visionGroup: AnalyzedGroup;
-    fileIndices: number[];
-    fileUrls: string[];
+    frontIdx: number;
+    frontUrl: string;
+    backIndices: number[];
+    backUrls: string[];
+    otherIndices: number[];
+    otherUrls: string[];
   }>();
 
   const assignedIndices = new Set<number>();
@@ -656,102 +729,25 @@ async function buildHybridGroups(
     console.log(`[buildHybridGroups] ✓ Matched ${filename} to "${brand}" "${product}" (${group.fileUrls.length} images total)`);
   }
 
-  console.log(`[buildHybridGroups] Created ${productGroups.size} product groups from exact brand+product matching`);
+  console.log(`[buildHybridGroups] Created ${productGroups.size} product groups from brand+product matching`);
 
-  // Step 2: Verify each group's images are similar using CLIP
-  console.log(`[buildHybridGroups] Step 2: Verifying groups with CLIP similarity...`);
-
-  const allEmbeddings = await Promise.all(
-    files.map(async (file, idx) => {
-      try {
-        console.log(`[buildHybridGroups] Getting CLIP embedding for ${file.entry.name}...`);
-        return await clipImageEmbedding(file.url);
-      } catch (err) {
-        console.warn(`[buildHybridGroups] Failed to get embedding for ${file.entry.name}:`, err);
-        return null;
-      }
-    })
-  );
+  // Step 2: NO CLIP VERIFICATION - Trust Vision's decisions completely
+  console.log(`[buildHybridGroups] Step 2: Creating groups from Vision data (CLIP verification disabled)`);
 
   const hybridGroups: any[] = [];
 
   for (const [productKey, group] of productGroups.entries()) {
-    console.log(`[buildHybridGroups] Verifying group: "${group.brand}" - "${group.product}" (${group.fileUrls.length} images)`);
+    console.log(`[buildHybridGroups] Creating group: "${group.brand}" - "${group.product}" (${group.fileUrls.length} images)`);
 
-    if (group.fileIndices.length === 1) {
-      // Single image group - no verification needed
-      console.log(`[buildHybridGroups] Single image group - no verification needed`);
-      hybridGroups.push({
-        ...group.visionGroup,
-        images: group.fileUrls,
-        indices: group.fileIndices,
-        primaryImageUrl: group.fileUrls[0],
-        secondaryImageUrl: null,
-        supportingImageUrls: []
-      });
-      continue;
-    }
-
-    // Multi-image group - verify similarity
-    const groupEmbeddings = group.fileIndices
-      .map((idx) => ({ idx, embedding: allEmbeddings[idx], url: files[idx].url }))
-      .filter((item) => item.embedding !== null);
-
-    if (groupEmbeddings.length < group.fileIndices.length) {
-      console.warn(`[buildHybridGroups] Missing embeddings for some images in group`);
-    }
-
-    // Calculate pairwise similarities
-    const MIN_SIMILARITY = 0.75; // Images in same group should be at least 0.75 similar
-    const verifiedIndices: number[] = [];
-    const rejectedIndices: number[] = [];
-
-    if (groupEmbeddings.length >= 2) {
-      // Add first image as anchor
-      verifiedIndices.push(groupEmbeddings[0].idx);
-
-      // Check each subsequent image against verified images
-      for (let i = 1; i < groupEmbeddings.length; i++) {
-        const candidate = groupEmbeddings[i];
-        let maxSim = 0;
-
-        for (const verifiedIdx of verifiedIndices) {
-          const verifiedItem = groupEmbeddings.find(e => e.idx === verifiedIdx);
-          if (verifiedItem && verifiedItem.embedding && candidate.embedding) {
-            const sim = cosine(candidate.embedding, verifiedItem.embedding);
-            maxSim = Math.max(maxSim, sim);
-          }
-        }
-
-        const filename = files[candidate.idx].entry.name;
-        if (maxSim >= MIN_SIMILARITY) {
-          console.log(`[buildHybridGroups] ✓ ${filename}: similarity=${maxSim.toFixed(3)} (verified)`);
-          verifiedIndices.push(candidate.idx);
-        } else {
-          console.warn(`[buildHybridGroups] ✗ ${filename}: similarity=${maxSim.toFixed(3)} (rejected - mismatch detected)`);
-          rejectedIndices.push(candidate.idx);
-          assignedIndices.delete(candidate.idx);
-        }
-      }
-    } else {
-      verifiedIndices.push(...group.fileIndices);
-    }
-
-    if (verifiedIndices.length > 0) {
-      const verifiedUrls = verifiedIndices.map(idx => files[idx].url);
-      console.log(`[buildHybridGroups] ✓ Group verified: "${group.brand}" - "${group.product}" with ${verifiedUrls.length} images`);
-
-      hybridGroups.push({
-        ...group.visionGroup,
-        images: verifiedUrls,
-        indices: verifiedIndices,
-        primaryImageUrl: verifiedUrls[0],
-        secondaryImageUrl: verifiedUrls[1] || null,
-        supportingImageUrls: verifiedUrls.slice(2)
-      });
-    } else {
-      console.warn(`[buildHybridGroups] ✗ Group rejected: "${group.brand}" - "${group.product}" (no verified images)`);
-    }
+    // Trust Vision completely - no CLIP similarity check
+    hybridGroups.push({
+      ...group.visionGroup,
+      images: group.fileUrls,
+      indices: group.fileIndices,
+      primaryImageUrl: group.fileUrls[0],
+      secondaryImageUrl: group.fileUrls[1] || null,
+      supportingImageUrls: group.fileUrls.slice(2)
+    });
   }
 
   // Step 2: For unassigned images, try visual description matching
