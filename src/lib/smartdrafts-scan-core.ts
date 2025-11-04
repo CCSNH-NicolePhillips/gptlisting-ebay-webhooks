@@ -515,16 +515,21 @@ async function buildHybridGroups(
     const imgUrl = group.images?.[0] || 'unknown';
     const filename = imgUrl.split('/').pop()?.split('?')[0] || 'unknown';
     
-    // Also find and log the OCR text for this image
+    // Also find and log the OCR text and visual description for this image
     const insight = insightList.find(ins => {
       const insightFilename = ins.url?.split('/').pop()?.split('?')[0]?.toLowerCase() || '';
       return insightFilename === filename.toLowerCase();
     });
     const ocrText = (insight as any)?.textExtracted || '';
+    const visualDesc = (insight as any)?.visualDescription || '';
     const ocrPreview = ocrText ? ocrText.substring(0, 80) : '(no text)';
     
     console.log(`  [${idx + 1}] ${filename}: brand="${group.brand}", product="${group.product}", confidence=${group.confidence}`);
     console.log(`      OCR: "${ocrPreview}${ocrText.length > 80 ? '...' : ''}"`);
+    if (visualDesc) {
+      const visualPreview = visualDesc.substring(0, 150);
+      console.log(`      Visual: "${visualPreview}${visualDesc.length > 150 ? '...' : ''}"`);
+    }
   });
   
   // Build filename index for matching

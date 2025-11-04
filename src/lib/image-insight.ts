@@ -10,4 +10,6 @@ export type ImageInsight = {
     text?: string;
     lines?: string[];
   };
+  textExtracted?: string;
+  visualDescription?: string;
 };
