@@ -347,10 +347,18 @@ GPT_MODEL=gpt-4o (NEEDS TO BE SET IN NETLIFY)
 3. **Pass 2 - Find backs**: Send remaining images with context: "These are the fronts (with descriptions). Find which remaining images are backs of these products."
 4. **Disable CLIP for now**: It's causing more harm than good (rejecting correct matches)
 
-**Files to change**:
-- `src/lib/smartdrafts-scan-core.ts` - Rewrite `buildHybridGroups()` to trust Vision roles
-- Remove CLIP verification step that overrides Vision
-- Implement two-pass Vision strategy
+**Changes Implemented** (Commit 894a13b):
+- ✅ **Hybrid fallback working** - All 9 images analyzed (commit 1e74593)
+- ✅ **CLIP verification disabled** - No longer rejects correct Vision matches
+- ✅ **Role logging added** - Shows "LOCKED AS FRONT" / "LOCKED AS BACK" in logs
+- ✅ **Vision roles trusted** - Images separated by role before grouping
+- ⏳ **Still TODO**: Complete rewrite of grouping logic to use roles instead of brand/product matching
+
+**Next Steps**:
+1. Remove brand/product grouping logic (lines 617-729)
+2. Group fronts first by brand/product
+3. For each front, find matching back using visual description
+4. Simple matching: front.brand === back.brand && color/packaging match
 
 **Alternative Fixes** (if env var doesn't solve it):
 3. **Reduce visualDescription detail** to avoid token limits
