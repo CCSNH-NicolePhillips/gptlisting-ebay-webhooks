@@ -1,9 +1,67 @@
-# CLIP Clustering Status - Nov 3, 2025
+# CLIP Clustering Status - Nov 4, 2025
 
-## ✅ FINAL SOLUTION: Vision OCR + Exact Brand Matching (67% Automatic, No False Positives)
+## 🔧 CRITICAL FIX PENDING: Filename Mapping Bug (Nov 4, 2025)
 
-### Production Status: **DEPLOYED & WORKING**
-- Commit: `232c858` (Nov 3, 2025)
+### Current Status: **BROKEN - FIX READY TO DEPLOY**
+- **Problem**: Vision API correctly identifies all products, but filename mapping bug causes 100% failure
+- **Root Cause**: Vision returns placeholder URLs (`https://example.com/1.jpg`, `2.jpg`, etc.) but code tried to match these to real filenames (`asd32q.jpg`, `awef.jpg`, etc.)
+- **Fix**: Match by array INDEX instead of filename - `visionGroups[0]` = `files[0]`, `visionGroups[1]` = `files[1]`, etc.
+- **Status**: Code fixed, TypeScript compiled, **READY TO PUSH**
+- **Commit Message**: "Fix critical filename mapping bug in Vision response processing"
+
+### What Happened (Nov 4, 2025)
+1. **Enhanced Vision Prompt (commit `abeb2b8`)**: Added detailed visualDescription instructions
+   - TOO COMPLEX: 12-point checklist with examples overwhelmed Vision API
+   - Result: ALL images returned `role: null`, `hasText: false` - complete failure
+   
+2. **Simplified Prompt**: Removed numbered checklist, kept comprehensive instructions in paragraph form
+   - Result: Vision API worked PERFECTLY - correctly identified all 8 products
+   - Vision responses showed proper OCR, roles (front/back), visual descriptions
+   
+3. **NEW BUG DISCOVERED**: Even with perfect Vision data, ALL products went to Uncategorized
+   - Log showed: `[buildHybridGroups] ✗ File not found: 1.jpg`, `2.jpg`, `3.jpg`, etc.
+   - Vision identified products correctly but code couldn't match them to real files
+   - **Root cause**: Array indexing bug in filename matching logic
+
+### The Fix (In Code, Not Yet Deployed)
+**File**: `src/lib/smartdrafts-scan-core.ts` lines ~545-620
+
+**Before** (BROKEN):
+```typescript
+for (const visionGroup of visionGroups) {
+  // Extract filename from Vision's placeholder URL
+  const visionImgUrl = visionGroup.images?.[0] || '';
+  const filename = visionImgUrl.split('/').pop()?.toLowerCase(); // Gets "1.jpg"
+  
+  const fileMatch = filesByFilename.get(filename); // Tries to find "1.jpg" in map of "asd32q.jpg", "awef.jpg" etc.
+  if (!fileMatch) {
+    console.warn(`✗ File not found: ${filename}`); // ALWAYS FAILS!
+  }
+}
+```
+
+**After** (FIXED):
+```typescript
+// Vision groups are in SAME ORDER as input files array
+for (let groupIdx = 0; groupIdx < visionGroups.length; groupIdx++) {
+  const visionGroup = visionGroups[groupIdx];
+  const fileIdx = groupIdx; // Direct mapping!
+  const file = files[fileIdx]; // Gets actual file
+  const filename = file.entry.name; // Real filename: "asd32q.jpg"
+}
+```
+
+### Expected Results After Deploy
+- **Before**: 0% success (all images → Uncategorized despite perfect Vision data)
+- **After**: 67-75% success (same as previous working version)
+- Vision API working perfectly - problem was only in filename mapping
+
+---
+
+## ✅ PREVIOUS WORKING SOLUTION: Vision OCR + Exact Brand Matching (67% Automatic, No False Positives)
+
+### Last Known Working Status
+- Commit: `232c858` (Nov 3, 2025) - **BEFORE enhanced prompt attempts**
 - Success Rate: **67% fully automatic** (6/9 images)
 - False Positive Rate: **0%** (no incorrect groupings)
 - Cost: ~$0.01 per analysis batch (well within budget)
@@ -29,7 +87,31 @@
 2. **Brand+Product Extraction**: Parse brand and product name from OCR text
 3. **Exact Matching**: Group images with identical "brand|||product" keys
 4. **CLIP Verification**: Verify grouped images have ≥0.75 similarity (prevents false groupings)
-5. **Uncategorized Fallback**: Images Vision can't identify go to "Uncategorized" for manual review
+5. **Orphan Back Merging** (NEW - Nov 3): Match single-back-only groups with front groups from same brand using visual similarity
+6. **Uncategorized Fallback**: Images Vision can't identify go to "Uncategorized" for manual review
+
+### Recent Enhancements (Nov 3, 2025)
+**Commits**: `cb1471a`, `02228a4`, `439bc3e`, `6f31466`
+
+1. **Visual Description Matching**: Added detailed `visualDescription` field to Vision prompt
+   - Color match (+15 pts), packaging type (+10 pts), material (+5 pts), shape (+5 pts)
+   - Text color (+3-6 pts), layout (+4 pts), panels (+9 pts), features (+2 pts)
+   - Threshold: ≥20 points for confident match
+   
+2. **Orphan Back Merging**: Match single-back-only groups with same-brand front groups
+   - Finds backs that Vision identified with generic product name ("Frog Fuel" vs "PERFORMANCE GREENS + PROTEIN")
+   - Uses visual similarity scoring (color, packaging, material, shape)
+   - Successfully merged Frog Fuel pairs in testing
+
+3. **Bug Fixes**: Fixed THREE locations where `visualDescription` and `textExtracted` fields were being stripped during response normalization
+
+### Known Issues
+- **Vision API Non-Determinism**: Same images produce different OCR results across runs
+  - Sometimes correctly identifies products
+  - Sometimes misidentifies products as "tan leather bag" or "brown leather bag"
+  - Sometimes drops images entirely from response (8 insights for 9 images)
+- **Success Rate Variability**: 50-75% depending on Vision's OCR reliability
+- **Simplified Prompt Working**: Detailed checklist overwhelmed Vision; paragraph format works better
 
 ### Why CLIP Matching is Disabled
 **Problem**: Visually similar supplement packaging causes false positives
@@ -147,15 +229,66 @@ HF_IMAGE_ENDPOINT_BASE=https://c4hp6rdkxs6bi333.us-east-1.aws.endpoints.huggingf
 USE_NEW_SORTER=true (default)
 ```
 
+## Next Steps for New AI Agent
+
+### IMMEDIATE ACTION REQUIRED
+1. **Deploy the filename mapping fix**: 
+   ```bash
+   git add -A
+   git commit -m "Fix critical filename mapping bug in Vision response processing"
+   git push
+   ```
+2. **Test with 9-image test set** to verify products group correctly
+3. **Expected result**: 3-4 product groups (67-75% pairing) instead of everything in Uncategorized
+
+### Understanding the System
+- **Vision API is the primary grouping mechanism** (not CLIP)
+- CLIP is used only for verification (prevent false positives)
+- System prioritizes safety: better to have manual review than wrong groupings
+- Vision OCR is non-deterministic but usually works 50-75% of the time
+
+### If Issues Persist
+1. Check Vision API response in logs: `🤖 Vision raw response:`
+2. Verify `imageInsights` have proper `role`, `hasVisibleText`, `textExtracted`, `visualDescription`
+3. Check if `[buildHybridGroups]` logs show "✓ Matched" or "✗ File not found"
+4. CLIP endpoint may be sleeping (503 errors) - this is normal, system has fallback
+
+### Testing Commands
+```bash
+# Local CLIP endpoint test
+node scripts/test-clip-endpoint.mjs
+
+# Build TypeScript
+npm run build
+
+# Check recent commits
+git log --oneline -10
+```
+
 ## Key Files
 - `src/lib/clip-client-split.ts` - CLIP API client
-- `src/lib/smartdrafts-scan-core.ts` - Main scan logic (Phase R0 at line ~873)
+- `src/lib/smartdrafts-scan-core.ts` - **Main scan logic (FILENAME MAPPING BUG FIX NEEDED HERE - lines ~545-620)**
+  - `buildHybridGroups()` function - Groups images by Vision brand+product match
+  - **BUG**: Tries to match Vision's placeholder URLs to real filenames
+  - **FIX**: Use array index matching instead: `visionGroups[i]` = `files[i]`
+- `src/lib/analyze-core.ts` - Vision API prompt and response processing
+  - Lines 273-288: Vision prompt (simplified Nov 4, complex version failed)
+  - Lines 215-237, 418-440: Response normalization (fixed to preserve visualDescription)
+- `src/lib/image-insight.ts` - TypeScript type with `textExtracted?` and `visualDescription?` fields
 - `src/config.ts` - Feature flags (USE_NEW_SORTER default=true)
 - `scripts/test-clip-endpoint.mjs` - Local CLIP endpoint tester
 - `prod.env` - Environment variables (lines 63-66 for CLIP)
 
-## Latest Commit
-`fafcb4c` - "Document final working solution: 67% automatic grouping with 0% false positives"
+## Latest Commits (Chronological)
+- `232c858` (Nov 3) - Last known working version (67% success)
+- `8c703eb` (Nov 3) - Add detailed visualDescription field to Vision analysis
+- `cb1471a` (Nov 3) - Add visual description matching to pair unidentified backs with fronts
+- `439bc3e` (Nov 3) - Fix visualDescription fields not being extracted (first location)
+- `6f31466` (Nov 3) - Fix third location + add cache debugging
+- `02228a4` (Nov 3) - Add orphan back group merging
+- `abeb2b8` (Nov 3) - **BROKE EVERYTHING**: Massively enhanced Vision prompt (too complex)
+- `[pending]` (Nov 4) - **Simplify Vision prompt** - Fixed Vision API, but revealed filename bug
+- `[pending]` (Nov 4) - **Fix filename mapping bug** - READY TO DEPLOY
 
 ## Known Issues (Low Priority)
 
