@@ -107,6 +107,7 @@ export async function runVision(input: VisionInput): Promise<any> {
   const prompt = input.prompt || "";
 
   const primary = parseModel(process.env.VISION_MODEL);
+  console.log("[vision-router] Using", process.env.VISION_MODEL || "(default)");
   const envFallbacks = (process.env.VISION_FALLBACK || "")
     .split(",")
     .map((entry) => entry.trim())
