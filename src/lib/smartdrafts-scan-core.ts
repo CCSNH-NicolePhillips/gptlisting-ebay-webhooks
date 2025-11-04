@@ -797,10 +797,15 @@ async function buildHybridGroups(
         const filename = file.entry.name?.toLowerCase() || '';
         const insight = insightList.find(ins => {
           const insightFilename = ins.url?.split('/').pop()?.split('?')[0]?.toLowerCase() || '';
-          return insightFilename === filename;
+          return insightFilename === filename.toLowerCase();
         });
         
         console.log(`  Checking ${filename}: insight=${!!insight}, visualDesc=${!!(insight as any)?.visualDescription}, role=${(insight as any)?.role}`);
+        if (insight) {
+          console.log(`    Insight URL: ${insight.url}`);
+          console.log(`    Has visualDescription field: ${Object.keys(insight).includes('visualDescription')}`);
+          console.log(`    visualDescription value: ${(insight as any).visualDescription?.substring(0, 50)}...`);
+        }
         
         if (insight && (insight as any).visualDescription && (insight as any).role === 'front') {
           productDescriptions.push({
