@@ -320,6 +320,38 @@ GPT_MODEL=gpt-4o (NEEDS TO BE SET IN NETLIFY)
 - Fallback: 8 individual calls → returns 8 more insights
 - Final: 9 total insights (100% coverage)
 
+---
+
+## NEW CRITICAL ISSUE 🚨 - Vision Role Assignments Being Ignored
+
+**Status**: Hybrid fallback ✅ works (all 9 insights received), BUT logic flaw discovered
+
+**Problem**: GPT Vision correctly identifies `role: "front"` and `role: "back"` in imageInsights, but `buildHybridGroups()` completely ignores this and tries to re-match everything using:
+1. Brand/product name matching
+2. CLIP similarity verification
+3. Visual description text matching
+
+**Evidence from production logs (11:48 AM run)**:
+- Vision correctly identified: `asd32q.jpg` role="front", `awef.jpg` role="front", `awefawed.jpg` role="back"
+- But then code tries to match them again using brand names: "Frog Fuel" vs "R+Co" vs "myBrainCo"
+- CLIP rejects correct matches: `IMG_20251102_144346.jpg` similarity=0.612 rejected despite being correct
+- Result: Chaos - fronts/backs mixed up, products mis-grouped
+
+**Root Cause**: `buildHybridGroups()` doesn't trust Vision's role assignments
+- Should: Lock fronts as fronts, remove from matching, find backs separately
+- Actually: Ignores roles, matches by brand/product, lets CLIP override correct Vision decisions
+
+**NEW STRATEGY** (user requested):
+1. **Pass 1 - Trust Vision roles**: When Vision says role="front", LOCK IT. Don't let CLIP override.
+2. **Remove fronts from pool**: Identified fronts are done. Remove from further consideration.
+3. **Pass 2 - Find backs**: Send remaining images with context: "These are the fronts (with descriptions). Find which remaining images are backs of these products."
+4. **Disable CLIP for now**: It's causing more harm than good (rejecting correct matches)
+
+**Files to change**:
+- `src/lib/smartdrafts-scan-core.ts` - Rewrite `buildHybridGroups()` to trust Vision roles
+- Remove CLIP verification step that overrides Vision
+- Implement two-pass Vision strategy
+
 **Alternative Fixes** (if env var doesn't solve it):
 3. **Reduce visualDescription detail** to avoid token limits
    - Current prompt has very verbose visualDescription instructions
