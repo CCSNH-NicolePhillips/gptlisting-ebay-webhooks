@@ -1,16 +1,42 @@
 # CLIP Clustering Status - Nov 4, 2025
 
-## 🔧 NEW CRITICAL ISSUE: Vision API Only Analyzing 1 of 9 Images (Nov 4, 2025)
+## � CRITICAL ISSUE: Vision API Misidentifying Products (Nov 4, 2025 - 2:10 PM)
 
-### Current Status: **DEPLOYED FIX WORKING, BUT NEW ISSUE DISCOVERED** ⚠️
-- **Good News**: Filename mapping fix (commit `d467909`) is working correctly ✅
-  - Index-based matching works: `visionGroups[0]` = `files[0]`
-  - No more "✗ File not found" errors
-- **New Problem**: Vision API only returned 1 imageInsight out of 9 images
-  - Log shows: `"groups": [1 group]` and `"imageInsights": [1 insight]`
-  - Expected: 9 imageInsights (one per image)
-  - Result: Only `asd32q.jpg` was analyzed, other 8 images got `role: null`
-  - All 8 unanalyzed images → Uncategorized group
+### Current Status: **FILENAME FIX WORKING, BUT VISION MIXING UP IMAGES** ⚠️
+
+#### Test Results (2 runs):
+- **Success Rate**: ~22% (2/9 images paired) ❌ Expected: 67-75%
+- **Groups Created**: 8 single-image groups (should be 4-5 products)
+- **Only 1 Correct Pair**: frog_01.jpg + IMG_20251102_144346.jpg (matched via OCR fallback)
+
+#### The Problem: Vision Returns WRONG Brand/Product for Each Image
+Vision API is **identifying the correct text** (OCR works) but **assigning it to the wrong images**:
+
+| Image | Vision Says | OCR Actually Shows | Reality |
+|-------|------------|-------------------|---------|
+| `asd32q.jpg` | "Frog Fuel - Nano Collagen" | "R+Co ON A CLOUD" | **R+Co hair oil** ❌ |
+| `awef.jpg` | "Frog Fuel - Performance Greens" | "myBrainCo. GUT REPAIR" | **myBrainCo** ❌ |
+| `azdfkuj.jpg` | "Unknown" | "Gluten Free • Vegan • UV Protection" | **R+Co back** ❌ |
+| `dfzdvzer.jpg` | "Unknown" | "Vitamin B12 5000 mcg" | **Nusava B12 back** ❌ |
+| `faeewfaw.jpg` | "R+Co - On a Cloud" | "Frog Fuel... STAY UNBREAKABLE" | **Frog Fuel back** ❌ |
+| `rgxbbg.jpg` | "Unknown" | "nusava B12 5000mcg" | **Nusava B12 front** ❌ |
+| `frog_01.jpg` | "Unknown" (fallback to OCR) | "FROG FUEL PERFORMANCE GREENS" | **Frog Fuel front** ✅ |
+| `IMG_20251102_144346.jpg` | "Unknown" (fallback to OCR) | "FROG FUEL PERFORMANCE GREENS" | **Frog Fuel front** ✅ |
+
+**Root Cause Theory**: Vision API is **caching or mixing up responses** across individual calls. Each image is analyzed separately (fallback mode), but Vision returns incorrect brand/product despite correct OCR text.
+
+#### ✅ Good News: Filename Mapping Fix Working
+- No more "✗ File not found" errors
+- Logs show: `✓ Matched asd32q.jpg to "frog fuel" "nano hydrolyzed collagen"`
+- Array index matching (`visionGroups[i] = files[i]`) is functioning correctly
+- Problem is **upstream** in Vision API response
+
+#### Potential Solutions:
+1. **Investigate Vision Cache**: Vision may be caching responses incorrectly
+2. **Add Image Numbers to Prompt**: Explicitly label each image "#1", "#2", etc.
+3. **Verify Dropbox URL Stability**: Check if Dropbox URLs are changing between calls
+4. **Switch to Anthropic/Gemini**: Test if other providers have same issue
+5. **Add Request ID Tracking**: Include unique ID per image to verify Vision isn't cross-contaminating
 
 ### Root Cause (INVESTIGATED)
 - ✅ **Verified**: All 9 images ARE being sent to Vision API (line 292: `runVision({ images: batch, prompt })`)
