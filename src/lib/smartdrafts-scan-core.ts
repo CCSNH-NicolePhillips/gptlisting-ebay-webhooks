@@ -791,6 +791,7 @@ async function buildHybridGroups(
     }> = [];
     
     for (const [productKey, group] of productGroups.entries()) {
+      console.log(`[buildHybridGroups] Checking group "${group.brand}" - "${group.product}" (${group.fileIndices.length} images)`);
       for (const fileIdx of group.fileIndices) {
         const file = files[fileIdx];
         const filename = file.entry.name?.toLowerCase() || '';
@@ -798,6 +799,8 @@ async function buildHybridGroups(
           const insightFilename = ins.url?.split('/').pop()?.split('?')[0]?.toLowerCase() || '';
           return insightFilename === filename;
         });
+        
+        console.log(`  Checking ${filename}: insight=${!!insight}, visualDesc=${!!(insight as any)?.visualDescription}, role=${(insight as any)?.role}`);
         
         if (insight && (insight as any).visualDescription && (insight as any).role === 'front') {
           productDescriptions.push({
@@ -808,7 +811,7 @@ async function buildHybridGroups(
             dominantColor: (insight as any).dominantColor || 'unknown',
             group
           });
-          console.log(`[buildHybridGroups] Front product: "${group.brand}" - "${group.product}"`);
+          console.log(`[buildHybridGroups] ✓ Found front for "${group.brand}" - "${group.product}"`);
           console.log(`  Visual: "${(insight as any).visualDescription}"`);
           console.log(`  Color: ${(insight as any).dominantColor}`);
         }
