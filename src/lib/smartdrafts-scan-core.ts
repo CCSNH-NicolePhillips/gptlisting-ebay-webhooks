@@ -532,15 +532,6 @@ async function buildHybridGroups(
     }
   });
   
-  // Build filename index for matching
-  const filesByFilename = new Map<string, { entry: DropboxEntry; url: string; index: number }>();
-  files.forEach((file, index) => {
-    const filename = file.entry.name?.toLowerCase() || '';
-    filesByFilename.set(filename, { ...file, index });
-  });
-  
-  console.log(`[buildHybridGroups] File index built with ${filesByFilename.size} files`);
-  
   // Step 1: Group Vision analyses by exact brand+product match
   const productGroups = new Map<string, { 
     brand: string; 
@@ -552,26 +543,26 @@ async function buildHybridGroups(
   
   const assignedIndices = new Set<number>();
   
-  for (const visionGroup of visionGroups) {
-    let brand = String(visionGroup.brand || '').trim().toLowerCase();
-    let product = String(visionGroup.product || '').trim().toLowerCase();
+  // Vision groups are in the same order as the input files array
+  for (let groupIdx = 0; groupIdx < visionGroups.length; groupIdx++) {
+    const visionGroup = visionGroups[groupIdx];
+    const fileIdx = groupIdx; // Direct mapping: visionGroups[i] = files[i]
     
-    // Extract filename from Vision's image URL
-    const visionImgUrl = visionGroup.images?.[0] || '';
-    const filename = visionImgUrl.split('/').pop()?.split('?')[0]?.toLowerCase() || '';
-    
-    if (!filename) {
-      console.warn(`[buildHybridGroups] No filename found in Vision group:`, visionGroup);
+    if (fileIdx >= files.length) {
+      console.warn(`[buildHybridGroups] Vision group index ${groupIdx} exceeds files array length ${files.length}`);
       continue;
     }
     
+    const file = files[fileIdx];
+    const filename = file.entry.name || '';
+    
+    let brand = String(visionGroup.brand || '').trim().toLowerCase();
+    let product = String(visionGroup.product || '').trim().toLowerCase();
+    
     // If Vision couldn't identify the product, try extracting brand from OCR text
     if (!brand || !product || brand === 'unknown' || product === 'unidentified item') {
-      // Find the imageInsight for this image
-      const insight = insightList.find(ins => {
-        const insightFilename = ins.url?.split('/').pop()?.split('?')[0]?.toLowerCase() || '';
-        return insightFilename === filename;
-      });
+      // Find the imageInsight for this file (also by index)
+      const insight = insightList[fileIdx];
       
       if (insight && (insight as any).textExtracted) {
         const ocrText = (insight as any).textExtracted;
@@ -638,14 +629,7 @@ async function buildHybridGroups(
     
     console.log(`[buildHybridGroups] Processing: ${filename} → "${brand}" "${product}"`);
     
-    const fileMatch = filesByFilename.get(filename);
-    
-    if (!fileMatch) {
-      console.warn(`[buildHybridGroups] ✗ File not found: ${filename}`);
-      continue;
-    }
-    
-    if (assignedIndices.has(fileMatch.index)) {
+    if (assignedIndices.has(fileIdx)) {
       console.warn(`[buildHybridGroups] ✗ File already assigned: ${filename}`);
       continue;
     }
@@ -667,9 +651,9 @@ async function buildHybridGroups(
     }
     
     const group = productGroups.get(productKey)!;
-    group.fileIndices.push(fileMatch.index);
-    group.fileUrls.push(fileMatch.url);
-    assignedIndices.add(fileMatch.index);
+    group.fileIndices.push(fileIdx);
+    group.fileUrls.push(file.url);
+    assignedIndices.add(fileIdx);
     
     console.log(`[buildHybridGroups] ✓ Matched ${filename} to "${brand}" "${product}" (${group.fileUrls.length} images total)`);
   }
