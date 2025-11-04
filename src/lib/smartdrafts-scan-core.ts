@@ -933,7 +933,130 @@ async function buildHybridGroups(
     }
   }
   
-  // Step 3: Create "Uncategorized" group for remaining unassigned images
+  // Step 3: Try to merge orphan back-only groups with matching front groups
+  console.log(`[buildHybridGroups] Step 3: Checking for orphan back-only groups to merge...`);
+  const groupsToRemove: string[] = [];
+  
+  for (let i = 0; i < hybridGroups.length; i++) {
+    const backGroup = hybridGroups[i];
+    
+    // Skip if not a single-image back-only group from same brand
+    if (backGroup.images.length !== 1) continue;
+    const backIdx = files.findIndex(f => f.url === backGroup.images[0]);
+    if (backIdx === -1) continue;
+    const backInsight = insightList.find(ins => {
+      const insUrl = ins.url?.split('/').pop()?.split('?')[0]?.toLowerCase();
+      const fileUrl = files[backIdx].url.split('/').pop()?.split('?')[0]?.toLowerCase();
+      return insUrl === fileUrl;
+    });
+    if (!backInsight?.role || backInsight.role !== 'back') continue;
+    if (!backInsight.visualDescription) continue;
+    
+    const backVisual = backInsight.visualDescription.toLowerCase();
+    const backColor = (backInsight.dominantColor || '').toLowerCase();
+    
+    console.log(`[buildHybridGroups]   Checking orphan back: ${files[backIdx].entry.name} (${backGroup.brand})`);
+    
+    // Look for a front group from the same brand
+    let bestFrontGroup: typeof hybridGroups[0] | null = null;
+    let bestScore = 0;
+    
+    for (let j = 0; j < hybridGroups.length; j++) {
+      if (i === j) continue;
+      const frontGroup = hybridGroups[j];
+      
+      // Must be same brand
+      if (frontGroup.brand?.toLowerCase() !== backGroup.brand?.toLowerCase()) continue;
+      
+      // Find the front image in this group
+      const frontIdx = frontGroup.images.findIndex((url: string) => {
+        const idx = files.findIndex(f => f.url === url);
+        if (idx === -1) return false;
+        const insight = insightList.find(ins => {
+          const insUrl = ins.url?.split('/').pop()?.split('?')[0]?.toLowerCase();
+          const fileUrl = files[idx].url.split('/').pop()?.split('?')[0]?.toLowerCase();
+          return insUrl === fileUrl;
+        });
+        return insight?.role === 'front';
+      });
+      
+      if (frontIdx === -1) continue;
+      
+      const frontUrl = frontGroup.images[frontIdx];
+      const frontFileIdx = files.findIndex(f => f.url === frontUrl);
+      const frontInsight = insightList.find(ins => {
+        const insUrl = ins.url?.split('/').pop()?.split('?')[0]?.toLowerCase();
+        const fileUrl = files[frontFileIdx].url.split('/').pop()?.split('?')[0]?.toLowerCase();
+        return insUrl === fileUrl;
+      });
+      
+      if (!frontInsight?.visualDescription) continue;
+      
+      const frontVisual = frontInsight.visualDescription.toLowerCase();
+      const frontColor = (frontInsight.dominantColor || '').toLowerCase();
+      
+      let score = 0;
+      
+      // Color match (highest weight)
+      if (backColor && frontColor && backColor === frontColor) {
+        score += 10;
+      }
+      
+      // Packaging type match
+      const packagingTypes = ['pouch', 'bottle', 'jar', 'box', 'tube', 'can', 'container'];
+      for (const pkg of packagingTypes) {
+        if (backVisual.includes(pkg) && frontVisual.includes(pkg)) {
+          score += 5;
+          break;
+        }
+      }
+      
+      // Material match
+      const materials = ['matte', 'glossy', 'transparent', 'clear', 'glass'];
+      for (const material of materials) {
+        if (backVisual.includes(material) && frontVisual.includes(material)) {
+          score += 3;
+          break;
+        }
+      }
+      
+      if (score > bestScore) {
+        bestScore = score;
+        bestFrontGroup = frontGroup;
+      }
+    }
+    
+    if (bestFrontGroup && bestScore >= 12) {
+      console.log(`[buildHybridGroups]   ✓ Merging "${backGroup.name}" back into "${bestFrontGroup.name}" (score: ${bestScore})`);
+      
+      // Add back image to front group
+      bestFrontGroup.images.push(backGroup.images[0]);
+      if (!bestFrontGroup.secondaryImageUrl) {
+        bestFrontGroup.secondaryImageUrl = backGroup.images[0];
+      } else {
+        bestFrontGroup.supportingImageUrls = bestFrontGroup.supportingImageUrls || [];
+        bestFrontGroup.supportingImageUrls.push(backGroup.images[0]);
+      }
+      
+      // Mark back group for removal
+      groupsToRemove.push(backGroup.groupId);
+      assignedIndices.add(backIdx);
+    } else {
+      console.log(`[buildHybridGroups]   ✗ No match found for orphan back (best score: ${bestScore})`);
+    }
+  }
+  
+  // Remove merged groups
+  if (groupsToRemove.length > 0) {
+    console.log(`[buildHybridGroups]   Removing ${groupsToRemove.length} merged groups`);
+    for (let i = hybridGroups.length - 1; i >= 0; i--) {
+      if (groupsToRemove.includes(hybridGroups[i].groupId)) {
+        hybridGroups.splice(i, 1);
+      }
+    }
+  }
+  
+  // Step 4: Create "Uncategorized" group for remaining unassigned images
   const finalUnassigned = files
     .map((_, i) => i)
     .filter(i => !assignedIndices.has(i));
