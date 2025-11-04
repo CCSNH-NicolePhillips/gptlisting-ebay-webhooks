@@ -557,70 +557,28 @@ export async function runAnalysis(
     }
   }
 
-  const verifiedBatches = chunkArray(verified, batchSize);
+  // ALWAYS analyze images individually to avoid Vision API confusion
+  const verifiedBatches = verified.map(url => [url]); // Each "batch" is 1 image
 
   const analyzedResults: any[] = [];
   const warnings: string[] = [...preflightWarnings];
 
   for (const [idx, batch] of verifiedBatches.entries()) {
-    console.log(`🧠 Analyzing batch ${idx + 1}/${verifiedBatches.length} (${batch.length} images)`);
+    console.log(`🧠 Analyzing image ${idx + 1}/${verifiedBatches.length} individually`);
   const metaForBatch = batch.map((url) => metaLookup.get(url) || { url, name: "", folder: "" });
   const result = await analyzeBatchViaVision(batch, metaForBatch, debugVisionResponse, force);
     if (result?._error) {
-      warnings.push(`Batch ${idx + 1}: ${result._error}`);
+      warnings.push(`Image ${idx + 1}: ${result._error}`);
     }
     
-    // Hybrid fallback: If batch returned fewer insights than images, fill in gaps with individual calls
+    // Since we're analyzing individually, we should always get 1 insight per image
     const insightsReturned = Array.isArray((result as any)?.imageInsights) ? (result as any).imageInsights.length : 0;
-    if (insightsReturned < batch.length && !result?._error) {
-      console.log(`⚠️ Batch ${idx + 1}: Got ${insightsReturned} insights for ${batch.length} images - filling gaps individually`);
-      const insightUrls = new Set<string>();
-      if (Array.isArray((result as any)?.imageInsights)) {
-        for (const insight of (result as any).imageInsights) {
-          if (insight?.url) {
-            insightUrls.add(toDirectDropbox(insight.url));
-          }
-        }
-      }
-      
-      // Find images that didn't get analyzed
-      const missingImages = batch.filter(url => !insightUrls.has(url));
-      console.log(`🔄 Re-analyzing ${missingImages.length} missing images individually:`, missingImages.map(base));
-      
-      // Analyze each missing image individually
-      for (const missingUrl of missingImages) {
-        try {
-          const meta = metaLookup.get(missingUrl) || { url: missingUrl, name: "", folder: "" };
-          const individualResult = await analyzeBatchViaVision([missingUrl], [meta], debugVisionResponse, force);
-          
-          // Merge individual result into batch result
-          if (Array.isArray((individualResult as any)?.imageInsights) && (individualResult as any).imageInsights.length > 0) {
-            if (!Array.isArray((result as any)?.imageInsights)) {
-              (result as any).imageInsights = [];
-            }
-            (result as any).imageInsights.push(...(individualResult as any).imageInsights);
-            console.log(`  ✓ Got insight for ${base(missingUrl)}`);
-          } else {
-            console.log(`  ✗ No insight for ${base(missingUrl)}`);
-          }
-          
-          // Merge groups too
-          if (Array.isArray((individualResult as any)?.groups) && (individualResult as any).groups.length > 0) {
-            if (!Array.isArray((result as any)?.groups)) {
-              (result as any).groups = [];
-            }
-            (result as any).groups.push(...(individualResult as any).groups);
-          }
-        } catch (err: any) {
-          console.error(`  ✗ Failed to analyze ${base(missingUrl)}:`, err?.message || err);
-        }
-      }
-      
-      console.log(`📦 Batch ${idx + 1}: After fallback: ${(result as any)?.imageInsights?.length || 0} total insights`);
+    if (insightsReturned === 0 && !result?._error) {
+      console.warn(`⚠️ Image ${idx + 1}: Vision returned no insights for ${base(batch[0])}`);
     }
     
     if (Array.isArray((result as any)?.imageInsights)) {
-      console.log(`📦 Batch ${idx + 1}: Using ${(result as any)?._cache ? 'CACHED' : 'FRESH'} data, ${(result as any).imageInsights.length} insights`);
+      console.log(`📦 Image ${idx + 1}: Using ${(result as any)?._cache ? 'CACHED' : 'FRESH'} data, ${(result as any).imageInsights.length} insights`);
       for (const insight of (result as any).imageInsights as ImageInsight[]) {
         if (!insight?.url) continue;
         // Debug first insight to see what fields we have
