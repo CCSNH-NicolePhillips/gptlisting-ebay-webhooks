@@ -16,6 +16,7 @@ import {
 import { frontBackStrict } from "./sorter/frontBackStrict.js";
 import { urlKey } from "../utils/urlKey.js";
 import { sanitizeInsightUrl } from "../utils/urlSanitize.js";
+import { makeDisplayUrl } from "../utils/displayUrl.js";
 
 type DropboxEntry = {
   ".tag": "file" | "folder";
@@ -1465,7 +1466,10 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       const originalUrl = urls[idx] || fileTuples[idx]?.url || '';
       const sanitizedUrl = sanitizeInsightUrl(insight.url, originalUrl);
       const key = urlKey(sanitizedUrl);
-      const displayUrl = toDirectDropbox(sanitizedUrl);
+      
+      // Use the original URL for displayUrl (it's a real Dropbox URL)
+      // This ensures thumbnails can load even if sanitizedUrl is a basename
+      const displayUrl = makeDisplayUrl(originalUrl, key);
       
       return { 
         ...insight, 
@@ -3022,6 +3026,15 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
     const dupes = allKeys.filter((k, i) => allKeys.indexOf(k) !== i);
     if (dupes.length) {
       console.warn('[role-index] DUPES found (before dedup):', dupes);
+    }
+    
+    // Debug: check for missing displayUrls
+    const allInsights = Object.values(imageInsightsRecord) as any[];
+    const noDisplay = allInsights.filter(x => !x.displayUrl || !/^https?:\/\//i.test(x.displayUrl));
+    if (noDisplay.length > 0) {
+      console.warn('[displayUrl] missing https URLs:', noDisplay.map(x => ({ key: x.key, displayUrl: x.displayUrl })));
+    } else {
+      console.log('[displayUrl] ✓ All insights have valid display URLs');
     }
 
     const cachePayload: SmartDraftGroupCache = {
