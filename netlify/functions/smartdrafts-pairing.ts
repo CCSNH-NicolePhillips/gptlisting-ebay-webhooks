@@ -37,20 +37,23 @@ function jaccard(a: string[], b: string[]): number {
 }
 
 /**
+ * Utility: Category bucket
+ */
+function bucket(path?: string | null): string {
+  const s = (path || '').toLowerCase();
+  if (/supplement|vitamin|nutrition/.test(s)) return 'supp';
+  if (/food|beverage|grocery/.test(s)) return 'food';
+  if (/hair/.test(s)) return 'hair';
+  if (/cosm|skin|spf|make ?up/.test(s)) return 'cosm';
+  return 'other';
+}
+
+/**
  * Utility: Category compatibility
  */
-function categoryCompat(a?: string, b?: string): number {
-  const buck = (p?: string) => {
-    const s = (p || '').toLowerCase();
-    if (/supplement|vitamin/.test(s)) return 'supp';
-    if (/food|beverage|grocery/.test(s)) return 'food';
-    if (/hair/.test(s)) return 'hair';
-    if (/cosm|skin|spf|make ?up/.test(s)) return 'cosm';
-    if (/accessor/.test(s)) return 'accessory';
-    return 'other';
-  };
-  const A = buck(a);
-  const B = buck(b);
+function categoryCompat(a?: string | null, b?: string | null): number {
+  const A = bucket(a);
+  const B = bucket(b);
   if (A === B && A !== 'other') return 1.0;
   if ((A === 'hair' && (B === 'supp' || B === 'food')) || (B === 'hair' && (A === 'supp' || A === 'food'))) return -1.0;
   if ((A === 'supp' && B === 'food') || (A === 'food' && B === 'supp')) return 0.4;
@@ -185,17 +188,36 @@ export const handler: Handler = async (event) => {
 
     // 3) Cross-group candidates: recover obvious supplement pairs
     function preScore(frontKey: string, backKey: string): number {
-      const bEq = (brandByKey.get(frontKey) || '').toLowerCase() === (brandByKey.get(backKey) || '').toLowerCase() && !!brandByKey.get(frontKey);
-      const pSim = jaccard(tokens(productByKey.get(frontKey)), tokens(productByKey.get(backKey)));
-      const c = categoryCompat(catByKey.get(frontKey), catByKey.get(backKey));
+      const fBrand = (brandByKey.get(frontKey) || '').toLowerCase();
+      const bBrand = (brandByKey.get(backKey) || '').toLowerCase();
+      const brandEq = !!fBrand && !!bBrand && fBrand === bBrand;
+      
+      const prodSim = jaccard(tokens(productByKey.get(frontKey)), tokens(productByKey.get(backKey)));
+      const cat = categoryCompat(catByKey.get(frontKey), catByKey.get(backKey));
       
       let s = 0;
-      if (bEq) s += 2.0;
-      s += pSim >= 0.6 ? 1.5 : pSim >= 0.4 ? 1.0 : 0;
-      s += c >= 0.6 ? 1.0 : c >= 0.2 ? 0.2 : c <= -0.5 ? -2.0 : 0;
       
-      // Light boost: front/back roles differ as desired
+      // existing components
+      if (brandEq) s += 2.0;
+      s += prodSim >= 0.6 ? 1.5 : prodSim >= 0.4 ? 1.0 : 0;
+      s += cat >= 0.6 ? 1.0 : cat >= 0.2 ? 0.2 : cat <= -0.5 ? -2.0 : 0;
+      
+      // always reward desired role pairing
       if (roleByKey.get(frontKey) === 'front' && roleByKey.get(backKey) === 'back') s += 1.0;
+      
+      // --- NEW: supplement-back rescue boosts ---
+      const fBuck = bucket(catByKey.get(frontKey));
+      const bBuck = bucket(catByKey.get(backKey));
+      
+      // (R1) Front is a supplement, back category is unknown/other but is a BACK → modest boost
+      if (fBuck === 'supp' && (bBuck === 'other') && roleByKey.get(backKey) === 'back') {
+        s += 1.0;
+      }
+      
+      // (R2) Front brand present, back brand missing → small rescue (helps Nusava)
+      if (fBrand && !bBrand) {
+        s += 0.7;
+      }
       
       return s;
     }
@@ -219,7 +241,7 @@ export const handler: Handler = async (event) => {
       const runner = scored[1];
       const gap = best.s - (runner?.s ?? -Infinity);
       
-      // Accept if strong enough
+      // Accept if strong enough (strict rule)
       if (best.s >= 3.0 && gap >= 1.0) {
         autoPairs.push({
           frontUrl: f,
@@ -236,6 +258,28 @@ export const handler: Handler = async (event) => {
           ],
           confidence: 0.95
         });
+        continue;
+      }
+      
+      // --- NEW: supplement soft accept ---
+      const fBuck = bucket(catByKey.get(f));
+      if (fBuck === 'supp' && best.s >= 2.4 && gap >= 0.8) {
+        autoPairs.push({
+          frontUrl: f,
+          backUrl: best.b,
+          matchScore: Math.round(best.s * 100) / 100,
+          brand: brandByKey.get(f) || '',
+          product: productByKey.get(f) || '',
+          variant: null,
+          sizeFront: null,
+          sizeBack: null,
+          evidence: [
+            `SOFT SUPP RESCUE: preScore=${best.s.toFixed(2)}`,
+            `gap=${gap === Infinity ? 'Infinity' : gap.toFixed(2)}`
+          ],
+          confidence: 0.90
+        });
+        continue;
       }
     }
 
