@@ -5,6 +5,7 @@ import { AnalysisPanel } from './components/AnalysisPanel.js';
 import { PairingPanel } from './components/PairingPanel.js';
 import { ProductPanel } from './components/ProductPanel.js';
 import { MetricsPanel } from './components/MetricsPanel.js';
+import { DebugPanel } from './components/DebugPanel.js';
 import { FolderSelector } from './components/FolderSelector.js';
 import { enqueueAnalyzeLive, pollAnalyzeLive, runPairingLive, resetFolderLive, getMetricsLive } from './lib/api.js';
 import { mockLoadAnalysis, mockRunPairing } from './lib/mockServer.js';
@@ -12,7 +13,7 @@ import { normalizeFolderInput } from './lib/urlKey.js';
 
 const html = htm.bind(h);
 
-const TABS = ['Analysis','Pairing','Products','Candidates (soon)','Metrics','Logs (soon)'];
+const TABS = ['Analysis','Pairing','Products','Candidates (soon)','Metrics','Logs (soon)','Debug'];
 
 export function App() {
   const [tab, setTab] = useState('Analysis');
@@ -238,7 +239,8 @@ export function App() {
         ${!loading && tab==='Analysis' && html`<${AnalysisPanel} data=${analysis} />`}
         ${!loading && tab==='Pairing' && html`<${PairingPanel} result=${pairing} />`}
         ${!loading && tab==='Products' && html`<${ProductPanel} products=${pairing?.products} />`}
-        ${!loading && tab==='Metrics' && html`<${MetricsPanel} metrics=${metrics} />`}
+        ${!loading && tab==='Metrics' && html`<${MetricsPanel} pairing=${pairing} />`}
+        ${!loading && tab==='Debug' && html`<${DebugPanel} analysis=${analysis} pairing=${pairing} />`}
         ${!loading && tab!=='Analysis' && tab!=='Pairing' && tab!=='Products' && tab!=='Metrics' && html`
           <div class="placeholder">
             <p>${tab} — coming next.</p>
