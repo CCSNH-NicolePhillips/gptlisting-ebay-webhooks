@@ -45,8 +45,13 @@ export function FolderSelector({ value, onChange, disabled }) {
       const paths = Array.from(unique.keys()).sort((a, b) => a.localeCompare(b));
       setFolders(paths);
       
-      // If we have folders and no current value, select the first one
-      if (paths.length > 0 && !value) {
+      // Check for stored default folder (set from index.html or previous session)
+      const stored = localStorage.getItem('dbxDefaultFolder') || '';
+      
+      // Priority: 1) current value, 2) stored default, 3) first folder
+      if (!value && stored && paths.includes(stored)) {
+        onChange(stored);
+      } else if (!value && paths.length > 0) {
         onChange(paths[0]);
       }
     } catch (err) {
@@ -60,6 +65,10 @@ export function FolderSelector({ value, onChange, disabled }) {
   function handleChange(e) {
     const selected = e.currentTarget.value;
     onChange(selected);
+    // Save as default folder for future sessions
+    if (selected) {
+      localStorage.setItem('dbxDefaultFolder', selected);
+    }
   }
 
   if (loading) {
