@@ -18,6 +18,7 @@
     "prepare": "husky install",
     "deploy": "netlify deploy --prod",
     "pairing": "tsx scripts/run-pairing.ts analysis.json pairing.json",
+    "canary": "tsx scripts/canary-test.ts",
     "verify:golden": "tsx scripts/verify-golden.ts",
     "metrics:print": "tsx scripts/metrics-print.ts",
     "test": "jest"
