@@ -1,4 +1,7 @@
-import { html } from '../htm-preact.js';
+import { h } from 'https://esm.sh/preact@10.20.2';
+import htm from 'https://esm.sh/htm@3.1.1';
+
+const html = htm.bind(h);
 
 /**
  * Debug panel showing raw analysis/pairing data for troubleshooting
