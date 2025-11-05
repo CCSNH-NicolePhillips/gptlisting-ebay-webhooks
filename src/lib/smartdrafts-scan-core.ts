@@ -14,6 +14,7 @@ import {
     type SmartDraftGroupCache,
 } from "./smartdrafts-store.js";
 import { frontBackStrict } from "./sorter/frontBackStrict.js";
+import { urlKey } from "../utils/urlKey.js";
 
 type DropboxEntry = {
   ".tag": "file" | "folder";
@@ -1476,7 +1477,13 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       const normalizedUrl = typeof insight.url === "string" ? toDirectDropbox(insight.url) : "";
       if (!normalizedUrl) return;
       const payload: ImageInsight = { ...insight, url: normalizedUrl };
-      insightMap.set(normalizedUrl, payload);
+      
+      // Use urlKey (basename) for consistent indexing
+      const key = urlKey(normalizedUrl);
+      if (!insightMap.has(key)) {
+        insightMap.set(key, payload);
+      }
+      
       const base = basenameFrom(normalizedUrl).toLowerCase();
       if (base) {
         if (!insightByBase.has(base)) {
@@ -1510,7 +1517,11 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       for (const base of bases) {
         const match = insightByBase.get(base);
         if (match) {
-          insightMap.set(tuple.url, match);
+          // Index by urlKey of tuple.url to avoid duplicates
+          const key = urlKey(tuple.url);
+          if (!insightMap.has(key)) {
+            insightMap.set(key, match);
+          }
           if (!roleByBase.has(base)) {
             const roleRaw = typeof match.role === "string" ? match.role.toLowerCase().trim() : "";
             const info: RoleInfo = {};
@@ -2862,7 +2873,20 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       if (heroPref) group.primaryImageUrl = heroPref;
       if (backPref && backPref !== heroPref) group.secondaryImageUrl = backPref;
 
-      normalizedGroups.push({ ...group, images: finalImages });
+      // Normalize all URLs to basenames using urlKey
+      const normalizedImages = finalImages.map(urlKey);
+      const uniqueBasenames = Array.from(new Set(normalizedImages));
+      
+      const normalizedGroup = {
+        ...group,
+        images: uniqueBasenames,
+        primaryImageUrl: group.primaryImageUrl ? urlKey(group.primaryImageUrl) : null,
+        heroUrl: group.heroUrl ? urlKey(group.heroUrl) : (group.primaryImageUrl ? urlKey(group.primaryImageUrl) : null),
+        backUrl: group.backUrl ? urlKey(group.backUrl) : null,
+        secondaryImageUrl: group.secondaryImageUrl ? urlKey(group.secondaryImageUrl) : null,
+      };
+      
+      normalizedGroups.push(normalizedGroup);
     }
 
     const orphanTuples = fileTuples.filter((tuple) => !usedUrls.has(tuple.url));
@@ -2914,12 +2938,21 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       });
     });
 
-    const imageInsightsRecord = Object.fromEntries(
-      Array.from(insightOutput.entries()).map(([key, value]) => {
-        const normalized = toDirectDropbox(key);
-        return [normalized, { ...value, url: normalized } as ImageInsight];
-      })
-    );
+    // De-duplicate imageInsights by urlKey before returning
+    const seen = new Set<string>();
+    const uniqueInsights: Array<[string, ImageInsight]> = [];
+    
+    for (const [key, value] of insightOutput.entries()) {
+      const normalized = toDirectDropbox(key);
+      const canonicalKey = urlKey(normalized);
+      
+      if (seen.has(canonicalKey)) continue;
+      seen.add(canonicalKey);
+      
+      uniqueInsights.push([canonicalKey, { ...value, url: canonicalKey } as ImageInsight]);
+    }
+
+    const imageInsightsRecord = Object.fromEntries(uniqueInsights);
 
     const cachePayload: SmartDraftGroupCache = {
       signature,
