@@ -46,9 +46,38 @@
 ## Pairing System
 - v1.0.0 complete (Phases 1-7) with tag `pairing-v1.0.0`
 - Located in `src/pairing/` directory
-- Not yet integrated into UI - new isolated UI being built instead of modifying legacy code
-- Uses vision role classification (front/back) to pair product images
+- Uses GPT-4o-mini for pairing (NO CLIP dependency)
+- Vision role classification (front/back) groups images by product
+- All backend functions implemented and wired to production code
 
-## Pending Questions
-- Backend functions (smartdrafts-analyze, smartdrafts-pairing, smartdrafts-reset, smartdrafts-metrics) need to be created next
-- Should reference existing endpoints like `dropbox-list-images`, `analyze-images-bg-user`, etc.
+## CLIP Removal (Phases S1-S3)
+**User Requirement**: "WHY ARE WE USING CLIP THE NEW HTML AND NEW CODE IS SO WE DONT USE IT"
+- **Phase S1 (COMPLETE)**: Added `USE_CLIP=false` flag (default) in `src/config.ts`
+  - Guarded all CLIP API calls at source in `src/lib/clip-client-split.ts`
+  - Early returns prevent HTTP requests to Hugging Face
+  - Eliminates 503 errors from unavailable CLIP service
+- **Phase S2 (COMPLETE)**: Vision-only grouping in `src/lib/smartdrafts-scan-core.ts`
+  - Wrapped `buildClipGroups()` and `buildHybridGroups()` with `if (USE_CLIP)` guards
+  - Added `getImageVector()` guard to return null immediately when disabled
+  - Logging: `[Phase R0] CLIP verification disabled; using vision-only roles and grouping`
+- **Phase S3 Part A (COMPLETE)**: Fixed `<imgUrl>` placeholders in `src/lib/analyze-core.ts` (line ~458)
+  - Vision API sometimes returns literal `<imgUrl>` instead of actual URLs
+  - Added detection for placeholder values: `<imgUrl>`, `imgUrl`, empty string
+  - Uses array index to map back to actual batch URL: `batch[idx]`
+  - Logs warning: `Fixed placeholder URL at index ${idx}: "${rawUrl}" → "${fallbackUrl}"`
+  - Prevents "role:null" bugs in UI caused by URL lookup mismatches
+- **Phase S3 Part B (Optional)**: URL key normalization already implemented
+  - Backend uses `basenameFrom()` for consistent basename matching (line 125)
+  - UI uses `urlKey()` for same purpose (public/new-smartdrafts/lib/urlKey.js)
+  - Both functions extract filename from full URLs to handle query params/path differences
+- **Build Status**: All changes compiled successfully with `npm run build` ✅
+- **Next**: End-to-end testing with real Dropbox data
+
+## Backend Functions (All Complete)
+- `smartdrafts-scan-bg` (POST) - Enqueue background scan job
+- `smartdrafts-scan-status` (GET) - Poll job status with jobId
+- `smartdrafts-scan-background` (Background worker) - Process scan jobs using production scan-core
+- `smartdrafts-pairing` (POST) - Run pairing algorithm with GPT-4o-mini
+- `smartdrafts-reset` (POST) - Clear cache for folder
+- `smartdrafts-metrics` (GET) - Get pairing metrics (stub)
+- `smartdrafts-analyze` (GET) - Wrapper for backward compat

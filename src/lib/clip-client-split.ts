@@ -1,4 +1,5 @@
 import { Buffer } from "node:buffer";
+import { USE_CLIP } from "../config.js";
 
 const HF_TOKEN = process.env.HF_API_TOKEN || "";
 const TEXT_BASE = (process.env.HF_TEXT_ENDPOINT_BASE || "").replace(/\/+$/, "");
@@ -56,6 +57,9 @@ async function post(url: string, headers: Record<string, string>, body: BodyInit
 }
 
 export async function clipTextEmbedding(text: string): Promise<number[] | null> {
+  if (!USE_CLIP) {
+    return null; // CLIP disabled - return null immediately
+  }
   if (!HF_TOKEN || !TEXT_BASE) return null;
   const json = await post(
     TEXT_BASE,
@@ -71,6 +75,9 @@ export async function clipTextEmbedding(text: string): Promise<number[] | null> 
 }
 
 export async function clipImageEmbedding(imageUrl: string): Promise<number[] | null> {
+  if (!USE_CLIP) {
+    return null; // CLIP disabled - return null immediately, no HTTP calls
+  }
   if (!HF_TOKEN || !IMAGE_BASE) {
     console.warn("[clipImageEmbedding] Missing HF_TOKEN or IMAGE_BASE");
     return null;

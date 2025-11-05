@@ -36,3 +36,6 @@ export const cfg = {
 export const USE_ROLE_SORTING = (process.env.USE_ROLE_SORTING ?? 'true') === 'true';
 export const USE_NEW_SORTER = (process.env.USE_NEW_SORTER ?? 'true') === 'true';
 export const STRICT_TWO_ONLY = (process.env.STRICT_TWO_ONLY ?? 'true') === 'true';
+
+// Phase S1: Hard-disable CLIP embeddings (moving to vision-only + pairing system)
+export const USE_CLIP = (process.env.USE_CLIP ?? 'false') === 'true';

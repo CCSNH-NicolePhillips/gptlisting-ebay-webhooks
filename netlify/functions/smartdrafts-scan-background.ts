@@ -3,6 +3,7 @@ import { runSmartDraftScan, type SmartDraftScanResponse } from "../../src/lib/sm
 import { putJob } from "../../src/lib/job-store.js";
 import { k } from "../../src/lib/user-keys.js";
 import { decRunning } from "../../src/lib/quota.js";
+import { USE_CLIP, USE_NEW_SORTER, USE_ROLE_SORTING } from "../../src/config.js";
 
 type BackgroundPayload = {
   jobId?: string;
@@ -48,6 +49,9 @@ export const handler: Handler = async (event) => {
   const force = Boolean(body.force);
   const limit = Number.isFinite(body.limit) ? Number(body.limit) : undefined;
   const debugEnabled = Boolean(body.debug);
+
+  // Log feature flags at startup
+  console.log(`[Flags] USE_CLIP=${USE_CLIP} USE_NEW_SORTER=${USE_NEW_SORTER} USE_ROLE_SORTING=${USE_ROLE_SORTING}`);
 
   const jobKey = k.job(userId, jobId);
 
