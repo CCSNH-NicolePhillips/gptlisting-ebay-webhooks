@@ -15,6 +15,7 @@ import {
 } from "./smartdrafts-store.js";
 import { frontBackStrict } from "./sorter/frontBackStrict.js";
 import { urlKey } from "../utils/urlKey.js";
+import { sanitizeInsightUrl } from "../utils/urlSanitize.js";
 
 type DropboxEntry = {
   ".tag": "file" | "folder";
@@ -1447,7 +1448,7 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
     const rawInsights = analysis?.imageInsights || {};
 
     // When USE_NEW_SORTER is enabled, use raw vision insights to avoid corruption from old logic
-    const insightList: ImageInsight[] = USE_NEW_SORTER && Array.isArray(analysis?._rawVisionInsights)
+    let insightList: ImageInsight[] = USE_NEW_SORTER && Array.isArray(analysis?._rawVisionInsights)
       ? (analysis._rawVisionInsights as ImageInsight[])
       : Array.isArray(rawInsights)
       ? (rawInsights as ImageInsight[])
@@ -1457,6 +1458,13 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
             return { ...(insight as ImageInsight), url };
           })
           .filter((value): value is ImageInsight => Boolean(value));
+
+    // Sanitize insight URLs immediately - replace placeholders like "<imgUrl>" with original URLs
+    insightList = insightList.map((insight, idx) => {
+      const originalUrl = urls[idx] || fileTuples[idx]?.url || '';
+      const sanitizedUrl = sanitizeInsightUrl(insight.url, originalUrl);
+      return { ...insight, url: sanitizedUrl };
+    });
 
     const extractInsightOcr = (insight: ImageInsight | undefined): string => {
       if (!insight) return "";
@@ -1625,6 +1633,23 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
     if (USE_NEW_SORTER) {
       // NEW HYBRID APPROACH: Trust Vision's product identification, use CLIP for image matching
       const visionGroups = Array.isArray(analysis?.groups) ? (analysis.groups as AnalyzedGroup[]) : [];
+      
+      // Sanitize all URLs in vision groups immediately
+      visionGroups.forEach((g, idx) => {
+        const originalUrl = urls[idx] || fileTuples[idx]?.url || '';
+        if (g.primaryImageUrl) {
+          g.primaryImageUrl = sanitizeInsightUrl(g.primaryImageUrl, originalUrl);
+        }
+        if (g.heroUrl) {
+          g.heroUrl = sanitizeInsightUrl(g.heroUrl, originalUrl);
+        }
+        if (g.backUrl) {
+          g.backUrl = sanitizeInsightUrl(g.backUrl, originalUrl);
+        }
+        if (Array.isArray(g.images)) {
+          g.images = g.images.map(img => sanitizeInsightUrl(img, originalUrl));
+        }
+      });
 
       console.log(`[Phase R0] DEBUG: visionGroups structure:`, JSON.stringify(visionGroups.map(g => ({
         groupId: g.groupId,
@@ -2874,7 +2899,9 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       if (backPref && backPref !== heroPref) group.secondaryImageUrl = backPref;
 
       // Normalize all URLs to basenames using urlKey
-      const normalizedImages = finalImages.map(urlKey);
+      const normalizedImages = finalImages
+        .map(urlKey)
+        .filter(k => k && k !== 'imgurl' && !k.startsWith('<')); // Skip placeholders
       const uniqueBasenames = Array.from(new Set(normalizedImages));
       
       const normalizedGroup = {
@@ -2946,6 +2973,12 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       const normalized = toDirectDropbox(key);
       const canonicalKey = urlKey(normalized);
       
+      // Skip any lingering placeholder URLs
+      if (!canonicalKey || canonicalKey === 'imgurl' || canonicalKey.startsWith('<')) {
+        console.warn(`[role-index] Skipping placeholder URL: "${canonicalKey}" from "${key}"`);
+        continue;
+      }
+      
       if (seen.has(canonicalKey)) continue;
       seen.add(canonicalKey);
       
@@ -2953,6 +2986,17 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
     }
 
     const imageInsightsRecord = Object.fromEntries(uniqueInsights);
+    
+    // Debug: log keys sample to verify no placeholders
+    const keySample = Array.from(seen).slice(0, 12);
+    console.log('[role-index] keys sample:', keySample);
+    
+    // Debug: check for duplicates
+    const allKeys = Array.from(insightOutput.entries()).map(([k]) => urlKey(toDirectDropbox(k)));
+    const dupes = allKeys.filter((k, i) => allKeys.indexOf(k) !== i);
+    if (dupes.length) {
+      console.warn('[role-index] DUPES found (before dedup):', dupes);
+    }
 
     const cachePayload: SmartDraftGroupCache = {
       signature,
