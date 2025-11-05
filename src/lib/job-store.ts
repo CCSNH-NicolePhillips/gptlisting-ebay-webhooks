@@ -118,3 +118,49 @@ export async function listJobs(limit = 50) {
     })
     .slice(0, limit);
 }
+
+/**
+ * Clear all Redis keys matching a pattern
+ * Returns the number of keys deleted
+ */
+export async function clearKeysByPattern(pattern: string): Promise<number> {
+  const keysResp = await redisCall("KEYS", pattern);
+  const keys = toStringArray(keysResp.result);
+  if (!keys.length) return 0;
+
+  // Delete keys in batch
+  let deleted = 0;
+  for (const key of keys) {
+    try {
+      await redisCall("DEL", key);
+      deleted++;
+    } catch (err) {
+      console.error(`Failed to delete key ${key}:`, err);
+    }
+  }
+
+  return deleted;
+}
+
+/**
+ * Clear all job-related keys for a specific userId
+ * This includes job data, price caches, overrides, and job indices
+ */
+export async function clearUserJobs(userId: string): Promise<number> {
+  let total = 0;
+  
+  // Clear job data: job:userId:*
+  total += await clearKeysByPattern(`job:${userId}:*`);
+  
+  // Clear price caches: price:userId:*
+  total += await clearKeysByPattern(`price:${userId}:*`);
+  
+  // Clear overrides: taxo:ovr:userId:*
+  total += await clearKeysByPattern(`taxo:ovr:${userId}:*`);
+  
+  // Clear job index: jobsidx:userId
+  total += await clearKeysByPattern(`jobsidx:${userId}`);
+  
+  return total;
+}
+

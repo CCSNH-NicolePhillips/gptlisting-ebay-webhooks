@@ -1,11 +1,16 @@
 import type { Handler } from "@netlify/functions";
 import { getOrigin, isOriginAllowed, jsonResponse } from "../../src/lib/http.js";
+import { clearUserJobs } from "../../src/lib/job-store.js";
+import { requireUserAuth } from "../../src/lib/auth-user.js";
 
 /**
  * POST /.netlify/functions/smartdrafts-reset?folder=<url>
  * 
- * Clears cache/DB entries for a Dropbox folder
+ * Clears Redis cache/job entries for the authenticated user
  * Returns { ok: true, cleared: number }
+ * 
+ * Note: 'folder' parameter is accepted but currently all user jobs are cleared
+ * (could be enhanced to clear only jobs matching specific folder path)
  */
 
 export const handler: Handler = async (event) => {
@@ -25,17 +30,37 @@ export const handler: Handler = async (event) => {
     return jsonResponse(403, { error: "Forbidden" }, originHdr, methods);
   }
 
+  // Get authenticated user
+  let user;
+  try {
+    user = await requireUserAuth(headers.authorization || headers.Authorization);
+  } catch (err: any) {
+    return jsonResponse(401, { error: "Unauthorized", message: err.message }, originHdr, methods);
+  }
+
   const folder = event.queryStringParameters?.folder || "";
 
   if (!folder) {
     return jsonResponse(400, { error: "folder parameter required" }, originHdr, methods);
   }
 
-  // TODO: Clear Redis cache entries for this folder
-  // Need to determine cache key pattern (likely based on folder hash/signature)
-  return jsonResponse(501, {
-    error: "Not yet implemented", 
-    message: "smartdrafts-reset needs to clear Redis cache for folder",
-    folder
-  }, originHdr, methods);
+  try {
+    // Clear all Redis keys for this user
+    // This includes: job:userId:*, price:userId:*, taxo:ovr:userId:*, jobsidx:userId
+    const cleared = await clearUserJobs(user.userId);
+    
+    console.log(`[smartdrafts-reset] Cleared ${cleared} Redis keys for user ${user.userId}`);
+    
+    return jsonResponse(200, {
+      ok: true,
+      cleared,
+      message: `Cleared ${cleared} cache entries for user`
+    }, originHdr, methods);
+  } catch (error: any) {
+    console.error("[smartdrafts-reset] error:", error);
+    return jsonResponse(500, {
+      error: "Reset failed",
+      message: error?.message || String(error)
+    }, originHdr, methods);
+  }
 };
