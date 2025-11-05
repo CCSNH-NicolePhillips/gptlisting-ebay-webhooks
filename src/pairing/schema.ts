@@ -20,6 +20,8 @@ const ProductGroup = z.object({
   productId: z.string().min(1),
   frontUrl: z.string().min(1),
   backUrl: z.string().min(1),
+  heroDisplayUrl: z.string().optional(), // Display URL for front image
+  backDisplayUrl: z.string().optional(), // Display URL for back image
   extras: z.array(z.string()).default([]), // side/detail/angle images
   evidence: z.object({
     brand: z.string(),
