@@ -105,6 +105,7 @@ export const handler: Handler = async (event) => {
       warnings: payload.warnings,
       groups: payload.groups,
       orphans: payload.orphans,
+      imageInsights: payload.imageInsights,
       cached: payload.cached,
       debug: payload.debug,
     });

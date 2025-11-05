@@ -30,26 +30,30 @@ export function App() {
   const [pairing, setPairing] = useState(null);
   const [metrics, setMetrics] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState(''); // Detailed status for loading spinner
   const [toast, setToast] = useState('');
 
-  function showToast(msg) { setToast(msg); setTimeout(() => setToast(''), 2000); }
+  function showToast(msg) { setToast(msg); setTimeout(() => setToast(''), 3000); }
 
   async function doAnalyze() {
     try {
       setLoading(true);
       let a;
       if (mode === 'Mock') {
+        setLoadingStatus('🎲 Loading mock data...');
         a = await mockLoadAnalysis();
-        showToast('Analysis loaded (mock)');
+        showToast('✨ Analysis loaded (mock)');
       } else {
         if (!folder) throw new Error('Pick a Dropbox folder/link first');
         // Folder is now a Dropbox path (not a URL), use it directly
         localStorage.setItem('dbxDefaultFolder', folder);
         
         // Enqueue job
+        setLoadingStatus('🚀 Queueing scan...');
         showToast('Queueing scan...');
         const jobId = await enqueueAnalyzeLive(folder, { force });
-        showToast(`Scan queued (${jobId.slice(0,8)}...) - polling...`);
+        setLoadingStatus(`⏳ Polling for results...`);
+        showToast(`Scan queued (${jobId.slice(0,8)}...)`);
         
         // Poll until complete (max 300 attempts = 10 minutes with 2s intervals)
         // Vision API takes 5-10 seconds per image, so allow plenty of time
@@ -60,11 +64,13 @@ export function App() {
           if (job.state === 'complete') {
             a = {
               groups: job.groups || [],
-              imageInsights: [], // scan doesn't return imageInsights
+              imageInsights: job.imageInsights || [],
+              orphans: job.orphans || [],
               cached: job.cached,
               folder: job.folder
             };
-            showToast(force ? 'Analysis complete (live, force)' : 'Analysis complete (live)');
+            setLoadingStatus('✅ Complete!');
+            showToast(force ? '✨ Analysis complete (live, force)' : '✨ Analysis complete (live)');
             break;
           }
           
@@ -75,16 +81,21 @@ export function App() {
           // Update status toast every 10 seconds (every 5 polls)
           if (i % 5 === 0 && i > 0) {
             const elapsed = Math.floor((i * 2) / 60);
-            showToast(`Scanning... (${job.state}, ${elapsed}m${Math.floor((i * 2) % 60 / 10) * 10}s)`);
+            const seconds = Math.floor((i * 2) % 60 / 10) * 10;
+            const timeStr = `${elapsed}m${seconds}s`;
+            setLoadingStatus(`🔍 Scanning... (${job.state}, ${timeStr} elapsed)`);
+            showToast(`Scanning images... ${timeStr}`);
           }
         }
         
         if (!a) throw new Error('Scan timed out after 10 minutes');
       }
       setAnalysis(a);
+      setLoadingStatus('');
       setTab('Analysis');
     } catch (e) {
-      console.error(e); showToast(e.message || 'Analyze failed');
+      console.error(e); showToast('❌ ' + (e.message || 'Analyze failed'));
+      setLoadingStatus('');
     } finally { setLoading(false); }
   }
 
@@ -93,31 +104,39 @@ export function App() {
       setLoading(true);
       let out;
       if (mode === 'Mock') {
+        setLoadingStatus('🎲 Running mock pairing...');
         out = await mockRunPairing();
-        showToast('Pairing complete (mock)');
+        showToast('✨ Pairing complete (mock)');
       } else {
         if (!analysis) throw new Error('Run Analyze first');
+        if (!analysis.imageInsights || analysis.imageInsights.length === 0) {
+          throw new Error('No image insights found. Try running Analyze again with Force Rescan.');
+        }
+        setLoadingStatus('🤖 Running GPT-4o-mini pairing...');
         out = await runPairingLive(analysis);
-        showToast('Pairing complete (live)');
+        showToast('✨ Pairing complete (live)');
       }
       const { pairing, metrics } = out;
       setPairing(pairing); setMetrics(metrics || null);
+      setLoadingStatus('');
       setTab('Pairing');
     } catch (e) {
-      console.error(e); showToast(e.message || 'Pairing failed');
+      console.error(e); showToast('❌ ' + (e.message || 'Pairing failed'));
     } finally { setLoading(false); }
   }
 
   async function doHardReset() {
     try {
-      if (mode !== 'Live') { showToast('Reset only applies to Live'); return; }
-      if (!folder) { showToast('Pick a folder first'); return; }
+      if (mode !== 'Live') { showToast('⚠️ Reset only applies to Live'); return; }
+      if (!folder) { showToast('⚠️ Pick a folder first'); return; }
       setLoading(true);
+      setLoadingStatus('🗑️ Clearing cache...');
       const res = await resetFolderLive(folder);
-      showToast(res?.ok ? `Reset done (cleared ${res.cleared ?? 0})` : 'Reset finished');
+      showToast(res?.ok ? `✅ Reset done (cleared ${res.cleared ?? 0})` : '✅ Reset finished');
       setAnalysis(null); setPairing(null); setMetrics(null);
+      setLoadingStatus('');
     } catch (e) {
-      console.error(e); showToast(e.message || 'Reset failed');
+      console.error(e); showToast('❌ ' + (e.message || 'Reset failed'));
     } finally { setLoading(false); }
   }
 
@@ -171,7 +190,11 @@ export function App() {
 
       <main class="content">
         ${toast && html`<div class="toast">${toast}</div>`}
-        ${loading && html`<div class="loading">Loading…</div>`}
+        ${loading && html`
+          <div class="loading-spinner loading-pulse">
+            <span>${loadingStatus || 'Loading…'}</span>
+          </div>
+        `}
         ${!loading && tab==='Analysis' && html`<${AnalysisPanel} data=${analysis} />`}
         ${!loading && tab==='Pairing' && html`<${PairingPanel} result=${pairing} />`}
         ${!loading && tab==='Products' && html`<${ProductPanel} products=${pairing?.products} />`}
