@@ -2,6 +2,23 @@
 // Input: { groups, imageInsights }
 // Output: a Map<string, FeatureRow> keyed by image url.
 
+/**
+ * Extract basename from URL or path (filename without directory)
+ * Handles both full URLs and simple filenames
+ */
+function basenameFrom(u: string): string {
+  try {
+    if (!u) return "";
+    const trimmed = u.trim();
+    if (!trimmed) return "";
+    const noQuery = trimmed.split("?")[0];
+    const parts = noQuery.split("/");
+    return parts[parts.length - 1] || "";
+  } catch {
+    return u;
+  }
+}
+
 export type Role = 'front' | 'back' | 'side' | 'other';
 
 export interface FeatureRow {
@@ -102,22 +119,49 @@ function normalizeColor(color: string): string {
 export function buildFeatures(analysis: Analysis): Map<string, FeatureRow> {
   const features = new Map<string, FeatureRow>();
   
-  // Build a map of url -> group data
-  const groupByUrl = new Map<string, any>();
+  // Build a map of basename -> group data for flexible URL matching
+  // Groups may have short filenames or full URLs in images array
+  const groupByBase = new Map<string, any>();
   for (const group of analysis.groups) {
+    // Try to get any URL from the group (could be primaryImageUrl or first image)
     const url = group.primaryImageUrl || group.images?.[0];
     if (url) {
-      groupByUrl.set(url, group);
+      const base = basenameFrom(url).toLowerCase();
+      if (base && !groupByBase.has(base)) {
+        groupByBase.set(base, group);
+      }
+    }
+    
+    // Also index by all images in the array (some groups have multiple URLs)
+    if (Array.isArray(group.images)) {
+      for (const imgUrl of group.images) {
+        if (imgUrl) {
+          const base = basenameFrom(imgUrl).toLowerCase();
+          if (base && !groupByBase.has(base)) {
+            groupByBase.set(base, group);
+          }
+        }
+      }
     }
   }
   
-  // Process each insight
+  console.log(`[buildFeatures] Built basename map with ${groupByBase.size} entries from ${analysis.groups.length} groups`);
+  
+  // Process each insight and match to group by basename
+  let matched = 0;
+  let skipped = 0;
   for (const insight of analysis.imageInsights) {
     const url = insight.url;
-    const group = groupByUrl.get(url);
+    const base = basenameFrom(url).toLowerCase();
+    const group = groupByBase.get(base);
     
-    if (!group) continue; // Skip insights without matching groups
+    if (!group) {
+      skipped++;
+      console.log(`[buildFeatures] SKIPPED: No group match for basename="${base}" from url="${url}"`);
+      continue; // Skip insights without matching groups
+    }
     
+    matched++;
     const role = (insight.role || 'other') as Role;
     const brandNorm = normalizeBrand(group.brand || '');
     const productTokens = tokenize(group.product || '');
@@ -146,5 +190,6 @@ export function buildFeatures(analysis: Analysis): Map<string, FeatureRow> {
     });
   }
   
+  console.log(`[buildFeatures] Matched ${matched} insights to groups, skipped ${skipped}`);
   return features;
 }
