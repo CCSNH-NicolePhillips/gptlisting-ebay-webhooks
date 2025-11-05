@@ -51,9 +51,10 @@ export function App() {
         const jobId = await enqueueAnalyzeLive(folder, { force });
         showToast(`Scan queued (${jobId.slice(0,8)}...) - polling...`);
         
-        // Poll until complete (max 60 attempts = 60 seconds)
-        for (let i = 0; i < 60; i++) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
+        // Poll until complete (max 300 attempts = 10 minutes with 2s intervals)
+        // Vision API takes 5-10 seconds per image, so allow plenty of time
+        for (let i = 0; i < 300; i++) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
           const job = await pollAnalyzeLive(jobId);
           
           if (job.state === 'complete') {
@@ -71,13 +72,14 @@ export function App() {
             throw new Error(job.error || 'Scan failed');
           }
           
-          // Update status toast every 5 seconds
+          // Update status toast every 10 seconds (every 5 polls)
           if (i % 5 === 0 && i > 0) {
-            showToast(`Scanning... (${job.state})`);
+            const elapsed = Math.floor((i * 2) / 60);
+            showToast(`Scanning... (${job.state}, ${elapsed}m${Math.floor((i * 2) % 60 / 10) * 10}s)`);
           }
         }
         
-        if (!a) throw new Error('Scan timed out after 60 seconds');
+        if (!a) throw new Error('Scan timed out after 10 minutes');
       }
       setAnalysis(a);
       setTab('Analysis');
