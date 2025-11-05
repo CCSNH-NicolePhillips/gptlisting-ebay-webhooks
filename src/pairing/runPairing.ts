@@ -336,6 +336,23 @@ export async function runPairing(opts: {
   // Group extras with products
   const products = groupExtrasWithProducts(allPairs, features);
   
+  // Hydrate display URLs for products
+  const displayUrlByKey = new Map<string, string>();
+  for (const insight of analysis.imageInsights || []) {
+    const key = (insight as any).key || (insight as any)._key || (insight as any).urlKey || insight.url;
+    const displayUrl = (insight as any).displayUrl;
+    if (key && displayUrl) {
+      displayUrlByKey.set(key.toLowerCase(), displayUrl);
+    }
+  }
+  
+  for (const p of products) {
+    const frontKey = p.frontUrl?.toLowerCase() || '';
+    const backKey = p.backUrl?.toLowerCase() || '';
+    p.heroDisplayUrl = displayUrlByKey.get(frontKey) || p.frontUrl;
+    p.backDisplayUrl = displayUrlByKey.get(backKey) || p.backUrl;
+  }
+  
   // Filter out singletons for images that were auto-paired
   const autoPairedUrls = new Set([
     ...autoPairs.map(p => canon(p.frontUrl)),

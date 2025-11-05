@@ -146,12 +146,21 @@ export function App() {
         }
         setLoadingStatus('🤖 Running GPT-4o-mini pairing...');
         
-        // Convert imageInsights from object to array if needed (pairing expects array)
+        // Convert imageInsights from object to array if needed and keep the fields pairing expects
+        const insightsArray = Array.isArray(analysis.imageInsights)
+          ? analysis.imageInsights
+          : Object.values(analysis.imageInsights || {});
+
         const analysisForPairing = {
           ...analysis,
-          imageInsights: Array.isArray(analysis.imageInsights) 
-            ? analysis.imageInsights 
-            : Object.values(analysis.imageInsights)
+          imageInsights: insightsArray.map(x => ({
+            url: x.url,
+            key: x.key || x._key || x.urlKey || x.url,     // tolerate earlier fields
+            role: x.role,
+            roleScore: x.roleScore,
+            displayUrl: x.displayUrl || x.url
+          })),
+          // groups are fine as-is; no change
         };
         
         out = await runPairingLive(analysisForPairing);
@@ -217,6 +226,9 @@ export function App() {
           <button class="btn" onClick=${doAnalyze}>Analyze</button>
           <button class="btn secondary" onClick=${doHardReset}>Hard Reset</button>
           <button class="btn" onClick=${doPairing} disabled=${!analysis && mode==='Mock'}>Run Pairing</button>
+          <button class="btn secondary" onClick=${async () => { await doPairing(); setTab('Products'); }} disabled=${!analysis && mode==='Mock'}>
+            Pairing → Products
+          </button>
         </div>
       </header>
 

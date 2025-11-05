@@ -19,8 +19,8 @@ export function ProductPanel({ products }) {
             ${p.categoryPath ? html`<div class="small">${p.categoryPath}</div>` : null}
           </div>
           <div class="pair">
-            <img class="thumb" src=${p.frontUrl} alt=${urlKey(p.frontUrl)} />
-            <img class="thumb" src=${p.backUrl}  alt=${urlKey(p.backUrl)} />
+            <img class="thumb" src=${p.heroDisplayUrl || p.frontUrl} alt=${urlKey(p.heroDisplayUrl || p.frontUrl)} />
+            <img class="thumb" src=${p.backDisplayUrl || p.backUrl}  alt=${urlKey(p.backDisplayUrl || p.backUrl)} />
           </div>
           ${p.extras?.length ? html`
             <div class="extras">
