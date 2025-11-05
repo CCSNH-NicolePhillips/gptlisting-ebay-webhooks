@@ -19,6 +19,45 @@ function urlKey(u: string): string {
 const isHttps = (u?: string) => /^https?:\/\//i.test(String(u || ''));
 
 /**
+ * Utility: Tokenize string
+ */
+function tokens(s?: string | null): string[] {
+  return (s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+}
+
+/**
+ * Utility: Jaccard similarity
+ */
+function jaccard(a: string[], b: string[]): number {
+  const A = new Set(a);
+  const B = new Set(b);
+  const inter = [...A].filter(x => B.has(x)).length;
+  const uni = new Set([...A, ...B]).size || 1;
+  return inter / uni;
+}
+
+/**
+ * Utility: Category compatibility
+ */
+function categoryCompat(a?: string, b?: string): number {
+  const buck = (p?: string) => {
+    const s = (p || '').toLowerCase();
+    if (/supplement|vitamin/.test(s)) return 'supp';
+    if (/food|beverage|grocery/.test(s)) return 'food';
+    if (/hair/.test(s)) return 'hair';
+    if (/cosm|skin|spf|make ?up/.test(s)) return 'cosm';
+    if (/accessor/.test(s)) return 'accessory';
+    return 'other';
+  };
+  const A = buck(a);
+  const B = buck(b);
+  if (A === B && A !== 'other') return 1.0;
+  if ((A === 'hair' && (B === 'supp' || B === 'food')) || (B === 'hair' && (A === 'supp' || A === 'food'))) return -1.0;
+  if ((A === 'supp' && B === 'food') || (A === 'food' && B === 'supp')) return 0.4;
+  return 0.2; // weak/other
+}
+
+/**
  * POST /.netlify/functions/smartdrafts-pairing
  * Body: { analysis?: VisionOutput, overrides?: Record<string, any> }
  * 
@@ -70,78 +109,197 @@ export const handler: Handler = async (event) => {
     }
 
     const client = new OpenAI({ apiKey: openaiKey });
+    const analysis = payload.analysis;
+
+    // CHUNK C.2: Build comprehensive pairing with intra-group + cross-group logic
+    
+    // 1) Build maps from analysis
+    const insights: any[] = Array.isArray(analysis.imageInsights)
+      ? analysis.imageInsights
+      : Object.values(analysis.imageInsights || {});
+
+    const roleByKey = new Map<string, string>();
+    const displayByKey = new Map<string, string>();
+    
+    for (const ins of insights) {
+      const k = ins.key || urlKey(ins.url);
+      if (!k) continue;
+      roleByKey.set(k, (ins.role || 'unknown').toLowerCase());
+      if (isHttps(ins.displayUrl)) displayByKey.set(k, ins.displayUrl);
+    }
+
+    const brandByKey = new Map<string, string>();
+    const productByKey = new Map<string, string>();
+    const catByKey = new Map<string, string>();
+    
+    for (const g of (analysis.groups || [])) {
+      const brand = String(g.brand || '').trim();
+      const prod = String(g.product || '').trim();
+      const cat = String(g.categoryPath || g.category || '').trim();
+      for (const img of (g.images || [])) {
+        const k = urlKey(img);
+        if (brand) brandByKey.set(k, brand);
+        if (prod) productByKey.set(k, prod);
+        if (cat) catByKey.set(k, cat);
+      }
+    }
+
+    // 2) Intra-group pairs: promote any front↔back that already coexist in a group
+    type Pair = {
+      frontUrl: string;
+      backUrl: string;
+      matchScore: number;
+      brand: string;
+      product: string;
+      variant?: string | null;
+      sizeFront?: string | null;
+      sizeBack?: string | null;
+      evidence: string[];
+      confidence: number;
+    };
+
+    const autoPairs: Pair[] = [];
+    
+    for (const g of (analysis.groups || [])) {
+      const keys = (g.images || []).map((img: any) => urlKey(img));
+      const fronts = keys.filter((k: string) => roleByKey.get(k) === 'front');
+      const backs = keys.filter((k: string) => roleByKey.get(k) === 'back');
+      
+      if (fronts.length && backs.length) {
+        const f = fronts[0];
+        const b = backs[0];
+        autoPairs.push({
+          frontUrl: f,
+          backUrl: b,
+          matchScore: 6.5,
+          brand: brandByKey.get(f) || g.brand || '',
+          product: productByKey.get(f) || g.product || '',
+          variant: g.variant || null,
+          sizeFront: g.size || null,
+          sizeBack: g.size || null,
+          evidence: ['INTRA-GROUP: front/back in same group'],
+          confidence: 0.95
+        });
+      }
+    }
+
+    // 3) Cross-group candidates: recover obvious supplement pairs
+    function preScore(frontKey: string, backKey: string): number {
+      const bEq = (brandByKey.get(frontKey) || '').toLowerCase() === (brandByKey.get(backKey) || '').toLowerCase() && !!brandByKey.get(frontKey);
+      const pSim = jaccard(tokens(productByKey.get(frontKey)), tokens(productByKey.get(backKey)));
+      const c = categoryCompat(catByKey.get(frontKey), catByKey.get(backKey));
+      
+      let s = 0;
+      if (bEq) s += 2.0;
+      s += pSim >= 0.6 ? 1.5 : pSim >= 0.4 ? 1.0 : 0;
+      s += c >= 0.6 ? 1.0 : c >= 0.2 ? 0.2 : c <= -0.5 ? -2.0 : 0;
+      
+      // Light boost: front/back roles differ as desired
+      if (roleByKey.get(frontKey) === 'front' && roleByKey.get(backKey) === 'back') s += 1.0;
+      
+      return s;
+    }
+
+    const pairedFronts = new Set(autoPairs.map(p => p.frontUrl));
+    const allKeys: string[] = Array.from(new Set(
+      (analysis.groups || []).flatMap((g: any) => (g.images || []).map((img: any) => urlKey(img)))
+    )) as string[];
+    const allFronts = allKeys.filter(k => roleByKey.get(k) === 'front' && !pairedFronts.has(k));
+    const allBacks = allKeys.filter(k => roleByKey.get(k) === 'back');
+
+    for (const f of allFronts) {
+      const scored = allBacks
+        .filter(b => b !== f)
+        .map(b => ({ b, s: preScore(f, b) }))
+        .sort((x, y) => y.s - x.s);
+      
+      if (!scored.length) continue;
+      
+      const best = scored[0];
+      const runner = scored[1];
+      const gap = best.s - (runner?.s ?? -Infinity);
+      
+      // Accept if strong enough
+      if (best.s >= 3.0 && gap >= 1.0) {
+        autoPairs.push({
+          frontUrl: f,
+          backUrl: best.b,
+          matchScore: Math.round(best.s * 100) / 100,
+          brand: brandByKey.get(f) || '',
+          product: productByKey.get(f) || '',
+          variant: null,
+          sizeFront: null,
+          sizeBack: null,
+          evidence: [
+            `AUTO-PAIRED: preScore=${best.s.toFixed(2)}`,
+            `gap=${gap === Infinity ? 'Infinity' : gap.toFixed(2)}`
+          ],
+          confidence: 0.95
+        });
+      }
+    }
+
+    // 4) Run existing pairing logic (if needed) and merge
     const { result, metrics } = await runPairing({
       client,
       analysis: payload.analysis,
       model: "gpt-4o-mini"
     });
 
-    // CHUNK C.1: Canonicalize keys and hydrate display URLs
-    const analysis = payload.analysis;
+    // 5) Canonicalize and merge pairs
+    const outPairs: Pair[] = [];
+    const seenPairs = new Set<string>();
     
-    // Normalize imageInsights to array
-    const insights: any[] = Array.isArray(analysis.imageInsights)
-      ? analysis.imageInsights
-      : Object.values(analysis.imageInsights || {});
-
-    // Build lookup maps
-    const displayByKey = new Map<string, string>();
-    const roleByKey = new Map<string, string>();
-
-    for (const ins of insights) {
-      const k = ins.key || urlKey(ins.url);
-      if (!k) continue;
-      roleByKey.set(k, (ins.role || '').toLowerCase());
-      if (isHttps(ins.displayUrl)) displayByKey.set(k, ins.displayUrl);
+    function pushPair(p: Pair) {
+      const k = `${p.frontUrl}|${p.backUrl}`;
+      if (seenPairs.has(k)) return;
+      seenPairs.add(k);
+      outPairs.push(p);
     }
 
-    // Brand/product by key (from analysis.groups)
-    const brandByKey = new Map<string, string>();
-    const productByKey = new Map<string, string>();
+    // Add autoPairs first (higher priority)
+    for (const p of autoPairs) pushPair(p);
 
-    for (const g of analysis.groups || []) {
-      const brand = String(g.brand || '').trim();
-      const prod = String(g.product || '').trim();
-      for (const img of (g.images || [])) {
-        const k = urlKey(img);
-        if (brand) brandByKey.set(k, brand);
-        if (prod) productByKey.set(k, prod);
-      }
+    // Add existing pairs (canonicalized)
+    for (const p of (result.pairs || [])) {
+      const canonP = {
+        ...p,
+        frontUrl: urlKey(p.frontUrl),
+        backUrl: urlKey(p.backUrl)
+      } as Pair;
+      pushPair(canonP);
     }
 
-    // Canonicalize pairs to keys and hydrate metadata
-    for (const p of result.pairs || []) {
-      const fk = urlKey(p.frontUrl);
-      const bk = urlKey(p.backUrl);
-      p.frontUrl = fk;
-      p.backUrl = bk;
-      
-      // Carry brand/product from the front key if available
-      if (!p.brand || p.brand === 'unknown') p.brand = brandByKey.get(fk) || p.brand || '';
-      if (!p.product || !p.product.length) p.product = productByKey.get(fk) || p.product || '';
+    // 6) Build products[] with https thumbnails + brand/product
+    const products = outPairs.map(p => ({
+      productId: `${(brandByKey.get(p.frontUrl) || '').toLowerCase().replace(/[^a-z0-9]+/g, '_')}_${tokens(productByKey.get(p.frontUrl)).join('_')}`.replace(/^_+|_+$/g, '') || `${p.frontUrl}_${p.backUrl}`,
+      frontUrl: p.frontUrl,
+      backUrl: p.backUrl,
+      extras: [],
+      evidence: {
+        brand: brandByKey.get(p.frontUrl) || '',
+        product: productByKey.get(p.frontUrl) || '',
+        variant: p.variant || null,
+        matchScore: p.matchScore,
+        confidence: p.confidence,
+        triggers: p.evidence || []
+      },
+      heroDisplayUrl: displayByKey.get(p.frontUrl) || p.frontUrl,
+      backDisplayUrl: displayByKey.get(p.backUrl) || p.backUrl
+    }));
+
+    // 7) Populate brand/product on pairs for the table
+    for (const p of outPairs) {
+      if (!p.brand || p.brand === 'unknown') p.brand = brandByKey.get(p.frontUrl) || p.brand || '';
+      if (!p.product || !p.product.length) p.product = productByKey.get(p.frontUrl) || p.product || '';
     }
 
-    // Canonicalize products to keys and add display URLs
-    for (const pr of result.products || []) {
-      const fk = urlKey(pr.frontUrl);
-      const bk = urlKey(pr.backUrl);
-      pr.frontUrl = fk;
-      pr.backUrl = bk;
-
-      // Hydrate https display URLs for UI cards
-      pr.heroDisplayUrl = displayByKey.get(fk) || pr.heroDisplayUrl || pr.frontUrl;
-      pr.backDisplayUrl = displayByKey.get(bk) || pr.backDisplayUrl || pr.backUrl;
-
-      // Carry metadata if missing
-      if (!pr.evidence?.brand || pr.evidence.brand === 'unknown') {
-        if (!pr.evidence) pr.evidence = {} as any;
-        (pr.evidence as any).brand = brandByKey.get(fk) || (pr.evidence as any).brand || '';
-      }
-      if (!pr.evidence?.product || !(pr.evidence as any).product.length) {
-        if (!pr.evidence) pr.evidence = {} as any;
-        (pr.evidence as any).product = productByKey.get(fk) || (pr.evidence as any).product || '';
-      }
-    }
+    // Return final result
+    result.pairs = outPairs.map(p => ({
+      ...p,
+      variant: p.variant ?? null
+    })) as any;
+    result.products = products;
 
     return jsonResponse(200, { 
       ok: true,
