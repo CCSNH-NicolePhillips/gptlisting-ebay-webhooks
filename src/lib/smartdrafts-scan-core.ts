@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { STRICT_TWO_ONLY, USE_NEW_SORTER, USE_ROLE_SORTING } from "../config.js";
+import { STRICT_TWO_ONLY, USE_NEW_SORTER, USE_ROLE_SORTING, USE_CLIP } from "../config.js";
 import { userScopedKey } from "./_auth.js";
 import { tokensStore } from "./_blobs.js";
 import { runAnalysis } from "./analyze-core.js";
@@ -1604,7 +1604,12 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
     };
 
     // Phase R0: Hybrid approach - Use Vision product IDs + CLIP similarity matching
-    console.log(`[Phase R0] Starting - USE_NEW_SORTER=${USE_NEW_SORTER}, fileTuples=${fileTuples.length}, insightList=${insightList.length}`);
+    console.log(`[Phase R0] Starting - USE_NEW_SORTER=${USE_NEW_SORTER}, USE_CLIP=${USE_CLIP}, fileTuples=${fileTuples.length}, insightList=${insightList.length}`);
+    
+    if (!USE_CLIP) {
+      console.log('[Phase R0] CLIP verification disabled; using vision-only roles and grouping');
+    }
+    
     let groups: AnalyzedGroup[];
     if (USE_NEW_SORTER) {
       // NEW HYBRID APPROACH: Trust Vision's product identification, use CLIP for image matching
@@ -1620,17 +1625,27 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       })), null, 2));
 
       if (visionGroups.length > 0) {
-        console.log(`[Phase R0] Using hybrid approach: Vision product IDs + CLIP similarity matching`);
-        groups = await buildHybridGroups(fileTuples, visionGroups, insightList);
+        if (USE_CLIP) {
+          console.log(`[Phase R0] Using hybrid approach: Vision product IDs + CLIP similarity matching`);
+          groups = await buildHybridGroups(fileTuples, visionGroups, insightList);
 
-        if (debugEnabled) {
-          console.log(`[Phase R0] Created ${groups.length} hybrid groups from ${fileTuples.length} images`);
+          if (debugEnabled) {
+            console.log(`[Phase R0] Created ${groups.length} hybrid groups from ${fileTuples.length} images`);
+          }
+        } else {
+          console.log(`[Phase R0] CLIP disabled - using vision-only grouping`);
+          groups = visionGroups;
         }
       } else {
-        // Fallback to pure CLIP if Vision returned nothing
-        groups = await buildClipGroups(fileTuples, insightList);
-        if (debugEnabled) {
-          console.log(`[Phase R0] Vision unavailable, using ${groups.length} CLIP-based groups`);
+        // Fallback to pure CLIP if Vision returned nothing (only if CLIP enabled)
+        if (USE_CLIP) {
+          groups = await buildClipGroups(fileTuples, insightList);
+          if (debugEnabled) {
+            console.log(`[Phase R0] Vision unavailable, using ${groups.length} CLIP-based groups`);
+          }
+        } else {
+          console.log(`[Phase R0] Vision unavailable and CLIP disabled - no groups created`);
+          groups = [];
         }
       }
 
@@ -1889,6 +1904,11 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
     };
 
     const getImageVector = (url: string): Promise<number[] | null> => {
+      // CLIP disabled - return null immediately
+      if (!USE_CLIP) {
+        return Promise.resolve(null);
+      }
+      
       const normalized = toDirectDropbox(url);
       if (!imageVectorCache.has(normalized)) {
         imageVectorCache.set(

@@ -457,11 +457,21 @@ async function analyzeBatchViaVision(
       }
       if (Array.isArray(anyResult?.imageInsights)) {
         anyResult.imageInsights = anyResult.imageInsights
-          .map((ins: any) => {
+          .map((ins: any, idx: number) => {
             if (!ins || typeof ins !== "object") return null;
             const rawUrl = typeof ins.url === "string" ? ins.url : "";
-            if (!rawUrl) return null;
-            const normalizedUrl = toDirectDropbox(rawUrl);
+            
+            // Phase S3: Fix <imgUrl> placeholders - use actual batch URL as fallback
+            let normalizedUrl: string;
+            if (!rawUrl || rawUrl === '<imgUrl>' || rawUrl === 'imgUrl' || rawUrl.trim() === '') {
+              // Use the corresponding URL from the batch
+              const fallbackUrl = batch[idx];
+              if (!fallbackUrl) return null;
+              normalizedUrl = toDirectDropbox(fallbackUrl);
+              console.warn(`[analyze-core] Fixed placeholder URL at index ${idx}: "${rawUrl}" → "${fallbackUrl}"`);
+            } else {
+              normalizedUrl = toDirectDropbox(rawUrl);
+            }
             const hasVisibleText = typeof ins.hasVisibleText === "boolean" ? ins.hasVisibleText : undefined;
             const dominantColor =
               typeof ins.dominantColor === "string" ? ins.dominantColor.toLowerCase().trim() : undefined;
