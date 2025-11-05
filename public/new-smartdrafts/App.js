@@ -109,7 +109,7 @@ export function App() {
         showToast('✨ Pairing complete (mock)');
       } else {
         if (!analysis) throw new Error('Run Analyze first');
-        if (!analysis.imageInsights || analysis.imageInsights.length === 0) {
+        if (!analysis.imageInsights || (typeof analysis.imageInsights === 'object' && Object.keys(analysis.imageInsights).length === 0)) {
           throw new Error('No image insights found. Try running Analyze again with Force Rescan.');
         }
         setLoadingStatus('🤖 Running GPT-4o-mini pairing...');

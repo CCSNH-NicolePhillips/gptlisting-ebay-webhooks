@@ -17,7 +17,9 @@ export function AnalysisPanel({ data }) {
   }
   
   const groups = data.groups || [];
-  const insights = data.imageInsights || [];
+  // imageInsights can be an object (keyed by URL) or array
+  const insightsRaw = data.imageInsights || {};
+  const insights = Array.isArray(insightsRaw) ? insightsRaw : Object.values(insightsRaw);
   
   // If we have groups but no insights, show groups view
   if (groups.length > 0 && insights.length === 0) {
