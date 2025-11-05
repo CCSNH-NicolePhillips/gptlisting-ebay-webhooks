@@ -44,18 +44,21 @@ export function App() {
     console.log('=== ANALYSIS DEBUG ===');
     console.log('Groups:', analysis.groups?.length);
     console.log('ImageInsights keys:', Object.keys(analysis.imageInsights || {}).length);
-    console.log('\nSample group URLs:', analysis.groups?.slice(0,3).map(g => ({ 
-      groupId: g.groupId, 
-      brand: g.brand, 
-      product: g.product,
-      images: g.images 
-    })));
-    console.log('\nSample insight URLs:', Object.values(analysis.imageInsights || {}).slice(0,3).map(i => ({ 
-      url: i.url, 
-      role: i.role,
-      roleScore: i.roleScore
-    })));
-    console.log('\nFull analysis object:', analysis);
+    console.log('\n--- GROUP URLs (first 3) ---');
+    analysis.groups?.slice(0,3).forEach((g, i) => {
+      console.log(`Group ${i}:`, g.brand, g.product);
+      console.log('  images:', g.images);
+    });
+    console.log('\n--- IMAGEINSIGHT URLs (first 3) ---');
+    Object.values(analysis.imageInsights || {}).slice(0,3).forEach((ins, i) => {
+      console.log(`Insight ${i}:`, ins.url);
+      console.log('  role:', ins.role, 'roleScore:', ins.roleScore);
+    });
+    console.log('\n--- FULL ANALYSIS ---');
+    console.log(analysis);
+    
+    // Return analysis for further inspection
+    return analysis;
   }
 
   // Expose to window for console access
