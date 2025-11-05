@@ -15,7 +15,14 @@ const TABS = ['Analysis','Pairing','Products (soon)','Candidates (soon)','Metric
 export function App() {
   const [tab, setTab] = useState('Analysis');
   const [mode, setMode] = useState('Mock'); // 'Mock' | 'Live'
-  const [folder, setFolder] = useState(localStorage.getItem('sd.folder') || '');
+  // Initialize folder from dbxDefaultFolder (set from index.html or previous session)
+  const [folder, setFolder] = useState(() => {
+    try {
+      return localStorage.getItem('dbxDefaultFolder') || '';
+    } catch {
+      return '';
+    }
+  });
   const [force, setForce] = useState(false);
   const [analysis, setAnalysis] = useState(null);
   const [pairing, setPairing] = useState(null);
@@ -35,7 +42,7 @@ export function App() {
       } else {
         if (!folder) throw new Error('Pick a Dropbox folder/link first');
         // Folder is now a Dropbox path (not a URL), use it directly
-        localStorage.setItem('sd.folder', folder);
+        localStorage.setItem('dbxDefaultFolder', folder);
         
         // Enqueue job
         showToast('Queueing scan...');
@@ -117,7 +124,7 @@ export function App() {
   function handleFolderChange(newFolder) {
     setFolder(newFolder);
     if (newFolder) {
-      localStorage.setItem('sd.folder', newFolder);
+      localStorage.setItem('dbxDefaultFolder', newFolder);
     }
   }
 
