@@ -1407,6 +1407,18 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       urlOrder.set(tuple.url, idx);
     });
 
+    // Build maps for displayUrl hydration: key -> https URL
+    const httpsByKey = new Map<string, string>();   // key -> https URL
+    const originalByKey = new Map<string, string>(); // key -> original request URL
+    
+    for (const tuple of fileTuples) {
+      const k = urlKey(tuple.url);
+      originalByKey.set(k, tuple.url);
+      if (/^https?:\/\//i.test(tuple.url)) {
+        httpsByKey.set(k, tuple.url);
+      }
+    }
+
     const urls = sanitizeUrls(fileTuples.map((tuple) => tuple.url));
     const analysisMeta = fileTuples.map((tuple) => ({
       url: tuple.url,
@@ -1466,6 +1478,11 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       const originalUrl = urls[idx] || fileTuples[idx]?.url || '';
       const sanitizedUrl = sanitizeInsightUrl(insight.url, originalUrl);
       const key = urlKey(sanitizedUrl);
+      
+      // Harvest https URLs for displayUrl hydration
+      if (/^https?:\/\//i.test(sanitizedUrl)) {
+        httpsByKey.set(key, sanitizedUrl);
+      }
       
       // Use the original URL for displayUrl (it's a real Dropbox URL)
       // This ensures thumbnails can load even if sanitizedUrl is a basename
@@ -1681,6 +1698,21 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
         imagesCount: g.images?.length || 0,
         imagesSample: g.images?.slice(0, 2)
       })), null, 2));
+
+      // Harvest https URLs from visionGroups for displayUrl hydration
+      for (const vg of visionGroups) {
+        const images = vg.images || [];
+        for (const img of images) {
+          if (typeof img === 'string' && /^https?:\/\//i.test(img)) {
+            const k = urlKey(img);
+            if (!httpsByKey.has(k)) {
+              httpsByKey.set(k, img);
+            }
+          }
+        }
+      }
+      
+      console.log(`[displayUrl] Harvested ${httpsByKey.size} https URLs for display`);
 
       if (visionGroups.length > 0) {
         if (USE_CLIP) {
@@ -2987,6 +3019,20 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       });
     });
 
+    // Function to compute displayUrl using harvested https URLs
+    const computeDisplayUrl = (key: string): string => {
+      // 1) Prefer an https URL we've already seen
+      const https = httpsByKey.get(key);
+      if (https) return https;
+
+      // 2) Fall back to the original enumerated URL if it was https
+      const orig = originalByKey.get(key) || '';
+      if (/^https?:\/\//i.test(orig)) return orig;
+
+      // 3) Last resort: return the key as-is (will be caught by validation)
+      return key;
+    };
+
     // De-duplicate imageInsights by key before returning
     const seen = new Set<string>();
     const uniqueInsights: Array<[string, ImageInsight]> = [];
@@ -3004,12 +3050,14 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       if (seen.has(insightKey)) continue;
       seen.add(insightKey);
       
-      // Preserve key and displayUrl in output
+      // Hydrate with proper displayUrl using harvested https URLs
+      const displayUrl = computeDisplayUrl(insightKey);
+      
       const insight = {
         ...value,
         url: normalized,
         key: insightKey,
-        displayUrl: (value as any).displayUrl || normalized
+        displayUrl
       } as ImageInsight;
       
       uniqueInsights.push([insightKey, insight]);
@@ -3032,7 +3080,7 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
     const allInsights = Object.values(imageInsightsRecord) as any[];
     const noDisplay = allInsights.filter(x => !x.displayUrl || !/^https?:\/\//i.test(x.displayUrl));
     if (noDisplay.length > 0) {
-      console.warn('[displayUrl] missing https URLs:', noDisplay.map(x => ({ key: x.key, displayUrl: x.displayUrl })));
+      console.warn('[displayUrl] still missing https URLs:', noDisplay.map(x => ({ key: x.key, displayUrl: x.displayUrl })));
     } else {
       console.log('[displayUrl] ✓ All insights have valid display URLs');
     }
