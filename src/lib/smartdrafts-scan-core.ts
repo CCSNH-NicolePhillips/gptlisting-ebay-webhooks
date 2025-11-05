@@ -17,6 +17,7 @@ import { frontBackStrict } from "./sorter/frontBackStrict.js";
 import { urlKey } from "../utils/urlKey.js";
 import { sanitizeInsightUrl } from "../utils/urlSanitize.js";
 import { makeDisplayUrl } from "../utils/displayUrl.js";
+import { buildRoleMap } from "../utils/roles.js";
 
 type DropboxEntry = {
   ".tag": "file" | "folder";
@@ -3083,6 +3084,86 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       console.warn('[displayUrl] still missing https URLs:', noDisplay.map(x => ({ key: x.key, displayUrl: x.displayUrl })));
     } else {
       console.log('[displayUrl] ✓ All insights have valid display URLs');
+    }
+
+    // Build role map for hero/back selection
+    const roleByKey = buildRoleMap(Object.values(imageInsightsRecord));
+
+    // Helper: pick hero and back from group images based on vision roles
+    function pickHeroBackForGroup(g: any, roleByKey: Map<string, { role: string; score: number }>) {
+      const images = g.images || [];
+      if (images.length === 0) return;
+
+      // Partition by role
+      const fronts: string[] = [];
+      const backs: string[] = [];
+      const sides: string[] = [];
+      const others: string[] = [];
+
+      for (const img of images) {
+        const key = typeof img === 'string' ? urlKey(img) : urlKey(img.url || '');
+        const entry = roleByKey.get(key);
+        const role = entry?.role || 'other';
+        
+        if (role === 'front') fronts.push(img);
+        else if (role === 'back') backs.push(img);
+        else if (role === 'side') sides.push(img);
+        else others.push(img);
+      }
+
+      // Sort each partition by |roleScore| descending
+      const sortByScore = (arr: any[]) => {
+        arr.sort((a, b) => {
+          const keyA = typeof a === 'string' ? urlKey(a) : urlKey(a.url || '');
+          const keyB = typeof b === 'string' ? urlKey(b) : urlKey(b.url || '');
+          const scoreA = Math.abs(roleByKey.get(keyA)?.score || 0);
+          const scoreB = Math.abs(roleByKey.get(keyB)?.score || 0);
+          return scoreB - scoreA;
+        });
+      };
+
+      sortByScore(fronts);
+      sortByScore(backs);
+      sortByScore(sides);
+      sortByScore(others);
+
+      // Pick hero: front > side > other > any
+      let hero = fronts[0] || sides[0] || others[0] || images[0];
+      
+      // Pick back: back > second front > different side > null
+      let back: any = backs[0];
+      if (!back && fronts.length >= 2) back = fronts[1];
+      if (!back && sides.length >= 1 && sides[0] !== hero) back = sides[0];
+      if (!back && sides.length >= 2) back = sides[1];
+
+      // Ensure hero ≠ back
+      if (back && hero === back) {
+        // Separate them
+        const allOthers = [...fronts, ...sides, ...others, ...backs].filter(x => x !== hero);
+        back = allOthers[0];
+      }
+
+      // Extract keys for heroUrl and backUrl
+      g.heroUrl = hero ? (typeof hero === 'string' ? urlKey(hero) : urlKey(hero.url || '')) : null;
+      g.backUrl = back ? (typeof back === 'string' ? urlKey(back) : urlKey(back.url || '')) : null;
+
+      // Optional: attach display URLs
+      g.heroDisplayUrl = g.heroUrl ? (httpsByKey.get(g.heroUrl) || `/files/${encodeURIComponent(g.heroUrl)}`) : null;
+      g.backDisplayUrl = g.backUrl ? (httpsByKey.get(g.backUrl) || `/files/${encodeURIComponent(g.backUrl)}`) : null;
+
+      // Reorder images: [hero, back, ...rest]
+      const rest = images.filter((x: any) => x !== hero && x !== back);
+      g.images = [hero, back, ...rest].filter(Boolean);
+    }
+
+    // Apply hero/back selection to all normalized groups
+    for (const g of normalizedGroups) {
+      pickHeroBackForGroup(g, roleByKey);
+    }
+
+    // Debug: log hero/back for each group
+    for (const g of normalizedGroups) {
+      console.log('[hero-back]', g.name || g.groupId, 'hero=', g.heroUrl, 'back=', g.backUrl);
     }
 
     const cachePayload: SmartDraftGroupCache = {
