@@ -3,6 +3,7 @@ import { useState } from 'https://esm.sh/preact@10.20.2/hooks';
 import htm from 'https://esm.sh/htm@3.1.1';
 import { AnalysisPanel } from './components/AnalysisPanel.js';
 import { PairingPanel } from './components/PairingPanel.js';
+import { FolderSelector } from './components/FolderSelector.js';
 import { enqueueAnalyzeLive, pollAnalyzeLive, runPairingLive, resetFolderLive, getMetricsLive } from './lib/api.js';
 import { mockLoadAnalysis, mockRunPairing } from './lib/mockServer.js';
 import { normalizeFolderInput } from './lib/urlKey.js';
@@ -33,12 +34,12 @@ export function App() {
         showToast('Analysis loaded (mock)');
       } else {
         if (!folder) throw new Error('Pick a Dropbox folder/link first');
-        const norm = normalizeFolderInput(folder);
-        localStorage.setItem('sd.folder', norm);
+        // Folder is now a Dropbox path (not a URL), use it directly
+        localStorage.setItem('sd.folder', folder);
         
         // Enqueue job
         showToast('Queueing scan...');
-        const jobId = await enqueueAnalyzeLive(norm, { force });
+        const jobId = await enqueueAnalyzeLive(folder, { force });
         showToast(`Scan queued (${jobId.slice(0,8)}...) - polling...`);
         
         // Poll until complete (max 60 attempts = 60 seconds)
@@ -110,24 +111,14 @@ export function App() {
   }
 
   function openDropboxChooser() {
-    if (!window?.Dropbox) { showToast('Dropbox Chooser not available'); return; }
-    window.Dropbox.choose({
-      linkType: "preview",     // preview yields share links; backend can handle
-      multiselect: false,
-      folderselect: true,      // ask for a folder; if picker doesn't support, user will still paste manually
-      success: (entries) => {
-        const link = entries?.[0]?.link || '';
-        if (link) {
-          const norm = normalizeFolderInput(link);
-          setFolder(norm);
-          localStorage.setItem('sd.folder', norm);
-          showToast('Folder selected');
-        } else {
-          showToast('No folder selected');
-        }
-      },
-      cancel: () => {}
-    });
+    showToast('Use the dropdown to select a folder');
+  }
+
+  function handleFolderChange(newFolder) {
+    setFolder(newFolder);
+    if (newFolder) {
+      localStorage.setItem('sd.folder', newFolder);
+    }
   }
 
   return html`
@@ -143,8 +134,10 @@ export function App() {
           </label>
           <label class="folder">
             <span>Folder:</span>
-            <input class="input" value=${folder} onInput=${e=>setFolder(e.currentTarget.value)} placeholder="Dropbox link or path…"/>
-            <button class="btn secondary" onClick=${openDropboxChooser}>Choose…</button>
+            ${mode === 'Live' 
+              ? html`<${FolderSelector} value=${folder} onChange=${handleFolderChange} disabled=${loading} />`
+              : html`<input class="input" value=${folder} onInput=${e=>setFolder(e.currentTarget.value)} placeholder="Mock mode - any value…" disabled=${loading}/>`
+            }
           </label>
           <label class="check">
             <input type="checkbox" checked=${force} onChange=${e=>setForce(e.currentTarget.checked)} />
