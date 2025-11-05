@@ -37,3 +37,6 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 system
 .pair { display:grid; grid-template-columns: 1fr 1fr; gap:6px; padding: 0 10px 10px; }
 .extras { display:flex; gap:6px; padding: 0 10px 10px; }
 .thumb.sm { height: 80px; }
+.panel { padding: 10px; }
+.stats { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+.pre { background:#0f172a; padding:8px; border-radius:6px; overflow:auto; margin:0; }
