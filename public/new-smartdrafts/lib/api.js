@@ -1,18 +1,14 @@
 // public/new-smartdrafts/lib/api.js
 
-// Use window.authClient.authFetch for authenticated endpoints
+// Use window.authClient.authFetch for authenticated endpoints (with fallback)
 async function authGet(url, opts={}) {
-  if (!window.authClient?.authFetch) {
-    throw new Error('Auth client not initialized. Please sign in.');
-  }
-  return window.authClient.authFetch(url, { method: 'GET', ...opts });
+  const exec = window.authClient?.authFetch ?? fetch;
+  return exec(url, { method: 'GET', ...opts });
 }
 
 async function authPost(url, body, opts={}) {
-  if (!window.authClient?.authFetch) {
-    throw new Error('Auth client not initialized. Please sign in.');
-  }
-  return window.authClient.authFetch(url, {
+  const exec = window.authClient?.authFetch ?? fetch;
+  return exec(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...(opts.headers||{}) },
     body: body ? JSON.stringify(body) : undefined,
