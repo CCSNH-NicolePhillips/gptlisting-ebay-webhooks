@@ -13,16 +13,38 @@ function post(url, body, opts={}) {
 }
 
 // ---- LIVE calls ----
-export async function analyzeLive(folderUrl, { force=false } = {}) {
+// Uses production-ready smartdrafts-scan-bg (enqueue) - caller must poll scan-status
+export async function enqueueAnalyzeLive(folderUrl, { force=false } = {}) {
   if (!folderUrl) throw new Error('folderUrl required');
-  const q = new URLSearchParams({ folder: folderUrl, force: String(!!force) });
-  const r = await get(`/.netlify/functions/smartdrafts-analyze?${q}`);
-  if (!r.ok) throw new Error(`analyzeLive ${r.status}: ${await r.text()}`);
-  return r.json(); // VisionOutput
+  
+  const r = await post(`/.netlify/functions/smartdrafts-scan-bg`, { 
+    path: folderUrl, 
+    force 
+  });
+  if (!r.ok) throw new Error(`Enqueue failed ${r.status}: ${await r.text()}`);
+  const data = await r.json();
+  
+  if (!data.jobId) throw new Error('No jobId returned from scan-bg');
+  return data.jobId;
 }
 
-export async function runPairingLive(overrides = {}) {
-  const r = await post(`/.netlify/functions/smartdrafts-pairing`, { overrides });
+export async function pollAnalyzeLive(jobId) {
+  if (!jobId) throw new Error('jobId required');
+  
+  const r = await get(`/.netlify/functions/smartdrafts-scan-status?jobId=${jobId}`);
+  if (!r.ok) throw new Error(`Status check failed ${r.status}: ${await r.text()}`);
+  
+  const job = await r.json();
+  
+  if (job.state === 'error') {
+    throw new Error(job.error || 'Scan job failed');
+  }
+  
+  return job; // { state: 'pending'|'running'|'complete', groups?, orphans?, cached?, folder?, signature? }
+}
+
+export async function runPairingLive(analysis, overrides = {}) {
+  const r = await post(`/.netlify/functions/smartdrafts-pairing`, { analysis, overrides });
   if (!r.ok) throw new Error(`runPairingLive ${r.status}: ${await r.text()}`);
   return r.json(); // { pairing, metrics? }
 }

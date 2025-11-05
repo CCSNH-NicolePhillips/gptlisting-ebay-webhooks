@@ -3,7 +3,7 @@ import { useState } from 'https://esm.sh/preact@10.20.2/hooks';
 import htm from 'https://esm.sh/htm@3.1.1';
 import { AnalysisPanel } from './components/AnalysisPanel.js';
 import { PairingPanel } from './components/PairingPanel.js';
-import { analyzeLive, runPairingLive, resetFolderLive, getMetricsLive } from './lib/api.js';
+import { enqueueAnalyzeLive, pollAnalyzeLive, runPairingLive, resetFolderLive, getMetricsLive } from './lib/api.js';
 import { mockLoadAnalysis, mockRunPairing } from './lib/mockServer.js';
 import { normalizeFolderInput } from './lib/urlKey.js';
 
@@ -35,8 +35,39 @@ export function App() {
         if (!folder) throw new Error('Pick a Dropbox folder/link first');
         const norm = normalizeFolderInput(folder);
         localStorage.setItem('sd.folder', norm);
-        a = await analyzeLive(norm, { force });
-        showToast(force ? 'Analysis loaded (live, force)' : 'Analysis loaded (live)');
+        
+        // Enqueue job
+        showToast('Queueing scan...');
+        const jobId = await enqueueAnalyzeLive(norm, { force });
+        showToast(`Scan queued (${jobId.slice(0,8)}...) - polling...`);
+        
+        // Poll until complete (max 60 attempts = 60 seconds)
+        for (let i = 0; i < 60; i++) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          const job = await pollAnalyzeLive(jobId);
+          
+          if (job.state === 'complete') {
+            a = {
+              groups: job.groups || [],
+              imageInsights: [], // scan doesn't return imageInsights
+              cached: job.cached,
+              folder: job.folder
+            };
+            showToast(force ? 'Analysis complete (live, force)' : 'Analysis complete (live)');
+            break;
+          }
+          
+          if (job.state === 'error') {
+            throw new Error(job.error || 'Scan failed');
+          }
+          
+          // Update status toast every 5 seconds
+          if (i % 5 === 0 && i > 0) {
+            showToast(`Scanning... (${job.state})`);
+          }
+        }
+        
+        if (!a) throw new Error('Scan timed out after 60 seconds');
       }
       setAnalysis(a);
       setTab('Analysis');
@@ -53,7 +84,8 @@ export function App() {
         out = await mockRunPairing();
         showToast('Pairing complete (mock)');
       } else {
-        out = await runPairingLive();
+        if (!analysis) throw new Error('Run Analyze first');
+        out = await runPairingLive(analysis);
         showToast('Pairing complete (live)');
       }
       const { pairing, metrics } = out;
