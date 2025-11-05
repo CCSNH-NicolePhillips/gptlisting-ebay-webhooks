@@ -20,7 +20,7 @@ export function AnalysisPanel({ data }) {
     <div class="grid">
       ${insights.map((ins) => html`
         <article class="card" key=${ins.url}>
-          <img class="thumb" src=${ins.url} alt=${urlKey(ins.url)} loading="lazy" />
+          <img class="thumb" src="${ins.url}" alt=${urlKey(ins.url)} loading="lazy" />
           <div class="meta">
             <div class="row">
               <span class="name">${urlKey(ins.url)}</span>
