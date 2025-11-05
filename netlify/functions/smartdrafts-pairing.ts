@@ -1,9 +1,11 @@
 import type { Handler } from "@netlify/functions";
 import { getOrigin, isOriginAllowed, jsonResponse } from "../../src/lib/http.js";
+import { runPairing } from "../../src/pairing/runPairing.js";
+import OpenAI from "openai";
 
 /**
  * POST /.netlify/functions/smartdrafts-pairing
- * Body: { overrides?: Record<string, any> }
+ * Body: { analysis?: VisionOutput, overrides?: Record<string, any> }
  * 
  * Runs the pairing algorithm from src/pairing/ on analysis results
  * Returns { pairing: PairingResult, metrics?: Metrics }
@@ -31,18 +33,44 @@ export const handler: Handler = async (event) => {
     return jsonResponse(415, { error: "Use application/json" }, originHdr, methods);
   }
 
-  let payload: { overrides?: Record<string, any> } = {};
+  let payload: { analysis?: any; overrides?: Record<string, any> } = {};
   try {
     payload = JSON.parse(event.body || "{}");
   } catch (err) {
     return jsonResponse(400, { error: "Invalid JSON" }, originHdr, methods);
   }
 
-  // TODO: Call runPairing from src/pairing/ with the analysis results
-  // Need to either pass analysis in body or retrieve from cache
-  return jsonResponse(501, {
-    error: "Not yet implemented",
-    message: "smartdrafts-pairing needs to integrate src/pairing/runPairing.ts",
-    overrides: payload.overrides || {}
-  }, originHdr, methods);
+  // Need analysis data to run pairing
+  if (!payload.analysis || !payload.analysis.imageInsights) {
+    return jsonResponse(400, { 
+      error: "analysis required in body",
+      hint: "POST { analysis: { groups, imageInsights }, overrides?: {} }"
+    }, originHdr, methods);
+  }
+
+  try {
+    const openaiKey = process.env.OPENAI_API_KEY;
+    if (!openaiKey) {
+      throw new Error("OPENAI_API_KEY not configured");
+    }
+
+    const client = new OpenAI({ apiKey: openaiKey });
+    const { result, metrics } = await runPairing({
+      client,
+      analysis: payload.analysis,
+      model: "gpt-4o-mini"
+    });
+
+    return jsonResponse(200, { 
+      ok: true,
+      pairing: result, 
+      metrics 
+    }, originHdr, methods);
+  } catch (error: any) {
+    console.error("[smartdrafts-pairing] error:", error);
+    return jsonResponse(500, {
+      error: "Pairing failed",
+      message: error?.message || String(error)
+    }, originHdr, methods);
+  }
 };

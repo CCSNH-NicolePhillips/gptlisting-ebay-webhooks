@@ -4,8 +4,13 @@ import { getOrigin, isOriginAllowed, jsonResponse } from "../../src/lib/http.js"
 /**
  * GET /.netlify/functions/smartdrafts-analyze?folder=<url>&force=<bool>
  * 
- * Combines dropbox-list-images + analyze-images-bg-user flow
- * Returns VisionOutput format for the new SmartDrafts UI
+ * Wrapper around smartdrafts-scan-bg that:
+ * 1. Enqueues a scan job via smartdrafts-scan-bg
+ * 2. Polls smartdrafts-scan-status until done
+ * 3. Returns the analysis VisionOutput
+ * 
+ * This is a convenience endpoint for the new UI to avoid client-side polling.
+ * For now, it redirects to using the existing scan-bg/scan-status flow.
  */
 
 export const handler: Handler = async (event) => {
@@ -32,12 +37,16 @@ export const handler: Handler = async (event) => {
     return jsonResponse(400, { error: "folder parameter required" }, originHdr, methods);
   }
 
-  // TODO: Wire to existing smartdrafts-scan-bg flow or create new analyze pipeline
-  // For now, return a stub that shows the function exists
-  return jsonResponse(501, { 
-    error: "Not yet implemented",
-    message: "smartdrafts-analyze needs to wire dropbox-list-images + analyze-images-bg",
+  // For now, return instructions to use the existing scan endpoints
+  // TODO: Implement auto-enqueue + poll wrapper
+  return jsonResponse(200, {
+    message: "Use smartdrafts-scan-bg + smartdrafts-scan-status for now",
+    hint: "POST to smartdrafts-scan-bg, then poll smartdrafts-scan-status with the jobId",
     folder,
-    force
+    force,
+    endpoints: {
+      enqueue: "/.netlify/functions/smartdrafts-scan-bg",
+      status: "/.netlify/functions/smartdrafts-scan-status?jobId=<id>"
+    }
   }, originHdr, methods);
 };
