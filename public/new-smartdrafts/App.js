@@ -35,6 +35,34 @@ export function App() {
 
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(''), 3000); }
 
+  // Debug helper - expose analysis to console
+  function debugAnalysis() {
+    if (!analysis) {
+      console.log('No analysis data yet');
+      return;
+    }
+    console.log('=== ANALYSIS DEBUG ===');
+    console.log('Groups:', analysis.groups?.length);
+    console.log('ImageInsights keys:', Object.keys(analysis.imageInsights || {}).length);
+    console.log('\nSample group URLs:', analysis.groups?.slice(0,3).map(g => ({ 
+      groupId: g.groupId, 
+      brand: g.brand, 
+      product: g.product,
+      images: g.images 
+    })));
+    console.log('\nSample insight URLs:', Object.values(analysis.imageInsights || {}).slice(0,3).map(i => ({ 
+      url: i.url, 
+      role: i.role,
+      roleScore: i.roleScore
+    })));
+    console.log('\nFull analysis object:', analysis);
+  }
+
+  // Expose to window for console access
+  if (typeof window !== 'undefined') {
+    window.debugAnalysis = debugAnalysis;
+  }
+
   async function doAnalyze() {
     try {
       setLoading(true);
