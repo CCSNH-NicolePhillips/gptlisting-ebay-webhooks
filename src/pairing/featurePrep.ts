@@ -3,6 +3,16 @@
 // Output: a Map<string, FeatureRow> keyed by image url.
 
 /**
+ * Extract canonical key from URL (strips prefixes like EBAY_, ebay/, etc.)
+ */
+function urlKey(u: string): string {
+  const t = (u || '').trim().toLowerCase().replace(/\s*\|\s*/g, '/');
+  const noQuery = t.split('?')[0];
+  const base = noQuery.split('/').pop() || noQuery;
+  return base.replace(/^(ebay[_-])/i, '');   // strip uploader prefix
+}
+
+/**
  * Extract basename from URL or path (filename without directory)
  * Handles both full URLs and simple filenames
  */
@@ -152,6 +162,7 @@ export function buildFeatures(analysis: Analysis): Map<string, FeatureRow> {
   let skipped = 0;
   for (const insight of analysis.imageInsights) {
     const url = insight.url;
+    const key = urlKey(url);  // Canonicalize to key
     const base = basenameFrom(url).toLowerCase();
     const group = groupByBase.get(base);
     
@@ -174,8 +185,8 @@ export function buildFeatures(analysis: Analysis): Map<string, FeatureRow> {
     const colorKey = normalizeColor(insight.dominantColor || '');
     const textExtracted = insight.textExtracted || '';
     
-    features.set(url, {
-      url,
+    features.set(key, {  // Use canonical key instead of raw url
+      url: key,           // Store canonical key as url
       role,
       brandNorm,
       productTokens,
