@@ -9,13 +9,15 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "types": ["@netlify/functions", "node"],
+    "isolatedModules": true,
+    "types": ["@netlify/functions", "node", "jest"],
     "lib": ["ES2022", "DOM"]
   },
   "include": [
     "src",
     "functions/**/*.ts",
     "functions/**/*.d.ts",
-    "netlify/functions/**/*.ts"
+    "netlify/functions/**/*.ts",
+    "tests/**/*.ts"
   ]
 }

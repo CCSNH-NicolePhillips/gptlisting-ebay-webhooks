@@ -1,0 +1,380 @@
+// Copilot: Implement runPairing that:
+//  - Accepts { client, model, analysis } where analysis = { groups, imageInsights } from Prompt 1
+//  - Builds messages using getPairingSystemPrompt + getPairingUserPrompt
+//  - Appends analysis JSON at the end of the user message
+//  - Calls the model (temperature 0)
+//  - Parses with parsePairingResult
+//  - Returns { result, rawText } and logs compact debug lines for each pair/singleton
+// 1) import buildFeatures and buildCandidates
+// 2) compute features and candidates from analysis
+// 3) build a "hints" payload:
+//    {
+//      featuresByUrl: Record<url, FeatureRow>,
+//      candidatesByFront: Record<frontUrl, string[]> // allowedBacks
+//    }
+// 4) Append "\nHINTS:\n" + JSON.stringify(hints) after the INPUT JSON in the user message.
+// 5) Before calling GPT, print candidate tables to console:
+//
+//  CANDIDATES front=<url>
+//   - <backUrl> score=<preScore> brand=<equal?> prodJac=<v> sizeEq=<t/f> pkg=<..> catTailOverlap=<t/f>
+//
+// (Include your quick pre-score from candidates.ts so I can sanity-check pruning.)
+//
+// Keep everything else from Phase 1 intact.
+
+import OpenAI from "openai";
+import { getPairingSystemPrompt, getPairingUserPrompt } from "../prompt/pairing-prompt.js";
+import { parsePairingResult, PairingResult, Pair } from "./schema.js";
+import { buildFeatures, FeatureRow } from "./featurePrep.js";
+import { buildCandidates, getCandidateScoresForFront, shouldAutoPairHairCosmetic } from "./candidates.js";
+import { cfg, getThresholdsSnapshot, ENGINE_VERSION } from "./config.js";
+import { buildMetrics, formatMetricsLog, PairingMetrics } from "./metrics.js";
+import { groupExtrasWithProducts } from "./groupExtras.js";
+
+type Analysis = {
+  groups: any[];
+  imageInsights: any[];
+};
+
+const canon = (u: string) => u.trim().toLowerCase();
+
+export async function runPairing(opts: {
+  client: OpenAI;
+  model?: string; // default gpt-4o-mini (or from cfg)
+  analysis: Analysis;
+  log?: (line: string) => void;
+}): Promise<{ result: PairingResult; rawText: string; metrics: PairingMetrics }> {
+  const { client, analysis, log = console.log, model = cfg.model } = opts;
+  const startTime = Date.now();
+
+  // Build features and candidates
+  const features = buildFeatures(analysis);
+  const buildStart = Date.now();
+  const candidatesMap = buildCandidates(features, 4);
+  const buildDurationMs = Date.now() - buildStart;
+  
+  // Safety: warn if candidate building took too long
+  if (buildDurationMs > cfg.maxCandidateBuildMs) {
+    log(`WARN: Candidate building took ${buildDurationMs}ms (threshold: ${cfg.maxCandidateBuildMs}ms)`);
+  }
+  
+  // Safety: detect backs that appear under too many fronts
+  const backFrontCounts = new Map<string, string[]>();
+  for (const [frontUrl, candidates] of Object.entries(candidatesMap)) {
+    for (const cand of candidates) {
+      const fronts = backFrontCounts.get(cand.backUrl) || [];
+      fronts.push(frontUrl);
+      backFrontCounts.set(cand.backUrl, fronts);
+    }
+  }
+  for (const [backUrl, fronts] of backFrontCounts.entries()) {
+    if (fronts.length >= cfg.maxBackFrontRatio) {
+      log(`WARN back=${backUrl} appears under ${fronts.length} fronts; consider lowering thresholds or enabling filename proximity`);
+    }
+  }
+  
+  // Auto-pair fallback: identify slam-dunk candidates before calling GPT
+  const autoPairs: Pair[] = [];
+  const usedBacks = new Set<string>();
+  const frontsForGPT = new Set<string>();
+  
+  // General auto-pair (supplements/food with strong signals)
+  for (const [frontUrl, candidates] of Object.entries(candidatesMap)) {
+    const scores = getCandidateScoresForFront(features, frontUrl).filter(s => s.preScore >= cfg.minPreScore);
+    
+    if (scores.length > 0) {
+      const best = scores[0];
+      const runnerUp = scores[1];
+      const gap = best.preScore - (runnerUp?.preScore ?? -Infinity);
+      
+      // Auto-pair if: preScore >= cfg threshold AND gap >= cfg threshold
+      if (best.preScore >= cfg.autoPair.score && gap >= cfg.autoPair.gap && !usedBacks.has(best.backUrl)) {
+        const group = analysis.groups.find(g => g.images?.includes(frontUrl) || g.primaryImageUrl === frontUrl);
+        autoPairs.push({
+          frontUrl: canon(frontUrl),
+          backUrl: canon(best.backUrl),
+          matchScore: Math.round(best.preScore * 10) / 10,
+          brand: group?.brand || 'unknown',
+          product: group?.product || '',
+          variant: group?.variant || '',
+          sizeFront: group?.size || '',
+          sizeBack: group?.size || '',
+          evidence: [
+            `AUTO-PAIRED: preScore=${best.preScore.toFixed(2)}`,
+            `gap=${gap.toFixed(2)}`,
+            `brand=${best.brandFlag}`,
+            `packaging=${best.packaging} boost=${best.packagingBoost}`,
+            `prodJac=${best.prodJac.toFixed(2)} varJac=${best.varJac.toFixed(2)}`,
+            `sizeEq=${best.sizeEq} catTailOverlap=${best.catTailOverlap}`,
+            `cosmeticBackCue=${best.cosmeticBackCue}`
+          ],
+          confidence: 0.95
+        });
+        usedBacks.add(best.backUrl);
+        log(`AUTOPAIR front=${frontUrl} back=${best.backUrl} preScore=${best.preScore.toFixed(1)} Δ=${gap.toFixed(1)} brand=${best.brandFlag} pkg=${best.packaging} sizeEq=${best.sizeEq} prodJac=${best.prodJac.toFixed(2)} varJac=${best.varJac.toFixed(2)}`);
+      } else {
+        frontsForGPT.add(frontUrl);
+      }
+    }
+  }
+  
+  // Domain-specific fallback for hair/cosmetics (lower threshold, INCI-based)
+  for (const [frontUrl, _] of Object.entries(candidatesMap)) {
+    if (!frontsForGPT.has(frontUrl)) continue; // Skip already auto-paired
+    
+    const scores = getCandidateScoresForFront(features, frontUrl).filter(s => s.preScore >= 1.5);
+    if (scores.length === 0) continue;
+    
+    const [top, second] = [scores[0], scores[1]];
+    const frontFeat = features.get(frontUrl);
+    const isHairCosmetic = /hair|cosmetic|skin|styling|beauty/i.test(frontFeat?.categoryPath || '');
+    
+    if (isHairCosmetic && shouldAutoPairHairCosmetic(top, second) && !usedBacks.has(top.backUrl)) {
+      const group = analysis.groups.find(g => g.images?.includes(frontUrl) || g.primaryImageUrl === frontUrl);
+      autoPairs.push({
+        frontUrl: canon(frontUrl),
+        backUrl: canon(top.backUrl),
+        matchScore: Math.round(top.preScore * 10) / 10,
+        brand: group?.brand || 'unknown',
+        product: group?.product || '',
+        variant: group?.variant || '',
+        sizeFront: group?.size || '',
+        sizeBack: group?.size || '',
+        evidence: [
+          `AUTO-PAIRED[hair]: preScore=${top.preScore.toFixed(2)}`,
+          `gap=${(top.preScore - (second?.preScore ?? -Infinity)).toFixed(2)}`,
+          `brand=${top.brandFlag}`,
+          `packaging=${top.packaging} boost=${top.packagingBoost}`,
+          `INCI=${top.cosmeticBackCue}`,
+          `prodJac=${top.prodJac.toFixed(2)} varJac=${top.varJac.toFixed(2)}`,
+          `sizeEq=${top.sizeEq}`
+        ],
+        confidence: 0.90
+      });
+      usedBacks.add(top.backUrl);
+      frontsForGPT.delete(frontUrl);
+      log(`AUTOPAIR[hair] front=${frontUrl} back=${top.backUrl} preScore=${top.preScore.toFixed(2)} Δ=${(top.preScore - (second?.preScore ?? -Infinity)).toFixed(2)} pkg=${top.packaging} INCI=${top.cosmeticBackCue} brand=${top.brandFlag} sizeEq=${top.sizeEq}`);
+    }
+  }
+  
+  // Print candidate tables with enhanced details (only for fronts going to GPT)
+  for (const [frontUrl, candidates] of Object.entries(candidatesMap)) {
+    if (!frontsForGPT.has(frontUrl)) continue;
+    log(`CANDIDATES front=${frontUrl}`);
+    for (const cand of candidates) {
+      const details: string[] = [];
+      details.push(`preScore=${cand.score.toFixed(1)}`);
+      details.push(`brand=${cand.brandMatch ? 'equal' : 'mismatch'}`);
+      details.push(`prodJac=${cand.prodJaccard.toFixed(2)}`);
+      details.push(`sizeEq=${cand.sizeEq}`);
+      details.push(`pkg=${cand.pkgMatch ? 'match' : 'nomatch'}`);
+      details.push(`catTailOverlap=${cand.catTailOverlap}`);
+      log(`  - back=${cand.backUrl} ${details.join(' ')}`);
+    }
+  }
+  
+  // Build hints payload with canonical URLs (exclude auto-paired fronts, filter used backs)
+  const featuresByUrl: Record<string, FeatureRow> = {};
+  for (const [url, feat] of features.entries()) {
+    featuresByUrl[canon(url)] = feat;
+  }
+  
+  const candidatesByFront: Record<string, string[]> = {};
+  for (const [frontUrl, candidates] of Object.entries(candidatesMap)) {
+    // Skip auto-paired fronts
+    if (!frontsForGPT.has(frontUrl)) continue;
+    
+    // Filter out already-used backs
+    const availableBacks = candidates
+      .map(c => canon(c.backUrl))
+      .filter(b => !usedBacks.has(b));
+    
+    if (availableBacks.length > 0) {
+      candidatesByFront[canon(frontUrl)] = availableBacks;
+    }
+  }
+  
+  // If all fronts were auto-paired, skip GPT call
+  if (Object.keys(candidatesByFront).length === 0) {
+    // Group extras before returning
+    const products = groupExtrasWithProducts(autoPairs, features);
+    
+    const durationMs = Date.now() - startTime;
+    const metrics = buildMetrics({
+      features,
+      candidatesMap,
+      autoPairs,
+      modelPairs: [],
+      singletons: [],
+      thresholds: getThresholdsSnapshot(),
+      durationMs
+    });
+    log(formatMetricsLog(metrics));
+    log(`SUMMARY frontsWithCandidates=${Object.keys(candidatesMap).length}/${Array.from(features.values()).filter(f => f.role === 'front').length} autoPairs=${autoPairs.length} modelPairs=0 singletons=0`);
+    return {
+      result: {
+        engineVersion: ENGINE_VERSION,
+        pairs: autoPairs,
+        products,
+        singletons: [],
+        debugSummary: []
+      },
+      rawText: '{}',
+      metrics
+    };
+  }
+  
+  // Some fronts need GPT tie-breaking
+  if (cfg.disableTiebreak) {
+    log('WARN: GPT tie-breaking disabled (PAIR_DISABLE_TIEBREAK=1), treating remaining fronts as singletons');
+    const remainingSingletons = Object.keys(candidatesByFront).map(frontUrl => ({
+      url: frontUrl,
+      reason: 'tiebreak_disabled'
+    }));
+    
+    const products = groupExtrasWithProducts(autoPairs, features);
+    const durationMs = Date.now() - startTime;
+    const metrics = buildMetrics({
+      features,
+      candidatesMap,
+      autoPairs,
+      modelPairs: [],
+      singletons: remainingSingletons,
+      thresholds: getThresholdsSnapshot(),
+      durationMs
+    });
+    log(formatMetricsLog(metrics));
+    log(`SUMMARY frontsWithCandidates=${Object.keys(candidatesMap).length}/${Array.from(features.values()).filter(f => f.role === 'front').length} autoPairs=${autoPairs.length} modelPairs=0 singletons=${remainingSingletons.length}`);
+    return {
+      result: {
+        engineVersion: ENGINE_VERSION,
+        pairs: autoPairs,
+        products,
+        singletons: remainingSingletons,
+        debugSummary: ['TieBreakDisabled due to PAIR_DISABLE_TIEBREAK=1']
+      },
+      rawText: '{}',
+      metrics
+    };
+  }
+  
+  // Canonicalize URLs in analysis shallow copy
+  const canonAnalysis = {
+    groups: analysis.groups.map(g => ({
+      ...g,
+      primaryImageUrl: canon(g.primaryImageUrl || g.images?.[0] || ''),
+      images: (g.images || []).map(canon)
+    })),
+    imageInsights: analysis.imageInsights.map(ins => ({
+      ...ins,
+      url: canon(ins.url)
+    }))
+  };
+  
+  const hints = { featuresByUrl, candidatesByFront };
+
+  const system = getPairingSystemPrompt();
+  const user = getPairingUserPrompt() + "\n\nINPUT:\n" + JSON.stringify(canonAnalysis) + "\n\nHINTS:\n" + JSON.stringify(hints);
+
+  const res = await client.chat.completions.create({
+    model,
+    temperature: 0,
+    messages: [
+      { role: "system", content: system },
+      { role: "user",   content: user }
+    ]
+  });
+
+  const rawText = res.choices[0]?.message?.content || "{}";
+  let parsed: PairingResult;
+  try {
+    parsed = parsePairingResult(JSON.parse(rawText));
+  } catch (e) {
+    // Try to recover if model wrapped code fences
+    const cleaned = rawText.replace(/```json|```/g, "").trim();
+    parsed = parsePairingResult(JSON.parse(cleaned));
+  }
+  
+  // Enforce contract: validate pairs use allowed backs
+  const allowed = new Map(Object.entries(candidatesByFront));
+  for (const p of parsed.pairs) {
+    const f = canon(p.frontUrl), b = canon(p.backUrl);
+    const list = allowed.get(f) || [];
+    if (!list.map(canon).includes(b)) {
+      throw new Error(`Model chose back not in candidates: front=${p.frontUrl} back=${p.backUrl}`);
+    }
+    // Check uniqueness (no back used twice)
+    if (usedBacks.has(b)) {
+      throw new Error(`Model reused back: back=${p.backUrl} already used in auto-pair`);
+    }
+    usedBacks.add(b);
+  }
+  
+  // Enforce contract: check singleton reasons and missing decisions
+  const frontsSeen = new Set(parsed.pairs.map(p => canon(p.frontUrl)));
+  for (const s of parsed.singletons) {
+    const f = canon(s.url);
+    const list = allowed.get(f);
+    if (list && list.length) {
+      if (!/^declined despite candidates/i.test(s.reason)) {
+        throw new Error(`Model claimed "no candidates" despite candidates: url=${s.url} reason=${s.reason}`);
+      }
+      frontsSeen.add(f);
+    }
+  }
+  
+  // Check for missing decisions
+  for (const frontUrl of allowed.keys()) {
+    if (!frontsSeen.has(frontUrl)) {
+      throw new Error(`contract violation: missing decision for front ${frontUrl}`);
+    }
+  }
+
+  // Merge auto-pairs + model pairs
+  const allPairs = [...autoPairs, ...parsed.pairs];
+  
+  // Group extras with products
+  const products = groupExtrasWithProducts(allPairs, features);
+  
+  // Filter out singletons for images that were auto-paired
+  const autoPairedUrls = new Set([
+    ...autoPairs.map(p => canon(p.frontUrl)),
+    ...autoPairs.map(p => canon(p.backUrl))
+  ]);
+  const filteredSingletons = parsed.singletons.filter(s => !autoPairedUrls.has(canon(s.url)));
+  
+  const mergedResult: PairingResult = {
+    engineVersion: ENGINE_VERSION,
+    pairs: allPairs,
+    products,
+    singletons: filteredSingletons,
+    debugSummary: parsed.debugSummary || []
+  };
+
+  // Debug logs
+  for (const p of allPairs) {
+    log(`PAIR  front=${p.frontUrl}  back=${p.backUrl}  score=${p.matchScore.toFixed(2)}  brand=${p.brand}  product=${p.product}`);
+    if (p.evidence?.length) log(`EVID  ${p.evidence.join(" | ")}`);
+  }
+  for (const s of filteredSingletons) {
+    log(`SINGLETON url=${s.url} reason=${s.reason}`);
+  }
+
+  // Build metrics
+  const durationMs = Date.now() - startTime;
+  const metrics = buildMetrics({
+    features,
+    candidatesMap,
+    autoPairs,
+    modelPairs: parsed.pairs,
+    singletons: filteredSingletons,
+    thresholds: getThresholdsSnapshot(),
+    durationMs
+  });
+  
+  // Summary
+  log(formatMetricsLog(metrics));
+  log(`SUMMARY frontsWithCandidates=${Object.keys(candidatesMap).length}/${Array.from(features.values()).filter(f => f.role === 'front').length} autoPairs=${autoPairs.length} modelPairs=${parsed.pairs.length} singletons=${filteredSingletons.length}`);
+
+  return { result: mergedResult, rawText, metrics };
+}

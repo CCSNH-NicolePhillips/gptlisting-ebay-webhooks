@@ -10,3 +10,4 @@ prod.env
 # Local Netlify folder
 .netlify
 tmp/
+.env

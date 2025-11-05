@@ -1,0 +1,177 @@
+{
+  "engineVersion": "1.0.0",
+  "pairs": [
+    {
+      "frontUrl": "ebay/asd32q.jpg",
+      "backUrl": "ebay/azdfkuj.jpg",
+      "matchScore": 3,
+      "brand": "R+Co",
+      "product": "Bond Building + Repair Styling Oil",
+      "variant": "On a Cloud",
+      "sizeFront": "41 mL / 1.4 fl oz",
+      "sizeBack": "41 mL / 1.4 fl oz",
+      "evidence": [
+        "AUTO-PAIRED: preScore=3.00",
+        "gap=Infinity",
+        "brand=unknownRescue",
+        "packaging=bottle boost=1",
+        "prodJac=0.00 varJac=0.00",
+        "sizeEq=false catTailOverlap=false",
+        "cosmeticBackCue=true"
+      ],
+      "confidence": 0.95
+    },
+    {
+      "frontUrl": "ebay/awef.jpg",
+      "backUrl": "ebay/awefawed.jpg",
+      "matchScore": 9,
+      "brand": "myBrainCo.",
+      "product": "Gut Repair",
+      "variant": "Natural Berry Flavour",
+      "sizeFront": "10.9 oz | 31 servings",
+      "sizeBack": "10.9 oz | 31 servings",
+      "evidence": [
+        "AUTO-PAIRED: preScore=9.00",
+        "gap=5.50",
+        "brand=equal",
+        "packaging=pouch boost=1.5",
+        "prodJac=1.00 varJac=0.20",
+        "sizeEq=false catTailOverlap=true",
+        "cosmeticBackCue=true"
+      ],
+      "confidence": 0.95
+    },
+    {
+      "frontUrl": "ebay/frog_01.jpg",
+      "backUrl": "faeewfaw.jpg",
+      "matchScore": 6.5,
+      "brand": "Frog Fuel",
+      "product": "Performance Greens + Protein",
+      "variant": "Lemon Lime Flavor",
+      "sizeFront": "25.4 oz (1.59 lb) 720 g",
+      "sizeBack": "25.4 oz (1.59 lb) 720 g",
+      "evidence": [
+        "AUTO-PAIRED: preScore=6.50",
+        "gap=2.50",
+        "brand=equal",
+        "packaging=pouch boost=1.5",
+        "prodJac=0.20 varJac=0.00",
+        "sizeEq=false catTailOverlap=true",
+        "cosmeticBackCue=true"
+      ],
+      "confidence": 0.95
+    },
+    {
+      "frontUrl": "ebay/rgxbbg.jpg",
+      "backUrl": "dfzdvzer.jpg",
+      "matchScore": 3.5,
+      "brand": "nusava",
+      "product": "Liquid Dietary Supplement",
+      "variant": "Strawberry Flavor",
+      "sizeFront": "2 fl oz / 60 ml",
+      "sizeBack": "2 fl oz / 60 ml",
+      "evidence": [
+        "AUTO-PAIRED: preScore=3.50",
+        "gap=1.00",
+        "brand=unknownRescue",
+        "packaging=dropper-bottle boost=2",
+        "prodJac=0.00 varJac=0.00",
+        "sizeEq=false catTailOverlap=false",
+        "cosmeticBackCue=true"
+      ],
+      "confidence": 0.95
+    }
+  ],
+  "products": [
+    {
+      "productId": "r_co_bond_building_repair_styling_oil",
+      "frontUrl": "ebay/asd32q.jpg",
+      "backUrl": "ebay/azdfkuj.jpg",
+      "extras": [],
+      "evidence": {
+        "brand": "R+Co",
+        "product": "Bond Building + Repair Styling Oil",
+        "variant": "On a Cloud",
+        "matchScore": 3,
+        "confidence": 0.95,
+        "triggers": [
+          "AUTO-PAIRED: preScore=3.00",
+          "gap=Infinity",
+          "brand=unknownRescue",
+          "packaging=bottle boost=1",
+          "prodJac=0.00 varJac=0.00",
+          "sizeEq=false catTailOverlap=false",
+          "cosmeticBackCue=true"
+        ]
+      }
+    },
+    {
+      "productId": "mybrainco_gut_repair",
+      "frontUrl": "ebay/awef.jpg",
+      "backUrl": "ebay/awefawed.jpg",
+      "extras": [],
+      "evidence": {
+        "brand": "myBrainCo.",
+        "product": "Gut Repair",
+        "variant": "Natural Berry Flavour",
+        "matchScore": 9,
+        "confidence": 0.95,
+        "triggers": [
+          "AUTO-PAIRED: preScore=9.00",
+          "gap=5.50",
+          "brand=equal",
+          "packaging=pouch boost=1.5",
+          "prodJac=1.00 varJac=0.20",
+          "sizeEq=false catTailOverlap=true",
+          "cosmeticBackCue=true"
+        ]
+      }
+    },
+    {
+      "productId": "frog_fuel_performance_greens_protein",
+      "frontUrl": "ebay/frog_01.jpg",
+      "backUrl": "faeewfaw.jpg",
+      "extras": [],
+      "evidence": {
+        "brand": "Frog Fuel",
+        "product": "Performance Greens + Protein",
+        "variant": "Lemon Lime Flavor",
+        "matchScore": 6.5,
+        "confidence": 0.95,
+        "triggers": [
+          "AUTO-PAIRED: preScore=6.50",
+          "gap=2.50",
+          "brand=equal",
+          "packaging=pouch boost=1.5",
+          "prodJac=0.20 varJac=0.00",
+          "sizeEq=false catTailOverlap=true",
+          "cosmeticBackCue=true"
+        ]
+      }
+    },
+    {
+      "productId": "nusava_liquid_dietary_supplement",
+      "frontUrl": "ebay/rgxbbg.jpg",
+      "backUrl": "dfzdvzer.jpg",
+      "extras": [],
+      "evidence": {
+        "brand": "nusava",
+        "product": "Liquid Dietary Supplement",
+        "variant": "Strawberry Flavor",
+        "matchScore": 3.5,
+        "confidence": 0.95,
+        "triggers": [
+          "AUTO-PAIRED: preScore=3.50",
+          "gap=1.00",
+          "brand=unknownRescue",
+          "packaging=dropper-bottle boost=2",
+          "prodJac=0.00 varJac=0.00",
+          "sizeEq=false catTailOverlap=false",
+          "cosmeticBackCue=true"
+        ]
+      }
+    }
+  ],
+  "singletons": [],
+  "debugSummary": []
+}
