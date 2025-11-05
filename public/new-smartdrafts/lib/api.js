@@ -1,5 +1,26 @@
 // public/new-smartdrafts/lib/api.js
 
+// Use window.authClient.authFetch for authenticated endpoints
+async function authGet(url, opts={}) {
+  if (!window.authClient?.authFetch) {
+    throw new Error('Auth client not initialized. Please sign in.');
+  }
+  return window.authClient.authFetch(url, { method: 'GET', ...opts });
+}
+
+async function authPost(url, body, opts={}) {
+  if (!window.authClient?.authFetch) {
+    throw new Error('Auth client not initialized. Please sign in.');
+  }
+  return window.authClient.authFetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...(opts.headers||{}) },
+    body: body ? JSON.stringify(body) : undefined,
+    ...opts
+  });
+}
+
+// Unauthenticated fetch helpers (for public endpoints)
 function get(url, opts={}) {
   return fetch(url, { method: 'GET', ...opts });
 }
@@ -17,7 +38,7 @@ function post(url, body, opts={}) {
 export async function enqueueAnalyzeLive(folderUrl, { force=false } = {}) {
   if (!folderUrl) throw new Error('folderUrl required');
   
-  const r = await post(`/.netlify/functions/smartdrafts-scan-bg`, { 
+  const r = await authPost(`/.netlify/functions/smartdrafts-scan-bg`, { 
     path: folderUrl, 
     force 
   });
@@ -31,7 +52,7 @@ export async function enqueueAnalyzeLive(folderUrl, { force=false } = {}) {
 export async function pollAnalyzeLive(jobId) {
   if (!jobId) throw new Error('jobId required');
   
-  const r = await get(`/.netlify/functions/smartdrafts-scan-status?jobId=${jobId}`);
+  const r = await authGet(`/.netlify/functions/smartdrafts-scan-status?jobId=${jobId}`);
   if (!r.ok) throw new Error(`Status check failed ${r.status}: ${await r.text()}`);
   
   const job = await r.json();
@@ -44,7 +65,7 @@ export async function pollAnalyzeLive(jobId) {
 }
 
 export async function runPairingLive(analysis, overrides = {}) {
-  const r = await post(`/.netlify/functions/smartdrafts-pairing`, { analysis, overrides });
+  const r = await authPost(`/.netlify/functions/smartdrafts-pairing`, { analysis, overrides });
   if (!r.ok) throw new Error(`runPairingLive ${r.status}: ${await r.text()}`);
   return r.json(); // { pairing, metrics? }
 }
@@ -52,7 +73,7 @@ export async function runPairingLive(analysis, overrides = {}) {
 export async function resetFolderLive(folderUrl) {
   if (!folderUrl) throw new Error('folderUrl required');
   const q = new URLSearchParams({ folder: folderUrl });
-  const r = await post(`/.netlify/functions/smartdrafts-reset?${q}`);
+  const r = await authPost(`/.netlify/functions/smartdrafts-reset?${q}`);
   if (!r.ok) throw new Error(`resetFolderLive ${r.status}: ${await r.text()}`);
   return r.json(); // { ok, cleared }
 }
