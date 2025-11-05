@@ -19,7 +19,35 @@ export function AnalysisPanel({ data }) {
   const groups = data.groups || [];
   // imageInsights can be an object (keyed by URL) or array
   const insightsRaw = data.imageInsights || {};
-  const insights = Array.isArray(insightsRaw) ? insightsRaw : Object.values(insightsRaw);
+  let insightsArray = Array.isArray(insightsRaw) ? insightsRaw : Object.values(insightsRaw);
+  
+  // De-duplicate by key and merge evidence, keeping best role
+  const map = new Map();
+  for (const raw of insightsArray) {
+    const key = raw.key || urlKey(raw.url);
+    if (!key) continue;
+    
+    const prev = map.get(key);
+    if (!prev) { 
+      map.set(key, raw); 
+      continue; 
+    }
+    
+    // Pick the one with a real role / larger |roleScore|
+    const a = prev, b = raw;
+    const pick = (x, y) => (Math.abs(x?.roleScore ?? 0) >= Math.abs(y?.roleScore ?? 0) ? x : y);
+    const best = (a.role && !b.role) ? a : (b.role && !a.role) ? b : pick(a, b);
+    
+    map.set(key, {
+      ...best,
+      key,
+      url: best.url,                            // keep real URL
+      displayUrl: best.displayUrl || best.url,  // for rendering
+      evidenceTriggers: [...new Set([...(a.evidenceTriggers || []), ...(b.evidenceTriggers || [])])]
+    });
+  }
+  
+  const insights = [...map.values()];
   
   // If we have groups but no insights, show groups view
   if (groups.length > 0 && insights.length === 0) {
@@ -68,11 +96,11 @@ export function AnalysisPanel({ data }) {
   return html`
     <div class="grid">
       ${insights.map((ins) => html`
-        <article class="card" key=${ins.url}>
-          <img class="thumb" src="${ins.url}" alt=${urlKey(ins.url)} loading="lazy" />
+        <article class="card" key=${ins.key || urlKey(ins.url)}>
+          <img class="thumb" src="${ins.displayUrl || ins.url}" alt=${ins.key || urlKey(ins.url)} loading="lazy" />
           <div class="meta">
             <div class="row">
-              <span class="name">${urlKey(ins.url)}</span>
+              <span class="name">${ins.key || urlKey(ins.url)}</span>
               <span class="chip" style=${{ background: roleColor(ins.role) }}>${ins.role || 'unknown'}</span>
             </div>
             <div class="small">
