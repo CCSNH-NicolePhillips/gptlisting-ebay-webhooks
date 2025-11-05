@@ -34,3 +34,6 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 system
 .pill { display:inline-block; background: var(--pill); color: var(--fg); border:1px solid #1f2937; border-radius: 999px; padding:4px 10px; margin-right:8px;}
 .drawer { position: sticky; bottom: 0; background: #0f172a; border:1px solid #1f2937; border-radius: 10px; padding: 10px; margin-top: 8px; }
 .list { margin:0; padding-left: 18px; }
+.pair { display:grid; grid-template-columns: 1fr 1fr; gap:6px; padding: 0 10px 10px; }
+.extras { display:flex; gap:6px; padding: 0 10px 10px; }
+.thumb.sm { height: 80px; }

@@ -3,6 +3,7 @@ import { useState } from 'https://esm.sh/preact@10.20.2/hooks';
 import htm from 'https://esm.sh/htm@3.1.1';
 import { AnalysisPanel } from './components/AnalysisPanel.js';
 import { PairingPanel } from './components/PairingPanel.js';
+import { ProductPanel } from './components/ProductPanel.js';
 import { FolderSelector } from './components/FolderSelector.js';
 import { enqueueAnalyzeLive, pollAnalyzeLive, runPairingLive, resetFolderLive, getMetricsLive } from './lib/api.js';
 import { mockLoadAnalysis, mockRunPairing } from './lib/mockServer.js';
@@ -10,7 +11,7 @@ import { normalizeFolderInput } from './lib/urlKey.js';
 
 const html = htm.bind(h);
 
-const TABS = ['Analysis','Pairing','Products (soon)','Candidates (soon)','Metrics (soon)','Logs (soon)'];
+const TABS = ['Analysis','Pairing','Products','Candidates (soon)','Metrics (soon)','Logs (soon)'];
 
 export function App() {
   const [tab, setTab] = useState('Analysis');
@@ -170,7 +171,8 @@ export function App() {
         ${loading && html`<div class="loading">Loading…</div>`}
         ${!loading && tab==='Analysis' && html`<${AnalysisPanel} data=${analysis} />`}
         ${!loading && tab==='Pairing' && html`<${PairingPanel} result=${pairing} />`}
-        ${!loading && tab!=='Analysis' && tab!=='Pairing' && html`
+        ${!loading && tab==='Products' && html`<${ProductPanel} products=${pairing?.products} />`}
+        ${!loading && tab!=='Analysis' && tab!=='Pairing' && tab!=='Products' && html`
           <div class="placeholder">
             <p>${tab} — coming next.</p>
           </div>
