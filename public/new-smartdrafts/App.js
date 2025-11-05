@@ -113,7 +113,16 @@ export function App() {
           throw new Error('No image insights found. Try running Analyze again with Force Rescan.');
         }
         setLoadingStatus('🤖 Running GPT-4o-mini pairing...');
-        out = await runPairingLive(analysis);
+        
+        // Convert imageInsights from object to array if needed (pairing expects array)
+        const analysisForPairing = {
+          ...analysis,
+          imageInsights: Array.isArray(analysis.imageInsights) 
+            ? analysis.imageInsights 
+            : Object.values(analysis.imageInsights)
+        };
+        
+        out = await runPairingLive(analysisForPairing);
         showToast('✨ Pairing complete (live)');
       }
       const { pairing, metrics } = out;
