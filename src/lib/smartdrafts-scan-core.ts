@@ -18,6 +18,7 @@ import { urlKey } from "../utils/urlKey.js";
 import { sanitizeInsightUrl } from "../utils/urlSanitize.js";
 import { makeDisplayUrl } from "../utils/displayUrl.js";
 import { buildRoleMap } from "../utils/roles.js";
+import { normBrand, tokenize, jaccard, categoryCompat } from "../utils/groupingHelpers.js";
 
 type DropboxEntry = {
   ".tag": "file" | "folder";
@@ -817,11 +818,15 @@ async function buildHybridGroups(
         const unassignedVisual = (insight as any).visualDescription || '';
         const unassignedColor = (insight as any).dominantColor || 'unknown';
         const unassignedRole = (insight as any).role || 'other';
+        const unassignedBrand = (insight as any).brand || '';
+        const unassignedProduct = (insight as any).product || '';
+        const unassignedCategory = (insight as any).categoryPath || '';
 
         console.log(`[buildHybridGroups] Trying to match ${filename}:`);
         console.log(`  Visual: "${unassignedVisual}"`);
         console.log(`  Color: ${unassignedColor}`);
         console.log(`  Role: ${unassignedRole}`);
+        console.log(`  Brand: ${unassignedBrand}, Category: ${unassignedCategory}`);
 
         // Try to match using ALL available visual details
         const visualLower = unassignedVisual.toLowerCase();
@@ -832,6 +837,47 @@ async function buildHybridGroups(
           const productVisualLower = product.visualDescription.toLowerCase();
           let score = 0;
           const reasons: string[] = [];
+
+          // GUARDRAILS: Check category compatibility first
+          const targetGroup = product.group;
+          const targetCategory = targetGroup?.categoryPath || '';
+          const catCompat = categoryCompat(unassignedCategory, targetCategory);
+          
+          // Hard block: cross-category mismatches (hair vs supplement/food)
+          if (catCompat <= -0.5) {
+            console.log(`  ✗ Blocked ${product.brand} - ${product.product}: category mismatch (hair↔supp/food)`);
+            continue;
+          }
+
+          // GUARDRAILS: Check brand compatibility
+          const unassignedBrandNorm = normBrand(unassignedBrand);
+          const targetBrandNorm = normBrand(product.brand);
+          const brandMatch = !!(unassignedBrandNorm && targetBrandNorm && unassignedBrandNorm === targetBrandNorm);
+          
+          // GUARDRAILS: Check product token similarity
+          const unassignedProdTokens = tokenize(unassignedProduct);
+          const targetProdTokens = tokenize(product.product);
+          const prodSim = jaccard(unassignedProdTokens, targetProdTokens);
+
+          // Add brand/category/product to score
+          if (brandMatch) {
+            score += 20;  // Strong brand match
+            reasons.push(`brand=${unassignedBrandNorm}`);
+          }
+          if (catCompat >= 0.6) {
+            score += 10;  // Same category
+            reasons.push(`category-match`);
+          } else if (catCompat >= 0.2) {
+            score += 2;   // Compatible category
+            reasons.push(`category-compat`);
+          }
+          if (prodSim >= 0.6) {
+            score += 15;  // Strong product similarity
+            reasons.push(`product-sim=${prodSim.toFixed(2)}`);
+          } else if (prodSim >= 0.4) {
+            score += 5;   // Moderate product similarity
+            reasons.push(`product-sim=${prodSim.toFixed(2)}`);
+          }
 
           // 1. DOMINANT COLOR MATCH (highest priority - 15 points)
           if (product.dominantColor === unassignedColor) {
@@ -954,13 +1000,38 @@ async function buildHybridGroups(
           if (score > 0 && (!bestMatch || score > (bestMatch as any)._score)) {
             bestMatch = product;
             (bestMatch as any)._score = score;
+            (bestMatch as any)._brandMatch = brandMatch;
+            (bestMatch as any)._prodSim = prodSim;
+            (bestMatch as any)._catCompat = catCompat;
             matchReason = reasons.join(', ');
           }
         }
 
+        // GUARDRAILS: Final check before accepting match
         if (bestMatch && (bestMatch as any)._score >= 20) {
+          const finalScore = (bestMatch as any)._score;
+          const finalBrandMatch = (bestMatch as any)._brandMatch;
+          const finalProdSim = (bestMatch as any)._prodSim || 0;
+          const finalCatCompat = (bestMatch as any)._catCompat || 0;
+          
+          // Hard block: category mismatch (should already be filtered, but double-check)
+          const catBlock = finalCatCompat <= -0.5;
+          
+          // Weak match: not enough evidence to be confident
+          const weak = finalScore < 40 && !(finalBrandMatch && finalProdSim >= 0.6);
+          
+          if (catBlock) {
+            console.log(`[buildHybridGroups] ✗ BLOCKED ${filename}: category incompatible (${finalCatCompat.toFixed(2)})`);
+            continue;
+          }
+          
+          if (weak) {
+            console.log(`[buildHybridGroups] ✗ BLOCKED ${filename}: weak match (score=${finalScore}, brand=${finalBrandMatch}, prodSim=${finalProdSim.toFixed(2)})`);
+            continue;
+          }
+
           console.log(`[buildHybridGroups] ✓ Matched ${filename} to "${bestMatch.brand}" - "${bestMatch.product}"`);
-          console.log(`  Match score: ${(bestMatch as any)._score}, reasons: ${matchReason}`);
+          console.log(`  Match score: ${finalScore}, reasons: ${matchReason}`);
 
           bestMatch.group.fileIndices.push(unassignedIdx);
           bestMatch.group.fileUrls.push(file.url);
@@ -1009,19 +1080,45 @@ async function buildHybridGroups(
 
     const backVisual = backInsight.visualDescription.toLowerCase();
     const backColor = (backInsight.dominantColor || '').toLowerCase();
+    const backBrand = (backInsight as any).brand || '';
+    const backProduct = (backInsight as any).product || '';
+    const backCategory = (backInsight as any).categoryPath || '';
 
     console.log(`[buildHybridGroups]   Checking orphan back: ${files[backIdx].entry.name} (${backGroup.brand})`);
+    console.log(`    Back category: ${backCategory}`);
 
     // Look for a front group from the same brand
     let bestFrontGroup: typeof hybridGroups[0] | null = null;
     let bestScore = 0;
+    let bestCatCompat = 0;
+    let bestBrandMatch = false;
+    let bestProdSim = 0;
 
     for (let j = 0; j < hybridGroups.length; j++) {
       if (i === j) continue;
       const frontGroup = hybridGroups[j];
 
+      // GUARDRAILS: Check category compatibility first
+      const frontCategory = frontGroup.categoryPath || '';
+      const catCompat = categoryCompat(backCategory, frontCategory);
+      
+      // Hard block: cross-category mismatches (hair vs supplement/food)
+      if (catCompat <= -0.5) {
+        console.log(`    ✗ Skip ${frontGroup.brand}: category mismatch (${catCompat.toFixed(2)})`);
+        continue;
+      }
+
       // Must be same brand
       if (frontGroup.brand?.toLowerCase() !== backGroup.brand?.toLowerCase()) continue;
+
+      // GUARDRAILS: Check brand and product similarity
+      const frontBrandNorm = normBrand(frontGroup.brand);
+      const backBrandNorm = normBrand(backBrand);
+      const brandMatch = !!(frontBrandNorm && backBrandNorm && frontBrandNorm === backBrandNorm);
+      
+      const frontProdTokens = tokenize(frontGroup.product || frontGroup.name || '');
+      const backProdTokens = tokenize(backProduct);
+      const prodSim = jaccard(frontProdTokens, backProdTokens);
 
       // Find the front image in this group
       const frontIdx = frontGroup.images.findIndex((url: string) => {
@@ -1045,6 +1142,21 @@ async function buildHybridGroups(
       const frontColor = (frontInsight.dominantColor || '').toLowerCase();
 
       let score = 0;
+
+      // GUARDRAILS: Add brand/category/product to score
+      if (brandMatch) {
+        score += 20;  // Strong brand match
+      }
+      if (catCompat >= 0.6) {
+        score += 10;  // Same category
+      } else if (catCompat >= 0.2) {
+        score += 2;   // Compatible category
+      }
+      if (prodSim >= 0.6) {
+        score += 15;  // Strong product similarity
+      } else if (prodSim >= 0.4) {
+        score += 5;   // Moderate product similarity
+      }
 
       // Use the same enhanced scoring system
       // 1. Color match (15 points)
@@ -1124,10 +1236,30 @@ async function buildHybridGroups(
       if (score > bestScore) {
         bestScore = score;
         bestFrontGroup = frontGroup;
+        bestCatCompat = catCompat;
+        bestBrandMatch = brandMatch;
+        bestProdSim = prodSim;
       }
     }
 
+    // GUARDRAILS: Final check before merging
     if (bestFrontGroup && bestScore >= 20) {
+      // Hard block: category mismatch (should already be filtered, but double-check)
+      const catBlock = bestCatCompat <= -0.5;
+      
+      // Weak match: not enough evidence to be confident
+      const weak = bestScore < 40 && !(bestBrandMatch && bestProdSim >= 0.6);
+      
+      if (catBlock) {
+        console.log(`[buildHybridGroups]   ✗ BLOCKED: category incompatible (${bestCatCompat.toFixed(2)})`);
+        continue;
+      }
+      
+      if (weak) {
+        console.log(`[buildHybridGroups]   ✗ BLOCKED: weak match (score=${bestScore}, brand=${bestBrandMatch}, prodSim=${bestProdSim.toFixed(2)})`);
+        continue;
+      }
+
       console.log(`[buildHybridGroups]   ✓ Merging "${backGroup.name}" back into "${bestFrontGroup.name}" (score: ${bestScore})`);
 
       // Add back image to front group
