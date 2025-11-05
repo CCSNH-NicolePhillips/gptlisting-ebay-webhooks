@@ -19,6 +19,7 @@ import { sanitizeInsightUrl } from "../utils/urlSanitize.js";
 import { makeDisplayUrl } from "../utils/displayUrl.js";
 import { buildRoleMap } from "../utils/roles.js";
 import { normBrand, tokenize, jaccard, categoryCompat } from "../utils/groupingHelpers.js";
+import { finalizeDisplayUrls } from "../utils/finalizeDisplay.js";
 
 type DropboxEntry = {
   ".tag": "file" | "folder";
@@ -3401,6 +3402,14 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
         },
       };
     }
+
+    // Final hydration: ensure all imageInsights have valid display URLs
+    finalizeDisplayUrls(responsePayload, {
+      httpsByKey,
+      originalByKey,
+      folderParam: folder,
+      publicFilesBase: '/files', // Optional: proxy base for local serving
+    });
 
     return jsonEnvelope(200, responsePayload);
   } catch (err: any) {
