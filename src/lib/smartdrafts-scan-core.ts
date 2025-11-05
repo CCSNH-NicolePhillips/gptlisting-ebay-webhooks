@@ -1460,10 +1460,19 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
           .filter((value): value is ImageInsight => Boolean(value));
 
     // Sanitize insight URLs immediately - replace placeholders like "<imgUrl>" with original URLs
+    // And add key + displayUrl fields for client rendering
     insightList = insightList.map((insight, idx) => {
       const originalUrl = urls[idx] || fileTuples[idx]?.url || '';
       const sanitizedUrl = sanitizeInsightUrl(insight.url, originalUrl);
-      return { ...insight, url: sanitizedUrl };
+      const key = urlKey(sanitizedUrl);
+      const displayUrl = toDirectDropbox(sanitizedUrl);
+      
+      return { 
+        ...insight, 
+        url: sanitizedUrl,
+        key,
+        displayUrl
+      };
     });
 
     const extractInsightOcr = (insight: ImageInsight | undefined): string => {
@@ -1484,10 +1493,19 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
     insightList.forEach((insight) => {
       const normalizedUrl = typeof insight.url === "string" ? toDirectDropbox(insight.url) : "";
       if (!normalizedUrl) return;
-      const payload: ImageInsight = { ...insight, url: normalizedUrl };
       
-      // Use urlKey (basename) for consistent indexing
-      const key = urlKey(normalizedUrl);
+      // Ensure key and displayUrl are set
+      const key = (insight as any).key || urlKey(normalizedUrl);
+      const displayUrl = (insight as any).displayUrl || normalizedUrl;
+      
+      const payload: ImageInsight = { 
+        ...insight, 
+        url: normalizedUrl,
+        key,
+        displayUrl
+      } as any;
+      
+      // Use key for consistent indexing (already has prefix stripped)
       if (!insightMap.has(key)) {
         insightMap.set(key, payload);
       }
@@ -2965,34 +2983,42 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       });
     });
 
-    // De-duplicate imageInsights by urlKey before returning
+    // De-duplicate imageInsights by key before returning
     const seen = new Set<string>();
     const uniqueInsights: Array<[string, ImageInsight]> = [];
     
     for (const [key, value] of insightOutput.entries()) {
       const normalized = toDirectDropbox(key);
-      const canonicalKey = urlKey(normalized);
+      const insightKey = (value as any).key || urlKey(normalized);
       
       // Skip any lingering placeholder URLs
-      if (!canonicalKey || canonicalKey === 'imgurl' || canonicalKey.startsWith('<')) {
-        console.warn(`[role-index] Skipping placeholder URL: "${canonicalKey}" from "${key}"`);
+      if (!insightKey || insightKey === 'imgurl' || insightKey.startsWith('<')) {
+        console.warn(`[role-index] Skipping placeholder URL: "${insightKey}" from "${key}"`);
         continue;
       }
       
-      if (seen.has(canonicalKey)) continue;
-      seen.add(canonicalKey);
+      if (seen.has(insightKey)) continue;
+      seen.add(insightKey);
       
-      uniqueInsights.push([canonicalKey, { ...value, url: canonicalKey } as ImageInsight]);
+      // Preserve key and displayUrl in output
+      const insight = {
+        ...value,
+        url: normalized,
+        key: insightKey,
+        displayUrl: (value as any).displayUrl || normalized
+      } as ImageInsight;
+      
+      uniqueInsights.push([insightKey, insight]);
     }
 
     const imageInsightsRecord = Object.fromEntries(uniqueInsights);
     
     // Debug: log keys sample to verify no placeholders
     const keySample = Array.from(seen).slice(0, 12);
-    console.log('[role-index] keys sample:', keySample);
+    console.log('[role-index] keys:', keySample);
     
     // Debug: check for duplicates
-    const allKeys = Array.from(insightOutput.entries()).map(([k]) => urlKey(toDirectDropbox(k)));
+    const allKeys = Array.from(insightOutput.entries()).map(([k, v]) => (v as any).key || urlKey(toDirectDropbox(k)));
     const dupes = allKeys.filter((k, i) => allKeys.indexOf(k) !== i);
     if (dupes.length) {
       console.warn('[role-index] DUPES found (before dedup):', dupes);

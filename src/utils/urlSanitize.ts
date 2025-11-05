@@ -10,7 +10,7 @@
 export function sanitizeInsightUrl(u?: string | null, fallback?: string): string {
   const v = (u || '').trim();
   // any of these means "the model didn't return a real URL"
-  if (!v || v === '<imgUrl>' || v === '<imgurl>' || v.toLowerCase() === 'imgurl' || /^<.*>$/.test(v)) {
+  if (!v || v === '<imgUrl>' || v === '<imgurl>' || /^<.*>$/.test(v)) {
     return fallback || '';
   }
   return v;
