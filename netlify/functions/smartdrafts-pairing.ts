@@ -245,6 +245,9 @@ export const handler: Handler = async (event) => {
     const allFronts = allKeys.filter(k => roleByKey.get(k) === 'front' && !pairedFronts.has(k));
     const allBacks = allKeys.filter(k => roleByKey.get(k) === 'back');
 
+    // Collect diagnostic info
+    const debugInfo: any[] = [];
+
     for (const f of allFronts) {
       const scored = allBacks
         .filter(b => b !== f)
@@ -257,21 +260,36 @@ export const handler: Handler = async (event) => {
       const runner = scored[1];
       const gap = best.s - (runner?.s ?? -Infinity);
       
-      // Optional debug for Nusava
+      // Collect debug info for this front
+      const fBuck = bucket(catByKey.get(f));
+      const debugEntry = {
+        frontKey: f,
+        frontBrand: brandByKey.get(f) || 'none',
+        frontCategory: catByKey.get(f) || 'none',
+        frontBucket: fBuck,
+        bestBackKey: best.b,
+        bestBackBrand: brandByKey.get(best.b) || 'none',
+        bestBackCategory: catByKey.get(best.b) || 'none',
+        bestBackBucket: bucket(catByKey.get(best.b)),
+        bestBackRole: roleByKey.get(best.b) || 'none',
+        bestBackHasFacts: factsCueByKey.get(best.b) || false,
+        bestScore: parseFloat(best.s.toFixed(2)),
+        runnerScore: runner ? parseFloat(runner.s.toFixed(2)) : null,
+        gap: gap === Infinity ? 'Infinity' : parseFloat(gap.toFixed(2)),
+        accepted: false,
+        rule: 'none'
+      };
+      
+      // Console log for server debugging
       if (f === 'rgxbbg.jpg') {
-        console.log('[diag nusava]', {
-          frontKey: f,
-          backKey: best.b,
-          s: best.s.toFixed(2),
-          backHasFacts: factsCueByKey.get(best.b),
-          catFront: catByKey.get(f),
-          catBack: catByKey.get(best.b),
-          gap: gap === Infinity ? 'Infinity' : gap.toFixed(2)
-        });
+        console.log('[diag nusava]', debugEntry);
       }
       
       // Accept if strong enough (strict rule)
       if (best.s >= 3.0 && gap >= 1.0) {
+        debugEntry.accepted = true;
+        debugEntry.rule = 'strict';
+        debugInfo.push(debugEntry);
         autoPairs.push({
           frontUrl: f,
           backUrl: best.b,
@@ -291,8 +309,10 @@ export const handler: Handler = async (event) => {
       }
       
       // --- NEW: supplement soft accept ---
-      const fBuck = bucket(catByKey.get(f));
       if (fBuck === 'supp' && best.s >= 2.4 && gap >= 0.8) {
+        debugEntry.accepted = true;
+        debugEntry.rule = 'soft-supp';
+        debugInfo.push(debugEntry);
         autoPairs.push({
           frontUrl: f,
           backUrl: best.b,
@@ -310,6 +330,9 @@ export const handler: Handler = async (event) => {
         });
         continue;
       }
+      
+      // Not accepted - still add to debug
+      debugInfo.push(debugEntry);
     }
 
     // 4) Run existing pairing logic (if needed) and merge
@@ -373,6 +396,14 @@ export const handler: Handler = async (event) => {
       variant: p.variant ?? null
     })) as any;
     result.products = products;
+    
+    // Add debug info to result
+    (result as any).debug = {
+      totalFronts: allFronts.length,
+      totalBacks: allBacks.length,
+      autoPairs: autoPairs.length,
+      candidates: debugInfo
+    };
 
     return jsonResponse(200, { 
       ok: true,
