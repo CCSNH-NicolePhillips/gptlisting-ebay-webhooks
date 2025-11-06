@@ -161,7 +161,8 @@ export function App() {
             displayUrl: x.displayUrl || x.url,
             // NEW: pass facts/text cues through
             evidenceTriggers: Array.isArray(x.evidenceTriggers) ? x.evidenceTriggers : [],
-            textExtracted: x.textExtracted || x.ocrText || ''
+            textExtracted: x.textExtracted || x.ocrText || '',
+            visualDescription: x.visualDescription || ''
           })),
         };
         
