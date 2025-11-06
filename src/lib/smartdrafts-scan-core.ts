@@ -3364,6 +3364,14 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
     };
     await setCachedSmartDraftGroups(cacheKey, cachePayload);
 
+    // Debug: check if visualDescription made it to imageInsightsRecord
+    const sampleKeys = Object.keys(imageInsightsRecord).slice(0, 2);
+    console.log('[responsePayload DEBUG] imageInsights sample:', sampleKeys.map(k => ({
+      key: k,
+      hasVisualDesc: !!(imageInsightsRecord[k] as any).visualDescription,
+      visualDescLength: ((imageInsightsRecord[k] as any).visualDescription || '').length
+    })));
+
     const responsePayload: any = {
       ok: true,
       folder,
