@@ -12,6 +12,7 @@ type HeadersMap = Record<string, string | undefined>;
 type Payload = {
   images?: string[];
   batchSize?: number;
+  force?: boolean;
 };
 
 export const handler: Handler = async (event) => {
@@ -85,6 +86,7 @@ export const handler: Handler = async (event) => {
 
   const rawBatch = Number(body.batchSize);
   const batchSize = Number.isFinite(rawBatch) ? Math.min(Math.max(rawBatch, 4), 12) : 12;
+  const force = Boolean(body.force);
 
   const jobId = crypto.randomUUID();
   const jobKey = k.job(user.userId, jobId);
@@ -115,7 +117,7 @@ export const handler: Handler = async (event) => {
     const resp = await fetch(backgroundUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jobId, images, batchSize, userId: user.userId }),
+      body: JSON.stringify({ jobId, images, batchSize, userId: user.userId, force }),
     });
 
     if (!resp.ok) {
