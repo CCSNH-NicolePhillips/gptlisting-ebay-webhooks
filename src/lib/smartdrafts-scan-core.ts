@@ -3111,6 +3111,37 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
     const payloadGroups = hydrateGroups(normalizedGroups, folder);
 
     const insightOutput = new Map<string, ImageInsight>();
+    
+    // Helper: detect facts panel cues for pairing
+    const detectFactsCues = (insight: any): string[] => {
+      const cues: string[] = [];
+      const patterns = [
+        'supplement facts',
+        'nutrition facts',
+        'drug facts',
+        'serving size',
+        'other ingredients',
+        'ingredients:',
+        'directions for use',
+        'directions:',
+        'warnings:',
+        'allergen'
+      ];
+      
+      // Check OCR text
+      const ocrText = (insight?.ocrText || insight?.textExtracted || '').toLowerCase();
+      const visualDesc = ((insight as any)?.visualDescription || '').toLowerCase();
+      const combinedText = `${ocrText} ${visualDesc}`;
+      
+      for (const pattern of patterns) {
+        if (combinedText.includes(pattern)) {
+          cues.push(pattern);
+        }
+      }
+      
+      return cues;
+    };
+    
     const mergeInsight = (url: string | null | undefined, source?: Partial<ImageInsight>) => {
       if (!url) return;
       const normalized = toDirectDropbox(url);
@@ -3130,6 +3161,14 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
           if (Array.isArray(source.ocr.lines) && (!current.ocr.lines || current.ocr.lines.length === 0)) {
             current.ocr.lines = source.ocr.lines.slice();
           }
+        }
+        // NEW: Extract textExtracted and evidenceTriggers for pairing
+        const textExtracted = source.ocrText || (source as any).textExtracted || '';
+        if (textExtracted && !(current as any).textExtracted) {
+          (current as any).textExtracted = textExtracted;
+        }
+        if (!Array.isArray((current as any).evidenceTriggers)) {
+          (current as any).evidenceTriggers = detectFactsCues(source);
         }
       }
       insightOutput.set(normalized, current);
