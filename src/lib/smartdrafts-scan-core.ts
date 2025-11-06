@@ -1606,6 +1606,13 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
           })
           .filter((value): value is ImageInsight => Boolean(value));
 
+    // Debug: check if visualDescription is present in raw insights
+    console.log('[scan-core DEBUG] insightList sample:', insightList.slice(0, 2).map(ins => ({
+      url: ins.url?.slice(0, 30),
+      hasVisualDesc: !!(ins as any).visualDescription,
+      visualDescLength: ((ins as any).visualDescription || '').length
+    })));
+
     // Sanitize insight URLs immediately - replace placeholders like "<imgUrl>" with original URLs
     // And add key + displayUrl fields for client rendering
     insightList = insightList.map((insight, idx) => {
@@ -3180,6 +3187,10 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
 
     insightMap.forEach((insight, key) => {
       const source = insight || { url: key };
+      // Debug: check first few items for visualDescription
+      if (Array.from(insightMap.keys()).indexOf(key) < 2) {
+        console.log(`[mergeInsight DEBUG] key=${key}, hasVisualDesc=${!!(source as any).visualDescription}, length=${((source as any).visualDescription || '').length}`);
+      }
       mergeInsight(source.url || key, source);
     });
 
