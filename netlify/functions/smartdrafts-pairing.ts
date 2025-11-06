@@ -424,20 +424,14 @@ export const handler: Handler = async (event) => {
       crossGroupDebug.push(msg);
     }
 
-    // 6) Build products[] with https thumbs (ignore dummy "handbag")
+    // 6) Build products[] with https thumbs (ignore dummy "handbag" role items)
     const handbagKeys = allKeys.filter(k => role.get(k) === 'other');
     const dummy = new Set(handbagKeys);
 
-    // Note: Not filtering out books - they can be legitimate products to sell
-    function isProductKey(k: string): boolean {
-      const c = (cat.get(k) || '').toLowerCase();
-      if (/accessor/.test(c)) return false;  // exclude handbags/accessories (non-product items)
-      return true;
-    }
-
+    // Note: Let pairing decide what's valid - don't pre-filter by category
+    // Users might sell books, accessories, etc. as legitimate products
     const products = pairs
       .filter(p => !dummy.has(p.frontUrl) && !dummy.has(p.backUrl))
-      .filter(p => isProductKey(p.frontUrl) && isProductKey(p.backUrl))
       .map(p => ({
         productId: `${(brand.get(p.frontUrl) || '').toLowerCase().replace(/[^a-z0-9]+/g, '_')}_${tok(prod.get(p.frontUrl)).join('_')}`.replace(/^_+|_+$/g, '') || `${p.frontUrl}_${p.backUrl}`,
         brand: brand.get(p.frontUrl) || '',
