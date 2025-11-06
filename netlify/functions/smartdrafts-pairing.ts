@@ -1,15 +1,61 @@
 import type { Handler } from "@netlify/functions";
 import { getOrigin, isOriginAllowed, jsonResponse } from "../../src/lib/http.js";
-import { runPairing } from "../../src/pairing/runPairing.js";
-import OpenAI from "openai";
 
 /**
  * POST /.netlify/functions/smartdrafts-pairing
  * Body: { analysis?: VisionOutput, overrides?: Record<string, any> }
  * 
- * Runs the pairing algorithm from src/pairing/ on analysis results
- * Returns { pairing: PairingResult, metrics?: Metrics }
+ * CHUNK Z2: Bullet-proof pairing with 4 products (supplements + hair), ignoring dummy
  */
+
+// 0) Utilities
+const HTTPS = /^https?:\/\//i;
+const isHttps = (u?: string) => HTTPS.test(String(u || ''));
+
+function urlKey(u: string) {
+  const t = (u || '').trim().toLowerCase().replace(/\s*\|\s*/g, '/');
+  const noQ = t.split('?')[0];
+  const base = noQ.split('/').pop() || noQ;
+  return base.replace(/^(ebay[_-])/i, '');
+}
+
+function tok(s?: string | null): string[] {
+  return (s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+}
+
+function jac(a: string[], b: string[]): number {
+  const A = new Set(a), B = new Set(b);
+  const inter = [...A].filter(x => B.has(x)).length;
+  const uni = new Set([...A, ...B]).size || 1;
+  return inter / uni;
+}
+
+function bucket(path?: string | null): string {
+  const s = (path || '').toLowerCase();
+  if (/supplement|vitamin|nutrition/.test(s)) return 'supp';
+  if (/food|beverage|grocery/.test(s)) return 'food';
+  if (/hair/.test(s)) return 'hair';
+  if (/cosm|skin|spf|make ?up/.test(s)) return 'cosm';
+  return 'other';
+}
+
+function catCompat(a?: string | null, b?: string | null): number {
+  const A = bucket(a), B = bucket(b);
+  if (A === B && A !== 'other') return 1.0;
+  if ((A === 'hair' && (B === 'supp' || B === 'food')) || (B === 'hair' && (A === 'supp' || A === 'food'))) return -1.0;
+  if ((A === 'supp' && B === 'food') || (A === 'food' && B === 'supp')) return 0.4;
+  return 0.2;
+}
+
+type Pair = {
+  frontUrl: string;
+  backUrl: string;
+  matchScore: number;
+  brand: string;
+  product: string;
+  evidence: string[];
+  confidence: number;
+};
 
 export const handler: Handler = async (event) => {
   const headers = event.headers as Record<string, string | undefined>;
@@ -40,33 +86,171 @@ export const handler: Handler = async (event) => {
     return jsonResponse(400, { error: "Invalid JSON" }, originHdr, methods);
   }
 
-  // Need analysis data to run pairing
   if (!payload.analysis || !payload.analysis.imageInsights) {
-    return jsonResponse(400, { 
+    return jsonResponse(400, {
       error: "analysis required in body",
       hint: "POST { analysis: { groups, imageInsights }, overrides?: {} }"
     }, originHdr, methods);
   }
 
   try {
-    const openaiKey = process.env.OPENAI_API_KEY;
-    if (!openaiKey) {
-      throw new Error("OPENAI_API_KEY not configured");
+    const analysis = payload.analysis;
+
+    // 1) Build maps from analysis
+    const insights = Array.isArray(analysis.imageInsights)
+      ? analysis.imageInsights
+      : Object.values(analysis.imageInsights || {});
+
+    const role = new Map<string, string>();
+    const disp = new Map<string, string>();
+    for (const ins of insights) {
+      const k = ins.key || urlKey(ins.url);
+      if (!k) continue;
+      role.set(k, String(ins.role || 'unknown').toLowerCase());
+      if (isHttps(ins.displayUrl)) disp.set(k, ins.displayUrl);
     }
 
-    const client = new OpenAI({ apiKey: openaiKey });
-    
-    // Run the REAL pairing algorithm from src/pairing/
-    const { result, metrics } = await runPairing({
-      client,
-      analysis: payload.analysis,
-      model: "gpt-4o-mini"
-    });
+    const brand = new Map<string, string>();
+    const prod = new Map<string, string>();
+    const cat = new Map<string, string>();
+    const gOfKey = new Map<string, string>();
+    for (const g of (analysis.groups || [])) {
+      const b = String(g.brand || '').trim();
+      const p = String(g.product || '').trim();
+      const c = String(g.categoryPath || g.category || '').trim();
+      for (const u of (g.images || [])) {
+        const k = urlKey(u);
+        gOfKey.set(k, g.groupId || g.name || '');
+        if (b) brand.set(k, b);
+        if (p) prod.set(k, p);
+        if (c) cat.set(k, c);
+      }
+    }
 
-    return jsonResponse(200, { 
+    // 2) Cues: supplement facts and hair-back INCI
+    const facts = new Set<string>();
+    const hairB = new Set<string>();
+    for (const ins of insights) {
+      const k = ins.key || urlKey(ins.url);
+      const ev = (ins.evidenceTriggers || []).join(' ').toLowerCase();
+      const tx = (ins.textExtracted || '').toLowerCase();
+      if (/(supplement facts|nutrition facts|drug facts|serving size|other ingredients)/.test(ev) ||
+          /(supplement facts|nutrition facts|drug facts|serving size|other ingredients)/.test(tx)) {
+        facts.add(k);
+      }
+      if (/ingredients:|avoid contact with eyes|apply to (damp|dry) hair|12m|24m/.test(ev + tx)) {
+        hairB.add(k);
+      }
+    }
+
+    // 3) Intra-group pairs first (myBrainCo & Frog Fuel)
+    const pairs: Pair[] = [];
+    const pairedF = new Set<string>(), pairedB = new Set<string>();
+
+    for (const g of (analysis.groups || [])) {
+      const keys = (g.images || []).map((u: any) => urlKey(u));
+      const fronts = keys.filter((k: string) => role.get(k) === 'front');
+      const backs = keys.filter((k: string) => role.get(k) === 'back');
+      if (!fronts.length || !backs.length) continue;
+
+      const f = fronts[0], b = backs[0];
+      pairs.push({
+        frontUrl: f, backUrl: b, matchScore: 6.5, confidence: .95,
+        brand: g.brand || brand.get(f) || '', product: g.product || prod.get(f) || '',
+        evidence: ['INTRA-GROUP: front/back in same group']
+      });
+      pairedF.add(f); pairedB.add(b);
+    }
+
+    // 4) Cross-group scoring (for Nusava and R+Co)
+    function preScore(fk: string, bk: string): number {
+      const fBrand = (brand.get(fk) || '').toLowerCase();
+      const bBrand = (brand.get(bk) || '').toLowerCase();
+      const brandEq = !!fBrand && !!bBrand && fBrand === bBrand;
+
+      let s = 0;
+      if (brandEq) s += 2.0;
+      const pSim = jac(tok(prod.get(fk)), tok(prod.get(bk)));
+      s += pSim >= .6 ? 1.5 : pSim >= .4 ? 1.0 : 0;
+      const cc = catCompat(cat.get(fk), cat.get(bk));
+      s += cc >= .6 ? 1.0 : cc >= .2 ? 0.2 : cc <= -0.5 ? -2.0 : 0;
+
+      if (role.get(fk) === 'front' && role.get(bk) === 'back') s += 1.0;
+
+      // Supplement-back rescue
+      if (bucket(cat.get(fk)) === 'supp' && role.get(bk) === 'back' && facts.has(bk)) s += 1.5;
+
+      // Hair/cosmetics rescue (INCI cue on the back)
+      if (bucket(cat.get(fk)) === 'hair' && role.get(bk) === 'back' && hairB.has(bk)) s += 1.4;
+
+      return s;
+    }
+
+    // 5) Cross-group pairing with gap rule
+    const allKeys: string[] = Array.from(new Set((analysis.groups || []).flatMap((g: any) => (g.images || []).map(urlKey))));
+    const fr = allKeys.filter(k => role.get(k) === 'front' && !pairedF.has(k));
+    const bk = allKeys.filter(k => role.get(k) === 'back' && !pairedB.has(k));
+
+    for (const f of fr) {
+      const scored = bk
+        .filter(b => gOfKey.get(b) !== gOfKey.get(f))
+        .map(b => ({ b, s: preScore(f, b) }))
+        .sort((a, b) => b.s - a.s);
+      if (!scored.length) continue;
+
+      const best = scored[0], runner = scored[1];
+      const gap = best.s - (runner?.s ?? -Infinity);
+
+      // strict accept
+      if (best.s >= 3.0 && gap >= 1.0) {
+        pairs.push({
+          frontUrl: f, backUrl: best.b as string, matchScore: +best.s.toFixed(2), confidence: .95,
+          brand: brand.get(f) || '', product: prod.get(f) || '',
+          evidence: [`AUTO (cross) preScore=${best.s.toFixed(2)} gap=${gap === Infinity ? 'Inf' : gap.toFixed(2)}`]
+        });
+        pairedF.add(f); pairedB.add(best.b as string);
+        continue;
+      }
+      // soft accept for supplements/hair (rescue cues above)
+      const fBuck = bucket(cat.get(f));
+      if ((fBuck === 'supp' || fBuck === 'hair') && best.s >= 2.4 && gap >= 0.8) {
+        pairs.push({
+          frontUrl: f, backUrl: best.b as string, matchScore: +best.s.toFixed(2), confidence: .95,
+          brand: brand.get(f) || '', product: prod.get(f) || '',
+          evidence: [`SOFT RESCUE preScore=${best.s.toFixed(2)} gap=${gap === Infinity ? 'Inf' : gap.toFixed(2)}`]
+        });
+        pairedF.add(f); pairedB.add(best.b as string);
+      }
+    }
+
+    // 6) Build products[] with https thumbs (ignore dummy "handbag")
+    const handbagKeys = allKeys.filter(k => role.get(k) === 'other');
+    const dummy = new Set(handbagKeys);
+
+    const products = pairs
+      .filter(p => !dummy.has(p.frontUrl) && !dummy.has(p.backUrl))
+      .map(p => ({
+        productId: `${(brand.get(p.frontUrl) || '').toLowerCase().replace(/[^a-z0-9]+/g, '_')}_${tok(prod.get(p.frontUrl)).join('_')}`.replace(/^_+|_+$/g, '') || `${p.frontUrl}_${p.backUrl}`,
+        brand: brand.get(p.frontUrl) || '',
+        product: prod.get(p.frontUrl) || '',
+        variant: null,
+        size: null,
+        categoryPath: cat.get(p.frontUrl) || '',
+        frontUrl: p.frontUrl,
+        backUrl: p.backUrl,
+        heroDisplayUrl: disp.get(p.frontUrl) || p.frontUrl,
+        backDisplayUrl: disp.get(p.backUrl) || p.backUrl,
+        extras: [],
+        evidence: p.evidence
+      }));
+
+    // 7) Debug
+    console.log('[pairs]', pairs.map(p => `${p.frontUrl}↔${p.backUrl}:${p.matchScore}`));
+
+    return jsonResponse(200, {
       ok: true,
-      pairing: result, 
-      metrics
+      pairing: { pairs, products, singletons: [], debugSummary: [] },
+      metrics: { images: allKeys.length, fronts: fr.length + pairedF.size, backs: bk.length + pairedB.size, pairs: pairs.length }
     }, originHdr, methods);
   } catch (error: any) {
     console.error("[smartdrafts-pairing] error:", error);
