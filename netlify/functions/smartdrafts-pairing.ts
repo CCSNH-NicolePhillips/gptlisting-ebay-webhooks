@@ -428,18 +428,16 @@ export const handler: Handler = async (event) => {
     const handbagKeys = allKeys.filter(k => role.get(k) === 'other');
     const dummy = new Set(handbagKeys);
 
-    // Step 2B: Filter out non-product categories
+    // Note: Not filtering out books - they can be legitimate products to sell
     function isProductKey(k: string): boolean {
       const c = (cat.get(k) || '').toLowerCase();
-      if (/media\s*>\s*books/.test(c)) return false;  // exclude books
-      if (/books?\s*>\s*biograph/.test(c)) return false;  // exclude books/biography
-      if (/accessor/.test(c)) return false;  // exclude handbags/accessories
+      if (/accessor/.test(c)) return false;  // exclude handbags/accessories (non-product items)
       return true;
     }
 
     const products = pairs
       .filter(p => !dummy.has(p.frontUrl) && !dummy.has(p.backUrl))
-      .filter(p => isProductKey(p.frontUrl) && isProductKey(p.backUrl))  // Step 2B
+      .filter(p => isProductKey(p.frontUrl) && isProductKey(p.backUrl))
       .map(p => ({
         productId: `${(brand.get(p.frontUrl) || '').toLowerCase().replace(/[^a-z0-9]+/g, '_')}_${tok(prod.get(p.frontUrl)).join('_')}`.replace(/^_+|_+$/g, '') || `${p.frontUrl}_${p.backUrl}`,
         brand: brand.get(p.frontUrl) || '',
