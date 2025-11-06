@@ -201,6 +201,8 @@ export const handler: Handler = async (event) => {
     console.log('[Z2-DEBUG] Unpaired fronts:', fr);
     console.log('[Z2-DEBUG] Unpaired backs:', bk);
 
+    const crossGroupDebug: string[] = [];
+
     for (const f of fr) {
       const scored = bk
         .filter(b => gOfKey.get(b) !== gOfKey.get(f))
@@ -215,11 +217,15 @@ export const handler: Handler = async (event) => {
       const gap = best.s - (runner?.s ?? -Infinity);
       const fBuck = bucket(cat.get(f));
 
-      console.log(`[Z2-DEBUG] Front ${f}: best=${best.s.toFixed(2)}, gap=${gap.toFixed(2)}, bucket=${fBuck}, category=${cat.get(f)}`);
+      const scoreDetail = `Front ${f}: best=${best.s.toFixed(2)} (to ${best.b}), gap=${gap.toFixed(2)}, bucket=${fBuck}, cat=${cat.get(f)}`;
+      console.log(`[Z2-DEBUG] ${scoreDetail}`);
+      crossGroupDebug.push(scoreDetail);
 
       // strict accept
       if (best.s >= 3.0 && gap >= 1.0) {
-        console.log(`[Z2-DEBUG] ✓ STRICT ACCEPT: ${f} ↔ ${best.b}`);
+        const msg = `✓ STRICT ACCEPT: ${f} ↔ ${best.b}`;
+        console.log(`[Z2-DEBUG] ${msg}`);
+        crossGroupDebug.push(msg);
         pairs.push({
           frontUrl: f, backUrl: best.b as string, matchScore: +best.s.toFixed(2), confidence: .95,
           brand: brand.get(f) || '', product: prod.get(f) || '',
@@ -230,7 +236,9 @@ export const handler: Handler = async (event) => {
       }
       // soft accept for supplements/hair (rescue cues above)
       if ((fBuck === 'supp' || fBuck === 'hair') && best.s >= 2.4 && gap >= 0.8) {
-        console.log(`[Z2-DEBUG] ✓ SOFT RESCUE (${fBuck}): ${f} ↔ ${best.b}`);
+        const msg = `✓ SOFT RESCUE (${fBuck}): ${f} ↔ ${best.b}`;
+        console.log(`[Z2-DEBUG] ${msg}`);
+        crossGroupDebug.push(msg);
         pairs.push({
           frontUrl: f, backUrl: best.b as string, matchScore: +best.s.toFixed(2), confidence: .95,
           brand: brand.get(f) || '', product: prod.get(f) || '',
@@ -238,7 +246,9 @@ export const handler: Handler = async (event) => {
         });
         pairedF.add(f); pairedB.add(best.b as string);
       } else {
-        console.log(`[Z2-DEBUG] ✗ REJECT: ${f} (score=${best.s.toFixed(2)}, gap=${gap.toFixed(2)}, bucket=${fBuck}, needs: strict>=3.0+gap>=1.0 OR soft(supp/hair)>=2.4+gap>=0.8)`);
+        const msg = `✗ REJECT: ${f} (score=${best.s.toFixed(2)}, gap=${gap.toFixed(2)}, bucket=${fBuck}, needs: strict>=3.0+gap>=1.0 OR soft(supp/hair)>=2.4+gap>=0.8)`;
+        console.log(`[Z2-DEBUG] ${msg}`);
+        crossGroupDebug.push(msg);
       }
     }
 
@@ -263,12 +273,23 @@ export const handler: Handler = async (event) => {
         evidence: p.evidence
       }));
 
-    // 7) Debug
+    // 7) Debug summary
     console.log('[pairs]', pairs.map(p => `${p.frontUrl}↔${p.backUrl}:${p.matchScore}`));
+
+    const debugSummary = [
+      `All roles: ${JSON.stringify(Array.from(role.entries()))}`,
+      `All brands: ${JSON.stringify(Array.from(brand.entries()))}`,
+      `All categories: ${JSON.stringify(Array.from(cat.entries()))}`,
+      `Supplement facts: ${JSON.stringify(Array.from(facts))}`,
+      `INCI (hair): ${JSON.stringify(Array.from(hairB))}`,
+      `Unpaired fronts: ${fr.join(', ')}`,
+      `Unpaired backs: ${bk.join(', ')}`,
+      ...crossGroupDebug
+    ];
 
     return jsonResponse(200, {
       ok: true,
-      pairing: { pairs, products, singletons: [], debugSummary: [] },
+      pairing: { pairs, products, singletons: [], debugSummary },
       metrics: { images: allKeys.length, fronts: fr.length + pairedF.size, backs: bk.length + pairedB.size, pairs: pairs.length }
     }, originHdr, methods);
   } catch (error: any) {
