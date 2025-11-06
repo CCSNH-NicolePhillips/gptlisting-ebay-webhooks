@@ -350,10 +350,10 @@ export const handler: Handler = async (event) => {
         s += 0.5; // Weak visual match
       }
 
-      // Supplement-back rescue
+      // Supplement-back rescue (only with facts cue)
       if (bucket(cat.get(fk)) === 'supp' && role.get(bk) === 'back' && facts.has(bk)) s += 1.5;
 
-      // Hair/cosmetics rescue (INCI cue on the back)
+      // Hair/cosmetics rescue (only with INCI cue)
       if (bucket(cat.get(fk)) === 'hair' && role.get(bk) === 'back' && hairB.has(bk)) s += 1.4;
 
       return s;
@@ -401,9 +401,12 @@ export const handler: Handler = async (event) => {
         pairedF.add(f); pairedB.add(best.b as string);
         continue;
       }
-      // soft accept for all product categories with good role match and color similarity
-      if (best.s >= 1.0 && gap >= 0.0) {
-        const msg = `✓ SOFT ACCEPT (${fBuck}): ${f} ↔ ${best.b}`;
+      
+      // soft accept only with cue & higher score (Step 2A)
+      const hasCue = (fBuck === 'supp' && facts.has(best.b as string)) 
+                  || (fBuck === 'hair' && hairB.has(best.b as string));
+      if (hasCue && best.s >= 2.6 && gap >= 0.8) {
+        const msg = `✓ SOFT ACCEPT (${fBuck}, with cue): ${f} ↔ ${best.b}`;
         console.log(`[Z2-DEBUG] ${msg}`);
         crossGroupDebug.push(msg);
         pairs.push({
@@ -412,19 +415,31 @@ export const handler: Handler = async (event) => {
           evidence: [`SOFT ACCEPT preScore=${best.s.toFixed(2)} gap=${gap === Infinity ? 'Inf' : gap.toFixed(2)}`]
         });
         pairedF.add(f); pairedB.add(best.b as string);
-      } else {
-        const msg = `✗ REJECT: ${f} (score=${best.s.toFixed(2)}, gap=${gap.toFixed(2)}, bucket=${fBuck}, needs: strict>=3.0+gap>=1.0 OR soft>=1.0+gap>=0.0)`;
-        console.log(`[Z2-DEBUG] ${msg}`);
-        crossGroupDebug.push(msg);
+        continue;
       }
+      
+      // Reject if no rule matched
+      const msg = `✗ REJECT: ${f} (score=${best.s.toFixed(2)}, gap=${gap.toFixed(2)}, bucket=${fBuck}, needs cue+score>=2.6+gap>=0.8)`;
+      console.log(`[Z2-DEBUG] ${msg}`);
+      crossGroupDebug.push(msg);
     }
 
     // 6) Build products[] with https thumbs (ignore dummy "handbag")
     const handbagKeys = allKeys.filter(k => role.get(k) === 'other');
     const dummy = new Set(handbagKeys);
 
+    // Step 2B: Filter out non-product categories
+    function isProductKey(k: string): boolean {
+      const c = (cat.get(k) || '').toLowerCase();
+      if (/media\s*>\s*books/.test(c)) return false;  // exclude books
+      if (/books?\s*>\s*biograph/.test(c)) return false;  // exclude books/biography
+      if (/accessor/.test(c)) return false;  // exclude handbags/accessories
+      return true;
+    }
+
     const products = pairs
       .filter(p => !dummy.has(p.frontUrl) && !dummy.has(p.backUrl))
+      .filter(p => isProductKey(p.frontUrl) && isProductKey(p.backUrl))  // Step 2B
       .map(p => ({
         productId: `${(brand.get(p.frontUrl) || '').toLowerCase().replace(/[^a-z0-9]+/g, '_')}_${tok(prod.get(p.frontUrl)).join('_')}`.replace(/^_+|_+$/g, '') || `${p.frontUrl}_${p.backUrl}`,
         brand: brand.get(p.frontUrl) || '',
