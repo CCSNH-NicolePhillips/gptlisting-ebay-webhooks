@@ -1,5 +1,6 @@
 import type { Handler } from "@netlify/functions";
 import { createHash } from "node:crypto";
+import fetch from "node-fetch";
 import { getOrigin, isOriginAllowed, jsonResponse } from "../../src/lib/http.js";
 import { getCachedSmartDraftGroups } from "../../src/lib/smartdrafts-store.js";
 import { getJob } from "../../src/lib/job-store.js";
@@ -14,6 +15,32 @@ import { getJob } from "../../src/lib/job-store.js";
  * 
  * CHUNK Z2: Bullet-proof pairing with 4 products (supplements + hair), ignoring dummy
  */
+
+// Helper: Direct Redis GET for arbitrary keys
+async function redisGet(key: string): Promise<any | null> {
+  const BASE = (process.env.UPSTASH_REDIS_REST_URL || "").replace(/\/$/, "");
+  const TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+  
+  if (!BASE || !TOKEN) return null;
+  
+  try {
+    const url = `${BASE}/GET/${encodeURIComponent(key)}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${TOKEN}` },
+    });
+    
+    if (!res.ok) return null;
+    
+    const json = await res.json() as { result: unknown };
+    const val = json.result;
+    if (typeof val !== "string" || !val) return null;
+    
+    return JSON.parse(val);
+  } catch {
+    return null;
+  }
+}
 
 // 0) Utilities
 const HTTPS = /^https?:\/\//i;
@@ -118,7 +145,7 @@ export const handler: Handler = async (event) => {
   if (!hasVD(analysis) && jobId) {
     console.log(`[PAIR] Attempting Redis fetch for jobId=${jobId}`);
     try {
-      const raw = await getJob(`analysis:${jobId}`);
+      const raw = await redisGet(`analysis:${jobId}`);
       if (raw) {
         analysis = raw;
         const arr = Array.isArray(analysis.imageInsights) 
@@ -138,19 +165,19 @@ export const handler: Handler = async (event) => {
     
     try {
       // Try direct folder lookup
-      const rawByFolder = await getJob(`analysis:byFolder:${folderSig}`);
+      const rawByFolder = await redisGet(`analysis:byFolder:${folderSig}`);
       if (rawByFolder) {
         analysis = rawByFolder;
         console.log(`[PAIR] loaded analysis by folderSig: ${folderSig}`);
       } else {
         // Last resort: use lastJobId pointer
-        const lastId = await getJob(`analysis:lastJobId:${folderSig}`);
-        if (lastId && typeof lastId === 'string') {
-          console.log(`[PAIR] Found lastJobId pointer: ${lastId}`);
-          const rawByLast = await getJob(`analysis:${lastId}`);
+        const lastIdRaw = await redisGet(`analysis:lastJobId:${folderSig}`);
+        if (lastIdRaw && typeof lastIdRaw === 'string') {
+          console.log(`[PAIR] Found lastJobId pointer: ${lastIdRaw}`);
+          const rawByLast = await redisGet(`analysis:${lastIdRaw}`);
           if (rawByLast) {
             analysis = rawByLast;
-            console.log(`[PAIR] loaded analysis by lastJobId: ${lastId}`);
+            console.log(`[PAIR] loaded analysis by lastJobId: ${lastIdRaw}`);
           }
         }
       }
