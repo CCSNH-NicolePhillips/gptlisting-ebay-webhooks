@@ -182,13 +182,19 @@ async function analyzeBatchViaVision(
 
   // If force=true, explicitly delete the cache first
   if (force && !BYPASS_VISION_CACHE) {
-    console.log(`[vision-cache] Force rescan requested - deleting cache for batch of ${batch.length} images`);
+    console.log(`[vision-cache] ========================================`);
+    console.log(`[vision-cache] FORCE RESCAN REQUESTED`);
+    console.log(`[vision-cache] Batch size: ${batch.length} images`);
+    console.log(`[vision-cache] First 3 images:`, batch.slice(0, 3).map(u => u.split('/').pop()));
+    console.log(`[vision-cache] Deleting cache before analysis...`);
     await deleteCachedBatch(batch);
+    console.log(`[vision-cache] ========================================`);
   }
 
   if (cacheEligible) {
     const cached = await getCachedBatch(batch);
     if (cached?.groups) {
+      console.log(`[vision-cache] Using CACHED data for batch (this should NOT happen after force delete!)`);
       // Ensure images are usable even for cached results
       try {
         const result = { ...cached, _cache: true } as any;
@@ -364,6 +370,7 @@ async function analyzeBatchViaVision(
 
   try {
     const result = await withRetry(() => runVision({ images: batch, prompt }));
+    console.log(`[vision-cache] Vision API returned ${force ? 'FRESH' : 'NEW'} data for ${batch.length} images`);
     if (debugLog || LOG_VISION_RESPONSES) {
       try {
         console.log("🤖 Vision raw response:", JSON.stringify(result, null, 2));

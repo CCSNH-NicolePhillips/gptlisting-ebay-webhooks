@@ -66,6 +66,21 @@ export async function setCachedBatch(urls: string[], data: unknown): Promise<voi
 
 export async function deleteCachedBatch(urls: string[]): Promise<void> {
   const key = makeBatchKey(urls);
-  await redisCall("DEL", key);
-  console.log(`[vision-cache] deleted cache key: ${key}`);
+  console.log(`[vision-cache] Deleting cache key: ${key} for ${urls.length} images`);
+  console.log(`[vision-cache] URLs being deleted:`, urls.slice(0, 3).map(u => u.split('/').pop()));
+  
+  const result = await redisCall("DEL", key);
+  const deleted = result?.result ?? 0;
+  
+  console.log(`[vision-cache] DELETE result: ${deleted} key(s) removed (1=success, 0=not found)`);
+  
+  // Verify deletion by trying to GET the key
+  const verify = await redisCall("GET", key);
+  const stillExists = verify?.result !== null && verify?.result !== undefined;
+  
+  if (stillExists) {
+    console.warn(`[vision-cache] ⚠️ Cache key ${key} still exists after deletion!`);
+  } else {
+    console.log(`[vision-cache] ✅ Confirmed cache key ${key} was deleted`);
+  }
 }
