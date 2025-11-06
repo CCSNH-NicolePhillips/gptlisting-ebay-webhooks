@@ -150,6 +150,8 @@ export function App() {
         // NEW APPROACH: Pass folder to pairing so it fetches fresh scan data from cache
         // This avoids data loss through UI transformations
         console.log('[UI] Sending folder to pairing (server-side fetch):', folder);
+        console.log('[UI] Analysis object has jobId?', !!analysis?.jobId);
+        console.log('[UI] Analysis jobId value:', analysis?.jobId);
         out = await runPairingLive(null, { folder });
         showToast('✨ Pairing complete (live, server-side)');
       }

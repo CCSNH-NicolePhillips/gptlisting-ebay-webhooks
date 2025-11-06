@@ -92,6 +92,13 @@ export const handler: Handler = async (event) => {
     return jsonResponse(400, { error: "Invalid JSON" }, originHdr, methods);
   }
 
+  console.log('[PAIR] Received payload keys:', Object.keys(payload));
+  console.log('[PAIR] payload.folder:', payload.folder);
+  console.log('[PAIR] payload.analysis exists?', !!payload.analysis);
+  if (payload.analysis) {
+    console.log('[PAIR] payload.analysis.jobId:', (payload.analysis as any)?.jobId);
+  }
+
   // NEW: Support fetching analysis from cache via folder parameter
   let analysis: any;
   
