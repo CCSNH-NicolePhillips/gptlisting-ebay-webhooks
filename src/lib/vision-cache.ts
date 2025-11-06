@@ -63,3 +63,9 @@ export async function setCachedBatch(urls: string[], data: unknown): Promise<voi
   await redisCall("SET", key, JSON.stringify(data));
   await redisCall("EXPIRE", key, `${TTL_SEC}`);
 }
+
+export async function deleteCachedBatch(urls: string[]): Promise<void> {
+  const key = makeBatchKey(urls);
+  await redisCall("DEL", key);
+  console.log(`[vision-cache] deleted cache key: ${key}`);
+}

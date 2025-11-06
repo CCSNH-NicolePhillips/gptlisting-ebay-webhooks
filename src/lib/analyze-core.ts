@@ -2,7 +2,7 @@ import { mergeGroups, sanitizeUrls, toDirectDropbox } from "./merge.js";
 import { lookupMarketPrice } from "./price-lookup.js";
 import { applyPricingFormula } from "./price-formula.js";
 import { runVision } from "./vision-router.js";
-import { getCachedBatch, setCachedBatch } from "./vision-cache.js";
+import { getCachedBatch, setCachedBatch, deleteCachedBatch } from "./vision-cache.js";
 import type { ImageInsight } from "./image-insight.js";
 import { clipImageEmbedding, cosine } from "./clip-client-split.js";
 
@@ -179,6 +179,12 @@ async function analyzeBatchViaVision(
   force = false
 ) {
   const cacheEligible = !BYPASS_VISION_CACHE && !force;
+
+  // If force=true, explicitly delete the cache first
+  if (force && !BYPASS_VISION_CACHE) {
+    console.log(`[vision-cache] Force rescan requested - deleting cache for batch of ${batch.length} images`);
+    await deleteCachedBatch(batch);
+  }
 
   if (cacheEligible) {
     const cached = await getCachedBatch(batch);
