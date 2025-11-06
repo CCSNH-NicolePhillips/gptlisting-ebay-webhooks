@@ -44,9 +44,10 @@ async function tryOpenAI(images: string[], prompt: string, model: string) {
   const response = await openai.chat.completions.create({
     model,
     temperature: 0.2,
+    max_tokens: 4000,
     response_format: { type: "json_object" },
     messages: [
-      { role: "system", content: "You are a strict JSON-only product photo parser." },
+      { role: "system", content: "You are a strict JSON-only product photo parser. You MUST include all required fields in your response, especially visualDescription for every image." },
       { role: "user", content },
     ],
   });
