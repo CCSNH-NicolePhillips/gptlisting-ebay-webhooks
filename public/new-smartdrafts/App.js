@@ -99,7 +99,8 @@ export function App() {
               imageInsights: job.imageInsights || [],
               orphans: job.orphans || [],
               cached: job.cached,
-              folder: job.folder
+              folder: job.folder,
+              jobId: jobId  // Include jobId for Redis fallback in pairing
             };
             setLoadingStatus('✅ Complete!');
             showToast(force ? '✨ Analysis complete (live, force)' : '✨ Analysis complete (live)');
