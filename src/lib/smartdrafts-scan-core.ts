@@ -3170,6 +3170,10 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
         if (!Array.isArray((current as any).evidenceTriggers)) {
           (current as any).evidenceTriggers = detectFactsCues(source);
         }
+        // NEW: Preserve visualDescription for visual similarity scoring
+        if ((source as any).visualDescription && !(current as any).visualDescription) {
+          (current as any).visualDescription = (source as any).visualDescription;
+        }
       }
       insightOutput.set(normalized, current);
     };
