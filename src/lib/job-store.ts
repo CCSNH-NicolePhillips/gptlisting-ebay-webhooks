@@ -41,6 +41,13 @@ async function setWithTtl(key: string, serialized: string) {
   await redisCall("SETEX", key, `${TTL_SEC}`, serialized);
 }
 
+/**
+ * Store arbitrary data in Redis with a custom TTL
+ */
+export async function redisSet(key: string, value: string, ttlSeconds: number) {
+  await redisCall("SETEX", key, `${ttlSeconds}`, value);
+}
+
 export async function putJob(jobId: string, data: unknown, options?: JobStoreOptions) {
   const serialized = JSON.stringify(data);
   const primaryKey = options?.key || defaultJobKey(jobId);

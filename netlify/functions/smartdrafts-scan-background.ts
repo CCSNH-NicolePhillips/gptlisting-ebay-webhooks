@@ -1,6 +1,6 @@
 import type { Handler } from "@netlify/functions";
 import { runSmartDraftScan, type SmartDraftScanResponse } from "../../src/lib/smartdrafts-scan-core.js";
-import { putJob } from "../../src/lib/job-store.js";
+import { putJob, redisSet } from "../../src/lib/job-store.js";
 import { k } from "../../src/lib/user-keys.js";
 import { decRunning } from "../../src/lib/quota.js";
 import { USE_CLIP, USE_NEW_SORTER, USE_ROLE_SORTING } from "../../src/config.js";
@@ -109,6 +109,23 @@ export const handler: Handler = async (event) => {
       cached: payload.cached,
       debug: payload.debug,
     });
+    
+    // Step 1A: Store analysis by jobId for pairing function to fetch
+    const analysis = {
+      groups: payload.groups,
+      orphans: payload.orphans,
+      imageInsights: payload.imageInsights,
+      signature: payload.signature,
+      jobId,
+    };
+    
+    try {
+      await redisSet(`analysis:${jobId}`, JSON.stringify(analysis), 60 * 60); // 1 hr TTL
+      console.log('[cache] write analysis for jobId=', jobId);
+    } catch (err) {
+      console.warn('[cache] failed to write analysis for jobId=', jobId, err);
+    }
+    
     await release();
   } catch (err: any) {
     console.error("[smartdrafts-scan-background] execution failed", err);
