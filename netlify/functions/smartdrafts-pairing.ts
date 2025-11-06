@@ -1,4 +1,5 @@
 import type { Handler } from "@netlify/functions";
+import { createHash } from "node:crypto";
 import { getOrigin, isOriginAllowed, jsonResponse } from "../../src/lib/http.js";
 import { getCachedSmartDraftGroups } from "../../src/lib/smartdrafts-store.js";
 import { getJob } from "../../src/lib/job-store.js";
@@ -99,8 +100,10 @@ export const handler: Handler = async (event) => {
     console.log('[PAIR] payload.analysis.jobId:', (payload.analysis as any)?.jobId);
   }
 
-  // NEW: Support fetching analysis from cache via folder parameter OR jobId
-  let analysis: any;
+  // ZF-2: Zero-frontend fix - fetch analysis from Redis without relying on UI
+  let analysis: any = payload.analysis || null;
+  const jobId = (payload as any)?.jobId || (analysis as any)?.jobId || null;
+  const folder = payload.folder || (analysis as any)?.folder || '';
   
   // Helper function to check if analysis has valid visualDescription fields
   function hasVD(a: any): boolean {
@@ -111,40 +114,58 @@ export const handler: Handler = async (event) => {
     return !!first?.visualDescription && (first.visualDescription.length > 20);
   }
   
-  // Step 1B (prioritized): Try Redis jobId-based fetch FIRST
-  const jobId = (payload as any)?.jobId;
-  if (jobId) {
+  // ZF-2.1: Try by jobId first (if present in request)
+  if (!hasVD(analysis) && jobId) {
     console.log(`[PAIR] Attempting Redis fetch for jobId=${jobId}`);
     try {
-      const cached = await getJob(`analysis:${jobId}`);
-      
-      if (cached && typeof cached === 'object') {
-        const arr = Array.isArray((cached as any).imageInsights) 
-          ? (cached as any).imageInsights 
-          : Object.values((cached as any).imageInsights || {});
-        console.log(`[PAIR] loaded analysis from redis for jobId=${jobId} insights=${arr.length}`);
-        
-        if (hasVD(cached)) {
-          console.log(`[PAIR] Redis analysis has visualDescription ✓`);
-          analysis = cached;
-        } else {
-          console.warn(`[PAIR] Redis analysis missing visualDescription, will try folder cache`);
-        }
-      } else {
-        console.warn(`[PAIR] No analysis found in redis for jobId=${jobId}`);
+      const raw = await getJob(`analysis:${jobId}`);
+      if (raw) {
+        analysis = raw;
+        const arr = Array.isArray(analysis.imageInsights) 
+          ? analysis.imageInsights 
+          : Object.values(analysis.imageInsights || {});
+        console.log(`[PAIR] loaded analysis by jobId: ${jobId}, insights=${arr.length}`);
       }
     } catch (err) {
       console.error(`[PAIR] Redis fetch failed for jobId=${jobId}:`, err);
     }
   }
   
-  // Fallback to folder-based cache if Redis didn't work
-  if (!analysis && payload.folder) {
-    console.log(`[pairing] Fetching analysis from cache for folder: ${payload.folder}`);
+  // ZF-2.2: If still no VD and we have a folder, try by folder signature
+  if (!hasVD(analysis) && folder) {
+    const folderSig = createHash('sha1').update(folder).digest('hex');
+    console.log(`[PAIR] No VD yet, trying by folderSig: ${folderSig}`);
+    
+    try {
+      // Try direct folder lookup
+      const rawByFolder = await getJob(`analysis:byFolder:${folderSig}`);
+      if (rawByFolder) {
+        analysis = rawByFolder;
+        console.log(`[PAIR] loaded analysis by folderSig: ${folderSig}`);
+      } else {
+        // Last resort: use lastJobId pointer
+        const lastId = await getJob(`analysis:lastJobId:${folderSig}`);
+        if (lastId && typeof lastId === 'string') {
+          console.log(`[PAIR] Found lastJobId pointer: ${lastId}`);
+          const rawByLast = await getJob(`analysis:${lastId}`);
+          if (rawByLast) {
+            analysis = rawByLast;
+            console.log(`[PAIR] loaded analysis by lastJobId: ${lastId}`);
+          }
+        }
+      }
+    } catch (err) {
+      console.error(`[PAIR] Redis folder-based fetch failed:`, err);
+    }
+  }
+  
+  // ZF-2.3: Final fallback to old folder cache (for backward compatibility)
+  if (!analysis && folder) {
+    console.log(`[pairing] Fallback to old folder cache for: ${folder}`);
     const normalizeFolderKey = (value: string): string => {
       return value.replace(/^[\\/]+/, "").trim();
     };
-    const cacheKey = normalizeFolderKey(payload.folder);
+    const cacheKey = normalizeFolderKey(folder);
     const cached = await getCachedSmartDraftGroups(cacheKey);
     
     if (!cached) {
@@ -170,9 +191,18 @@ export const handler: Handler = async (event) => {
       orphans: cached.orphans,
       imageInsights: cached.imageInsights
     };
-  } else if (payload.analysis) {
-    console.log(`[pairing] Using analysis from request body (old way - may lose fields)`);
-    analysis = payload.analysis;
+  }
+  
+  // ZF-2.4: Check if we have visualDescription after all fallbacks
+  if (!hasVD(analysis)) {
+    console.warn('[PAIR] no visualDescription available after redis fallbacks');
+    // Continue with degraded pairing (visual similarity will be 0)
+  } else {
+    const arr = Array.isArray(analysis.imageInsights) 
+      ? analysis.imageInsights 
+      : Object.values(analysis.imageInsights || {});
+    const first = arr[0] as any;
+    console.log(`[PAIR] ✓ visualDescription available (first insight len=${first?.visualDescription?.length || 0})`);
   }
   
   // Final check: do we have analysis?
