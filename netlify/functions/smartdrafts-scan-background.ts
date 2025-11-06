@@ -1,4 +1,5 @@
 import type { Handler } from "@netlify/functions";
+import { createHash } from "node:crypto";
 import { runSmartDraftScan, type SmartDraftScanResponse } from "../../src/lib/smartdrafts-scan-core.js";
 import { putJob, redisSet } from "../../src/lib/job-store.js";
 import { k } from "../../src/lib/user-keys.js";
@@ -119,11 +120,30 @@ export const handler: Handler = async (event) => {
       jobId,
     };
     
+    // ZF-1: Compute stable folder signature for zero-frontend lookup
+    const folderSig = createHash('sha1').update(folder).digest('hex');
+    
     try {
+      // Store by jobId (existing)
       await redisSet(`analysis:${jobId}`, JSON.stringify(analysis), 60 * 60); // 1 hr TTL
-      console.log('[cache] write analysis for jobId=', jobId);
+      
+      // ZF-1: Store by folder signature (so pairing can find by folder alone)
+      await redisSet(`analysis:byFolder:${folderSig}`, JSON.stringify(analysis), 60 * 60);
+      
+      // ZF-1: Store lastJobId pointer for this folder
+      await redisSet(`analysis:lastJobId:${folderSig}`, jobId, 60 * 60);
+      
+      console.log('[cache] write analysis', { 
+        jobId, 
+        folderSig, 
+        keys: [
+          `analysis:${jobId}`, 
+          `analysis:byFolder:${folderSig}`, 
+          `analysis:lastJobId:${folderSig}`
+        ]
+      });
     } catch (err) {
-      console.warn('[cache] failed to write analysis for jobId=', jobId, err);
+      console.warn('[cache] failed to write analysis', { jobId, folderSig, err });
     }
     
     await release();
