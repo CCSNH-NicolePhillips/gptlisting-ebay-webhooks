@@ -99,7 +99,7 @@ export const handler: Handler = async (event) => {
     console.log('[PAIR] payload.analysis.jobId:', (payload.analysis as any)?.jobId);
   }
 
-  // NEW: Support fetching analysis from cache via folder parameter
+  // NEW: Support fetching analysis from cache via folder parameter OR jobId
   let analysis: any;
   
   // Helper function to check if analysis has valid visualDescription fields
@@ -111,7 +111,35 @@ export const handler: Handler = async (event) => {
     return !!first?.visualDescription && (first.visualDescription.length > 20);
   }
   
-  if (payload.folder) {
+  // Step 1B (prioritized): Try Redis jobId-based fetch FIRST
+  const jobId = (payload as any)?.jobId;
+  if (jobId) {
+    console.log(`[PAIR] Attempting Redis fetch for jobId=${jobId}`);
+    try {
+      const cached = await getJob(`analysis:${jobId}`);
+      
+      if (cached && typeof cached === 'object') {
+        const arr = Array.isArray((cached as any).imageInsights) 
+          ? (cached as any).imageInsights 
+          : Object.values((cached as any).imageInsights || {});
+        console.log(`[PAIR] loaded analysis from redis for jobId=${jobId} insights=${arr.length}`);
+        
+        if (hasVD(cached)) {
+          console.log(`[PAIR] Redis analysis has visualDescription ✓`);
+          analysis = cached;
+        } else {
+          console.warn(`[PAIR] Redis analysis missing visualDescription, will try folder cache`);
+        }
+      } else {
+        console.warn(`[PAIR] No analysis found in redis for jobId=${jobId}`);
+      }
+    } catch (err) {
+      console.error(`[PAIR] Redis fetch failed for jobId=${jobId}:`, err);
+    }
+  }
+  
+  // Fallback to folder-based cache if Redis didn't work
+  if (!analysis && payload.folder) {
     console.log(`[pairing] Fetching analysis from cache for folder: ${payload.folder}`);
     const normalizeFolderKey = (value: string): string => {
       return value.replace(/^[\\/]+/, "").trim();
@@ -145,50 +173,25 @@ export const handler: Handler = async (event) => {
   } else if (payload.analysis) {
     console.log(`[pairing] Using analysis from request body (old way - may lose fields)`);
     analysis = payload.analysis;
-  } else {
+  }
+  
+  // Final check: do we have analysis?
+  if (!analysis) {
     return jsonResponse(400, {
-      error: "Either 'analysis' or 'folder' required in body",
-      hint: "POST { folder: 'dropbox-url' } OR { analysis: { groups, imageInsights } }"
+      error: "Could not load analysis",
+      hint: "Provide jobId, folder, or analysis in request body"
     }, originHdr, methods);
   }
-
-  // Step 1B: If visualDescription is missing, try to fetch from Redis by jobId
-  if (!hasVD(analysis)) {
-    console.log('[PAIR] visualDescription missing, attempting Redis fallback...');
-    const jobId = (analysis as any)?.jobId || (payload as any)?.jobId;
-    
-    if (jobId) {
-      try {
-        console.log(`[PAIR] Fetching analysis from redis for jobId=${jobId}`);
-        const cached = await getJob(`analysis:${jobId}`);
-        
-        if (cached && typeof cached === 'object') {
-          const arr = Array.isArray((cached as any).imageInsights) 
-            ? (cached as any).imageInsights 
-            : Object.values((cached as any).imageInsights || {});
-          console.log(`[PAIR] loaded analysis from redis for jobId=${jobId} insights=${arr.length}`);
-          
-          if (hasVD(cached)) {
-            console.log(`[PAIR] Redis analysis has visualDescription ✓`);
-            analysis = cached;
-          } else {
-            console.warn(`[PAIR] Redis analysis also missing visualDescription`);
-          }
-        } else {
-          console.warn(`[PAIR] No analysis found in redis for jobId=${jobId}`);
-        }
-      } catch (err) {
-        console.error(`[PAIR] Redis fetch failed for jobId=${jobId}:`, err);
-      }
-    } else {
-      console.warn('[PAIR] No jobId available for Redis fallback');
-    }
-  } else {
+  
+  // Log final state
+  if (hasVD(analysis)) {
     const arr = Array.isArray(analysis.imageInsights) 
       ? analysis.imageInsights 
       : Object.values(analysis.imageInsights || {});
     const first = arr[0] as any;
-    console.log(`[PAIR] analysis has visualDescription ✓ (first insight len=${first?.visualDescription?.length || 0})`);
+    console.log(`[PAIR] Final analysis has visualDescription ✓ (first insight len=${first?.visualDescription?.length || 0})`);
+  } else {
+    console.warn(`[PAIR] Final analysis MISSING visualDescription - visual similarity will be 0`);
   }
 
   if (!analysis || !analysis.imageInsights) {
