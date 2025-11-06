@@ -2,37 +2,17 @@
   "engineVersion": "1.0.0",
   "pairs": [
     {
-      "frontUrl": "ebay/asd32q.jpg",
-      "backUrl": "ebay/azdfkuj.jpg",
-      "matchScore": 3,
-      "brand": "R+Co",
-      "product": "Bond Building + Repair Styling Oil",
-      "variant": "On a Cloud",
-      "sizeFront": "41 mL / 1.4 fl oz",
-      "sizeBack": "41 mL / 1.4 fl oz",
+      "frontUrl": "awef.jpg",
+      "backUrl": "awefawed.jpg",
+      "matchScore": 8.5,
+      "brand": "unknown",
+      "product": "",
+      "variant": "",
+      "sizeFront": "",
+      "sizeBack": "",
       "evidence": [
-        "AUTO-PAIRED: preScore=3.00",
-        "gap=Infinity",
-        "brand=unknownRescue",
-        "packaging=bottle boost=1",
-        "prodJac=0.00 varJac=0.00",
-        "sizeEq=false catTailOverlap=false",
-        "cosmeticBackCue=true"
-      ],
-      "confidence": 0.95
-    },
-    {
-      "frontUrl": "ebay/awef.jpg",
-      "backUrl": "ebay/awefawed.jpg",
-      "matchScore": 9,
-      "brand": "myBrainCo.",
-      "product": "Gut Repair",
-      "variant": "Natural Berry Flavour",
-      "sizeFront": "10.9 oz | 31 servings",
-      "sizeBack": "10.9 oz | 31 servings",
-      "evidence": [
-        "AUTO-PAIRED: preScore=9.00",
-        "gap=5.50",
+        "AUTO-PAIRED: preScore=8.50",
+        "gap=5.00",
         "brand=equal",
         "packaging=pouch boost=1.5",
         "prodJac=1.00 varJac=0.20",
@@ -42,17 +22,17 @@
       "confidence": 0.95
     },
     {
-      "frontUrl": "ebay/frog_01.jpg",
+      "frontUrl": "frog_01.jpg",
       "backUrl": "faeewfaw.jpg",
       "matchScore": 6.5,
-      "brand": "Frog Fuel",
-      "product": "Performance Greens + Protein",
-      "variant": "Lemon Lime Flavor",
-      "sizeFront": "25.4 oz (1.59 lb) 720 g",
-      "sizeBack": "25.4 oz (1.59 lb) 720 g",
+      "brand": "unknown",
+      "product": "",
+      "variant": "",
+      "sizeFront": "",
+      "sizeBack": "",
       "evidence": [
         "AUTO-PAIRED: preScore=6.50",
-        "gap=2.50",
+        "gap=3.00",
         "brand=equal",
         "packaging=pouch boost=1.5",
         "prodJac=0.20 varJac=0.00",
@@ -62,17 +42,17 @@
       "confidence": 0.95
     },
     {
-      "frontUrl": "ebay/rgxbbg.jpg",
+      "frontUrl": "rgxbbg.jpg",
       "backUrl": "dfzdvzer.jpg",
       "matchScore": 3.5,
-      "brand": "nusava",
-      "product": "Liquid Dietary Supplement",
-      "variant": "Strawberry Flavor",
-      "sizeFront": "2 fl oz / 60 ml",
-      "sizeBack": "2 fl oz / 60 ml",
+      "brand": "unknown",
+      "product": "",
+      "variant": "",
+      "sizeFront": "",
+      "sizeBack": "",
       "evidence": [
         "AUTO-PAIRED: preScore=3.50",
-        "gap=1.00",
+        "gap=1.50",
         "brand=unknownRescue",
         "packaging=dropper-bottle boost=2",
         "prodJac=0.00 varJac=0.00",
@@ -80,45 +60,43 @@
         "cosmeticBackCue=true"
       ],
       "confidence": 0.95
+    },
+    {
+      "frontUrl": "asd32q.jpg",
+      "backUrl": "azdfkuj.jpg",
+      "matchScore": 2.5,
+      "brand": "unknown",
+      "product": "",
+      "variant": "",
+      "sizeFront": "",
+      "sizeBack": "",
+      "evidence": [
+        "AUTO-PAIRED[hair]: preScore=2.50",
+        "gap=Infinity",
+        "brand=unknownRescue",
+        "packaging=bottle boost=1",
+        "INCI=true",
+        "prodJac=0.00 varJac=0.00",
+        "sizeEq=false"
+      ],
+      "confidence": 0.9
     }
   ],
   "products": [
     {
-      "productId": "r_co_bond_building_repair_styling_oil",
-      "frontUrl": "ebay/asd32q.jpg",
-      "backUrl": "ebay/azdfkuj.jpg",
+      "productId": "unknown_",
+      "frontUrl": "awef.jpg",
+      "backUrl": "awefawed.jpg",
       "extras": [],
       "evidence": {
-        "brand": "R+Co",
-        "product": "Bond Building + Repair Styling Oil",
-        "variant": "On a Cloud",
-        "matchScore": 3,
+        "brand": "unknown",
+        "product": "",
+        "variant": "",
+        "matchScore": 8.5,
         "confidence": 0.95,
         "triggers": [
-          "AUTO-PAIRED: preScore=3.00",
-          "gap=Infinity",
-          "brand=unknownRescue",
-          "packaging=bottle boost=1",
-          "prodJac=0.00 varJac=0.00",
-          "sizeEq=false catTailOverlap=false",
-          "cosmeticBackCue=true"
-        ]
-      }
-    },
-    {
-      "productId": "mybrainco_gut_repair",
-      "frontUrl": "ebay/awef.jpg",
-      "backUrl": "ebay/awefawed.jpg",
-      "extras": [],
-      "evidence": {
-        "brand": "myBrainCo.",
-        "product": "Gut Repair",
-        "variant": "Natural Berry Flavour",
-        "matchScore": 9,
-        "confidence": 0.95,
-        "triggers": [
-          "AUTO-PAIRED: preScore=9.00",
-          "gap=5.50",
+          "AUTO-PAIRED: preScore=8.50",
+          "gap=5.00",
           "brand=equal",
           "packaging=pouch boost=1.5",
           "prodJac=1.00 varJac=0.20",
@@ -128,19 +106,19 @@
       }
     },
     {
-      "productId": "frog_fuel_performance_greens_protein",
-      "frontUrl": "ebay/frog_01.jpg",
+      "productId": "unknown_",
+      "frontUrl": "frog_01.jpg",
       "backUrl": "faeewfaw.jpg",
       "extras": [],
       "evidence": {
-        "brand": "Frog Fuel",
-        "product": "Performance Greens + Protein",
-        "variant": "Lemon Lime Flavor",
+        "brand": "unknown",
+        "product": "",
+        "variant": "",
         "matchScore": 6.5,
         "confidence": 0.95,
         "triggers": [
           "AUTO-PAIRED: preScore=6.50",
-          "gap=2.50",
+          "gap=3.00",
           "brand=equal",
           "packaging=pouch boost=1.5",
           "prodJac=0.20 varJac=0.00",
@@ -150,24 +128,46 @@
       }
     },
     {
-      "productId": "nusava_liquid_dietary_supplement",
-      "frontUrl": "ebay/rgxbbg.jpg",
+      "productId": "unknown_",
+      "frontUrl": "rgxbbg.jpg",
       "backUrl": "dfzdvzer.jpg",
       "extras": [],
       "evidence": {
-        "brand": "nusava",
-        "product": "Liquid Dietary Supplement",
-        "variant": "Strawberry Flavor",
+        "brand": "unknown",
+        "product": "",
+        "variant": "",
         "matchScore": 3.5,
         "confidence": 0.95,
         "triggers": [
           "AUTO-PAIRED: preScore=3.50",
-          "gap=1.00",
+          "gap=1.50",
           "brand=unknownRescue",
           "packaging=dropper-bottle boost=2",
           "prodJac=0.00 varJac=0.00",
           "sizeEq=false catTailOverlap=false",
           "cosmeticBackCue=true"
+        ]
+      }
+    },
+    {
+      "productId": "unknown_",
+      "frontUrl": "asd32q.jpg",
+      "backUrl": "azdfkuj.jpg",
+      "extras": [],
+      "evidence": {
+        "brand": "unknown",
+        "product": "",
+        "variant": "",
+        "matchScore": 2.5,
+        "confidence": 0.9,
+        "triggers": [
+          "AUTO-PAIRED[hair]: preScore=2.50",
+          "gap=Infinity",
+          "brand=unknownRescue",
+          "packaging=bottle boost=1",
+          "INCI=true",
+          "prodJac=0.00 varJac=0.00",
+          "sizeEq=false"
         ]
       }
     }

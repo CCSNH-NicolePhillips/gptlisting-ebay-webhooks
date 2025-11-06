@@ -1,0 +1,110 @@
+{
+  "groups": [
+    {
+      "groupId": "grp_rc237n8k",
+      "brand": "R+Co",
+      "product": "ON A CLOUD",
+      "variant": "BOND BUILDING + REPAIR STYLING OIL",
+      "size": "41 ML / 1.4 FL OZ",
+      "category": "Hair Care",
+      "categoryPath": "Hair Care",
+      "images": [
+        "asd32q.jpg",
+        "awefawed.jpg",
+        "dfzdvzer.jpg",
+        "faeewfaw.jpg"
+      ],
+      "confidence": 0.9
+    },
+    {
+      "groupId": "grp_iadzi4e9",
+      "brand": "myBrainCo.",
+      "product": "GUT REPAIR",
+      "variant": "Natural Berry Flavour",
+      "size": "10.9 oz | 31 servings",
+      "category": "Supplement",
+      "categoryPath": "Supplement",
+      "images": [
+        "awef.jpg",
+        "awefawed.jpg",
+        "dfzdvzer.jpg",
+        "faeewfaw.jpg"
+      ],
+      "confidence": 0.9
+    },
+    {
+      "groupId": "grp_5r0cvgnq",
+      "brand": "Frog Fuel",
+      "product": "Performance Greens + Protein",
+      "variant": "Lemon Lime Flavor",
+      "size": "25.4 oz (1.59 lb) 720g",
+      "category": "Supplement",
+      "categoryPath": "Supplement",
+      "images": [
+        "frog_01.jpg",
+        "awefawed.jpg",
+        "dfzdvzer.jpg",
+        "faeewfaw.jpg"
+      ],
+      "confidence": 0.9
+    }
+  ],
+  "imageInsights": [
+    {
+      "url": "asd32q.jpg",
+      "role": "front",
+      "hasVisibleText": true,
+      "textExtracted": "R+Co ON A CLOUD BOND BUILDING + REPAIR STYLING OIL HUILE COIFFANTE FORTIFIANTE ET RÉPARATRICE 41 ML / 1.4 FL OZ",
+      "key": "asd32q.jpg",
+      "displayUrl": "http://local/asd32q.jpg"
+    },
+    {
+      "url": "awef.jpg",
+      "role": "front",
+      "hasVisibleText": true,
+      "textExtracted": "PROBIOTIC, PREBIOTIC, GLUTAMINE & DIGESTIVE ENZYME POWDER\nmyBrainCo.\nMULTI-ACTION\nGUT REPAIR\nDIGESTION - MICROBIOME - COGNITION\nNATURAL BERRY FLAVOUR\nTHINK & FEEL YOUR BEST\nDIETARY SUPPLEMENT | 10.9 oz | 31 SERVINGS\nLOW FODMAP",
+      "key": "awef.jpg",
+      "displayUrl": "http://local/awef.jpg"
+    },
+    {
+      "url": "awefawed.jpg",
+      "role": "back",
+      "hasVisibleText": true,
+      "textExtracted": "Gut Repair™ is a comprehensive blend of probiotics, prebiotics, resistant starch, glutamine, digestive enzymes, soothing herbs and supportive nutrients in one convenient daily serving. Produced using natural, certified organic and proprietary ingredients. • DIGESTION • BLOATING • MICROBIOME • COGNITION • REGULARITY • IMMUNITY Award winning Lab tested Carbon neutral No nasties DIRECTIONS FOR USE: Before breakfast or after dinner, blend 1 scoop (10 g) into 200 mL of water, juice or a smoothie. For best results use daily. STORAGE: Store below 77°F in a cool dry place. Always use a dry scoop. Reseal after each use. Natural ingredients may settle. Shake well prior to each use. Use within 90 days of opening. Natural color may vary from batch to batch. Product free from: GMOs, Gluten, Dairy, Egg, Peanut, Tree Nuts, Soy, Artificial Colors, Flavors or Sweeteners. us.mybrainco.com | @mybrainco_ WARNING: Consult physician before using if pregnant, breastfeeding or taking medication. Keep out of reach of children. THESE STATEMENTS HAVE NOT BEEN EVALUATED BY THE FOOD AND DRUG ADMINISTRATION. THIS PRODUCT IS NOT INTENDED TO DIAGNOSE, TREAT, CURE, OR PREVENT ANY DISEASE. Climate Active Carbon Neutral PRODUCT myBrainCo Inc, 295 Madison Ave 12th floor, New York City 10017. For all enquiries email: support@mybrainco.com Expiry / Batch 30/06/2026 240906 Supplement Facts Serving Size 10 g (1 scoop) • Servings Per Container 31 Amount Per Serve Calories 35 Total Fat 0 g 0% Saturated Fat 0 g 0% Total Carbohydrate 5 g 2% Dietary Fiber 5 g 17% Total Sugars 0 g Includes Added Sugars 0 g 0% Protein 1 g Vitamin C (from Organic Acerola) 11 mg 11% Zinc (from Inactive Saccharomyces cerevisiae) 1 mg 11% Sodium 0 mg 0% Fibregum™ Acacia Fibre (Acacia senegal) 5 g Sunfiber® Guar Fibre (Partially Hydrolyzed Guar Gum) 1 g L-Glutamine 1 g Organic Green Banana Resistant Starch* 500 mg Organic Ceylon Cinnamon (Cinnamomum verum bark) 400 mg Bacillus coagulans (2 Billion CFU) 200 mg Saccharomyces boulardii (5 Billion CFU) 200 mg Aloe vera (Aloe barbadensis) Inner Leaf Extract (1:200) 100 mg Pomegranate (Punica granatum) Inner Leaf Extract (1:15) (Punicalagin) 100 mg Proprietary Digestive Enzyme blend (Protease, Amylase, Lipase, Cellulase, Lactase) 100 mg Percent Daily Values (DV) are based on 2000 calorie diet. Other Ingredients: Natural Berry Flavor, Natural Vanilla Flavor, Organic Cacao Extract*, Natural Beetroot Powder (Color) Sunfiber® is a registered trademark of Taiyo International, Inc. Fibregum™ is a trademark of Nexira",
+      "key": "awefawed.jpg",
+      "displayUrl": "http://local/awefawed.jpg"
+    },
+    {
+      "url": "dfzdvzer.jpg",
+      "role": "back",
+      "hasVisibleText": true,
+      "textExtracted": "SUPPLEMENT FACTS\nServing Size 1 1/4 dropper (1.5 ml)\nServings Per Container 40\nAmount Per Serving %DV*\nVitamin B1 (Thiamine)\n(as Thiamine Niononitrate) 2.4 mg 200%\nVitamin B3 (as Niacinamide) 16 mg 100%\nVitamin B6 (as Pyridoxine HCI) 3.4 mg 200%\nFolate (as folic acid)\n400 mcg DFE\n(240 mcg Folic Acid) 100%\nVitamin B12\n(as Methylcobalamin) 5000 mcg 208,333%\n*Percent Daily Value (DV) is based on a 2000 calorie diet.\nOther Ingredients: Purified Water, Organic Vegetable Glycerin,\nCitric Acid, Natural Flavors, Monk Fruit Extract\nManufactured for:\nNassau 17346 Foothill Blvd #7096, Glendale, CA 91204\nNEED HELP? We're available to help. hello@getnusun.com\nGMO FREE\nLAB TESTED\nGMP",
+      "key": "dfzdvzer.jpg",
+      "displayUrl": "http://local/dfzdvzer.jpg"
+    },
+    {
+      "url": "faeewfaw.jpg",
+      "role": "back",
+      "hasVisibleText": true,
+      "textExtracted": "STAY UNBREAKABLE\nUNLOCK ENERGY, RECOVERY, AND THE POWER TO GO FURTHER EVERY DAY\nPowered by Frog Fuel's proprietary Nano Hydrolyzed Collagen® protein, this formula fuels ultra-fast recovery, better gut health, and sustained energy for a life in motion. Stop settling. Start thriving. This is nutrition that delivers the results you deserve.\nGRASS-FED BOVINE | MADE WITH TYPE I & III COLLAGEN-PROBIOTICS + PREBIOTICS FOR DIGESTIVE SUPPORT\nNON GMO | LACTOSE FREE | GLUTEN FREE | KETO-FRIENDLY\nNO ARTIFICIAL FLAVORS, COLORS, SWEETENERS, DYES, OR PRESERVATIVES\nDIRECTIONS: Combine 1 scoop with 10-12 ounces of water or other liquid.\nOTHER INGREDIENTS: Citric Acid, Natural Flavors, Malic Acid, Rebaudioside A (Stevia Leaf Extract), Xanthan Gum, Silicon Dioxide, Rebaudioside M (Steviol Glycosides), Monk Fruit Extract\nWARNING: Consult with your healthcare provider before use if you are pregnant, nursing, have a medical condition, or are taking any medication. KEEP OUT OF REACH OF CHILDREN.\nThis product is sold by weight, not by volume. Settling may occur. Store in a cool, dry place.\nNotice: Use this product as a food supplement only. Do not use for weight reduction.\nSUPPLEMENT FACTS\nServing Size: 1 Scoop (24g)\nServings Per Container: 30\nAmount Per Serving %DV\nCalories 90\nTotal Carbohydrate 8g 3%*\nDietary Fiber 2g 7%*\nProtein 15g 30%*\nVitamin A (as Retinyl Palmitate) 450mcg 50%\nVitamin C (as Ascorbic Acid) 90mg 100%\nVitamin E (as D-Alpha Tocopherol) 15mg 100%\nVitamin B6 (as Pyridoxine HCl) 2mg 120%\nFolate 400mcg DFE 100%\nVitamin B12 (as Methylcobalamin) 6mcg 250%\nBiotin 30mcg 100%\nPantothenic Acid (as D-Calcium Pantothenate) 10mg 200%\nCalcium (as Dicalcium Phosphate) 50mg 4%\nIron (as Ferrous Fumarate) 2mg 10%\nPhosphorus (as Dicalcium Phosphate) 40mg 3%\nMagnesium (as Magnesium Phosphate) 50mg 12%\nSodium 100mg 4%\nPotassium (as Potassium Citrate) 100mg 2%\nHydrolyzed Collagen (Bovine) 8,588mg †\nAmino Acid Blend 1,170mg †\nL-Arginine, Taurine, L-Glutamine, L-Tryptophan, L-Histidine, L-Methionine, L-Cystine\nFruit & Vegetable Blend 400mg †\nOrganic Spirulina (Arthrospira platensis), Organic Chlorella (Chlorella vulgaris), Organic Kale (Brassica oleracea), Organic Spinach (Spinacia oleracea), Organic Broccoli (Brassica oleracea), Organic Carrot (Daucus carota), Organic Beet (Beta vulgaris), Organic Tomato (Solanum lycopersicum), Organic Shiitake Mushroom (Lentinula edodes), Organic Maitake Mushroom (Grifola frondosa), Organic Reishi Mushroom (Ganoderma lucidum), Organic Cordyceps Mushroom (Cordyceps militaris), Organic Lion's Mane Mushroom (Hericium erinaceus), Organic Turkey Tail Mushroom (Trametes versicolor), Organic Agaricus Mushroom (Agaricus blazei), Organic King Trumpet Mushroom (Pleurotus eryngii), Organic White Button Mushroom (Agaricus bisporus), Organic Black Pepper Extract (Piper nigrum), Organic Turmeric Extract (Curcuma longa)\nProbiotic/Prebiotic Blend 50mg †\nLactobacillus acidophilus, Bifidobacterium lactis, 5B CFU\nAdaptogen Blend 50mg †\nMaitake Mushroom (Grifola frondosa), Lion's Mane Mushroom (Hericium erinaceus), Cordyceps Mushroom (Cordyceps militaris), Ginseng (Panax ginseng)\n* Percentage Daily Value (DV) based on a 2,000 calorie diet\n† Daily Value not established.\nFROGFUEL.COM\nSCAN, SUBSCRIBE, +SAVE\nFROG FUEL\n092 LABS",
+      "key": "faeewfaw.jpg",
+      "displayUrl": "http://local/faeewfaw.jpg"
+    },
+    {
+      "url": "frog_01.jpg",
+      "role": "front",
+      "hasVisibleText": true,
+      "textExtracted": "STAY UNBREAKABLE PERFORMANCE RECOVERY ENERGY GUT HEALTH FROG FUEL PERFORMANCE GREENS + PROTEIN DEVELOPED BY NAVY SEALS MADE IN THE U.S.A. 9G PREMIUM PROTEIN 5B CFU PROBIOTICS + PREBIOTICS 37 POWERFUL INGREDIENTS LEMON LIME FLAVOR CAFFEINE FREE A POWERFUL BLEND OF NUTRIENTS, ANTIOXIDANTS, SUPERFOODS, AND ADAPTOGENS Net wt. 25.4 oz. (1.59 lb) 720g 30 servings",
+      "key": "frog_01.jpg",
+      "displayUrl": "http://local/frog_01.jpg"
+    },
+    {
+      "url": "rgxbbg.jpg",
+      "role": "front",
+      "hasVisibleText": true,
+      "textExtracted": "nusava VEGAN B12 5000 mcg B6 3400 mcg B1 2400 mcg NIACIN + FOLATE NON GMO / HIGH POTENCY / VITAMIN B COMPLEX STRAWBERRY FLAVOR LIQUID DIETARY SUPPLEMENT 2 FL OZ. 60 ML",
+      "key": "rgxbbg.jpg",
+      "displayUrl": "http://local/rgxbbg.jpg"
+    }
+  ]
+}

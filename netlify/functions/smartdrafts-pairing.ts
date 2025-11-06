@@ -147,6 +147,13 @@ export const handler: Handler = async (event) => {
     const pairs: Pair[] = [];
     const pairedF = new Set<string>(), pairedB = new Set<string>();
 
+    // DEBUG: Log all detected roles/brands/categories
+    console.log('[Z2-DEBUG] All image roles:', Array.from(role.entries()));
+    console.log('[Z2-DEBUG] All brands:', Array.from(brand.entries()));
+    console.log('[Z2-DEBUG] All categories:', Array.from(cat.entries()));
+    console.log('[Z2-DEBUG] Supplement facts detected:', Array.from(facts));
+    console.log('[Z2-DEBUG] INCI (hair) detected:', Array.from(hairB));
+
     for (const g of (analysis.groups || [])) {
       const keys = (g.images || []).map((u: any) => urlKey(u));
       const fronts = keys.filter((k: string) => role.get(k) === 'front');
@@ -191,18 +198,28 @@ export const handler: Handler = async (event) => {
     const fr = allKeys.filter(k => role.get(k) === 'front' && !pairedF.has(k));
     const bk = allKeys.filter(k => role.get(k) === 'back' && !pairedB.has(k));
 
+    console.log('[Z2-DEBUG] Unpaired fronts:', fr);
+    console.log('[Z2-DEBUG] Unpaired backs:', bk);
+
     for (const f of fr) {
       const scored = bk
         .filter(b => gOfKey.get(b) !== gOfKey.get(f))
         .map(b => ({ b, s: preScore(f, b) }))
         .sort((a, b) => b.s - a.s);
+      
+      console.log(`[Z2-DEBUG] Front ${f} scores:`, scored);
+      
       if (!scored.length) continue;
 
       const best = scored[0], runner = scored[1];
       const gap = best.s - (runner?.s ?? -Infinity);
+      const fBuck = bucket(cat.get(f));
+
+      console.log(`[Z2-DEBUG] Front ${f}: best=${best.s.toFixed(2)}, gap=${gap.toFixed(2)}, bucket=${fBuck}, category=${cat.get(f)}`);
 
       // strict accept
       if (best.s >= 3.0 && gap >= 1.0) {
+        console.log(`[Z2-DEBUG] ✓ STRICT ACCEPT: ${f} ↔ ${best.b}`);
         pairs.push({
           frontUrl: f, backUrl: best.b as string, matchScore: +best.s.toFixed(2), confidence: .95,
           brand: brand.get(f) || '', product: prod.get(f) || '',
@@ -212,14 +229,16 @@ export const handler: Handler = async (event) => {
         continue;
       }
       // soft accept for supplements/hair (rescue cues above)
-      const fBuck = bucket(cat.get(f));
       if ((fBuck === 'supp' || fBuck === 'hair') && best.s >= 2.4 && gap >= 0.8) {
+        console.log(`[Z2-DEBUG] ✓ SOFT RESCUE (${fBuck}): ${f} ↔ ${best.b}`);
         pairs.push({
           frontUrl: f, backUrl: best.b as string, matchScore: +best.s.toFixed(2), confidence: .95,
           brand: brand.get(f) || '', product: prod.get(f) || '',
           evidence: [`SOFT RESCUE preScore=${best.s.toFixed(2)} gap=${gap === Infinity ? 'Inf' : gap.toFixed(2)}`]
         });
         pairedF.add(f); pairedB.add(best.b as string);
+      } else {
+        console.log(`[Z2-DEBUG] ✗ REJECT: ${f} (score=${best.s.toFixed(2)}, gap=${gap.toFixed(2)}, bucket=${fBuck}, needs: strict>=3.0+gap>=1.0 OR soft(supp/hair)>=2.4+gap>=0.8)`);
       }
     }
 
