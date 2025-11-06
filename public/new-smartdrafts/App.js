@@ -146,28 +146,11 @@ export function App() {
         }
         setLoadingStatus('🤖 Running GPT-4o-mini pairing...');
         
-        // Convert imageInsights from object to array if needed and keep the fields pairing expects
-        const insightsArray = Array.isArray(analysis.imageInsights)
-          ? analysis.imageInsights
-          : Object.values(analysis.imageInsights || {});
-
-        const analysisForPairing = {
-          ...analysis,
-          imageInsights: insightsArray.map(x => ({
-            url: x.url,
-            key: x.key || x._key || x.urlKey || x.url,
-            role: x.role,
-            roleScore: x.roleScore,
-            displayUrl: x.displayUrl || x.url,
-            // NEW: pass facts/text cues through
-            evidenceTriggers: Array.isArray(x.evidenceTriggers) ? x.evidenceTriggers : [],
-            textExtracted: x.textExtracted || x.ocrText || '',
-            visualDescription: x.visualDescription || ''
-          })),
-        };
-        
-        out = await runPairingLive(analysisForPairing);
-        showToast('✨ Pairing complete (live)');
+        // NEW APPROACH: Pass folder to pairing so it fetches fresh scan data from cache
+        // This avoids data loss through UI transformations
+        console.log('[UI] Sending folder to pairing (server-side fetch):', folder);
+        out = await runPairingLive(null, { folder });
+        showToast('✨ Pairing complete (live, server-side)');
       }
       const { pairing, metrics } = out;
       setPairing(pairing); setMetrics(metrics || null);

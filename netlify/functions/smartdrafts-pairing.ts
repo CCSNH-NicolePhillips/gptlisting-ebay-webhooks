@@ -1,9 +1,14 @@
 import type { Handler } from "@netlify/functions";
 import { getOrigin, isOriginAllowed, jsonResponse } from "../../src/lib/http.js";
+import { getCachedSmartDraftGroups } from "../../src/lib/smartdrafts-store.js";
 
 /**
  * POST /.netlify/functions/smartdrafts-pairing
- * Body: { analysis?: VisionOutput, overrides?: Record<string, any> }
+ * Body: { analysis?: VisionOutput, folder?: string, overrides?: Record<string, any> }
+ * 
+ * NEW: Can now accept EITHER:
+ *   - analysis object (old way, prone to data loss through UI)
+ *   - folder URL (new way, fetches fresh scan data from cache)
  * 
  * CHUNK Z2: Bullet-proof pairing with 4 products (supplements + hair), ignoring dummy
  */
@@ -79,22 +84,65 @@ export const handler: Handler = async (event) => {
     return jsonResponse(415, { error: "Use application/json" }, originHdr, methods);
   }
 
-  let payload: { analysis?: any; overrides?: Record<string, any> } = {};
+  let payload: { analysis?: any; folder?: string; overrides?: Record<string, any> } = {};
   try {
     payload = JSON.parse(event.body || "{}");
   } catch (err) {
     return jsonResponse(400, { error: "Invalid JSON" }, originHdr, methods);
   }
 
-  if (!payload.analysis || !payload.analysis.imageInsights) {
+  // NEW: Support fetching analysis from cache via folder parameter
+  let analysis: any;
+  
+  if (payload.folder) {
+    console.log(`[pairing] Fetching analysis from cache for folder: ${payload.folder}`);
+    const normalizeFolderKey = (value: string): string => {
+      return value.replace(/^[\\/]+/, "").trim();
+    };
+    const cacheKey = normalizeFolderKey(payload.folder);
+    const cached = await getCachedSmartDraftGroups(cacheKey);
+    
+    if (!cached) {
+      return jsonResponse(404, { 
+        error: "No cached scan found for this folder", 
+        hint: "Run Analyze first, then Run Pairing" 
+      }, originHdr, methods);
+    }
+    
+    console.log(`[pairing] Found cached scan with ${Object.keys(cached.imageInsights || {}).length} imageInsights`);
+    
+    // Log sample to verify visualDescription is present
+    const sampleKey = Object.keys(cached.imageInsights || {})[0];
+    if (sampleKey) {
+      const sample = (cached.imageInsights || {})[sampleKey] as any;
+      console.log(`[pairing] Sample insight ${sampleKey}:`);
+      console.log(`  - has visualDescription: ${!!sample.visualDescription}`);
+      console.log(`  - visualDescription length: ${(sample.visualDescription || '').length}`);
+    }
+    
+    analysis = {
+      groups: cached.groups,
+      orphans: cached.orphans,
+      imageInsights: cached.imageInsights
+    };
+  } else if (payload.analysis) {
+    console.log(`[pairing] Using analysis from request body (old way - may lose fields)`);
+    analysis = payload.analysis;
+  } else {
     return jsonResponse(400, {
-      error: "analysis required in body",
-      hint: "POST { analysis: { groups, imageInsights }, overrides?: {} }"
+      error: "Either 'analysis' or 'folder' required in body",
+      hint: "POST { folder: 'dropbox-url' } OR { analysis: { groups, imageInsights } }"
+    }, originHdr, methods);
+  }
+
+  if (!analysis || !analysis.imageInsights) {
+    return jsonResponse(400, {
+      error: "analysis.imageInsights required",
+      hint: "Run Analyze first to generate image insights"
     }, originHdr, methods);
   }
 
   try {
-    const analysis = payload.analysis;
 
     // 1) Build maps from analysis
     const insights = Array.isArray(analysis.imageInsights)
