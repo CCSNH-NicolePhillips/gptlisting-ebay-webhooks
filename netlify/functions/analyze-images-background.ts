@@ -10,6 +10,7 @@ interface BackgroundPayload {
   images?: string[];
   batchSize?: number;
   userId?: string;
+  force?: boolean;
 }
 
 function extractHints(raw: string): Pick<BackgroundPayload, "jobId" | "userId"> {
@@ -112,6 +113,7 @@ export const handler: Handler = async (event) => {
     const images = Array.isArray(body.images) ? body.images : [];
     const rawBatch = Number(body.batchSize);
     const batchSize = Number.isFinite(rawBatch) ? Math.min(Math.max(rawBatch, 4), 12) : 12;
+    const force = Boolean(body.force);
 
     if (!jobId) {
       throw new Error("Missing jobId in background payload");
@@ -134,7 +136,7 @@ export const handler: Handler = async (event) => {
     await putJob(jobId, { jobId, userId, state: "running", startedAt: Date.now() }, { key: jobKey });
 
     try {
-      const result = await runAnalysis(sanitizedImages, batchSize);
+      const result = await runAnalysis(sanitizedImages, batchSize, { force });
       await putJob(jobId, {
         jobId,
         userId,
