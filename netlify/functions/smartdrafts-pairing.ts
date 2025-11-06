@@ -1,6 +1,7 @@
 import type { Handler } from "@netlify/functions";
 import { getOrigin, isOriginAllowed, jsonResponse } from "../../src/lib/http.js";
 import { getCachedSmartDraftGroups } from "../../src/lib/smartdrafts-store.js";
+import { getJob } from "../../src/lib/job-store.js";
 
 /**
  * POST /.netlify/functions/smartdrafts-pairing
@@ -94,6 +95,15 @@ export const handler: Handler = async (event) => {
   // NEW: Support fetching analysis from cache via folder parameter
   let analysis: any;
   
+  // Helper function to check if analysis has valid visualDescription fields
+  function hasVD(a: any): boolean {
+    if (!a?.imageInsights) return false;
+    const arr = Array.isArray(a.imageInsights) ? a.imageInsights : Object.values(a.imageInsights);
+    if (!arr.length) return false;
+    const first = arr[0] as any;
+    return !!first?.visualDescription && (first.visualDescription.length > 20);
+  }
+  
   if (payload.folder) {
     console.log(`[pairing] Fetching analysis from cache for folder: ${payload.folder}`);
     const normalizeFolderKey = (value: string): string => {
@@ -133,6 +143,45 @@ export const handler: Handler = async (event) => {
       error: "Either 'analysis' or 'folder' required in body",
       hint: "POST { folder: 'dropbox-url' } OR { analysis: { groups, imageInsights } }"
     }, originHdr, methods);
+  }
+
+  // Step 1B: If visualDescription is missing, try to fetch from Redis by jobId
+  if (!hasVD(analysis)) {
+    console.log('[PAIR] visualDescription missing, attempting Redis fallback...');
+    const jobId = (analysis as any)?.jobId || (payload as any)?.jobId;
+    
+    if (jobId) {
+      try {
+        console.log(`[PAIR] Fetching analysis from redis for jobId=${jobId}`);
+        const cached = await getJob(`analysis:${jobId}`);
+        
+        if (cached && typeof cached === 'object') {
+          const arr = Array.isArray((cached as any).imageInsights) 
+            ? (cached as any).imageInsights 
+            : Object.values((cached as any).imageInsights || {});
+          console.log(`[PAIR] loaded analysis from redis for jobId=${jobId} insights=${arr.length}`);
+          
+          if (hasVD(cached)) {
+            console.log(`[PAIR] Redis analysis has visualDescription ✓`);
+            analysis = cached;
+          } else {
+            console.warn(`[PAIR] Redis analysis also missing visualDescription`);
+          }
+        } else {
+          console.warn(`[PAIR] No analysis found in redis for jobId=${jobId}`);
+        }
+      } catch (err) {
+        console.error(`[PAIR] Redis fetch failed for jobId=${jobId}:`, err);
+      }
+    } else {
+      console.warn('[PAIR] No jobId available for Redis fallback');
+    }
+  } else {
+    const arr = Array.isArray(analysis.imageInsights) 
+      ? analysis.imageInsights 
+      : Object.values(analysis.imageInsights || {});
+    const first = arr[0] as any;
+    console.log(`[PAIR] analysis has visualDescription ✓ (first insight len=${first?.visualDescription?.length || 0})`);
   }
 
   if (!analysis || !analysis.imageInsights) {
