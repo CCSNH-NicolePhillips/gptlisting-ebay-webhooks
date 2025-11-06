@@ -123,12 +123,22 @@ export const handler: Handler = async (event) => {
 
     const roleByKey = new Map<string, string>();
     const displayByKey = new Map<string, string>();
+    const factsCueByKey = new Map<string, boolean>();
+    
+    // Helper: detect facts panel cues
+    function hasFactsCue(i: any): boolean {
+      const ev = (i.evidenceTriggers || []).join(' ').toLowerCase();
+      const tx = (i.textExtracted || '').toLowerCase();
+      const PAT = /(supplement facts|nutrition facts|drug facts|serving size|other ingredients)/;
+      return PAT.test(ev) || PAT.test(tx);
+    }
     
     for (const ins of insights) {
       const k = ins.key || urlKey(ins.url);
       if (!k) continue;
       roleByKey.set(k, (ins.role || 'unknown').toLowerCase());
       if (isHttps(ins.displayUrl)) displayByKey.set(k, ins.displayUrl);
+      factsCueByKey.set(k, hasFactsCue(ins));
     }
 
     const brandByKey = new Map<string, string>();
@@ -205,7 +215,7 @@ export const handler: Handler = async (event) => {
       // always reward desired role pairing
       if (roleByKey.get(frontKey) === 'front' && roleByKey.get(backKey) === 'back') s += 1.0;
       
-      // --- NEW: supplement-back rescue boosts ---
+      // --- BOOST: supplement-back rescue boosts ---
       const fBuck = bucket(catByKey.get(frontKey));
       const bBuck = bucket(catByKey.get(backKey));
       
@@ -217,6 +227,12 @@ export const handler: Handler = async (event) => {
       // (R2) Front brand present, back brand missing → small rescue (helps Nusava)
       if (fBrand && !bBrand) {
         s += 0.7;
+      }
+      
+      // (R3) NEW: Supplement back rescue using facts-panel cue
+      const backHasFacts = !!factsCueByKey.get(backKey);
+      if (fBuck === 'supp' && roleByKey.get(backKey) === 'back' && backHasFacts) {
+        s += 1.5;
       }
       
       return s;
@@ -240,6 +256,19 @@ export const handler: Handler = async (event) => {
       const best = scored[0];
       const runner = scored[1];
       const gap = best.s - (runner?.s ?? -Infinity);
+      
+      // Optional debug for Nusava
+      if (f === 'rgxbbg.jpg') {
+        console.log('[diag nusava]', {
+          frontKey: f,
+          backKey: best.b,
+          s: best.s.toFixed(2),
+          backHasFacts: factsCueByKey.get(best.b),
+          catFront: catByKey.get(f),
+          catBack: catByKey.get(best.b),
+          gap: gap === Infinity ? 'Infinity' : gap.toFixed(2)
+        });
+      }
       
       // Accept if strong enough (strict rule)
       if (best.s >= 3.0 && gap >= 1.0) {

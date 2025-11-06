@@ -155,12 +155,14 @@ export function App() {
           ...analysis,
           imageInsights: insightsArray.map(x => ({
             url: x.url,
-            key: x.key || x._key || x.urlKey || x.url,     // tolerate earlier fields
+            key: x.key || x._key || x.urlKey || x.url,
             role: x.role,
             roleScore: x.roleScore,
-            displayUrl: x.displayUrl || x.url
+            displayUrl: x.displayUrl || x.url,
+            // NEW: pass facts/text cues through
+            evidenceTriggers: Array.isArray(x.evidenceTriggers) ? x.evidenceTriggers : [],
+            textExtracted: x.textExtracted || x.ocrText || ''
           })),
-          // groups are fine as-is; no change
         };
         
         out = await runPairingLive(analysisForPairing);
