@@ -335,12 +335,44 @@ export const handler: Handler = async (event) => {
       debugInfo.push(debugEntry);
     }
 
-    // 4) Run existing pairing logic (if needed) and merge
-    const { result, metrics } = await runPairing({
-      client,
-      analysis: payload.analysis,
-      model: "gpt-4o-mini"
-    });
+    // 4) Run GPT pairing only for remaining unpaired fronts
+    const finalPairedFronts = new Set(autoPairs.map(p => p.frontUrl));
+    const remainingFronts = allFronts.filter(k => !finalPairedFronts.has(k));
+    
+    let gptPairs: Pair[] = [];
+    if (remainingFronts.length > 0) {
+      console.log(`[pairing] Running GPT fallback for ${remainingFronts.length} unpaired fronts:`, remainingFronts);
+      
+      // Build filtered analysis with only unpaired fronts
+      const filteredGroups = (analysis.groups || []).map((g: any) => ({
+        ...g,
+        images: (g.images || []).filter((img: any) => {
+          const k = urlKey(img);
+          return remainingFronts.includes(k) || roleByKey.get(k) === 'back';
+        })
+      })).filter((g: any) => g.images.length > 0);
+      
+      const filteredAnalysis = {
+        ...analysis,
+        groups: filteredGroups
+      };
+      
+      const { result, metrics: gptMetrics } = await runPairing({
+        client,
+        analysis: filteredAnalysis,
+        model: "gpt-4o-mini"
+      });
+      
+      gptPairs = (result.pairs || []).map(p => ({
+        ...p,
+        frontUrl: urlKey(p.frontUrl),
+        backUrl: urlKey(p.backUrl)
+      })) as Pair[];
+      
+      console.log(`[pairing] GPT returned ${gptPairs.length} additional pairs`);
+    } else {
+      console.log('[pairing] All fronts paired deterministically, skipping GPT');
+    }
 
     // 5) Canonicalize and merge pairs
     const outPairs: Pair[] = [];
@@ -356,14 +388,9 @@ export const handler: Handler = async (event) => {
     // Add autoPairs first (higher priority)
     for (const p of autoPairs) pushPair(p);
 
-    // Add existing pairs (canonicalized)
-    for (const p of (result.pairs || [])) {
-      const canonP = {
-        ...p,
-        frontUrl: urlKey(p.frontUrl),
-        backUrl: urlKey(p.backUrl)
-      } as Pair;
-      pushPair(canonP);
+    // Add GPT pairs (already canonicalized)
+    for (const p of gptPairs) {
+      pushPair(p);
     }
 
     // 6) Build products[] with https thumbnails + brand/product
@@ -390,25 +417,29 @@ export const handler: Handler = async (event) => {
       if (!p.product || !p.product.length) p.product = productByKey.get(p.frontUrl) || p.product || '';
     }
 
-    // Return final result
-    result.pairs = outPairs.map(p => ({
-      ...p,
-      variant: p.variant ?? null
-    })) as any;
-    result.products = products;
-    
-    // Add debug info to result
-    (result as any).debug = {
-      totalFronts: allFronts.length,
-      totalBacks: allBacks.length,
-      autoPairs: autoPairs.length,
-      candidates: debugInfo
+    // Build final result object
+    const finalResult: any = {
+      engineVersion: "1.0.0",
+      pairs: outPairs.map(p => ({
+        ...p,
+        variant: p.variant ?? null
+      })),
+      products: products,
+      singletons: [],
+      debugSummary: [],
+      debug: {
+        totalFronts: allFronts.length,
+        totalBacks: allBacks.length,
+        autoPairs: autoPairs.length,
+        gptPairs: gptPairs.length,
+        candidates: debugInfo
+      }
     };
 
     return jsonResponse(200, { 
       ok: true,
-      pairing: result, 
-      metrics 
+      pairing: finalResult, 
+      metrics: null
     }, originHdr, methods);
   } catch (error: any) {
     console.error("[smartdrafts-pairing] error:", error);
