@@ -299,19 +299,19 @@ export const handler: Handler = async (event) => {
         pairedF.add(f); pairedB.add(best.b as string);
         continue;
       }
-      // soft accept for supplements/hair (rescue cues above)
-      if ((fBuck === 'supp' || fBuck === 'hair') && best.s >= 1.0 && gap >= 0.0) {
-        const msg = `✓ SOFT RESCUE (${fBuck}): ${f} ↔ ${best.b}`;
+      // soft accept for all product categories with good role match and color similarity
+      if (best.s >= 1.0 && gap >= 0.0) {
+        const msg = `✓ SOFT ACCEPT (${fBuck}): ${f} ↔ ${best.b}`;
         console.log(`[Z2-DEBUG] ${msg}`);
         crossGroupDebug.push(msg);
         pairs.push({
           frontUrl: f, backUrl: best.b as string, matchScore: +best.s.toFixed(2), confidence: .95,
           brand: brand.get(f) || '', product: prod.get(f) || '',
-          evidence: [`SOFT RESCUE preScore=${best.s.toFixed(2)} gap=${gap === Infinity ? 'Inf' : gap.toFixed(2)}`]
+          evidence: [`SOFT ACCEPT preScore=${best.s.toFixed(2)} gap=${gap === Infinity ? 'Inf' : gap.toFixed(2)}`]
         });
         pairedF.add(f); pairedB.add(best.b as string);
       } else {
-        const msg = `✗ REJECT: ${f} (score=${best.s.toFixed(2)}, gap=${gap.toFixed(2)}, bucket=${fBuck}, needs: strict>=3.0+gap>=1.0 OR soft(supp/hair)>=1.0+gap>=0.0)`;
+        const msg = `✗ REJECT: ${f} (score=${best.s.toFixed(2)}, gap=${gap.toFixed(2)}, bucket=${fBuck}, needs: strict>=3.0+gap>=1.0 OR soft>=1.0+gap>=0.0)`;
         console.log(`[Z2-DEBUG] ${msg}`);
         crossGroupDebug.push(msg);
       }
