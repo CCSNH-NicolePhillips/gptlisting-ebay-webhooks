@@ -138,7 +138,10 @@ export const handler: Handler = async (event) => {
       const tx = (ins.textExtracted || '').toLowerCase();
       const vd = String((ins as any).visualDescription || '').toLowerCase();
       
-      console.log(`[Z2-DEBUG] Image ${k}: visualDescription = "${vd.substring(0, 80)}..."`);
+      console.log(`[Z2-DEBUG] Image ${k}:`);
+      console.log(`  - visualDescription present: ${!!(ins as any).visualDescription}`);
+      console.log(`  - visualDescription length: ${vd.length}`);
+      console.log(`  - visualDescription value: "${vd}"`);
       visual.set(k, vd);
       
       if (/(supplement facts|nutrition facts|drug facts|serving size|other ingredients)/.test(ev) ||
