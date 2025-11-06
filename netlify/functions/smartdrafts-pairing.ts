@@ -205,6 +205,7 @@ export const handler: Handler = async (event) => {
 
     for (const f of fr) {
       const scored = bk
+        .filter(b => !pairedB.has(b)) // Skip already-paired backs
         .filter(b => gOfKey.get(b) !== gOfKey.get(f))
         .map(b => ({ b, s: preScore(f, b) }))
         .sort((a, b) => b.s - a.s);
