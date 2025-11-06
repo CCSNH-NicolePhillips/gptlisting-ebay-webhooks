@@ -138,6 +138,7 @@ export const handler: Handler = async (event) => {
       const tx = (ins.textExtracted || '').toLowerCase();
       const vd = String((ins as any).visualDescription || '').toLowerCase();
       
+      console.log(`[Z2-DEBUG] Image ${k}: visualDescription = "${vd.substring(0, 80)}..."`);
       visual.set(k, vd);
       
       if (/(supplement facts|nutrition facts|drug facts|serving size|other ingredients)/.test(ev) ||
@@ -240,6 +241,7 @@ export const handler: Handler = async (event) => {
 
       // Visual similarity bonus (NEW!)
       const vSim = visualSimilarity(fk, bk);
+      console.log(`[Z2-VISUAL] ${fk} ↔ ${bk}: vSim=${vSim.toFixed(3)}`);
       if (vSim >= 0.5) {
         s += 2.0; // Strong visual match
       } else if (vSim >= 0.3) {
