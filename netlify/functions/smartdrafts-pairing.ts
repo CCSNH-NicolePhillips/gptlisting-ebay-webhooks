@@ -300,7 +300,7 @@ export const handler: Handler = async (event) => {
         continue;
       }
       // soft accept for supplements/hair (rescue cues above)
-      if ((fBuck === 'supp' || fBuck === 'hair') && best.s >= 1.0 && gap >= 0.5) {
+      if ((fBuck === 'supp' || fBuck === 'hair') && best.s >= 1.0 && gap >= 0.0) {
         const msg = `✓ SOFT RESCUE (${fBuck}): ${f} ↔ ${best.b}`;
         console.log(`[Z2-DEBUG] ${msg}`);
         crossGroupDebug.push(msg);
@@ -311,7 +311,7 @@ export const handler: Handler = async (event) => {
         });
         pairedF.add(f); pairedB.add(best.b as string);
       } else {
-        const msg = `✗ REJECT: ${f} (score=${best.s.toFixed(2)}, gap=${gap.toFixed(2)}, bucket=${fBuck}, needs: strict>=3.0+gap>=1.0 OR soft(supp/hair)>=1.0+gap>=0.5)`;
+        const msg = `✗ REJECT: ${f} (score=${best.s.toFixed(2)}, gap=${gap.toFixed(2)}, bucket=${fBuck}, needs: strict>=3.0+gap>=1.0 OR soft(supp/hair)>=1.0+gap>=0.0)`;
         console.log(`[Z2-DEBUG] ${msg}`);
         crossGroupDebug.push(msg);
       }
