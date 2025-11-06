@@ -130,10 +130,16 @@ export const handler: Handler = async (event) => {
     // 2) Cues: supplement facts and hair-back INCI
     const facts = new Set<string>();
     const hairB = new Set<string>();
+    const visual = new Map<string, string>(); // Store visualDescription for each image
+    
     for (const ins of insights) {
       const k = ins.key || urlKey(ins.url);
       const ev = (ins.evidenceTriggers || []).join(' ').toLowerCase();
       const tx = (ins.textExtracted || '').toLowerCase();
+      const vd = String((ins as any).visualDescription || '').toLowerCase();
+      
+      visual.set(k, vd);
+      
       if (/(supplement facts|nutrition facts|drug facts|serving size|other ingredients)/.test(ev) ||
           /(supplement facts|nutrition facts|drug facts|serving size|other ingredients)/.test(tx)) {
         facts.add(k);
@@ -141,6 +147,54 @@ export const handler: Handler = async (event) => {
       if (/ingredients:|avoid contact with eyes|apply to (damp|dry) hair|12m|24m/.test(ev + tx)) {
         hairB.add(k);
       }
+    }
+
+    // Helper: Extract visual features from description
+    function extractVisualFeatures(desc: string): Set<string> {
+      const features = new Set<string>();
+      const words = desc.toLowerCase().split(/[\s,\-/]+/);
+      
+      // Packaging types
+      const packaging = ['bottle', 'jar', 'pouch', 'tube', 'canister', 'dropper', 'pump', 'spray', 'tin', 'box'];
+      // Shapes
+      const shapes = ['cylindrical', 'rectangular', 'oval', 'square', 'flat', 'stand-up'];
+      // Materials
+      const materials = ['plastic', 'glass', 'metallic', 'foil', 'paper', 'cardboard', 'glossy', 'matte', 'clear', 'frosted'];
+      // Colors
+      const colors = ['white', 'black', 'blue', 'green', 'red', 'yellow', 'purple', 'orange', 'brown', 'pink', 'amber', 'transparent', 'silver', 'gold'];
+      // Closures
+      const closures = ['screw', 'flip', 'pump', 'dropper', 'spray', 'twist', 'zip', 'resealable'];
+      // Special features
+      const special = ['window', 'embossed', 'holographic', 'tear', 'tamper', 'band'];
+      
+      const allKeywords = [...packaging, ...shapes, ...materials, ...colors, ...closures, ...special];
+      
+      for (const word of words) {
+        if (allKeywords.includes(word)) {
+          features.add(word);
+        }
+      }
+      
+      return features;
+    }
+
+    // Helper: Calculate visual similarity between two images
+    function visualSimilarity(key1: string, key2: string): number {
+      const desc1 = visual.get(key1) || '';
+      const desc2 = visual.get(key2) || '';
+      
+      if (!desc1 || !desc2) return 0;
+      
+      const features1 = extractVisualFeatures(desc1);
+      const features2 = extractVisualFeatures(desc2);
+      
+      if (features1.size === 0 || features2.size === 0) return 0;
+      
+      // Jaccard similarity
+      const intersection = new Set([...features1].filter(x => features2.has(x)));
+      const union = new Set([...features1, ...features2]);
+      
+      return intersection.size / union.size;
     }
 
     // 3) Intra-group pairs first (myBrainCo & Frog Fuel)
@@ -183,6 +237,16 @@ export const handler: Handler = async (event) => {
       s += cc >= .6 ? 1.0 : cc >= .2 ? 0.2 : cc <= -0.5 ? -2.0 : 0;
 
       if (role.get(fk) === 'front' && role.get(bk) === 'back') s += 1.0;
+
+      // Visual similarity bonus (NEW!)
+      const vSim = visualSimilarity(fk, bk);
+      if (vSim >= 0.5) {
+        s += 2.0; // Strong visual match
+      } else if (vSim >= 0.3) {
+        s += 1.0; // Moderate visual match
+      } else if (vSim >= 0.15) {
+        s += 0.5; // Weak visual match
+      }
 
       // Supplement-back rescue
       if (bucket(cat.get(fk)) === 'supp' && role.get(bk) === 'back' && facts.has(bk)) s += 1.5;
