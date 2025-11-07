@@ -406,10 +406,12 @@ export const handler: Handler = async (event) => {
 
       if (role.get(fk) === 'front' && role.get(bk) === 'back') s += 1.0;
 
-      // Visual similarity bonus (NEW!)
+      // Visual similarity bonus (NEW! - Exponential scaling to break ties)
       const vSim = visualSimilarity(fk, bk);
       console.log(`[Z2-VISUAL] ${fk} ↔ ${bk}: vSim=${vSim.toFixed(3)}`);
-      if (vSim >= 0.5) {
+      if (vSim >= 0.8) {
+        s += 3.0; // Very strong visual match (near-perfect)
+      } else if (vSim >= 0.5) {
         s += 2.0; // Strong visual match
       } else if (vSim >= 0.3) {
         s += 1.0; // Moderate visual match
