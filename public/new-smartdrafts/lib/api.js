@@ -84,3 +84,11 @@ export async function getMetricsLive() {
   if (!r.ok) throw new Error(`getMetricsLive ${r.status}: ${await r.text()}`);
   return r.json(); // Metrics
 }
+
+export async function createDraftsLive(products) {
+  if (!products || !products.length) throw new Error('products required');
+  
+  const r = await authPost(`/.netlify/functions/smartdrafts-create-drafts`, { products });
+  if (!r.ok) throw new Error(`createDraftsLive ${r.status}: ${await r.text()}`);
+  return r.json(); // { ok, drafts, summary }
+}
