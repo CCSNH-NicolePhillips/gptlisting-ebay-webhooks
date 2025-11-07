@@ -53,8 +53,7 @@ async function testCreateDrafts() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        // Add auth header if needed
-        // 'Authorization': 'Bearer YOUR_TOKEN_HERE'
+        'X-Test-Mode': 'true',
       },
       body: JSON.stringify({
         products: sampleProducts
