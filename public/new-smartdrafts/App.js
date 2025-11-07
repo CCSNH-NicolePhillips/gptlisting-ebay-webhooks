@@ -4,16 +4,17 @@ import htm from 'https://esm.sh/htm@3.1.1';
 import { AnalysisPanel } from './components/AnalysisPanel.js';
 import { PairingPanel } from './components/PairingPanel.js';
 import { ProductPanel } from './components/ProductPanel.js';
+import { DraftsPanel } from './components/DraftsPanel.js';
 import { MetricsPanel } from './components/MetricsPanel.js';
 import { DebugPanel } from './components/DebugPanel.js';
 import { FolderSelector } from './components/FolderSelector.js';
-import { enqueueAnalyzeLive, pollAnalyzeLive, runPairingLive, resetFolderLive, getMetricsLive } from './lib/api.js';
+import { enqueueAnalyzeLive, pollAnalyzeLive, runPairingLive, resetFolderLive, getMetricsLive, createDraftsLive } from './lib/api.js';
 import { mockLoadAnalysis, mockRunPairing } from './lib/mockServer.js';
 import { normalizeFolderInput } from './lib/urlKey.js';
 
 const html = htm.bind(h);
 
-const TABS = ['Analysis','Pairing','Products','Candidates (soon)','Metrics','Logs (soon)','Debug'];
+const TABS = ['Analysis','Pairing','Products','Drafts','Metrics','Logs (soon)','Debug'];
 
 export function App() {
   const [tab, setTab] = useState('Analysis');
@@ -29,6 +30,7 @@ export function App() {
   const [force, setForce] = useState(false);
   const [analysis, setAnalysis] = useState(null);
   const [pairing, setPairing] = useState(null);
+  const [drafts, setDrafts] = useState(null);
   const [metrics, setMetrics] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState(''); // Detailed status for loading spinner
@@ -163,6 +165,28 @@ export function App() {
     } finally { setLoading(false); }
   }
 
+  async function doCreateDrafts() {
+    try {
+      setLoading(true);
+      if (mode === 'Mock') {
+        showToast('⚠️ Draft creation only works in Live mode');
+        return;
+      }
+      if (!pairing?.products || pairing.products.length === 0) {
+        throw new Error('Run Pairing first to get products');
+      }
+      setLoadingStatus('🤖 Generating listings with ChatGPT...');
+      
+      const result = await createDraftsLive(pairing.products);
+      setDrafts(result.drafts || []);
+      showToast(`✨ Generated ${result.summary?.succeeded || 0} listing(s)!`);
+      setLoadingStatus('');
+      setTab('Drafts');
+    } catch (e) {
+      console.error(e); showToast('❌ ' + (e.message || 'Draft creation failed'));
+    } finally { setLoading(false); }
+  }
+
   async function doHardReset() {
     try {
       if (mode !== 'Live') { showToast('⚠️ Reset only applies to Live'); return; }
@@ -217,6 +241,7 @@ export function App() {
           <button class="btn secondary" onClick=${async () => { await doPairing(); setTab('Products'); }} disabled=${!analysis && mode==='Mock'}>
             Pairing → Products
           </button>
+          <button class="btn" onClick=${doCreateDrafts} disabled=${!pairing?.products?.length}>Create Drafts</button>
         </div>
       </header>
 
@@ -239,9 +264,10 @@ export function App() {
         ${!loading && tab==='Analysis' && html`<${AnalysisPanel} data=${analysis} />`}
         ${!loading && tab==='Pairing' && html`<${PairingPanel} result=${pairing} />`}
         ${!loading && tab==='Products' && html`<${ProductPanel} products=${pairing?.products} />`}
+        ${!loading && tab==='Drafts' && html`<${DraftsPanel} drafts=${drafts} />`}
         ${!loading && tab==='Metrics' && html`<${MetricsPanel} pairing=${pairing} />`}
         ${!loading && tab==='Debug' && html`<${DebugPanel} analysis=${analysis} pairing=${pairing} />`}
-        ${!loading && tab!=='Analysis' && tab!=='Pairing' && tab!=='Products' && tab!=='Metrics' && html`
+        ${!loading && tab!=='Analysis' && tab!=='Pairing' && tab!=='Products' && tab!=='Drafts' && tab!=='Metrics' && tab!=='Debug' && html`
           <div class="placeholder">
             <p>${tab} — coming next.</p>
           </div>
