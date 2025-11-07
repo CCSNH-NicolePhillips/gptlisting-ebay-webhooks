@@ -75,6 +75,29 @@
     <div id="warnings" class="muted"></div>
     <div id="grid" class="grid"></div>
 
+  <!-- Pairing & Draft Generation Section -->
+  <div id="pairingSection" class="panel" style="display:none; margin-top:24px;">
+    <h2>Create Listings</h2>
+    <p class="muted">Pair products and generate eBay-ready listings with ChatGPT.</p>
+    <div class="controls">
+      <button id="btnPairProducts">1. Pair Products</button>
+      <button id="btnCreateDrafts" disabled style="background:#2266dd;">2. Generate Listings</button>
+    </div>
+    <div id="pairingStatus" class="muted" style="margin-top:8px;"></div>
+  </div>
+
+  <!-- Paired Products Display -->
+  <div id="pairedProductsSection" style="display:none; margin-top:24px;">
+    <h3>Paired Products</h3>
+    <div id="pairedProductsGrid" class="grid"></div>
+  </div>
+
+  <!-- Generated Drafts Display -->
+  <div id="draftsSection" style="display:none; margin-top:24px;">
+    <h3>Generated Listings</h3>
+    <div id="draftsGrid" class="grid"></div>
+  </div>
+
   <h3 id="orphansTitle" style="display:none;">Unsorted Images</h3>
   <div id="orphansInfo" class="muted" style="display:none;"></div>
   <div id="orphansGrid" class="grid" style="display:none;"></div>
@@ -667,6 +690,13 @@
           renderOrphans(Array.isArray(data.orphans) ? data.orphans : []);
           renderDebugData(data.debug, 'No debug data returned.');
           setRawOutput({ jobId, ...job }, true);
+          
+          // Save folder info for pairing and show pairing section
+          window._lastScanData = { 
+            folderUrl: folder, 
+            folderPath: payload.path || folder 
+          };
+          showPairingSection();
         } catch (err) {
           const message = err?.message || String(err);
           setStatus(`Error: ${message}`);
@@ -935,6 +965,208 @@
           setStatus(`Ready to scan ${path}.`);
         }
       });
+
+      // Pairing & Draft Creation
+      let pairedProducts = [];
+      const btnPairProducts = $('#btnPairProducts');
+      const btnCreateDrafts = $('#btnCreateDrafts');
+      const pairingSection = $('#pairingSection');
+      const pairingStatus = $('#pairingStatus');
+      const pairedProductsSection = $('#pairedProductsSection');
+      const pairedProductsGrid = $('#pairedProductsGrid');
+      const draftsSection = $('#draftsSection');
+      const draftsGrid = $('#draftsGrid');
+
+      function showPairingSection() {
+        if (pairingSection) pairingSection.style.display = 'block';
+      }
+
+      btnPairProducts?.addEventListener('click', async () => {
+        const folderUrl = window._lastScanData?.folderUrl || folderSelect?.value;
+        if (!folderUrl) {
+          if (pairingStatus) pairingStatus.textContent = 'Please scan a folder first.';
+          return;
+        }
+
+        btnPairProducts.disabled = true;
+        btnCreateDrafts.disabled = true;
+        if (pairingStatus) pairingStatus.textContent = 'Pairing products...';
+        
+        try {
+          const exec = window.authClient?.authFetch ?? fetch;
+          const res = await exec('/.netlify/functions/smartdrafts-pairing', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folder: folderUrl }),
+          });
+          
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data?.ok) {
+            throw new Error(data?.error || `Pairing failed (${res.status})`);
+          }
+          
+          pairedProducts = data.products || [];
+          if (pairingStatus) {
+            pairingStatus.textContent = `✅ Paired ${pairedProducts.length} product(s). Ready to generate listings.`;
+          }
+          btnCreateDrafts.disabled = false;
+          
+          // Display paired products
+          renderPairedProducts(pairedProducts);
+          
+        } catch (err) {
+          if (pairingStatus) {
+            pairingStatus.textContent = `❌ Pairing error: ${err?.message || err}`;
+          }
+        } finally {
+          btnPairProducts.disabled = false;
+        }
+      });
+
+      btnCreateDrafts?.addEventListener('click', async () => {
+        if (!pairedProducts.length) {
+          if (pairingStatus) pairingStatus.textContent = 'Pair products first.';
+          return;
+        }
+
+        btnCreateDrafts.disabled = true;
+        btnPairProducts.disabled = true;
+        if (pairingStatus) pairingStatus.textContent = 'Generating listings with ChatGPT...';
+        
+        try {
+          const exec = window.authClient?.authFetch ?? fetch;
+          const res = await exec('/.netlify/functions/smartdrafts-create-drafts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ products: pairedProducts }),
+          });
+          
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data?.ok) {
+            throw new Error(data?.error || `Draft creation failed (${res.status})`);
+          }
+          
+          const drafts = data.drafts || [];
+          if (pairingStatus) {
+            pairingStatus.textContent = `✅ Generated ${drafts.length} listing(s)! Total: ${data.summary?.total || 0}, Succeeded: ${data.summary?.succeeded || 0}, Failed: ${data.summary?.failed || 0}`;
+          }
+          
+          // Display generated drafts
+          renderDrafts(drafts);
+          
+        } catch (err) {
+          if (pairingStatus) {
+            pairingStatus.textContent = `❌ Draft creation error: ${err?.message || err}`;
+          }
+        } finally {
+          btnCreateDrafts.disabled = false;
+          btnPairProducts.disabled = false;
+        }
+      });
+
+      function renderPairedProducts(products) {
+        if (!pairedProductsSection || !pairedProductsGrid) return;
+        
+        pairedProductsSection.style.display = products.length > 0 ? 'block' : 'none';
+        pairedProductsGrid.innerHTML = '';
+        
+        products.forEach((product) => {
+          const card = el('div', { class: 'card' });
+          card.appendChild(el('div', { 
+            html: `<strong>${product.brand || 'Unknown'} ${product.product || 'Product'}</strong>` 
+          }));
+          
+          if (product.variant) {
+            card.appendChild(el('div', { class: 'muted', text: product.variant }));
+          }
+          if (product.size) {
+            card.appendChild(el('div', { class: 'muted', text: `Size: ${product.size}` }));
+          }
+          
+          const thumbs = el('div', { class: 'thumbs' });
+          if (product.heroDisplayUrl) {
+            const thumb = el('div', { class: 'thumb' });
+            thumb.appendChild(el('img', { src: product.heroDisplayUrl, alt: 'Front' }));
+            thumb.appendChild(el('div', { class: 'thumb-badge', text: 'Front' }));
+            thumbs.appendChild(thumb);
+          }
+          if (product.backDisplayUrl) {
+            const thumb = el('div', { class: 'thumb' });
+            thumb.appendChild(el('img', { src: product.backDisplayUrl, alt: 'Back' }));
+            thumb.appendChild(el('div', { class: 'thumb-badge back', text: 'Back' }));
+            thumbs.appendChild(thumb);
+          }
+          card.appendChild(thumbs);
+          pairedProductsGrid.appendChild(card);
+        });
+      }
+
+      function renderDrafts(drafts) {
+        if (!draftsSection || !draftsGrid) return;
+        
+        draftsSection.style.display = drafts.length > 0 ? 'block' : 'none';
+        draftsGrid.innerHTML = '';
+        
+        drafts.forEach((draft) => {
+          const card = el('div', { class: 'card' });
+          
+          // Title
+          card.appendChild(el('div', { html: `<strong>${draft.title}</strong>` }));
+          
+          // Meta
+          const meta = [];
+          if (draft.brand) meta.push(`Brand: ${draft.brand}`);
+          if (draft.price) meta.push(`$${draft.price}`);
+          if (draft.condition) meta.push(draft.condition);
+          if (draft.category?.title) meta.push(draft.category.title);
+          if (meta.length) {
+            card.appendChild(el('div', { class: 'muted', text: meta.join(' • ') }));
+          }
+          
+          // Description
+          if (draft.description) {
+            card.appendChild(el('div', { 
+              style: 'margin-top:8px; font-size:14px; color:#444;',
+              text: draft.description 
+            }));
+          }
+          
+          // Bullets
+          if (draft.bullets && draft.bullets.length > 0) {
+            const bulletList = el('ul', { class: 'bullet-list' });
+            draft.bullets.forEach((bullet) => {
+              bulletList.appendChild(el('li', { text: bullet }));
+            });
+            card.appendChild(bulletList);
+          }
+          
+          // Aspects
+          if (draft.aspects && Object.keys(draft.aspects).length > 0) {
+            const aspectDetails = el('details', {});
+            aspectDetails.appendChild(el('summary', { text: `Item Specifics (${Object.keys(draft.aspects).length})` }));
+            const aspectList = el('div', { style: 'margin-top:4px; font-size:13px;' });
+            Object.entries(draft.aspects).forEach(([key, values]) => {
+              const valueStr = Array.isArray(values) ? values.join(', ') : values;
+              aspectList.appendChild(el('div', { text: `${key}: ${valueStr}` }));
+            });
+            aspectDetails.appendChild(aspectList);
+            card.appendChild(aspectDetails);
+          }
+          
+          // Images
+          if (draft.images && draft.images.length > 0) {
+            const thumbs = el('div', { class: 'thumbs' });
+            draft.images.slice(0, 6).forEach((url, idx) => {
+              const thumb = el('div', { class: 'thumb' });
+              thumb.appendChild(el('img', { src: url, alt: `Image ${idx + 1}` }));
+              thumbs.appendChild(thumb);
+            });
+            card.appendChild(thumbs);
+          }
+          
+          draftsGrid.appendChild(card);
+        });
+      }
 
   updateGenerateState();
   setWarnings([]);
