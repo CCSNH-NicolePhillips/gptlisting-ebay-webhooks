@@ -8,7 +8,7 @@ import { DraftsPanel } from './components/DraftsPanel.js';
 import { MetricsPanel } from './components/MetricsPanel.js';
 import { DebugPanel } from './components/DebugPanel.js';
 import { FolderSelector } from './components/FolderSelector.js';
-import { enqueueAnalyzeLive, pollAnalyzeLive, runPairingLive, resetFolderLive, getMetricsLive, createDraftsLive } from './lib/api.js';
+import { enqueueAnalyzeLive, pollAnalyzeLive, runPairingLive, resetFolderLive, getMetricsLive, createDraftsLive, publishDraftsToEbay } from './lib/api.js';
 import { mockLoadAnalysis, mockRunPairing } from './lib/mockServer.js';
 import { normalizeFolderInput } from './lib/urlKey.js';
 
@@ -187,6 +187,61 @@ export function App() {
     } finally { setLoading(false); }
   }
 
+  async function doPublishToEbay() {
+    try {
+      setLoading(true);
+      if (mode === 'Mock') {
+        showToast('⚠️ Publish only works in Live mode');
+        return;
+      }
+      if (!drafts || drafts.length === 0) {
+        throw new Error('Create drafts first');
+      }
+      if (!analysis?.jobId) {
+        throw new Error('Missing jobId from analysis');
+      }
+      
+      setLoadingStatus('📤 Publishing to eBay...');
+      
+      // Convert ChatGPT drafts to groups format for create-ebay-draft-user
+      const groups = drafts.map((draft, index) => {
+        const sku = `${draft.brand?.substring(0,3).toUpperCase() || 'ITM'}-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}-${index}`;
+        
+        return {
+          groupId: draft.productId,
+          brand: draft.brand,
+          product: draft.product,
+          name: draft.product,
+          title: draft.title,
+          description: draft.description,
+          images: draft.images,
+          aspects: draft.aspects,
+          category: draft.category,
+          categoryPath: draft.category?.title,
+          price: draft.price,
+          condition: draft.condition,
+          sku: sku,
+        };
+      });
+      
+      const result = await publishDraftsToEbay(analysis.jobId, groups);
+      
+      if (result.ok) {
+        const successCount = result.results?.filter((r) => r.ok).length || 0;
+        showToast(`✅ Published ${successCount}/${drafts.length} draft(s) to eBay!`);
+        // Redirect to drafts page
+        setTimeout(() => {
+          window.location.href = '/drafts.html';
+        }, 2000);
+      } else {
+        throw new Error(result.error || 'Publish failed');
+      }
+      
+    } catch (e) {
+      console.error(e); showToast('❌ ' + (e.message || 'Publish failed'));
+    } finally { setLoading(false); setLoadingStatus(''); }
+  }
+
   async function doHardReset() {
     try {
       if (mode !== 'Live') { showToast('⚠️ Reset only applies to Live'); return; }
@@ -242,6 +297,7 @@ export function App() {
             Pairing → Products
           </button>
           <button class="btn" onClick=${doCreateDrafts} disabled=${!pairing?.products?.length}>Create Drafts</button>
+          <button class="btn" onClick=${doPublishToEbay} disabled=${!drafts?.length}>Publish to eBay</button>
         </div>
       </header>
 
