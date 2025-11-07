@@ -41,9 +41,9 @@ const sampleProducts = [
 async function testCreateDrafts() {
   console.log('🧪 Testing smartdrafts-create-drafts endpoint...\n');
   
-  const url = process.env.NETLIFY_URL 
-    ? `${process.env.NETLIFY_URL}/.netlify/functions/smartdrafts-create-drafts`
-    : 'http://localhost:8888/.netlify/functions/smartdrafts-create-drafts';
+  const url = process.env.APP_URL 
+    ? `${process.env.APP_URL}/.netlify/functions/smartdrafts-create-drafts`
+    : 'https://ebaywebhooks.netlify.app/.netlify/functions/smartdrafts-create-drafts';
   
   console.log(`📍 Endpoint: ${url}`);
   console.log(`📦 Sending ${sampleProducts.length} products...\n`);
