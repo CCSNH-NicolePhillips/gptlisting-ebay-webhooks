@@ -310,7 +310,9 @@ export const handler: Handler = async (event) => {
 
   try {
     // Authenticate user (skip in test mode)
-    const isTestMode = headers['x-test-mode'] === 'true' || process.env.NODE_ENV === 'test';
+    const testModeHeader = headers['x-test-mode'] || headers['X-Test-Mode'];
+    const isTestMode = testModeHeader === 'true' || process.env.NODE_ENV === 'test';
+    
     if (!isTestMode) {
       await requireUserAuth(headers.authorization || headers.Authorization);
       console.log(`[smartdrafts-create-drafts] Authenticated user`);
