@@ -221,6 +221,9 @@ export function App() {
           price: draft.price,
           condition: draft.condition,
           sku: sku,
+          offer: {
+            merchantLocationKey: 'default-loc',
+          },
         };
       });
       
