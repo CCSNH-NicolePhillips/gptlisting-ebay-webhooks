@@ -221,13 +221,13 @@ export function App() {
           price: draft.price,
           condition: draft.condition,
           sku: sku,
-          offer: {
-            merchantLocationKey: 'default-loc', // Explicitly use default-loc
-          },
+          // Don't pass offer object - let server use defaults
         };
       });
       
-      const result = await publishDraftsToEbay(analysis.jobId, groups);
+      // Use a new jobId for ChatGPT drafts to avoid old saved bindings with wrong merchantLocationKey
+      const chatgptJobId = `chatgpt-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      const result = await publishDraftsToEbay(chatgptJobId, groups);
       
       if (result.ok) {
         const successCount = result.results?.filter((r) => r.ok).length || 0;
