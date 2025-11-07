@@ -1,0 +1,107 @@
+{
+  "ok": true,
+  "drafts": [
+    {
+      "productId": "wishtrend_acid_duo_hibiscus",
+      "brand": "By Wishtrend",
+      "product": "Acid-Duo 2% Mild Gel Cleanser",
+      "title": "By Wishtrend Acid-Duo 2% Mild Gel Cleanser Hibiscus AHA-BHA 150ml",
+      "description": "The By Wishtrend Acid-Duo 2% Mild Gel Cleanser is a gentle facial cleanser formulated with AHA and BHA derived from hibiscus. Designed for daily use, it helps to remove impurities and excess oil while maintaining skin balance. Its mild formula is suitable for all skin types, including sensitive skin.",
+      "bullets": [
+        "Contains 2% AHA and BHA for gentle exfoliation",
+        "Infused with hibiscus extract for added skin benefits",
+        "Low pH formula helps maintain skin barrier",
+        "Suitable for all skin types, including sensitive",
+        "150ml size for long-lasting use"
+      ],
+      "aspects": {
+        "Brand": [
+          "By Wishtrend"
+        ],
+        "Type": [
+          "Gel Cleanser"
+        ],
+        "Features": [
+          "AHA, BHA, Hibiscus, Gentle, Low pH"
+        ],
+        "Size": [
+          "150ml"
+        ],
+        "Formulation": [
+          "Gel"
+        ],
+        "Skin Type": [
+          "All Skin Types"
+        ],
+        "Product Line": [
+          "Acid-Duo"
+        ],
+        "Main Purpose": [
+          "Daily Facial Cleansing"
+        ]
+      },
+      "category": {
+        "id": "",
+        "title": "Health & Beauty > Skin Care > Cleansers"
+      },
+      "images": [
+        "https://example.com/wishtrend_front.jpg",
+        "https://example.com/wishtrend_back.jpg"
+      ],
+      "price": 22,
+      "condition": "NEW"
+    },
+    {
+      "productId": "natural_stacks_neuromaster",
+      "brand": "Natural Stacks",
+      "product": "NeuroMaster",
+      "title": "Natural Stacks NeuroMaster 60 Capsules Brain Health Supplement Nootropic",
+      "description": "Natural Stacks NeuroMaster is a dietary supplement designed to support cognitive function and brain health. This bottle contains 60 capsules, formulated with ingredients selected for their nootropic properties. Manufactured by Natural Stacks, this product is suitable for daily use as part of a wellness routine. The capsules are sealed and new, ensuring product integrity.",
+      "bullets": [
+        "Supports cognitive function and brain health",
+        "Contains 60 easy-to-swallow capsules",
+        "Formulated with natural nootropic ingredients",
+        "Sealed bottle for guaranteed freshness",
+        "Suitable for daily supplementation"
+      ],
+      "aspects": {
+        "Brand": [
+          "Natural Stacks"
+        ],
+        "Type": [
+          "Dietary Supplement"
+        ],
+        "Features": [
+          "Nootropic, Brain Health, Sealed"
+        ],
+        "Size": [
+          "60 Capsules"
+        ],
+        "Formulation": [
+          "Capsule"
+        ],
+        "Expiration Date": [
+          "See packaging"
+        ],
+        "Main Purpose": [
+          "Cognitive Support"
+        ]
+      },
+      "category": {
+        "id": "",
+        "title": "Health & Wellness > Supplements"
+      },
+      "images": [
+        "https://example.com/naturalstacks_front.jpg",
+        "https://example.com/naturalstacks_back.jpg"
+      ],
+      "price": 39.95,
+      "condition": "NEW"
+    }
+  ],
+  "summary": {
+    "total": 2,
+    "succeeded": 2,
+    "failed": 0
+  }
+}

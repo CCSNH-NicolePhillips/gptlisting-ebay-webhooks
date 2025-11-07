@@ -92,3 +92,11 @@ export async function createDraftsLive(products) {
   if (!r.ok) throw new Error(`createDraftsLive ${r.status}: ${await r.text()}`);
   return r.json(); // { ok, drafts, summary }
 }
+
+export async function publishDraftsToEbay(jobId, drafts) {
+  if (!jobId || !drafts || !drafts.length) throw new Error('jobId and drafts required');
+  
+  const r = await authPost(`/.netlify/functions/create-ebay-draft-user`, { jobId, groups: drafts });
+  if (!r.ok) throw new Error(`publishDraftsToEbay ${r.status}: ${await r.text()}`);
+  return r.json(); // { ok, results }
+}
