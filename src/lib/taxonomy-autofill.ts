@@ -23,9 +23,13 @@ function extractGroupValue(group: GroupRecord, specific: ItemSpecific): string |
 
 export function buildItemSpecifics(cat: CategoryDef, group: GroupRecord): Record<string, string[]> {
   const aspects: Record<string, string[]> = {};
+  const requiredAspects = new Set<string>();
 
   // First, populate from category-specific requirements
   for (const specific of cat.itemSpecifics || []) {
+    if (specific.required) {
+      requiredAspects.add(specific.name);
+    }
     const value = extractGroupValue(group, specific);
     if (value && value.trim()) {
       aspects[specific.name] = [value.trim()];
@@ -52,6 +56,21 @@ export function buildItemSpecifics(cat: CategoryDef, group: GroupRecord): Record
     } else {
       // Fallback to "Unbranded" if no brand is specified
       aspects.Brand = ['Unbranded'];
+    }
+  }
+
+  // Fill in common required aspects that might be missing with sensible defaults
+  // This handles cases where ChatGPT picks a category but doesn't provide all required aspects
+  const commonDefaults: Record<string, string> = {
+    'Type': 'Other',
+    'Model': 'Does Not Apply',
+    'MPN': 'Does Not Apply',
+    'Country/Region of Manufacture': 'Unknown',
+  };
+
+  for (const [aspectName, defaultValue] of Object.entries(commonDefaults)) {
+    if (requiredAspects.has(aspectName) && (!aspects[aspectName] || aspects[aspectName].length === 0)) {
+      aspects[aspectName] = [defaultValue];
     }
   }
 
