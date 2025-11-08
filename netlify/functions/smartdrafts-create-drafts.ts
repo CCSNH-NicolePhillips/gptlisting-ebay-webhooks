@@ -1,7 +1,6 @@
 import type { Handler } from "@netlify/functions";
 import { requireUserAuth } from "../../src/lib/auth-user.js";
 import { getOrigin, jsonResponse } from "../../src/lib/http.js";
-import { tokensStore } from "../../src/lib/_blobs.js";
 import { pickCategoryForGroup } from "../../src/lib/taxonomy-select.js";
 import type { CategoryDef } from "../../src/lib/taxonomy-schema.js";
 import { openai } from "../../src/lib/openai.js";
@@ -14,40 +13,6 @@ const GPT_RETRY_DELAY_MS = Math.max(250, Number(process.env.GPT_RETRY_DELAY_MS |
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/**
- * Retry blob storage operations (for EBUSY errors)
- */
-async function retryBlobOperation<T>(
-  operation: () => Promise<T>,
-  operationName: string,
-  maxAttempts = 3
-): Promise<T> {
-  let lastError: any;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      return await operation();
-    } catch (err: any) {
-      lastError = err;
-      const isLastAttempt = attempt >= maxAttempts;
-      const isBusyError = err?.message?.includes('EBUSY') || err?.cause?.code === 'EBUSY' || err?.code === 'EBUSY';
-      
-      if (isBusyError && !isLastAttempt) {
-        const delayMs = Math.min(2000 * Math.pow(2, attempt - 1), 10000);
-        console.warn(`[Blob] ${operationName} attempt ${attempt}/${maxAttempts} failed (EBUSY), retrying in ${delayMs}ms...`);
-        await new Promise(resolve => setTimeout(resolve, delayMs));
-      } else if (!isLastAttempt) {
-        const delayMs = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
-        console.warn(`[Blob] ${operationName} attempt ${attempt}/${maxAttempts} failed, retrying in ${delayMs}ms...`);
-        await new Promise(resolve => setTimeout(resolve, delayMs));
-      } else {
-        console.error(`[Blob] ${operationName} failed after ${maxAttempts} attempts:`, err?.message || err);
-        throw err;
-      }
-    }
-  }
-  throw lastError;
 }
 
 type PairedProduct = {
@@ -368,85 +333,35 @@ export const handler: Handler = async (event) => {
 
     console.log(`[smartdrafts-create-drafts] Creating drafts for ${products.length} product(s)`);
 
-    // Create background job instead of processing synchronously
-    const jobId = `drafts-job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const store = tokensStore();
-    
-    // Create queue with products
-    const queue = {
-      jobId,
-      products,
-      createdAt: Date.now(),
-    };
+    // Create drafts for all products
+    const drafts: Draft[] = [];
+    const errors: Array<{ productId: string; error: string }> = [];
 
-    // Create initial job status
-    const status = {
-      jobId,
-      total: products.length,
-      processed: 0,
-      succeeded: 0,
-      failed: 0,
-      status: 'queued',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-
-    // Store queue and status in blob storage with retry
-    await retryBlobOperation(
-      () => store.setJSON(`drafts-queue-${jobId}.json`, queue),
-      'Save drafts queue',
-      5
-    );
-    await retryBlobOperation(
-      () => store.setJSON(`drafts-status-${jobId}.json`, status),
-      'Save drafts status',
-      5
-    );
-    await retryBlobOperation(
-      () => store.setJSON(`drafts-results-${jobId}.json`, { drafts: [] }),
-      'Save drafts results',
-      5
-    );
-
-    // Add to active jobs index with retry
-    const index = (await retryBlobOperation(
-      () => store.get('drafts-job-index.json', { type: 'json' }),
-      'Get drafts job index',
-      3
-    ).catch(() => null)) as any;
-    const activeJobs = index?.activeJobs || [];
-    if (!activeJobs.includes(jobId)) {
-      activeJobs.push(jobId);
-      await retryBlobOperation(
-        () => store.setJSON('drafts-job-index.json', { activeJobs }),
-        'Update drafts job index',
-        5
-      );
-    }
-
-    // Trigger background worker to start processing
-    const baseUrl = process.env.APP_URL || process.env.URL || process.env.DEPLOY_PRIME_URL || process.env.DEPLOY_URL || 'https://ebaywebhooks.netlify.app';
-    const target = `${baseUrl.replace(/\/$/, '')}/.netlify/functions/smartdrafts-create-drafts-bg`;
-
-    try {
-      const resp = await fetch(target, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId }),
-      });
-
-      if (!resp.ok) {
-        console.warn(`Background worker invoke failed: ${resp.status} ${resp.statusText}`);
+    for (const product of products) {
+      try {
+        const draft = await createDraftForProduct(product);
+        drafts.push(draft);
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        console.error(`[smartdrafts-create-drafts] Failed for ${product.productId}:`, errorMsg);
+        errors.push({ 
+          productId: product.productId, 
+          error: errorMsg 
+        });
       }
-    } catch (err) {
-      console.warn(`Background worker trigger failed:`, err);
     }
+
+    console.log(`[smartdrafts-create-drafts] Created ${drafts.length}/${products.length} drafts`);
 
     return jsonResponse(200, {
       ok: true,
-      jobId,
-      message: `Started background job for ${products.length} products`,
-      totalProducts: products.length,
+      drafts,
+      errors: errors.length > 0 ? errors : undefined,
+      summary: {
+        total: products.length,
+        succeeded: drafts.length,
+        failed: errors.length,
+      },
     }, originHdr, methods);
 
   } catch (error: any) {
