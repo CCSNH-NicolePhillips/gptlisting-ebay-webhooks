@@ -16,6 +16,40 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Retry blob storage operations (for EBUSY errors)
+ */
+async function retryBlobOperation<T>(
+  operation: () => Promise<T>,
+  operationName: string,
+  maxAttempts = 3
+): Promise<T> {
+  let lastError: any;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await operation();
+    } catch (err: any) {
+      lastError = err;
+      const isLastAttempt = attempt >= maxAttempts;
+      const isBusyError = err?.message?.includes('EBUSY') || err?.cause?.code === 'EBUSY' || err?.code === 'EBUSY';
+      
+      if (isBusyError && !isLastAttempt) {
+        const delayMs = Math.min(2000 * Math.pow(2, attempt - 1), 10000);
+        console.warn(`[Blob] ${operationName} attempt ${attempt}/${maxAttempts} failed (EBUSY), retrying in ${delayMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      } else if (!isLastAttempt) {
+        const delayMs = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+        console.warn(`[Blob] ${operationName} attempt ${attempt}/${maxAttempts} failed, retrying in ${delayMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      } else {
+        console.error(`[Blob] ${operationName} failed after ${maxAttempts} attempts:`, err?.message || err);
+        throw err;
+      }
+    }
+  }
+  throw lastError;
+}
+
 type PairedProduct = {
   productId: string;
   brand: string;
@@ -357,17 +391,37 @@ export const handler: Handler = async (event) => {
       updatedAt: Date.now(),
     };
 
-    // Store queue and status in blob storage
-    await store.setJSON(`drafts-queue-${jobId}.json`, queue);
-    await store.setJSON(`drafts-status-${jobId}.json`, status);
-    await store.setJSON(`drafts-results-${jobId}.json`, { drafts: [] });
+    // Store queue and status in blob storage with retry
+    await retryBlobOperation(
+      () => store.setJSON(`drafts-queue-${jobId}.json`, queue),
+      'Save drafts queue',
+      5
+    );
+    await retryBlobOperation(
+      () => store.setJSON(`drafts-status-${jobId}.json`, status),
+      'Save drafts status',
+      5
+    );
+    await retryBlobOperation(
+      () => store.setJSON(`drafts-results-${jobId}.json`, { drafts: [] }),
+      'Save drafts results',
+      5
+    );
 
-    // Add to active jobs index
-    const index = (await store.get('drafts-job-index.json', { type: 'json' }).catch(() => null)) as any;
+    // Add to active jobs index with retry
+    const index = (await retryBlobOperation(
+      () => store.get('drafts-job-index.json', { type: 'json' }),
+      'Get drafts job index',
+      3
+    ).catch(() => null)) as any;
     const activeJobs = index?.activeJobs || [];
     if (!activeJobs.includes(jobId)) {
       activeJobs.push(jobId);
-      await store.setJSON('drafts-job-index.json', { activeJobs });
+      await retryBlobOperation(
+        () => store.setJSON('drafts-job-index.json', { activeJobs }),
+        'Update drafts job index',
+        5
+      );
     }
 
     // Trigger background worker to start processing
