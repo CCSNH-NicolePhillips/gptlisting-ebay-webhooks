@@ -196,6 +196,51 @@
       return await res.json();
     }
 
+    async function checkJobStatus(jobId) {
+      const res = await window.authClient.authFetch(`/.netlify/functions/ebay-fetch-categories-status?jobId=${jobId}`);
+      if (res.status === 401) {
+        showAuthError();
+        throw new Error('Authentication failed. Please log in again.');
+      }
+      return await res.json();
+    }
+
+    function showJobProgress(elementId, status) {
+      const el = document.getElementById(elementId);
+      const percent = status.totalCategories > 0 
+        ? Math.round((status.processed / status.totalCategories) * 100)
+        : 0;
+      
+      const stats = `
+        <div class="stats">
+          <div class="stat-box">
+            <strong>${status.processed} / ${status.totalCategories}</strong>
+            <span>Processed (${percent}%)</span>
+          </div>
+          <div class="stat-box success">
+            <strong>${status.success}</strong>
+            <span>Successful</span>
+          </div>
+          <div class="stat-box error">
+            <strong>${status.failed}</strong>
+            <span>Failed</span>
+          </div>
+          <div class="stat-box">
+            <strong>${status.status}</strong>
+            <span>Status</span>
+          </div>
+        </div>
+        <div class="result info">
+          <div style="background: #ddd; height: 20px; border-radius: 4px; overflow: hidden;">
+            <div style="background: #4CAF50; height: 100%; width: ${percent}%; transition: width 0.3s;"></div>
+          </div>
+          <p style="margin-top: 0.5rem;">Job ID: <code>${status.jobId}</code></p>
+          <p>${status.parentCategory || ''}</p>
+        </div>
+      `;
+      el.innerHTML = stats;
+    }
+
     function showResult(elementId, data, isSuccess = true) {
       const el = document.getElementById(elementId);
       el.innerHTML = `<div class="result ${isSuccess ? 'success' : 'error'}">${JSON.stringify(data, null, 2)}</div>`;
@@ -318,19 +363,66 @@
         : 'ALL categories from the entire marketplace';
       
       const confirmed = confirm(
-        `⚠️ WARNING: This will fetch ${maxCategories || 'ALL'} ${scope}.\n\n` +
-        `This may take a VERY long time and could hit rate limits.\n\n` +
-        `Recommended: Start with maxCategories=100 to test.\n\n` +
+        `⚠️ WARNING: This will queue a background job to fetch ${maxCategories || 'ALL'} ${scope}.\n\n` +
+        `The job will process categories in the background.\n` +
+        `Processing rate: ~5 categories per minute.\n\n` +
         `Continue?`
       );
       
       if (!confirmed) return;
       
-      document.getElementById('allResult').innerHTML = `<p>Fetching ${maxCategories || 'ALL'} categories from ${marketplaceId}${parentCategoryId ? ` (parent: ${parentCategoryId})` : ''}... This may take a while...</p>`;
+      document.getElementById('allResult').innerHTML = `<p>Creating background job...</p>`;
       
       try {
         const result = await fetchAllCategories(marketplaceId, delayMs, maxCategories, parentCategoryId);
-        showResult('allResult', result, result.ok);
+        
+        if (!result.ok || !result.jobId) {
+          showResult('allResult', result, false);
+          return;
+        }
+
+        // Start polling for status
+        const jobId = result.jobId;
+        document.getElementById('allResult').innerHTML = `<p>Job created! Polling for status...</p>`;
+        
+        const pollInterval = setInterval(async () => {
+          try {
+            const statusResult = await checkJobStatus(jobId);
+            
+            if (!statusResult.ok || !statusResult.status) {
+              clearInterval(pollInterval);
+              showResult('allResult', statusResult, false);
+              return;
+            }
+
+            const status = statusResult.status;
+            showJobProgress('allResult', status);
+
+            // Stop polling when completed
+            if (status.status === 'completed' || status.status === 'failed') {
+              clearInterval(pollInterval);
+              
+              // Show final result with any errors
+              if (status.errors && status.errors.length > 0) {
+                const errorSummary = status.errors.slice(0, 10).map(e => 
+                  `${e.categoryName} (${e.categoryId}): ${e.error}`
+                ).join('\n');
+                const errorDiv = `
+                  <div class="result error" style="margin-top: 1rem;">
+                    <p><strong>Errors (showing first 10):</strong></p>
+                    <pre>${errorSummary}</pre>
+                    ${status.errors.length > 10 ? `<p>... and ${status.errors.length - 10} more errors</p>` : ''}
+                  </div>
+                `;
+                document.getElementById('allResult').insertAdjacentHTML('beforeend', errorDiv);
+              }
+            }
+          } catch (err) {
+            clearInterval(pollInterval);
+            showResult('allResult', { error: err.message }, false);
+          }
+        }, 5000); // Poll every 5 seconds
+
       } catch (err) {
         showResult('allResult', { error: err.message }, false);
       }
