@@ -39,6 +39,46 @@ type JobStatus = {
 };
 
 /**
+ * Retry blob storage operations with exponential backoff
+ */
+async function retryBlobOperation<T>(
+  operation: () => Promise<T>,
+  operationName: string,
+  maxAttempts = 3
+): Promise<T> {
+  let lastError: any;
+  
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await operation();
+    } catch (err: any) {
+      lastError = err;
+      const isLastAttempt = attempt >= maxAttempts;
+      
+      // Check if it's a Netlify rate limit / EBUSY error
+      const isBusyError = err?.message?.includes('EBUSY') || 
+                         err?.cause?.code === 'EBUSY' ||
+                         err?.code === 'EBUSY';
+      
+      if (isBusyError && !isLastAttempt) {
+        const delayMs = Math.min(2000 * Math.pow(2, attempt - 1), 10000); // 2s, 4s, 8s
+        console.warn(`[Blob] ${operationName} attempt ${attempt}/${maxAttempts} failed (EBUSY), retrying in ${delayMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      } else if (!isLastAttempt) {
+        const delayMs = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // 1s, 2s, 4s
+        console.warn(`[Blob] ${operationName} attempt ${attempt}/${maxAttempts} failed, retrying in ${delayMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      } else {
+        console.error(`[Blob] ${operationName} failed after ${maxAttempts} attempts:`, err?.message || err);
+        throw err;
+      }
+    }
+  }
+  
+  throw lastError;
+}
+
+/**
  * Background worker that fetches categories from a queue.
  * This runs as a background function to avoid timeouts.
  */
@@ -202,26 +242,50 @@ export const handler: Handler = async (event) => {
     
     console.log(`Batch summary - Processed: ${status.processed}/${status.total}, Success: ${status.success}, Failed: ${status.failed}, Queue remaining: ${queue.categories.length}`);
     
-    // Save status BEFORE triggering next batch (so we don't lose progress if trigger fails)
-    await store.setJSON(statusKey, status);
+    // Save status BEFORE triggering next batch (with retry logic for EBUSY errors)
+    await retryBlobOperation(
+      () => store.setJSON(statusKey, status),
+      'Save status',
+      5 // More retries for critical status saves
+    );
     
     if (queue.categories.length === 0) {
       // Job completed
       status.status = 'completed';
       status.completedAt = Date.now();
       
-      // Remove from active jobs
-      const index = (await store.get('category-fetch-index.json', { type: 'json' }).catch(() => null)) as any;
+      // Save final status with retry
+      await retryBlobOperation(
+        () => store.setJSON(statusKey, status),
+        'Save final status',
+        5
+      );
+      
+      // Remove from active jobs with retry
+      const index = (await retryBlobOperation(
+        () => store.get('category-fetch-index.json', { type: 'json' }),
+        'Get job index',
+        3
+      ).catch(() => null)) as any;
+      
       const activeJobs = (index?.activeJobs || []) as string[];
-      await store.setJSON('category-fetch-index.json', {
-        activeJobs: activeJobs.filter(id => id !== targetJobId),
-      });
+      await retryBlobOperation(
+        () => store.setJSON('category-fetch-index.json', {
+          activeJobs: activeJobs.filter(id => id !== targetJobId),
+        }),
+        'Update job index',
+        3
+      );
     } else {
       // Still processing - update queue and trigger next batch
       status.status = 'running';
       
       console.log(`Saving updated queue with ${queue.categories.length} categories remaining`);
-      await store.setJSON(queueKey, queue);
+      await retryBlobOperation(
+        () => store.setJSON(queueKey, queue),
+        'Save queue',
+        5
+      );
       
       // Re-trigger this function for the next batch with retry logic
       const baseUrl = process.env.APP_URL || process.env.URL || process.env.DEPLOY_PRIME_URL || process.env.DEPLOY_URL || 'https://ebaywebhooks.netlify.app';
@@ -259,7 +323,7 @@ export const handler: Handler = async (event) => {
             await new Promise(resolve => setTimeout(resolve, delayMs));
             return triggerNextBatch(attempt + 1, maxAttempts);
           } else {
-            // All retries failed - save to status
+            // All retries failed - save to status with retry logic
             const criticalError = {
               categoryId: 'SYSTEM',
               categoryName: 'Chain trigger failed after retries',
@@ -267,7 +331,13 @@ export const handler: Handler = async (event) => {
               timestamp: Date.now(),
             };
             status.errors?.push(criticalError);
-            await store.setJSON(statusKey, status);
+            await retryBlobOperation(
+              () => store.setJSON(statusKey, status),
+              'Save error status',
+              5
+            ).catch(saveErr => {
+              console.error('Failed to save error status even after retries:', saveErr);
+            });
             console.error('CRITICAL: Failed to trigger next batch after all retries');
           }
         }
