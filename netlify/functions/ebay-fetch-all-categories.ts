@@ -38,16 +38,18 @@ type CategoryTreeNode = {
 };
 
 /**
- * Fetches the entire category tree from eBay and populates all leaf categories.
- * Warning: This can take a LONG time (thousands of categories) and may hit rate limits.
+ * Starts a background job to fetch the entire category tree from eBay.
+ * Returns immediately with a jobId that can be used to check status.
  * 
  * POST /.netlify/functions/ebay-fetch-all-categories
  * Body: { 
  *   marketplaceId: "EBAY_US",
- *   delayMs: 200,  // delay between aspect fetches
- *   maxCategories: 100,  // optional limit for testing
- *   parentCategoryId: "26395"  // optional: only fetch categories under this parent (e.g., "26395" = Health & Beauty)
+ *   parentCategoryId: "26395"  // optional: only fetch categories under this parent
  * }
+ * 
+ * Returns: { ok: true, jobId: "job-12345", totalCategories: 1234 }
+ * 
+ * Check status at: /.netlify/functions/ebay-fetch-categories-status?jobId=job-12345
  */
 export const handler: Handler = async (event) => {
   const headers = event.headers as Record<string, string | undefined>;
@@ -180,114 +182,53 @@ export const handler: Handler = async (event) => {
       ? leafCategories.slice(0, maxCategories)
       : leafCategories;
 
-    const results = {
-      success: [] as any[],
-      failed: [] as any[],
-      total: totalCategories,
-      fetching: categoriesToFetch.length,
-      maxCategories: maxCategories || 'unlimited',
-      parentCategoryId: parentCategoryId || 'root',
-      parentCategoryName: startNode.category.categoryName,
+    // Step 3: Create background job instead of processing synchronously
+    const jobId = `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Create queue with categories to fetch
+    const queue = {
+      jobId,
+      marketplaceId,
+      categoryTreeId,
+      categories: categoriesToFetch.map(c => ({
+        id: c.id,
+        name: c.name,
+      })),
+      createdAt: Date.now(),
     };
 
-    // Step 3: Fetch aspects for each leaf category
-    let processed = 0;
-    for (const cat of categoriesToFetch) {
-      try {
-        processed++;
-        
-        // Fetch category aspects
-        const url = `${apiHost}/commerce/taxonomy/v1/category_tree/${categoryTreeId}/get_item_aspects_for_category?category_id=${cat.id}`;
-        const response = await fetch(url, { headers: fetchHeaders });
+    // Create initial job status
+    const status = {
+      jobId,
+      totalCategories: categoriesToFetch.length,
+      processed: 0,
+      success: 0,
+      failed: 0,
+      status: 'queued',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      parentCategory: parentCategoryId ? `${startNode.category.categoryName} (${parentCategoryId})` : 'All categories',
+    };
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          results.failed.push({
-            categoryId: cat.id,
-            categoryName: cat.name,
-            status: response.status,
-            error: errorText,
-          });
-          continue;
-        }
+    // Store queue and status in blob storage
+    const blobStore = tokensStore();
+    await blobStore.setJSON(`category-fetch-queue-${jobId}.json`, queue);
+    await blobStore.setJSON(`category-fetch-status-${jobId}.json`, status);
 
-        const data = (await response.json()) as EbayCategory;
-
-        // Convert eBay aspects to our ItemSpecific format
-        const itemSpecifics: ItemSpecific[] = [];
-
-        for (const aspect of data.aspects || []) {
-          const name = aspect.localizedAspectName;
-          const isRequired = aspect.aspectConstraint?.aspectRequired || false;
-          const hasValues = Array.isArray(aspect.aspectValues) && aspect.aspectValues.length > 0;
-
-          const itemSpecific: ItemSpecific = {
-            name,
-            type: hasValues ? 'enum' : 'string',
-            required: isRequired,
-            source: 'group',
-          };
-
-          if (hasValues && aspect.aspectValues!.length <= 100) {
-            // Only store enum values if there aren't too many
-            itemSpecific.enum = aspect.aspectValues!.map((v) => v.localizedValue);
-          }
-
-          itemSpecifics.push(itemSpecific);
-        }
-
-        // Create slug from category name (use original cat.name if API doesn't return categoryName)
-        const categoryName = data.categoryName || cat.name;
-        const slug = categoryName
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-|-$/g, '');
-
-        // Create CategoryDef object
-        const categoryDef: CategoryDef = {
-          id: cat.id,
-          slug: `${slug}-${cat.id}`,
-          title: categoryName,
-          marketplaceId,
-          itemSpecifics,
-          version: 1,
-          updatedAt: Date.now(),
-        };
-
-        // Store in taxonomy database
-        await putCategory(categoryDef);
-
-        results.success.push({
-          categoryId: cat.id,
-          categoryName: data.categoryName,
-          aspectCount: itemSpecifics.length,
-          requiredCount: itemSpecifics.filter((s) => s.required).length,
-          progress: `${processed}/${categoriesToFetch.length}`,
-        });
-
-        // Delay between requests to avoid rate limits
-        if (processed < categoriesToFetch.length && delayMs > 0) {
-          await new Promise((resolve) => setTimeout(resolve, delayMs));
-        }
-      } catch (e: any) {
-        results.failed.push({
-          categoryId: cat.id,
-          categoryName: cat.name,
-          error: e?.message || String(e),
-        });
-      }
+    // Add to active jobs index
+    const index = (await blobStore.get('category-fetch-index.json', { type: 'json' }).catch(() => null)) as any;
+    const activeJobs = index?.activeJobs || [];
+    if (!activeJobs.includes(jobId)) {
+      activeJobs.push(jobId);
+      await blobStore.setJSON('category-fetch-index.json', { activeJobs });
     }
 
     return jsonResponse(200, {
       ok: true,
-      results,
-      summary: {
-        totalLeafCategories: totalCategories,
-        fetched: categoriesToFetch.length,
-        success: results.success.length,
-        failed: results.failed.length,
-        parentCategory: parentCategoryId ? `${startNode.category.categoryName} (${parentCategoryId})` : 'All categories',
-      },
+      jobId,
+      totalCategories: categoriesToFetch.length,
+      message: 'Background job created. Use GET /ebay-fetch-categories-status?jobId=' + jobId + ' to check progress.',
+      parentCategory: parentCategoryId ? `${startNode.category.categoryName} (${parentCategoryId})` : 'All categories',
     }, originHdr, METHODS);
   } catch (e: any) {
     console.error('Error fetching all categories:', e);
