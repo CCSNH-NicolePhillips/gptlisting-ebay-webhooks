@@ -198,6 +198,9 @@ export const handler: Handler = async (event) => {
     // Update status
     status.updatedAt = Date.now();
     
+    // Save status BEFORE triggering next batch (so we don't lose progress if trigger fails)
+    await store.setJSON(statusKey, status);
+    
     if (queue.categories.length === 0) {
       // Job completed
       status.status = 'completed';
@@ -214,21 +217,61 @@ export const handler: Handler = async (event) => {
       status.status = 'running';
       await store.setJSON(queueKey, queue);
       
-      // Re-trigger this function for the next batch
+      // Re-trigger this function for the next batch with retry logic
       const baseUrl = process.env.APP_URL || process.env.URL || process.env.DEPLOY_PRIME_URL || process.env.DEPLOY_URL || 'https://ebaywebhooks.netlify.app';
       const target = `${baseUrl.replace(/\/$/, '')}/.netlify/functions/ebay-fetch-categories-background`;
       
-      fetch(target, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId: targetJobId }),
-      }).catch(err => {
-        console.warn('Failed to trigger next batch:', err?.message);
+      console.log(`Triggering next batch for job ${targetJobId}, ${queue.categories.length} categories remaining`);
+      
+      // Retry logic with exponential backoff
+      const triggerNextBatch = async (attempt = 1, maxAttempts = 3) => {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+          
+          const res = await fetch(target, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ jobId: targetJobId }),
+            signal: controller.signal,
+          });
+          
+          clearTimeout(timeoutId);
+          
+          if (!res.ok) {
+            throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+          }
+          
+          console.log(`✓ Next batch triggered successfully (attempt ${attempt})`);
+        } catch (err: any) {
+          const isLastAttempt = attempt >= maxAttempts;
+          console.error(`✗ Batch trigger attempt ${attempt}/${maxAttempts} failed:`, err?.message);
+          
+          if (!isLastAttempt) {
+            const delayMs = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // 1s, 2s, 4s
+            console.log(`Retrying in ${delayMs}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+            return triggerNextBatch(attempt + 1, maxAttempts);
+          } else {
+            // All retries failed - save to status
+            const criticalError = {
+              categoryId: 'SYSTEM',
+              categoryName: 'Chain trigger failed after retries',
+              error: err?.message || String(err),
+              timestamp: Date.now(),
+            };
+            status.errors?.push(criticalError);
+            await store.setJSON(statusKey, status);
+            console.error('CRITICAL: Failed to trigger next batch after all retries');
+          }
+        }
+      };
+      
+      // Don't await - trigger async with retries
+      triggerNextBatch().catch(err => {
+        console.error('Unexpected error in triggerNextBatch:', err);
       });
     }
-    
-    // Save updated status
-    await store.setJSON(statusKey, status);
 
     console.log(`Batch complete: ${batch.length} processed, ${skipped} skipped (already in DB)`);
 
