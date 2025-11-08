@@ -185,30 +185,41 @@ export const handler: Handler = async (event) => {
     console.log(`Found ${categoriesToFetch.length} leaf categories total`);
 
     // Step 2.5: Filter out categories already in Redis
-    // BUT limit pre-filtering to avoid timeout on very large sets
+    // ALWAYS pre-filter to avoid wasting eBay API calls on duplicates
     console.log('Filtering out already-cached categories...');
     const uncachedCategories: Array<{ id: string; name: string }> = [];
     let alreadyCached = 0;
     
-    // Only pre-filter if checking < 1000 categories (to avoid timeout)
-    const shouldPreFilter = categoriesToFetch.length < 1000;
+    console.log(`Pre-filtering ${categoriesToFetch.length} categories against Redis...`);
     
-    if (shouldPreFilter) {
-      console.log(`Pre-filtering ${categoriesToFetch.length} categories against Redis...`);
-      for (const cat of categoriesToFetch) {
-        const existing = await getCategoryById(cat.id);
-        if (existing) {
+    // Process in batches to avoid timeout on large sets
+    const FILTER_BATCH_SIZE = 500;
+    for (let i = 0; i < categoriesToFetch.length; i += FILTER_BATCH_SIZE) {
+      const batch = categoriesToFetch.slice(i, i + FILTER_BATCH_SIZE);
+      
+      // Check each category in parallel within batch
+      const results = await Promise.all(
+        batch.map(async (cat) => {
+          const existing = await getCategoryById(cat.id);
+          return { cat, exists: !!existing };
+        })
+      );
+      
+      for (const { cat, exists } of results) {
+        if (exists) {
           alreadyCached++;
         } else {
-          uncachedCategories.push({ id: cat.id, name: cat.name });
+          uncachedCategories.push(cat);
         }
       }
-      console.log(`Already cached: ${alreadyCached}, Need to fetch: ${uncachedCategories.length}`);
-    } else {
-      // For large sets, skip pre-filtering here and let worker handle duplicates
-      console.log(`Large category set (${categoriesToFetch.length}), skipping pre-filter to avoid timeout`);
-      uncachedCategories.push(...categoriesToFetch);
+      
+      // Log progress
+      if (i + FILTER_BATCH_SIZE < categoriesToFetch.length) {
+        console.log(`  Filtered ${i + batch.length}/${categoriesToFetch.length}... (${alreadyCached} cached, ${uncachedCategories.length} need fetch)`);
+      }
     }
+    
+    console.log(`✅ Pre-filter complete: ${alreadyCached} cached, ${uncachedCategories.length} need to fetch`);
 
     if (uncachedCategories.length === 0) {
       return jsonResponse(200, {
