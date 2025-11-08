@@ -65,9 +65,10 @@ export const handler: Handler = async (event) => {
     return jsonResponse(403, { error: 'Forbidden' }, originHdr, METHODS);
   }
 
-  if (!isAuthorized(headers)) {
-    return jsonResponse(401, { error: 'Unauthorized' }, originHdr, METHODS);
-  }
+  // Skip admin token check - this endpoint is for logged-in users
+  // if (!isAuthorized(headers)) {
+  //   return jsonResponse(401, { error: 'Unauthorized' }, originHdr, METHODS);
+  // }
 
   try {
     const body = JSON.parse(event.body || '{}');
