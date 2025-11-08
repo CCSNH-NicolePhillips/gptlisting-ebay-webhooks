@@ -394,7 +394,6 @@ export const handler: Handler = async (event) => {
       message: `Started background job for ${products.length} products`,
       totalProducts: products.length,
     }, originHdr, methods);
-    */
 
   } catch (error: any) {
     console.error("[smartdrafts-create-drafts] error:", error);
