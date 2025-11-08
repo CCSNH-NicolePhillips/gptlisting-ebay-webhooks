@@ -8,15 +8,16 @@ const DEFAULT_CATEGORY = process.env.DEFAULT_CATEGORY_ID || "180959";
 const DEFAULT_CONDITION = "NEW";
 
 function sanitizeSku(value: string): string {
-  return value.replace(/[^a-z0-9]+/gi, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "sku";
+  // Remove all non-alphanumeric characters for eBay SKU compliance
+  return value.replace(/[^a-z0-9]+/gi, "").slice(0, 50) || "sku";
 }
 
 function generateSku(group: Record<string, any>): string {
   const base = [group?.brand, group?.product]
     .filter((part) => typeof part === "string" && part.trim())
-    .join("-");
+    .join("");
   const fallback = group?.groupId || group?.id || Date.now().toString(36);
-  return sanitizeSku([base, fallback].filter(Boolean).join("-"));
+  return sanitizeSku([base, fallback].filter(Boolean).join(""));
 }
 
 function buildTitle(group: Record<string, any>): string {
