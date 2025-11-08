@@ -42,6 +42,8 @@ async function call(command: string, args: Arg[] = []): Promise<any> {
 export async function putCategory(cat: CategoryDef): Promise<void> {
   await call("sadd", ["taxonomy:index", cat.slug]);
   await call("set", [`taxonomy:cat:${cat.slug}`, JSON.stringify(cat)]);
+  // Also store by ID for fast lookups
+  await call("set", [`taxonomy:id:${cat.id}`, JSON.stringify(cat)]);
 }
 
 export async function getCategory(slug: string): Promise<CategoryDef | null> {
@@ -53,6 +55,24 @@ export async function getCategory(slug: string): Promise<CategoryDef | null> {
   } catch {
     return null;
   }
+}
+
+export async function getCategoryById(categoryId: string): Promise<CategoryDef | null> {
+  if (!categoryId) return null;
+  
+  // Try to get by ID directly (stored in index)
+  const raw = await call("get", [`taxonomy:id:${categoryId}`]);
+  if (raw) {
+    try {
+      return JSON.parse(raw) as CategoryDef;
+    } catch {
+      // Fall through to search
+    }
+  }
+  
+  // Fallback: search through all categories
+  const categories = await listCategories();
+  return categories.find((cat) => cat.id === categoryId) || null;
 }
 
 export async function listCategories(): Promise<CategoryDef[]> {

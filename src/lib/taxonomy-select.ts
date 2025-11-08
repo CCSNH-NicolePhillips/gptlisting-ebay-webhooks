@@ -1,5 +1,5 @@
 import type { CategoryDef } from "./taxonomy-schema.js";
-import { listCategories } from "./taxonomy-store.js";
+import { listCategories, getCategoryById } from "./taxonomy-store.js";
 
 const CACHE_TTL_MS = 30_000;
 let cache: { categories: CategoryDef[]; expiresAt: number } | null = null;
@@ -33,6 +33,18 @@ async function getCategories(): Promise<CategoryDef[]> {
 }
 
 export async function pickCategoryForGroup(group: Record<string, any>): Promise<CategoryDef | null> {
+  // If the group has a category object with an ID (e.g., from ChatGPT), try to look it up directly
+  if (group.category && typeof group.category === 'object') {
+    const categoryId = String(group.category.id || group.category.categoryId || '').trim();
+    if (categoryId) {
+      const cached = await getCategoryById(categoryId);
+      if (cached) {
+        return cached;
+      }
+      // Category not in cache yet - will use default or fetch later
+    }
+  }
+
   const categories = await getCategories();
   if (!categories.length) return null;
 
