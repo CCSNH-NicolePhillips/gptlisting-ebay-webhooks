@@ -211,12 +211,44 @@
       return await res.json();
     }
 
+    async function resumeJob(jobId) {
+      if (!confirm('Resume this stuck job? This will restart the background worker.')) {
+        return;
+      }
+
+      try {
+        const res = await window.authClient.authFetch('/.netlify/functions/ebay-fetch-categories-background', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jobId })
+        });
+
+        if (!res.ok) {
+          alert('Failed to resume job: ' + res.status);
+          return;
+        }
+
+        alert('Job resumed! Check the progress bar for updates.');
+      } catch (err) {
+        alert('Error resuming job: ' + err.message);
+      }
+    }
+
     function showJobProgress(elementId, status) {
       const el = document.getElementById(elementId);
       const total = status.totalCategories || status.total || 0;
       const percent = total > 0 
         ? Math.round((status.processed / total) * 100)
         : 0;
+      
+      // Check if job is stuck (status=running but hasn't updated in 2+ minutes)
+      const isStuck = status.status === 'running' && 
+                     status.updatedAt && 
+                     (Date.now() - status.updatedAt) > 120000;
+      
+      const resumeButton = isStuck 
+        ? `<button class="btn secondary" onclick="resumeJob('${status.jobId}')" style="margin-top: 1rem;">🔄 Resume Stuck Job</button>`
+        : '';
       
       const stats = `
         <div class="stats">
@@ -232,8 +264,8 @@
             <strong>${status.failed}</strong>
             <span>Failed</span>
           </div>
-          <div class="stat-box">
-            <strong>${status.status}</strong>
+          <div class="stat-box ${isStuck ? 'error' : ''}">
+            <strong>${status.status}${isStuck ? ' (STUCK)' : ''}</strong>
             <span>Status</span>
           </div>
         </div>
@@ -243,6 +275,7 @@
           </div>
           <p style="margin-top: 0.5rem;">Job ID: <code>${status.jobId}</code></p>
           <p>${status.parentCategory || ''}</p>
+          ${resumeButton}
         </div>
       `;
       el.innerHTML = stats;
