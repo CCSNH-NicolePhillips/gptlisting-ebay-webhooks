@@ -84,6 +84,7 @@ async function retryBlobOperation<T>(
  */
 export const handler: Handler = async (event) => {
   const store = tokensStore();
+  const invocationId = Math.random().toString(36).substring(2, 10);
   
   try {
     // Check if a specific jobId was passed in the body
@@ -107,6 +108,25 @@ export const handler: Handler = async (event) => {
       
       targetJobId = activeJobs[0];
     }
+
+    // Try to acquire lock - if another instance is processing, exit immediately
+    const lockKey = `category-fetch-lock-${targetJobId}.json`;
+    const existingLock = (await store.get(lockKey, { type: 'json' }).catch(() => null)) as any;
+    
+    if (existingLock) {
+      const lockAge = Date.now() - (existingLock.timestamp || 0);
+      // Only respect locks less than 2 minutes old (stale lock protection)
+      if (lockAge < 120000) {
+        console.log(`[${invocationId}] Job ${targetJobId} is locked by ${existingLock.instanceId}, exiting`);
+        return { statusCode: 200, body: JSON.stringify({ ok: true, message: 'Job locked by another instance' }) };
+      } else {
+        console.warn(`[${invocationId}] Breaking stale lock (${lockAge}ms old) on job ${targetJobId}`);
+      }
+    }
+    
+    // Acquire lock
+    await store.setJSON(lockKey, { instanceId: invocationId, timestamp: Date.now() });
+    console.log(`[${invocationId}] Acquired lock for job ${targetJobId}`);
 
     // Get the queue for this job
     const queueKey = `category-fetch-queue-${targetJobId}.json`;
@@ -304,6 +324,10 @@ export const handler: Handler = async (event) => {
       const backlogKey = `category-fetch-backlog-${targetJobId}.json`;
       await store.delete(backlogKey).catch(() => {});
       
+      // Release lock
+      await store.delete(lockKey).catch(() => {});
+      console.log(`[${invocationId}] Released lock for completed job ${targetJobId}`);
+      
       // Remove from active jobs with retry
       const index = (await retryBlobOperation(
         () => store.get('category-fetch-index.json', { type: 'json' }),
@@ -391,6 +415,10 @@ export const handler: Handler = async (event) => {
         console.error('Unexpected error in triggerNextBatch:', err);
       });
     }
+    
+    // Release lock before returning
+    await store.delete(lockKey).catch(() => {});
+    console.log(`[${invocationId}] Released lock for job ${targetJobId}`);
 
     console.log(`Batch complete: ${batch.length} processed, ${skipped} skipped (already in DB)`);
 
