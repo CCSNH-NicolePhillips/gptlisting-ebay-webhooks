@@ -236,8 +236,9 @@ export const handler: Handler = async (event) => {
           itemSpecifics.push(itemSpecific);
         }
 
-        // Create slug from category name
-        const slug = data.categoryName
+        // Create slug from category name (use original cat.name if API doesn't return categoryName)
+        const categoryName = data.categoryName || cat.name;
+        const slug = categoryName
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, '-')
           .replace(/^-|-$/g, '');
@@ -246,7 +247,7 @@ export const handler: Handler = async (event) => {
         const categoryDef: CategoryDef = {
           id: cat.id,
           slug: `${slug}-${cat.id}`,
-          title: data.categoryName,
+          title: categoryName,
           marketplaceId,
           itemSpecifics,
           version: 1,
