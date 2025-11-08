@@ -85,6 +85,38 @@
       <button class="btn secondary" onclick="fetchCommonCategories()">Fetch Common Beauty & Health Categories</button>
       <div id="commonResult"></div>
     </div>
+
+    <div class="card" style="border: 2px solid #ff9800;">
+      <h2>⚠️ Fetch ALL Categories (Advanced)</h2>
+      <p class="muted" style="color: #c41e3a;"><strong>Warning:</strong> This will fetch ALL leaf categories from eBay (thousands). It may take hours and could hit rate limits. Use with caution!</p>
+      <form id="allCategoriesForm">
+        <div style="margin-bottom: 1rem;">
+          <label for="allMarketplace">Marketplace:</label>
+          <select id="allMarketplace">
+            <option value="EBAY_US">EBAY_US</option>
+            <option value="EBAY_GB">EBAY_GB</option>
+            <option value="EBAY_DE">EBAY_DE</option>
+            <option value="EBAY_AU">EBAY_AU</option>
+            <option value="EBAY_CA">EBAY_CA</option>
+            <option value="EBAY_FR">EBAY_FR</option>
+            <option value="EBAY_IT">EBAY_IT</option>
+            <option value="EBAY_ES">EBAY_ES</option>
+          </select>
+        </div>
+        <div style="margin-bottom: 1rem;">
+          <label for="allDelayMs">Delay between requests (ms):</label>
+          <input type="number" id="allDelayMs" value="200" min="100" max="5000" style="width: 150px;">
+          <span class="muted">Recommended: 200ms or higher</span>
+        </div>
+        <div style="margin-bottom: 1rem;">
+          <label for="maxCategoriesLimit">Max categories (0 = unlimited):</label>
+          <input type="number" id="maxCategoriesLimit" value="100" min="0" max="10000" style="width: 150px;">
+          <span class="muted">Test with 100 first!</span>
+        </div>
+        <button type="submit" class="btn danger">⚠️ Fetch ALL Categories</button>
+      </form>
+      <div id="allResult"></div>
+    </div>
   </div>
 
   <script type="module">
@@ -104,6 +136,15 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ categoryIds, marketplaceId, delayMs })
+      });
+      return await res.json();
+    }
+
+    async function fetchAllCategories(marketplaceId, delayMs, maxCategories) {
+      const res = await authClient.authFetch('/.netlify/functions/ebay-fetch-all-categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ marketplaceId, delayMs, maxCategories })
       });
       return await res.json();
     }
@@ -216,6 +257,32 @@
         showResult('commonResult', { error: err.message }, false);
       }
     };
+
+    document.getElementById('allCategoriesForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const marketplaceId = document.getElementById('allMarketplace').value;
+      const delayMs = parseInt(document.getElementById('allDelayMs').value) || 200;
+      const maxCategories = parseInt(document.getElementById('maxCategoriesLimit').value) || 0;
+      
+      const confirmed = confirm(
+        `⚠️ WARNING: This will fetch ${maxCategories || 'ALL'} categories from eBay.\n\n` +
+        `This may take a VERY long time and could hit rate limits.\n\n` +
+        `Recommended: Start with maxCategories=100 to test.\n\n` +
+        `Continue?`
+      );
+      
+      if (!confirmed) return;
+      
+      document.getElementById('allResult').innerHTML = `<p>Fetching ${maxCategories || 'ALL'} categories from ${marketplaceId}... This may take a while...</p>`;
+      
+      try {
+        const result = await fetchAllCategories(marketplaceId, delayMs, maxCategories);
+        showResult('allResult', result, result.ok);
+      } catch (err) {
+        showResult('allResult', { error: err.message }, false);
+      }
+    });
 
     // Initialize auth
     authClient.requireAuth().catch(() => {
