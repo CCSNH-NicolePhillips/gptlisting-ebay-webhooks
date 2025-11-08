@@ -176,8 +176,8 @@ export function App() {
         throw new Error('Run Pairing first to get products');
       }
       
-      // Server now caps at 3 products per request - send in smaller batches
-      const BATCH_SIZE = 3;
+      // Server now caps at 2 products per request - send in smaller batches
+      const BATCH_SIZE = 2;
       const allDrafts = [];
       const totalProducts = pairing.products.length;
       

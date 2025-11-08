@@ -11,7 +11,7 @@ const MAX_TOKENS = Number(process.env.GPT_MAX_TOKENS || 700);
 const GPT_RETRY_ATTEMPTS = Math.max(1, Number(process.env.GPT_RETRY_ATTEMPTS || 1));
 const GPT_RETRY_DELAY_MS = Math.max(250, Number(process.env.GPT_RETRY_DELAY_MS || 1500));
 const GPT_TIMEOUT_MS = Math.max(5000, Number(process.env.GPT_TIMEOUT_MS || 20000));
-const MAX_SEEDS = Math.max(1, Number(process.env.DRAFTS_MAX_SEEDS || 3));
+const MAX_SEEDS = Math.max(1, Number(process.env.DRAFTS_MAX_SEEDS || 2)); // Reduce to 2 for safety
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -265,17 +265,22 @@ function normalizeAspects(aspects: any, product: PairedProduct): Record<string, 
  * Create a draft for a single product
  */
 async function createDraftForProduct(product: PairedProduct): Promise<Draft> {
+  const startTime = Date.now();
   console.log(`[Draft] Creating for: ${product.productId}`);
   
   // Step 1: Pick category
+  const catStart = Date.now();
   const categoryHint = await pickCategory(product);
+  console.log(`[Draft] Category pick took ${Date.now() - catStart}ms for ${product.productId}`);
   
   // Step 2: Build GPT prompt
   const prompt = buildPrompt(product, categoryHint);
   console.log(`[Draft] GPT prompt for ${product.productId}:`, prompt.slice(0, 200) + '...');
   
   // Step 3: Call GPT
+  const gptStart = Date.now();
   const responseText = await callOpenAI(prompt);
+  console.log(`[Draft] GPT call took ${Date.now() - gptStart}ms for ${product.productId}`);
   console.log(`[Draft] GPT response for ${product.productId}:`, responseText.slice(0, 200) + '...');
   
   // Step 4: Parse response
@@ -302,7 +307,7 @@ async function createDraftForProduct(product: PairedProduct): Promise<Draft> {
     condition: parsed.condition,
   };
   
-  console.log(`[Draft] ✓ Created for ${product.productId}: "${draft.title}"`);
+  console.log(`[Draft] ✓ Created for ${product.productId} in ${Date.now() - startTime}ms: "${draft.title}"`);
   
   return draft;
 }
@@ -352,19 +357,23 @@ export const handler: Handler = async (event) => {
     }
     const products = rawProducts.slice(0, MAX_SEEDS);
 
+    const requestStart = Date.now();
     console.log(`[smartdrafts-create-drafts] Creating drafts for ${products.length} product(s) (${rawProducts.length} requested)`);
 
     // Create drafts for all products
     const drafts: Draft[] = [];
     const errors: Array<{ productId: string; error: string }> = [];
 
-    for (const product of products) {
+    for (let i = 0; i < products.length; i++) {
+      const product = products[i];
       try {
+        console.log(`[smartdrafts-create-drafts] Processing ${i + 1}/${products.length}: ${product.productId}`);
         const draft = await createDraftForProduct(product);
         drafts.push(draft);
+        console.log(`[smartdrafts-create-drafts] ✓ Completed ${i + 1}/${products.length} (${Date.now() - requestStart}ms elapsed)`);
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
-        console.error(`[smartdrafts-create-drafts] Failed for ${product.productId}:`, errorMsg);
+        console.error(`[smartdrafts-create-drafts] ✗ Failed ${i + 1}/${products.length} (${product.productId}):`, errorMsg);
         errors.push({ 
           productId: product.productId, 
           error: errorMsg 
@@ -372,7 +381,8 @@ export const handler: Handler = async (event) => {
       }
     }
 
-    console.log(`[smartdrafts-create-drafts] Created ${drafts.length}/${products.length} drafts`);
+    const totalTime = Date.now() - requestStart;
+    console.log(`[smartdrafts-create-drafts] Created ${drafts.length}/${products.length} drafts in ${totalTime}ms`);
 
     return jsonResponse(200, {
       ok: true,
