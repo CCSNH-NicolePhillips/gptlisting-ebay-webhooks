@@ -228,7 +228,10 @@
           return;
         }
 
-        alert('Job resumed! Check the progress bar for updates.');
+        alert('Job resumed! The page will auto-trigger batches every 5 seconds.');
+        
+        // Start polling for this job with auto-trigger
+        startAutoTriggerPolling(jobId, 'allResult');
       } catch (err) {
         alert('Error resuming job: ' + err.message);
       }
@@ -251,6 +254,63 @@
       } catch (err) {
         alert('Error triggering batch: ' + err.message);
       }
+    }
+
+    // Global polling intervals tracker
+    const activePolls = new Map();
+
+    function startAutoTriggerPolling(jobId, elementId) {
+      // Clear any existing poll for this element
+      if (activePolls.has(elementId)) {
+        clearInterval(activePolls.get(elementId));
+      }
+
+      const pollInterval = setInterval(async () => {
+        try {
+          const statusResult = await checkJobStatus(jobId);
+          
+          if (!statusResult || !statusResult.status) {
+            console.error('Invalid status result:', statusResult);
+            return;
+          }
+
+          const status = statusResult.status;
+          showJobProgress(elementId, status);
+          
+          // Auto-trigger if stuck (no update in 10 seconds while running)
+          if (status.status === 'running' && status.updatedAt) {
+            const secondsSinceUpdate = (Date.now() - status.updatedAt) / 1000;
+            if (secondsSinceUpdate > 10) {
+              console.log(`Job stuck for ${Math.round(secondsSinceUpdate)}s, auto-triggering...`);
+              await manualTriggerBatch(jobId);
+            }
+          }
+
+          // Stop polling when completed
+          if (status.status === 'completed' || status.status === 'failed') {
+            clearInterval(pollInterval);
+            activePolls.delete(elementId);
+            
+            if (status.errors && status.errors.length > 0) {
+              const errorSummary = status.errors.slice(0, 10).map(e => 
+                `${e.categoryName} (${e.categoryId}): ${e.error}`
+              ).join('\n');
+              const errorDiv = `
+                <div class="result error" style="margin-top: 1rem;">
+                  <p><strong>Errors (showing first 10):</strong></p>
+                  <pre>${errorSummary}</pre>
+                  ${status.errors.length > 10 ? `<p>... and ${status.errors.length - 10} more errors</p>` : ''}
+                </div>
+              `;
+              document.getElementById(elementId).insertAdjacentHTML('beforeend', errorDiv);
+            }
+          }
+        } catch (err) {
+          console.error('Polling error:', err);
+        }
+      }, 5000); // Poll every 5 seconds
+
+      activePolls.set(elementId, pollInterval);
     }
 
     function showJobProgress(elementId, status) {
@@ -460,13 +520,14 @@
           return;
         }
 
-        // Start polling for status
+        // Start polling for status with auto-trigger
         const jobId = result.jobId;
         
         // Show initial status immediately
         showJobProgress('allResult', {
           jobId: jobId,
           totalCategories: result.totalCategories,
+          total: result.totalCategories,
           processed: 0,
           success: 0,
           failed: 0,
@@ -474,51 +535,8 @@
           parentCategory: result.parentCategory
         });
         
-        const pollInterval = setInterval(async () => {
-          try {
-            const statusResult = await checkJobStatus(jobId);
-            
-            if (!statusResult || !statusResult.status) {
-              console.error('Invalid status result:', statusResult);
-              return; // Keep polling
-            }
-
-            const status = statusResult.status;
-            showJobProgress('allResult', status);
-            
-            // Auto-trigger if stuck (no update in 30 seconds while running)
-            if (status.status === 'running' && status.updatedAt) {
-              const secondsSinceUpdate = (Date.now() - status.updatedAt) / 1000;
-              if (secondsSinceUpdate > 30) {
-                console.log(`Job stuck for ${Math.round(secondsSinceUpdate)}s, auto-triggering...`);
-                manualTriggerBatch(jobId).catch(err => console.error('Auto-trigger failed:', err));
-              }
-            }
-
-            // Stop polling when completed
-            if (status.status === 'completed' || status.status === 'failed') {
-              clearInterval(pollInterval);
-              
-              // Show final result with any errors
-              if (status.errors && status.errors.length > 0) {
-                const errorSummary = status.errors.slice(0, 10).map(e => 
-                  `${e.categoryName} (${e.categoryId}): ${e.error}`
-                ).join('\n');
-                const errorDiv = `
-                  <div class="result error" style="margin-top: 1rem;">
-                    <p><strong>Errors (showing first 10):</strong></p>
-                    <pre>${errorSummary}</pre>
-                    ${status.errors.length > 10 ? `<p>... and ${status.errors.length - 10} more errors</p>` : ''}
-                  </div>
-                `;
-                document.getElementById('allResult').insertAdjacentHTML('beforeend', errorDiv);
-              }
-            }
-          } catch (err) {
-            clearInterval(pollInterval);
-            showResult('allResult', { error: err.message }, false);
-          }
-        }, 5000); // Poll every 5 seconds
+        // Use centralized auto-trigger polling
+        startAutoTriggerPolling(jobId, 'allResult');
 
       } catch (err) {
         showResult('allResult', { error: err.message }, false);
