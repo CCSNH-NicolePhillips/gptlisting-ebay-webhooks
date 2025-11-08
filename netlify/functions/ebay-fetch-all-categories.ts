@@ -45,7 +45,8 @@ type CategoryTreeNode = {
  * Body: { 
  *   marketplaceId: "EBAY_US",
  *   delayMs: 200,  // delay between aspect fetches
- *   maxCategories: 100  // optional limit for testing
+ *   maxCategories: 100,  // optional limit for testing
+ *   parentCategoryId: "26395"  // optional: only fetch categories under this parent (e.g., "26395" = Health & Beauty)
  * }
  */
 export const handler: Handler = async (event) => {
@@ -73,6 +74,7 @@ export const handler: Handler = async (event) => {
     const marketplaceId = String(body.marketplaceId || 'EBAY_US').trim();
     const delayMs = Number(body.delayMs || 200);
     const maxCategories = Number(body.maxCategories || 0); // 0 = no limit
+    const parentCategoryId = String(body.parentCategoryId || '').trim(); // optional filter
 
     // Map marketplace to category tree ID
     const categoryTreeMap: Record<string, string> = {
@@ -122,7 +124,35 @@ export const handler: Handler = async (event) => {
     const treeData = await treeResponse.json() as any;
     const rootNode = treeData.rootCategoryNode as CategoryTreeNode;
 
-    // Step 2: Collect all leaf category IDs (categories with no children)
+    // Step 2: Find the starting node (either root or a specific parent category)
+    let startNode: CategoryTreeNode = rootNode;
+    
+    if (parentCategoryId) {
+      // Find the parent category node in the tree
+      function findNodeById(node: CategoryTreeNode, targetId: string): CategoryTreeNode | null {
+        if (node.category.categoryId === targetId) {
+          return node;
+        }
+        if (Array.isArray(node.childCategoryTreeNodes)) {
+          for (const child of node.childCategoryTreeNodes) {
+            const found = findNodeById(child, targetId);
+            if (found) return found;
+          }
+        }
+        return null;
+      }
+      
+      const parentNode = findNodeById(rootNode, parentCategoryId);
+      if (!parentNode) {
+        return jsonResponse(400, {
+          error: `Parent category ${parentCategoryId} not found in tree`,
+        }, originHdr, METHODS);
+      }
+      
+      startNode = parentNode;
+    }
+
+    // Step 3: Collect all leaf category IDs (categories with no children)
     const leafCategories: Array<{ id: string; name: string }> = [];
 
     function collectLeafCategories(node: CategoryTreeNode) {
@@ -142,7 +172,7 @@ export const handler: Handler = async (event) => {
       }
     }
 
-    collectLeafCategories(rootNode);
+    collectLeafCategories(startNode);
 
     const totalCategories = leafCategories.length;
     const categoriesToFetch = maxCategories > 0 
@@ -155,6 +185,8 @@ export const handler: Handler = async (event) => {
       total: totalCategories,
       fetching: categoriesToFetch.length,
       maxCategories: maxCategories || 'unlimited',
+      parentCategoryId: parentCategoryId || 'root',
+      parentCategoryName: startNode.category.categoryName,
     };
 
     // Step 3: Fetch aspects for each leaf category
@@ -252,6 +284,7 @@ export const handler: Handler = async (event) => {
         fetched: categoriesToFetch.length,
         success: results.success.length,
         failed: results.failed.length,
+        parentCategory: parentCategoryId ? `${startNode.category.categoryName} (${parentCategoryId})` : 'All categories',
       },
     }, originHdr, METHODS);
   } catch (e: any) {
