@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fetch eBay Category Aspects</title>
+  <link rel="stylesheet" href="/index.css">
+  <style>
+    .container { max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+    .card { background: white; border: 1px solid #ddd; border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; }
+    .result { background: #f5f5f5; padding: 1rem; border-radius: 4px; margin-top: 1rem; font-family: monospace; font-size: 0.9rem; max-height: 400px; overflow-y: auto; }
+    .success { color: #2d862d; }
+    .error { color: #c41e3a; }
+    textarea { font-family: monospace; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-top: 1rem; }
+    .stat-box { background: #f0f0f0; padding: 1rem; border-radius: 4px; text-align: center; }
+    .stat-box strong { display: block; font-size: 1.5rem; color: #333; }
+    .stat-box span { font-size: 0.9rem; color: #666; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🏷️ Fetch eBay Category Aspects</h1>
+    <p class="muted">Fetch and cache category metadata (required/optional item specifics) from eBay Taxonomy API.</p>
+
+    <div class="card">
+      <h2>Single Category</h2>
+      <form id="singleForm">
+        <div style="margin-bottom: 1rem;">
+          <label for="categoryId">Category ID:</label>
+          <input type="text" id="categoryId" placeholder="177011" style="width: 200px;" required>
+        </div>
+        <div style="margin-bottom: 1rem;">
+          <label for="marketplaceId">Marketplace:</label>
+          <select id="marketplaceId">
+            <option value="EBAY_US">EBAY_US</option>
+            <option value="EBAY_GB">EBAY_GB</option>
+            <option value="EBAY_DE">EBAY_DE</option>
+            <option value="EBAY_AU">EBAY_AU</option>
+            <option value="EBAY_CA">EBAY_CA</option>
+            <option value="EBAY_FR">EBAY_FR</option>
+            <option value="EBAY_IT">EBAY_IT</option>
+            <option value="EBAY_ES">EBAY_ES</option>
+          </select>
+        </div>
+        <button type="submit" class="btn">Fetch Category</button>
+      </form>
+      <div id="singleResult"></div>
+    </div>
+
+    <div class="card">
+      <h2>Bulk Fetch Categories</h2>
+      <p class="muted">Fetch multiple categories at once. Enter one category ID per line.</p>
+      <form id="bulkForm">
+        <div style="margin-bottom: 1rem;">
+          <label for="bulkCategories">Category IDs (one per line):</label>
+          <textarea id="bulkCategories" rows="10" style="width: 100%; font-family: monospace;" placeholder="177011&#10;180959&#10;261328"></textarea>
+        </div>
+        <div style="margin-bottom: 1rem;">
+          <label for="bulkMarketplace">Marketplace:</label>
+          <select id="bulkMarketplace">
+            <option value="EBAY_US">EBAY_US</option>
+            <option value="EBAY_GB">EBAY_GB</option>
+            <option value="EBAY_DE">EBAY_DE</option>
+            <option value="EBAY_AU">EBAY_AU</option>
+            <option value="EBAY_CA">EBAY_CA</option>
+            <option value="EBAY_FR">EBAY_FR</option>
+            <option value="EBAY_IT">EBAY_IT</option>
+            <option value="EBAY_ES">EBAY_ES</option>
+          </select>
+        </div>
+        <div style="margin-bottom: 1rem;">
+          <label for="delayMs">Delay between requests (ms):</label>
+          <input type="number" id="delayMs" value="100" min="0" max="5000" style="width: 150px;">
+          <span class="muted">Prevent rate limiting</span>
+        </div>
+        <button type="submit" class="btn">Fetch All Categories</button>
+      </form>
+      <div id="bulkResult"></div>
+    </div>
+
+    <div class="card">
+      <h2>Common Categories</h2>
+      <p class="muted">Quick fetch for commonly used categories.</p>
+      <button class="btn secondary" onclick="fetchCommonCategories()">Fetch Common Beauty & Health Categories</button>
+      <div id="commonResult"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { authClient } from '/auth-client.js';
+
+    async function fetchSingleCategory(categoryId, marketplaceId) {
+      const res = await authClient.authFetch('/.netlify/functions/ebay-fetch-category-aspects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ categoryId, marketplaceId })
+      });
+      return await res.json();
+    }
+
+    async function fetchBulkCategories(categoryIds, marketplaceId, delayMs) {
+      const res = await authClient.authFetch('/.netlify/functions/ebay-fetch-categories-bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ categoryIds, marketplaceId, delayMs })
+      });
+      return await res.json();
+    }
+
+    function showResult(elementId, data, isSuccess = true) {
+      const el = document.getElementById(elementId);
+      el.innerHTML = `<div class="result ${isSuccess ? 'success' : 'error'}">${JSON.stringify(data, null, 2)}</div>`;
+      
+      if (isSuccess && data.category) {
+        const stats = `
+          <div class="stats">
+            <div class="stat-box">
+              <strong>${data.category.title}</strong>
+              <span>Category Name</span>
+            </div>
+            <div class="stat-box">
+              <strong>${data.category.id}</strong>
+              <span>Category ID</span>
+            </div>
+            <div class="stat-box">
+              <strong>${data.aspectCount || 0}</strong>
+              <span>Total Aspects</span>
+            </div>
+            <div class="stat-box">
+              <strong>${data.requiredCount || 0}</strong>
+              <span>Required Aspects</span>
+            </div>
+          </div>
+        `;
+        el.insertAdjacentHTML('afterbegin', stats);
+      }
+
+      if (isSuccess && data.results) {
+        const stats = `
+          <div class="stats">
+            <div class="stat-box">
+              <strong>${data.summary?.total || 0}</strong>
+              <span>Total Requested</span>
+            </div>
+            <div class="stat-box success">
+              <strong>${data.summary?.success || 0}</strong>
+              <span>Successful</span>
+            </div>
+            <div class="stat-box error">
+              <strong>${data.summary?.failed || 0}</strong>
+              <span>Failed</span>
+            </div>
+          </div>
+        `;
+        el.insertAdjacentHTML('afterbegin', stats);
+      }
+    }
+
+    document.getElementById('singleForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const categoryId = document.getElementById('categoryId').value.trim();
+      const marketplaceId = document.getElementById('marketplaceId').value;
+      
+      document.getElementById('singleResult').innerHTML = '<p>Fetching...</p>';
+      
+      try {
+        const result = await fetchSingleCategory(categoryId, marketplaceId);
+        showResult('singleResult', result, result.ok);
+      } catch (err) {
+        showResult('singleResult', { error: err.message }, false);
+      }
+    });
+
+    document.getElementById('bulkForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const text = document.getElementById('bulkCategories').value;
+      const categoryIds = text.split('\n')
+        .map(line => line.trim())
+        .filter(line => line && /^\d+$/.test(line));
+      
+      if (categoryIds.length === 0) {
+        alert('Please enter at least one category ID');
+        return;
+      }
+
+      const marketplaceId = document.getElementById('bulkMarketplace').value;
+      const delayMs = parseInt(document.getElementById('delayMs').value) || 100;
+      
+      document.getElementById('bulkResult').innerHTML = `<p>Fetching ${categoryIds.length} categories...</p>`;
+      
+      try {
+        const result = await fetchBulkCategories(categoryIds, marketplaceId, delayMs);
+        showResult('bulkResult', result, result.ok);
+      } catch (err) {
+        showResult('bulkResult', { error: err.message }, false);
+      }
+    });
+
+    window.fetchCommonCategories = async function() {
+      const commonCategoryIds = [
+        '177011', // Health & Beauty > Vitamins & Dietary Supplements
+        '180959', // Health & Beauty > Makeup
+        '31786',  // Health & Beauty > Skin Care
+        '11854',  // Health & Beauty > Hair Care & Styling
+        '180971', // Health & Beauty > Fragrances
+        '261328', // Health & Beauty > Bath & Body
+      ];
+      
+      document.getElementById('commonResult').innerHTML = `<p>Fetching ${commonCategoryIds.length} common categories...</p>`;
+      
+      try {
+        const result = await fetchBulkCategories(commonCategoryIds, 'EBAY_US', 100);
+        showResult('commonResult', result, result.ok);
+      } catch (err) {
+        showResult('commonResult', { error: err.message }, false);
+      }
+    };
+
+    // Initialize auth
+    authClient.requireAuth().catch(() => {
+      window.location.href = '/login.html';
+    });
+  </script>
+</body>
+</html>
