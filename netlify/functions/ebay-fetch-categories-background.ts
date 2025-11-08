@@ -201,15 +201,48 @@ export const handler: Handler = async (event) => {
     status.status = 'running';
     status.updatedAt = Date.now();
 
-    // Get eBay credentials
-    const saved = (await store.get('ebay.json', { type: 'json' })) as any;
-    const refresh = saved?.refresh_token as string | undefined;
-    if (!refresh) {
-      console.error('No eBay refresh token');
-      return { statusCode: 500, body: JSON.stringify({ error: 'No eBay credentials' }) };
+    // Get eBay credentials - support fallback app for rate limiting
+    const primaryClientId = process.env.EBAY_CLIENT_ID;
+    const primaryClientSecret = process.env.EBAY_CLIENT_SECRET;
+    const fallbackClientId = process.env.EBAY_FALLBACK_CLIENT_ID;
+    const fallbackClientSecret = process.env.EBAY_FALLBACK_CLIENT_SECRET;
+    
+    // Function to get app-level OAuth token
+    const getAppToken = async (clientId: string, clientSecret: string) => {
+      const authString = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+      const tokenResponse = await fetch('https://api.ebay.com/identity/v1/oauth2/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': `Basic ${authString}`,
+        },
+        body: 'grant_type=client_credentials&scope=https://api.ebay.com/oauth/api_scope',
+      });
+      
+      if (!tokenResponse.ok) {
+        throw new Error(`Failed to get OAuth token: ${tokenResponse.status}`);
+      }
+      
+      const tokenData = await tokenResponse.json();
+      return tokenData.access_token;
+    };
+    
+    // Try primary app first, fallback if rate limited
+    let access_token: string;
+    let usingFallback = false;
+    
+    try {
+      access_token = await getAppToken(primaryClientId!, primaryClientSecret!);
+    } catch (err: any) {
+      if (fallbackClientId && fallbackClientSecret) {
+        console.log('Primary app failed, trying fallback app...');
+        access_token = await getAppToken(fallbackClientId, fallbackClientSecret);
+        usingFallback = true;
+      } else {
+        throw err;
+      }
     }
-
-    const { access_token } = await accessTokenFromRefresh(refresh);
+    
     const ENV = process.env.EBAY_ENV || 'PROD';
     const { apiHost } = tokenHosts(ENV);
 
@@ -218,6 +251,10 @@ export const handler: Handler = async (event) => {
       'Content-Type': 'application/json',
       Accept: 'application/json',
     };
+    
+    if (usingFallback) {
+      console.log('🔄 Using fallback eBay app due to rate limit');
+    }
 
     // Process up to 5 categories per execution (to stay under time limits)
     const batchSize = 5;
@@ -241,7 +278,7 @@ export const handler: Handler = async (event) => {
 
         const url = `${apiHost}/commerce/taxonomy/v1/category_tree/${queue.categoryTreeId}/get_item_aspects_for_category?category_id=${cat.id}`;
         
-        // Fetch with rate limit retry
+        // Fetch with rate limit retry and fallback app
         let response: Response | null = null;
         let rateLimitRetries = 0;
         const maxRateLimitRetries = 3;
@@ -250,6 +287,20 @@ export const handler: Handler = async (event) => {
           response = await fetch(url, { headers: fetchHeaders });
           
           if (response.status === 429) {
+            // Try fallback app if available and not already using it
+            if (!usingFallback && fallbackClientId && fallbackClientSecret && rateLimitRetries === 0) {
+              console.warn(`Rate limited (429), switching to fallback app...`);
+              try {
+                const fallbackToken = await getAppToken(fallbackClientId, fallbackClientSecret);
+                fetchHeaders.Authorization = `Bearer ${fallbackToken}`;
+                usingFallback = true;
+                rateLimitRetries++;
+                continue; // Retry with fallback app
+              } catch (err: any) {
+                console.error('Fallback app also failed:', err.message);
+              }
+            }
+            
             // Rate limited - put category back in queue and stop processing
             console.warn(`Rate limited (429) on category ${cat.id}, putting back in queue`);
             queue.categories.unshift(cat); // Put back at front
