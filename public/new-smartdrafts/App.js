@@ -205,7 +205,11 @@ export function App() {
       
       // Convert ChatGPT drafts to groups format for create-ebay-draft-user
       const groups = drafts.map((draft, index) => {
-        const sku = `${draft.brand?.substring(0,3).toUpperCase() || 'ITM'}-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}-${index}`;
+        // Generate alphanumeric-only SKU (no hyphens or special chars)
+        const brandPrefix = (draft.brand || 'ITM').replace(/[^A-Za-z0-9]/g, '').substring(0, 3).toUpperCase();
+        const timestamp = Date.now().toString(36);
+        const random = Math.random().toString(36).substring(2, 7);
+        const sku = `${brandPrefix}${timestamp}${random}${index}`;
         
         return {
           groupId: draft.productId,
