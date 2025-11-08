@@ -60,16 +60,41 @@ export const handler: Handler = async (event) => {
 				{ offer_status: undefined, marketplace: false },
 			];
 			for (const c of combos) {
-				const p = new URLSearchParams();
-				if (c.offer_status) p.set('offer_status', c.offer_status);
-				if (c.marketplace) p.set('marketplace_id', MARKETPLACE_ID);
-				p.set('limit', '200');
-				p.set('offset', '0');
-				const res = await listOffersAttempt(p);
-				const code = Number(res.body?.errors?.[0]?.errorId || 0);
-				if (res.ok) return Array.isArray(res.body?.offers) ? res.body.offers : [];
-				if (res.status >= 500) continue; // try next combo
-				if (res.status === 400 && code === 25707) continue; // invalid sku noise
+				let allOffers: any[] = [];
+				let offset = 0;
+				const limit = 200;
+				const maxOffers = 2000; // Safety limit
+				
+				while (allOffers.length < maxOffers) {
+					const p = new URLSearchParams();
+					if (c.offer_status) p.set('offer_status', c.offer_status);
+					if (c.marketplace) p.set('marketplace_id', MARKETPLACE_ID);
+					p.set('limit', String(limit));
+					p.set('offset', String(offset));
+					const res = await listOffersAttempt(p);
+					const code = Number(res.body?.errors?.[0]?.errorId || 0);
+					
+					if (!res.ok) {
+						if (res.status >= 500) break; // try next combo
+						if (res.status === 400 && code === 25707) break; // invalid sku noise
+						return null;
+					}
+					
+					const pageOffers = Array.isArray(res.body?.offers) ? res.body.offers : [];
+					if (pageOffers.length === 0) break; // No more offers
+					
+					allOffers = allOffers.concat(pageOffers);
+					
+					// Check if there are more pages
+					const total = Number(res.body?.total || 0);
+					if (allOffers.length >= total || pageOffers.length < limit) {
+						break; // Got all offers
+					}
+					
+					offset += limit;
+				}
+				
+				if (allOffers.length > 0) return allOffers;
 			}
 			return null;
 		}
