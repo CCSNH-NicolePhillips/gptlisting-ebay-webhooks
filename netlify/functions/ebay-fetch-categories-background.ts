@@ -1,5 +1,4 @@
 import type { Handler } from '@netlify/functions';
-import { schedule } from '@netlify/functions';
 import { accessTokenFromRefresh, tokenHosts } from '../../src/lib/_common.js';
 import { tokensStore } from '../../src/lib/_blobs.js';
 import { putCategory } from '../../src/lib/taxonomy-store.js';
@@ -181,5 +180,17 @@ export const handler: Handler = async (event) => {
   }
 };
 
-// Export the scheduled handler as default
-export default schedule('*/1 * * * *', handler);
+/**
+ * Background worker to process category fetch queues.
+ * 
+ * This function can be called:
+ * 1. Manually via POST /.netlify/functions/ebay-fetch-categories-background
+ * 2. Via external cron service (e.g., Upstash QStash, cron-job.org)
+ * 3. Via Netlify scheduled functions (Pro plan required)
+ * 
+ * To set up scheduled execution with an external service:
+ * - URL: https://your-site.netlify.app/.netlify/functions/ebay-fetch-categories-background
+ * - Method: POST
+ * - Schedule: Every 1 minute
+ * - Headers: (optional) Authorization header if you add auth
+ */
