@@ -230,9 +230,13 @@ export const handler: Handler = async (event) => {
       let merchantLocationKey =
         (mapped.offer.merchantLocationKey && String(mapped.offer.merchantLocationKey)) || null;
 
+      console.log(`[DEBUG] Initial merchantLocationKey from mapped: ${merchantLocationKey}`);
+      console.log(`[DEBUG] ENV EBAY_MERCHANT_LOCATION_KEY: ${process.env.EBAY_MERCHANT_LOCATION_KEY}`);
+
       // Prefer env variable over mapped value to avoid stale saved bindings
       if (process.env.EBAY_MERCHANT_LOCATION_KEY) {
         merchantLocationKey = process.env.EBAY_MERCHANT_LOCATION_KEY;
+        console.log(`[DEBUG] Using env variable: ${merchantLocationKey}`);
       }
 
       // Per-user default merchant location fallback
@@ -242,10 +246,13 @@ export const handler: Handler = async (event) => {
           const saved = (await store.get(userScopedKey(user.userId, "ebay-location.json"), { type: "json" })) as any;
           const candidate = typeof saved?.merchantLocationKey === "string" ? saved.merchantLocationKey.trim() : "";
           if (candidate) merchantLocationKey = candidate;
+          console.log(`[DEBUG] Using saved user default: ${merchantLocationKey}`);
         } catch {
           // ignore
         }
       }
+
+      console.log(`[DEBUG] Final merchantLocationKey before validation: ${merchantLocationKey}`);
 
       // Resolve and validate merchantLocationKey against live locations
       const keys = Array.isArray(availableLocationKeys) ? availableLocationKeys : [];
