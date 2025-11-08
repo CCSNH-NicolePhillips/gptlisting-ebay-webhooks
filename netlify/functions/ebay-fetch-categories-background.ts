@@ -87,13 +87,40 @@ export const handler: Handler = async (event) => {
   const invocationId = Math.random().toString(36).substring(2, 10);
   
   try {
-    // Check if a specific jobId was passed in the body
+    // Parse request body
     let targetJobId: string | undefined;
+    let action: string | undefined;
     try {
       const body = event.body ? JSON.parse(event.body) : {};
       targetJobId = body.jobId;
+      action = body.action;
     } catch (e) {
       // No body or invalid JSON, will check index for active jobs
+    }
+
+    // Handle cancel all jobs action
+    if (action === 'cancelAll') {
+      console.log(`[${invocationId}] Cancelling all jobs`);
+      
+      // Clear the job index
+      await store.setJSON('category-fetch-index.json', { activeJobs: [] });
+      
+      // Get all job files and delete locks
+      const allBlobs = await store.list();
+      for (const blob of allBlobs.blobs || []) {
+        if (blob.key?.includes('category-fetch-lock-')) {
+          await store.delete(blob.key).catch(() => {});
+          console.log(`Deleted lock: ${blob.key}`);
+        }
+      }
+      
+      return { 
+        statusCode: 200, 
+        body: JSON.stringify({ 
+          ok: true, 
+          message: 'All jobs cancelled and locks cleared' 
+        }) 
+      };
     }
 
     // If no specific jobId, get the first active job from index

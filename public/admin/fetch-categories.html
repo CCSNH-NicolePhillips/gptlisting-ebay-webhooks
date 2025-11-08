@@ -237,6 +237,39 @@
       }
     }
 
+    async function cancelAllJobs() {
+      if (!confirm('Cancel ALL running jobs? This will clear the job index and stop all workers.')) {
+        return;
+      }
+
+      try {
+        // Stop all polling intervals
+        activePolls.forEach((intervalId, elementId) => {
+          clearInterval(intervalId);
+          console.log(`Stopped polling for ${elementId}`);
+        });
+        activePolls.clear();
+
+        // Clear the job index (removes all active jobs)
+        const res = await window.authClient.authFetch('/.netlify/functions/ebay-fetch-categories-background', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'cancelAll' })
+        });
+
+        if (!res.ok) {
+          console.warn('Failed to clear job index:', res.status);
+        }
+
+        alert('All jobs cancelled! Polling stopped. Refresh the page to see updated status.');
+        
+        // Clear UI
+        document.getElementById('allResult').innerHTML = '<p>All jobs cancelled. Refresh page to start fresh.</p>';
+      } catch (err) {
+        alert('Error cancelling jobs: ' + err.message);
+      }
+    }
+
     async function manualTriggerBatch(jobId) {
       try {
         const res = await window.authClient.authFetch('/.netlify/functions/ebay-fetch-categories-background', {
