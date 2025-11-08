@@ -35,6 +35,10 @@
   <div class="container">
     <h1>🏷️ Fetch eBay Category Aspects</h1>
     <p class="muted">Fetch and cache category metadata (required/optional item specifics) from eBay Taxonomy API.</p>
+    <div id="authStatus" style="margin: 1rem 0; padding: 1rem; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; display: none;">
+      <strong>⚠️ Authentication Required</strong>
+      <p>Your session has expired. <a href="/login.html" style="color: #0066cc;">Click here to log in again</a></p>
+    </div>
 
     <div class="card">
       <h2>Single Category</h2>
@@ -149,12 +153,20 @@
 
   <script src="/auth-client.js"></script>
   <script>
+    function showAuthError() {
+      document.getElementById('authStatus').style.display = 'block';
+    }
+
     async function fetchSingleCategory(categoryId, marketplaceId) {
       const res = await window.authClient.authFetch('/.netlify/functions/ebay-fetch-category-aspects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ categoryId, marketplaceId })
       });
+      if (res.status === 401) {
+        showAuthError();
+        throw new Error('Authentication failed. Please log in again.');
+      }
       return await res.json();
     }
 
@@ -164,6 +176,10 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ categoryIds, marketplaceId, delayMs })
       });
+      if (res.status === 401) {
+        showAuthError();
+        throw new Error('Authentication failed. Please log in again.');
+      }
       return await res.json();
     }
 
@@ -173,6 +189,10 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ marketplaceId, delayMs, maxCategories, parentCategoryId })
       });
+      if (res.status === 401) {
+        showAuthError();
+        throw new Error('Authentication failed. Please log in again.');
+      }
       return await res.json();
     }
 
