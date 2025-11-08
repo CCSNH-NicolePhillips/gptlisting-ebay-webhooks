@@ -258,6 +258,36 @@ export const handler: Handler = async (event) => {
       5 // More retries for critical status saves
     );
     
+    // Refill queue from backlog if running low
+    if (queue.categories.length < 10) {
+      const backlogKey = `category-fetch-backlog-${targetJobId}.json`;
+      const backlog = (await store.get(backlogKey, { type: 'json' }).catch(() => null)) as any;
+      
+      if (backlog && backlog.remaining && backlog.remaining.length > 0) {
+        const refillSize = Math.min(50, backlog.remaining.length);
+        const refill = backlog.remaining.splice(0, refillSize);
+        queue.categories.push(...refill);
+        
+        console.log(`Refilled queue with ${refillSize} categories from backlog. Backlog remaining: ${backlog.remaining.length}`);
+        
+        // Update backlog
+        if (backlog.remaining.length > 0) {
+          await retryBlobOperation(
+            () => store.setJSON(backlogKey, backlog),
+            'Save backlog',
+            3
+          );
+        } else {
+          // Backlog empty, delete it
+          await store.delete(backlogKey).catch(() => {});
+        }
+        
+        // Update status to show backlog count
+        (status as any).backlog = backlog.remaining.length;
+        (status as any).queued = queue.categories.length;
+      }
+    }
+    
     if (queue.categories.length === 0) {
       // Job completed
       status.status = 'completed';
@@ -269,6 +299,10 @@ export const handler: Handler = async (event) => {
         'Save final status',
         5
       );
+      
+      // Clean up backlog if any
+      const backlogKey = `category-fetch-backlog-${targetJobId}.json`;
+      await store.delete(backlogKey).catch(() => {});
       
       // Remove from active jobs with retry
       const index = (await retryBlobOperation(

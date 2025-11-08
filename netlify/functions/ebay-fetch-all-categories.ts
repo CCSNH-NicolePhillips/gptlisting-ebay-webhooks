@@ -213,13 +213,24 @@ export const handler: Handler = async (event) => {
     // Step 3: Create background job instead of processing synchronously
     const jobId = `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
-    // Create queue with ONLY uncached categories
+    // Limit queue size to prevent memory issues (max 100 categories per queue)
+    const MAX_QUEUE_SIZE = 100;
+    const firstBatch = uncachedCategories.slice(0, MAX_QUEUE_SIZE);
+    const remaining = uncachedCategories.slice(MAX_QUEUE_SIZE);
+    
+    // Create queue with first batch only
     const queue = {
       jobId,
       marketplaceId,
       categoryTreeId,
-      categories: uncachedCategories,
+      categories: firstBatch,
       createdAt: Date.now(),
+    };
+
+    // Store remaining categories separately if any
+    const backlog = {
+      jobId,
+      remaining,
     };
 
     // Create initial job status
@@ -230,6 +241,8 @@ export const handler: Handler = async (event) => {
       processed: 0,
       success: 0,
       failed: 0,
+      queued: firstBatch.length, // How many in active queue
+      backlog: remaining.length, // How many waiting
       status: 'queued',
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -241,6 +254,11 @@ export const handler: Handler = async (event) => {
     const blobStore = tokensStore();
     await blobStore.setJSON(`category-fetch-queue-${jobId}.json`, queue);
     await blobStore.setJSON(`category-fetch-status-${jobId}.json`, status);
+    
+    // Store backlog separately (only if there is one)
+    if (remaining.length > 0) {
+      await blobStore.setJSON(`category-fetch-backlog-${jobId}.json`, backlog);
+    }
 
     // Add to active jobs index
     const index = (await blobStore.get('category-fetch-index.json', { type: 'json' }).catch(() => null)) as any;
