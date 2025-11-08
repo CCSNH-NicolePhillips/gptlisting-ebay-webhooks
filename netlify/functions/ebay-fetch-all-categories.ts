@@ -185,20 +185,30 @@ export const handler: Handler = async (event) => {
     console.log(`Found ${categoriesToFetch.length} leaf categories total`);
 
     // Step 2.5: Filter out categories already in Redis
+    // BUT limit pre-filtering to avoid timeout on very large sets
     console.log('Filtering out already-cached categories...');
     const uncachedCategories: Array<{ id: string; name: string }> = [];
     let alreadyCached = 0;
     
-    for (const cat of categoriesToFetch) {
-      const existing = await getCategoryById(cat.id);
-      if (existing) {
-        alreadyCached++;
-      } else {
-        uncachedCategories.push({ id: cat.id, name: cat.name });
-      }
-    }
+    // Only pre-filter if checking < 1000 categories (to avoid timeout)
+    const shouldPreFilter = categoriesToFetch.length < 1000;
     
-    console.log(`Already cached: ${alreadyCached}, Need to fetch: ${uncachedCategories.length}`);
+    if (shouldPreFilter) {
+      console.log(`Pre-filtering ${categoriesToFetch.length} categories against Redis...`);
+      for (const cat of categoriesToFetch) {
+        const existing = await getCategoryById(cat.id);
+        if (existing) {
+          alreadyCached++;
+        } else {
+          uncachedCategories.push({ id: cat.id, name: cat.name });
+        }
+      }
+      console.log(`Already cached: ${alreadyCached}, Need to fetch: ${uncachedCategories.length}`);
+    } else {
+      // For large sets, skip pre-filtering here and let worker handle duplicates
+      console.log(`Large category set (${categoriesToFetch.length}), skipping pre-filter to avoid timeout`);
+      uncachedCategories.push(...categoriesToFetch);
+    }
 
     if (uncachedCategories.length === 0) {
       return jsonResponse(200, {
