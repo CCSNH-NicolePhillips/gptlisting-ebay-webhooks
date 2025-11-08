@@ -1,7 +1,7 @@
 import type { Handler } from '@netlify/functions';
 import { accessTokenFromRefresh, tokenHosts } from '../../src/lib/_common.js';
 import { tokensStore } from '../../src/lib/_blobs.js';
-import { putCategory } from '../../src/lib/taxonomy-store.js';
+import { putCategory, getCategoryById } from '../../src/lib/taxonomy-store.js';
 import type { CategoryDef, ItemSpecific } from '../../src/lib/taxonomy-schema.js';
 
 type EbayAspect = {
@@ -126,9 +126,21 @@ export const handler: Handler = async (event) => {
     // Process up to 5 categories per execution (to stay under time limits)
     const batchSize = 5;
     const batch = queue.categories.splice(0, batchSize);
+    
+    let skipped = 0;
 
     for (const cat of batch) {
       try {
+        // Check if category already exists in database
+        const existing = await getCategoryById(cat.id);
+        if (existing) {
+          console.log(`Skipping category ${cat.id} - already in database`);
+          skipped++;
+          status.processed++;
+          status.success++;
+          continue;
+        }
+
         const url = `${apiHost}/commerce/taxonomy/v1/category_tree/${queue.categoryTreeId}/get_item_aspects_for_category?category_id=${cat.id}`;
         const response = await fetch(url, { headers: fetchHeaders });
 
@@ -218,6 +230,8 @@ export const handler: Handler = async (event) => {
     // Save updated status
     await store.setJSON(statusKey, status);
 
+    console.log(`Batch complete: ${batch.length} processed, ${skipped} skipped (already in DB)`);
+
     return {
       statusCode: 200,
       body: JSON.stringify({
@@ -226,6 +240,7 @@ export const handler: Handler = async (event) => {
         processed: status.processed,
         total: status.total,
         remaining: queue.categories.length,
+        skipped,
         status: status.status,
       }),
     };
