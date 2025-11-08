@@ -240,11 +240,78 @@ export const handler: Handler = async (event) => {
         }
 
         const url = `${apiHost}/commerce/taxonomy/v1/category_tree/${queue.categoryTreeId}/get_item_aspects_for_category?category_id=${cat.id}`;
-        const response = await fetch(url, { headers: fetchHeaders });
+        
+        // Fetch with rate limit retry
+        let response: Response | null = null;
+        let rateLimitRetries = 0;
+        const maxRateLimitRetries = 3;
+        
+        while (rateLimitRetries <= maxRateLimitRetries) {
+          response = await fetch(url, { headers: fetchHeaders });
+          
+          if (response.status === 429) {
+            // Rate limited - put category back in queue and stop processing
+            console.warn(`Rate limited (429) on category ${cat.id}, putting back in queue`);
+            queue.categories.unshift(cat); // Put back at front
+            
+            // Save updated queue
+            await retryBlobOperation(
+              () => store.setJSON(queueKey, queue),
+              'Save queue after rate limit',
+              3
+            );
+            
+            // Save status
+            await retryBlobOperation(
+              () => store.setJSON(statusKey, status),
+              'Save status after rate limit',
+              3
+            );
+            
+            // Release lock
+            await store.delete(lockKey).catch(() => {});
+            
+            // Wait before re-triggering (exponential backoff: 60s, 120s, 300s)
+            const waitTime = rateLimitRetries === 0 ? 60000 : rateLimitRetries === 1 ? 120000 : 300000;
+            console.log(`Waiting ${waitTime}ms before retrying due to rate limit...`);
+            
+            // Schedule retry by re-triggering after delay
+            const baseUrl = process.env.APP_URL || process.env.URL || process.env.DEPLOY_PRIME_URL || process.env.DEPLOY_URL || 'https://ebaywebhooks.netlify.app';
+            const target = `${baseUrl.replace(/\/$/, '')}/.netlify/functions/ebay-fetch-categories-background`;
+            
+            setTimeout(async () => {
+              try {
+                await fetch(target, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ jobId: targetJobId }),
+                });
+              } catch (err) {
+                console.error('Failed to re-trigger after rate limit:', err);
+              }
+            }, waitTime);
+            
+            return {
+              statusCode: 200,
+              body: JSON.stringify({
+                ok: true,
+                message: `Rate limited, will retry in ${waitTime / 1000}s`,
+                processed: status.processed,
+                remaining: queue.categories.length,
+              }),
+            };
+          }
+          
+          if (response.ok) {
+            break; // Success
+          }
+          
+          rateLimitRetries++;
+        }
 
-        if (!response.ok) {
+        if (!response || !response.ok) {
           status.failed++;
-          status.errors?.push({ categoryId: cat.id, categoryName: cat.name, error: `HTTP ${response.status}` });
+          status.errors?.push({ categoryId: cat.id, categoryName: cat.name, error: `HTTP ${response?.status || 'unknown'}` });
           continue;
         }
 
