@@ -1,7 +1,7 @@
 import type { Handler } from '@netlify/functions';
 import { accessTokenFromRefresh, tokenHosts } from '../../src/lib/_common.js';
 import { tokensStore } from '../../src/lib/_blobs.js';
-import { putCategory } from '../../src/lib/taxonomy-store.js';
+import { putCategory, getCategoryById } from '../../src/lib/taxonomy-store.js';
 import type { CategoryDef, ItemSpecific } from '../../src/lib/taxonomy-schema.js';
 import { getOrigin, isAuthorized, isOriginAllowed, jsonResponse } from '../../src/lib/http.js';
 
@@ -182,26 +182,51 @@ export const handler: Handler = async (event) => {
       ? leafCategories.slice(0, maxCategories)
       : leafCategories;
 
+    console.log(`Found ${categoriesToFetch.length} leaf categories total`);
+
+    // Step 2.5: Filter out categories already in Redis
+    console.log('Filtering out already-cached categories...');
+    const uncachedCategories: Array<{ id: string; name: string }> = [];
+    let alreadyCached = 0;
+    
+    for (const cat of categoriesToFetch) {
+      const existing = await getCategoryById(cat.id);
+      if (existing) {
+        alreadyCached++;
+      } else {
+        uncachedCategories.push({ id: cat.id, name: cat.name });
+      }
+    }
+    
+    console.log(`Already cached: ${alreadyCached}, Need to fetch: ${uncachedCategories.length}`);
+
+    if (uncachedCategories.length === 0) {
+      return jsonResponse(200, {
+        ok: true,
+        message: 'All categories are already cached!',
+        totalCategories: categoriesToFetch.length,
+        alreadyCached,
+        needToFetch: 0,
+      }, originHdr, METHODS);
+    }
+
     // Step 3: Create background job instead of processing synchronously
     const jobId = `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
-    // Create queue with categories to fetch
+    // Create queue with ONLY uncached categories
     const queue = {
       jobId,
       marketplaceId,
       categoryTreeId,
-      categories: categoriesToFetch.map(c => ({
-        id: c.id,
-        name: c.name,
-      })),
+      categories: uncachedCategories,
       createdAt: Date.now(),
     };
 
     // Create initial job status
     const status = {
       jobId,
-      total: categoriesToFetch.length,
-      totalCategories: categoriesToFetch.length, // Keep for backward compat
+      total: uncachedCategories.length,
+      totalCategories: uncachedCategories.length, // Keep for backward compat
       processed: 0,
       success: 0,
       failed: 0,
@@ -209,6 +234,7 @@ export const handler: Handler = async (event) => {
       createdAt: Date.now(),
       updatedAt: Date.now(),
       parentCategory: parentCategoryId ? `${startNode.category.categoryName} (${parentCategoryId})` : 'All categories',
+      alreadyCached, // Track how many we skipped upfront
     };
 
     // Store queue and status in blob storage
@@ -247,8 +273,9 @@ export const handler: Handler = async (event) => {
     return jsonResponse(200, {
       ok: true,
       jobId,
-      totalCategories: categoriesToFetch.length,
-      message: 'Background job created. Use GET /ebay-fetch-categories-status?jobId=' + jobId + ' to check progress.',
+      totalCategories: uncachedCategories.length,
+      alreadyCached,
+      message: `Background job created. Skipped ${alreadyCached} already-cached categories. Fetching ${uncachedCategories.length} new ones.`,
       parentCategory: parentCategoryId ? `${startNode.category.categoryName} (${parentCategoryId})` : 'All categories',
     }, originHdr, METHODS);
   } catch (e: any) {
