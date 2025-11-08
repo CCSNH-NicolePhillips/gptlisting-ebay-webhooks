@@ -228,7 +228,12 @@ export const handler: Handler = async (event) => {
       const marketplaceId =
         mapped.offer.marketplaceId || process.env.DEFAULT_MARKETPLACE_ID || process.env.EBAY_MARKETPLACE_ID || "EBAY_US";
       let merchantLocationKey =
-        (mapped.offer.merchantLocationKey && String(mapped.offer.merchantLocationKey)) || process.env.EBAY_MERCHANT_LOCATION_KEY || null;
+        (mapped.offer.merchantLocationKey && String(mapped.offer.merchantLocationKey)) || null;
+
+      // Prefer env variable over mapped value to avoid stale saved bindings
+      if (process.env.EBAY_MERCHANT_LOCATION_KEY) {
+        merchantLocationKey = process.env.EBAY_MERCHANT_LOCATION_KEY;
+      }
 
       // Per-user default merchant location fallback
       if (!merchantLocationKey) {
