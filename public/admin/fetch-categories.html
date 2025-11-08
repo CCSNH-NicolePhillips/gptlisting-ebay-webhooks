@@ -246,8 +246,21 @@
                      status.updatedAt && 
                      (Date.now() - status.updatedAt) > 120000;
       
+      const timeSinceUpdate = status.updatedAt 
+        ? Math.round((Date.now() - status.updatedAt) / 1000) + 's ago'
+        : 'never';
+      
       const resumeButton = isStuck 
         ? `<button class="btn secondary" onclick="resumeJob('${status.jobId}')" style="margin-top: 1rem;">🔄 Resume Stuck Job</button>`
+        : '';
+      
+      const errorsList = status.errors && status.errors.length > 0
+        ? `<details style="margin-top: 1rem;">
+            <summary style="cursor: pointer; color: #d32f2f; font-weight: bold;">
+              ⚠️ ${status.errors.length} Error(s) - Click to view
+            </summary>
+            <pre style="background: #ffebee; padding: 1rem; margin-top: 0.5rem; overflow-x: auto; max-height: 300px;">${JSON.stringify(status.errors.slice(-10), null, 2)}</pre>
+          </details>`
         : '';
       
       const stats = `
@@ -266,7 +279,7 @@
           </div>
           <div class="stat-box ${isStuck ? 'error' : ''}">
             <strong>${status.status}${isStuck ? ' (STUCK)' : ''}</strong>
-            <span>Status</span>
+            <span>Status (updated ${timeSinceUpdate})</span>
           </div>
         </div>
         <div class="result info">
@@ -275,6 +288,7 @@
           </div>
           <p style="margin-top: 0.5rem;">Job ID: <code>${status.jobId}</code></p>
           <p>${status.parentCategory || ''}</p>
+          ${errorsList}
           ${resumeButton}
         </div>
       `;
