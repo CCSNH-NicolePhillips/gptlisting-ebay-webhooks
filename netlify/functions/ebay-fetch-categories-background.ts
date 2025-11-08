@@ -127,6 +127,8 @@ export const handler: Handler = async (event) => {
     const batchSize = 5;
     const batch = queue.categories.splice(0, batchSize);
     
+    console.log(`Processing batch of ${batch.length} categories. Queue remaining: ${queue.categories.length}`);
+    
     let skipped = 0;
 
     for (const cat of batch) {
@@ -198,6 +200,8 @@ export const handler: Handler = async (event) => {
     // Update status
     status.updatedAt = Date.now();
     
+    console.log(`Batch summary - Processed: ${status.processed}/${status.total}, Success: ${status.success}, Failed: ${status.failed}, Queue remaining: ${queue.categories.length}`);
+    
     // Save status BEFORE triggering next batch (so we don't lose progress if trigger fails)
     await store.setJSON(statusKey, status);
     
@@ -215,6 +219,8 @@ export const handler: Handler = async (event) => {
     } else {
       // Still processing - update queue and trigger next batch
       status.status = 'running';
+      
+      console.log(`Saving updated queue with ${queue.categories.length} categories remaining`);
       await store.setJSON(queueKey, queue);
       
       // Re-trigger this function for the next batch with retry logic
