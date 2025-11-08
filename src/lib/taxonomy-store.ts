@@ -85,20 +85,28 @@ export async function listCategories(): Promise<CategoryDef[]> {
   if (!slugs.length) return [];
 
   const categories: CategoryDef[] = [];
-  await Promise.all(
-    slugs.map(async (slug) => {
-      const raw = await call("get", [`taxonomy:cat:${slug}`]);
-      if (!raw) return;
-      try {
-        const parsed = JSON.parse(raw) as CategoryDef;
-        if (parsed && parsed.slug === slug) {
-          categories.push(parsed);
+  
+  // Batch the fetches to avoid EMFILE (too many open connections)
+  const BATCH_SIZE = 100;
+  for (let i = 0; i < slugs.length; i += BATCH_SIZE) {
+    const batch = slugs.slice(i, i + BATCH_SIZE);
+    const batchResults = await Promise.all(
+      batch.map(async (slug) => {
+        const raw = await call("get", [`taxonomy:cat:${slug}`]);
+        if (!raw) return null;
+        try {
+          const parsed = JSON.parse(raw) as CategoryDef;
+          if (parsed && parsed.slug === slug) {
+            return parsed;
+          }
+        } catch {
+          /* ignore malformed */
         }
-      } catch {
-        /* ignore malformed */
-      }
-    }),
-  );
+        return null;
+      }),
+    );
+    categories.push(...batchResults.filter((cat): cat is CategoryDef => cat !== null));
+  }
 
   return categories.sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
 }
