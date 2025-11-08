@@ -35,6 +35,12 @@
   <div class="container">
     <h1>🏷️ Fetch eBay Category Aspects</h1>
     <p class="muted">Fetch and cache category metadata (required/optional item specifics) from eBay Taxonomy API.</p>
+    
+    <div style="margin: 1rem 0;">
+      <button class="btn danger" onclick="cancelAllJobs()" style="float: right;">🛑 Cancel All Running Jobs</button>
+      <div style="clear: both;"></div>
+    </div>
+    
     <div id="authStatus" style="margin: 1rem 0; padding: 1rem; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; display: none;">
       <strong>⚠️ Authentication Required</strong>
       <p>Your session has expired. <a href="/login.html" style="color: #0066cc;">Click here to log in again</a></p>
