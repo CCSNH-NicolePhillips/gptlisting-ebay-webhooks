@@ -181,5 +181,5 @@ export const handler: Handler = async (event) => {
   }
 };
 
-// Schedule to run every minute
-export const scheduledHandler = schedule('*/1 * * * *', handler);
+// Export the scheduled handler as default
+export default schedule('*/1 * * * *', handler);
