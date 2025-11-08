@@ -207,14 +207,15 @@
 
     function showJobProgress(elementId, status) {
       const el = document.getElementById(elementId);
-      const percent = status.totalCategories > 0 
-        ? Math.round((status.processed / status.totalCategories) * 100)
+      const total = status.totalCategories || status.total || 0;
+      const percent = total > 0 
+        ? Math.round((status.processed / total) * 100)
         : 0;
       
       const stats = `
         <div class="stats">
           <div class="stat-box">
-            <strong>${status.processed} / ${status.totalCategories}</strong>
+            <strong>${status.processed} / ${total}</strong>
             <span>Processed (${percent}%)</span>
           </div>
           <div class="stat-box success">
@@ -383,16 +384,25 @@
 
         // Start polling for status
         const jobId = result.jobId;
-        document.getElementById('allResult').innerHTML = `<p>Job created! Polling for status...</p>`;
+        
+        // Show initial status immediately
+        showJobProgress('allResult', {
+          jobId: jobId,
+          totalCategories: result.totalCategories,
+          processed: 0,
+          success: 0,
+          failed: 0,
+          status: 'queued',
+          parentCategory: result.parentCategory
+        });
         
         const pollInterval = setInterval(async () => {
           try {
             const statusResult = await checkJobStatus(jobId);
             
-            if (!statusResult.ok || !statusResult.status) {
-              clearInterval(pollInterval);
-              showResult('allResult', statusResult, false);
-              return;
+            if (!statusResult || !statusResult.status) {
+              console.error('Invalid status result:', statusResult);
+              return; // Keep polling
             }
 
             const status = statusResult.status;
