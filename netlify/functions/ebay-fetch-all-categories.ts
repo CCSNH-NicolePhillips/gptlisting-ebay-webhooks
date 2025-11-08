@@ -200,7 +200,8 @@ export const handler: Handler = async (event) => {
     // Create initial job status
     const status = {
       jobId,
-      totalCategories: categoriesToFetch.length,
+      total: categoriesToFetch.length,
+      totalCategories: categoriesToFetch.length, // Keep for backward compat
       processed: 0,
       success: 0,
       failed: 0,

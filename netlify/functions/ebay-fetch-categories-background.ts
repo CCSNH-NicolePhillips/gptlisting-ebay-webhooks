@@ -140,6 +140,15 @@ export const handler: Handler = async (event) => {
         startedAt: Date.now(),
         errors: [],
       };
+    } else {
+      // Fix legacy status objects that used 'totalCategories' instead of 'total'
+      if (!status.total && (status as any).totalCategories) {
+        status.total = (status as any).totalCategories;
+      }
+      // Ensure total is set even if missing
+      if (!status.total) {
+        status.total = status.processed + queue.categories.length;
+      }
     }
 
     status.status = 'running';
