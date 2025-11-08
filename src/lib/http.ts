@@ -56,11 +56,12 @@ export function json(
   statusCode: number,
   body: unknown,
   originHeader?: string,
-  methods = "GET, POST, OPTIONS"
+  methods = "GET, POST, OPTIONS",
+  extraHeaders: Record<string, string> = {}
 ) {
   return {
     statusCode,
-    headers: corsHeaders(originHeader, methods),
+    headers: { ...corsHeaders(originHeader, methods), ...extraHeaders },
     body: JSON.stringify(body),
   };
 }
@@ -69,9 +70,10 @@ export function jsonResponse(
   statusCode: number,
   body: unknown,
   originHeader: string | undefined,
-  methods: string
+  methods: string,
+  extraHeaders: Record<string, string> = {}
 ) {
-  return json(statusCode, body, originHeader, methods);
+  return json(statusCode, body, originHeader, methods, extraHeaders);
 }
 
 export function extractBearerToken(headers: HeadersRecord): string {

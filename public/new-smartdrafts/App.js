@@ -176,8 +176,8 @@ export function App() {
         throw new Error('Run Pairing first to get products');
       }
       
-      // Process in batches to avoid timeout
-      const BATCH_SIZE = 4;
+      // Server now caps at 3 products per request - send in smaller batches
+      const BATCH_SIZE = 3;
       const allDrafts = [];
       const totalProducts = pairing.products.length;
       
@@ -189,6 +189,11 @@ export function App() {
         setLoadingStatus(`🤖 Generating batch ${batchNum}/${totalBatches} (${batch.length} items)...`);
         
         const result = await createDraftsLive(batch);
+        
+        // Server returns x-drafts-processed header if capped
+        const processed = result.summary?.succeeded || result.drafts?.length || 0;
+        console.log(`[doCreateDrafts] Batch ${batchNum}: processed ${processed}/${batch.length}`);
+        
         allDrafts.push(...(result.drafts || []));
       }
       

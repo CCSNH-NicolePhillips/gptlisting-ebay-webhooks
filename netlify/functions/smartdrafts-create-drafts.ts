@@ -7,12 +7,24 @@ import { openai } from "../../src/lib/openai.js";
 
 const METHODS = "POST, OPTIONS";
 const MODEL = process.env.GPT_MODEL || "gpt-4o-mini";
-const MAX_TOKENS = Number(process.env.GPT_MAX_TOKENS || 1000);
-const GPT_RETRY_ATTEMPTS = Math.max(1, Number(process.env.GPT_RETRY_ATTEMPTS || 2));
+const MAX_TOKENS = Number(process.env.GPT_MAX_TOKENS || 700);
+const GPT_RETRY_ATTEMPTS = Math.max(1, Number(process.env.GPT_RETRY_ATTEMPTS || 1));
 const GPT_RETRY_DELAY_MS = Math.max(250, Number(process.env.GPT_RETRY_DELAY_MS || 1500));
+const GPT_TIMEOUT_MS = Math.max(5000, Number(process.env.GPT_TIMEOUT_MS || 20000));
+const MAX_SEEDS = Math.max(1, Number(process.env.DRAFTS_MAX_SEEDS || 3));
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Timeout wrapper for promises
+ */
+async function withTimeout<T>(p: Promise<T>, ms = GPT_TIMEOUT_MS): Promise<T> {
+  return await Promise.race([
+    p,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`timeout after ${ms}ms`)), ms)),
+  ]);
 }
 
 type PairedProduct = {
@@ -51,7 +63,7 @@ type Draft = {
 };
 
 /**
- * Call OpenAI with retry logic
+ * Call OpenAI with retry logic and timeout
  */
 async function callOpenAI(prompt: string): Promise<string> {
   if (!process.env.OPENAI_API_KEY) {
@@ -61,27 +73,30 @@ async function callOpenAI(prompt: string): Promise<string> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= GPT_RETRY_ATTEMPTS; attempt++) {
     try {
-      const completion = await openai.chat.completions.create({
-        model: MODEL,
-        temperature: 0.7,
-        max_tokens: Math.max(100, Math.min(4000, MAX_TOKENS)),
-        response_format: { type: "json_object" },
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are an expert eBay listing writer.\n" +
-              "Return ONLY strict JSON with keys: title, description, bullets, aspects, price, condition.\n" +
-              "- title: <=80 chars, high-signal product name, no emojis, no fluff.\n" +
-              "- description: 2-4 sentences, neutral factual claims (no medical), highlight key features.\n" +
-              "- bullets: array of 3-5 short benefit/feature points.\n" +
-              "- aspects: object with Brand, Type, Features, Size, etc. Include all relevant item specifics.\n" +
-              "- price: estimated retail price as number (e.g. 29.99)\n" +
-              "- condition: one of 'NEW', 'LIKE_NEW', 'USED_EXCELLENT', 'USED_GOOD', 'USED_ACCEPTABLE'\n",
-          },
-          { role: "user", content: prompt },
-        ],
-      });
+      const completion = await withTimeout(
+        openai.chat.completions.create({
+          model: MODEL,
+          temperature: 0.7,
+          max_tokens: Math.max(100, Math.min(4000, MAX_TOKENS)),
+          response_format: { type: "json_object" },
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are an expert eBay listing writer.\n" +
+                "Return ONLY strict JSON with keys: title, description, bullets, aspects, price, condition.\n" +
+                "- title: <=80 chars, high-signal product name, no emojis, no fluff.\n" +
+                "- description: 2-4 sentences, neutral factual claims (no medical), highlight key features.\n" +
+                "- bullets: array of 3-5 short benefit/feature points.\n" +
+                "- aspects: object with Brand, Type, Features, Size, etc. Include all relevant item specifics.\n" +
+                "- price: estimated retail price as number (e.g. 29.99)\n" +
+                "- condition: one of 'NEW', 'LIKE_NEW', 'USED_EXCELLENT', 'USED_GOOD', 'USED_ACCEPTABLE'\n",
+            },
+            { role: "user", content: prompt },
+          ],
+        }),
+        GPT_TIMEOUT_MS
+      );
       return completion.choices?.[0]?.message?.content || "{}";
     } catch (err) {
       lastError = err;
@@ -322,16 +337,22 @@ export const handler: Handler = async (event) => {
 
     // Parse request body
     const body = JSON.parse(event.body || "{}");
-    const products = Array.isArray(body.products) ? body.products : [];
+    const rawProducts = Array.isArray(body.products) ? body.products : [];
 
-    if (products.length === 0) {
+    if (rawProducts.length === 0) {
       return jsonResponse(400, { 
         ok: false, 
         error: "No products provided. Expected { products: [...] }" 
       }, originHdr, methods);
     }
 
-    console.log(`[smartdrafts-create-drafts] Creating drafts for ${products.length} product(s)`);
+    // Cap products to avoid timeout - client will send remainder
+    if (rawProducts.length > MAX_SEEDS) {
+      console.warn(`[smartdrafts-create-drafts] Received ${rawProducts.length}, processing only ${MAX_SEEDS}`);
+    }
+    const products = rawProducts.slice(0, MAX_SEEDS);
+
+    console.log(`[smartdrafts-create-drafts] Creating drafts for ${products.length} product(s) (${rawProducts.length} requested)`);
 
     // Create drafts for all products
     const drafts: Draft[] = [];
@@ -362,7 +383,7 @@ export const handler: Handler = async (event) => {
         succeeded: drafts.length,
         failed: errors.length,
       },
-    }, originHdr, methods);
+    }, originHdr, methods, { "x-drafts-processed": String(drafts.length) });
 
   } catch (error: any) {
     console.error("[smartdrafts-create-drafts] error:", error);
