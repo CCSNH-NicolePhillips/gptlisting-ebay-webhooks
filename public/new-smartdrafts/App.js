@@ -176,29 +176,65 @@ export function App() {
         throw new Error('Run Pairing first to get products');
       }
       
-      // Process in batches to avoid timeout
-      const BATCH_SIZE = 4;
-      const allDrafts = [];
-      const totalProducts = pairing.products.length;
+      setLoadingStatus('🤖 Starting background job for ChatGPT...');
       
-      for (let i = 0; i < totalProducts; i += BATCH_SIZE) {
-        const batch = pairing.products.slice(i, i + BATCH_SIZE);
-        const batchNum = Math.floor(i / BATCH_SIZE) + 1;
-        const totalBatches = Math.ceil(totalProducts / BATCH_SIZE);
-        
-        setLoadingStatus(`🤖 Generating batch ${batchNum}/${totalBatches} (${batch.length} items)...`);
-        
-        const result = await createDraftsLive(batch);
-        allDrafts.push(...(result.drafts || []));
+      // Start background job
+      const startResult = await createDraftsLive(pairing.products);
+      
+      if (!startResult.jobId) {
+        throw new Error('Failed to start background job');
       }
       
-      setDrafts(allDrafts);
-      showToast(`✨ Generated ${allDrafts.length} listing(s)!`);
-      setLoadingStatus('');
-      setTab('Drafts');
+      const jobId = startResult.jobId;
+      const totalProducts = startResult.totalProducts || pairing.products.length;
+      
+      setLoadingStatus(`🤖 Processing ${totalProducts} products...`);
+      
+      // Poll for results
+      const pollInterval = setInterval(async () => {
+        try {
+          const statusRes = await window.authClient.authFetch(
+            `/.netlify/functions/smartdrafts-create-drafts-status?jobId=${jobId}`
+          );
+          
+          if (!statusRes.ok) {
+            clearInterval(pollInterval);
+            throw new Error(`Status check failed: ${statusRes.status}`);
+          }
+          
+          const statusData = await statusRes.json();
+          const status = statusData.status;
+          
+          if (!status) {
+            clearInterval(pollInterval);
+            throw new Error('Invalid status response');
+          }
+          
+          const percent = Math.round((status.processed / status.total) * 100);
+          setLoadingStatus(`🤖 Processing... ${status.processed}/${status.total} (${percent}%)`);
+          
+          if (status.status === 'completed') {
+            clearInterval(pollInterval);
+            setDrafts(statusData.drafts || []);
+            showToast(`✨ Generated ${status.succeeded} listing(s)!`);
+            setLoadingStatus('');
+            setTab('Drafts');
+            setLoading(false);
+          } else if (status.status === 'failed') {
+            clearInterval(pollInterval);
+            throw new Error('Job failed');
+          }
+        } catch (err) {
+          clearInterval(pollInterval);
+          setLoading(false);
+          showToast('❌ ' + (err.message || 'Status check failed'));
+        }
+      }, 3000); // Poll every 3 seconds
+      
     } catch (e) {
       console.error(e); showToast('❌ ' + (e.message || 'Draft creation failed'));
-    } finally { setLoading(false); }
+      setLoading(false);
+    }
   }
 
   async function doPublishToEbay() {

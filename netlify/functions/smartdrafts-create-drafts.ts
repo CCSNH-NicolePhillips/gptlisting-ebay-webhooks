@@ -1,6 +1,7 @@
 import type { Handler } from "@netlify/functions";
 import { requireUserAuth } from "../../src/lib/auth-user.js";
 import { getOrigin, jsonResponse } from "../../src/lib/http.js";
+import { tokensStore } from "../../src/lib/_blobs.js";
 import { pickCategoryForGroup } from "../../src/lib/taxonomy-select.js";
 import type { CategoryDef } from "../../src/lib/taxonomy-schema.js";
 import { openai } from "../../src/lib/openai.js";
@@ -333,36 +334,67 @@ export const handler: Handler = async (event) => {
 
     console.log(`[smartdrafts-create-drafts] Creating drafts for ${products.length} product(s)`);
 
-    // Create drafts for all products
-    const drafts: Draft[] = [];
-    const errors: Array<{ productId: string; error: string }> = [];
+    // Create background job instead of processing synchronously
+    const jobId = `drafts-job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const store = tokensStore();
+    
+    // Create queue with products
+    const queue = {
+      jobId,
+      products,
+      createdAt: Date.now(),
+    };
 
-    for (const product of products) {
-      try {
-        const draft = await createDraftForProduct(product);
-        drafts.push(draft);
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : String(err);
-        console.error(`[smartdrafts-create-drafts] Failed for ${product.productId}:`, errorMsg);
-        errors.push({ 
-          productId: product.productId, 
-          error: errorMsg 
-        });
-      }
+    // Create initial job status
+    const status = {
+      jobId,
+      total: products.length,
+      processed: 0,
+      succeeded: 0,
+      failed: 0,
+      status: 'queued',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+
+    // Store queue and status in blob storage
+    await store.setJSON(`drafts-queue-${jobId}.json`, queue);
+    await store.setJSON(`drafts-status-${jobId}.json`, status);
+    await store.setJSON(`drafts-results-${jobId}.json`, { drafts: [] });
+
+    // Add to active jobs index
+    const index = (await store.get('drafts-job-index.json', { type: 'json' }).catch(() => null)) as any;
+    const activeJobs = index?.activeJobs || [];
+    if (!activeJobs.includes(jobId)) {
+      activeJobs.push(jobId);
+      await store.setJSON('drafts-job-index.json', { activeJobs });
     }
 
-    console.log(`[smartdrafts-create-drafts] Created ${drafts.length}/${products.length} drafts`);
+    // Trigger background worker to start processing
+    const baseUrl = process.env.APP_URL || process.env.URL || process.env.DEPLOY_PRIME_URL || process.env.DEPLOY_URL || 'https://ebaywebhooks.netlify.app';
+    const target = `${baseUrl.replace(/\/$/, '')}/.netlify/functions/smartdrafts-create-drafts-bg`;
+
+    try {
+      const resp = await fetch(target, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId }),
+      });
+
+      if (!resp.ok) {
+        console.warn(`Background worker invoke failed: ${resp.status} ${resp.statusText}`);
+      }
+    } catch (err) {
+      console.warn(`Background worker trigger failed:`, err);
+    }
 
     return jsonResponse(200, {
       ok: true,
-      drafts,
-      errors: errors.length > 0 ? errors : undefined,
-      summary: {
-        total: products.length,
-        succeeded: drafts.length,
-        failed: errors.length,
-      },
+      jobId,
+      message: `Started background job for ${products.length} products`,
+      totalProducts: products.length,
     }, originHdr, methods);
+    */
 
   } catch (error: any) {
     console.error("[smartdrafts-create-drafts] error:", error);
