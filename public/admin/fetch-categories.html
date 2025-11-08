@@ -104,6 +104,21 @@
           </select>
         </div>
         <div style="margin-bottom: 1rem;">
+          <label for="parentCategoryId">Parent Category ID (optional):</label>
+          <input type="text" id="parentCategoryId" placeholder="26395 for Health & Beauty" style="width: 300px;">
+          <span class="muted">Leave empty for ALL categories</span>
+          <div style="margin-top: 0.5rem; font-size: 0.9rem;">
+            <strong>Common parent categories:</strong>
+            <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
+              <li><code>26395</code> - Health & Beauty</li>
+              <li><code>11450</code> - Clothing, Shoes & Accessories</li>
+              <li><code>58058</code> - Jewelry & Watches</li>
+              <li><code>15032</code> - Home & Garden</li>
+              <li><code>293</code> - Electronics</li>
+            </ul>
+          </div>
+        </div>
+        <div style="margin-bottom: 1rem;">
           <label for="allDelayMs">Delay between requests (ms):</label>
           <input type="number" id="allDelayMs" value="200" min="100" max="5000" style="width: 150px;">
           <span class="muted">Recommended: 200ms or higher</span>
@@ -113,7 +128,7 @@
           <input type="number" id="maxCategoriesLimit" value="100" min="0" max="10000" style="width: 150px;">
           <span class="muted">Test with 100 first!</span>
         </div>
-        <button type="submit" class="btn danger">⚠️ Fetch ALL Categories</button>
+        <button type="submit" class="btn danger">⚠️ Fetch Categories</button>
       </form>
       <div id="allResult"></div>
     </div>
@@ -140,11 +155,11 @@
       return await res.json();
     }
 
-    async function fetchAllCategories(marketplaceId, delayMs, maxCategories) {
+    async function fetchAllCategories(marketplaceId, delayMs, maxCategories, parentCategoryId) {
       const res = await authClient.authFetch('/.netlify/functions/ebay-fetch-all-categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ marketplaceId, delayMs, maxCategories })
+        body: JSON.stringify({ marketplaceId, delayMs, maxCategories, parentCategoryId })
       });
       return await res.json();
     }
@@ -264,9 +279,14 @@
       const marketplaceId = document.getElementById('allMarketplace').value;
       const delayMs = parseInt(document.getElementById('allDelayMs').value) || 200;
       const maxCategories = parseInt(document.getElementById('maxCategoriesLimit').value) || 0;
+      const parentCategoryId = document.getElementById('parentCategoryId').value.trim();
+      
+      const scope = parentCategoryId 
+        ? `categories under parent ${parentCategoryId}`
+        : 'ALL categories from the entire marketplace';
       
       const confirmed = confirm(
-        `⚠️ WARNING: This will fetch ${maxCategories || 'ALL'} categories from eBay.\n\n` +
+        `⚠️ WARNING: This will fetch ${maxCategories || 'ALL'} ${scope}.\n\n` +
         `This may take a VERY long time and could hit rate limits.\n\n` +
         `Recommended: Start with maxCategories=100 to test.\n\n` +
         `Continue?`
@@ -274,10 +294,10 @@
       
       if (!confirmed) return;
       
-      document.getElementById('allResult').innerHTML = `<p>Fetching ${maxCategories || 'ALL'} categories from ${marketplaceId}... This may take a while...</p>`;
+      document.getElementById('allResult').innerHTML = `<p>Fetching ${maxCategories || 'ALL'} categories from ${marketplaceId}${parentCategoryId ? ` (parent: ${parentCategoryId})` : ''}... This may take a while...</p>`;
       
       try {
-        const result = await fetchAllCategories(marketplaceId, delayMs, maxCategories);
+        const result = await fetchAllCategories(marketplaceId, delayMs, maxCategories, parentCategoryId);
         showResult('allResult', result, result.ok);
       } catch (err) {
         showResult('allResult', { error: err.message }, false);
