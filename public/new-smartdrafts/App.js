@@ -207,7 +207,7 @@ export function App() {
       const groups = drafts.map((draft, index) => {
         const sku = `${draft.brand?.substring(0,3).toUpperCase() || 'ITM'}-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}-${index}`;
         
-        const group = {
+        return {
           groupId: draft.productId,
           brand: draft.brand,
           product: draft.product,
@@ -222,13 +222,6 @@ export function App() {
           condition: draft.condition,
           sku: sku,
         };
-        
-        // Add override object to explicitly set merchantLocationKey
-        group.offer = {
-          merchantLocationKey: 'default-loc',
-        };
-        
-        return group;
       });
       
       // Use a new jobId for ChatGPT drafts to avoid old saved bindings with wrong merchantLocationKey

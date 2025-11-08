@@ -59,6 +59,7 @@ async function fetchInventoryLocationKeys(accessToken: string, apiHost: string, 
 
 const METHODS = "POST, OPTIONS";
 const DRY_RUN_DEFAULT = (process.env.EBAY_DRY_RUN || "true").toLowerCase() !== "false";
+const DEFAULT_LOCATION_KEY = "default-loc"; // Fallback location key when env not set
 
 type HeadersMap = Record<string, string | undefined>;
 
@@ -234,14 +235,9 @@ export const handler: Handler = async (event) => {
       console.log(`[DEBUG] ENV EBAY_MERCHANT_LOCATION_KEY: ${process.env.EBAY_MERCHANT_LOCATION_KEY}`);
 
       // Prefer env variable over mapped value to avoid stale saved bindings
-      // Default to 'default-loc' if env variable is not set
       if (process.env.EBAY_MERCHANT_LOCATION_KEY) {
         merchantLocationKey = process.env.EBAY_MERCHANT_LOCATION_KEY;
         console.log(`[DEBUG] Using env variable: ${merchantLocationKey}`);
-      } else if (!merchantLocationKey) {
-        // Hardcoded fallback for now
-        merchantLocationKey = 'default-loc';
-        console.log(`[DEBUG] Using hardcoded default-loc`);
       }
 
       // Per-user default merchant location fallback (only if still not set)
