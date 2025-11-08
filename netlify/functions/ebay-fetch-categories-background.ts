@@ -33,36 +33,67 @@ type JobStatus = {
   success: number;
   failed: number;
   startedAt: number;
+  updatedAt?: number;
   completedAt?: number;
   errors?: any[];
 };
 
 /**
  * Background worker that fetches categories from a queue.
- * This runs as a scheduled background function to avoid timeouts.
+ * This runs as a background function to avoid timeouts.
  */
 export const handler: Handler = async (event) => {
   const store = tokensStore();
   
   try {
-    // Get the next batch from the queue
-    const queueKey = 'category-fetch-queue.json';
+    // Check if a specific jobId was passed in the body
+    let targetJobId: string | undefined;
+    try {
+      const body = event.body ? JSON.parse(event.body) : {};
+      targetJobId = body.jobId;
+    } catch (e) {
+      // No body or invalid JSON, will check index for active jobs
+    }
+
+    // If no specific jobId, get the first active job from index
+    if (!targetJobId) {
+      const index = (await store.get('category-fetch-index.json', { type: 'json' }).catch(() => null)) as any;
+      const activeJobs = (index?.activeJobs || []) as string[];
+      
+      if (activeJobs.length === 0) {
+        console.log('No active jobs to process');
+        return { statusCode: 200, body: JSON.stringify({ ok: true, message: 'No active jobs' }) };
+      }
+      
+      targetJobId = activeJobs[0];
+    }
+
+    // Get the queue for this job
+    const queueKey = `category-fetch-queue-${targetJobId}.json`;
     const queue = (await store.get(queueKey, { type: 'json' }).catch(() => null)) as any;
     
     if (!queue || !Array.isArray(queue.categories) || queue.categories.length === 0) {
-      console.log('No categories in queue');
+      console.log(`Queue for job ${targetJobId} is empty or not found`);
+      
+      // Remove from active jobs
+      const index = (await store.get('category-fetch-index.json', { type: 'json' }).catch(() => null)) as any;
+      const activeJobs = (index?.activeJobs || []) as string[];
+      await store.setJSON('category-fetch-index.json', {
+        activeJobs: activeJobs.filter(id => id !== targetJobId),
+      });
+      
       return { statusCode: 200, body: JSON.stringify({ ok: true, message: 'Queue empty' }) };
     }
 
     // Get job status
-    const statusKey = `category-fetch-status-${queue.jobId}.json`;
+    const statusKey = `category-fetch-status-${targetJobId}.json`;
     let status = (await store.get(statusKey, { type: 'json' }).catch(() => null)) as JobStatus | null;
     
     if (!status) {
       status = {
-        jobId: queue.jobId,
+        jobId: targetJobId,
         status: 'running',
-        total: queue.total || queue.categories.length,
+        total: queue.categories.length,
         processed: 0,
         success: 0,
         failed: 0,
@@ -72,6 +103,7 @@ export const handler: Handler = async (event) => {
     }
 
     status.status = 'running';
+    status.updatedAt = Date.now();
 
     // Get eBay credentials
     const saved = (await store.get('ebay.json', { type: 'json' })) as any;
@@ -151,22 +183,48 @@ export const handler: Handler = async (event) => {
       status.processed++;
     }
 
-    // Update queue and status
-    await store.set(queueKey, JSON.stringify(queue));
+    // Update status
+    status.updatedAt = Date.now();
     
     if (queue.categories.length === 0) {
+      // Job completed
       status.status = 'completed';
       status.completedAt = Date.now();
+      
+      // Remove from active jobs
+      const index = (await store.get('category-fetch-index.json', { type: 'json' }).catch(() => null)) as any;
+      const activeJobs = (index?.activeJobs || []) as string[];
+      await store.setJSON('category-fetch-index.json', {
+        activeJobs: activeJobs.filter(id => id !== targetJobId),
+      });
+    } else {
+      // Still processing - update queue and trigger next batch
+      status.status = 'running';
+      await store.setJSON(queueKey, queue);
+      
+      // Re-trigger this function for the next batch
+      const baseUrl = process.env.APP_URL || process.env.URL || process.env.DEPLOY_PRIME_URL || process.env.DEPLOY_URL || 'https://ebaywebhooks.netlify.app';
+      const target = `${baseUrl.replace(/\/$/, '')}/.netlify/functions/ebay-fetch-categories-background`;
+      
+      fetch(target, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: targetJobId }),
+      }).catch(err => {
+        console.warn('Failed to trigger next batch:', err?.message);
+      });
     }
     
-    await store.set(statusKey, JSON.stringify(status));
+    // Save updated status
+    await store.setJSON(statusKey, status);
 
     return {
       statusCode: 200,
       body: JSON.stringify({
         ok: true,
-        jobId: queue.jobId,
+        jobId: targetJobId,
         processed: status.processed,
+        total: status.total,
         remaining: queue.categories.length,
         status: status.status,
       }),

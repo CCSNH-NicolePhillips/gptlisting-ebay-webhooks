@@ -223,6 +223,26 @@ export const handler: Handler = async (event) => {
       await blobStore.setJSON('category-fetch-index.json', { activeJobs });
     }
 
+    // Trigger background worker to start processing
+    const baseUrl = process.env.APP_URL || process.env.URL || process.env.DEPLOY_PRIME_URL || process.env.DEPLOY_URL || 'https://ebaywebhooks.netlify.app';
+    const target = `${baseUrl.replace(/\/$/, '')}/.netlify/functions/ebay-fetch-categories-background`;
+
+    try {
+      const resp = await fetch(target, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId }),
+      });
+
+      if (!resp.ok) {
+        console.warn(`Background worker invoke failed: ${resp.status} ${resp.statusText}`);
+        // Continue anyway - worker can be triggered manually or via external cron
+      }
+    } catch (err: any) {
+      console.warn('Background worker fetch exception:', err?.message);
+      // Continue anyway - worker can be triggered manually or via external cron
+    }
+
     return jsonResponse(200, {
       ok: true,
       jobId,
