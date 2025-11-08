@@ -60,19 +60,15 @@ export async function getCategory(slug: string): Promise<CategoryDef | null> {
 export async function getCategoryById(categoryId: string): Promise<CategoryDef | null> {
   if (!categoryId) return null;
   
-  // Try to get by ID directly (stored in index)
+  // Only get by ID directly - no expensive fallback scan
   const raw = await call("get", [`taxonomy:id:${categoryId}`]);
-  if (raw) {
-    try {
-      return JSON.parse(raw) as CategoryDef;
-    } catch {
-      // Fall through to search
-    }
-  }
+  if (!raw) return null;
   
-  // Fallback: search through all categories
-  const categories = await listCategories();
-  return categories.find((cat) => cat.id === categoryId) || null;
+  try {
+    return JSON.parse(raw) as CategoryDef;
+  } catch {
+    return null;
+  }
 }
 
 export async function listCategories(): Promise<CategoryDef[]> {
