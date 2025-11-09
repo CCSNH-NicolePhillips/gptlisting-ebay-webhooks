@@ -93,6 +93,13 @@ function conditionStringToCode(value: string): number | undefined {
 }
 
 function buildDescription(title: string, group: Record<string, any>): string {
+  // Use ChatGPT-generated description if available
+  if (group?.description && typeof group.description === "string" && group.description.trim()) {
+    console.log('[buildDescription] Using group.description:', group.description.slice(0, 100));
+    return group.description.trim().slice(0, 7000);
+  }
+
+  // Fallback: build description from title + variant/size/claims
   const lines: string[] = [title];
   if (group?.variant) lines.push(`Variant: ${group.variant}`);
   if (group?.size) lines.push(`Size: ${group.size}`);
@@ -106,6 +113,7 @@ function buildDescription(title: string, group: Record<string, any>): string {
     });
   }
 
+  console.log('[buildDescription] Built fallback description:', lines.join("\n").slice(0, 100));
   return lines.join("\n").slice(0, 7000);
 }
 
