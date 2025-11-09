@@ -272,14 +272,36 @@
       <div style="margin: 0.8rem 0 0.2rem; display: flex; gap: 0.5rem; align-items: center">
         <button id="btnCreate">Create draft</button>
         <button id="btnPublish" class="secondary" disabled>Publish now</button>
+        <button id="btnShowDebug" class="secondary" style="margin-left: auto">🐛 Debug</button>
         <span id="msg2" class="muted"></span>
       </div>
+      
+      <!-- Debug Panel -->
+      <details id="debugPanel" style="margin-top: 1rem; display: none">
+        <summary style="cursor: pointer; font-weight: bold; color: #0066cc">
+          🐛 Debug Info (Draft Data Being Sent)
+        </summary>
+        <div style="margin-top: 0.5rem; background: #f5f5f5; padding: 1rem; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">
+          <div style="margin-bottom: 0.5rem">
+            <strong>Group Data:</strong>
+            <pre id="debugGroup" style="background: white; padding: 0.5rem; overflow-x: auto; margin: 0.25rem 0"></pre>
+          </div>
+          <div style="margin-bottom: 0.5rem">
+            <strong>Mapped Draft (Inventory):</strong>
+            <pre id="debugInventory" style="background: white; padding: 0.5rem; overflow-x: auto; margin: 0.25rem 0"></pre>
+          </div>
+          <div>
+            <strong>Offer Data:</strong>
+            <pre id="debugOffer" style="background: white; padding: 0.5rem; overflow-x: auto; margin: 0.25rem 0"></pre>
+          </div>
+        </div>
+      </details>
     </div>
 
     <script>
       const $ = (id) => document.getElementById(id);
       const catPreview = $('categoryPreview');
-  const titleEl = $('title');
+      const titleEl = $('title');
       // removed search input
       const nextBtn = $('btnNext');
       const step2 = $('step2');
@@ -288,6 +310,11 @@
       const locationSel = $('location');
       const modal = $('browseModal');
       const browseBtn = $('btnBrowse');
+      const btnShowDebug = $('btnShowDebug');
+      const debugPanel = $('debugPanel');
+      const debugGroup = $('debugGroup');
+      const debugInventory = $('debugInventory');
+      const debugOffer = $('debugOffer');
 
       const browseClose = $('browseClose');
       const browseList = $('browseList');
@@ -297,6 +324,9 @@
       const skuHintEl = $('skuHint');
       const skuDefaultHint = 'Use 1-50 letters or numbers. No spaces or punctuation.';
       const skuPattern = /^[A-Za-z0-9]{1,50}$/;
+      
+      // Global to store last created draft data for debugging
+      let lastDraftData = null;
 
       function updateSkuHint(value) {
         if (!skuHintEl) return;
@@ -660,26 +690,30 @@
           return;
         }
         const aspects = collectAspects();
+        
+        // Store draft data for debugging
+        lastDraftData = {
+          sku,
+          title,
+          price,
+          qty,
+          images,
+          merchantLocationKey,
+          categoryId,
+          description: description || undefined,
+          condition: condition || undefined,
+          aspects: Object.keys(aspects).length ? aspects : undefined,
+          weightLbs: weightLbs || undefined,
+          weightOz: weightOz || undefined,
+        };
+        
         try {
           const weightLbs = (document.getElementById('weightLbs') || { value: '' }).value.trim();
           const weightOz = (document.getElementById('weightOz') || { value: '' }).value.trim();
           const r = await authClient.authFetch('/.netlify/functions/ebay-create-draft', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              sku,
-              title,
-              price,
-              qty,
-              images,
-              merchantLocationKey,
-              categoryId,
-              description: description || undefined,
-              condition: condition || undefined,
-              aspects: Object.keys(aspects).length ? aspects : undefined,
-              weightLbs: weightLbs || undefined,
-              weightOz: weightOz || undefined,
-            }),
+            body: JSON.stringify(lastDraftData),
           });
           const data = await r.json();
           const resultsCount = Array.isArray(data?.results) ? data.results.length : 0;
@@ -1123,6 +1157,28 @@
           loadFrom,
         };
       })();
+      
+      // Debug button handler
+      if (btnShowDebug) {
+        btnShowDebug.addEventListener('click', () => {
+          if (!lastDraftData) {
+            alert('No draft data yet. Create a draft first to see debug info.');
+            return;
+          }
+          
+          // Show the debug panel
+          debugPanel.style.display = 'block';
+          debugPanel.setAttribute('open', '');
+          
+          // Populate debug info
+          debugGroup.textContent = JSON.stringify(lastDraftData, null, 2);
+          debugInventory.textContent = 'Create draft to see what gets sent to eBay API...';
+          debugOffer.textContent = 'After draft is created, offerId will appear here.';
+          
+          // Scroll to it
+          debugPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        });
+      }
     </script>
   </body>
 </html>
