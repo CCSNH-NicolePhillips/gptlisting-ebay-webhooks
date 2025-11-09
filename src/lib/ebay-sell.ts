@@ -146,6 +146,16 @@ export async function putInventoryItem(
     payload.condition = inventory.condition;
   }
 
+  // Log the payload being sent to eBay for debugging
+  console.log('[putInventoryItem] Sending to eBay:', JSON.stringify({
+    sku,
+    title: (payload.product as any).title,
+    aspectsCount: Object.keys((payload.product as any).aspects || {}).length,
+    aspects: (payload.product as any).aspects,
+    hasBrand: !!(payload.product as any).aspects?.Brand,
+    brandValue: (payload.product as any).aspects?.Brand,
+  }, null, 2));
+
   const url = `${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
   const res = await fetch(url, {
     method: "PUT",
@@ -155,8 +165,11 @@ export async function putInventoryItem(
 
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
+    console.error('[putInventoryItem] eBay rejected:', detail);
     throw new Error(`Inventory PUT failed ${res.status}: ${detail}`);
   }
+  
+  console.log('[putInventoryItem] ✓ Success for SKU:', sku);
 }
 
 export type OfferCreationPayload = {
