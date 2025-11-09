@@ -133,6 +133,19 @@ export async function putInventoryItem(
       imageUrls: sanitizeImageUrls(inventory.product.imageUrls || []),
       aspects: sanitizeAspects(inventory.product.aspects || {}),
     },
+    // Add default package weight/size to prevent shipping errors
+    packageWeightAndSize: {
+      dimensions: {
+        height: 3,
+        length: 6,
+        width: 4,
+        unit: "INCH"
+      },
+      weight: {
+        value: 1,
+        unit: "POUND"
+      }
+    }
   };
 
   // Ensure at least one valid image URL remains
