@@ -22,18 +22,24 @@ export const handler: Handler = async (event) => {
 			marketplaceId: MARKETPLACE_ID,
 			response: tJson 
 		});
-		const treeId = tJson?.categoryTreeId;
+		let treeId = tJson?.categoryTreeId;
 		if (!treeId) {
-			console.error('[ebay-category-browse] No tree ID returned from eBay:', tJson);
-			return { 
-				statusCode: 500, 
-				body: JSON.stringify({ 
-					error: 'no tree id', 
-					detail: tJson,
-					marketplaceId: MARKETPLACE_ID,
-					apiHost 
-				}) 
-			};
+			const fallback = (process.env.EBAY_DEFAULT_CATEGORY_TREE_ID || '0').trim();
+			if (fallback) {
+				console.warn('[ebay-category-browse] Falling back to default tree ID', fallback);
+				treeId = fallback;
+			} else {
+				console.error('[ebay-category-browse] No tree ID returned from eBay and no fallback configured:', tJson);
+				return {
+					statusCode: 500,
+					body: JSON.stringify({
+						error: 'no tree id',
+						detail: tJson,
+						marketplaceId: MARKETPLACE_ID,
+						apiHost,
+					})
+				};
+			}
 		}
 
 		function mapChildren(
