@@ -180,6 +180,11 @@ export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>): P
       
       console.log(`Using fallback condition: ${offerCondition}`);
     }
+  } else {
+    // No condition data available - use safest default
+    // USED (3000) is accepted by most categories, NEW (1000) is often restricted
+    console.warn(`Category ${categoryId} has no allowedConditions data. Using USED (3000) as safe default.`);
+    offerCondition = 3000;
   }
   
   const quantity = deriveQuantity(group, matched);
