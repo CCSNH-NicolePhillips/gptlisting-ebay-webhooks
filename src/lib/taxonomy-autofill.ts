@@ -93,18 +93,23 @@ export function buildItemSpecifics(cat: CategoryDef, group: GroupRecord): Record
     console.log(`✓ Brand already set: "${aspects.Brand[0]}"`);
   }
 
-  // Fill in common required aspects that might be missing with sensible defaults
-  // This handles cases where ChatGPT picks a category but doesn't provide all required aspects
+  // Fill in common required aspects with sensible defaults
+  // Always ensure these are present, regardless of whether category marks them as required
   const commonDefaults: Record<string, string> = {
     'Type': 'Other',
     'Model': 'Does Not Apply',
     'MPN': 'Does Not Apply',
     'Country/Region of Manufacture': 'Unknown',
+    'UPC': 'Does Not Apply',
+    'ISBN': 'Does Not Apply',
+    'EAN': 'Does Not Apply',
   };
 
   for (const [aspectName, defaultValue] of Object.entries(commonDefaults)) {
-    if (requiredAspects.has(aspectName) && (!aspects[aspectName] || aspects[aspectName].length === 0)) {
+    // Fill if missing OR empty
+    if (!aspects[aspectName] || aspects[aspectName].length === 0 || !aspects[aspectName][0]?.trim()) {
       aspects[aspectName] = [defaultValue];
+      console.log(`✓ ${aspectName} auto-filled with: "${defaultValue}"`);
     }
   }
 
