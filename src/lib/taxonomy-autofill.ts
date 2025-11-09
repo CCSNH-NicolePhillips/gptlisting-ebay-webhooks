@@ -22,6 +22,15 @@ function extractGroupValue(group: GroupRecord, specific: ItemSpecific): string |
 }
 
 export function buildItemSpecifics(cat: CategoryDef, group: GroupRecord): Record<string, string[]> {
+  console.log('[buildItemSpecifics] Input group:', JSON.stringify({
+    brand: group.brand,
+    product: group.product,
+    manufacturer: group.manufacturer,
+    category: group.category,
+    aspectsKeys: group.aspects ? Object.keys(group.aspects) : [],
+    allKeys: Object.keys(group),
+  }, null, 2));
+  
   const aspects: Record<string, string[]> = {};
   const requiredAspects = new Set<string>();
 
