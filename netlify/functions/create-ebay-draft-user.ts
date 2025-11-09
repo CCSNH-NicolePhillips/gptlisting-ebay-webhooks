@@ -282,6 +282,10 @@ export const handler: Handler = async (event) => {
       }
       merchantLocationKey = resolvedKey;
 
+      console.log(`[create-ebay-draft-user] About to create inventory for SKU: ${mapped.sku}`);
+      console.log(`[create-ebay-draft-user] Inventory aspects:`, JSON.stringify(mapped.inventory?.product?.aspects, null, 2));
+      console.log(`[create-ebay-draft-user] Has Brand? ${!!mapped.inventory?.product?.aspects?.Brand}, Brand value:`, mapped.inventory?.product?.aspects?.Brand);
+
   await putInventoryItem(access.token, access.apiHost, mapped.sku, mapped.inventory, mapped.offer.quantity, marketplaceId);
 
       let offerResult;
