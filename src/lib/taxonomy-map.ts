@@ -156,7 +156,32 @@ export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>): P
   const categoryId = matched?.id || DEFAULT_CATEGORY;
   const marketplaceId = matched?.marketplaceId || DEFAULT_MARKETPLACE;
   const condition = (matched?.defaults?.condition || group?.condition || DEFAULT_CONDITION).toString();
-  const offerCondition = conditionStringToCode(condition) ?? 1000;
+  
+  // Get condition code, but validate against allowed conditions
+  let offerCondition = conditionStringToCode(condition) ?? 1000;
+  
+  // If category has allowed conditions, ensure the selected condition is valid
+  if (matched?.allowedConditions && matched.allowedConditions.length > 0) {
+    const allowedIds = matched.allowedConditions.map(c => c.conditionId);
+    const conditionStr = String(offerCondition);
+    
+    if (!allowedIds.includes(conditionStr)) {
+      // Condition not allowed, try to find best fallback
+      console.warn(`Condition ${offerCondition} not allowed for category ${categoryId}. Allowed: ${allowedIds.join(', ')}`);
+      
+      // Priority fallback: USED (3000) > NEW (1000) > first allowed
+      if (allowedIds.includes('3000')) {
+        offerCondition = 3000;
+      } else if (allowedIds.includes('1000')) {
+        offerCondition = 1000;
+      } else {
+        offerCondition = parseInt(allowedIds[0], 10);
+      }
+      
+      console.log(`Using fallback condition: ${offerCondition}`);
+    }
+  }
+  
   const quantity = deriveQuantity(group, matched);
   const aspects = matched ? buildItemSpecifics(matched, group) : {};
   const description = buildDescription(title, group);
