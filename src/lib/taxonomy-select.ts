@@ -39,9 +39,39 @@ export async function pickCategoryForGroup(group: Record<string, any>): Promise<
     if (categoryId) {
       const cached = await getCategoryById(categoryId);
       if (cached) {
+        console.log('[pickCategoryForGroup] Found category by ID:', categoryId);
         return cached;
       }
-      // Category not in cache yet - will use default or fetch later
+    }
+    
+    // Try to match by category title/path
+    const categoryTitle = String(group.category.title || '').trim();
+    if (categoryTitle) {
+      const categories = await getCategories();
+      const titleNorm = normalize(categoryTitle);
+      console.log('[pickCategoryForGroup] Searching for category by title:', categoryTitle);
+      
+      // Look for exact title match or path match
+      for (const cat of categories) {
+        const catTitleNorm = normalize(cat.title || '');
+        const catSlugNorm = normalize(cat.slug || '');
+        
+        if (catTitleNorm === titleNorm || catSlugNorm === titleNorm) {
+          console.log('[pickCategoryForGroup] Exact match found:', cat.id, cat.title);
+          return cat;
+        }
+        
+        // Check if the category path matches (e.g., "Books > Biography" matches category with that path)
+        if (titleNorm.includes('>')) {
+          const parts = titleNorm.split('>').map(p => p.trim());
+          const lastPart = parts[parts.length - 1];
+          if (catTitleNorm.includes(lastPart) || catSlugNorm.includes(lastPart)) {
+            console.log('[pickCategoryForGroup] Partial path match found:', cat.id, cat.title);
+            return cat;
+          }
+        }
+      }
+      console.log('[pickCategoryForGroup] No category match found for title:', categoryTitle);
     }
   }
 
@@ -50,6 +80,8 @@ export async function pickCategoryForGroup(group: Record<string, any>): Promise<
 
   const haystack = collectHaystack(group);
   if (!haystack) return null;
+
+  console.log('[pickCategoryForGroup] Falling back to scoreRules matching with haystack:', haystack.slice(0, 100));
 
   let best: CategoryDef | null = null;
   let bestScore = Number.NEGATIVE_INFINITY;
@@ -75,6 +107,12 @@ export async function pickCategoryForGroup(group: Record<string, any>): Promise<
       best = cat;
       bestScore = score;
     }
+  }
+
+  if (best) {
+    console.log('[pickCategoryForGroup] ScoreRules match found:', best.id, best.title, 'score:', bestScore);
+  } else {
+    console.log('[pickCategoryForGroup] No scoreRules match found');
   }
 
   return best;
