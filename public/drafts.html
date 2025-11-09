@@ -370,25 +370,41 @@
         
         fix.onclick = async () => {
           fix.disabled = true;
+          fix.textContent = 'Fixing...';
           flash.textContent = 'Fixing aspects...';
           try {
             const exec = (window.authClient && typeof window.authClient.authFetch === 'function') ? window.authClient.authFetch : fetch;
-            const r = await exec('/.netlify/functions/ebay-fix-draft-aspects', {
+            
+            // Add timeout to prevent hanging
+            const timeoutPromise = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Request timed out after 30 seconds')), 30000)
+            );
+            
+            const fetchPromise = exec('/.netlify/functions/ebay-fix-draft-aspects', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ offerId: offer.offerId }),
             });
+            
+            const r = await Promise.race([fetchPromise, timeoutPromise]);
             const data = await r.json();
+            
+            console.log('[Fix Aspects] Response:', data);
+            
             if (r.ok && data.ok) {
-              flash.textContent = `Fixed aspects for ${offer.offerId}. Added: ${(data.added || []).join(', ')}`;
-              load(); // Reload to show updated draft
+              flash.textContent = `✓ Fixed! Added: ${(data.added || []).join(', ')}`;
+              fix.textContent = 'Fix Aspects';
+              setTimeout(() => load(), 1500); // Reload after showing message
             } else {
-              flash.textContent = `Fix failed: ${data.error || 'unknown error'}`;
+              flash.textContent = `Fix failed: ${data.error || 'unknown error'}${data.detail ? ' - ' + data.detail : ''}`;
               fix.disabled = false;
+              fix.textContent = 'Retry Fix';
             }
           } catch (e) {
+            console.error('[Fix Aspects] Error:', e);
             flash.textContent = 'Fix error: ' + e.message;
             fix.disabled = false;
+            fix.textContent = 'Retry Fix';
           }
         };
 
