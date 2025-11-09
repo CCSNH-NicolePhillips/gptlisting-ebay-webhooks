@@ -55,7 +55,7 @@ If you see `429 Unknown Error`, you're currently rate limited.
 
 ## Current Status
 
-- **Primary App**: `NicoleHa-GPTListi-PRD-1c595f5ca-b22548d4`
+- **Primary App**: `YOUR-APP-NAME-PRD-xxxxxxxxx-xxxxxxxx` (configured in env)
 - **Fallback App**: Not yet configured
 - **Categories Cached**: 7,361 / 15,111 (49%)
 - **Remaining**: 7,750
