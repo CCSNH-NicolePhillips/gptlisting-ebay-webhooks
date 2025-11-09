@@ -778,7 +778,15 @@ async function processItem(item: DraftItem, ctx: ProcessContext) {
     // ignore weight issues
   }
   if (item.inventoryCondition) inventoryPayload.condition = item.inventoryCondition;
-  if (item.aspects) (inventoryPayload.product as any).aspects = item.aspects;
+  if (item.aspects) {
+    console.log(`[processItem] Adding aspects for SKU ${item.sku}:`, JSON.stringify(item.aspects, null, 2));
+    console.log(`[processItem] Has Brand? ${!!item.aspects.Brand}, Brand value:`, item.aspects.Brand);
+    (inventoryPayload.product as any).aspects = item.aspects;
+  } else {
+    console.warn(`[processItem] NO ASPECTS for SKU ${item.sku}!`);
+  }
+
+  console.log(`[processItem] Sending inventory PUT for SKU ${item.sku} with payload:`, JSON.stringify(inventoryPayload, null, 2));
 
   const invUrl = `${ctx.apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(item.sku)}`;
   const invRes = await fetch(invUrl, {
@@ -787,6 +795,8 @@ async function processItem(item: DraftItem, ctx: ProcessContext) {
     body: JSON.stringify(inventoryPayload),
   });
   if (!invRes.ok) {
+    const errorDetail = await safeBody(invRes);
+    console.error(`[processItem] Inventory PUT failed for SKU ${item.sku}:`, errorDetail);
     throw buildError("inventory put failed", {
       step: "put-inventory-item",
       status: invRes.status,
