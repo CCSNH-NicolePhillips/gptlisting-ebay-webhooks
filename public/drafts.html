@@ -360,9 +360,37 @@
         const pub = document.createElement('button');
         pub.className = 'btn';
         pub.textContent = 'Publish';
+        const fix = document.createElement('button');
+        fix.className = 'btn secondary';
+        fix.textContent = 'Fix Aspects';
+        fix.title = 'Add missing Brand, Type, etc.';
         const del = document.createElement('button');
         del.className = 'btn danger';
         del.textContent = 'Delete';
+        
+        fix.onclick = async () => {
+          fix.disabled = true;
+          flash.textContent = 'Fixing aspects...';
+          try {
+            const exec = (window.authClient && typeof window.authClient.authFetch === 'function') ? window.authClient.authFetch : fetch;
+            const r = await exec('/.netlify/functions/ebay-fix-draft-aspects', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ offerId: offer.offerId }),
+            });
+            const data = await r.json();
+            if (r.ok && data.ok) {
+              flash.textContent = `Fixed aspects for ${offer.offerId}. Added: ${(data.added || []).join(', ')}`;
+              load(); // Reload to show updated draft
+            } else {
+              flash.textContent = `Fix failed: ${data.error || 'unknown error'}`;
+              fix.disabled = false;
+            }
+          } catch (e) {
+            flash.textContent = 'Fix error: ' + e.message;
+            fix.disabled = false;
+          }
+        };
 
         pub.onclick = async () => {
           pub.disabled = true;
@@ -455,8 +483,9 @@
         };
 
         row.appendChild(pub);
+        row.appendChild(fix);
         row.appendChild(del);
-  body.appendChild(title);
+        body.appendChild(title);
   if (desc.textContent) body.appendChild(desc);
   body.appendChild(meta);
         body.appendChild(badge);
