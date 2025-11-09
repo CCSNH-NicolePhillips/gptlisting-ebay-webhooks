@@ -197,7 +197,20 @@ export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>): P
   
   const quantity = deriveQuantity(group, matched);
   console.log('[mapGroupToDraftWithTaxonomy] About to call buildItemSpecifics, matched =', !!matched);
-  const aspects = matched ? buildItemSpecifics(matched, group) : {};
+  
+  // Always call buildItemSpecifics to merge group aspects, even if category lookup fails
+  // Pass a minimal CategoryDef if matched is null so the function can still process group.aspects
+  const fallbackCategory: CategoryDef = {
+    id: categoryId,
+    title: '',
+    slug: '',
+    marketplaceId: DEFAULT_MARKETPLACE,
+    itemSpecifics: [],
+    version: 0,
+    updatedAt: Date.now()
+  };
+  const aspects = buildItemSpecifics(matched || fallbackCategory, group);
+  
   console.log('[mapGroupToDraftWithTaxonomy] buildItemSpecifics returned:', {
     aspectsCount: Object.keys(aspects).length,
     hasAspects: Object.keys(aspects).length > 0,
