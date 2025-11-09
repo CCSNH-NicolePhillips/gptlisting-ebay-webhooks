@@ -22,6 +22,11 @@ export type CategoryDefaults = {
   returnPolicyId?: string;
 };
 
+export type AllowedCondition = {
+  conditionId: string;
+  conditionDisplayName: string;
+};
+
 export type CategoryDef = {
   id: string;
   slug: string;
@@ -30,6 +35,7 @@ export type CategoryDef = {
   scoreRules?: CategoryScoreRules;
   itemSpecifics: ItemSpecific[];
   defaults?: CategoryDefaults;
+  allowedConditions?: AllowedCondition[];
   version: number;
   updatedAt: number;
 };

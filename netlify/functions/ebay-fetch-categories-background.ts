@@ -385,6 +385,34 @@ export const handler: Handler = async (event) => {
           itemSpecifics.push(itemSpecific);
         }
 
+        // Fetch allowed conditions for this category
+        let allowedConditions: Array<{ conditionId: string; conditionDisplayName: string }> = [];
+        try {
+          const condPath = `/sell/metadata/v1/marketplace/${queue.marketplaceId}/get_item_condition_policies?category_id=${encodeURIComponent(cat.id)}`;
+          const condUrl = `${apiHost}${condPath}`;
+          const condResponse = await fetch(condUrl, { headers: fetchHeaders });
+          
+          if (condResponse.ok) {
+            const condData: any = await condResponse.json();
+            const conditions = condData?.itemConditionPolicies?.[0]?.itemConditions || [];
+            allowedConditions = conditions.map((c: any) => ({
+              conditionId: String(c.conditionId || ''),
+              conditionDisplayName: String(c.conditionDisplayName || ''),
+            })).filter((c: any) => c.conditionId);
+          }
+        } catch (err: any) {
+          // Fallback to taxonomy conditions if metadata API fails
+          try {
+            const taxCond = (data as any)?.itemConditionGroup?.itemConditions || [];
+            if (Array.isArray(taxCond) && taxCond.length) {
+              allowedConditions = taxCond.map((c: any) => ({
+                conditionId: String(c.conditionId || ''),
+                conditionDisplayName: String(c.conditionDisplayName || ''),
+              })).filter((c: any) => c.conditionId);
+            }
+          } catch {}
+        }
+
         const categoryName = data.categoryName || cat.name;
         const slug = categoryName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
@@ -394,6 +422,7 @@ export const handler: Handler = async (event) => {
           title: categoryName,
           marketplaceId: queue.marketplaceId,
           itemSpecifics,
+          allowedConditions: allowedConditions.length > 0 ? allowedConditions : undefined,
           version: 1,
           updatedAt: Date.now(),
         };
