@@ -51,7 +51,7 @@ export async function pickCategoryForGroup(group: Record<string, any>): Promise<
       const titleNorm = normalize(categoryTitle);
       console.log('[pickCategoryForGroup] Searching for category by title:', categoryTitle);
       
-      // Look for exact title match or path match
+      // Look for exact title match or slug match first
       for (const cat of categories) {
         const catTitleNorm = normalize(cat.title || '');
         const catSlugNorm = normalize(cat.slug || '');
@@ -60,18 +60,74 @@ export async function pickCategoryForGroup(group: Record<string, any>): Promise<
           console.log('[pickCategoryForGroup] Exact match found:', cat.id, cat.title);
           return cat;
         }
+      }
+      
+      // If we have a path like "Books > Biography", match ALL parts in sequence
+      if (titleNorm.includes('>')) {
+        const parts = titleNorm.split('>').map(p => p.trim());
+        console.log('[pickCategoryForGroup] Matching category path parts:', parts);
         
-        // Check if the category path matches (e.g., "Books > Biography" matches category with that path)
-        if (titleNorm.includes('>')) {
-          const parts = titleNorm.split('>').map(p => p.trim());
-          const lastPart = parts[parts.length - 1];
-          if (catTitleNorm.includes(lastPart) || catSlugNorm.includes(lastPart)) {
-            console.log('[pickCategoryForGroup] Partial path match found:', cat.id, cat.title);
+        for (const cat of categories) {
+          const catTitleNorm = normalize(cat.title || '');
+          const catSlugNorm = normalize(cat.slug || '');
+          
+          // All parts must appear in order in the category title/slug
+          let allMatch = true;
+          for (const part of parts) {
+            if (!catTitleNorm.includes(part) && !catSlugNorm.includes(part)) {
+              allMatch = false;
+              break;
+            }
+          }
+          
+          if (allMatch) {
+            console.log('[pickCategoryForGroup] Full path match found:', cat.id, cat.title);
             return cat;
           }
         }
       }
       console.log('[pickCategoryForGroup] No category match found for title:', categoryTitle);
+      
+      // If category path matching failed, extract keywords to help scoreRules matching
+      // e.g., "Books > Biography" -> add "books" and "biography" to haystack
+      if (titleNorm.includes('>')) {
+        const categoryKeywords = titleNorm.split('>').map(p => p.trim()).join(' ');
+        const enhancedHaystack = collectHaystack(group) + ' ' + categoryKeywords;
+        console.log('[pickCategoryForGroup] Enhanced haystack with category keywords:', enhancedHaystack.slice(0, 150));
+        
+        // Try scoreRules matching with enhanced haystack
+        const categories = await getCategories();
+        let best: CategoryDef | null = null;
+        let bestScore = Number.NEGATIVE_INFINITY;
+
+        for (const cat of categories) {
+          const includes = Array.isArray(cat.scoreRules?.includes)
+            ? cat.scoreRules!.includes.map((entry) => normalize(entry))
+            : [];
+          const excludes = Array.isArray(cat.scoreRules?.excludes)
+            ? cat.scoreRules!.excludes.map((entry) => normalize(entry))
+            : [];
+          const minScore = cat.scoreRules?.minScore ?? 1;
+
+          let score = 0;
+          for (const needle of includes) {
+            if (needle && enhancedHaystack.includes(needle)) score += 1;
+          }
+          for (const block of excludes) {
+            if (block && enhancedHaystack.includes(block)) score -= 2;
+          }
+
+          if (score > bestScore && score >= minScore) {
+            best = cat;
+            bestScore = score;
+          }
+        }
+
+        if (best) {
+          console.log('[pickCategoryForGroup] Enhanced scoreRules match found:', best.id, best.title, 'score:', bestScore);
+          return best;
+        }
+      }
     }
   }
 
