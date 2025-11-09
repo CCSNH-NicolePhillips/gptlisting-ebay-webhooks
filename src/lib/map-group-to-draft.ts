@@ -1,5 +1,6 @@
 import { mapGroupToDraftWithTaxonomy, type TaxonomyMappedDraft } from "./taxonomy-map.js";
 import { k } from "./user-keys.js";
+import { proxyImageUrls } from "./image-utils.js";
 
 const BASE = (process.env.UPSTASH_REDIS_REST_URL || "").replace(/\/$/, "");
 const TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -213,28 +214,38 @@ export async function mapGroupToDraft(group: Record<string, any>, opts?: MapOpti
   const groupIdRaw = group?.groupId ?? group?.id ?? null;
   const groupId = typeof groupIdRaw === "string" ? groupIdRaw.trim() : "";
 
+  let draft: TaxonomyMappedDraft;
   if (!options.userId || !options.jobId || !groupId) {
     console.log('[mapGroupToDraft] No override - returning base');
-    return base;
+    draft = base;
+  } else {
+    const override = await fetchOverride(options.userId, options.jobId, groupId);
+    if (!override) {
+      console.log('[mapGroupToDraft] No override found - returning base');
+      draft = base;
+    } else {
+      console.log('[mapGroupToDraft] Applying override:', JSON.stringify(override, null, 2));
+      draft = applyOverride(base, override);
+      
+      console.log('[mapGroupToDraft] Final result after override:', JSON.stringify({
+        sku: draft.sku,
+        aspectsCount: Object.keys(draft.inventory?.product?.aspects || {}).length,
+        aspects: draft.inventory?.product?.aspects,
+        hasBrand: !!draft.inventory?.product?.aspects?.Brand
+      }, null, 2));
+    }
   }
 
-  const override = await fetchOverride(options.userId, options.jobId, groupId);
-  if (!override) {
-    console.log('[mapGroupToDraft] No override found - returning base');
-    return base;
+  // Proxy all images through image-proxy to handle EXIF rotation and normalization
+  const imageUrls = draft.inventory?.product?.imageUrls;
+  if (imageUrls && Array.isArray(imageUrls) && imageUrls.length > 0) {
+    const appUrl = process.env.APP_URL || process.env.URL || process.env.DEPLOY_PRIME_URL || process.env.DEPLOY_URL;
+    const proxiedUrls = proxyImageUrls(imageUrls, appUrl);
+    console.log('[mapGroupToDraft] Proxied images:', { original: imageUrls.length, proxied: proxiedUrls.length });
+    draft.inventory.product.imageUrls = proxiedUrls;
   }
-
-  console.log('[mapGroupToDraft] Applying override:', JSON.stringify(override, null, 2));
-  const result = applyOverride(base, override);
   
-  console.log('[mapGroupToDraft] Final result after override:', JSON.stringify({
-    sku: result.sku,
-    aspectsCount: Object.keys(result.inventory?.product?.aspects || {}).length,
-    aspects: result.inventory?.product?.aspects,
-    hasBrand: !!result.inventory?.product?.aspects?.Brand
-  }, null, 2));
-  
-  return result;
+  return draft;
 }
 
 export type { TaxonomyMappedDraft } from "./taxonomy-map.js";
