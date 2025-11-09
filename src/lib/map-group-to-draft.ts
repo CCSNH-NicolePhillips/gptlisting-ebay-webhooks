@@ -192,20 +192,49 @@ function applyOverride(base: TaxonomyMappedDraft, override: OverrideRecord): Tax
 
 export async function mapGroupToDraft(group: Record<string, any>, opts?: MapOptions): Promise<TaxonomyMappedDraft> {
   const options = toOptions(opts);
+  
+  console.log('[mapGroupToDraft] Input group:', JSON.stringify({
+    brand: group.brand,
+    product: group.product,
+    groupId: group.groupId,
+    aspects: group.aspects,
+    allKeys: Object.keys(group)
+  }, null, 2));
+  
   const base = await mapGroupToDraftWithTaxonomy(group);
+  
+  console.log('[mapGroupToDraft] Base from taxonomy:', JSON.stringify({
+    sku: base.sku,
+    aspectsCount: Object.keys(base.inventory?.product?.aspects || {}).length,
+    aspects: base.inventory?.product?.aspects,
+    hasBrand: !!base.inventory?.product?.aspects?.Brand
+  }, null, 2));
+  
   const groupIdRaw = group?.groupId ?? group?.id ?? null;
   const groupId = typeof groupIdRaw === "string" ? groupIdRaw.trim() : "";
 
   if (!options.userId || !options.jobId || !groupId) {
+    console.log('[mapGroupToDraft] No override - returning base');
     return base;
   }
 
   const override = await fetchOverride(options.userId, options.jobId, groupId);
   if (!override) {
+    console.log('[mapGroupToDraft] No override found - returning base');
     return base;
   }
 
-  return applyOverride(base, override);
+  console.log('[mapGroupToDraft] Applying override:', JSON.stringify(override, null, 2));
+  const result = applyOverride(base, override);
+  
+  console.log('[mapGroupToDraft] Final result after override:', JSON.stringify({
+    sku: result.sku,
+    aspectsCount: Object.keys(result.inventory?.product?.aspects || {}).length,
+    aspects: result.inventory?.product?.aspects,
+    hasBrand: !!result.inventory?.product?.aspects?.Brand
+  }, null, 2));
+  
+  return result;
 }
 
 export type { TaxonomyMappedDraft } from "./taxonomy-map.js";
