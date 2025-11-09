@@ -264,12 +264,33 @@
         <div id="flash" class="flash"></div>
         <div>
           <button id="btnRefresh" class="btn secondary" title="Reload drafts">Refresh</button>
+          <button id="btnShowDebug" class="btn secondary">🐛 Debug Last Error</button>
         </div>
       </div>
+      
+      <!-- Debug Panel -->
+      <details id="debugPanel" style="margin-bottom: 1rem; display: none">
+        <summary style="cursor: pointer; font-weight: bold; color: #0066cc">
+          🐛 Debug Info (Last Publish Attempt)
+        </summary>
+        <div style="margin-top: 0.5rem; background: #f5f5f5; padding: 1rem; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">
+          <div style="margin-bottom: 0.5rem">
+            <strong>Offer Data:</strong>
+            <pre id="debugOffer" style="background: white; padding: 0.5rem; overflow-x: auto; margin: 0.25rem 0"></pre>
+          </div>
+          <div style="margin-bottom: 0.5rem">
+            <strong>Error Response:</strong>
+            <pre id="debugError" style="background: white; padding: 0.5rem; overflow-x: auto; margin: 0.25rem 0"></pre>
+          </div>
+        </div>
+      </details>
+      
       <div id="list" class="grid" aria-live="polite"></div>
     </div>
 
     <script>
+      // Store last publish attempt for debugging
+      let lastPublishAttempt = null;
       async function fetchJSON(url, opts) {
         const exec = authClient && typeof authClient.authFetch === 'function' ? authClient.authFetch : fetch;
         // Add cache-buster and force no-store to avoid stale CDN/browser caches
@@ -347,6 +368,14 @@
           pub.disabled = true;
           del.disabled = true;
           flash.textContent = 'Publishing…';
+          
+          // Store for debugging
+          lastPublishAttempt = {
+            offerId: offer.offerId,
+            offer: offer,
+            timestamp: new Date().toISOString(),
+          };
+          
           try {
             const exec = (window.authClient && typeof window.authClient.authFetch === 'function') ? window.authClient.authFetch : fetch;
             const r = await exec('/.netlify/functions/ebay-publish-offer', {
@@ -355,6 +384,11 @@
               body: JSON.stringify({ offerId: offer.offerId }),
             });
             const data = await r.json();
+            
+            // Store response for debugging
+            lastPublishAttempt.response = data;
+            lastPublishAttempt.status = r.status;
+            
             if (r.ok && data.ok && !data.deleted) {
               el.remove();
               flash.textContent = `Published ${offer.offerId}`;
@@ -654,6 +688,43 @@
           flash.textContent = 'Delete error: ' + (e?.message || String(e));
         }
       });
+      
+      // Debug button handler
+      document.getElementById('btnShowDebug')?.addEventListener('click', () => {
+        const debugPanel = document.getElementById('debugPanel');
+        const debugOffer = document.getElementById('debugOffer');
+        const debugError = document.getElementById('debugError');
+        
+        if (!lastPublishAttempt) {
+          alert('No publish attempts yet. Try publishing a draft first.');
+          return;
+        }
+        
+        // Show panel
+        debugPanel.style.display = 'block';
+        debugPanel.setAttribute('open', '');
+        
+        // Populate debug info
+        debugOffer.textContent = JSON.stringify({
+          offerId: lastPublishAttempt.offerId,
+          sku: lastPublishAttempt.offer?.sku,
+          categoryId: lastPublishAttempt.offer?.categoryId,
+          title: lastPublishAttempt.offer?.listing?.title,
+          aspects: lastPublishAttempt.offer?.listing?.aspects,
+          condition: lastPublishAttempt.offer?.listing?.condition,
+          status: lastPublishAttempt.offer?.status,
+        }, null, 2);
+        
+        debugError.textContent = JSON.stringify({
+          status: lastPublishAttempt.status,
+          response: lastPublishAttempt.response,
+          timestamp: lastPublishAttempt.timestamp,
+        }, null, 2);
+        
+        // Scroll to it
+        debugPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
+      
       async function bootstrap() {
         try {
           const ok = await authClient.requireAuth();
