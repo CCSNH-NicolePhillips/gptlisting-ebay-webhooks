@@ -153,6 +153,14 @@ export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>): P
   const sku = generateSku(group);
 
   const matched = await pickCategoryForGroup(group);
+  console.log('[mapGroupToDraftWithTaxonomy] pickCategoryForGroup result:', {
+    matched: !!matched,
+    categoryId: matched?.id,
+    categoryTitle: matched?.title,
+    hasItemSpecifics: !!matched?.itemSpecifics,
+    itemSpecificsCount: matched?.itemSpecifics?.length || 0
+  });
+  
   const categoryId = matched?.id || DEFAULT_CATEGORY;
   const marketplaceId = matched?.marketplaceId || DEFAULT_MARKETPLACE;
   const condition = (matched?.defaults?.condition || group?.condition || DEFAULT_CONDITION).toString();
@@ -188,7 +196,14 @@ export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>): P
   }
   
   const quantity = deriveQuantity(group, matched);
+  console.log('[mapGroupToDraftWithTaxonomy] About to call buildItemSpecifics, matched =', !!matched);
   const aspects = matched ? buildItemSpecifics(matched, group) : {};
+  console.log('[mapGroupToDraftWithTaxonomy] buildItemSpecifics returned:', {
+    aspectsCount: Object.keys(aspects).length,
+    hasAspects: Object.keys(aspects).length > 0,
+    hasBrand: !!aspects.Brand,
+    aspectKeys: Object.keys(aspects)
+  });
   const description = buildDescription(title, group);
 
   const fulfillmentPolicyId = matched?.defaults?.fulfillmentPolicyId || process.env.EBAY_FULFILLMENT_POLICY_ID || null;
