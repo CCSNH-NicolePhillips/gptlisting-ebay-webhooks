@@ -48,14 +48,28 @@ export function buildItemSpecifics(cat: CategoryDef, group: GroupRecord): Record
   }
 
   // Merge in aspects provided directly in the group (e.g., from ChatGPT)
+  console.log('[buildItemSpecifics] Checking group.aspects:', {
+    hasAspects: !!group.aspects,
+    aspectsType: typeof group.aspects,
+    aspectsKeys: group.aspects ? Object.keys(group.aspects) : [],
+    aspectsValue: group.aspects
+  });
+  
   if (group.aspects && typeof group.aspects === 'object') {
+    console.log('[buildItemSpecifics] Merging group.aspects into aspects...');
     for (const [name, value] of Object.entries(group.aspects)) {
       if (Array.isArray(value) && value.length > 0) {
         aspects[name] = value;
+        console.log(`  ✓ Merged ${name}: ${JSON.stringify(value)}`);
       } else if (typeof value === 'string' && value.trim()) {
         aspects[name] = [value.trim()];
+        console.log(`  ✓ Merged ${name}: ["${value.trim()}"]`);
+      } else {
+        console.log(`  ✗ Skipped ${name}: invalid value type/empty`);
       }
     }
+  } else {
+    console.log('[buildItemSpecifics] No valid group.aspects to merge');
   }
 
   // Ensure Brand is ALWAYS present (required by eBay for almost all categories)
