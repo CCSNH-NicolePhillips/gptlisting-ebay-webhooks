@@ -49,14 +49,48 @@ export function buildItemSpecifics(cat: CategoryDef, group: GroupRecord): Record
     }
   }
 
-  // Ensure Brand is always present (required by eBay for most categories)
-  if (!aspects.Brand || aspects.Brand.length === 0) {
+  // Ensure Brand is ALWAYS present (required by eBay for almost all categories)
+  if (!aspects.Brand || aspects.Brand.length === 0 || !aspects.Brand[0]?.trim()) {
+    // Try multiple sources for brand
+    let brandValue: string | undefined;
+    
+    // 1. Check group.brand
     if (group.brand && typeof group.brand === 'string' && group.brand.trim()) {
-      aspects.Brand = [group.brand.trim()];
-    } else {
-      // Fallback to "Unbranded" if no brand is specified
-      aspects.Brand = ['Unbranded'];
+      brandValue = group.brand.trim();
+      console.log(`✓ Brand set from group.brand: "${brandValue}"`);
     }
+    // 2. Check if brand is in a different field (common ChatGPT variations)
+    else if (group.manufacturer && typeof group.manufacturer === 'string' && group.manufacturer.trim()) {
+      brandValue = group.manufacturer.trim();
+      console.log(`✓ Brand set from group.manufacturer: "${brandValue}"`);
+    }
+    // 3. Extract from product name if it contains recognizable brand patterns
+    else if (group.product && typeof group.product === 'string') {
+      const productLower = group.product.toLowerCase();
+      // Common brand patterns (you can expand this list)
+      const commonBrands = ['nike', 'adidas', 'apple', 'samsung', 'sony', 'microsoft', 'dell', 'hp', 'lenovo', 'asus'];
+      for (const brand of commonBrands) {
+        if (productLower.includes(brand)) {
+          brandValue = brand.charAt(0).toUpperCase() + brand.slice(1);
+          console.log(`✓ Brand extracted from product name: "${brandValue}"`);
+          break;
+        }
+      }
+    }
+    
+    // Fallback to "Unbranded" if still no brand found
+    if (!brandValue) {
+      brandValue = 'Unbranded';
+      console.warn(`⚠️ No brand found in group, using fallback: "Unbranded"`, { 
+        groupKeys: Object.keys(group),
+        hasBrand: !!group.brand,
+        brandValue: group.brand 
+      });
+    }
+    
+    aspects.Brand = [brandValue];
+  } else {
+    console.log(`✓ Brand already set: "${aspects.Brand[0]}"`);
   }
 
   // Fill in common required aspects that might be missing with sensible defaults
