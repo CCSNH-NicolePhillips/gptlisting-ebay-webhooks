@@ -17,9 +17,24 @@ export const handler: Handler = async (event) => {
 			{ headers }
 		);
 		const tJson = await tRes.json();
+		console.log('[ebay-category-browse] eBay tree ID response:', { 
+			status: tRes.status, 
+			marketplaceId: MARKETPLACE_ID,
+			response: tJson 
+		});
 		const treeId = tJson?.categoryTreeId;
-		if (!treeId)
-			return { statusCode: 500, body: JSON.stringify({ error: 'no tree id', detail: tJson }) };
+		if (!treeId) {
+			console.error('[ebay-category-browse] No tree ID returned from eBay:', tJson);
+			return { 
+				statusCode: 500, 
+				body: JSON.stringify({ 
+					error: 'no tree id', 
+					detail: tJson,
+					marketplaceId: MARKETPLACE_ID,
+					apiHost 
+				}) 
+			};
+		}
 
 		function mapChildren(
 			node: any,
