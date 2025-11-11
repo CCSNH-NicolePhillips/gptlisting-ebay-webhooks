@@ -27,9 +27,8 @@ function generateSku(group: Record<string, any>): string {
   // Add timestamp + random for uniqueness (alphanumeric only)
   const unique = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
   
-  // Format: BrandInitials_ProductInitials_UniqueID
-  const parts = [brandInitials, productInitials, unique].filter(Boolean);
-  const sku = parts.join("_");
+  // Format: BrandInitialsProductInitialsUniqueID (no special chars, alphanumeric only)
+  const sku = brandInitials + productInitials + unique;
   
   return sanitizeSku(sku) || "sku" + unique;
 }
