@@ -30,10 +30,10 @@ export const handler: Handler = async (event) => {
 			'X-EBAY-C-MARKETPLACE-ID': MARKETPLACE_ID,
 		} as Record<string, string>;
 
-		async function listOnce(includeStatus: boolean, includeMarketplace: boolean) {
+			async function listOnce(includeStatus: boolean, includeMarketplace: boolean, statusParam?: string) {
 			const params = new URLSearchParams();
 			if (sku) params.set('sku', sku);
-			if (includeStatus && status) params.set('offer_status', status);
+				if (includeStatus && (statusParam || status)) params.set('offer_status', (statusParam || status)!);
 			if (includeMarketplace) params.set('marketplace_id', MARKETPLACE_ID);
 			params.set('limit', String(limit));
 			params.set('offset', String(offset));
@@ -118,10 +118,10 @@ export const handler: Handler = async (event) => {
 		// Helper to read offers length safely
 		const getOffers = (body: any) => (Array.isArray(body?.offers) ? body.offers : []);
 
-		async function aggregateForStatuses(sts: string[], includeMarketplace: boolean) {
+			async function aggregateForStatuses(sts: string[], includeMarketplace: boolean) {
 			const agg: any[] = [];
 			for (const st of sts) {
-				const r = await listOnce(true, includeMarketplace);
+					const r = await listOnce(true, includeMarketplace, st);
 				attempts.push(r);
 				if (!r.ok) continue;
 				const arr = getOffers(r.body);
@@ -133,7 +133,7 @@ export const handler: Handler = async (event) => {
 		let res: any;
 		let offers: any[] = [];
 
-		if (normalizedStatuses.length > 1) {
+			if (normalizedStatuses.length > 1) {
 			// Try with marketplace first
 			offers = await aggregateForStatuses(normalizedStatuses, true);
 			if (offers.length === 0) {
@@ -158,22 +158,22 @@ export const handler: Handler = async (event) => {
 		}
 
 		// Single status or none
-		if (status) {
-			res = await listOnce(true, true);
+			if (status) {
+				res = await listOnce(true, true, status);
 			attempts.push(res);
 		} else {
-			res = await listOnce(false, true);
+				res = await listOnce(false, true);
 			attempts.push(res);
 		}
 
 		// If failure with status present, try without status (some accounts/APIs reject offer_status)
-		if (!res.ok && status) {
-			res = await listOnce(false, true);
+			if (!res.ok && status) {
+				res = await listOnce(false, true);
 			attempts.push(res);
 		}
 		// If still bad, try without marketplace_id
 		if (!res.ok) {
-			res = await listOnce(Boolean(status), false);
+				res = await listOnce(Boolean(status), false, status);
 			attempts.push(res);
 		}
 
@@ -248,11 +248,16 @@ export const handler: Handler = async (event) => {
 		}
 
 		// If we removed the status filter, apply client-side filtering now
-		const final = status
-			? offers.filter(
-					(o: any) => String(o?.status || '').toUpperCase() === String(status).toUpperCase()
-				)
-			: offers;
+			const final = (status && String(status).trim())
+				? (() => {
+						const allow = String(status)
+							.split(',')
+							.map((s) => s.trim().toUpperCase())
+							.filter(Boolean);
+						if (!allow.length) return offers;
+						return offers.filter((o: any) => allow.includes(String(o?.status || '').toUpperCase()));
+					})()
+				: offers;
 		if (String(status || '') && res?.url?.includes('offer_status=')) {
 			// Already filtered by server; return upstream shape
 			return {
