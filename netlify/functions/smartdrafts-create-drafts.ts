@@ -65,7 +65,7 @@ type Draft = {
 /**
  * Call OpenAI with retry logic and timeout
  */
-async function callOpenAI(prompt: string): Promise<string> {
+async function callOpenAI(messages: any[]): Promise<string> {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error("Missing OPENAI_API_KEY");
   }
@@ -79,30 +79,7 @@ async function callOpenAI(prompt: string): Promise<string> {
           temperature: 0.7,
           max_tokens: Math.max(100, Math.min(4000, MAX_TOKENS)),
           response_format: { type: "json_object" },
-          messages: [
-            {
-              role: "system",
-              content:
-                "You are an expert eBay listing writer with access to current retail pricing data.\n" +
-                "Return ONLY strict JSON with keys: title, description, bullets, aspects, price, condition.\n" +
-                "- title: <=80 chars, high-signal product name, no emojis, no fluff.\n" +
-                "- description: 2-4 sentences, neutral factual claims (no medical), highlight key features.\n" +
-                "- bullets: array of 3-5 short benefit/feature points.\n" +
-                "- aspects: object with Brand, Type, Features, Size, etc. Include all relevant item specifics.\n" +
-                "- price: calculated eBay listing price (see pricing formula below)\n" +
-                "- condition: one of 'NEW', 'LIKE_NEW', 'USED_EXCELLENT', 'USED_GOOD', 'USED_ACCEPTABLE'\n" +
-                "\n" +
-                "PRICING FORMULA:\n" +
-                "1. Find the BASE PRICE from reputable retailers (Walmart, Amazon, or official product website)\n" +
-                "2. Calculate eBay listing price:\n" +
-                "   - If base price ≤ $30: eBay price = base price - 10%\n" +
-                "     Example: $21.00 base → $18.90 eBay price\n" +
-                "   - If base price > $30: eBay price = (base price - 10%) - $5\n" +
-                "     Example: $30 base → $27 - $5 = $22.00 eBay price\n" +
-                "3. Return the final eBay price as a number (e.g. 18.90, not '$18.90')\n",
-            },
-            { role: "user", content: prompt },
-          ],
+          messages,
         }),
         GPT_TIMEOUT_MS
       );
@@ -179,6 +156,46 @@ function buildPrompt(product: PairedProduct, categoryHint: CategoryHint | null):
   lines.push("Assess condition based on whether it appears to be new/sealed or used.");
   
   return lines.join("\n");
+}
+
+/**
+ * Build chat messages, optionally attaching images for vision-based extraction.
+ */
+function buildMessages(product: PairedProduct, prompt: string) {
+  // System prompt includes pricing and vision guidance, especially for books
+  const systemContent =
+    "You are an expert eBay listing writer with access to current retail pricing data.\n" +
+    "Return ONLY strict JSON with keys: title, description, bullets, aspects, price, condition.\n" +
+    "- title: <=80 chars, high-signal product name, no emojis, no fluff.\n" +
+    "- description: 2-4 sentences, neutral factual claims (no medical), highlight key features.\n" +
+    "- bullets: array of 3-5 short benefit/feature points.\n" +
+    "- aspects: object with Brand, Type, Features, Size, etc. Include all relevant item specifics.\n" +
+    "- price: calculated eBay listing price (see pricing formula below).\n" +
+    "- condition: one of 'NEW', 'LIKE_NEW', 'USED_EXCELLENT', 'USED_GOOD', 'USED_ACCEPTABLE'.\n" +
+    "\n" +
+    "If images are provided, READ THEM CAREFULLY. For BOOKS, extract Title, Author, Subtitle, Edition, Publisher, ISBN-13/ISBN-10, and Language from the front/back cover.\n" +
+    "Use these to populate title/description and aspects (e.g., Author, Format, Language, Publisher, ISBN-13).\n" +
+    "\n" +
+    "PRICING FORMULA:\n" +
+    "1. Find the BASE PRICE from reputable retailers (Walmart, Amazon, or official product website).\n" +
+    "2. Calculate eBay listing price:\n" +
+    "   - If base price ≤ $30: eBay price = base price - 10%\n" +
+    "   - If base price > $30: eBay price = (base price - 10%) - $5\n" +
+    "3. Return the final eBay price as a number (e.g. 18.90, not '$18.90').\n";
+
+  const userParts: any[] = [{ type: "text", text: prompt }];
+  // Attach images for vision parsing when available
+  const imgUrls = [product.heroDisplayUrl, product.backDisplayUrl, ...(product.extras || [])]
+    .filter(Boolean)
+    .slice(0, 4);
+  for (const url of imgUrls) {
+    userParts.push({ type: "image_url", image_url: { url } });
+  }
+
+  return [
+    { role: "system", content: systemContent },
+    { role: "user", content: userParts },
+  ];
 }
 
 /**
@@ -295,7 +312,8 @@ async function createDraftForProduct(product: PairedProduct): Promise<Draft> {
   
   // Step 3: Call GPT
   const gptStart = Date.now();
-  const responseText = await callOpenAI(prompt);
+  const messages = buildMessages(product, prompt);
+  const responseText = await callOpenAI(messages);
   console.log(`[Draft] GPT call took ${Date.now() - gptStart}ms for ${product.productId}`);
   console.log(`[Draft] GPT response for ${product.productId}:`, responseText.slice(0, 200) + '...');
   
