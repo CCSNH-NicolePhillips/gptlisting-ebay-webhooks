@@ -19,7 +19,17 @@ function generateSku(group: Record<string, any>): string {
   const fallback = group?.groupId || group?.id || Date.now().toString(36);
   // Add timestamp + random to ensure uniqueness across runs (alphanumeric only)
   const unique = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  return sanitizeSku([base, fallback, unique].filter(Boolean).join(""));
+  
+  // Build full SKU with unique suffix, but ensure unique part isn't truncated
+  const fullBase = [base, fallback].filter(Boolean).join("");
+  const sanitizedBase = sanitizeSku(fullBase);
+  const sanitizedUnique = sanitizeSku(unique);
+  
+  // Reserve space for unique suffix (typically ~14 chars)
+  const maxBaseLength = 50 - sanitizedUnique.length;
+  const trimmedBase = sanitizedBase.slice(0, maxBaseLength);
+  
+  return (trimmedBase + sanitizedUnique).slice(0, 50) || "sku";
 }
 
 function buildTitle(group: Record<string, any>): string {
