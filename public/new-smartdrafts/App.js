@@ -203,6 +203,8 @@ export function App() {
       }
       
       setDrafts(allDrafts);
+      console.log(`[doCreateDrafts] Final: created ${allDrafts.length} drafts from ${totalProducts} products`);
+      console.log(`[doCreateDrafts] Draft IDs:`, allDrafts.map(d => d.productId));
       showToast(`✨ Generated ${allDrafts.length} listing(s)!`);
       setLoadingStatus('');
       setTab('Drafts');
@@ -224,6 +226,8 @@ export function App() {
       if (!analysis?.jobId) {
         throw new Error('Missing jobId from analysis');
       }
+      
+      console.log(`[doPublishToEbay] Starting with ${drafts.length} drafts:`, drafts.map(d => d.productId));
       
       // Publish one item at a time to avoid 504 gateway timeout
       const chatgptJobId = `chatgpt-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -257,6 +261,7 @@ export function App() {
         
         try {
           const result = await publishDraftsToEbay(chatgptJobId, [group]);
+          console.log(`[Publish] Success for ${draft.productId}:`, result);
           allResults.push({ draft, result, ok: result.ok });
         } catch (err) {
           console.error(`[Publish] Failed for ${draft.productId}:`, err);
