@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Quick List</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #141a33;
+      --line: #2a335c;
+      --text: #f4f6fb;
+      --muted: #a2a9c8;
+      --primary: #4f7cff;
+      --primary-600: #3e66d6;
+      --success: #22c55e;
+      --warning: #f59e0b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      padding: 2rem 1rem;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    h1 {
+      font-size: 2rem;
+      margin: 0 0 0.5rem;
+    }
+    .subtitle {
+      color: var(--muted);
+      margin-bottom: 2rem;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .step {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem;
+      background: rgba(255,255,255,0.02);
+      border-radius: 8px;
+      margin-bottom: 0.75rem;
+      border: 1px solid transparent;
+    }
+    .step.active {
+      border-color: var(--primary);
+      background: rgba(79, 124, 255, 0.1);
+    }
+    .step.complete {
+      border-color: var(--success);
+      background: rgba(34, 197, 94, 0.1);
+    }
+    .step-num {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .step.active .step-num {
+      background: var(--primary);
+    }
+    .step.complete .step-num {
+      background: var(--success);
+    }
+    .step-content {
+      flex: 1;
+    }
+    .step-title {
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+    .step-desc {
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+    .step-status {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .step.complete .step-status {
+      color: var(--success);
+    }
+    .btn {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      transition: background 0.2s;
+    }
+    .btn:hover:not(:disabled) {
+      background: var(--primary-600);
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn.secondary {
+      background: transparent;
+      border: 1px solid var(--line);
+      color: var(--text);
+    }
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-right: 0.5rem;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .progress {
+      background: rgba(255,255,255,0.05);
+      border-radius: 4px;
+      height: 8px;
+      overflow: hidden;
+      margin-top: 1rem;
+    }
+    .progress-bar {
+      height: 100%;
+      background: var(--primary);
+      transition: width 0.3s;
+    }
+    .results {
+      display: none;
+      margin-top: 1.5rem;
+    }
+    .results.show {
+      display: block;
+    }
+    .result-summary {
+      display: flex;
+      justify-content: space-between;
+      padding: 1rem;
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid var(--success);
+      border-radius: 8px;
+      margin-bottom: 1rem;
+    }
+    .result-stat {
+      text-align: center;
+    }
+    .result-num {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--success);
+    }
+    .result-label {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .actions {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <script src="/auth-client.js"></script>
+  
+  <div class="container">
+    <h1>Quick List</h1>
+    <p class="subtitle">Scan, analyze, and create eBay drafts in one click</p>
+    
+    <div class="card">
+      <div class="step" id="step1">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <div class="step-title">Scan Images</div>
+          <div class="step-desc">Analyze product photos and extract details</div>
+        </div>
+        <div class="step-status" id="status1">Pending</div>
+      </div>
+      
+      <div class="step" id="step2">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <div class="step-title">Match Products</div>
+          <div class="step-desc">Pair front/back images and identify products</div>
+        </div>
+        <div class="step-status" id="status2">Pending</div>
+      </div>
+      
+      <div class="step" id="step3">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <div class="step-title">Generate Listings</div>
+          <div class="step-desc">Create titles, descriptions, and pricing with AI</div>
+        </div>
+        <div class="step-status" id="status3">Pending</div>
+      </div>
+      
+      <div class="step" id="step4">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <div class="step-title">Send to eBay Drafts</div>
+          <div class="step-desc">Create unpublished listings ready to review</div>
+        </div>
+        <div class="step-status" id="status4">Pending</div>
+      </div>
+      
+      <div class="progress">
+        <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+      </div>
+    </div>
+    
+    <button class="btn" id="btnStart" onclick="startPipeline()">
+      Start Quick List
+    </button>
+    
+    <div class="results" id="results">
+      <div class="result-summary">
+        <div class="result-stat">
+          <div class="result-num" id="totalDrafts">0</div>
+          <div class="result-label">Drafts Created</div>
+        </div>
+        <div class="result-stat">
+          <div class="result-num" id="totalImages">0</div>
+          <div class="result-label">Images Processed</div>
+        </div>
+        <div class="result-stat">
+          <div class="result-num" id="totalPaired">0</div>
+          <div class="result-label">Products Matched</div>
+        </div>
+      </div>
+      
+      <div class="actions">
+        <a href="/drafts.html" class="btn">View Drafts</a>
+        <button class="btn secondary" onclick="resetPipeline()">Run Again</button>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const exec = window.authClient?.authFetch || fetch;
+    
+    let currentJobId = null;
+    
+    async function fetchJSON(url, opts = {}) {
+      const r = await exec(url, opts);
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      return data;
+    }
+    
+    function updateStep(num, status) {
+      const step = $(`step${num}`);
+      const statusEl = $(`status${num}`);
+      
+      step.classList.remove('active', 'complete');
+      if (status === 'active') {
+        step.classList.add('active');
+        statusEl.innerHTML = '<span class="spinner"></span>Running...';
+      } else if (status === 'complete') {
+        step.classList.add('complete');
+        statusEl.textContent = '✓ Complete';
+      }
+      
+      // Update progress bar
+      const progress = (num / 4) * 100;
+      $('progressBar').style.width = `${progress}%`;
+    }
+    
+    async function startPipeline() {
+      const btn = $('btnStart');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Running...';
+      $('results').classList.remove('show');
+      
+      try {
+        // Step 1: Analyze
+        updateStep(1, 'active');
+        const analyzeRes = await fetchJSON('/.netlify/functions/smartdrafts-analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'analyze' })
+        });
+        
+        if (!analyzeRes.ok || !analyzeRes.jobId) {
+          throw new Error(analyzeRes.error || 'Analyze failed');
+        }
+        
+        currentJobId = analyzeRes.jobId;
+        updateStep(1, 'complete');
+        $('totalImages').textContent = analyzeRes.totalImages || 0;
+        
+        // Step 2: Pair
+        updateStep(2, 'active');
+        const pairRes = await fetchJSON('/.netlify/functions/smartdrafts-pair', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jobId: currentJobId })
+        });
+        
+        if (!pairRes.ok) {
+          throw new Error(pairRes.error || 'Pairing failed');
+        }
+        
+        updateStep(2, 'complete');
+        const pairCount = pairRes.pairs?.length || 0;
+        $('totalPaired').textContent = pairCount;
+        
+        if (pairCount === 0) {
+          throw new Error('No products were paired. Please check your images.');
+        }
+        
+        // Step 3: Create Drafts (one at a time)
+        updateStep(3, 'active');
+        let draftsCreated = 0;
+        
+        for (let i = 0; i < pairCount; i++) {
+          const draftRes = await fetchJSON('/.netlify/functions/smartdrafts-create-drafts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ jobId: currentJobId })
+          });
+          
+          if (draftRes.ok && draftRes.created > 0) {
+            draftsCreated += draftRes.created;
+            $('status3').innerHTML = `<span class="spinner"></span>${draftsCreated} of ${pairCount} created...`;
+          }
+          
+          // Small delay between requests
+          if (i < pairCount - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
+        
+        updateStep(3, 'complete');
+        $('totalDrafts').textContent = draftsCreated;
+        
+        // Step 4: Publish to eBay Drafts (one at a time)
+        updateStep(4, 'active');
+        let published = 0;
+        
+        for (let i = 0; i < draftsCreated; i++) {
+          const pubRes = await fetchJSON('/.netlify/functions/create-ebay-draft-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ jobId: currentJobId })
+          });
+          
+          if (pubRes.ok && pubRes.created > 0) {
+            published += pubRes.created;
+            $('status4').innerHTML = `<span class="spinner"></span>${published} of ${draftsCreated} sent...`;
+          }
+          
+          // Small delay between requests
+          if (i < draftsCreated - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
+        
+        updateStep(4, 'complete');
+        
+        // Show results
+        $('progressBar').style.width = '100%';
+        $('results').classList.add('show');
+        btn.textContent = 'Complete!';
+        
+      } catch (err) {
+        console.error('Pipeline error:', err);
+        alert(`Error: ${err.message}`);
+        btn.disabled = false;
+        btn.textContent = 'Retry';
+      }
+    }
+    
+    function resetPipeline() {
+      // Reset all steps
+      for (let i = 1; i <= 4; i++) {
+        const step = $(`step${i}`);
+        const status = $(`status${i}`);
+        step.classList.remove('active', 'complete');
+        status.textContent = 'Pending';
+      }
+      
+      $('progressBar').style.width = '0%';
+      $('results').classList.remove('show');
+      $('btnStart').disabled = false;
+      $('btnStart').textContent = 'Start Quick List';
+      currentJobId = null;
+    }
+    
+    async function bootstrap() {
+      try {
+        const ok = await authClient.requireAuth();
+        if (!ok) return;
+      } catch (e) {
+        console.error('Auth check failed', e);
+      }
+    }
+    
+    bootstrap();
+  </script>
+</body>
+</html>
