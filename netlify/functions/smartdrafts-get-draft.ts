@@ -76,11 +76,16 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     
     if (!offerRes.ok) {
       const errorText = await offerRes.text();
-      console.error('Failed to fetch offer:', errorText);
+      console.error('Failed to fetch offer from eBay:', offerRes.status, errorText);
       return {
         statusCode: offerRes.status,
         headers,
-        body: JSON.stringify({ ok: false, error: 'Failed to fetch offer from eBay' }),
+        body: JSON.stringify({ 
+          ok: false, 
+          error: 'Failed to fetch offer from eBay',
+          detail: errorText.substring(0, 500),
+          status: offerRes.status
+        }),
       };
     }
     
