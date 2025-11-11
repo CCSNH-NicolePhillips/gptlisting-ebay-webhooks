@@ -159,7 +159,7 @@ function buildPrompt(product: PairedProduct, categoryHint: CategoryHint | null):
   
   lines.push("");
   lines.push("Create a professional eBay listing with accurate details.");
-  lines.push("Estimate a fair retail price based on the product type.");
+  lines.push("Research the current market price for this exact product online (check retailer websites, eBay, Amazon, etc.) and provide the typical retail price as a number.");
   lines.push("Assess condition based on whether it appears to be new/sealed or used.");
   
   return lines.join("\n");
