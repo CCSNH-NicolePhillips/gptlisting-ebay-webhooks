@@ -14,12 +14,28 @@ const GPT_TIMEOUT_MS = Math.max(5000, Number(process.env.GPT_TIMEOUT_MS || 30000
 const MAX_SEEDS = Math.max(1, Number(process.env.DRAFTS_MAX_SEEDS || 1)); // Process 1 item per request to avoid Netlify timeout
 
 /**
- * Apply pricing formula to base retail price
+ * Apply pricing formula to base retail price with category-specific caps
  */
-function computeEbayPrice(base: number): number {
+function computeEbayPrice(base: number, categoryPath?: string): number {
   if (!isFinite(base) || base <= 0) return 0;
-  let price = base * 0.9; // 10% off retail
-  if (base > 30) price -= 5; // Extra $5 off if over $30
+  
+  // Apply category-specific price caps to prevent unrealistic pricing
+  const lowerCategory = (categoryPath || '').toLowerCase();
+  let cappedBase = base;
+  
+  // Books: cap at $35 retail (most used books shouldn't exceed this)
+  if (lowerCategory.includes('book')) {
+    cappedBase = Math.min(base, 35);
+  }
+  // DVDs/Media: cap at $25 retail
+  else if (lowerCategory.includes('dvd') || lowerCategory.includes('movie') || lowerCategory.includes('music')) {
+    cappedBase = Math.min(base, 25);
+  }
+  
+  // Apply formula: 10% off retail + extra $5 off if over $30
+  let price = cappedBase * 0.9;
+  if (cappedBase > 30) price -= 5;
+  
   return Math.round(price * 100) / 100;
 }
 
@@ -99,8 +115,8 @@ async function callOpenAI(prompt: string): Promise<string> {
                 "- description: 2-4 sentences, neutral factual claims (no medical), highlight key features.\n" +
                 "- bullets: array of 3-5 short benefit/feature points.\n" +
                 "- aspects: object with Brand, Type, Features, Size, etc. Include all relevant item specifics.\n" +
-                "- price: Use web search to find current retail prices at Walmart, Target, Amazon, or other major retailers. Provide the actual current market price as a number (e.g. 29.99). DO NOT estimate - search for real data.\n" +
-                "- condition: one of 'NEW', 'LIKE_NEW', 'USED_EXCELLENT', 'USED_GOOD', 'USED_ACCEPTABLE'\n",
+                "- price: IMPORTANT - Search Amazon.com and Walmart.com for the CURRENT regular selling price (not sale/clearance prices). For books, use the new hardcover/paperback price from Amazon. Return ONLY the number (e.g. 24.99). If product not found, estimate based on similar items.\n" +
+                "- condition: one of 'NEW', 'LIKE_NEW', 'USED_EXCELLENT', 'USED_GOOD', 'USED_ACCEPTABLE'. Assume NEW unless description indicates otherwise.\n",
             },
             { role: "user", content: prompt },
           ],
@@ -303,9 +319,10 @@ async function createDraftForProduct(product: PairedProduct): Promise<Draft> {
   const images = [product.heroDisplayUrl, product.backDisplayUrl, ...(product.extras || [])].filter(Boolean);
   
   // Step 7: Build final draft
-  // Apply pricing formula: ChatGPT provides retail price, we apply our discount formula
+  // Apply pricing formula: ChatGPT provides retail price, we apply our discount formula with category caps
   const retailPrice = typeof parsed.price === 'number' && parsed.price > 0 ? parsed.price : 0;
-  const ebayPrice = computeEbayPrice(retailPrice);
+  const categoryPath = categoryHint?.title || product.categoryPath || '';
+  const ebayPrice = computeEbayPrice(retailPrice, categoryPath);
   
   const draft: Draft = {
     productId: product.productId,
@@ -321,7 +338,7 @@ async function createDraftForProduct(product: PairedProduct): Promise<Draft> {
     condition: parsed.condition,
   };
   
-  console.log(`[Draft] ✓ Created for ${product.productId} in ${Date.now() - startTime}ms: "${draft.title}" (retail: $${retailPrice} → eBay: $${ebayPrice})`);
+  console.log(`[Draft] ✓ Created for ${product.productId} in ${Date.now() - startTime}ms: "${draft.title}" (retail: $${retailPrice} → eBay: $${ebayPrice}, category: ${categoryPath})`);
   
   return draft;
 }
