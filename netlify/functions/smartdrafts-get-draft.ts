@@ -1,9 +1,9 @@
 import type { Handler, HandlerEvent, HandlerContext } from '@netlify/functions';
 
 /**
- * GET /.netlify/functions/smartdrafts-get-draft?jobId=xxx&groupId=yyy
+ * GET /.netlify/functions/smartdrafts-get-draft?sku=xxx
  * 
- * Fetches a single draft from KV storage for editing.
+ * Fetches a single draft from KV storage for editing by SKU.
  */
 const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
   const headers = {
@@ -26,13 +26,13 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
   }
 
   try {
-    const { jobId, groupId } = event.queryStringParameters || {};
+    const { sku } = event.queryStringParameters || {};
     
-    if (!jobId || !groupId) {
+    if (!sku) {
       return {
         statusCode: 400,
         headers,
-        body: JSON.stringify({ ok: false, error: 'Missing jobId or groupId' }),
+        body: JSON.stringify({ ok: false, error: 'Missing sku parameter' }),
       };
     }
 
@@ -46,35 +46,40 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       };
     }
 
-    const kvKey = `draft:${userId}:${jobId}`;
-    
+    // Search through all draft jobs for this user to find the one with matching SKU
     // @ts-ignore - Netlify KV not in types yet
-    const stored = await context.store?.get(kvKey);
-    if (!stored) {
-      return {
-        statusCode: 404,
-        headers,
-        body: JSON.stringify({ ok: false, error: 'Job not found' }),
-      };
-    }
-
-    const jobData = typeof stored === 'string' ? JSON.parse(stored) : stored;
-    const drafts = jobData.drafts || [];
+    const allKeys = await context.store?.list({ prefix: `draft:${userId}:` }) || [];
     
-    const draft = drafts.find((d: any) => d.groupId === groupId);
-    
-    if (!draft) {
-      return {
-        statusCode: 404,
-        headers,
-        body: JSON.stringify({ ok: false, error: 'Draft not found' }),
-      };
+    for (const key of allKeys) {
+      // @ts-ignore
+      const stored = await context.store?.get(key);
+      if (!stored) continue;
+      
+      const jobData = typeof stored === 'string' ? JSON.parse(stored) : stored;
+      const drafts = jobData.drafts || [];
+      
+      const draft = drafts.find((d: any) => d.sku === sku);
+      
+      if (draft) {
+        // Extract jobId from key (format: draft:userId:jobId)
+        const jobId = key.split(':')[2];
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ 
+            ok: true, 
+            draft,
+            jobId,
+            groupId: draft.groupId 
+          }),
+        };
+      }
     }
 
     return {
-      statusCode: 200,
+      statusCode: 404,
       headers,
-      body: JSON.stringify({ ok: true, draft }),
+      body: JSON.stringify({ ok: false, error: 'Draft not found for this SKU' }),
     };
   } catch (error: any) {
     console.error('[smartdrafts-get-draft] Error:', error);

@@ -413,7 +413,11 @@
         };
 
         edit.onclick = () => {
-          window.location.href = `/edit-draft.html?jobId=${currentJobId}&groupId=${groupId}`;
+          if (!offer.sku) {
+            flash.textContent = 'Cannot edit: SKU not found';
+            return;
+          }
+          window.location.href = `/edit-draft.html?sku=${encodeURIComponent(offer.sku)}`;
         };
 
         pub.onclick = async () => {
