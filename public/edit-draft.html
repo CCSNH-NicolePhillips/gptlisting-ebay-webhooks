@@ -247,8 +247,7 @@
     const $ = (id) => document.getElementById(id);
     const exec = window.authClient?.authFetch || fetch;
     
-    let currentJobId = null;
-    let currentGroupId = null;
+    let currentSku = null;
     let originalDraft = null;
     
     async function fetchJSON(url, opts = {}) {
@@ -285,15 +284,14 @@
     async function loadDraft() {
       try {
         const params = new URLSearchParams(window.location.search);
-        currentJobId = params.get('jobId');
-        currentGroupId = params.get('groupId');
+        currentSku = params.get('sku');
         
-        if (!currentJobId || !currentGroupId) {
-          throw new Error('Missing jobId or groupId in URL');
+        if (!currentSku) {
+          throw new Error('Missing sku in URL');
         }
         
         // Fetch the draft data
-        const res = await fetchJSON(`/.netlify/functions/smartdrafts-get-draft?jobId=${encodeURIComponent(currentJobId)}&groupId=${encodeURIComponent(currentGroupId)}`);
+        const res = await fetchJSON(`/.netlify/functions/smartdrafts-get-draft?sku=${encodeURIComponent(currentSku)}`);
         
         if (!res.ok || !res.draft) {
           throw new Error('Draft not found');
@@ -365,8 +363,7 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            jobId: currentJobId,
-            groupId: currentGroupId,
+            sku: currentSku,
             draft: updatedDraft,
           }),
         });

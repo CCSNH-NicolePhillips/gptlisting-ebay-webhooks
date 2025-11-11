@@ -4,7 +4,7 @@ import type { Handler, HandlerEvent, HandlerContext } from '@netlify/functions';
  * POST /.netlify/functions/smartdrafts-update-draft
  * 
  * Updates a single draft in KV storage.
- * Body: { jobId, groupId, draft: { title, description, price, condition, aspects, images, ... } }
+ * Body: { sku, draft: { title, description, price, condition, aspects, images, ... } }
  */
 const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
   const headers = {
@@ -27,13 +27,13 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
   }
 
   try {
-    const { jobId, groupId, draft } = JSON.parse(event.body || '{}');
+    const { sku, draft } = JSON.parse(event.body || '{}');
     
-    if (!jobId || !groupId || !draft) {
+    if (!sku || !draft) {
       return {
         statusCode: 400,
         headers,
-        body: JSON.stringify({ ok: false, error: 'Missing jobId, groupId, or draft' }),
+        body: JSON.stringify({ ok: false, error: 'Missing sku or draft' }),
       };
     }
 
@@ -64,51 +64,49 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       };
     }
 
-    const kvKey = `draft:${userId}:${jobId}`;
-    
+    // Search through all draft jobs for this user to find the one with matching SKU
     // @ts-ignore - Netlify KV not in types yet
-    const stored = await context.store?.get(kvKey);
-    if (!stored) {
-      return {
-        statusCode: 404,
-        headers,
-        body: JSON.stringify({ ok: false, error: 'Job not found' }),
-      };
-    }
-
-    const jobData = typeof stored === 'string' ? JSON.parse(stored) : stored;
-    const drafts = jobData.drafts || [];
+    const allKeys = await context.store?.list({ prefix: `draft:${userId}:` }) || [];
     
-    const draftIndex = drafts.findIndex((d: any) => d.groupId === groupId);
-    
-    if (draftIndex === -1) {
-      return {
-        statusCode: 404,
-        headers,
-        body: JSON.stringify({ ok: false, error: 'Draft not found' }),
-      };
+    for (const kvKey of allKeys) {
+      // @ts-ignore
+      const stored = await context.store?.get(kvKey);
+      if (!stored) continue;
+      
+      const jobData = typeof stored === 'string' ? JSON.parse(stored) : stored;
+      const drafts = jobData.drafts || [];
+      
+      const draftIndex = drafts.findIndex((d: any) => d.sku === sku);
+      
+      if (draftIndex !== -1) {
+        // Update the draft, preserving fields not included in the update
+        drafts[draftIndex] = {
+          ...drafts[draftIndex],
+          ...draft,
+          sku, // Ensure SKU doesn't change
+        };
+
+        jobData.drafts = drafts;
+        jobData.updatedAt = new Date().toISOString();
+
+        // Save back to KV
+        // @ts-ignore
+        await context.store?.set(kvKey, JSON.stringify(jobData));
+
+        console.log(`✓ Updated draft: sku=${sku}`);
+
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ ok: true }),
+        };
+      }
     }
-
-    // Update the draft, preserving fields not included in the update
-    drafts[draftIndex] = {
-      ...drafts[draftIndex],
-      ...draft,
-      groupId, // Ensure groupId doesn't change
-    };
-
-    jobData.drafts = drafts;
-    jobData.updatedAt = new Date().toISOString();
-
-    // Save back to KV
-    // @ts-ignore
-    await context.store?.set(kvKey, JSON.stringify(jobData));
-
-    console.log(`✓ Updated draft: jobId=${jobId}, groupId=${groupId}`);
 
     return {
-      statusCode: 200,
+      statusCode: 404,
       headers,
-      body: JSON.stringify({ ok: true }),
+      body: JSON.stringify({ ok: false, error: 'Draft not found for this SKU' }),
     };
   } catch (error: any) {
     console.error('[smartdrafts-update-draft] Error:', error);
