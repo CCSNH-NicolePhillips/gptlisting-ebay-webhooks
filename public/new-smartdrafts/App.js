@@ -176,13 +176,30 @@ export function App() {
         throw new Error('Run Pairing first to get products');
       }
       
+      // De-duplicate products by productId (fallback to brand|product key)
+      const uniqueProducts = [];
+      const seenKeys = new Set();
+      for (const p of pairing.products) {
+        const key = (p.productId && String(p.productId)) || `${p.brand || ''}|${p.product || ''}`;
+        if (!seenKeys.has(key)) {
+          seenKeys.add(key);
+          uniqueProducts.push(p);
+        } else {
+          console.warn('[doCreateDrafts] Skipping duplicate product seed:', key);
+        }
+      }
+      if (uniqueProducts.length !== pairing.products.length) {
+        const dupes = pairing.products.length - uniqueProducts.length;
+        showToast(`ℹ️ Skipped ${dupes} duplicate product(s)`);
+      }
+
       // Process 1 product at a time to avoid timeout with price research
       const BATCH_SIZE = 1;
       const allDrafts = [];
-      const totalProducts = pairing.products.length;
+      const totalProducts = uniqueProducts.length;
       
       for (let i = 0; i < totalProducts; i += BATCH_SIZE) {
-        const batch = pairing.products.slice(i, i + BATCH_SIZE);
+        const batch = uniqueProducts.slice(i, i + BATCH_SIZE);
         const batchNum = Math.floor(i / BATCH_SIZE) + 1;
         const totalBatches = Math.ceil(totalProducts / BATCH_SIZE);
         
@@ -202,8 +219,25 @@ export function App() {
         }
       }
       
-      setDrafts(allDrafts);
-      showToast(`✨ Generated ${allDrafts.length} listing(s)!`);
+      // De-duplicate drafts by productId just in case server returned a duplicate
+      const dedupedDrafts = [];
+      const seenDraftIds = new Set();
+      for (const d of allDrafts) {
+        const key = (d.productId && String(d.productId)) || `${d.brand || ''}|${d.product || ''}`;
+        if (!seenDraftIds.has(key)) {
+          seenDraftIds.add(key);
+          dedupedDrafts.push(d);
+        } else {
+          console.warn('[doCreateDrafts] Dropping duplicate draft for', key);
+        }
+      }
+      if (dedupedDrafts.length !== allDrafts.length) {
+        const removed = allDrafts.length - dedupedDrafts.length;
+        showToast(`ℹ️ Removed ${removed} duplicate draft(s)`);
+      }
+
+      setDrafts(dedupedDrafts);
+      showToast(`✨ Generated ${dedupedDrafts.length} listing(s)!`);
       setLoadingStatus('');
       setTab('Drafts');
     } catch (e) {
