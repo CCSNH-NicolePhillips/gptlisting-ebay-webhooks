@@ -12,24 +12,26 @@ function sanitizeSku(value: string): string {
   return value.replace(/[^a-z0-9]+/gi, "").slice(0, 50) || "sku";
 }
 
+function getInitials(text: string): string {
+  if (!text) return "";
+  // Split on spaces, underscores, and common separators
+  const words = text.split(/[\s_\-&]+/).filter(w => w.trim());
+  // Take first letter of each word, uppercase
+  return words.map(w => w.charAt(0).toUpperCase()).join("");
+}
+
 function generateSku(group: Record<string, any>): string {
-  const base = [group?.brand, group?.product]
-    .filter((part) => typeof part === "string" && part.trim())
-    .join("");
-  const fallback = group?.groupId || group?.id || Date.now().toString(36);
-  // Add timestamp + random to ensure uniqueness across runs (alphanumeric only)
-  const unique = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const brandInitials = getInitials(group?.brand || "");
+  const productInitials = getInitials(group?.product || "");
   
-  // Build full SKU with unique suffix, but ensure unique part isn't truncated
-  const fullBase = [base, fallback].filter(Boolean).join("");
-  const sanitizedBase = sanitizeSku(fullBase);
-  const sanitizedUnique = sanitizeSku(unique);
+  // Add timestamp + random for uniqueness (alphanumeric only)
+  const unique = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
   
-  // Reserve space for unique suffix (typically ~14 chars)
-  const maxBaseLength = 50 - sanitizedUnique.length;
-  const trimmedBase = sanitizedBase.slice(0, maxBaseLength);
+  // Format: BrandInitials_ProductInitials_UniqueID
+  const parts = [brandInitials, productInitials, unique].filter(Boolean);
+  const sku = parts.join("_");
   
-  return (trimmedBase + sanitizedUnique).slice(0, 50) || "sku";
+  return sanitizeSku(sku) || "sku" + unique;
 }
 
 function buildTitle(group: Record<string, any>): string {
