@@ -114,6 +114,23 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       console.warn('Failed to fetch inventory item:', await inventoryRes.text());
     }
     
+    // Fetch category aspects metadata to show what's available/required
+    let categoryAspects: any = null;
+    if (offer.categoryId) {
+      try {
+        const categoryRes = await fetch(
+          `${apiHost}/commerce/taxonomy/v1/category_tree/0/get_item_aspects_for_category?category_id=${offer.categoryId}`,
+          { headers: ebayHeaders }
+        );
+        if (categoryRes.ok) {
+          categoryAspects = await categoryRes.json();
+          console.log('Category aspects metadata:', JSON.stringify(categoryAspects, null, 2));
+        }
+      } catch (e) {
+        console.warn('Failed to fetch category aspects:', e);
+      }
+    }
+    
     // Build draft-like object from offer + inventory data
     // Inventory has product.title, product.description, product.aspects, product.imageUrls
     const draft = {
@@ -126,6 +143,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       images: inventory.product?.imageUrls || [],
       categoryId: offer.categoryId || '',
       offerId: offer.offerId,
+      categoryAspects: categoryAspects?.aspects || [], // Available aspects for this category
     };
     
     console.log('Mapped draft:', JSON.stringify(draft, null, 2));
