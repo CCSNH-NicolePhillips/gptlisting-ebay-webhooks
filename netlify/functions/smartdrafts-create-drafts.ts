@@ -6,11 +6,11 @@ import type { CategoryDef } from "../../src/lib/taxonomy-schema.js";
 import { openai } from "../../src/lib/openai.js";
 
 const METHODS = "POST, OPTIONS";
-const MODEL = process.env.GPT_MODEL || "gpt-4o-mini";
+const MODEL = process.env.GPT_MODEL || "gpt-4o"; // Use gpt-4o for web search capability
 const MAX_TOKENS = Number(process.env.GPT_MAX_TOKENS || 700);
 const GPT_RETRY_ATTEMPTS = Math.max(1, Number(process.env.GPT_RETRY_ATTEMPTS || 1));
 const GPT_RETRY_DELAY_MS = Math.max(250, Number(process.env.GPT_RETRY_DELAY_MS || 1500));
-const GPT_TIMEOUT_MS = Math.max(5000, Number(process.env.GPT_TIMEOUT_MS || 20000));
+const GPT_TIMEOUT_MS = Math.max(5000, Number(process.env.GPT_TIMEOUT_MS || 30000)); // Longer timeout for web search
 const MAX_SEEDS = Math.max(1, Number(process.env.DRAFTS_MAX_SEEDS || 1)); // Process 1 item per request to avoid Netlify timeout
 
 function sleep(ms: number) {
@@ -83,13 +83,13 @@ async function callOpenAI(prompt: string): Promise<string> {
             {
               role: "system",
               content:
-                "You are an expert eBay listing writer.\n" +
+                "You are an expert eBay listing writer with real-time web access.\n" +
                 "Return ONLY strict JSON with keys: title, description, bullets, aspects, price, condition.\n" +
                 "- title: <=80 chars, high-signal product name, no emojis, no fluff.\n" +
                 "- description: 2-4 sentences, neutral factual claims (no medical), highlight key features.\n" +
                 "- bullets: array of 3-5 short benefit/feature points.\n" +
                 "- aspects: object with Brand, Type, Features, Size, etc. Include all relevant item specifics.\n" +
-                "- price: estimated retail price as number (e.g. 29.99)\n" +
+                "- price: Use web search to find current retail prices at Walmart, Target, Amazon, or other major retailers. Provide the actual current market price as a number (e.g. 29.99). DO NOT estimate - search for real data.\n" +
                 "- condition: one of 'NEW', 'LIKE_NEW', 'USED_EXCELLENT', 'USED_GOOD', 'USED_ACCEPTABLE'\n",
             },
             { role: "user", content: prompt },
@@ -159,7 +159,7 @@ function buildPrompt(product: PairedProduct, categoryHint: CategoryHint | null):
   
   lines.push("");
   lines.push("Create a professional eBay listing with accurate details.");
-  lines.push("Research the current market price for this exact product online (check retailer websites, eBay, Amazon, etc.) and provide the typical retail price as a number.");
+  lines.push("IMPORTANT: Search the web for the current retail price of this exact product. Check Walmart.com, Target.com, Amazon.com, and other major retailers. Provide the actual current market price you find, not an estimate.");
   lines.push("Assess condition based on whether it appears to be new/sealed or used.");
   
   return lines.join("\n");
