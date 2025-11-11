@@ -317,10 +317,10 @@ export const handler: Handler = async (event) => {
         });
         console.log(`[create-ebay-draft-user] ✓ Offer created successfully for SKU: ${mapped.sku}, offerId: ${offerResult.offerId}`);
       } catch (e: any) {
-        console.error(`[create-ebay-draft-user] ✗ Offer creation failed for SKU: ${mapped.sku}:`, e?.message || e);
         const msg = String(e?.message || e || "");
         // Handle idempotency: offer already exists (errorId 25002)
         if (/\berrorId\"?\s*:\s*25002\b/.test(msg)) {
+          console.log(`[create-ebay-draft-user] ℹ Offer already exists for SKU: ${mapped.sku}, attempting to fetch existing offer...`);
           let existingOfferId = "";
           try {
             // Attempt to parse offerId from the error JSON
@@ -340,6 +340,7 @@ export const handler: Handler = async (event) => {
           if (existingOfferId) {
             try {
               const off = await fetchOfferById(access.token, access.apiHost, existingOfferId, marketplaceId);
+              console.log(`[create-ebay-draft-user] ✓ Fetched existing offer for SKU: ${mapped.sku}, offerId: ${existingOfferId}`);
               results.push({ sku: mapped.sku, offerId: existingOfferId, warnings: [], ...(off?.status ? { status: off.status } : {}) });
               try {
                 await putBinding(user.userId, jobId, groupId, {
@@ -361,7 +362,8 @@ export const handler: Handler = async (event) => {
             }
           }
         }
-        // Non-idempotent or unhandled error: bubble up
+        // Non-idempotent or unhandled error: log and bubble up
+        console.error(`[create-ebay-draft-user] ✗ Offer creation failed for SKU: ${mapped.sku}:`, e?.message || e);
         throw e;
       }
 
