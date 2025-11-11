@@ -11,7 +11,7 @@ const MAX_TOKENS = Number(process.env.GPT_MAX_TOKENS || 700);
 const GPT_RETRY_ATTEMPTS = Math.max(1, Number(process.env.GPT_RETRY_ATTEMPTS || 1));
 const GPT_RETRY_DELAY_MS = Math.max(250, Number(process.env.GPT_RETRY_DELAY_MS || 1500));
 const GPT_TIMEOUT_MS = Math.max(5000, Number(process.env.GPT_TIMEOUT_MS || 20000));
-const MAX_SEEDS = Math.max(1, Number(process.env.DRAFTS_MAX_SEEDS || 2)); // Reduce to 2 for safety
+const MAX_SEEDS = Math.max(1, Number(process.env.DRAFTS_MAX_SEEDS || 1)); // Process 1 item per request to avoid Netlify timeout
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));

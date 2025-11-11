@@ -176,8 +176,8 @@ export function App() {
         throw new Error('Run Pairing first to get products');
       }
       
-      // Server now caps at 2 products per request - send in smaller batches
-      const BATCH_SIZE = 2;
+      // Server caps at 1 product per request to avoid timeout - send sequentially with delay
+      const BATCH_SIZE = 1;
       const allDrafts = [];
       const totalProducts = pairing.products.length;
       
@@ -186,7 +186,7 @@ export function App() {
         const batchNum = Math.floor(i / BATCH_SIZE) + 1;
         const totalBatches = Math.ceil(totalProducts / BATCH_SIZE);
         
-        setLoadingStatus(`🤖 Generating batch ${batchNum}/${totalBatches} (${batch.length} items)...`);
+        setLoadingStatus(`🤖 Generating draft ${batchNum}/${totalBatches}...`);
         
         const result = await createDraftsLive(batch);
         
@@ -195,6 +195,11 @@ export function App() {
         console.log(`[doCreateDrafts] Batch ${batchNum}: processed ${processed}/${batch.length}`);
         
         allDrafts.push(...(result.drafts || []));
+        
+        // Small delay between items to avoid overwhelming serverless
+        if (i + BATCH_SIZE < totalProducts) {
+          await new Promise(r => setTimeout(r, 500));
+        }
       }
       
       setDrafts(allDrafts);
