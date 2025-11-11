@@ -340,7 +340,7 @@ export const handler: Handler = async (event) => {
           if (existingOfferId) {
             try {
               const off = await fetchOfferById(access.token, access.apiHost, existingOfferId, marketplaceId);
-              console.log(`[create-ebay-draft-user] ✓ Fetched existing offer for SKU: ${mapped.sku}, offerId: ${existingOfferId}`);
+              console.log(`[create-ebay-draft-user] ✓ Fetched existing offer for SKU: ${mapped.sku}, offerId: ${existingOfferId}, status: ${off?.status || 'UNKNOWN'}`);
               results.push({ sku: mapped.sku, offerId: existingOfferId, warnings: [], ...(off?.status ? { status: off.status } : {}) });
               try {
                 await putBinding(user.userId, jobId, groupId, {
