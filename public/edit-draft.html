@@ -273,14 +273,16 @@
       $('titleCount').textContent = `${title.value.length} / 80`;
     }
     
-    function addAspect(key = '', value = '') {
+    function addAspect(key = '', value = '', isRequired = false) {
       const container = $('aspectsList');
       const div = document.createElement('div');
       div.className = 'aspect-item';
+      const requiredMark = isRequired ? ' <span style="color: #ef4444;">*</span>' : '';
+      const keyReadonly = isRequired || key ? 'readonly' : '';
       div.innerHTML = `
-        <input type="text" placeholder="Name (e.g. Brand)" value="${key}" class="aspect-key" />
-        <input type="text" placeholder="Value (e.g. Nike)" value="${value}" class="aspect-value" />
-        <button class="btn-remove" onclick="this.parentElement.remove()">✕</button>
+        <input type="text" placeholder="Name (e.g. Brand)" value="${key}" class="aspect-key" ${keyReadonly} />
+        <input type="text" placeholder="Value${requiredMark}" value="${value}" class="aspect-value" ${isRequired ? 'required' : ''} />
+        <button class="btn-remove" onclick="this.parentElement.remove()" ${isRequired ? 'disabled title="Required field"' : ''}>✕</button>
       `;
       container.appendChild(div);
     }
@@ -316,11 +318,24 @@
         
         updateTitleCount();
         
-        // Populate aspects
+        // Populate aspects - show existing ones first
+        const existingAspects = new Set();
         if (originalDraft.aspects && typeof originalDraft.aspects === 'object') {
           Object.entries(originalDraft.aspects).forEach(([key, values]) => {
             const valueStr = Array.isArray(values) ? values.join(', ') : values;
-            addAspect(key, valueStr);
+            addAspect(key, valueStr, false);
+            existingAspects.add(key);
+          });
+        }
+        
+        // Add empty fields for category-recommended aspects that aren't filled yet
+        if (originalDraft.categoryAspects && Array.isArray(originalDraft.categoryAspects)) {
+          originalDraft.categoryAspects.forEach(aspect => {
+            const name = aspect.localizedAspectName;
+            if (!existingAspects.has(name)) {
+              const isRequired = aspect.aspectConstraint?.aspectRequired || false;
+              addAspect(name, '', isRequired);
+            }
           });
         }
         
