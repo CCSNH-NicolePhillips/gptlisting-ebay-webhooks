@@ -98,18 +98,37 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     
     const offer = await offerRes.json();
     
-    // Build draft-like object from offer data
+    console.log('Fetched offer from eBay:', JSON.stringify(offer, null, 2));
+    
+    // Fetch the inventory item to get product details (title, description, aspects, images)
+    const sku = offer.sku;
+    const inventoryRes = await fetch(`${apiHost}/sell/inventory/v1/inventory_item/${sku}`, {
+      headers: ebayHeaders,
+    });
+    
+    let inventory: any = {};
+    if (inventoryRes.ok) {
+      inventory = await inventoryRes.json();
+      console.log('Fetched inventory from eBay:', JSON.stringify(inventory, null, 2));
+    } else {
+      console.warn('Failed to fetch inventory item:', await inventoryRes.text());
+    }
+    
+    // Build draft-like object from offer + inventory data
+    // Inventory has product.title, product.description, product.aspects, product.imageUrls
     const draft = {
       sku: offer.sku,
-      title: offer.listing?.title || '',
-      description: offer.listing?.description || '',
+      title: inventory.product?.title || offer.title || '',
+      description: inventory.product?.description || offer.listingDescription || '',
       price: offer.pricingSummary?.price?.value || 0,
-      condition: offer.condition || 'NEW',
-      aspects: offer.listing?.aspects || {},
-      images: offer.listing?.imageUrls || [],
+      condition: inventory.condition || offer.condition || 'NEW',
+      aspects: inventory.product?.aspects || {},
+      images: inventory.product?.imageUrls || [],
       categoryId: offer.categoryId || '',
       offerId: offer.offerId,
     };
+    
+    console.log('Mapped draft:', JSON.stringify(draft, null, 2));
 
     return {
       statusCode: 200,
