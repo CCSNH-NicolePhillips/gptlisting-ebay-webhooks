@@ -66,12 +66,19 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     
     const { access_token } = await accessTokenFromRefresh(refresh);
     const { apiHost } = tokenHosts(process.env.EBAY_ENV);
+    const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || 'EBAY_US';
+    
+    const ebayHeaders = {
+      'Authorization': `Bearer ${access_token}`,
+      'Accept': 'application/json',
+      'Accept-Language': 'en-US',
+      'Content-Language': 'en-US',
+      'Content-Type': 'application/json',
+      'X-EBAY-C-MARKETPLACE-ID': MARKETPLACE_ID,
+    };
     
     const offerRes = await fetch(`${apiHost}/sell/inventory/v1/offer/${offerId}`, {
-      headers: {
-        'Authorization': `Bearer ${access_token}`,
-        'Content-Type': 'application/json',
-      },
+      headers: ebayHeaders,
     });
     
     if (!offerRes.ok) {
