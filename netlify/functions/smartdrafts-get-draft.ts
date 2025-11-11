@@ -1,9 +1,9 @@
 import type { Handler, HandlerEvent, HandlerContext } from '@netlify/functions';
 
 /**
- * GET /.netlify/functions/smartdrafts-get-draft?sku=xxx
+ * GET /.netlify/functions/smartdrafts-get-draft?offerId=xxx
  * 
- * Fetches a single draft from KV storage for editing by SKU.
+ * Fetches offer data from eBay for editing.
  */
 const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
   const headers = {
@@ -26,79 +26,72 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
   }
 
   try {
-    const { sku } = event.queryStringParameters || {};
+    const { offerId } = event.queryStringParameters || {};
     
-    if (!sku) {
+    if (!offerId) {
       return {
         statusCode: 400,
         headers,
-        body: JSON.stringify({ ok: false, error: 'Missing sku parameter' }),
+        body: JSON.stringify({ ok: false, error: 'Missing offerId parameter' }),
       };
     }
 
-    // Get userId from context (Netlify Identity)
-    // Note: clientContext may not always be populated, try Authorization header too
-    let userId = context.clientContext?.user?.sub;
+    console.log('Fetching offer from eBay:', offerId);
     
-    if (!userId) {
-      // Try to extract from Authorization header
-      const authHeader = event.headers?.authorization || event.headers?.Authorization;
-      if (authHeader?.startsWith('Bearer ')) {
-        try {
-          const token = authHeader.substring(7);
-          const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-          userId = payload.sub;
-        } catch (e) {
-          console.warn('Failed to decode JWT:', e);
-        }
-      }
-    }
-    
-    if (!userId) {
-      console.error('No userId found in clientContext or Authorization header');
+    // Fetch the offer from eBay
+    const ebayToken = process.env.EBAY_ACCESS_TOKEN;
+    if (!ebayToken) {
       return {
-        statusCode: 401,
+        statusCode: 500,
         headers,
-        body: JSON.stringify({ ok: false, error: 'Not authenticated' }),
+        body: JSON.stringify({ ok: false, error: 'eBay token not configured' }),
       };
     }
-
-    console.log('Loading draft for userId:', userId, 'sku:', sku);
-
-    // Search through all draft jobs for this user to find the one with matching SKU
-    // @ts-ignore - Netlify KV not in types yet
-    const allKeys = await context.store?.list({ prefix: `draft:${userId}:` }) || [];
     
-    for (const key of allKeys) {
-      // @ts-ignore
-      const stored = await context.store?.get(key);
-      if (!stored) continue;
-      
-      const jobData = typeof stored === 'string' ? JSON.parse(stored) : stored;
-      const drafts = jobData.drafts || [];
-      
-      const draft = drafts.find((d: any) => d.sku === sku);
-      
-      if (draft) {
-        // Extract jobId from key (format: draft:userId:jobId)
-        const jobId = key.split(':')[2];
-        return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify({ 
-            ok: true, 
-            draft,
-            jobId,
-            groupId: draft.groupId 
-          }),
-        };
-      }
+    const ebayEnv = process.env.EBAY_ENV || 'production';
+    const baseUrl = ebayEnv === 'sandbox' 
+      ? 'https://api.sandbox.ebay.com'
+      : 'https://api.ebay.com';
+    
+    const offerRes = await fetch(`${baseUrl}/sell/inventory/v1/offer/${offerId}`, {
+      headers: {
+        'Authorization': `Bearer ${ebayToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!offerRes.ok) {
+      const errorText = await offerRes.text();
+      console.error('Failed to fetch offer:', errorText);
+      return {
+        statusCode: offerRes.status,
+        headers,
+        body: JSON.stringify({ ok: false, error: 'Failed to fetch offer from eBay' }),
+      };
     }
+    
+    const offer = await offerRes.json();
+    
+    // Build draft-like object from offer data
+    const draft = {
+      sku: offer.sku,
+      title: offer.listing?.title || '',
+      description: offer.listing?.description || '',
+      price: offer.pricingSummary?.price?.value || 0,
+      condition: offer.condition || 'NEW',
+      aspects: offer.listing?.aspects || {},
+      images: offer.listing?.imageUrls || [],
+      categoryId: offer.categoryId || '',
+      offerId: offer.offerId,
+    };
 
     return {
-      statusCode: 404,
+      statusCode: 200,
       headers,
-      body: JSON.stringify({ ok: false, error: 'Draft not found for this SKU' }),
+      body: JSON.stringify({ 
+        ok: true, 
+        draft,
+      }),
     };
   } catch (error: any) {
     console.error('[smartdrafts-get-draft] Error:', error);

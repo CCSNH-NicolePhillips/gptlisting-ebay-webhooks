@@ -3,8 +3,8 @@ import type { Handler, HandlerEvent, HandlerContext } from '@netlify/functions';
 /**
  * POST /.netlify/functions/smartdrafts-update-draft
  * 
- * Updates a single draft in KV storage.
- * Body: { sku, draft: { title, description, price, condition, aspects, images, ... } }
+ * Updates an eBay offer with edited draft data.
+ * Body: { offerId, draft: { title, description, price, condition, aspects, ... } }
  */
 const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
   const headers = {
@@ -27,13 +27,13 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
   }
 
   try {
-    const { sku, draft } = JSON.parse(event.body || '{}');
+    const { offerId, draft } = JSON.parse(event.body || '{}');
     
-    if (!sku || !draft) {
+    if (!offerId || !draft) {
       return {
         statusCode: 400,
         headers,
-        body: JSON.stringify({ ok: false, error: 'Missing sku or draft' }),
+        body: JSON.stringify({ ok: false, error: 'Missing offerId or draft' }),
       };
     }
 
@@ -54,78 +54,113 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       };
     }
 
-    // Get userId from context (Netlify Identity)
-    // Note: clientContext may not always be populated, try Authorization header too
-    let userId = context.clientContext?.user?.sub;
+    console.log('Updating eBay offer:', offerId);
     
-    if (!userId) {
-      // Try to extract from Authorization header
-      const authHeader = event.headers?.authorization || event.headers?.Authorization;
-      if (authHeader?.startsWith('Bearer ')) {
-        try {
-          const token = authHeader.substring(7);
-          const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-          userId = payload.sub;
-        } catch (e) {
-          console.warn('Failed to decode JWT:', e);
-        }
-      }
+    // Get eBay token
+    const ebayToken = process.env.EBAY_ACCESS_TOKEN;
+    if (!ebayToken) {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ ok: false, error: 'eBay token not configured' }),
+      };
     }
     
-    if (!userId) {
-      console.error('No userId found in clientContext or Authorization header');
+    const ebayEnv = process.env.EBAY_ENV || 'production';
+    const baseUrl = ebayEnv === 'sandbox' 
+      ? 'https://api.sandbox.ebay.com'
+      : 'https://api.ebay.com';
+    
+    // Fetch current offer to get SKU
+    const offerRes = await fetch(`${baseUrl}/sell/inventory/v1/offer/${offerId}`, {
+      headers: {
+        'Authorization': `Bearer ${ebayToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!offerRes.ok) {
       return {
-        statusCode: 401,
+        statusCode: offerRes.status,
         headers,
-        body: JSON.stringify({ ok: false, error: 'Not authenticated' }),
+        body: JSON.stringify({ ok: false, error: 'Failed to fetch offer from eBay' }),
+      };
+    }
+    
+    const currentOffer = await offerRes.json();
+    const sku = currentOffer.sku;
+    
+    // Update the inventory item first (title, description, aspects, images)
+    const inventoryPayload = {
+      product: {
+        title: draft.title,
+        description: draft.description,
+        aspects: draft.aspects || {},
+        imageUrls: draft.images || currentOffer.listing?.imageUrls || [],
+      },
+      condition: draft.condition || 'NEW',
+      availability: currentOffer.availability || {
+        shipToLocationAvailability: {
+          quantity: 1,
+        },
+      },
+    };
+    
+    const inventoryRes = await fetch(`${baseUrl}/sell/inventory/v1/inventory_item/${sku}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${ebayToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(inventoryPayload),
+    });
+    
+    if (!inventoryRes.ok) {
+      const errorText = await inventoryRes.text();
+      console.error('Failed to update inventory:', errorText);
+      return {
+        statusCode: inventoryRes.status,
+        headers,
+        body: JSON.stringify({ ok: false, error: 'Failed to update inventory item' }),
+      };
+    }
+    
+    // Update the offer (price)
+    const offerPayload = {
+      ...currentOffer,
+      pricingSummary: {
+        price: {
+          value: draft.price.toString(),
+          currency: currentOffer.pricingSummary?.price?.currency || 'USD',
+        },
+      },
+    };
+    
+    const updateOfferRes = await fetch(`${baseUrl}/sell/inventory/v1/offer/${offerId}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${ebayToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(offerPayload),
+    });
+    
+    if (!updateOfferRes.ok) {
+      const errorText = await updateOfferRes.text();
+      console.error('Failed to update offer:', errorText);
+      return {
+        statusCode: updateOfferRes.status,
+        headers,
+        body: JSON.stringify({ ok: false, error: 'Failed to update offer' }),
       };
     }
 
-    console.log('Updating draft for userId:', userId, 'sku:', sku);
-
-    // Search through all draft jobs for this user to find the one with matching SKU
-    // @ts-ignore - Netlify KV not in types yet
-    const allKeys = await context.store?.list({ prefix: `draft:${userId}:` }) || [];
-    
-    for (const kvKey of allKeys) {
-      // @ts-ignore
-      const stored = await context.store?.get(kvKey);
-      if (!stored) continue;
-      
-      const jobData = typeof stored === 'string' ? JSON.parse(stored) : stored;
-      const drafts = jobData.drafts || [];
-      
-      const draftIndex = drafts.findIndex((d: any) => d.sku === sku);
-      
-      if (draftIndex !== -1) {
-        // Update the draft, preserving fields not included in the update
-        drafts[draftIndex] = {
-          ...drafts[draftIndex],
-          ...draft,
-          sku, // Ensure SKU doesn't change
-        };
-
-        jobData.drafts = drafts;
-        jobData.updatedAt = new Date().toISOString();
-
-        // Save back to KV
-        // @ts-ignore
-        await context.store?.set(kvKey, JSON.stringify(jobData));
-
-        console.log(`✓ Updated draft: sku=${sku}`);
-
-        return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify({ ok: true }),
-        };
-      }
-    }
+    console.log(`✓ Updated offer: ${offerId}`);
 
     return {
-      statusCode: 404,
+      statusCode: 200,
       headers,
-      body: JSON.stringify({ ok: false, error: 'Draft not found for this SKU' }),
+      body: JSON.stringify({ ok: true }),
     };
   } catch (error: any) {
     console.error('[smartdrafts-update-draft] Error:', error);
