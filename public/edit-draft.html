@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Edit Draft</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #141a33;
+      --panel-2: #0f1530;
+      --line: #2a335c;
+      --text: #f4f6fb;
+      --muted: #a2a9c8;
+      --primary: #4f7cff;
+      --primary-600: #3e66d6;
+      --success: #22c55e;
+      --danger: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      padding: 2rem 1rem;
+    }
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 2rem;
+    }
+    h1 {
+      font-size: 1.75rem;
+      margin: 0;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .section-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+      color: var(--primary);
+    }
+    .form-group {
+      margin-bottom: 1.25rem;
+    }
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      font-size: 0.9rem;
+    }
+    input, textarea, select {
+      width: 100%;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 0.65rem 0.85rem;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.95rem;
+    }
+    input:focus, textarea:focus, select:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+    textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    .aspect-item {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .aspect-item input {
+      flex: 1;
+    }
+    .btn-remove {
+      background: var(--danger);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    .btn-add {
+      background: transparent;
+      color: var(--primary);
+      border: 1px dashed var(--line);
+      border-radius: 6px;
+      padding: 0.5rem;
+      cursor: pointer;
+      font-size: 0.85rem;
+      width: 100%;
+      margin-top: 0.5rem;
+    }
+    .btn {
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn:hover:not(:disabled) {
+      background: var(--primary-600);
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn.secondary {
+      background: transparent;
+      border: 1px solid var(--line);
+      color: var(--text);
+    }
+    .actions {
+      display: flex;
+      gap: 1rem;
+      margin-top: 2rem;
+    }
+    .flash {
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      display: none;
+    }
+    .flash.show {
+      display: block;
+    }
+    .flash.success {
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid var(--success);
+      color: var(--success);
+    }
+    .flash.error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid var(--danger);
+      color: var(--danger);
+    }
+    .helper {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-top: 0.25rem;
+    }
+    .images-preview {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      gap: 0.75rem;
+    }
+    .image-thumb {
+      position: relative;
+      aspect-ratio: 1;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+    }
+    .image-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+  </style>
+</head>
+<body>
+  <script src="/auth-client.js"></script>
+  
+  <div class="container">
+    <div class="header">
+      <h1>Edit Draft</h1>
+      <a href="/drafts.html" class="btn secondary">← Back to Drafts</a>
+    </div>
+    
+    <div class="flash" id="flash"></div>
+    
+    <div class="card">
+      <div class="section-title">Basic Information</div>
+      
+      <div class="form-group">
+        <label for="title">Title <span class="helper">(max 80 characters)</span></label>
+        <input type="text" id="title" maxlength="80" />
+        <div class="helper" id="titleCount">0 / 80</div>
+      </div>
+      
+      <div class="form-group">
+        <label for="description">Description</label>
+        <textarea id="description" rows="4"></textarea>
+      </div>
+      
+      <div class="grid-2">
+        <div class="form-group">
+          <label for="price">Price ($)</label>
+          <input type="number" id="price" step="0.01" min="0" />
+        </div>
+        
+        <div class="form-group">
+          <label for="condition">Condition</label>
+          <select id="condition">
+            <option value="NEW">New</option>
+            <option value="LIKE_NEW">Like New</option>
+            <option value="USED_EXCELLENT">Used - Excellent</option>
+            <option value="USED_GOOD">Used - Good</option>
+            <option value="USED_ACCEPTABLE">Used - Acceptable</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    
+    <div class="card">
+      <div class="section-title">Item Specifics (Aspects)</div>
+      <div id="aspectsList"></div>
+      <button class="btn-add" onclick="addAspect()">+ Add Aspect</button>
+    </div>
+    
+    <div class="card">
+      <div class="section-title">Images</div>
+      <div class="images-preview" id="imagesPreview"></div>
+    </div>
+    
+    <div class="actions">
+      <button class="btn" id="btnSave" onclick="saveDraft()">Save Changes</button>
+      <button class="btn secondary" onclick="window.location.href='/drafts.html'">Cancel</button>
+    </div>
+  </div>
+  
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const exec = window.authClient?.authFetch || fetch;
+    
+    let currentJobId = null;
+    let currentGroupId = null;
+    let originalDraft = null;
+    
+    async function fetchJSON(url, opts = {}) {
+      const r = await exec(url, opts);
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      return data;
+    }
+    
+    function showFlash(message, type = 'success') {
+      const flash = $('flash');
+      flash.textContent = message;
+      flash.className = `flash show ${type}`;
+      setTimeout(() => flash.classList.remove('show'), 5000);
+    }
+    
+    function updateTitleCount() {
+      const title = $('title');
+      $('titleCount').textContent = `${title.value.length} / 80`;
+    }
+    
+    function addAspect(key = '', value = '') {
+      const container = $('aspectsList');
+      const div = document.createElement('div');
+      div.className = 'aspect-item';
+      div.innerHTML = `
+        <input type="text" placeholder="Name (e.g. Brand)" value="${key}" class="aspect-key" />
+        <input type="text" placeholder="Value (e.g. Nike)" value="${value}" class="aspect-value" />
+        <button class="btn-remove" onclick="this.parentElement.remove()">✕</button>
+      `;
+      container.appendChild(div);
+    }
+    
+    async function loadDraft() {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        currentJobId = params.get('jobId');
+        currentGroupId = params.get('groupId');
+        
+        if (!currentJobId || !currentGroupId) {
+          throw new Error('Missing jobId or groupId in URL');
+        }
+        
+        // Fetch the draft data
+        const res = await fetchJSON(`/.netlify/functions/smartdrafts-get-draft?jobId=${encodeURIComponent(currentJobId)}&groupId=${encodeURIComponent(currentGroupId)}`);
+        
+        if (!res.ok || !res.draft) {
+          throw new Error('Draft not found');
+        }
+        
+        originalDraft = res.draft;
+        
+        // Populate form
+        $('title').value = originalDraft.title || '';
+        $('description').value = originalDraft.description || '';
+        $('price').value = originalDraft.price || '';
+        $('condition').value = originalDraft.condition || 'NEW';
+        
+        updateTitleCount();
+        
+        // Populate aspects
+        if (originalDraft.aspects && typeof originalDraft.aspects === 'object') {
+          Object.entries(originalDraft.aspects).forEach(([key, values]) => {
+            const valueStr = Array.isArray(values) ? values.join(', ') : values;
+            addAspect(key, valueStr);
+          });
+        }
+        
+        // Show images
+        if (originalDraft.images && Array.isArray(originalDraft.images)) {
+          const preview = $('imagesPreview');
+          originalDraft.images.forEach(url => {
+            const div = document.createElement('div');
+            div.className = 'image-thumb';
+            div.innerHTML = `<img src="${url}" alt="Product image" />`;
+            preview.appendChild(div);
+          });
+        }
+        
+      } catch (err) {
+        console.error('Failed to load draft:', err);
+        showFlash(`Error: ${err.message}`, 'error');
+      }
+    }
+    
+    async function saveDraft() {
+      try {
+        const btn = $('btnSave');
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+        
+        // Collect aspects
+        const aspects = {};
+        document.querySelectorAll('.aspect-item').forEach(item => {
+          const key = item.querySelector('.aspect-key').value.trim();
+          const value = item.querySelector('.aspect-value').value.trim();
+          if (key && value) {
+            // Split comma-separated values into array
+            aspects[key] = value.includes(',') ? value.split(',').map(v => v.trim()) : [value];
+          }
+        });
+        
+        const updatedDraft = {
+          ...originalDraft,
+          title: $('title').value.trim(),
+          description: $('description').value.trim(),
+          price: parseFloat($('price').value) || 0,
+          condition: $('condition').value,
+          aspects,
+        };
+        
+        // Save to backend
+        const res = await fetchJSON('/.netlify/functions/smartdrafts-update-draft', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jobId: currentJobId,
+            groupId: currentGroupId,
+            draft: updatedDraft,
+          }),
+        });
+        
+        if (res.ok) {
+          showFlash('Draft saved successfully!', 'success');
+          setTimeout(() => window.location.href = '/drafts.html', 1500);
+        } else {
+          throw new Error(res.error || 'Failed to save draft');
+        }
+        
+      } catch (err) {
+        console.error('Failed to save draft:', err);
+        showFlash(`Error: ${err.message}`, 'error');
+        $('btnSave').disabled = false;
+        $('btnSave').textContent = 'Save Changes';
+      }
+    }
+    
+    $('title').addEventListener('input', updateTitleCount);
+    
+    async function bootstrap() {
+      try {
+        const ok = await authClient.requireAuth();
+        if (!ok) return;
+        await loadDraft();
+      } catch (e) {
+        console.error('Bootstrap failed', e);
+      }
+    }
+    
+    bootstrap();
+  </script>
+</body>
+</html>
