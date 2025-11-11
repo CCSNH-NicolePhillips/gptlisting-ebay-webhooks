@@ -7,10 +7,11 @@ import { openai } from "../../src/lib/openai.js";
 
 const METHODS = "POST, OPTIONS";
 const MODEL = process.env.GPT_MODEL || "gpt-4o-mini";
-const MAX_TOKENS = Number(process.env.GPT_MAX_TOKENS || 700);
+const MAX_TOKENS = Number(process.env.GPT_MAX_TOKENS || 500);
 const GPT_RETRY_ATTEMPTS = Math.max(1, Number(process.env.GPT_RETRY_ATTEMPTS || 1));
 const GPT_RETRY_DELAY_MS = Math.max(250, Number(process.env.GPT_RETRY_DELAY_MS || 1500));
-const GPT_TIMEOUT_MS = Math.max(5000, Number(process.env.GPT_TIMEOUT_MS || 20000));
+// Lower default timeout to avoid Netlify's ~26s gateway limit; aim to spend <15s per item
+const GPT_TIMEOUT_MS = Math.max(5000, Number(process.env.GPT_TIMEOUT_MS || 15000));
 const MAX_SEEDS = Math.max(1, Number(process.env.DRAFTS_MAX_SEEDS || 1)); // Process 1 at a time to avoid timeout with price research
 
 function sleep(ms: number) {
@@ -161,7 +162,16 @@ function buildPrompt(product: PairedProduct, categoryHint: CategoryHint | null):
 /**
  * Build chat messages, optionally attaching images for vision-based extraction.
  */
-function buildMessages(product: PairedProduct, prompt: string) {
+function isLikelyBook(product: PairedProduct, categoryHint: CategoryHint | null): boolean {
+  const t = `${product.product} ${product.variant || ''} ${product.size || ''} ${product.categoryPath || ''}`.toLowerCase();
+  const c = `${categoryHint?.title || ''}`.toLowerCase();
+  return (
+    t.includes('book') || t.includes('paperback') || t.includes('hardcover') ||
+    c.includes('book') || c.includes('books')
+  );
+}
+
+function buildMessages(product: PairedProduct, prompt: string, categoryHint: CategoryHint | null) {
   // System prompt includes pricing and vision guidance, especially for books
   const systemContent =
     "You are an expert eBay listing writer with access to current retail pricing data.\n" +
@@ -184,12 +194,14 @@ function buildMessages(product: PairedProduct, prompt: string) {
     "3. Return the final eBay price as a number (e.g. 18.90, not '$18.90').\n";
 
   const userParts: any[] = [{ type: "text", text: prompt }];
-  // Attach images for vision parsing when available
-  const imgUrls = [product.heroDisplayUrl, product.backDisplayUrl, ...(product.extras || [])]
-    .filter(Boolean)
-    .slice(0, 4);
-  for (const url of imgUrls) {
-    userParts.push({ type: "image_url", image_url: { url } });
+  // Attach images ONLY for likely books to reduce latency and avoid 504s
+  if (isLikelyBook(product, categoryHint)) {
+    const imgUrls = [product.heroDisplayUrl, product.backDisplayUrl, ...(product.extras || [])]
+      .filter(Boolean)
+      .slice(0, 2); // front/back are sufficient
+    for (const url of imgUrls) {
+      userParts.push({ type: "image_url", image_url: { url } });
+    }
   }
 
   return [
@@ -312,7 +324,7 @@ async function createDraftForProduct(product: PairedProduct): Promise<Draft> {
   
   // Step 3: Call GPT
   const gptStart = Date.now();
-  const messages = buildMessages(product, prompt);
+  const messages = buildMessages(product, prompt, categoryHint);
   const responseText = await callOpenAI(messages);
   console.log(`[Draft] GPT call took ${Date.now() - gptStart}ms for ${product.productId}`);
   console.log(`[Draft] GPT response for ${product.productId}:`, responseText.slice(0, 200) + '...');
