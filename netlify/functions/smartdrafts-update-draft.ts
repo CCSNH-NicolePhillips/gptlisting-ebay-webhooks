@@ -55,14 +55,33 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     }
 
     // Get userId from context (Netlify Identity)
-    const userId = context.clientContext?.user?.sub;
+    // Note: clientContext may not always be populated, try Authorization header too
+    let userId = context.clientContext?.user?.sub;
+    
     if (!userId) {
+      // Try to extract from Authorization header
+      const authHeader = event.headers?.authorization || event.headers?.Authorization;
+      if (authHeader?.startsWith('Bearer ')) {
+        try {
+          const token = authHeader.substring(7);
+          const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+          userId = payload.sub;
+        } catch (e) {
+          console.warn('Failed to decode JWT:', e);
+        }
+      }
+    }
+    
+    if (!userId) {
+      console.error('No userId found in clientContext or Authorization header');
       return {
         statusCode: 401,
         headers,
         body: JSON.stringify({ ok: false, error: 'Not authenticated' }),
       };
     }
+
+    console.log('Updating draft for userId:', userId, 'sku:', sku);
 
     // Search through all draft jobs for this user to find the one with matching SKU
     // @ts-ignore - Netlify KV not in types yet
