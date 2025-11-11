@@ -176,8 +176,8 @@ export function App() {
         throw new Error('Run Pairing first to get products');
       }
       
-      // Server now caps at 2 products per request - send in smaller batches
-      const BATCH_SIZE = 1; // Process 1 product at a time to avoid timeout with price research
+      // Process 1 product at a time to avoid timeout with price research
+      const BATCH_SIZE = 1;
       const allDrafts = [];
       const totalProducts = pairing.products.length;
       
