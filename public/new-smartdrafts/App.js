@@ -177,7 +177,7 @@ export function App() {
       }
       
       // Server now caps at 2 products per request - send in smaller batches
-      const BATCH_SIZE = 2;
+      const BATCH_SIZE = 1; // Process 1 product at a time to avoid timeout with price research
       const allDrafts = [];
       const totalProducts = pairing.products.length;
       
@@ -195,6 +195,11 @@ export function App() {
         console.log(`[doCreateDrafts] Batch ${batchNum}: processed ${processed}/${batch.length}`);
         
         allDrafts.push(...(result.drafts || []));
+        
+        // Add small delay between batches to avoid overwhelming the API
+        if (i + BATCH_SIZE < totalProducts) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
       }
       
       setDrafts(allDrafts);
