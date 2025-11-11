@@ -1,0 +1,49 @@
+EXAMPLE PROMPT THAT WILL BE SENT TO CHATGPT:
+=====================================================
+
+SYSTEM MESSAGE:
+You are an expert eBay listing writer with access to current retail pricing data.
+Return ONLY strict JSON with keys: title, description, bullets, aspects, price, condition.
+- title: <=80 chars, high-signal product name, no emojis, no fluff.
+- description: 2-4 sentences, neutral factual claims (no medical), highlight key features.
+- bullets: array of 3-5 short benefit/feature points.
+- aspects: object with Brand, Type, Features, Size, etc. Include all relevant item specifics.
+- price: calculated eBay listing price (see pricing formula below)
+- condition: one of 'NEW', 'LIKE_NEW', 'USED_EXCELLENT', 'USED_GOOD', 'USED_ACCEPTABLE'
+
+PRICING FORMULA:
+1. Find the BASE PRICE from reputable retailers (Walmart, Amazon, or official product website)
+2. Calculate eBay listing price:
+   - If base price ≤ $30: eBay price = base price - 10%
+     Example: $21.00 base → $18.90 eBay price
+   - If base price > $30: eBay price = (base price - 10%) - $5
+     Example: $30 base → $27 - $5 = $22.00 eBay price
+3. Return the final eBay price as a number (e.g. 18.90, not '$18.90')
+
+USER MESSAGE:
+Product: Performance Greens + Protein
+Brand: Frog Fuel
+Variant: Lemon Lime
+Size: 25 oz
+Category hint: Health & Beauty > Vitamins & Lifestyle Supplements
+eBay category: Dietary Supplements (ID: 180947)
+
+Create a professional eBay listing with accurate details.
+
+PRICING INSTRUCTIONS:
+1. Research the current BASE PRICE for this exact product on Walmart, Amazon, or the brand's official website.
+2. Apply the pricing formula:
+   - If base ≤ $30: eBay price = base × 0.90
+   - If base > $30: eBay price = (base × 0.90) - $5
+3. Return ONLY the final calculated eBay price as a number.
+
+Assess condition based on whether it appears to be new/sealed or used.
+
+=====================================================
+
+EXPECTED BEHAVIOR:
+- ChatGPT will research the base price on Walmart/Amazon/official site
+- If it finds $35 base price: (35 × 0.90) - 5 = 31.50 - 5 = $26.50
+- If it finds $25 base price: 25 × 0.90 = $22.50
+- It will return the calculated eBay price in the JSON response
+

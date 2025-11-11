@@ -83,14 +83,23 @@ async function callOpenAI(prompt: string): Promise<string> {
             {
               role: "system",
               content:
-                "You are an expert eBay listing writer.\n" +
+                "You are an expert eBay listing writer with access to current retail pricing data.\n" +
                 "Return ONLY strict JSON with keys: title, description, bullets, aspects, price, condition.\n" +
                 "- title: <=80 chars, high-signal product name, no emojis, no fluff.\n" +
                 "- description: 2-4 sentences, neutral factual claims (no medical), highlight key features.\n" +
                 "- bullets: array of 3-5 short benefit/feature points.\n" +
                 "- aspects: object with Brand, Type, Features, Size, etc. Include all relevant item specifics.\n" +
-                "- price: estimated retail price as number (e.g. 29.99)\n" +
-                "- condition: one of 'NEW', 'LIKE_NEW', 'USED_EXCELLENT', 'USED_GOOD', 'USED_ACCEPTABLE'\n",
+                "- price: calculated eBay listing price (see pricing formula below)\n" +
+                "- condition: one of 'NEW', 'LIKE_NEW', 'USED_EXCELLENT', 'USED_GOOD', 'USED_ACCEPTABLE'\n" +
+                "\n" +
+                "PRICING FORMULA:\n" +
+                "1. Find the BASE PRICE from reputable retailers (Walmart, Amazon, or official product website)\n" +
+                "2. Calculate eBay listing price:\n" +
+                "   - If base price ≤ $30: eBay price = base price - 10%\n" +
+                "     Example: $21.00 base → $18.90 eBay price\n" +
+                "   - If base price > $30: eBay price = (base price - 10%) - $5\n" +
+                "     Example: $30 base → $27 - $5 = $22.00 eBay price\n" +
+                "3. Return the final eBay price as a number (e.g. 18.90, not '$18.90')\n",
             },
             { role: "user", content: prompt },
           ],
@@ -159,7 +168,14 @@ function buildPrompt(product: PairedProduct, categoryHint: CategoryHint | null):
   
   lines.push("");
   lines.push("Create a professional eBay listing with accurate details.");
-  lines.push("Estimate a fair retail price based on the product type.");
+  lines.push("");
+  lines.push("PRICING INSTRUCTIONS:");
+  lines.push("1. Research the current BASE PRICE for this exact product on Walmart, Amazon, or the brand's official website.");
+  lines.push("2. Apply the pricing formula:");
+  lines.push("   - If base ≤ $30: eBay price = base × 0.90");
+  lines.push("   - If base > $30: eBay price = (base × 0.90) - $5");
+  lines.push("3. Return ONLY the final calculated eBay price as a number.");
+  lines.push("");
   lines.push("Assess condition based on whether it appears to be new/sealed or used.");
   
   return lines.join("\n");
