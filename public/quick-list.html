@@ -443,6 +443,7 @@
           const draft = drafts[idx];
           return {
             ...product,
+            groupId: product.productId || product.groupId, // Map productId to groupId
             title: draft?.title,
             description: draft?.description,
             aspects: draft?.aspects,
