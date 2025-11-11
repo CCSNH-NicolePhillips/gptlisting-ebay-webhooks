@@ -288,6 +288,18 @@ export const handler: Handler = async (event) => {
 
   await putInventoryItem(access.token, access.apiHost, mapped.sku, mapped.inventory, mapped.offer.quantity, marketplaceId);
 
+      console.log(`[create-ebay-draft-user] About to create offer for SKU: ${mapped.sku}`);
+      console.log(`[create-ebay-draft-user] Offer params:`, {
+        categoryId: mapped.offer.categoryId,
+        price: mapped.offer.price,
+        quantity: mapped.offer.quantity,
+        condition: mapped.offer.condition,
+        fulfillmentPolicyId: mapped.offer.fulfillmentPolicyId ?? userPolicyDefaults.fulfillment ?? null,
+        paymentPolicyId: mapped.offer.paymentPolicyId ?? userPolicyDefaults.payment ?? null,
+        returnPolicyId: mapped.offer.returnPolicyId ?? userPolicyDefaults.return ?? null,
+        merchantLocationKey,
+      });
+
       let offerResult;
       try {
         offerResult = await createOffer(access.token, access.apiHost, {
@@ -303,7 +315,9 @@ export const handler: Handler = async (event) => {
         merchantLocationKey,
         description: mapped.offer.description,
         });
+        console.log(`[create-ebay-draft-user] ✓ Offer created successfully for SKU: ${mapped.sku}, offerId: ${offerResult.offerId}`);
       } catch (e: any) {
+        console.error(`[create-ebay-draft-user] ✗ Offer creation failed for SKU: ${mapped.sku}:`, e?.message || e);
         const msg = String(e?.message || e || "");
         // Handle idempotency: offer already exists (errorId 25002)
         if (/\berrorId\"?\s*:\s*25002\b/.test(msg)) {
