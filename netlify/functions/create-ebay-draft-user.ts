@@ -8,6 +8,52 @@ import { tokensStore } from "../../src/lib/_blobs.js";
 import { userScopedKey } from "../../src/lib/_auth.js";
 import { createOffer, putInventoryItem } from "../../src/lib/ebay-sell.js";
 
+async function fetchDefaultPolicyIds(
+  token: string,
+  apiHost: string,
+  marketplaceId: string
+): Promise<{ fulfillment?: string; payment?: string; return?: string }> {
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/json",
+    "Accept-Language": "en-US",
+    "Content-Language": "en-US",
+    "X-EBAY-C-MARKETPLACE-ID": marketplaceId,
+  } as Record<string, string>;
+
+  async function get(url: string) {
+    const r = await fetch(url, { headers });
+    const txt = await r.text().catch(() => "");
+    let json: any = null;
+    try { json = txt ? JSON.parse(txt) : null; } catch { json = { raw: txt }; }
+    if (!r.ok) throw new Error(`${url} ${r.status}: ${txt}`);
+    return json;
+  }
+
+  // Try to pick the seller's default policy for each type; fall back to first policy
+  function pickId(list: any[], idKey: string, defaultKey = 'default') {
+    if (!Array.isArray(list) || !list.length) return undefined;
+    const def = list.find((p) => p && (p[defaultKey] === true || String(p.name||'').toLowerCase().includes('default')));
+    const chosen = def || list[0];
+    const id = chosen?.[idKey];
+    return (typeof id === 'string' && id.trim()) ? id.trim() : undefined;
+  }
+
+  try {
+    const f = await get(`${apiHost}/sell/account/v1/fulfillment_policy?marketplace_id=${encodeURIComponent(marketplaceId)}`);
+    const p = await get(`${apiHost}/sell/account/v1/payment_policy?marketplace_id=${encodeURIComponent(marketplaceId)}`);
+    const r = await get(`${apiHost}/sell/account/v1/return_policy?marketplace_id=${encodeURIComponent(marketplaceId)}`);
+    return {
+      fulfillment: pickId(f?.fulfillmentPolicies || f?.policies || [], 'fulfillmentPolicyId'),
+      payment: pickId(p?.paymentPolicies || p?.policies || [], 'paymentPolicyId'),
+      return: pickId(r?.returnPolicies || r?.policies || [], 'returnPolicyId'),
+    };
+  } catch (e) {
+    console.warn('[create-ebay-draft-user] failed to fetch default policy ids', (e as any)?.message || e);
+    return {};
+  }
+}
+
 async function fetchOfferById(token: string, apiHost: string, offerId: string, marketplaceId: string) {
   const url = `${apiHost}/sell/inventory/v1/offer/${encodeURIComponent(offerId)}`;
   const r = await fetch(url, {
@@ -224,6 +270,9 @@ export const handler: Handler = async (event) => {
 
   const results: Array<{ sku: string; offerId: string; warnings: unknown[] }> = [];
 
+  // Resolve default policy ids once, only if we need them
+  let resolvedPolicyDefaults: { fulfillment?: string; payment?: string; return?: string } | null = null;
+
   for (const { group, mapped, groupId } of prepared) {
     try {
       const marketplaceId =
@@ -290,6 +339,21 @@ export const handler: Handler = async (event) => {
 
       let offerResult;
       try {
+        // Fill policy IDs from mapped or user defaults; if still missing, lazily fetch seller defaults once
+        let fulfillmentId = mapped.offer.fulfillmentPolicyId ?? userPolicyDefaults.fulfillment ?? null;
+        let paymentId = mapped.offer.paymentPolicyId ?? userPolicyDefaults.payment ?? null;
+        let returnId = mapped.offer.returnPolicyId ?? userPolicyDefaults.return ?? null;
+
+        if (!fulfillmentId || !paymentId || !returnId) {
+          if (!resolvedPolicyDefaults) {
+            resolvedPolicyDefaults = await fetchDefaultPolicyIds(access.token, access.apiHost, marketplaceId);
+            console.log('[create-ebay-draft-user] Resolved default policy ids', resolvedPolicyDefaults);
+          }
+          fulfillmentId = fulfillmentId || resolvedPolicyDefaults.fulfillment || null;
+          paymentId = paymentId || resolvedPolicyDefaults.payment || null;
+          returnId = returnId || resolvedPolicyDefaults.return || null;
+        }
+
         offerResult = await createOffer(access.token, access.apiHost, {
         sku: mapped.sku,
         marketplaceId,
@@ -297,9 +361,9 @@ export const handler: Handler = async (event) => {
         price: mapped.offer.price,
         quantity: mapped.offer.quantity,
         condition: mapped.offer.condition,
-        fulfillmentPolicyId: mapped.offer.fulfillmentPolicyId ?? userPolicyDefaults.fulfillment ?? null,
-        paymentPolicyId: mapped.offer.paymentPolicyId ?? userPolicyDefaults.payment ?? null,
-        returnPolicyId: mapped.offer.returnPolicyId ?? userPolicyDefaults.return ?? null,
+        fulfillmentPolicyId: fulfillmentId,
+        paymentPolicyId: paymentId,
+        returnPolicyId: returnId,
         merchantLocationKey,
         description: mapped.offer.description,
         });
