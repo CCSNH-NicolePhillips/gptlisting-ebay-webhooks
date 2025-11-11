@@ -225,17 +225,21 @@ export function App() {
         throw new Error('Missing jobId from analysis');
       }
       
-      setLoadingStatus('📤 Publishing to eBay...');
+      // Publish one item at a time to avoid 504 gateway timeout
+      const chatgptJobId = `chatgpt-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      const allResults = [];
       
-      // Convert ChatGPT drafts to groups format for create-ebay-draft-user
-      const groups = drafts.map((draft, index) => {
-        // Generate alphanumeric-only SKU (no hyphens or special chars)
+      for (let i = 0; i < drafts.length; i++) {
+        const draft = drafts[i];
+        setLoadingStatus(`📤 Publishing ${i + 1}/${drafts.length} to eBay...`);
+        
+        // Generate alphanumeric-only SKU
         const brandPrefix = (draft.brand || 'ITM').replace(/[^A-Za-z0-9]/g, '').substring(0, 3).toUpperCase();
         const timestamp = Date.now().toString(36);
         const random = Math.random().toString(36).substring(2, 7);
-        const sku = `${brandPrefix}${timestamp}${random}${index}`;
+        const sku = `${brandPrefix}${timestamp}${random}${i}`;
         
-        return {
+        const group = {
           groupId: draft.productId,
           brand: draft.brand,
           product: draft.product,
@@ -250,21 +254,31 @@ export function App() {
           condition: draft.condition,
           sku: sku,
         };
-      });
+        
+        try {
+          const result = await publishDraftsToEbay(chatgptJobId, [group]);
+          allResults.push({ draft, result, ok: result.ok });
+        } catch (err) {
+          console.error(`[Publish] Failed for ${draft.productId}:`, err);
+          allResults.push({ draft, result: null, ok: false, error: err.message });
+        }
+        
+        // Small delay between items
+        if (i + 1 < drafts.length) {
+          await new Promise(r => setTimeout(r, 500));
+        }
+      }
       
-      // Use a new jobId for ChatGPT drafts to avoid old saved bindings with wrong merchantLocationKey
-      const chatgptJobId = `chatgpt-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-      const result = await publishDraftsToEbay(chatgptJobId, groups);
+      const successCount = allResults.filter(r => r.ok).length;
+      const failCount = allResults.length - successCount;
       
-      if (result.ok) {
-        const successCount = result.results?.filter((r) => r.ok).length || 0;
-        showToast(`✅ Published ${successCount}/${drafts.length} draft(s) to eBay!`);
-        // Redirect to drafts page
+      if (successCount > 0) {
+        showToast(`✅ Published ${successCount}/${drafts.length} to eBay!${failCount > 0 ? ` (${failCount} failed)` : ''}`);
         setTimeout(() => {
           window.location.href = '/drafts.html';
         }, 2000);
       } else {
-        throw new Error(result.error || 'Publish failed');
+        throw new Error(`All ${drafts.length} items failed to publish`);
       }
       
     } catch (e) {
