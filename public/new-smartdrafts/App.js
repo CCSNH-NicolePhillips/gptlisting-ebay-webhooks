@@ -225,17 +225,23 @@ export function App() {
         throw new Error('Missing jobId from analysis');
       }
       
-      setLoadingStatus('📤 Publishing to eBay...');
-      
-      // Convert ChatGPT drafts to groups format for create-ebay-draft-user
-      const groups = drafts.map((draft, index) => {
-        // Generate alphanumeric-only SKU (no hyphens or special chars)
+      // Publish one item at a time to avoid function timeouts at the gateway
+      const total = drafts.length;
+      const publishedResults = [];
+      const failures = [];
+      const chatgptJobId = `chatgpt-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`; // reuse one jobId for all
+
+      for (let i = 0; i < drafts.length; i++) {
+        const draft = drafts[i];
+        setLoadingStatus(`📤 Publishing ${i + 1}/${total}…`);
+
+        // Convert single draft to group format expected by server
         const brandPrefix = (draft.brand || 'ITM').replace(/[^A-Za-z0-9]/g, '').substring(0, 3).toUpperCase();
         const timestamp = Date.now().toString(36);
         const random = Math.random().toString(36).substring(2, 7);
-        const sku = `${brandPrefix}${timestamp}${random}${index}`;
-        
-        return {
+        const sku = `${brandPrefix}${timestamp}${random}${i}`;
+
+        const group = {
           groupId: draft.productId,
           brand: draft.brand,
           product: draft.product,
@@ -248,23 +254,39 @@ export function App() {
           categoryPath: draft.category?.title,
           price: draft.price,
           condition: draft.condition,
-          sku: sku,
+          sku,
         };
-      });
-      
-      // Use a new jobId for ChatGPT drafts to avoid old saved bindings with wrong merchantLocationKey
-      const chatgptJobId = `chatgpt-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-      const result = await publishDraftsToEbay(chatgptJobId, groups);
-      
-      if (result.ok) {
-        const successCount = result.results?.filter((r) => r.ok).length || 0;
-        showToast(`✅ Published ${successCount}/${drafts.length} draft(s) to eBay!`);
+
+        try {
+          const res = await publishDraftsToEbay(chatgptJobId, [group]);
+          if (res?.ok) {
+            const count = Array.isArray(res.results) ? res.results.length : (typeof res.created === 'number' ? res.created : 0);
+            if (count > 0) {
+              publishedResults.push(res.results[0]);
+            } else {
+              // Treat empty ok response as failure for this item
+              failures.push({ index: i, error: 'Empty response for item' });
+            }
+          } else {
+            failures.push({ index: i, error: res?.error || 'Unknown publish error' });
+          }
+        } catch (err) {
+          failures.push({ index: i, error: err?.message || String(err) });
+        }
+
+        // Small delay between items to be gentle on rate limits
+        if (i + 1 < drafts.length) {
+          await new Promise(r => setTimeout(r, 500));
+        }
+      }
+
+      const successCount = publishedResults.length;
+      if (successCount > 0) {
+        showToast(`✅ Published ${successCount}/${total} draft(s) to eBay` + (failures.length ? ` (⚠️ ${failures.length} failed)` : '')); 
         // Redirect to drafts page
-        setTimeout(() => {
-          window.location.href = '/drafts.html';
-        }, 2000);
+        setTimeout(() => { window.location.href = '/drafts.html'; }, 1500);
       } else {
-        throw new Error(result.error || 'Publish failed');
+        throw new Error(failures[0]?.error || 'Publish failed');
       }
       
     } catch (e) {
