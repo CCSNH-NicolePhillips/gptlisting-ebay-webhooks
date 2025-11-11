@@ -364,6 +364,10 @@
         fix.className = 'btn secondary';
         fix.textContent = 'Fix Aspects';
         fix.title = 'Add missing Brand, Type, etc.';
+        const edit = document.createElement('button');
+        edit.className = 'btn secondary';
+        edit.textContent = 'Edit';
+        edit.title = 'Edit draft details';
         const del = document.createElement('button');
         del.className = 'btn danger';
         del.textContent = 'Delete';
@@ -406,6 +410,10 @@
             fix.disabled = false;
             fix.textContent = 'Retry Fix';
           }
+        };
+
+        edit.onclick = () => {
+          window.location.href = `/edit-draft.html?jobId=${currentJobId}&groupId=${groupId}`;
         };
 
         pub.onclick = async () => {
@@ -500,6 +508,7 @@
 
         row.appendChild(pub);
         row.appendChild(fix);
+        row.appendChild(edit);
         row.appendChild(del);
         body.appendChild(title);
   if (desc.textContent) body.appendChild(desc);
