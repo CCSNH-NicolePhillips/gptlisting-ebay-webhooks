@@ -17,7 +17,9 @@ function generateSku(group: Record<string, any>): string {
     .filter((part) => typeof part === "string" && part.trim())
     .join("");
   const fallback = group?.groupId || group?.id || Date.now().toString(36);
-  return sanitizeSku([base, fallback].filter(Boolean).join(""));
+  // Add timestamp + random to ensure uniqueness across runs (alphanumeric only)
+  const unique = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  return sanitizeSku([base, fallback, unique].filter(Boolean).join(""));
 }
 
 function buildTitle(group: Record<string, any>): string {
