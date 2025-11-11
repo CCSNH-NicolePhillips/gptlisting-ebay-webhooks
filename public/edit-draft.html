@@ -245,12 +245,12 @@
   
   <script>
     const $ = (id) => document.getElementById(id);
-    const exec = window.authClient?.authFetch || fetch;
     
     let currentSku = null;
     let originalDraft = null;
     
     async function fetchJSON(url, opts = {}) {
+      const exec = window.authClient?.authFetch || fetch;
       const r = await exec(url, opts);
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
@@ -290,8 +290,13 @@
           throw new Error('Missing sku in URL');
         }
         
+        console.log('Loading draft for SKU:', currentSku);
+        showFlash('Loading draft...', 'success');
+        
         // Fetch the draft data
         const res = await fetchJSON(`/.netlify/functions/smartdrafts-get-draft?sku=${encodeURIComponent(currentSku)}`);
+        
+        console.log('Draft loaded:', res);
         
         if (!res.ok || !res.draft) {
           throw new Error('Draft not found');
@@ -325,6 +330,8 @@
             preview.appendChild(div);
           });
         }
+        
+        showFlash('Draft loaded successfully!', 'success');
         
       } catch (err) {
         console.error('Failed to load draft:', err);
@@ -387,11 +394,29 @@
     
     async function bootstrap() {
       try {
-        const ok = await authClient.requireAuth();
-        if (!ok) return;
+        // Wait for authClient to be available
+        if (!window.authClient) {
+          console.log('Waiting for authClient...');
+          await new Promise(resolve => {
+            const check = setInterval(() => {
+              if (window.authClient) {
+                clearInterval(check);
+                resolve();
+              }
+            }, 100);
+          });
+        }
+        
+        const ok = await window.authClient.requireAuth();
+        if (!ok) {
+          showFlash('Authentication required. Redirecting to login...', 'error');
+          return;
+        }
+        
         await loadDraft();
       } catch (e) {
         console.error('Bootstrap failed', e);
+        showFlash(`Failed to load: ${e.message}`, 'error');
       }
     }
     
