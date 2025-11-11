@@ -413,11 +413,11 @@
         };
 
         edit.onclick = () => {
-          if (!offer.sku) {
-            flash.textContent = 'Cannot edit: SKU not found';
+          if (!offer.offerId) {
+            flash.textContent = 'Cannot edit: Offer ID not found';
             return;
           }
-          window.location.href = `/edit-draft.html?sku=${encodeURIComponent(offer.sku)}`;
+          window.location.href = `/edit-draft.html?offerId=${encodeURIComponent(offer.offerId)}`;
         };
 
         pub.onclick = async () => {

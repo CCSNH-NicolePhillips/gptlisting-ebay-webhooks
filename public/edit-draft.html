@@ -246,7 +246,7 @@
   <script>
     const $ = (id) => document.getElementById(id);
     
-    let currentSku = null;
+    let currentOfferId = null;
     let originalDraft = null;
     
     async function fetchJSON(url, opts = {}) {
@@ -284,17 +284,17 @@
     async function loadDraft() {
       try {
         const params = new URLSearchParams(window.location.search);
-        currentSku = params.get('sku');
+        currentOfferId = params.get('offerId');
         
-        if (!currentSku) {
-          throw new Error('Missing sku in URL');
+        if (!currentOfferId) {
+          throw new Error('Missing offerId in URL');
         }
         
-        console.log('Loading draft for SKU:', currentSku);
+        console.log('Loading draft for offerId:', currentOfferId);
         showFlash('Loading draft...', 'success');
         
         // Fetch the draft data
-        const res = await fetchJSON(`/.netlify/functions/smartdrafts-get-draft?sku=${encodeURIComponent(currentSku)}`);
+        const res = await fetchJSON(`/.netlify/functions/smartdrafts-get-draft?offerId=${encodeURIComponent(currentOfferId)}`);
         
         console.log('Draft loaded:', res);
         
@@ -370,7 +370,7 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            sku: currentSku,
+            offerId: currentOfferId,
             draft: updatedDraft,
           }),
         });
