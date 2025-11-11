@@ -264,26 +264,8 @@
         <div id="flash" class="flash"></div>
         <div>
           <button id="btnRefresh" class="btn secondary" title="Reload drafts">Refresh</button>
-          <button id="btnShowDebug" class="btn secondary">🐛 Debug Last Error</button>
         </div>
       </div>
-      
-      <!-- Debug Panel -->
-      <details id="debugPanel" style="margin-bottom: 1rem; display: none">
-        <summary style="cursor: pointer; font-weight: bold; color: #0066cc">
-          🐛 Debug Info (Last Publish Attempt)
-        </summary>
-        <div style="margin-top: 0.5rem; background: #f5f5f5; padding: 1rem; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">
-          <div style="margin-bottom: 0.5rem">
-            <strong>Offer Data:</strong>
-            <pre id="debugOffer" style="background: white; padding: 0.5rem; overflow-x: auto; margin: 0.25rem 0"></pre>
-          </div>
-          <div style="margin-bottom: 0.5rem">
-            <strong>Error Response:</strong>
-            <pre id="debugError" style="background: white; padding: 0.5rem; overflow-x: auto; margin: 0.25rem 0"></pre>
-          </div>
-        </div>
-      </details>
       
       <div id="list" class="grid" aria-live="polite"></div>
     </div>
@@ -360,10 +342,6 @@
         const pub = document.createElement('button');
         pub.className = 'btn';
         pub.textContent = 'Publish';
-        const fix = document.createElement('button');
-        fix.className = 'btn secondary';
-        fix.textContent = 'Fix Aspects';
-        fix.title = 'Add missing Brand, Type, etc.';
         const edit = document.createElement('button');
         edit.className = 'btn secondary';
         edit.textContent = 'Edit';
@@ -371,46 +349,6 @@
         const del = document.createElement('button');
         del.className = 'btn danger';
         del.textContent = 'Delete';
-        
-        fix.onclick = async () => {
-          fix.disabled = true;
-          fix.textContent = 'Fixing...';
-          flash.textContent = 'Fixing aspects...';
-          try {
-            const exec = (window.authClient && typeof window.authClient.authFetch === 'function') ? window.authClient.authFetch : fetch;
-            
-            // Add timeout to prevent hanging
-            const timeoutPromise = new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Request timed out after 30 seconds')), 30000)
-            );
-            
-            const fetchPromise = exec('/.netlify/functions/ebay-fix-draft-aspects', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ offerId: offer.offerId }),
-            });
-            
-            const r = await Promise.race([fetchPromise, timeoutPromise]);
-            const data = await r.json();
-            
-            console.log('[Fix Aspects] Response:', data);
-            
-            if (r.ok && data.ok) {
-              flash.textContent = `✓ Fixed! Added: ${(data.added || []).join(', ')}`;
-              fix.textContent = 'Fix Aspects';
-              setTimeout(() => load(), 1500); // Reload after showing message
-            } else {
-              flash.textContent = `Fix failed: ${data.error || 'unknown error'}${data.detail ? ' - ' + data.detail : ''}`;
-              fix.disabled = false;
-              fix.textContent = 'Retry Fix';
-            }
-          } catch (e) {
-            console.error('[Fix Aspects] Error:', e);
-            flash.textContent = 'Fix error: ' + e.message;
-            fix.disabled = false;
-            fix.textContent = 'Retry Fix';
-          }
-        };
 
         edit.onclick = () => {
           if (!offer.offerId) {
@@ -511,7 +449,6 @@
         };
 
         row.appendChild(pub);
-        row.appendChild(fix);
         row.appendChild(edit);
         row.appendChild(del);
         body.appendChild(title);
