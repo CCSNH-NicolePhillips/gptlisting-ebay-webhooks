@@ -349,28 +349,54 @@
       $('results').classList.remove('show');
       
       try {
-        // Step 1: Analyze
+        // Step 1: Scan/Analyze (enqueue background job)
         updateStep(1, 'active');
-        const analyzeRes = await fetchJSON('/.netlify/functions/smartdrafts-analyze', {
+        const scanRes = await fetchJSON('/.netlify/functions/smartdrafts-scan-bg', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
-            action: 'analyze',
-            folderPath: selectedFolder
+            path: selectedFolder,
+            force: false
           })
         });
         
-        if (!analyzeRes.ok || !analyzeRes.jobId) {
-          throw new Error(analyzeRes.error || 'Analyze failed');
+        if (!scanRes.ok || !scanRes.jobId) {
+          throw new Error(scanRes.error || 'Scan failed to start');
         }
         
-        currentJobId = analyzeRes.jobId;
-        updateStep(1, 'complete');
-        $('totalImages').textContent = analyzeRes.totalImages || 0;
+        currentJobId = scanRes.jobId;
+        console.log('[Quick List] Scan job started:', currentJobId);
+        
+        // Poll for scan completion
+        let scanComplete = false;
+        let attempts = 0;
+        const maxAttempts = 80; // 2 minutes max (1.5s intervals)
+        
+        while (!scanComplete && attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          attempts++;
+          
+          const statusRes = await fetchJSON(`/.netlify/functions/smartdrafts-scan-status?jobId=${currentJobId}`);
+          
+          if (statusRes.state === 'complete') {
+            scanComplete = true;
+            updateStep(1, 'complete');
+            $('totalImages').textContent = (statusRes.groups || []).length || 0;
+            console.log('[Quick List] Scan complete:', statusRes.groups?.length, 'groups');
+          } else if (statusRes.state === 'error') {
+            throw new Error(statusRes.error || 'Scan failed');
+          } else {
+            $('status1').innerHTML = `<span class="spinner"></span>Analyzing... (${attempts * 1.5}s)`;
+          }
+        }
+        
+        if (!scanComplete) {
+          throw new Error('Scan timeout after 2 minutes');
+        }
         
         // Step 2: Pair
         updateStep(2, 'active');
-        const pairRes = await fetchJSON('/.netlify/functions/smartdrafts-pair', {
+        const pairRes = await fetchJSON('/.netlify/functions/smartdrafts-pairing', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ jobId: currentJobId })
@@ -381,61 +407,67 @@
         }
         
         updateStep(2, 'complete');
-        const pairCount = pairRes.pairs?.length || 0;
-        $('totalPaired').textContent = pairCount;
+        const products = pairRes.pairing?.products || [];
+        $('totalPaired').textContent = products.length;
         
-        if (pairCount === 0) {
+        if (products.length === 0) {
           throw new Error('No products were paired. Please check your images.');
         }
         
-        // Step 3: Create Drafts (one at a time)
-        updateStep(3, 'active');
-        let draftsCreated = 0;
+        console.log('[Quick List] Paired', products.length, 'products');
         
-        for (let i = 0; i < pairCount; i++) {
-          const draftRes = await fetchJSON('/.netlify/functions/smartdrafts-create-drafts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ jobId: currentJobId })
-          });
-          
-          if (draftRes.ok && draftRes.created > 0) {
-            draftsCreated += draftRes.created;
-            $('status3').innerHTML = `<span class="spinner"></span>${draftsCreated} of ${pairCount} created...`;
-          }
-          
-          // Small delay between requests
-          if (i < pairCount - 1) {
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
+        // Step 3: Create Drafts (send all products at once)
+        updateStep(3, 'active');
+        const draftRes = await fetchJSON('/.netlify/functions/smartdrafts-create-drafts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ products })
+        });
+        
+        if (!draftRes.ok) {
+          throw new Error(draftRes.error || 'Draft creation failed');
         }
         
         updateStep(3, 'complete');
-        $('totalDrafts').textContent = draftsCreated;
+        const drafts = draftRes.drafts || [];
+        $('totalDrafts').textContent = drafts.length;
         
-        // Step 4: Publish to eBay Drafts (one at a time)
+        console.log('[Quick List] Created', drafts.length, 'drafts');
+        
+        // Step 4: Publish to eBay Drafts
         updateStep(4, 'active');
-        let published = 0;
         
-        for (let i = 0; i < draftsCreated; i++) {
-          const pubRes = await fetchJSON('/.netlify/functions/create-ebay-draft-user', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ jobId: currentJobId })
-          });
-          
-          if (pubRes.ok && pubRes.created > 0) {
-            published += pubRes.created;
-            $('status4').innerHTML = `<span class="spinner"></span>${published} of ${draftsCreated} sent...`;
-          }
-          
-          // Small delay between requests
-          if (i < draftsCreated - 1) {
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
+        // Note: create-ebay-draft-user needs the groups with drafts
+        // We need to merge the pairing products with draft content
+        const groupsWithDrafts = products.map((product, idx) => {
+          const draft = drafts[idx];
+          return {
+            ...product,
+            title: draft?.title,
+            description: draft?.description,
+            aspects: draft?.aspects,
+            price: draft?.price,
+            condition: draft?.condition,
+            category: draft?.category
+          };
+        });
+        
+        const pubRes = await fetchJSON('/.netlify/functions/create-ebay-draft-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            jobId: currentJobId,
+            groups: groupsWithDrafts
+          })
+        });
+        
+        if (!pubRes.ok) {
+          throw new Error(pubRes.error || 'Publishing to eBay failed');
         }
         
         updateStep(4, 'complete');
+        const published = pubRes.created || 0;
+        console.log('[Quick List] Published', published, 'drafts to eBay');
         
         // Show results
         $('progressBar').style.width = '100%';
