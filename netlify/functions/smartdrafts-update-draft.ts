@@ -1,4 +1,7 @@
 import type { Handler, HandlerEvent, HandlerContext } from '@netlify/functions';
+import { accessTokenFromRefresh, tokenHosts } from '../../src/lib/_common.js';
+import { tokensStore } from '../../src/lib/_blobs.js';
+import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
 
 /**
  * POST /.netlify/functions/smartdrafts-update-draft
@@ -56,25 +59,36 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 
     console.log('Updating eBay offer:', offerId);
     
-    // Get eBay token
-    const ebayToken = process.env.EBAY_ACCESS_TOKEN;
-    if (!ebayToken) {
-      return {
-        statusCode: 500,
+    // Get authentication
+    const store = tokensStore();
+    const bearer = getBearerToken(event);
+    let sub = (await requireAuthVerified(event))?.sub || null;
+    if (!sub) sub = getJwtSubUnverified(event);
+    if (!bearer || !sub) {
+      return { 
+        statusCode: 401, 
         headers,
-        body: JSON.stringify({ ok: false, error: 'eBay token not configured' }),
+        body: JSON.stringify({ ok: false, error: 'Unauthorized' })
       };
     }
     
-    const ebayEnv = process.env.EBAY_ENV || 'production';
-    const baseUrl = ebayEnv === 'sandbox' 
-      ? 'https://api.sandbox.ebay.com'
-      : 'https://api.ebay.com';
+    const saved = (await store.get(userScopedKey(sub, 'ebay.json'), { type: 'json' })) as any;
+    const refresh = saved?.refresh_token as string | undefined;
+    if (!refresh) {
+      return { 
+        statusCode: 400, 
+        headers,
+        body: JSON.stringify({ ok: false, error: 'Connect eBay first' })
+      };
+    }
+    
+    const { access_token } = await accessTokenFromRefresh(refresh);
+    const { apiHost } = tokenHosts(process.env.EBAY_ENV);
     
     // Fetch current offer to get SKU
-    const offerRes = await fetch(`${baseUrl}/sell/inventory/v1/offer/${offerId}`, {
+    const offerRes = await fetch(`${apiHost}/sell/inventory/v1/offer/${offerId}`, {
       headers: {
-        'Authorization': `Bearer ${ebayToken}`,
+        'Authorization': `Bearer ${access_token}`,
         'Content-Type': 'application/json',
       },
     });
@@ -106,10 +120,10 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       },
     };
     
-    const inventoryRes = await fetch(`${baseUrl}/sell/inventory/v1/inventory_item/${sku}`, {
+    const inventoryRes = await fetch(`${apiHost}/sell/inventory/v1/inventory_item/${sku}`, {
       method: 'PUT',
       headers: {
-        'Authorization': `Bearer ${ebayToken}`,
+        'Authorization': `Bearer ${access_token}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(inventoryPayload),
@@ -136,10 +150,10 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       },
     };
     
-    const updateOfferRes = await fetch(`${baseUrl}/sell/inventory/v1/offer/${offerId}`, {
+    const updateOfferRes = await fetch(`${apiHost}/sell/inventory/v1/offer/${offerId}`, {
       method: 'PUT',
       headers: {
-        'Authorization': `Bearer ${ebayToken}`,
+        'Authorization': `Bearer ${access_token}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(offerPayload),
