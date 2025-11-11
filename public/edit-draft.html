@@ -5,55 +5,40 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Edit Draft</title>
   <style>
-    :root {
-      --bg: #0b1020;
-      --panel: #141a33;
-      --panel-2: #0f1530;
-      --line: #2a335c;
-      --text: #f4f6fb;
-      --muted: #a2a9c8;
-      --primary: #4f7cff;
-      --primary-600: #3e66d6;
-      --success: #22c55e;
-      --danger: #ef4444;
-    }
-    * { box-sizing: border-box; }
     body {
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       margin: 0;
-      background: var(--bg);
-      color: var(--text);
-      padding: 2rem 1rem;
-    }
-    .container {
-      max-width: 1000px;
-      margin: 0 auto;
-    }
-    .header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 2rem;
-    }
-    h1 {
-      font-size: 1.75rem;
-      margin: 0;
+      padding: 2rem;
+      background: #0b1020;
+      color: #f4f6fb;
     }
     .card {
-      background: var(--panel);
-      border: 1px solid var(--line);
+      max-width: 920px;
+      margin: 0 auto 1rem;
+      background: #141a33;
+      border: 1px solid #2a335c;
       border-radius: 12px;
-      padding: 1.5rem;
-      margin-bottom: 1.5rem;
+      padding: 1.25rem 1.5rem;
     }
     .section-title {
       font-size: 1.1rem;
       font-weight: 700;
       margin-bottom: 1rem;
-      color: var(--primary);
+      color: #4f7cff;
     }
-    .form-group {
-      margin-bottom: 1.25rem;
+    h2 {
+      margin: 0 0 1rem 0;
+      font-size: 1.4rem;
+    }
+    .form-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-bottom: 0.85rem;
+    }
+    .form-field {
+      flex: 1 1 250px;
+      min-width: 220px;
     }
     label {
       display: block;
@@ -63,81 +48,55 @@
     }
     input, textarea, select {
       width: 100%;
-      background: var(--panel-2);
-      border: 1px solid var(--line);
+      background: #0f1530;
+      border: 1px solid #2a335c;
       border-radius: 6px;
       padding: 0.65rem 0.85rem;
-      color: var(--text);
+      color: #f4f6fb;
       font-family: inherit;
       font-size: 0.95rem;
     }
     input:focus, textarea:focus, select:focus {
       outline: none;
-      border-color: var(--primary);
+      border-color: #4f7cff;
     }
     textarea {
       resize: vertical;
-      min-height: 80px;
+      min-height: 120px;
     }
-    .grid-2 {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1rem;
+    button {
+      background: #4f7cff;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 0.7rem 1.5rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover:not(:disabled) {
+      background: #3e66d6;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    button.secondary {
+      background: #2a335c;
+      color: #f4f6fb;
+    }
+    button.secondary:hover:not(:disabled) {
+      background: #3d4770;
     }
     .aspect-item {
       display: flex;
       gap: 0.5rem;
       margin-bottom: 0.5rem;
+      align-items: center;
     }
     .aspect-item input {
       flex: 1;
-    }
-    .btn-remove {
-      background: var(--danger);
-      color: white;
-      border: none;
-      border-radius: 6px;
-      padding: 0.5rem 0.75rem;
-      cursor: pointer;
-      font-size: 0.85rem;
-    }
-    .btn-add {
-      background: transparent;
-      color: var(--primary);
-      border: 1px dashed var(--line);
-      border-radius: 6px;
-      padding: 0.5rem;
-      cursor: pointer;
-      font-size: 0.85rem;
-      width: 100%;
-      margin-top: 0.5rem;
-    }
-    .btn {
-      background: var(--primary);
-      color: white;
-      border: none;
-      border-radius: 8px;
-      padding: 0.75rem 1.5rem;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    .btn:hover:not(:disabled) {
-      background: var(--primary-600);
-    }
-    .btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-    .btn.secondary {
-      background: transparent;
-      border: 1px solid var(--line);
-      color: var(--text);
-    }
-    .actions {
-      display: flex;
-      gap: 1rem;
-      margin-top: 2rem;
     }
     .flash {
       padding: 0.75rem 1rem;
@@ -150,17 +109,17 @@
     }
     .flash.success {
       background: rgba(34, 197, 94, 0.1);
-      border: 1px solid var(--success);
-      color: var(--success);
+      border: 1px solid #22c55e;
+      color: #22c55e;
     }
     .flash.error {
       background: rgba(239, 68, 68, 0.1);
-      border: 1px solid var(--danger);
-      color: var(--danger);
+      border: 1px solid #ef4444;
+      color: #ef4444;
     }
-    .helper {
+    .muted {
       font-size: 0.85rem;
-      color: var(--muted);
+      color: #94a3b8;
       margin-top: 0.25rem;
     }
     .images-preview {
@@ -173,7 +132,7 @@
       aspect-ratio: 1;
       border-radius: 8px;
       overflow: hidden;
-      border: 1px solid var(--line);
+      border: 1px solid #2a335c;
     }
     .image-thumb img {
       width: 100%;
@@ -185,62 +144,62 @@
 <body>
   <script src="/auth-client.js"></script>
   
-  <div class="container">
-    <div class="header">
-      <h1>Edit Draft</h1>
-      <a href="/drafts.html" class="btn secondary">← Back to Drafts</a>
-    </div>
-    
+  <div class="card">
+    <h2>Edit Draft</h2>
     <div class="flash" id="flash"></div>
+  </div>
     
-    <div class="card">
-      <div class="section-title">Basic Information</div>
-      
-      <div class="form-group">
-        <label for="title">Title <span class="helper">(max 80 characters)</span></label>
+  <div class="card">
+    <div class="section-title">Basic Information</div>
+    
+    <div class="form-row">
+      <div class="form-field" style="flex: 2;">
+        <label for="title">Title <small class="muted">(max 80 characters)</small></label>
         <input type="text" id="title" maxlength="80" />
-        <div class="helper" id="titleCount">0 / 80</div>
+        <small class="muted" id="titleCount">0 / 80</small>
       </div>
-      
-      <div class="form-group">
+    </div>
+    
+    <div class="form-row">
+      <div class="form-field" style="flex: 2;">
         <label for="description">Description</label>
-        <textarea id="description" rows="4"></textarea>
+        <textarea id="description"></textarea>
+      </div>
+    </div>
+    
+    <div class="form-row">
+      <div class="form-field">
+        <label for="price">Price USD</label>
+        <input type="number" id="price" step="0.01" min="0" />
       </div>
       
-      <div class="grid-2">
-        <div class="form-group">
-          <label for="price">Price ($)</label>
-          <input type="number" id="price" step="0.01" min="0" />
-        </div>
-        
-        <div class="form-group">
-          <label for="condition">Condition</label>
-          <select id="condition">
-            <option value="NEW">New</option>
-            <option value="LIKE_NEW">Like New</option>
-            <option value="USED_EXCELLENT">Used - Excellent</option>
-            <option value="USED_GOOD">Used - Good</option>
-            <option value="USED_ACCEPTABLE">Used - Acceptable</option>
-          </select>
-        </div>
+      <div class="form-field">
+        <label for="condition">Condition</label>
+        <select id="condition">
+          <option value="NEW">New</option>
+          <option value="LIKE_NEW">Like New</option>
+          <option value="USED_EXCELLENT">Used - Excellent</option>
+          <option value="USED_GOOD">Used - Good</option>
+          <option value="USED_ACCEPTABLE">Used - Acceptable</option>
+        </select>
       </div>
     </div>
+  </div>
     
-    <div class="card">
-      <div class="section-title">Item Specifics (Aspects)</div>
-      <div id="aspectsList"></div>
-      <button class="btn-add" onclick="addAspect()">+ Add Aspect</button>
-    </div>
+  <div class="card">
+    <div class="section-title">Item Specifics (Aspects)</div>
+    <div id="aspectsList"></div>
+    <button class="secondary" style="margin-top: 0.5rem;" onclick="addAspect()">+ Add Aspect</button>
+  </div>
     
-    <div class="card">
-      <div class="section-title">Images</div>
-      <div class="images-preview" id="imagesPreview"></div>
-    </div>
+  <div class="card">
+    <div class="section-title">Images</div>
+    <div class="images-preview" id="imagesPreview"></div>
+  </div>
     
-    <div class="actions">
-      <button class="btn" id="btnSave" onclick="saveDraft()">Save Changes</button>
-      <button class="btn secondary" onclick="window.location.href='/drafts.html'">Cancel</button>
-    </div>
+  <div class="card">
+    <button id="btnSave" onclick="saveDraft()">Update Draft</button>
+    <button class="secondary" onclick="window.location.href='/drafts.html'" style="margin-left: 0.5rem;">Cancel</button>
   </div>
   
   <script>
@@ -282,7 +241,7 @@
       div.innerHTML = `
         <input type="text" placeholder="Name (e.g. Brand)" value="${key}" class="aspect-key" ${keyReadonly} />
         <input type="text" placeholder="Value${requiredMark}" value="${value}" class="aspect-value" ${isRequired ? 'required' : ''} />
-        <button class="btn-remove" onclick="this.parentElement.remove()" ${isRequired ? 'disabled title="Required field"' : ''}>✕</button>
+        <button class="secondary" onclick="this.parentElement.remove()" ${isRequired ? 'disabled title="Required field"' : ''} style="padding: 0.25rem 0.5rem; margin-left: 0.5rem;">✕</button>
       `;
       container.appendChild(div);
     }
@@ -405,7 +364,7 @@
         console.error('Failed to save draft:', err);
         showFlash(`Error: ${err.message}`, 'error');
         $('btnSave').disabled = false;
-        $('btnSave').textContent = 'Save Changes';
+        $('btnSave').textContent = 'Update Draft';
       }
     }
     
