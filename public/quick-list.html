@@ -416,42 +416,71 @@
         
         console.log('[Quick List] Paired', products.length, 'products');
         
-        // Step 3: Create Drafts (send all products at once)
+        // Step 3: Create Drafts (one at a time to avoid timeout)
         updateStep(3, 'active');
-        const draftRes = await fetchJSON('/.netlify/functions/smartdrafts-create-drafts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ products })
-        });
+        const drafts = [];
         
-        if (!draftRes.ok) {
-          throw new Error(draftRes.error || 'Draft creation failed');
+        for (let i = 0; i < products.length; i++) {
+          $('status3').innerHTML = `<span class="spinner"></span>Creating ${i + 1} of ${products.length}...`;
+          
+          const draftRes = await fetchJSON('/.netlify/functions/smartdrafts-create-drafts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ products: [products[i]] }) // Send one at a time
+          });
+          
+          if (!draftRes.ok) {
+            console.warn(`Failed to create draft for product ${i + 1}:`, draftRes.error);
+            // Continue with other products even if one fails
+            drafts.push(null);
+          } else {
+            const createdDrafts = draftRes.drafts || [];
+            if (createdDrafts.length > 0) {
+              drafts.push(createdDrafts[0]);
+            } else {
+              drafts.push(null);
+            }
+          }
+          
+          // Small delay between requests to avoid rate limits
+          if (i < products.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
         }
         
         updateStep(3, 'complete');
-        const drafts = draftRes.drafts || [];
-        $('totalDrafts').textContent = drafts.length;
+        const successfulDrafts = drafts.filter(d => d !== null).length;
+        $('totalDrafts').textContent = successfulDrafts;
         
-        console.log('[Quick List] Created', drafts.length, 'drafts');
+        console.log('[Quick List] Created', successfulDrafts, 'of', products.length, 'drafts');
         
         // Step 4: Publish to eBay Drafts
         updateStep(4, 'active');
         
-        // Note: create-ebay-draft-user needs the groups with drafts
-        // We need to merge the pairing products with draft content
-        const groupsWithDrafts = products.map((product, idx) => {
-          const draft = drafts[idx];
-          return {
-            ...product,
-            groupId: product.productId || product.groupId, // Map productId to groupId
-            title: draft?.title,
-            description: draft?.description,
-            aspects: draft?.aspects,
-            price: draft?.price,
-            condition: draft?.condition,
-            category: draft?.category
-          };
-        });
+        // Filter out products that failed draft creation
+        const groupsWithDrafts = products
+          .map((product, idx) => {
+            const draft = drafts[idx];
+            if (!draft) return null; // Skip failed drafts
+            
+            return {
+              ...product,
+              groupId: product.productId || product.groupId, // Map productId to groupId
+              title: draft.title,
+              description: draft.description,
+              aspects: draft.aspects,
+              price: draft.price,
+              condition: draft.condition,
+              category: draft.category
+            };
+          })
+          .filter(g => g !== null); // Remove nulls
+        
+        if (groupsWithDrafts.length === 0) {
+          throw new Error('No valid drafts to publish to eBay');
+        }
+        
+        console.log('[Quick List] Publishing', groupsWithDrafts.length, 'drafts to eBay');
         
         const pubRes = await fetchJSON('/.netlify/functions/create-ebay-draft-user', {
           method: 'POST',
