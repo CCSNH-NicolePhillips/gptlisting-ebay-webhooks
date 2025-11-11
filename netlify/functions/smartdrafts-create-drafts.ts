@@ -13,6 +13,16 @@ const GPT_RETRY_DELAY_MS = Math.max(250, Number(process.env.GPT_RETRY_DELAY_MS |
 const GPT_TIMEOUT_MS = Math.max(5000, Number(process.env.GPT_TIMEOUT_MS || 30000)); // Longer timeout for web search
 const MAX_SEEDS = Math.max(1, Number(process.env.DRAFTS_MAX_SEEDS || 1)); // Process 1 item per request to avoid Netlify timeout
 
+/**
+ * Apply pricing formula to base retail price
+ */
+function computeEbayPrice(base: number): number {
+  if (!isFinite(base) || base <= 0) return 0;
+  let price = base * 0.9; // 10% off retail
+  if (base > 30) price -= 5; // Extra $5 off if over $30
+  return Math.round(price * 100) / 100;
+}
+
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -293,6 +303,10 @@ async function createDraftForProduct(product: PairedProduct): Promise<Draft> {
   const images = [product.heroDisplayUrl, product.backDisplayUrl, ...(product.extras || [])].filter(Boolean);
   
   // Step 7: Build final draft
+  // Apply pricing formula: ChatGPT provides retail price, we apply our discount formula
+  const retailPrice = typeof parsed.price === 'number' && parsed.price > 0 ? parsed.price : 0;
+  const ebayPrice = computeEbayPrice(retailPrice);
+  
   const draft: Draft = {
     productId: product.productId,
     brand: product.brand,
@@ -303,11 +317,11 @@ async function createDraftForProduct(product: PairedProduct): Promise<Draft> {
     aspects,
     category: categoryHint || { id: '', title: product.categoryPath || 'Uncategorized' },
     images,
-    price: parsed.price,
+    price: ebayPrice, // Use computed eBay price with discount formula
     condition: parsed.condition,
   };
   
-  console.log(`[Draft] ✓ Created for ${product.productId} in ${Date.now() - startTime}ms: "${draft.title}"`);
+  console.log(`[Draft] ✓ Created for ${product.productId} in ${Date.now() - startTime}ms: "${draft.title}" (retail: $${retailPrice} → eBay: $${ebayPrice})`);
   
   return draft;
 }
