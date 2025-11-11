@@ -457,21 +457,35 @@
         // Step 4: Publish to eBay Drafts
         updateStep(4, 'active');
         
-        // Filter out products that failed draft creation
+        // Build groups with proper structure for create-ebay-draft-user
         const groupsWithDrafts = products
           .map((product, idx) => {
             const draft = drafts[idx];
             if (!draft) return null; // Skip failed drafts
             
+            // Build images array from product URLs
+            const images = [
+              product.heroDisplayUrl || product.frontUrl,
+              product.backDisplayUrl || product.backUrl,
+              ...(product.extras || [])
+            ].filter(Boolean);
+            
             return {
-              ...product,
-              groupId: product.productId || product.groupId, // Map productId to groupId
+              groupId: product.productId || product.groupId,
+              brand: product.brand || draft.brand || 'Unknown',
+              product: product.product || draft.product || 'Product',
+              variant: product.variant,
+              size: product.size,
+              images: images,
               title: draft.title,
               description: draft.description,
               aspects: draft.aspects,
               price: draft.price,
+              pricing: { ebay: draft.price },
+              quantity: 1,
               condition: draft.condition,
-              category: draft.category
+              category: draft.category,
+              categoryPath: product.categoryPath
             };
           })
           .filter(g => g !== null); // Remove nulls
