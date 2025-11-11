@@ -178,6 +178,19 @@
       gap: 0.75rem;
       margin-top: 1rem;
     }
+    select {
+      width: 100%;
+      padding: 0.75rem;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      font-size: 1rem;
+    }
+    h3 {
+      color: var(--text);
+      margin-bottom: 0.75rem;
+    }
   </style>
 </head>
 <body>
@@ -186,6 +199,13 @@
   <div class="container">
     <h1>Quick List</h1>
     <p class="subtitle">Scan, analyze, and create eBay drafts in one click</p>
+    
+    <div class="card">
+      <h3 style="margin-top: 0;">Select Dropbox Folder</h3>
+      <select id="folderSelect" class="btn secondary" style="margin-bottom: 1.5rem;">
+        <option value="">Loading folders...</option>
+      </select>
+    </div>
     
     <div class="card">
       <div class="step" id="step1">
@@ -229,7 +249,7 @@
       </div>
     </div>
     
-    <button class="btn" id="btnStart" onclick="startPipeline()">
+    <button class="btn" id="btnStart" onclick="startPipeline()" disabled>
       Start Quick List
     </button>
     
@@ -261,12 +281,42 @@
     const exec = window.authClient?.authFetch || fetch;
     
     let currentJobId = null;
+    let selectedFolder = null;
     
     async function fetchJSON(url, opts = {}) {
       const r = await exec(url, opts);
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
       return data;
+    }
+    
+    async function loadFolders() {
+      try {
+        const data = await fetchJSON('/.netlify/functions/dropbox-list-folders');
+        const select = $('folderSelect');
+        
+        if (!data.folders || data.folders.length === 0) {
+          select.innerHTML = '<option value="">No folders found</option>';
+          return;
+        }
+        
+        select.innerHTML = '<option value="">-- Select a folder --</option>';
+        data.folders.forEach(folder => {
+          const opt = document.createElement('option');
+          opt.value = folder.path_lower;
+          opt.textContent = folder.name;
+          select.appendChild(opt);
+        });
+        
+        select.addEventListener('change', (e) => {
+          selectedFolder = e.target.value;
+          $('btnStart').disabled = !selectedFolder;
+        });
+        
+      } catch (err) {
+        console.error('Failed to load folders:', err);
+        $('folderSelect').innerHTML = '<option value="">Error loading folders</option>';
+      }
     }
     
     function updateStep(num, status) {
@@ -288,6 +338,11 @@
     }
     
     async function startPipeline() {
+      if (!selectedFolder) {
+        alert('Please select a Dropbox folder first');
+        return;
+      }
+      
       const btn = $('btnStart');
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner"></span>Running...';
@@ -299,7 +354,10 @@
         const analyzeRes = await fetchJSON('/.netlify/functions/smartdrafts-analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'analyze' })
+          body: JSON.stringify({ 
+            action: 'analyze',
+            folderPath: selectedFolder
+          })
         });
         
         if (!analyzeRes.ok || !analyzeRes.jobId) {
@@ -412,6 +470,9 @@
       try {
         const ok = await authClient.requireAuth();
         if (!ok) return;
+        
+        // Load Dropbox folders
+        await loadFolders();
       } catch (e) {
         console.error('Auth check failed', e);
       }
