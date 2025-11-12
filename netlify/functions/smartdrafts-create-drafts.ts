@@ -2,6 +2,7 @@ import type { Handler } from "@netlify/functions";
 import { requireUserAuth } from "../../src/lib/auth-user.js";
 import { getOrigin, jsonResponse } from "../../src/lib/http.js";
 import { pickCategoryForGroup } from "../../src/lib/taxonomy-select.js";
+import { listCategories } from "../../src/lib/taxonomy-store.js";
 import type { CategoryDef } from "../../src/lib/taxonomy-schema.js";
 import { openai } from "../../src/lib/openai.js";
 
@@ -138,9 +139,55 @@ async function callOpenAI(prompt: string): Promise<string> {
 }
 
 /**
+ * Get relevant eBay categories for GPT to choose from
+ */
+async function getRelevantCategories(product: PairedProduct): Promise<string> {
+  try {
+    const allCategories = await listCategories();
+    
+    // Filter to relevant categories based on product info
+    const searchTerms = [
+      product.product,
+      product.brand,
+      product.variant,
+      product.categoryPath
+    ].filter(Boolean).join(' ').toLowerCase();
+    
+    // Get categories that might be relevant (limit to 50 to keep token count reasonable)
+    const relevant = allCategories
+      .filter(cat => {
+        const catText = `${cat.title} ${cat.slug}`.toLowerCase();
+        // Include if category contains any word from search terms
+        return searchTerms.split(/\s+/).some(term => 
+          term.length > 3 && catText.includes(term)
+        );
+      })
+      .slice(0, 50)
+      .map(cat => `${cat.id}: ${cat.slug}`)
+      .join('\n');
+    
+    if (relevant) {
+      return relevant;
+    }
+    
+    // If no relevant categories found, return top-level categories
+    const topLevel = allCategories
+      .filter(cat => cat.slug && cat.slug.split('>').length <= 3)
+      .slice(0, 50)
+      .map(cat => `${cat.id}: ${cat.slug}`)
+      .join('\n');
+    
+    return topLevel;
+  } catch (err) {
+    console.error('[getRelevantCategories] Error:', err);
+    return '';
+  }
+}
+
+/**
  * Build GPT prompt from product data
  */
-function buildPrompt(product: PairedProduct, categoryHint: CategoryHint | null): string {
+function buildPrompt(product: PairedProduct, categoryHint: CategoryHint | null, categories: string): string {
   const lines: string[] = [
     `Product: ${product.product}`,
   ];
@@ -184,9 +231,28 @@ function buildPrompt(product: PairedProduct, categoryHint: CategoryHint | null):
   }
   
   lines.push("");
+  
+  // Add category selection
+  if (categories) {
+    lines.push("Available eBay Categories (choose the most specific/appropriate one by ID):");
+    lines.push(categories);
+    lines.push("");
+  }
+  
   lines.push("Create a professional eBay listing with accurate details.");
-  lines.push("IMPORTANT: Search the web for the current retail price of this exact product. Check Walmart.com, Target.com, Amazon.com, and other major retailers. Provide the actual current market price you find, not an estimate.");
+  lines.push("IMPORTANT: Search Amazon.com and Walmart.com for CURRENT regular selling price (NOT sale/clearance/collectible prices). For books, use new hardcover/paperback price.");
   lines.push("Assess condition based on whether it appears to be new/sealed or used.");
+  lines.push("");
+  lines.push("Response format (JSON):");
+  lines.push("{");
+  lines.push('  "categoryId": "12345", // REQUIRED: Choose the most specific eBay category ID from the list above');
+  lines.push('  "title": "...", // 80 chars max');
+  lines.push('  "description": "...",');
+  lines.push('  "bullets": ["...", "...", "..."], // 3-5 bullet points');
+  lines.push('  "aspects": { "Brand": ["..."], "Type": ["..."], ... }, // Item specifics');
+  lines.push('  "price": 29.99, // Current retail price from Amazon/Walmart');
+  lines.push('  "condition": "NEW" // or "USED"');
+  lines.push("}");
   
   return lines.join("\n");
 }
@@ -232,6 +298,7 @@ function parseGptResponse(responseText: string, product: PairedProduct): any {
   try {
     const parsed = JSON.parse(responseText);
     return {
+      categoryId: typeof parsed.categoryId === 'string' ? parsed.categoryId.trim() : undefined,
       title: typeof parsed.title === 'string' ? parsed.title.slice(0, 80) : `${product.brand} ${product.product}`.slice(0, 80),
       description: typeof parsed.description === 'string' ? parsed.description.slice(0, 1200) : `${product.brand} ${product.product}`,
       bullets: Array.isArray(parsed.bullets) ? parsed.bullets.slice(0, 5).map((b: any) => String(b).slice(0, 200)) : [],
@@ -242,6 +309,7 @@ function parseGptResponse(responseText: string, product: PairedProduct): any {
   } catch (err) {
     console.error('[GPT] Failed to parse response:', err);
     return {
+      categoryId: undefined,
       title: `${product.brand} ${product.product}`.slice(0, 80),
       description: `${product.brand} ${product.product}`,
       bullets: [],
@@ -294,34 +362,63 @@ async function createDraftForProduct(product: PairedProduct): Promise<Draft> {
   const startTime = Date.now();
   console.log(`[Draft] Creating for: ${product.productId}`);
   
-  // Step 1: Pick category
+  // Step 1: Get relevant categories for GPT to choose from
+  const catListStart = Date.now();
+  const relevantCategories = await getRelevantCategories(product);
+  console.log(`[Draft] Category list generation took ${Date.now() - catListStart}ms for ${product.productId}`);
+  
+  // Step 2: Pick category as fallback (in case GPT doesn't provide one)
   const catStart = Date.now();
   const categoryHint = await pickCategory(product);
-  console.log(`[Draft] Category pick took ${Date.now() - catStart}ms for ${product.productId}`);
+  console.log(`[Draft] Category fallback pick took ${Date.now() - catStart}ms for ${product.productId}`);
   
-  // Step 2: Build GPT prompt
-  const prompt = buildPrompt(product, categoryHint);
+  // Step 3: Build GPT prompt with category list
+  const prompt = buildPrompt(product, categoryHint, relevantCategories);
   console.log(`[Draft] GPT prompt for ${product.productId}:`, prompt.slice(0, 200) + '...');
   
-  // Step 3: Call GPT
+  // Step 4: Call GPT
   const gptStart = Date.now();
   const responseText = await callOpenAI(prompt);
   console.log(`[Draft] GPT call took ${Date.now() - gptStart}ms for ${product.productId}`);
-  console.log(`[Draft] GPT response for ${product.productId}:`, responseText.slice(0, 200) + '...');
+  console.log(`[Draft] GPT response for ${product.productId}:`, responseText.slice(0, 300) + '...');
   
-  // Step 4: Parse response
+  // Step 5: Parse response
   const parsed = parseGptResponse(responseText, product);
   
-  // Step 5: Normalize aspects
+  // Step 6: Get category from GPT's response or use fallback
+  let finalCategory: CategoryHint | null = categoryHint;
+  if (parsed.categoryId) {
+    console.log(`[Draft] GPT selected category ID: ${parsed.categoryId}`);
+    try {
+      const { getCategoryById } = await import("../../src/lib/taxonomy-store.js");
+      const gptCategory = await getCategoryById(parsed.categoryId);
+      if (gptCategory) {
+        finalCategory = {
+          id: gptCategory.id,
+          title: gptCategory.title || gptCategory.slug || '',
+          aspects: {},
+        };
+        console.log(`[Draft] Using GPT category: ${finalCategory.title} (${finalCategory.id})`);
+      } else {
+        console.warn(`[Draft] GPT category ${parsed.categoryId} not found, using fallback`);
+      }
+    } catch (err) {
+      console.error(`[Draft] Error loading GPT category:`, err);
+    }
+  } else {
+    console.log(`[Draft] GPT did not provide categoryId, using fallback`);
+  }
+  
+  // Step 7: Normalize aspects
   const aspects = normalizeAspects(parsed.aspects, product);
   
-  // Step 6: Collect images
+  // Step 8: Collect images
   const images = [product.heroDisplayUrl, product.backDisplayUrl, ...(product.extras || [])].filter(Boolean);
   
-  // Step 7: Build final draft
+  // Step 9: Build final draft
   // Apply pricing formula: ChatGPT provides retail price, we apply our discount formula with category caps
   const retailPrice = typeof parsed.price === 'number' && parsed.price > 0 ? parsed.price : 0;
-  const categoryPath = categoryHint?.title || product.categoryPath || '';
+  const categoryPath = finalCategory?.title || product.categoryPath || '';
   const ebayPrice = computeEbayPrice(retailPrice, categoryPath);
   
   const draft: Draft = {
@@ -332,7 +429,7 @@ async function createDraftForProduct(product: PairedProduct): Promise<Draft> {
     description: parsed.description,
     bullets: parsed.bullets,
     aspects,
-    category: categoryHint || { id: '', title: product.categoryPath || 'Uncategorized' },
+    category: finalCategory || { id: '', title: product.categoryPath || 'Uncategorized' },
     images,
     price: ebayPrice, // Use computed eBay price with discount formula
     condition: parsed.condition,
