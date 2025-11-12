@@ -155,7 +155,18 @@ async function getRelevantCategories(product: PairedProduct): Promise<string> {
         );
       })
       .slice(0, 20)
-      .map(cat => `${cat.id}: ${cat.title}`)
+      .map(cat => {
+        // Include key item specifics for each category
+        const aspects = cat.itemSpecifics
+          ?.filter(spec => !spec.required && spec.name !== 'Brand') // Skip required fields that are auto-filled
+          .slice(0, 8) // Limit to top 8 aspects to keep prompt reasonable
+          .map(spec => spec.name)
+          .join(', ') || '';
+        
+        return aspects 
+          ? `${cat.id}: ${cat.title} (aspects: ${aspects})`
+          : `${cat.id}: ${cat.title}`;
+      })
       .join('\n');
     
     if (relevant) {
@@ -173,7 +184,17 @@ async function getRelevantCategories(product: PairedProduct): Promise<string> {
     
     const fallback = allCategories
       .filter(cat => commonCats.includes(cat.id))
-      .map(cat => `${cat.id}: ${cat.title}`)
+      .map(cat => {
+        const aspects = cat.itemSpecifics
+          ?.filter(spec => !spec.required && spec.name !== 'Brand')
+          .slice(0, 8)
+          .map(spec => spec.name)
+          .join(', ') || '';
+        
+        return aspects 
+          ? `${cat.id}: ${cat.title} (aspects: ${aspects})`
+          : `${cat.id}: ${cat.title}`;
+      })
       .join('\n');
     
     return fallback;
@@ -237,6 +258,9 @@ function buildPrompt(product: PairedProduct, categoryHint: CategoryHint | null, 
   lines.push("IMPORTANT: Search Amazon.com and Walmart.com for CURRENT regular selling price (NOT sale/clearance/collectible prices). For books, use new hardcover/paperback price.");
   lines.push("Assess condition based on whether it appears to be new/sealed or used.");
   lines.push("");
+  lines.push("CRITICAL: Fill out ALL relevant item specifics (aspects) listed for the chosen category. These are shown in parentheses after each category above.");
+  lines.push("The more aspects you fill out accurately, the better the listing will rank in eBay search results.");
+  lines.push("");
   lines.push("Response format (JSON):");
   lines.push("{");
   if (categories && categories.length > 0) {
@@ -245,7 +269,14 @@ function buildPrompt(product: PairedProduct, categoryHint: CategoryHint | null, 
   lines.push('  "title": "...", // 80 chars max');
   lines.push('  "description": "...",');
   lines.push('  "bullets": ["...", "...", "..."], // 3-5 bullet points');
-  lines.push('  "aspects": { "Brand": ["..."], "Type": ["..."], ... }, // Item specifics');
+  lines.push('  "aspects": { // Fill out ALL relevant aspects from the category - Features, Ingredients, Formulation, Size, etc.');
+  lines.push('    "Brand": ["..."],');
+  lines.push('    "Type": ["..."],');
+  lines.push('    "Features": ["...", "..."], // Multiple values OK');
+  lines.push('    "Main Purpose": ["..."],');
+  lines.push('    "Ingredients": ["...", "..."]');
+  lines.push('    // ... include ALL relevant aspects from the chosen category');
+  lines.push('  },');
   lines.push('  "price": 29.99, // Current retail price from Amazon/Walmart');
   lines.push('  "condition": "NEW" // or "USED"');
   lines.push("}");
