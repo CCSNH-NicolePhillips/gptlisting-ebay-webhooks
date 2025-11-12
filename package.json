@@ -21,10 +21,15 @@
     "canary": "tsx scripts/canary-test.ts",
     "verify:golden": "tsx scripts/verify-golden.ts",
     "metrics:print": "tsx scripts/metrics-print.ts",
-    "test": "jest"
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:verbose": "jest --verbose"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.21.1",
+    "@aws-sdk/client-s3": "^3.600.0",
+    "@aws-sdk/s3-request-presigner": "^3.600.0",
     "@google/generative-ai": "^0.7.1",
     "@netlify/blobs": "^6.5.0",
     "cheerio": "^1.0.0-rc.12",
