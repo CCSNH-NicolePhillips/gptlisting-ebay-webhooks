@@ -286,7 +286,14 @@ async function pickCategory(product: PairedProduct): Promise<CategoryHint | null
 
 function parseGptResponse(responseText: string, product: PairedProduct): any {
   try {
-    const parsed = JSON.parse(responseText);
+    // Strip markdown code blocks if present (```json ... ```)
+    let cleanText = responseText.trim();
+    if (cleanText.startsWith('```')) {
+      // Remove opening ```json and closing ```
+      cleanText = cleanText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+    }
+    
+    const parsed = JSON.parse(cleanText);
     return {
       categoryId: typeof parsed.categoryId === 'string' ? parsed.categoryId.trim() : undefined,
       title: typeof parsed.title === 'string' ? parsed.title.slice(0, 80) : `${product.brand} ${product.product}`.slice(0, 80),
