@@ -327,6 +327,11 @@
       
       // Global to store last created draft data for debugging
       let lastDraftData = null;
+      
+      // Edit mode detection
+      const urlParams = new URLSearchParams(window.location.search);
+      const IS_EDIT_MODE = urlParams.get('edit') === 'true';
+      const EDIT_OFFER_ID = urlParams.get('offerId');
 
       function updateSkuHint(value) {
         if (!skuHintEl) return;

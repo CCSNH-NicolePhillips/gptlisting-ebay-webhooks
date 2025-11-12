@@ -24,7 +24,7 @@ export const cfg = {
       fulfillmentPolicyId: process.env.EBAY_FULFILLMENT_POLICY_ID || '',
     },
     defaultMarketplaceId: process.env.DEFAULT_MARKETPLACE_ID || 'EBAY_US',
-    defaultCategoryId: process.env.DEFAULT_CATEGORY_ID || '177011',
+    defaultCategoryId: process.env.DEFAULT_CATEGORY_ID || '99', // Everything Else
     promotedCampaignId: process.env.PROMOTED_CAMPAIGN_ID || '',
   },
 
