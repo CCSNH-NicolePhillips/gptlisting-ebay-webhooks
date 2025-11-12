@@ -258,8 +258,11 @@ function buildPrompt(product: PairedProduct, categoryHint: CategoryHint | null, 
   lines.push("IMPORTANT: Search Amazon.com and Walmart.com for CURRENT regular selling price (NOT sale/clearance/collectible prices). For books, use new hardcover/paperback price.");
   lines.push("Assess condition based on whether it appears to be new/sealed or used.");
   lines.push("");
-  lines.push("CRITICAL: Fill out ALL relevant item specifics (aspects) listed for the chosen category. These are shown in parentheses after each category above.");
-  lines.push("The more aspects you fill out accurately, the better the listing will rank in eBay search results.");
+  lines.push("CRITICAL REQUIREMENT: You MUST fill out ALL relevant item specifics (aspects) shown in parentheses for your chosen category above.");
+  lines.push("Example: If category shows (aspects: Formulation, Main Purpose, Ingredients, Features, Active Ingredients)");
+  lines.push("then your aspects object MUST include those fields with appropriate values.");
+  lines.push("The more complete and accurate the aspects, the better the eBay search ranking.");
+  lines.push("DO NOT just fill Brand and Type - include ALL relevant aspects listed for the category!");
   lines.push("");
   lines.push("Response format (JSON):");
   lines.push("{");
@@ -269,13 +272,16 @@ function buildPrompt(product: PairedProduct, categoryHint: CategoryHint | null, 
   lines.push('  "title": "...", // 80 chars max');
   lines.push('  "description": "...",');
   lines.push('  "bullets": ["...", "...", "..."], // 3-5 bullet points');
-  lines.push('  "aspects": { // Fill out ALL relevant aspects from the category - Features, Ingredients, Formulation, Size, etc.');
+  lines.push('  "aspects": {');
+  lines.push('    // REQUIRED: Include ALL aspects shown for your chosen category above');
   lines.push('    "Brand": ["..."],');
   lines.push('    "Type": ["..."],');
-  lines.push('    "Features": ["...", "..."], // Multiple values OK');
-  lines.push('    "Main Purpose": ["..."],');
-  lines.push('    "Ingredients": ["...", "..."]');
-  lines.push('    // ... include ALL relevant aspects from the chosen category');
+  lines.push('    "Formulation": ["Capsule"], // Example - fill based on product');
+  lines.push('    "Main Purpose": ["Brain Health"], // Example - fill based on product');
+  lines.push('    "Ingredients": ["L-Tyrosine", "..."], // Example - list key ingredients');
+  lines.push('    "Features": ["Non-GMO", "Gluten-Free"], // Example - list all features');
+  lines.push('    "Active Ingredients": ["..."], // Include if shown in category aspects');
+  lines.push('    // ... include EVERY aspect listed for the chosen category');
   lines.push('  },');
   lines.push('  "price": 29.99, // Current retail price from Amazon/Walmart');
   lines.push('  "condition": "NEW" // or "USED"');
@@ -385,6 +391,7 @@ async function createDraftForProduct(product: PairedProduct): Promise<Draft> {
   const catListStart = Date.now();
   const relevantCategories = await getRelevantCategories(product);
   console.log(`[Draft] Category list generation took ${Date.now() - catListStart}ms`);
+  console.log(`[Draft] Category list preview:\n${relevantCategories.slice(0, 500)}...`);
   
   const catStart = Date.now();
   const categoryHint = await pickCategory(product);
