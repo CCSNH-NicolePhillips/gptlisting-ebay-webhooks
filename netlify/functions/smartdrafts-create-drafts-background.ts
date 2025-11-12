@@ -353,12 +353,15 @@ async function createDraftForProduct(product: PairedProduct): Promise<Draft> {
   console.log(`[Draft] Category fallback pick took ${Date.now() - catStart}ms`);
   
   const prompt = buildPrompt(product, categoryHint, relevantCategories);
+  console.log(`[Draft] Prompt length: ${prompt.length} chars`);
   
   const gptStart = Date.now();
   const responseText = await callOpenAI(prompt);
   console.log(`[Draft] GPT call took ${Date.now() - gptStart}ms`);
+  console.log(`[Draft] GPT response:`, responseText.slice(0, 500));
   
   const parsed = parseGptResponse(responseText, product);
+  console.log(`[Draft] Parsed response:`, JSON.stringify(parsed, null, 2));
   
   let finalCategory: CategoryHint | null = categoryHint;
   if (parsed.categoryId) {
