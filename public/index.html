@@ -208,6 +208,38 @@
       </div>
 
       <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid #2a335c" />
+      <h2 style="margin-bottom: 1.5rem; font-size: 1.75rem;">🚀 Create Listings</h2>
+      
+      <!-- AI-Powered SmartDrafts -->
+      <div style="background: linear-gradient(135deg, #1a2845 0%, #0f1530 100%); border: 2px solid #4f7cff; border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem; position: relative; overflow: hidden;">
+        <div style="position: absolute; top: 10px; right: 10px; background: #4f7cff; color: white; padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase;">✨ AI Powered</div>
+        <h3 style="margin-top: 0; font-size: 1.4rem; color: #fff;">SmartDrafts Quick List</h3>
+        <p style="color: #cbd5ff; margin: 0.5rem 0 1rem;">
+          <strong>Fully automated AI listing creation.</strong> Simply drop product photos in Dropbox, and our AI analyzes images, researches prices, selects categories, and creates complete eBay drafts ready to publish.
+        </p>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+          <a id="goQuickList" class="btn disabled" href="/quick-list.html" aria-disabled="true" style="background: #4f7cff; font-size: 1rem; padding: 0.8rem 1.5rem; box-shadow: 0 4px 12px rgba(79, 124, 255, 0.3);">
+            <span style="font-size: 1.1rem; font-weight: 700;">⚡ Quick List (AI)</span>
+          </a>
+          <span class="small" style="color: #a8c1ff;">• Vision AI • GPT-4 • Auto-pricing • Smart categories</span>
+        </div>
+      </div>
+
+      <!-- Manual Draft Creation -->
+      <div style="background: #0f1530; border: 1px solid #3d4a86; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
+        <h3 style="margin-top: 0; font-size: 1.2rem; color: #fff;">Manual Draft Wizard</h3>
+        <p style="color: #a2a9c8; margin: 0.5rem 0 1rem; font-size: 0.95rem;">
+          Traditional workflow for creating drafts one at a time. Select images, fill in details manually, and create individual listings with full control.
+        </p>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+          <a id="goCreateDraft" class="btn secondary full-width disabled" href="/draft-wizard.html" aria-disabled="true" style="max-width: 200px;">
+            <span>📝 Manual Draft</span>
+          </a>
+          <a class="btn secondary full-width" href="/drafts.html" id="viewDraftsBtn" style="max-width: 200px;">📋 View Drafts</a>
+        </div>
+      </div>
+
+      <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid #2a335c" />
       <h2>Setup checklist</h2>
       <ul class="small" id="checklist" style="line-height: 1.9">
         <li id="chkDropbox">Dropbox: <span class="muted">Unknown</span></li>
@@ -221,14 +253,6 @@
           <a href="/location.html" id="locationLink" style="display: none">Manage</a>
         </li>
       </ul>
-
-      <div style="margin-top: 1rem; display:flex; gap:.5rem; flex-wrap:wrap; align-items:center;">
-  <a id="goCreateDraft" class="btn full-width disabled" href="/draft-wizard.html" aria-disabled="true">
-          <span>Create Draft</span>
-        </a>
-        <a class="btn secondary full-width" href="/drafts.html" id="viewDraftsBtn">View Drafts</a>
-        <span id="goCreateMsg" class="small"></span>
-      </div>
       <div class="footer">Need help? See <a href="/privacy.html" target="_blank">Privacy</a>.</div>
   </div>
 
@@ -670,6 +694,7 @@
         }
 
   const goLink = document.getElementById('goCreateDraft');
+  const goQuickList = document.getElementById('goQuickList');
   if (goLink) {
     if (ready) {
       goLink.classList.remove('disabled');
@@ -679,6 +704,17 @@
       goLink.classList.add('disabled');
       goLink.setAttribute('aria-disabled', 'true');
       goLink.setAttribute('tabindex', '-1');
+    }
+  }
+  if (goQuickList) {
+    if (ready) {
+      goQuickList.classList.remove('disabled');
+      goQuickList.removeAttribute('aria-disabled');
+      goQuickList.removeAttribute('tabindex');
+    } else {
+      goQuickList.classList.add('disabled');
+      goQuickList.setAttribute('aria-disabled', 'true');
+      goQuickList.setAttribute('tabindex', '-1');
     }
   }
       }
