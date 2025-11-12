@@ -416,43 +416,56 @@
         
         console.log('[Quick List] Paired', products.length, 'products');
         
-        // Step 3: Create Drafts (one at a time to avoid timeout)
+        // Step 3: Create Drafts (using background job)
         updateStep(3, 'active');
-        const drafts = [];
+        $('status3').innerHTML = `<span class="spinner"></span>Starting draft creation...`;
         
-        for (let i = 0; i < products.length; i++) {
-          $('status3').innerHTML = `<span class="spinner"></span>Creating ${i + 1} of ${products.length}...`;
+        // Start background job
+        const draftBgRes = await fetchJSON('/.netlify/functions/smartdrafts-create-drafts-bg', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ products })
+        });
+        
+        if (!draftBgRes.ok || !draftBgRes.jobId) {
+          throw new Error(draftBgRes.error || 'Failed to start draft creation job');
+        }
+        
+        const draftJobId = draftBgRes.jobId;
+        console.log('[Quick List] Draft creation job started:', draftJobId);
+        
+        // Poll for completion (max 120 attempts = 3 minutes)
+        let draftAttempts = 0;
+        let drafts = [];
+        while (draftAttempts++ < 120) {
+          await new Promise(resolve => setTimeout(resolve, 1500));
           
-          const draftRes = await fetchJSON('/.netlify/functions/smartdrafts-create-drafts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ products: [products[i]] }) // Send one at a time
-          });
+          const statusRes = await fetchJSON(`/.netlify/functions/smartdrafts-create-drafts-status?jobId=${encodeURIComponent(draftJobId)}`);
           
-          if (!draftRes.ok) {
-            console.warn(`Failed to create draft for product ${i + 1}:`, draftRes.error);
-            // Continue with other products even if one fails
-            drafts.push(null);
-          } else {
-            const createdDrafts = draftRes.drafts || [];
-            if (createdDrafts.length > 0) {
-              drafts.push(createdDrafts[0]);
-            } else {
-              drafts.push(null);
-            }
+          if (!statusRes.ok) {
+            throw new Error(statusRes.error || 'Failed to get draft creation status');
           }
           
-          // Small delay between requests to avoid rate limits
-          if (i < products.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 500));
+          const job = statusRes.job || {};
+          const processed = job.processedProducts || 0;
+          const total = job.totalProducts || products.length;
+          
+          $('status3').innerHTML = `<span class="spinner"></span>Creating drafts (${processed}/${total})...`;
+          
+          if (job.state === 'completed') {
+            drafts = job.drafts || [];
+            updateStep(3, 'complete');
+            $('totalDrafts').textContent = drafts.length;
+            console.log('[Quick List] Draft creation completed:', drafts.length, 'drafts');
+            break;
+          } else if (job.state === 'error') {
+            throw new Error(job.error || 'Draft creation failed');
           }
         }
         
-        updateStep(3, 'complete');
-        const successfulDrafts = drafts.filter(d => d !== null).length;
-        $('totalDrafts').textContent = successfulDrafts;
-        
-        console.log('[Quick List] Created', successfulDrafts, 'of', products.length, 'drafts');
+        if (draftAttempts >= 120) {
+          throw new Error('Draft creation timed out after 3 minutes');
+        }
         
         // Step 4: Publish to eBay Drafts
         updateStep(4, 'active');
