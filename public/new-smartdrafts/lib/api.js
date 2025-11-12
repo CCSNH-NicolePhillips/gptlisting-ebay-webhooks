@@ -88,9 +88,18 @@ export async function getMetricsLive() {
 export async function createDraftsLive(products) {
   if (!products || !products.length) throw new Error('products required');
   
-  const r = await authPost(`/.netlify/functions/smartdrafts-create-drafts`, { products });
+  // Use background job to avoid 504 timeouts
+  const r = await authPost(`/.netlify/functions/smartdrafts-create-drafts-bg`, { products });
   if (!r.ok) throw new Error(`createDraftsLive ${r.status}: ${await r.text()}`);
-  return r.json(); // { ok, drafts, summary }
+  return r.json(); // { ok, jobId }
+}
+
+export async function pollDraftStatus(jobId) {
+  if (!jobId) throw new Error('jobId required');
+  
+  const r = await authGet(`/.netlify/functions/smartdrafts-create-drafts-status?jobId=${encodeURIComponent(jobId)}`);
+  if (!r.ok) throw new Error(`pollDraftStatus ${r.status}: ${await r.text()}`);
+  return r.json(); // { ok, job }
 }
 
 export async function publishDraftsToEbay(jobId, drafts) {

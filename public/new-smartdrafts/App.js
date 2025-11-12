@@ -8,7 +8,7 @@ import { DraftsPanel } from './components/DraftsPanel.js';
 import { MetricsPanel } from './components/MetricsPanel.js';
 import { DebugPanel } from './components/DebugPanel.js';
 import { FolderSelector } from './components/FolderSelector.js';
-import { enqueueAnalyzeLive, pollAnalyzeLive, runPairingLive, resetFolderLive, getMetricsLive, createDraftsLive, publishDraftsToEbay } from './lib/api.js';
+import { enqueueAnalyzeLive, pollAnalyzeLive, runPairingLive, resetFolderLive, getMetricsLive, createDraftsLive, pollDraftStatus, publishDraftsToEbay } from './lib/api.js';
 import { mockLoadAnalysis, mockRunPairing } from './lib/mockServer.js';
 import { normalizeFolderInput } from './lib/urlKey.js';
 
@@ -176,30 +176,51 @@ export function App() {
         throw new Error('Run Pairing first to get products');
       }
       
-      // Server caps at 1 product per request to avoid timeout - send sequentially with delay
-      const BATCH_SIZE = 1;
-      const allDrafts = [];
       const totalProducts = pairing.products.length;
+      setLoadingStatus(`🚀 Starting draft creation for ${totalProducts} product(s)...`);
       
-      for (let i = 0; i < totalProducts; i += BATCH_SIZE) {
-        const batch = pairing.products.slice(i, i + BATCH_SIZE);
-        const batchNum = Math.floor(i / BATCH_SIZE) + 1;
-        const totalBatches = Math.ceil(totalProducts / BATCH_SIZE);
+      // Start background job with all products
+      const result = await createDraftsLive(pairing.products);
+      
+      if (!result.ok || !result.jobId) {
+        throw new Error(result.error || 'Failed to start draft creation job');
+      }
+      
+      const jobId = result.jobId;
+      console.log(`[doCreateDrafts] Job started: ${jobId}`);
+      
+      // Poll for completion (max 120 attempts = 3 minutes at 1.5s intervals)
+      let attempts = 0;
+      const maxAttempts = 120;
+      let jobComplete = false;
+      let allDrafts = [];
+      
+      while (!jobComplete && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        attempts++;
         
-        setLoadingStatus(`🤖 Generating draft ${batchNum}/${totalBatches}...`);
+        const statusRes = await pollDraftStatus(jobId);
         
-        const result = await createDraftsLive(batch);
-        
-        // Server returns x-drafts-processed header if capped
-        const processed = result.summary?.succeeded || result.drafts?.length || 0;
-        console.log(`[doCreateDrafts] Batch ${batchNum}: processed ${processed}/${batch.length}`);
-        
-        allDrafts.push(...(result.drafts || []));
-        
-        // Small delay between items to avoid overwhelming serverless
-        if (i + BATCH_SIZE < totalProducts) {
-          await new Promise(r => setTimeout(r, 500));
+        if (!statusRes.ok) {
+          throw new Error(statusRes.error || 'Failed to get job status');
         }
+        
+        const job = statusRes.job || {};
+        const processed = job.processedProducts || 0;
+        
+        setLoadingStatus(`🤖 Generating drafts... ${processed}/${totalProducts} (${attempts * 1.5}s)`);
+        
+        if (job.state === 'complete') {
+          jobComplete = true;
+          allDrafts = job.results || [];
+          console.log(`[doCreateDrafts] Job complete: ${allDrafts.length} drafts created`);
+        } else if (job.state === 'error') {
+          throw new Error(job.error || 'Draft creation job failed');
+        }
+      }
+      
+      if (!jobComplete) {
+        throw new Error(`Draft creation timeout after ${maxAttempts * 1.5}s`);
       }
       
       setDrafts(allDrafts);
