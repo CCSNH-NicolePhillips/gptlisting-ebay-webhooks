@@ -197,22 +197,66 @@
   <script src="/auth-client.js"></script>
   
   <div class="container">
-    <h1>Quick List</h1>
-    <p class="subtitle">Scan, analyze, and create eBay drafts in one click</p>
+    <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem;">
+      <div style="flex: 1;">
+        <h1 style="margin-bottom: 0.25rem;">⚡ SmartDrafts Quick List</h1>
+        <p class="subtitle" style="margin-bottom: 0;">AI-powered listing creation from your product photos</p>
+      </div>
+      <a href="/index.html" class="btn secondary" style="width: auto; padding: 0.6rem 1rem; font-size: 0.9rem;">← Back</a>
+    </div>
+    
+    <!-- Feature highlights -->
+    <div class="card" style="background: linear-gradient(135deg, rgba(79, 124, 255, 0.1) 0%, rgba(79, 124, 255, 0.05) 100%); border-color: rgba(79, 124, 255, 0.3); margin-bottom: 1.5rem;">
+      <div style="display: flex; gap: 2rem; flex-wrap: wrap; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <div style="font-size: 1.5rem;">🤖</div>
+          <div>
+            <div style="font-weight: 600; font-size: 0.9rem;">GPT-4 Vision</div>
+            <div style="font-size: 0.75rem; color: var(--muted);">Image analysis</div>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <div style="font-size: 1.5rem;">💰</div>
+          <div>
+            <div style="font-weight: 600; font-size: 0.9rem;">Smart Pricing</div>
+            <div style="font-size: 0.75rem; color: var(--muted);">Amazon/Walmart research</div>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <div style="font-size: 1.5rem;">🎯</div>
+          <div>
+            <div style="font-weight: 600; font-size: 0.9rem;">Auto Categories</div>
+            <div style="font-size: 0.75rem; color: var(--muted);">eBay taxonomy matching</div>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <div style="font-size: 1.5rem;">✨</div>
+          <div>
+            <div style="font-weight: 600; font-size: 0.9rem;">Full Automation</div>
+            <div style="font-size: 0.75rem; color: var(--muted);">Zero manual input</div>
+          </div>
+        </div>
+      </div>
+    </div>
     
     <div class="card">
-      <h3 style="margin-top: 0;">Select Dropbox Folder</h3>
-      <select id="folderSelect" class="btn secondary" style="margin-bottom: 1.5rem;">
+      <h3 style="margin-top: 0;">📁 Select Dropbox Folder</h3>
+      <select id="folderSelect" class="btn secondary" style="margin-bottom: 0;">
         <option value="">Loading folders...</option>
       </select>
     </div>
     
     <div class="card">
+      <h3 style="margin-top: 0; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+        <span>🔄 Automated Pipeline</span>
+        <span style="font-size: 0.75rem; font-weight: normal; color: var(--muted);">All steps run automatically</span>
+      </h3>
+      
       <div class="step" id="step1">
         <div class="step-num">1</div>
         <div class="step-content">
-          <div class="step-title">Scan Images</div>
-          <div class="step-desc">Analyze product photos and extract details</div>
+          <div class="step-title">🔍 Scan & Analyze Images</div>
+          <div class="step-desc">Vision AI examines each photo, extracts product details, text, and visual features</div>
         </div>
         <div class="step-status" id="status1">Pending</div>
       </div>
@@ -220,8 +264,8 @@
       <div class="step" id="step2">
         <div class="step-num">2</div>
         <div class="step-content">
-          <div class="step-title">Match Products</div>
-          <div class="step-desc">Pair front/back images and identify products</div>
+          <div class="step-title">🧩 Smart Product Matching</div>
+          <div class="step-desc">AI pairs front/back images and identifies unique products using CLIP embeddings</div>
         </div>
         <div class="step-status" id="status2">Pending</div>
       </div>
@@ -229,8 +273,8 @@
       <div class="step" id="step3">
         <div class="step-num">3</div>
         <div class="step-content">
-          <div class="step-title">Generate Listings</div>
-          <div class="step-desc">Create titles, descriptions, and pricing with AI</div>
+          <div class="step-title">✍️ Generate Professional Listings</div>
+          <div class="step-desc">GPT-4 creates titles, descriptions, bullet points, researches pricing, and selects optimal categories</div>
         </div>
         <div class="step-status" id="status3">Pending</div>
       </div>
@@ -238,8 +282,8 @@
       <div class="step" id="step4">
         <div class="step-num">4</div>
         <div class="step-content">
-          <div class="step-title">Send to eBay Drafts</div>
-          <div class="step-desc">Create unpublished listings ready to review</div>
+          <div class="step-title">📤 Publish to eBay Drafts</div>
+          <div class="step-desc">Creates unpublished eBay offers ready for your final review and publishing</div>
         </div>
         <div class="step-status" id="status4">Pending</div>
       </div>
@@ -249,29 +293,36 @@
       </div>
     </div>
     
-    <button class="btn" id="btnStart" onclick="startPipeline()" disabled>
-      Start Quick List
+    <button class="btn" id="btnStart" onclick="startPipeline()" disabled style="font-size: 1.1rem; padding: 1rem 2rem; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-600) 100%); box-shadow: 0 4px 16px rgba(79, 124, 255, 0.4);">
+      🚀 Start Quick List
     </button>
     
     <div class="results" id="results">
-      <div class="result-summary">
-        <div class="result-stat">
-          <div class="result-num" id="totalDrafts">0</div>
-          <div class="result-label">Drafts Created</div>
+      <div class="card" style="background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(34, 197, 94, 0.05) 100%); border-color: var(--success);">
+        <h3 style="margin-top: 0; color: var(--success); display: flex; align-items: center; gap: 0.5rem;">
+          <span style="font-size: 1.5rem;">🎉</span>
+          <span>Success! Drafts Created</span>
+        </h3>
+        
+        <div class="result-summary">
+          <div class="result-stat">
+            <div class="result-num" id="totalDrafts">0</div>
+            <div class="result-label">📋 eBay Drafts</div>
+          </div>
+          <div class="result-stat">
+            <div class="result-num" id="totalPaired">0</div>
+            <div class="result-label">🧩 Products Matched</div>
+          </div>
+          <div class="result-stat">
+            <div class="result-num" id="totalImages">0</div>
+            <div class="result-label">📸 Images Analyzed</div>
+          </div>
         </div>
-        <div class="result-stat">
-          <div class="result-num" id="totalImages">0</div>
-          <div class="result-label">Images Processed</div>
+        
+        <div class="actions">
+          <a href="/drafts.html" class="btn" style="background: var(--success); font-weight: 700;">✓ View & Publish Drafts</a>
+          <button class="btn secondary" onclick="resetPipeline()">🔄 Run Again</button>
         </div>
-        <div class="result-stat">
-          <div class="result-num" id="totalPaired">0</div>
-          <div class="result-label">Products Matched</div>
-        </div>
-      </div>
-      
-      <div class="actions">
-        <a href="/drafts.html" class="btn">View Drafts</a>
-        <button class="btn secondary" onclick="resetPipeline()">Run Again</button>
       </div>
     </div>
   </div>
@@ -345,7 +396,7 @@
       
       const btn = $('btnStart');
       btn.disabled = true;
-      btn.innerHTML = '<span class="spinner"></span>Running...';
+      btn.innerHTML = '<span class="spinner"></span>Processing...';
       $('results').classList.remove('show');
       
       try {
@@ -530,13 +581,15 @@
         // Show results
         $('progressBar').style.width = '100%';
         $('results').classList.add('show');
-        btn.textContent = 'Complete!';
+        btn.textContent = '✓ Complete!';
+        btn.style.background = 'var(--success)';
         
       } catch (err) {
         console.error('Pipeline error:', err);
         alert(`Error: ${err.message}`);
         btn.disabled = false;
-        btn.textContent = 'Retry';
+        btn.textContent = '🔄 Retry Quick List';
+        btn.style.background = 'linear-gradient(135deg, var(--primary) 0%, var(--primary-600) 100%)';
       }
     }
     
@@ -552,7 +605,8 @@
       $('progressBar').style.width = '0%';
       $('results').classList.remove('show');
       $('btnStart').disabled = false;
-      $('btnStart').textContent = 'Start Quick List';
+      $('btnStart').textContent = '🚀 Start Quick List';
+      $('btnStart').style.background = 'linear-gradient(135deg, var(--primary) 0%, var(--primary-600) 100%)';
       currentJobId = null;
     }
     
