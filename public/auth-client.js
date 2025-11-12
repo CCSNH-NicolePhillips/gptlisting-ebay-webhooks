@@ -118,6 +118,20 @@
     }
       const createAuth0 = getCreateAuth0();
       if (!createAuth0) throw new Error('Auth0 SDK not loaded');
+      
+      // Suppress console spam from Auth0 403 token refresh errors in dev tools
+      // These happen when refresh tokens expire and are harmless (user will re-login)
+      // We wrap console.error temporarily during Auth0 initialization
+      const origConsoleError = console.error;
+      console.error = function(...args) {
+        const msg = args.join(' ');
+        // Suppress Auth0 token endpoint 403 errors
+        if (msg.includes('auth0.com/oauth/token') && msg.includes('403')) {
+          return; // Silently ignore
+        }
+        origConsoleError.apply(console, args);
+      };
+      
       state.auth0 = await createAuth0({
       domain: state.cfg.AUTH0_DOMAIN,
       clientId: state.cfg.AUTH0_CLIENT_ID,
@@ -150,7 +164,17 @@
     if (isAuth) {
       state.user = await state.auth0.getUser();
       // Try to acquire an API access token; if audience is not configured, fall back to ID token
-      state.token = await state.auth0.getTokenSilently().catch(() => null);
+      // Suppress 403 console spam from failed token refresh attempts (common with expired refresh tokens)
+      try {
+        state.token = await state.auth0.getTokenSilently();
+      } catch (e) {
+        // Silently ignore 403 Forbidden errors from refresh token attempts
+        // User will be prompted to login again when needed
+        if (!e.message?.includes('403')) {
+          console.warn('Token refresh failed:', e.message || e);
+        }
+        state.token = null;
+      }
       try {
         const idc = await state.auth0.getIdTokenClaims();
         state.idTokenRaw = idc && (idc.__raw || idc.raw || null);
@@ -158,6 +182,9 @@
       // Make sure function calls carry Authorization as soon as we detect auth
       try { attachAuthFetch(); } catch {}
     }
+    
+    // Restore original console.error after Auth0 initialization
+    console.error = origConsoleError;
   }
 
   function initIdentity() {
