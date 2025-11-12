@@ -471,22 +471,21 @@
         updateStep(4, 'active');
         
         // Build groups with proper structure for create-ebay-draft-user
-        const groupsWithDrafts = products
-          .map((product, idx) => {
-            const draft = drafts[idx];
+        // Match drafts to products by index
+        const groupsWithDrafts = drafts
+          .map((draft, idx) => {
             if (!draft) return null; // Skip failed drafts
             
-            // Build images array from product URLs
-            const images = [
-              product.heroDisplayUrl || product.frontUrl,
-              product.backDisplayUrl || product.backUrl,
-              ...(product.extras || [])
-            ].filter(Boolean);
+            const product = products[idx];
+            if (!product) return null;
+            
+            // Build images array from draft data
+            const images = draft.images || [];
             
             return {
-              groupId: product.productId || product.groupId,
-              brand: product.brand || draft.brand || 'Unknown',
-              product: product.product || draft.product || 'Product',
+              groupId: draft.productId || product.productId || product.groupId,
+              brand: draft.brand || 'Unknown',
+              product: draft.product || 'Product',
               variant: product.variant,
               size: product.size,
               images: images,
@@ -498,7 +497,7 @@
               quantity: 1,
               condition: draft.condition,
               category: draft.category,
-              categoryPath: product.categoryPath
+              categoryPath: draft.category?.title || product.categoryPath
             };
           })
           .filter(g => g !== null); // Remove nulls
