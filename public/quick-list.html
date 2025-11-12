@@ -467,6 +467,8 @@
           throw new Error('Draft creation timed out after 3 minutes');
         }
         
+        console.log('[Quick List] Drafts received:', JSON.stringify(drafts, null, 2));
+        
         // Step 4: Publish to eBay Drafts
         updateStep(4, 'active');
         
