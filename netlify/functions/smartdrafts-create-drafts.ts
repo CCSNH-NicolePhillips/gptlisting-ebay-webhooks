@@ -153,7 +153,7 @@ async function getRelevantCategories(product: PairedProduct): Promise<string> {
       product.categoryPath
     ].filter(Boolean).join(' ').toLowerCase();
     
-    // Get categories that might be relevant (limit to 50 to keep token count reasonable)
+    // Get categories that might be relevant (limit to 20 to keep token count low and response fast)
     const relevant = allCategories
       .filter(cat => {
         const catText = `${cat.title} ${cat.slug}`.toLowerCase();
@@ -162,22 +162,30 @@ async function getRelevantCategories(product: PairedProduct): Promise<string> {
           term.length > 3 && catText.includes(term)
         );
       })
-      .slice(0, 50)
-      .map(cat => `${cat.id}: ${cat.slug}`)
+      .slice(0, 20)
+      .map(cat => `${cat.id}: ${cat.title}`)
       .join('\n');
     
     if (relevant) {
       return relevant;
     }
     
-    // If no relevant categories found, return top-level categories
-    const topLevel = allCategories
-      .filter(cat => cat.slug && cat.slug.split('>').length <= 3)
-      .slice(0, 50)
-      .map(cat => `${cat.id}: ${cat.slug}`)
+    // If no relevant categories found, return a curated list of common categories
+    const commonCats = [
+      '261186', // Books
+      '31411', // Health & Beauty
+      '11450', // Clothing, Shoes & Accessories  
+      '293', // Consumer Electronics
+      '88433', // Vitamins & Dietary Supplements
+      '99', // Everything Else
+    ];
+    
+    const fallback = allCategories
+      .filter(cat => commonCats.includes(cat.id))
+      .map(cat => `${cat.id}: ${cat.title}`)
       .join('\n');
     
-    return topLevel;
+    return fallback;
   } catch (err) {
     console.error('[getRelevantCategories] Error:', err);
     return '';
@@ -232,9 +240,9 @@ function buildPrompt(product: PairedProduct, categoryHint: CategoryHint | null, 
   
   lines.push("");
   
-  // Add category selection
-  if (categories) {
-    lines.push("Available eBay Categories (choose the most specific/appropriate one by ID):");
+  // Add category selection (only if we have relevant categories)
+  if (categories && categories.length > 0) {
+    lines.push("Choose the most appropriate eBay category ID from this list:");
     lines.push(categories);
     lines.push("");
   }
@@ -245,7 +253,9 @@ function buildPrompt(product: PairedProduct, categoryHint: CategoryHint | null, 
   lines.push("");
   lines.push("Response format (JSON):");
   lines.push("{");
-  lines.push('  "categoryId": "12345", // REQUIRED: Choose the most specific eBay category ID from the list above');
+  if (categories && categories.length > 0) {
+    lines.push('  "categoryId": "12345", // Choose the most appropriate eBay category ID from the list above');
+  }
   lines.push('  "title": "...", // 80 chars max');
   lines.push('  "description": "...",');
   lines.push('  "bullets": ["...", "...", "..."], // 3-5 bullet points');
