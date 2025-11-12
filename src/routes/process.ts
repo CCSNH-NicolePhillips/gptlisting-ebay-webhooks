@@ -84,7 +84,7 @@ processRouter.post('/process', async (req, res) => {
         });
 
         // allow per-SKU category override via data file: .tmp/category_map.json
-        let categoryId = body.categoryId || cfg.ebay.defaultCategoryId || '177011';
+        let categoryId = body.categoryId || cfg.ebay.defaultCategoryId || '99'; // Everything Else
         try {
           const mapPath = path.join(cfg.dataDir, 'category_map.json');
           if (fs.existsSync(mapPath)) {

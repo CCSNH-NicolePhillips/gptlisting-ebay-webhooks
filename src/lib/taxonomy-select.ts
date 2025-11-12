@@ -62,19 +62,32 @@ export async function pickCategoryForGroup(group: Record<string, any>): Promise<
         }
       }
       
-      // If we have a path like "Books > Biography", match ALL parts in sequence
+      // If we have a path like "Books > Biography", match parts more intelligently
       if (titleNorm.includes('>')) {
         const parts = titleNorm.split('>').map(p => p.trim());
         console.log('[pickCategoryForGroup] Matching category path parts:', parts);
         
+        // Strategy 1: Try to match the last part (most specific) in category title
+        const lastPart = parts[parts.length - 1];
         for (const cat of categories) {
           const catTitleNorm = normalize(cat.title || '');
           const catSlugNorm = normalize(cat.slug || '');
           
-          // All parts must appear in order in the category title/slug
+          // Check if the category title or the last segment of slug matches
+          if (catTitleNorm === lastPart || catSlugNorm.endsWith(' > ' + lastPart)) {
+            console.log('[pickCategoryForGroup] Last part exact match found:', cat.id, cat.title);
+            return cat;
+          }
+        }
+        
+        // Strategy 2: Match all parts appearing in the slug path
+        for (const cat of categories) {
+          const catSlugNorm = normalize(cat.slug || '');
+          
+          // All parts must appear in order in the category slug
           let allMatch = true;
           for (const part of parts) {
-            if (!catTitleNorm.includes(part) && !catSlugNorm.includes(part)) {
+            if (!catSlugNorm.includes(part)) {
               allMatch = false;
               break;
             }
@@ -84,6 +97,31 @@ export async function pickCategoryForGroup(group: Record<string, any>): Promise<
             console.log('[pickCategoryForGroup] Full path match found:', cat.id, cat.title);
             return cat;
           }
+        }
+        
+        // Strategy 3: Fuzzy match - find category whose slug contains most of the parts
+        let bestMatch: CategoryDef | null = null;
+        let bestMatchCount = 0;
+        
+        for (const cat of categories) {
+          const catSlugNorm = normalize(cat.slug || '');
+          let matchCount = 0;
+          
+          for (const part of parts) {
+            if (catSlugNorm.includes(part)) {
+              matchCount++;
+            }
+          }
+          
+          if (matchCount > bestMatchCount && matchCount >= parts.length - 1) {
+            bestMatch = cat;
+            bestMatchCount = matchCount;
+          }
+        }
+        
+        if (bestMatch) {
+          console.log('[pickCategoryForGroup] Fuzzy path match found:', bestMatch.id, bestMatch.title, 'matched', bestMatchCount, 'of', parts.length, 'parts');
+          return bestMatch;
         }
       }
       console.log('[pickCategoryForGroup] No category match found for title:', categoryTitle);
