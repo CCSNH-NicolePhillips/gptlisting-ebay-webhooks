@@ -1,0 +1,263 @@
+// Tests for HTTP utility functions
+
+import {
+  parseAllowedOrigins,
+  isOriginAllowed,
+  getOrigin,
+  corsHeaders,
+  json,
+  extractBearerToken,
+  isAuthorized,
+  isUserMode,
+} from "../../src/lib/http.js";
+
+describe("HTTP Utilities", () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    // Reset environment before each test
+    process.env = { ...originalEnv };
+  });
+
+  afterAll(() => {
+    process.env = originalEnv;
+  });
+
+  describe("parseAllowedOrigins", () => {
+    test("returns empty array when no origins configured", () => {
+      delete process.env.ALLOWED_ORIGINS;
+      expect(parseAllowedOrigins()).toEqual([]);
+    });
+
+    test("parses comma-separated origins", () => {
+      process.env.ALLOWED_ORIGINS = "http://localhost:3000,https://example.com";
+      const origins = parseAllowedOrigins();
+      expect(origins).toContain("http://localhost:3000");
+      expect(origins).toContain("https://example.com");
+    });
+
+    test("trims whitespace from origins", () => {
+      process.env.ALLOWED_ORIGINS = " http://localhost:3000 , https://example.com ";
+      const origins = parseAllowedOrigins();
+      expect(origins).toEqual(["http://localhost:3000", "https://example.com"]);
+    });
+
+    test("filters out empty strings", () => {
+      process.env.ALLOWED_ORIGINS = "http://localhost:3000,,https://example.com";
+      const origins = parseAllowedOrigins();
+      expect(origins).toEqual(["http://localhost:3000", "https://example.com"]);
+    });
+  });
+
+  describe("isOriginAllowed", () => {
+    test("returns true when no origins configured (allow all)", () => {
+      delete process.env.ALLOWED_ORIGINS;
+      expect(isOriginAllowed("http://anything.com")).toBe(true);
+    });
+
+    test("returns false when origin is undefined and origins are configured", () => {
+      process.env.ALLOWED_ORIGINS = "http://localhost:3000";
+      expect(isOriginAllowed(undefined)).toBe(false);
+    });
+
+    test("returns true for allowed origin", () => {
+      process.env.ALLOWED_ORIGINS = "http://localhost:3000,https://example.com";
+      expect(isOriginAllowed("http://localhost:3000")).toBe(true);
+      expect(isOriginAllowed("https://example.com")).toBe(true);
+    });
+
+    test("returns false for non-allowed origin", () => {
+      process.env.ALLOWED_ORIGINS = "http://localhost:3000";
+      expect(isOriginAllowed("http://evil.com")).toBe(false);
+    });
+
+    test("validates origin is a proper URL", () => {
+      process.env.ALLOWED_ORIGINS = "http://localhost:3000";
+      expect(isOriginAllowed("not-a-url")).toBe(false);
+    });
+
+    test("matches exact origin (normalized)", () => {
+      process.env.ALLOWED_ORIGINS = "http://localhost:3000";
+      expect(isOriginAllowed("http://localhost:3000/some/path")).toBe(true);
+    });
+  });
+
+  describe("getOrigin", () => {
+    test("returns origin header when present", () => {
+      expect(getOrigin({ origin: "http://localhost:3000" })).toBe("http://localhost:3000");
+      expect(getOrigin({ Origin: "http://localhost:3000" })).toBe("http://localhost:3000");
+    });
+
+    test("returns access-control-request-origin when origin not present", () => {
+      expect(
+        getOrigin({ "access-control-request-origin": "http://localhost:3000" })
+      ).toBe("http://localhost:3000");
+    });
+
+    test("extracts origin from referer when origin not present", () => {
+      expect(
+        getOrigin({ referer: "http://localhost:3000/some/path" })
+      ).toBe("http://localhost:3000");
+      expect(
+        getOrigin({ Referer: "https://example.com/page?query=1" })
+      ).toBe("https://example.com");
+    });
+
+    test("returns undefined when no origin headers present", () => {
+      expect(getOrigin({})).toBeUndefined();
+      expect(getOrigin({ "content-type": "application/json" })).toBeUndefined();
+    });
+
+    test("returns undefined for invalid referer URL", () => {
+      expect(getOrigin({ referer: "not-a-valid-url" })).toBeUndefined();
+    });
+
+    test("prioritizes origin over referer", () => {
+      expect(
+        getOrigin({
+          origin: "http://localhost:3000",
+          referer: "http://other.com/page",
+        })
+      ).toBe("http://localhost:3000");
+    });
+  });
+
+  describe("corsHeaders", () => {
+    test("returns default CORS headers with wildcard", () => {
+      delete process.env.ALLOWED_ORIGINS;
+      const headers = corsHeaders();
+      expect(headers["Access-Control-Allow-Origin"]).toBe("*");
+      expect(headers["Access-Control-Allow-Methods"]).toBe("GET, POST, OPTIONS");
+      expect(headers["Access-Control-Allow-Headers"]).toBe("Content-Type, Authorization");
+    });
+
+    test("returns allowed origin when valid", () => {
+      process.env.ALLOWED_ORIGINS = "http://localhost:3000";
+      const headers = corsHeaders("http://localhost:3000");
+      expect(headers["Access-Control-Allow-Origin"]).toBe("http://localhost:3000");
+    });
+
+    test("returns first allowed origin when request origin is not allowed", () => {
+      process.env.ALLOWED_ORIGINS = "http://localhost:3000,https://example.com";
+      const headers = corsHeaders("http://evil.com");
+      expect(headers["Access-Control-Allow-Origin"]).toBe("http://localhost:3000");
+    });
+
+    test("includes custom methods when specified", () => {
+      const headers = corsHeaders(undefined, "PUT, DELETE");
+      expect(headers["Access-Control-Allow-Methods"]).toBe("PUT, DELETE");
+    });
+
+    test("includes Vary header for proper caching", () => {
+      const headers = corsHeaders();
+      expect(headers["Vary"]).toBe("Origin");
+    });
+  });
+
+  describe("json", () => {
+    test("returns proper response object", () => {
+      const response = json(200, { success: true });
+      expect(response.statusCode).toBe(200);
+      expect(response.headers["Content-Type"]).toBe("application/json");
+      expect(response.body).toBe('{"success":true}');
+    });
+
+    test("includes CORS headers", () => {
+      const response = json(200, { data: "test" }, "http://localhost:3000");
+      expect(response.headers["Access-Control-Allow-Origin"]).toBeDefined();
+    });
+
+    test("merges extra headers", () => {
+      const response = json(
+        200,
+        {},
+        undefined,
+        "GET, POST, OPTIONS",
+        { "X-Custom": "value" }
+      );
+      expect(response.headers["X-Custom"]).toBe("value");
+    });
+
+    test("handles null body", () => {
+      const response = json(204, null);
+      expect(response.body).toBe("null");
+    });
+  });
+
+  describe("extractBearerToken", () => {
+    test("extracts token from Authorization header", () => {
+      expect(extractBearerToken({ authorization: "Bearer mytoken123" })).toBe("mytoken123");
+      expect(extractBearerToken({ Authorization: "Bearer mytoken123" })).toBe("mytoken123");
+    });
+
+    test("handles extra whitespace", () => {
+      expect(extractBearerToken({ authorization: "Bearer   mytoken123  " })).toBe("mytoken123");
+    });
+
+    test("returns empty string when no Bearer prefix", () => {
+      expect(extractBearerToken({ authorization: "mytoken123" })).toBe("");
+      expect(extractBearerToken({ authorization: "Basic credentials" })).toBe("");
+    });
+
+    test("returns empty string when no authorization header", () => {
+      expect(extractBearerToken({})).toBe("");
+      expect(extractBearerToken({ "content-type": "application/json" })).toBe("");
+    });
+
+    test("is case-sensitive for Bearer keyword", () => {
+      expect(extractBearerToken({ authorization: "bearer mytoken" })).toBe("");
+    });
+  });
+
+  describe("isAuthorized", () => {
+    test("returns true when no admin token configured", () => {
+      delete process.env.ADMIN_API_TOKEN;
+      expect(isAuthorized({ authorization: "Bearer anything" })).toBe(true);
+      expect(isAuthorized({})).toBe(true);
+    });
+
+    test("returns true when token matches admin token", () => {
+      process.env.ADMIN_API_TOKEN = "secret123";
+      expect(isAuthorized({ authorization: "Bearer secret123" })).toBe(true);
+    });
+
+    test("returns false when token does not match", () => {
+      process.env.ADMIN_API_TOKEN = "secret123";
+      expect(isAuthorized({ authorization: "Bearer wrong" })).toBe(false);
+    });
+
+    test("returns false when no token provided and admin token required", () => {
+      process.env.ADMIN_API_TOKEN = "secret123";
+      expect(isAuthorized({})).toBe(false);
+    });
+  });
+
+  describe("isUserMode", () => {
+    test("returns false when AUTH_MODE is admin", () => {
+      process.env.AUTH_MODE = "admin";
+      expect(isUserMode()).toBe(false);
+    });
+
+    test("returns true when AUTH_MODE is user", () => {
+      process.env.AUTH_MODE = "user";
+      expect(isUserMode()).toBe(true);
+    });
+
+    test("returns true when AUTH_MODE is mixed", () => {
+      process.env.AUTH_MODE = "mixed";
+      expect(isUserMode()).toBe(true);
+    });
+
+    test("defaults to admin mode when not set", () => {
+      delete process.env.AUTH_MODE;
+      expect(isUserMode()).toBe(false);
+    });
+
+    test("is case-insensitive", () => {
+      process.env.AUTH_MODE = "USER";
+      expect(isUserMode()).toBe(true);
+      process.env.AUTH_MODE = "Mixed";
+      expect(isUserMode()).toBe(true);
+    });
+  });
+});

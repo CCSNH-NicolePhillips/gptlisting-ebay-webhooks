@@ -141,17 +141,14 @@
       
       // Track if we get 403s during init (expired refresh token)
       let got403 = false;
-      let redirectPending = false;
+      let redirectPending = false; // CRITICAL: Check this before EVERY redirect
       
       const forceRelogin = () => {
-        if (redirectPending) {
-          // Already redirecting, throw to stop all execution
-          throw new Error('AUTH_REDIRECT_PENDING');
-        }
+        if (redirectPending) return; // Already redirecting
         redirectPending = true;
         console.warn('[Auth] Detected expired refresh token (403), forcing re-login');
-
-        // NUCLEAR: Clear auth immediately and aggressively
+        
+        // Clear auth immediately and aggressively
         clearLocalAuthState();
 
         // Also clear any Auth0 state that might be in-flight
@@ -167,12 +164,12 @@
         window.fetch = origFetch;
         console.error = origConsoleError;
         sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
-
-        // Redirect immediately - don't use location.href, use replace to avoid back button
+        
+        // Redirect - use replace to prevent back button issues
         window.location.replace('/login.html');
-
-        // CRITICAL: Throw to stop all subsequent code execution
-        throw new Error('AUTH_REDIRECT');
+        
+        // Throw error to stop all execution
+        throw new Error('AUTH_REDIRECT_PENDING');
       };
       
       // Suppress Auth0 403 token refresh errors (network + console)
@@ -182,6 +179,11 @@
       
       // Intercept fetch to detect and suppress Auth0 token 403s
       window.fetch = async function(...args) {
+        if (redirectPending) {
+          // Already redirecting, don't make any more requests
+          throw new Error('AUTH_REDIRECT_PENDING');
+        }
+        
         const url = typeof args[0] === 'string' ? args[0] : args[0]?.url;
         const isAuth0Token = url && url.includes('.auth0.com/oauth/token');
         
@@ -190,24 +192,19 @@
           // Track 403s from Auth0 token endpoint and force re-login
           if (isAuth0Token && response.status === 403) {
             got403 = true;
-            // Force re-login IMMEDIATELY - don't let SDK continue
-            forceRelogin();
-            // Return a fake successful response to prevent SDK error handling
-            return new Response(JSON.stringify({ error: 'redirecting' }), {
-              status: 200,
-              headers: { 'Content-Type': 'application/json' }
-            });
+            // Throw to stop SDK - don't return fake success
+            forceRelogin(); // This throws
           }
           return response;
         } catch (err) {
+          // If it's our redirect error, re-throw it
+          if (err.message === 'AUTH_REDIRECT_PENDING') {
+            throw err;
+          }
+          
           if (isAuth0Token) {
             got403 = true;
-            forceRelogin();
-            // Return fake success instead of error
-            return new Response(JSON.stringify({ error: 'redirecting' }), {
-              status: 200,
-              headers: { 'Content-Type': 'application/json' }
-            });
+            forceRelogin(); // This throws
           }
           throw err;
         }
@@ -222,95 +219,87 @@
         origConsoleError.apply(console, args);
       };
       
-      state.auth0 = await createAuth0({
-      domain: state.cfg.AUTH0_DOMAIN,
-      clientId: state.cfg.AUTH0_CLIENT_ID,
-      cacheLocation: 'localstorage',
-      useRefreshTokens: true,
-      authorizationParams: {
-        redirect_uri: window.location.origin + '/login.html',
-        audience: state.cfg.AUTH0_AUDIENCE || undefined,
-      },
-    });
-
-    // Handle redirect callback
-    if (window.location.pathname.endsWith('/login.html')) {
-      const q = window.location.search;
-      if (q.includes('code=') && q.includes('state=')) {
-        try {
-          await state.auth0.handleRedirectCallback();
-          const returnTo = sessionStorage.getItem('returnTo') || '/';
-          sessionStorage.removeItem('returnTo');
-          window.history.replaceState({}, document.title, '/login.html');
-          window.location.assign(returnTo);
-          return; // navigation
-        } catch (e) {
-          console.error('Auth0 callback error', e);
-        }
-      }
-    }
-
-    const isAuth = await state.auth0.isAuthenticated();
-
-    // If we got 403s during init, refresh token is dead - force re-login
-    // (This code should be unreachable now since forceRelogin() throws, but kept as safety net)
-    if (got403 && !redirectPending) {
-      console.warn('[Auth] Detected expired refresh token (403), forcing re-login');
-      clearLocalAuthState();
-      window.fetch = origFetch;
-      console.error = origConsoleError;
-      sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
-      window.location.replace('/login.html');
-      return;
-    }
-    
-    if (isAuth) {
-      state.user = await state.auth0.getUser();
-      // Try to acquire an API access token; if audience is not configured, fall back to ID token
       try {
-        state.token = await state.auth0.getTokenSilently();
-      } catch (e) {
-        // If refresh token fails (403/401), clear auth state and force re-login
-        const isForbidden = e.message?.includes('403') || e.message?.includes('Forbidden');
-        const isUnauthorized = e.message?.includes('401') || e.message?.includes('Unauthorized');
+        state.auth0 = await createAuth0({
+          domain: state.cfg.AUTH0_DOMAIN,
+          clientId: state.cfg.AUTH0_CLIENT_ID,
+          cacheLocation: 'localstorage',
+          useRefreshTokens: true,
+          authorizationParams: {
+            redirect_uri: window.location.origin + '/login.html',
+            audience: state.cfg.AUTH0_AUDIENCE || undefined,
+          },
+        });
 
-        if ((isForbidden || isUnauthorized) && !redirectPending) {
-          console.warn('[Auth] Refresh token expired, forcing re-login');
-          redirectPending = true;
-          // Clear all Auth0 state
-          clearLocalAuthState();
-          // Restore fetch/console before redirect
-          window.fetch = origFetch;
-          console.error = origConsoleError;
-          // Redirect to login
-          sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
-          window.location.replace('/login.html');
-          return;
+        // Handle redirect callback
+        if (window.location.pathname.endsWith('/login.html')) {
+          const q = window.location.search;
+          if (q.includes('code=') && q.includes('state=')) {
+            try {
+              await state.auth0.handleRedirectCallback();
+              const returnTo = sessionStorage.getItem('returnTo') || '/';
+              sessionStorage.removeItem('returnTo');
+              window.history.replaceState({}, document.title, '/login.html');
+              window.location.assign(returnTo);
+              return; // navigation
+            } catch (e) {
+              console.error('Auth0 callback error', e);
+            }
+          }
+        }
+
+        const isAuth = await state.auth0.isAuthenticated();
+        
+        // Check redirectPending before continuing
+        if (redirectPending) return;
+        
+        if (isAuth) {
+          state.user = await state.auth0.getUser();
+          
+          if (redirectPending) return;
+          
+          // Try to acquire an API access token; if audience is not configured, fall back to ID token
+          try {
+            state.token = await state.auth0.getTokenSilently();
+          } catch (e) {
+            if (redirectPending) return;
+            
+            // If refresh token fails (403/401), clear auth state and force re-login
+            const isForbidden = e.message?.includes('403') || e.message?.includes('Forbidden');
+            const isUnauthorized = e.message?.includes('401') || e.message?.includes('Unauthorized');
+            
+            if (isForbidden || isUnauthorized) {
+              forceRelogin(); // This throws and redirects
+            }
+            
+            console.warn('Token refresh failed:', e.message || e);
+            state.token = null;
+          }
+          
+          if (redirectPending) return;
+          
+          try {
+            const idc = await state.auth0.getIdTokenClaims();
+            state.idTokenRaw = idc && (idc.__raw || idc.raw || null);
+          } catch {}
+          // Make sure function calls carry Authorization as soon as we detect auth
+          try { attachAuthFetch(); } catch {}
         }
         
-        console.warn('Token refresh failed:', e.message || e);
-        state.token = null;
+      } catch (err) {
+        // If it's our redirect error, just return - redirect is already happening
+        if (err.message === 'AUTH_REDIRECT_PENDING') {
+          return;
+        }
+        // Re-throw other errors
+        throw err;
+      } finally {
+        // Always restore original fetch and console.error
+        if (!redirectPending) {
+          window.fetch = origFetch;
+          console.error = origConsoleError;
+        }
       }
-      try {
-        const idc = await state.auth0.getIdTokenClaims();
-        state.idTokenRaw = idc && (idc.__raw || idc.raw || null);
-      } catch {}
-      // Make sure function calls carry Authorization as soon as we detect auth
-      try { attachAuthFetch(); } catch {}
-    }
-    
-    // Restore original fetch and console.error after Auth0 initialization
-    window.fetch = origFetch;
-    console.error = origConsoleError;
-    } catch (e) {
-      // If we're redirecting due to 403, silently return (redirect is already in progress)
-      if (e.message === 'AUTH_REDIRECT' || e.message === 'AUTH_REDIRECT_PENDING') {
-        console.log('[Auth] Redirect in progress, stopping initialization');
-        return;
-      }
-      // Re-throw other errors
-      throw e;
-    }
   }
 
   function initIdentity() {

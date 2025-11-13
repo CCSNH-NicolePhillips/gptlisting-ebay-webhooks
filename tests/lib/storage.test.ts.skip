@@ -1,0 +1,260 @@
+// Tests for storage utilities
+
+import {
+  getStagingConfig,
+  generateStagingKey,
+  generatePresignedPutUrl,
+  generateSignedGetUrl,
+  getStagedUrl,
+} from "../../src/lib/storage.js";
+
+// Mock AWS SDK
+jest.mock("@aws-sdk/client-s3");
+jest.mock("@aws-sdk/s3-request-presigner");
+
+import { S3Client } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+
+const mockGetSignedUrl = getSignedUrl as jest.MockedFunction<typeof getSignedUrl>;
+
+describe("Storage Utilities", () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    process.env = {
+      ...originalEnv,
+      R2_BUCKET: "test-bucket",
+      R2_ACCOUNT_ID: "test-account-id",
+      R2_ACCESS_KEY_ID: "test-access-key",
+      R2_SECRET_ACCESS_KEY: "test-secret-key",
+      R2_PUBLIC_URL: undefined,
+      STAGING_RETENTION_HOURS: "72",
+    };
+    mockGetSignedUrl.mockResolvedValue("https://signed-url.com/test");
+  });
+
+  afterAll(() => {
+    process.env = originalEnv;
+  });
+
+  describe("getStagingConfig", () => {
+    test("loads R2 configuration from environment", () => {
+      const config = getStagingConfig();
+      expect(config.bucket).toBe("test-bucket");
+      expect(config.accountId).toBe("test-account-id");
+      expect(config.accessKeyId).toBe("test-access-key");
+      expect(config.secretAccessKey).toBe("test-secret-key");
+      expect(config.retentionHours).toBe(72);
+    });
+
+    test("falls back to S3 environment variables", () => {
+      delete process.env.R2_BUCKET;
+      delete process.env.R2_ACCOUNT_ID;
+      process.env.S3_BUCKET = "s3-bucket";
+      process.env.AWS_REGION = "us-east-1";
+      process.env.AWS_ACCESS_KEY_ID = "aws-key";
+      process.env.AWS_SECRET_ACCESS_KEY = "aws-secret";
+
+      const config = getStagingConfig();
+      expect(config.bucket).toBe("s3-bucket");
+      expect(config.accountId).toBe("us-east-1");
+      expect(config.accessKeyId).toBe("aws-key");
+      expect(config.secretAccessKey).toBe("aws-secret");
+    });
+
+    test("defaults retention to 72 hours when not set", () => {
+      delete process.env.STAGING_RETENTION_HOURS;
+      const config = getStagingConfig();
+      expect(config.retentionHours).toBe(72);
+    });
+
+    test("parses custom retention hours", () => {
+      process.env.STAGING_RETENTION_HOURS = "48";
+      const config = getStagingConfig();
+      expect(config.retentionHours).toBe(48);
+    });
+
+    test("includes public URL when configured", () => {
+      process.env.R2_PUBLIC_URL = "https://pub-abc.r2.dev";
+      const config = getStagingConfig();
+      expect(config.publicUrlBase).toBe("https://pub-abc.r2.dev");
+    });
+
+    test("throws error when no bucket configured", () => {
+      delete process.env.R2_BUCKET;
+      delete process.env.S3_BUCKET;
+      expect(() => getStagingConfig()).toThrow("R2_BUCKET or S3_BUCKET environment variable required");
+    });
+  });
+
+  describe("generateStagingKey", () => {
+    test("generates key with correct format", () => {
+      const key = generateStagingKey("user123", "photo.jpg", "job456");
+      expect(key).toMatch(/^staging\/user123\/job456\/[a-f0-9]{16}-photo\.jpg$/);
+    });
+
+    test("sanitizes filename", () => {
+      const key = generateStagingKey("user123", "my photo!@#.jpg", "job456");
+      expect(key).toMatch(/^staging\/user123\/job456\/[a-f0-9]{16}-my_photo___.jpg$/);
+    });
+
+    test("uses 'default' when jobId not provided", () => {
+      const key = generateStagingKey("user123", "photo.jpg");
+      expect(key).toMatch(/^staging\/user123\/default\/[a-f0-9]{16}-photo\.jpg$/);
+    });
+
+    test("handles filenames without extension", () => {
+      const key = generateStagingKey("user123", "photo", "job456");
+      expect(key).toMatch(/^staging\/user123\/job456\/[a-f0-9]{16}-photo$/);
+    });
+
+    test("includes hash for uniqueness", () => {
+      const key1 = generateStagingKey("user123", "photo.jpg", "job456");
+      const key2 = generateStagingKey("user123", "photo.jpg", "job456");
+      
+      // Keys should be different due to timestamp in hash
+      // Extract hash part (between last / and -)
+      const hash1 = key1.split("/").pop()?.split("-")[0];
+      const hash2 = key2.split("/").pop()?.split("-")[0];
+      
+      expect(hash1).toBeDefined();
+      expect(hash2).toBeDefined();
+      expect(hash1).not.toBe(hash2);
+    });
+
+    test("handles special characters in userId", () => {
+      const key = generateStagingKey("user-with-dash_123", "photo.jpg", "job");
+      expect(key).toContain("user-with-dash_123");
+    });
+
+    test("hash is 16 characters hex", () => {
+      const key = generateStagingKey("user123", "photo.jpg", "job456");
+      const hash = key.split("/").pop()?.split("-")[0];
+      expect(hash).toHaveLength(16);
+      expect(hash).toMatch(/^[a-f0-9]{16}$/);
+    });
+  });
+
+  describe("generatePresignedPutUrl", () => {
+    test("generates presigned PUT URL", async () => {
+      const url = await generatePresignedPutUrl(
+        "staging/user123/job456/abc-photo.jpg",
+        "image/jpeg"
+      );
+      
+      expect(url).toBe("https://signed-url.com/test");
+      expect(mockGetSignedUrl).toHaveBeenCalled();
+    });
+
+    test("uses default expiry of 10 minutes", async () => {
+      await generatePresignedPutUrl(
+        "staging/user123/job456/abc-photo.jpg",
+        "image/jpeg"
+      );
+      
+      const options = mockGetSignedUrl.mock.calls[0][2];
+      expect(options?.expiresIn).toBe(600);
+    });
+
+    test("accepts custom expiry time", async () => {
+      await generatePresignedPutUrl(
+        "staging/user123/job456/abc-photo.jpg",
+        "image/jpeg",
+        1800
+      );
+      
+      const options = mockGetSignedUrl.mock.calls[0][2];
+      expect(options?.expiresIn).toBe(1800);
+    });
+
+    test("includes content type in command", async () => {
+      await generatePresignedPutUrl(
+        "staging/user123/job456/abc-photo.jpg",
+        "image/png"
+      );
+      
+      const command = mockGetSignedUrl.mock.calls[0][1] as any;
+      expect(command.input.ContentType).toBe("image/png");
+    });
+
+    test("includes metadata with timestamps", async () => {
+      await generatePresignedPutUrl(
+        "staging/user123/job456/abc-photo.jpg",
+        "image/jpeg"
+      );
+      
+      const command = mockGetSignedUrl.mock.calls[0][1] as any;
+      expect(command.input.Metadata).toBeDefined();
+      expect(command.input.Metadata?.uploadedAt).toBeDefined();
+      expect(command.input.Metadata?.expiresAt).toBeDefined();
+    });
+  });
+
+  describe("generateSignedGetUrl", () => {
+    test("generates signed GET URL", async () => {
+      const url = await generateSignedGetUrl("staging/user123/job456/abc-photo.jpg");
+      
+      expect(url).toBe("https://signed-url.com/test");
+      expect(mockGetSignedUrl).toHaveBeenCalled();
+    });
+
+    test("uses default expiry of 24 hours", async () => {
+      await generateSignedGetUrl("staging/user123/job456/abc-photo.jpg");
+      
+      const options = mockGetSignedUrl.mock.calls[0][2];
+      expect(options?.expiresIn).toBe(86400);
+    });
+
+    test("accepts custom expiry time", async () => {
+      await generateSignedGetUrl("staging/user123/job456/abc-photo.jpg", 3600);
+      
+      const options = mockGetSignedUrl.mock.calls[0][2];
+      expect(options?.expiresIn).toBe(3600);
+    });
+  });
+
+  describe("getStagedUrl", () => {
+    test("returns public URL when configured", async () => {
+      process.env.R2_PUBLIC_URL = "https://pub-abc.r2.dev";
+      const url = await getStagedUrl("staging/user123/job456/abc-photo.jpg");
+      
+      expect(url).toBe("https://pub-abc.r2.dev/staging/user123/job456/abc-photo.jpg");
+      expect(mockGetSignedUrl).not.toHaveBeenCalled();
+    });
+
+    test("returns signed URL when public URL not configured", async () => {
+      delete process.env.R2_PUBLIC_URL;
+      const url = await getStagedUrl("staging/user123/job456/abc-photo.jpg");
+      
+      expect(url).toBe("https://signed-url.com/test");
+      expect(mockGetSignedUrl).toHaveBeenCalled();
+    });
+
+    test("handles keys without leading slash", async () => {
+      process.env.R2_PUBLIC_URL = "https://pub-abc.r2.dev";
+      const url = await getStagedUrl("staging/user123/photo.jpg");
+      
+      expect(url).toBe("https://pub-abc.r2.dev/staging/user123/photo.jpg");
+    });
+  });
+
+  describe("Path formats", () => {
+    test("staging keys follow consistent pattern", () => {
+      const key1 = generateStagingKey("user123", "photo1.jpg", "job456");
+      const key2 = generateStagingKey("user456", "photo2.png", "job789");
+      
+      expect(key1).toMatch(/^staging\/[^/]+\/[^/]+\/[^/]+$/);
+      expect(key2).toMatch(/^staging\/[^/]+\/[^/]+\/[^/]+$/);
+    });
+
+    test("keys are URL-safe", () => {
+      const key = generateStagingKey("user@123", "my file.jpg", "job#456");
+      
+      // Should not contain problematic characters
+      expect(key).not.toContain("@");
+      expect(key).not.toContain(" ");
+      expect(key).not.toContain("#");
+    });
+  });
+});
