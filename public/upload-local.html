@@ -168,7 +168,7 @@
   </div>
 
   <script type="module">
-    // Wait for auth client to initialize
+    // Wait for auth client to initialize and require auth
     async function initAuth() {
       if (!window.authClient) {
         console.error('Auth client not loaded');
@@ -176,14 +176,14 @@
         return false;
       }
       
-      const isAuth = await window.authClient.isAuthenticated();
-      if (!isAuth) {
-        console.log('Not authenticated, redirecting to login...');
-        window.location.href = '/login.html';
+      try {
+        // requireAuth will redirect to login if not authenticated
+        await window.authClient.requireAuth();
+        return true;
+      } catch (error) {
+        console.error('Auth failed:', error);
         return false;
       }
-      
-      return true;
     }
     
     const dropZone = document.getElementById('dropZone');
