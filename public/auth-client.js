@@ -65,6 +65,8 @@
   async function initAuth0() {
     if (!state.cfg?.AUTH0_DOMAIN || !state.cfg?.AUTH0_CLIENT_ID) return;
     if (state.auth0) return;
+
+    try {
     // Load SPA SDK if not present. Prefer same-origin proxy to satisfy strict CSP.
     function beginAmdDisable() {
       const hadDefine = typeof window.define === 'function';
@@ -148,7 +150,7 @@
         
         // Clear auth immediately and aggressively
         clearLocalAuthState();
-        
+
         // Also clear any Auth0 state that might be in-flight
         try {
           sessionStorage.clear();
@@ -158,7 +160,7 @@
             }
           });
         } catch (e) { }
-        
+
         window.fetch = origFetch;
         console.error = origConsoleError;
         sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
