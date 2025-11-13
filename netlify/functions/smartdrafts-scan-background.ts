@@ -10,6 +10,7 @@ type BackgroundPayload = {
   jobId?: string;
   userId?: string;
   folder?: string;
+  stagedUrls?: string[];
   force?: boolean;
   limit?: number;
   debug?: boolean;
@@ -47,6 +48,7 @@ export const handler: Handler = async (event) => {
   }
 
   const folder = typeof body.folder === "string" ? body.folder.trim() : "";
+  const stagedUrls = Array.isArray(body.stagedUrls) ? body.stagedUrls : [];
   const force = Boolean(body.force);
   const limit = Number.isFinite(body.limit) ? Number(body.limit) : undefined;
   const debugEnabled = Boolean(body.debug);
@@ -68,12 +70,14 @@ export const handler: Handler = async (event) => {
     await writeJob(jobId, userId, {
       state: "running",
       startedAt: Date.now(),
-      folder,
+      folder: folder || undefined,
+      stagedUrls: stagedUrls.length > 0 ? stagedUrls : undefined,
     });
 
     const response: SmartDraftScanResponse = await runSmartDraftScan({
       userId,
-      folder,
+      folder: folder || undefined,
+      stagedUrls: stagedUrls.length > 0 ? stagedUrls : undefined,
       force,
       limit,
       debug: debugEnabled,
