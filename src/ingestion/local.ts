@@ -147,25 +147,41 @@ export async function uploadFilesServerSide(userId: string, files: Array<{ name:
   const config = getStagingConfig();
   const keys: string[] = [];
   
-  for (const file of files) {
+  console.log('[uploadFilesServerSide] Starting upload of', files.length, 'files');
+  console.log('[uploadFilesServerSide] Bucket:', config.bucket);
+  console.log('[uploadFilesServerSide] Account ID:', config.accountId);
+  
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
     const key = generateStagingKey(userId, file.name);
     const buffer = Buffer.from(file.data, 'base64');
     
-    const command = new PutObjectCommand({
-      Bucket: config.bucket,
-      Key: key,
-      Body: buffer,
-      ContentType: file.mime,
-      Metadata: {
-        uploadedAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + config.retentionHours! * 3600000).toISOString(),
-      },
-    });
+    console.log(`[uploadFilesServerSide] [${i + 1}/${files.length}] Uploading ${file.name} (${buffer.length} bytes) as ${key}`);
     
-    await client.send(command);
-    keys.push(key);
+    try {
+      const command = new PutObjectCommand({
+        Bucket: config.bucket,
+        Key: key,
+        Body: buffer,
+        ContentType: file.mime,
+        Metadata: {
+          uploadedAt: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + config.retentionHours! * 3600000).toISOString(),
+        },
+      });
+      
+      await client.send(command);
+      keys.push(key);
+      console.log(`[uploadFilesServerSide] [${i + 1}/${files.length}] ✓ Success: ${key}`);
+      
+    } catch (error: any) {
+      console.error(`[uploadFilesServerSide] [${i + 1}/${files.length}] ✗ Failed: ${file.name}`);
+      console.error(`[uploadFilesServerSide] Error:`, error.message);
+      throw error; // Re-throw to stop the upload process
+    }
   }
   
+  console.log('[uploadFilesServerSide] Upload complete!', keys.length, 'files uploaded');
   return keys;
 }
 
