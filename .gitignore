@@ -12,3 +12,7 @@ prod.env
 tmp/
 .env
 coverage
+
+# Sensitive analysis files
+PATENT-*.md
+*-ANALYSIS-*.md
