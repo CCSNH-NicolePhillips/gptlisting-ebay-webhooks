@@ -452,6 +452,19 @@ async function createDraftForProduct(product: PairedProduct): Promise<Draft> {
   };
   
   console.log(`[Draft] ✓ Created for ${product.productId} in ${Date.now() - startTime}ms: "${draft.title}"`);
+  console.log(`[Draft] Final draft data for ${product.productId}:`, JSON.stringify({
+    productId: draft.productId,
+    brand: draft.brand,
+    product: draft.product,
+    title: draft.title,
+    aspectsCount: Object.keys(draft.aspects || {}).length,
+    aspectsKeys: Object.keys(draft.aspects || {}),
+    categoryId: draft.category?.id,
+    categoryTitle: draft.category?.title,
+    imagesCount: draft.images?.length || 0,
+    price: draft.price,
+    condition: draft.condition
+  }, null, 2));
   
   return draft;
 }
