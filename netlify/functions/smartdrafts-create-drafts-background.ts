@@ -13,6 +13,9 @@ const GPT_RETRY_DELAY_MS = 1000;
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" });
 
+// Cache categories in memory for the lifetime of this function instance
+let categoriesCache: any[] | null = null;
+
 type BackgroundPayload = {
   jobId?: string;
   userId?: string;
@@ -146,7 +149,13 @@ async function callOpenAI(prompt: string): Promise<string> {
 
 async function getRelevantCategories(product: PairedProduct): Promise<string> {
   try {
-    const allCategories = await listCategories();
+    // Use cached categories to avoid repeated Redis calls (15+ seconds each!)
+    if (!categoriesCache) {
+      const start = Date.now();
+      categoriesCache = await listCategories();
+      console.log(`[Cache] Loaded ${categoriesCache.length} categories in ${Date.now() - start}ms`);
+    }
+    const allCategories = categoriesCache;
     
     const searchTerms = [
       product.product,
@@ -166,9 +175,9 @@ async function getRelevantCategories(product: PairedProduct): Promise<string> {
       .map(cat => {
         // Include key item specifics for each category
         const aspects = cat.itemSpecifics
-          ?.filter(spec => !spec.required && spec.name !== 'Brand') // Skip required fields that are auto-filled
+          ?.filter((spec: any) => !spec.required && spec.name !== 'Brand') // Skip required fields that are auto-filled
           .slice(0, 8) // Limit to top 8 aspects to keep prompt reasonable
-          .map(spec => spec.name)
+          .map((spec: any) => spec.name)
           .join(', ') || '';
         
         return aspects 
@@ -194,9 +203,9 @@ async function getRelevantCategories(product: PairedProduct): Promise<string> {
       .filter(cat => commonCats.includes(cat.id))
       .map(cat => {
         const aspects = cat.itemSpecifics
-          ?.filter(spec => !spec.required && spec.name !== 'Brand')
+          ?.filter((spec: any) => !spec.required && spec.name !== 'Brand')
           .slice(0, 8)
-          .map(spec => spec.name)
+          .map((spec: any) => spec.name)
           .join(', ') || '';
         
         return aspects 
@@ -302,27 +311,11 @@ async function pickCategory(product: PairedProduct): Promise<CategoryHint | null
   try {
     console.log(`[Category] Picking for: ${product.brand} ${product.product}`);
     
-    const category = await pickCategoryForGroup({
-      brand: product.brand || undefined,
-      product: product.product,
-      variant: product.variant || undefined,
-      size: product.size || undefined,
-      claims: [],
-      keywords: [],
-    });
-    
-    if (!category) {
-      console.warn(`[Category] No category found for: ${product.product}`);
-      return null;
-    }
-    
-    console.log(`[Category] Selected: ${category.title} (${category.id})`);
-    
-    return {
-      id: category.id,
-      title: category.title,
-      aspects: {},
-    };
+    // Skip the expensive pickCategoryForGroup lookup - we already have GPT choosing the category
+    // pickCategoryForGroup calls listCategories() again (12+ seconds!) which we already cached above
+    // Instead, just return null and let GPT pick from the relevant categories list
+    console.log(`[Category] Skipping fallback category lookup - will use GPT selection only`);
+    return null;
   } catch (err) {
     console.error(`[Category] Error picking category:`, err);
     return null;
