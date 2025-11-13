@@ -76,6 +76,9 @@ export const handler: Handler = async (event) => {
       },
     });
     
+    console.log('[ingest-local-init] Generated', result.uploads.length, 'presigned URLs');
+    console.log('[ingest-local-init] Sample URL:', result.uploads[0]?.url?.substring(0, 100) + '...');
+    
     return jsonResponse(200, {
       ok: true,
       uploads: result.uploads,

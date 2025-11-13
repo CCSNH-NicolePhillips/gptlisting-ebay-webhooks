@@ -45,19 +45,27 @@ export function createStorageClient(config?: StagingConfig): S3Client {
   const cfg = config || getStagingConfig();
   
   // Cloudflare R2 endpoint format
+  // R2 uses pattern: https://<account-id>.r2.cloudflarestorage.com
+  // Check if accountId looks like AWS region (e.g., us-east-1) vs R2 account ID
   const isR2 = !!cfg.accountId && !cfg.accountId.match(/^[a-z]{2}-[a-z]+-\d$/);
-  const endpoint = isR2
-    ? `https://${cfg.accountId}.r2.cloudflarestorage.com`
-    : undefined;
   
-  return new S3Client({
+  const clientConfig: any = {
     region: isR2 ? 'auto' : (cfg.accountId || 'us-east-1'),
-    endpoint,
     credentials: {
       accessKeyId: cfg.accessKeyId,
       secretAccessKey: cfg.secretAccessKey,
     },
-  });
+  };
+  
+  if (isR2) {
+    // For R2, use the account-specific endpoint
+    // IMPORTANT: Do NOT include bucket name in endpoint
+    clientConfig.endpoint = `https://${cfg.accountId}.r2.cloudflarestorage.com`;
+    // R2 requires path-style for presigned URLs to work properly
+    clientConfig.forcePathStyle = true;
+  }
+  
+  return new S3Client(clientConfig);
 }
 
 /**

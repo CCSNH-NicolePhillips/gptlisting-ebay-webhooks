@@ -28,8 +28,6 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.21.1",
-    "@aws-sdk/client-s3": "^3.600.0",
-    "@aws-sdk/s3-request-presigner": "^3.600.0",
     "@google/generative-ai": "^0.7.1",
     "@netlify/blobs": "^6.5.0",
     "cheerio": "^1.0.0-rc.12",
