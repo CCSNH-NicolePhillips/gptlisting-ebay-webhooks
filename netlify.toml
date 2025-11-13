@@ -13,6 +13,11 @@
 [functions."smartdrafts-create-drafts"]
   timeout = 26  # Max for Pro tier, helps with ChatGPT API calls
 
+# Allow larger payloads for local upload (base64 images)
+[functions."ingest-local-upload"]
+  timeout = 26
+  included_files = []  # Don't bundle extra files
+
 # Reduce false positives in Netlify Secrets Scanning by omitting non-sensitive keys.
 [build.environment]
   SECRETS_SCAN_OMIT_KEYS = "PUBLISH_MODE,DEFAULT_MARKETPLACE_ID,DEFAULT_CATEGORY_ID,EBAY_ENV,APP_URL,DROPBOX_LOCALE,EBAY_RUNAME,EBAY_ENDPOINT_URL,DROPBOX_REDIRECT_URI,PROMOTED_CAMPAIGN_ID,OCR_PROVIDER,SHIP_NAME,SHIP_ADDRESS1,SHIP_CITY,SHIP_STATE,SHIP_POSTAL,SHIP_COUNTRY,EBAY_MERCHANT_LOCATION_KEY"
