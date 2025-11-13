@@ -210,9 +210,9 @@ export function App() {
         
         setLoadingStatus(`🤖 Generating drafts... ${processed}/${totalProducts} (${attempts * 1.5}s)`);
         
-        if (job.state === 'complete') {
+        if (job.state === 'completed') {
           jobComplete = true;
-          allDrafts = job.results || [];
+          allDrafts = job.drafts || [];
           console.log(`[doCreateDrafts] Job complete: ${allDrafts.length} drafts created`);
         } else if (job.state === 'error') {
           throw new Error(job.error || 'Draft creation job failed');

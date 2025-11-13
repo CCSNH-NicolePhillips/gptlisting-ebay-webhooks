@@ -457,10 +457,13 @@ async function createDraftForProduct(product: PairedProduct): Promise<Draft> {
 }
 
 export const handler: Handler = async (event) => {
+  const handlerStartTime = Date.now();
   const body = parsePayload(event.body);
   const jobId = typeof body.jobId === "string" ? body.jobId : undefined;
   const userId = typeof body.userId === "string" ? body.userId : undefined;
   const products = Array.isArray(body.products) ? body.products : [];
+
+  console.log(`[PERF] Handler started for jobId: ${jobId}, products: ${products.length}`);
 
   if (!jobId || !userId) {
     if (jobId) {
@@ -483,29 +486,42 @@ export const handler: Handler = async (event) => {
   }
 
   try {
+    const writeJobStart = Date.now();
     await writeJob(jobId, userId, {
       state: "running",
       startedAt: Date.now(),
       totalProducts: products.length,
       processedProducts: 0,
     });
+    console.log(`[PERF] Initial writeJob took ${Date.now() - writeJobStart}ms`);
 
     const drafts: Draft[] = [];
     const errors: any[] = [];
     
+    const loopStartTime = Date.now();
     for (let i = 0; i < products.length; i++) {
       const product = products[i];
+      const productStartTime = Date.now();
+      
+      console.log(`\n[PERF] ========== PRODUCT ${i + 1}/${products.length} START ==========`);
+      console.log(`[PERF] Product ID: ${product.productId}`);
       
       try {
         const draft = await createDraftForProduct(product);
         drafts.push(draft);
         
+        const productTotalTime = Date.now() - productStartTime;
+        console.log(`[PERF] Product ${i + 1}/${products.length} TOTAL time: ${productTotalTime}ms`);
+        console.log(`[PERF] ========== PRODUCT ${i + 1}/${products.length} END ==========\n`);
+        
         // Update progress
+        const progressStart = Date.now();
         await writeJob(jobId, userId, {
           state: "running",
           processedProducts: i + 1,
           totalProducts: products.length,
         });
+        console.log(`[PERF] Progress writeJob took ${Date.now() - progressStart}ms`);
         
       } catch (err: any) {
         console.error(`[Draft] Error creating draft for ${product.productId}:`, err);
@@ -515,6 +531,10 @@ export const handler: Handler = async (event) => {
         });
       }
     }
+    
+    const loopTotalTime = Date.now() - loopStartTime;
+    console.log(`[PERF] ALL PRODUCTS LOOP TOTAL: ${loopTotalTime}ms for ${products.length} products`);
+    console.log(`[PERF] Average per product: ${Math.round(loopTotalTime / products.length)}ms`)
     
     await writeJob(jobId, userId, {
       state: "completed",
