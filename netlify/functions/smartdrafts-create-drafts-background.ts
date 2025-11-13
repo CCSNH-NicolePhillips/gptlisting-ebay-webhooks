@@ -106,9 +106,15 @@ function computeEbayPrice(retailPrice: number, categoryPath: string): number {
 }
 
 async function callOpenAI(prompt: string): Promise<string> {
+  if (!process.env.OPENAI_API_KEY) {
+    console.error("[GPT] OPENAI_API_KEY not configured");
+    throw new Error("OpenAI API key not configured");
+  }
+
   let lastError: any;
   for (let attempt = 1; attempt <= GPT_RETRY_ATTEMPTS; attempt++) {
     try {
+      console.log(`[GPT] Attempt ${attempt}/${GPT_RETRY_ATTEMPTS} - calling OpenAI...`);
       const completion = await timeoutPromise(
         openai.chat.completions.create({
           model: "gpt-4o",
@@ -122,12 +128,14 @@ async function callOpenAI(prompt: string): Promise<string> {
         }),
         GPT_TIMEOUT_MS
       );
+      console.log(`[GPT] Attempt ${attempt} succeeded`);
       return completion.choices?.[0]?.message?.content || "{}";
     } catch (err) {
       lastError = err;
+      console.error(`[GPT] Attempt ${attempt} failed:`, err instanceof Error ? err.message : String(err));
       if (attempt >= GPT_RETRY_ATTEMPTS) break;
       const delay = GPT_RETRY_DELAY_MS * attempt;
-      console.warn(`[GPT] Attempt ${attempt} failed, retrying in ${delay}ms...`);
+      console.warn(`[GPT] Retrying in ${delay}ms...`);
       await sleep(delay);
     }
   }
