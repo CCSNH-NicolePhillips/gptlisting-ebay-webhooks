@@ -42,7 +42,7 @@ export function guessMime(filename: string): string {
  * Validate that MIME type is a supported image
  */
 export function isValidImageMime(mime: string): boolean {
-  return SUPPORTED_IMAGE_TYPES.includes(mime as SupportedImageType);
+  return SUPPORTED_IMAGE_TYPES.includes(mime.toLowerCase() as SupportedImageType);
 }
 
 /**
@@ -50,18 +50,18 @@ export function isValidImageMime(mime: string): boolean {
  */
 export function getExtensionFromMime(mime: string): string {
   const extMap: Record<string, string> = {
-    'image/jpeg': 'jpg',
-    'image/jpg': 'jpg',
-    'image/png': 'png',
-    'image/gif': 'gif',
-    'image/webp': 'webp',
-    'image/heic': 'heic',
-    'image/heif': 'heif',
-    'image/bmp': 'bmp',
-    'image/tiff': 'tiff',
+    'image/jpeg': '.jpg',
+    'image/jpg': '.jpg',
+    'image/png': '.png',
+    'image/gif': '.gif',
+    'image/webp': '.webp',
+    'image/heic': '.heic',
+    'image/heif': '.heif',
+    'image/bmp': '.bmp',
+    'image/tiff': '.tiff',
   };
   
-  return extMap[mime.toLowerCase()] || 'jpg';
+  return extMap[mime.toLowerCase()] || '.bin';
 }
 
 /**
@@ -76,16 +76,31 @@ export function hasImageExtension(filename: string): boolean {
  * Sanitize filename for storage (remove special characters, limit length)
  */
 export function sanitizeFilename(filename: string): string {
+  // Trim and check for empty
+  const trimmed = filename.trim();
+  
   // Replace spaces and special chars with underscores
-  const sanitized = filename
+  // Also remove path traversal patterns like ..
+  const sanitized = trimmed
+    .replace(/\.\./g, '')  // Remove path traversal
     .replace(/[^a-zA-Z0-9._-]/g, '_')
     .replace(/__+/g, '_')
     .replace(/^_+|_+$/g, '');
+  
+  // If empty after sanitization, return 'unnamed'
+  if (!sanitized) {
+    return 'unnamed';
+  }
   
   // Limit to 100 chars before extension
   const parts = sanitized.split('.');
   const ext = parts.length > 1 ? parts.pop() : '';
   const name = parts.join('.');
+  
+  // If name is empty but has extension, use 'unnamed'
+  if (!name && ext) {
+    return `unnamed.${ext}`;
+  }
   
   const truncated = name.slice(0, 100);
   return ext ? `${truncated}.${ext}` : truncated;

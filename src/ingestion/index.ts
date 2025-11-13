@@ -33,7 +33,7 @@ export function getAdapter(source: SourceType): IngestionAdapter {
   if (!adapter) {
     throw new IngestError(
       IngestErrorCode.INVALID_SOURCE,
-      `Unsupported source: ${source}. Supported: ${Object.keys(adapters).join(', ')}`
+      `Source not supported: ${source}. Supported: ${Object.keys(adapters).join(', ')}`
     );
   }
   
