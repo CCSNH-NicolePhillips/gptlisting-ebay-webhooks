@@ -333,6 +333,7 @@
         uploadBtn.style.display = 'none';
         clearBtn.style.display = 'none';
         statusMessage.style.display = 'none';
+        fileInput.value = ''; // Reset file input so user can select files again
       } else {
         renderFileList();
         showStatus('info', `${selectedFiles.length} image(s) ready to upload`);
