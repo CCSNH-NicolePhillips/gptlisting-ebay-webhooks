@@ -12,8 +12,7 @@
 
 import type { Handler } from '@netlify/functions';
 import { getJwtSubUnverified, getBearerToken } from '../../src/lib/_auth.js';
-import { createStorageClient, getStagingConfig, generateStagingKey } from '../../src/lib/storage.js';
-import { PutObjectCommand } from '@aws-sdk/client-s3';
+import { uploadFilesServerSide } from '../../src/ingestion/local.js';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -79,38 +78,9 @@ export const handler: Handler = async (event) => {
     }
     
     console.log('[ingest-local-upload] Creating storage client...');
-    const client = createStorageClient();
-    const config = getStagingConfig();
-    console.log('[ingest-local-upload] Storage config loaded, bucket:', config.bucket);
     
-    const keys: string[] = [];
-    
-    // Upload each file
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      console.log(`[ingest-local-upload] Processing file ${i + 1}/${files.length}: ${file.name}`);
-      
-      const key = generateStagingKey(userId, file.name);
-      const buffer = Buffer.from(file.data, 'base64');
-      
-      console.log(`[ingest-local-upload] Generated key: ${key}, size: ${buffer.length} bytes`);
-      
-      const command = new PutObjectCommand({
-        Bucket: config.bucket,
-        Key: key,
-        Body: buffer,
-        ContentType: file.mime,
-        Metadata: {
-          uploadedAt: new Date().toISOString(),
-          expiresAt: new Date(Date.now() + config.retentionHours! * 3600000).toISOString(),
-        },
-      });
-      
-      await client.send(command);
-      keys.push(key);
-      
-      console.log(`[ingest-local-upload] ✓ Uploaded ${file.name} (${buffer.length} bytes) as ${key}`);
-    }
+    // Upload files using helper function from ingestion layer
+    const keys = await uploadFilesServerSide(userId, files);
     
     console.log(`[ingest-local-upload] Upload complete! ${keys.length} files uploaded`);
     
