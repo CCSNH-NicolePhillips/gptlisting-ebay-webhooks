@@ -354,6 +354,18 @@
       return div.innerHTML;
     }
     
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64 = reader.result.split(',')[1]; // Remove data:image/...;base64, prefix
+          resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+    
     function showStatus(type, message) {
       statusMessage.className = `status-message status-${type}`;
       statusMessage.textContent = message;
@@ -379,57 +391,58 @@
       try {
         uploadBtn.disabled = true;
         clearBtn.disabled = true;
-        showStatus('info', 'Initializing upload...');
+        showStatus('info', 'Uploading files...');
         updateProgress(0);
         
-        // Step 1: Initialize upload (get presigned URLs)
+        // Check auth
         if (!window.authClient?.authFetch) {
           throw new Error('Auth client not available. Please refresh the page.');
         }
         
-        const initRes = await window.authClient.authFetch('/.netlify/functions/ingest-local-init', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            fileCount: selectedFiles.length,
-            mimeHints: selectedFiles.map(f => f.type),
-            filenames: selectedFiles.map(f => f.name),
-          }),
-        });
-        
-        if (!initRes.ok) {
-          const error = await initRes.json();
-          throw new Error(error.error || `Init failed: ${initRes.status}`);
-        }
-        
-        const { uploads } = await initRes.json();
-        showStatus('info', `Uploading ${selectedFiles.length} file(s)...`);
-        
-        // Step 2: Upload files to presigned URLs
-        const keys = [];
+        // Convert files to base64
+        showStatus('info', 'Preparing files...');
+        const fileData = [];
         for (let i = 0; i < selectedFiles.length; i++) {
           const file = selectedFiles[i];
-          const upload = uploads[i];
-          
-          const statusEl = document.getElementById(`status-${i}`);
-          statusEl.className = 'file-status status-uploading';
-          statusEl.textContent = 'Uploading...';
-          
-          await fetch(upload.url, {
-            method: 'PUT',
-            headers: { 'Content-Type': file.type },
-            body: file,
+          const base64 = await fileToBase64(file);
+          fileData.push({
+            name: file.name,
+            mime: file.type,
+            data: base64
           });
-          
-          keys.push(upload.key);
-          statusEl.className = 'file-status status-complete';
-          statusEl.textContent = 'Uploaded';
-          updateProgress(((i + 1) / selectedFiles.length) * 100);
+          updateProgress(((i + 1) / selectedFiles.length) * 30); // 0-30% for prep
         }
+        
+        // Upload all files to server (which uploads to R2)
+        showStatus('info', 'Uploading to storage...');
+        const statusEls = selectedFiles.map((_, i) => document.getElementById(`status-${i}`));
+        statusEls.forEach(el => {
+          el.className = 'file-status status-uploading';
+          el.textContent = 'Uploading...';
+        });
+        
+        const uploadRes = await window.authClient.authFetch('/.netlify/functions/ingest-local-upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ files: fileData }),
+        });
+        
+        if (!uploadRes.ok) {
+          const error = await uploadRes.json();
+          throw new Error(error.error || `Upload failed: ${uploadRes.status}`);
+        }
+        
+        const { keys } = await uploadRes.json();
+        
+        statusEls.forEach(el => {
+          el.className = 'file-status status-complete';
+          el.textContent = 'Complete';
+        });
+        updateProgress(80);
         
         showStatus('info', 'Processing images...');
         
-        // Step 3: Complete upload and get staged files
+        // Get staged file info
         const completeRes = await window.authClient.authFetch('/.netlify/functions/ingest-local-complete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -442,6 +455,7 @@
         }
         
         const { files } = await completeRes.json();
+        updateProgress(100);
         
         // Step 4: Start scan job
         showStatus('info', 'Starting analysis...');
