@@ -1179,7 +1179,49 @@
           setStatus('Please sign in to load Dropbox folders.');
           return;
         }
-        await loadFolders();
+        
+        // Check if there's a jobId in the URL (from local upload redirect)
+        const urlParams = new URLSearchParams(window.location.search);
+        const existingJobId = urlParams.get('jobId');
+        
+        if (existingJobId) {
+          // Auto-poll the existing job instead of loading folders
+          setStatus(`Loading scan job ${existingJobId}...`);
+          try {
+            const job = await pollSmartDraftScan(existingJobId, {
+              onUpdate: (data) => {
+                setStatus(`Scanning... (${data.state || 'pending'})`);
+                if (data.progress) {
+                  const pct = Math.round((data.progress.current / data.progress.total) * 100);
+                  setStatus(`Scanning... ${pct}% complete (${data.progress.current}/${data.progress.total} images)`);
+                }
+              },
+              maxAttempts: 120,
+            });
+            
+            setRawOutput({ jobId: existingJobId, ...job }, true);
+            
+            if (job.state === 'complete' && job.result) {
+              const groups = job.result.groups || [];
+              renderGroups(groups);
+              if (groups.length) {
+                setStatus(`✅ Scan complete! Found ${groups.length} product group(s).`);
+              } else {
+                setStatus('Scan complete, but no products detected.');
+              }
+            } else if (job.state === 'error') {
+              setStatus(`❌ Scan failed: ${job.error || 'Unknown error'}`);
+            } else {
+              setStatus(`Job finished with state: ${job.state}`);
+            }
+          } catch (err) {
+            setStatus(`❌ Failed to load scan job: ${err?.message || 'Unknown error'}`);
+            console.error('Job polling error:', err);
+          }
+        } else {
+          // Normal flow: load Dropbox folders
+          await loadFolders();
+        }
       })();
     </script>
   </body>
