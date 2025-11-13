@@ -13,6 +13,7 @@ type HeadersMap = Record<string, string | undefined>;
 
 type ScanRequest = {
   path?: string;
+  stagedUrls?: string[]; // NEW: Support direct file URLs from ingestion system
   force?: boolean;
   limit?: number;
   debug?: boolean | string;
@@ -53,9 +54,16 @@ export const handler: Handler = async (event) => {
     return json(400, { ok: false, error: "Invalid JSON" }, originHdr, METHODS);
   }
 
+  // Support either folder path OR staged URLs (but not both)
   const folder = typeof payload?.path === "string" ? payload.path.trim() : "";
-  if (!folder) {
-    return json(400, { ok: false, error: "Provide folder path" }, originHdr, METHODS);
+  const stagedUrls = Array.isArray(payload?.stagedUrls) ? payload.stagedUrls : [];
+  
+  if (!folder && stagedUrls.length === 0) {
+    return json(400, { ok: false, error: "Provide either 'path' (Dropbox folder) or 'stagedUrls' (uploaded files)" }, originHdr, METHODS);
+  }
+  
+  if (folder && stagedUrls.length > 0) {
+    return json(400, { ok: false, error: "Provide either 'path' or 'stagedUrls', not both" }, originHdr, METHODS);
   }
 
   const force = Boolean(payload?.force);
@@ -94,7 +102,8 @@ export const handler: Handler = async (event) => {
       userId: user.userId,
       state: "pending",
       createdAt: Date.now(),
-      folder,
+      folder: folder || undefined,
+      stagedUrls: stagedUrls.length > 0 ? stagedUrls : undefined,
       options: { force, limit, debug: debugEnabled },
     }, { key: jobKey });
   } catch (err) {
@@ -111,7 +120,15 @@ export const handler: Handler = async (event) => {
     const resp = await fetch(target, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jobId, userId: user.userId, folder, force, limit, debug: debugEnabled }),
+      body: JSON.stringify({ 
+        jobId, 
+        userId: user.userId, 
+        folder: folder || undefined,
+        stagedUrls: stagedUrls.length > 0 ? stagedUrls : undefined,
+        force, 
+        limit, 
+        debug: debugEnabled 
+      }),
     });
 
     if (!resp.ok) {
@@ -121,7 +138,8 @@ export const handler: Handler = async (event) => {
         userId: user.userId,
         state: "error",
         finishedAt: Date.now(),
-        folder,
+        folder: folder || undefined,
+        stagedUrls: stagedUrls.length > 0 ? stagedUrls : undefined,
         error: `${resp.status} ${resp.statusText}: ${detail.slice(0, 300)}`,
       }, { key: jobKey });
       await decRunning(user.userId).catch(() => {});
@@ -133,7 +151,8 @@ export const handler: Handler = async (event) => {
       userId: user.userId,
       state: "error",
       finishedAt: Date.now(),
-      folder,
+      folder: folder || undefined,
+      stagedUrls: stagedUrls.length > 0 ? stagedUrls : undefined,
       error: err?.message || "fetch failed",
     }, { key: jobKey });
     await decRunning(user.userId).catch(() => {});
@@ -141,6 +160,12 @@ export const handler: Handler = async (event) => {
     return json(502, { ok: false, error: "Background fetch exception", jobId }, originHdr, METHODS);
   }
 
-  console.log(JSON.stringify({ evt: "smartdrafts-scan.enqueued", userId: user.userId, jobId, folder }));
+  console.log(JSON.stringify({ 
+    evt: "smartdrafts-scan.enqueued", 
+    userId: user.userId, 
+    jobId, 
+    folder: folder || undefined,
+    stagedUrlCount: stagedUrls.length || undefined
+  }));
   return json(200, { ok: true, jobId }, originHdr, METHODS);
 };

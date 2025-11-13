@@ -93,7 +93,8 @@ const MAX_IMAGES = Math.max(1, Math.min(100, Number(process.env.SMARTDRAFT_MAX_I
 
 export type SmartDraftScanOptions = {
   userId: string;
-  folder: string;
+  folder?: string; // Dropbox folder path (optional if stagedUrls provided)
+  stagedUrls?: string[]; // Pre-staged file URLs (from ingestion system)
   force?: boolean;
   limit?: number;
   debug?: boolean | string;
@@ -1382,8 +1383,38 @@ function hydrateGroups(groups: any[], folder: string) {
   });
 }
 
+/**
+ * Run scan on pre-staged URLs (from ingestion system)
+ * For now, this creates minimal file entries and delegates to the main scan logic
+ * TODO: Full integration with vision pipeline
+ */
+async function runSmartDraftScanFromStagedUrls(options: {
+  userId: string;
+  stagedUrls: string[];
+  limit: number;
+  force: boolean;
+  debug: boolean;
+}): Promise<SmartDraftScanResponse> {
+  const { stagedUrls } = options;
+  
+  // For Phase 1: Return error directing users to use Dropbox
+  // Full staged URL support requires vision pipeline integration
+  return jsonEnvelope(501, {
+    ok: false,
+    error: "Staged URL scanning not yet implemented. Please use Dropbox folder upload for now.",
+  });
+  
+  // TODO Phase 2: Implement full vision pipeline for staged URLs
+  // - Create DropboxEntry-like structures from URLs
+  // - Run vision analysis on each URL
+  // - Run CLIP/pairing logic
+  // - Cache results
+  // - Return formatted response
+}
+
 export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise<SmartDraftScanResponse> {
   const folder = typeof options.folder === "string" ? options.folder.trim() : "";
+  const stagedUrls = Array.isArray(options.stagedUrls) ? options.stagedUrls : [];
   const force = Boolean(options.force);
   const limitRaw = Number(options.limit);
   const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, MAX_IMAGES) : MAX_IMAGES;
@@ -1394,10 +1425,27 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
   const userId = options.userId;
   const skipQuota = Boolean(options.skipQuota);
 
-  if (!folder) {
-    return { status: 400, body: { ok: false, error: "Provide folder path" } };
+  // Must provide either folder OR stagedUrls
+  if (!folder && stagedUrls.length === 0) {
+    return { status: 400, body: { ok: false, error: "Provide either 'folder' (Dropbox) or 'stagedUrls' (uploaded files)" } };
+  }
+  
+  if (folder && stagedUrls.length > 0) {
+    return { status: 400, body: { ok: false, error: "Provide either 'folder' or 'stagedUrls', not both" } };
   }
 
+  // NEW: Handle staged URLs (from ingestion system)
+  if (stagedUrls.length > 0) {
+    return await runSmartDraftScanFromStagedUrls({
+      userId,
+      stagedUrls,
+      limit,
+      force,
+      debug: debugEnabled,
+    });
+  }
+
+  // EXISTING: Handle Dropbox folder
   try {
     const store = tokensStore();
   const saved = (await store.get(userScopedKey(userId, "dropbox.json"), { type: "json" })) as any;
