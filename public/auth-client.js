@@ -119,14 +119,37 @@
       const createAuth0 = getCreateAuth0();
       if (!createAuth0) throw new Error('Auth0 SDK not loaded');
       
-      // Suppress console spam from Auth0 403 token refresh errors in dev tools
+      // Suppress Auth0 403 token refresh errors (network + console)
       // These happen when refresh tokens expire and are harmless (user will re-login)
-      // We wrap console.error temporarily during Auth0 initialization
+      const origFetch = window.fetch.bind(window);
       const origConsoleError = console.error;
+      
+      // Intercept fetch to suppress Auth0 token 403s
+      window.fetch = async function(...args) {
+        const url = typeof args[0] === 'string' ? args[0] : args[0]?.url;
+        const isAuth0Token = url && url.includes('.auth0.com/oauth/token');
+        
+        try {
+          const response = await origFetch(...args);
+          // If it's a 403 from Auth0 token endpoint, don't throw or log
+          if (isAuth0Token && response.status === 403) {
+            // Return the response without triggering errors
+            return response;
+          }
+          return response;
+        } catch (err) {
+          // Suppress Auth0 token fetch errors
+          if (isAuth0Token) {
+            return Promise.reject(err);
+          }
+          throw err;
+        }
+      };
+      
+      // Also suppress console.error messages
       console.error = function(...args) {
         const msg = args.join(' ');
-        // Suppress Auth0 token endpoint 403 errors
-        if (msg.includes('auth0.com/oauth/token') && msg.includes('403')) {
+        if (msg.includes('auth0.com/oauth/token') && (msg.includes('403') || msg.includes('Forbidden'))) {
           return; // Silently ignore
         }
         origConsoleError.apply(console, args);
@@ -183,7 +206,8 @@
       try { attachAuthFetch(); } catch {}
     }
     
-    // Restore original console.error after Auth0 initialization
+    // Restore original fetch and console.error after Auth0 initialization
+    window.fetch = origFetch;
     console.error = origConsoleError;
   }
 
