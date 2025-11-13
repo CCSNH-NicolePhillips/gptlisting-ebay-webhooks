@@ -410,50 +410,67 @@
             mime: file.type,
             data: base64
           });
-          updateProgress(((i + 1) / selectedFiles.length) * 30); // 0-30% for prep
+          updateProgress(((i + 1) / selectedFiles.length) * 20); // 0-20% for prep
         }
         
-        // Upload all files to server (which uploads to R2)
+        // Upload in batches to avoid 6MB payload limit
+        // Base64 adds ~33% overhead, so 2MB files become ~2.7MB
+        // Safe batch size: 2 files at a time
+        const BATCH_SIZE = 2;
+        const allKeys = [];
+        
         showStatus('info', 'Uploading to storage...');
         const statusEls = selectedFiles.map((_, i) => document.getElementById(`status-${i}`));
-        statusEls.forEach(el => {
-          el.className = 'file-status status-uploading';
-          el.textContent = 'Uploading...';
-        });
         
-        const uploadRes = await window.authClient.authFetch('/.netlify/functions/ingest-local-upload', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ files: fileData }),
-        });
-        
-        if (!uploadRes.ok) {
-          let errorMessage = `Upload failed: ${uploadRes.status}`;
-          const contentType = uploadRes.headers.get('content-type');
+        for (let batchStart = 0; batchStart < fileData.length; batchStart += BATCH_SIZE) {
+          const batch = fileData.slice(batchStart, batchStart + BATCH_SIZE);
+          const batchIndices = Array.from({ length: batch.length }, (_, i) => batchStart + i);
           
-          if (contentType && contentType.includes('application/json')) {
-            try {
-              const error = await uploadRes.json();
-              errorMessage = error.error || error.message || errorMessage;
-            } catch (parseError) {
-              errorMessage = `Server error (${uploadRes.status}). Could not parse error response.`;
+          // Update status for this batch
+          batchIndices.forEach(i => {
+            statusEls[i].className = 'file-status status-uploading';
+            statusEls[i].textContent = 'Uploading...';
+          });
+          
+          const uploadRes = await window.authClient.authFetch('/.netlify/functions/ingest-local-upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ files: batch }),
+          });
+          
+          if (!uploadRes.ok) {
+            let errorMessage = `Upload failed: ${uploadRes.status}`;
+            const contentType = uploadRes.headers.get('content-type');
+            
+            if (contentType && contentType.includes('application/json')) {
+              try {
+                const error = await uploadRes.json();
+                errorMessage = error.error || error.message || errorMessage;
+              } catch (parseError) {
+                errorMessage = `Server error (${uploadRes.status}). Could not parse error response.`;
+              }
+            } else {
+              // Response is not JSON (probably HTML error page)
+              const text = await uploadRes.text();
+              console.error('Server returned non-JSON error:', text.substring(0, 500));
+              errorMessage = `Server error (${uploadRes.status}). Check function logs.`;
             }
-          } else {
-            // Response is not JSON (probably HTML error page)
-            const text = await uploadRes.text();
-            console.error('Server returned non-JSON error:', text.substring(0, 500));
-            errorMessage = `Server error (${uploadRes.status}). Check function logs.`;
+            throw new Error(errorMessage);
           }
-          throw new Error(errorMessage);
+          
+          const { keys } = await uploadRes.json();
+          allKeys.push(...keys);
+          
+          // Mark batch as complete
+          batchIndices.forEach(i => {
+            statusEls[i].className = 'file-status status-complete';
+            statusEls[i].textContent = 'Complete';
+          });
+          
+          // Update progress (20% prep + 70% upload)
+          const uploadProgress = ((batchStart + batch.length) / fileData.length) * 70;
+          updateProgress(20 + uploadProgress);
         }
-        
-        const { keys } = await uploadRes.json();
-        
-        statusEls.forEach(el => {
-          el.className = 'file-status status-complete';
-          el.textContent = 'Complete';
-        });
-        updateProgress(80);
         
         showStatus('info', 'Processing images...');
         
@@ -461,7 +478,7 @@
         const completeRes = await window.authClient.authFetch('/.netlify/functions/ingest-local-complete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ keys }),
+          body: JSON.stringify({ keys: allKeys }),
         });
         
         if (!completeRes.ok) {
