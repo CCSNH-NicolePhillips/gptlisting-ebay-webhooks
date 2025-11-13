@@ -429,13 +429,19 @@
         
         if (!uploadRes.ok) {
           let errorMessage = `Upload failed: ${uploadRes.status}`;
-          try {
-            const error = await uploadRes.json();
-            errorMessage = error.error || error.message || errorMessage;
-          } catch (parseError) {
+          const contentType = uploadRes.headers.get('content-type');
+          
+          if (contentType && contentType.includes('application/json')) {
+            try {
+              const error = await uploadRes.json();
+              errorMessage = error.error || error.message || errorMessage;
+            } catch (parseError) {
+              errorMessage = `Server error (${uploadRes.status}). Could not parse error response.`;
+            }
+          } else {
             // Response is not JSON (probably HTML error page)
             const text = await uploadRes.text();
-            console.error('Server returned non-JSON error:', text);
+            console.error('Server returned non-JSON error:', text.substring(0, 500));
             errorMessage = `Server error (${uploadRes.status}). Check function logs.`;
           }
           throw new Error(errorMessage);
