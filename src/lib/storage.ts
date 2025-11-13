@@ -234,3 +234,27 @@ export async function deleteStagedFiles(keys: string[]): Promise<void> {
   // TODO: Implement batch delete if needed
   // For now, rely on lifecycle rules for auto-deletion
 }
+
+/**
+ * Upload buffer directly to staging
+ * Used for server-side proxy uploads
+ */
+export async function uploadToStaging(
+  key: string,
+  buffer: Buffer,
+  mime: string,
+  metadata?: Record<string, string>
+): Promise<void> {
+  const client = createStorageClient();
+  const config = getStagingConfig();
+
+  const command = new PutObjectCommand({
+    Bucket: config.bucket,
+    Key: key,
+    Body: buffer,
+    ContentType: mime,
+    Metadata: metadata || {},
+  });
+
+  await client.send(command);
+}
