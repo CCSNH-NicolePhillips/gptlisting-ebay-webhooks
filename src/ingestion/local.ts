@@ -8,8 +8,9 @@
 
 import type { IngestionAdapter, IngestRequest, IngestedFile, PresignedUpload } from './types.js';
 import { guessMime, hasImageExtension } from '../lib/mime.js';
-import { getStagedUrl, generatePresignedUploads } from '../lib/storage.js';
+import { getStagedUrl, generatePresignedUploads, createStorageClient, getStagingConfig, generateStagingKey } from '../lib/storage.js';
 import { IngestError, IngestErrorCode } from './types.js';
+import { PutObjectCommand } from '@aws-sdk/client-s3';
 
 export const LocalAdapter: IngestionAdapter = {
   /**
@@ -132,6 +133,37 @@ export function validateLocalListPayload(payload: any): string[] {
       IngestErrorCode.INVALID_SOURCE,
       'All keys must be strings'
     );
+  }
+  
+  return keys;
+}
+
+/**
+ * Upload files server-side (for Netlify function)
+ * payload: { files: [{ name, mime, data: base64 }] }
+ */
+export async function uploadFilesServerSide(userId: string, files: Array<{ name: string; mime: string; data: string }>): Promise<string[]> {
+  const client = createStorageClient();
+  const config = getStagingConfig();
+  const keys: string[] = [];
+  
+  for (const file of files) {
+    const key = generateStagingKey(userId, file.name);
+    const buffer = Buffer.from(file.data, 'base64');
+    
+    const command = new PutObjectCommand({
+      Bucket: config.bucket,
+      Key: key,
+      Body: buffer,
+      ContentType: file.mime,
+      Metadata: {
+        uploadedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + config.retentionHours! * 3600000).toISOString(),
+      },
+    });
+    
+    await client.send(command);
+    keys.push(key);
   }
   
   return keys;
