@@ -200,12 +200,16 @@ export function App() {
         attempts++;
         
         const statusRes = await pollDraftStatus(jobId);
+        console.log(`[doCreateDrafts] Poll attempt ${attempts}: statusRes =`, statusRes);
         
         if (!statusRes.ok) {
           throw new Error(statusRes.error || 'Failed to get job status');
         }
         
         const job = statusRes.job || {};
+        console.log(`[doCreateDrafts] Job state: ${job.state}, processed: ${job.processedProducts}/${totalProducts}`);
+        console.log(`[doCreateDrafts] Job has drafts:`, !!job.drafts, `count:`, job.drafts?.length || 0);
+        
         const processed = job.processedProducts || 0;
         
         setLoadingStatus(`🤖 Generating drafts... ${processed}/${totalProducts} (${attempts * 1.5}s)`);
@@ -214,6 +218,7 @@ export function App() {
           jobComplete = true;
           allDrafts = job.drafts || [];
           console.log(`[doCreateDrafts] Job complete: ${allDrafts.length} drafts created`);
+          console.log(`[doCreateDrafts] Drafts:`, allDrafts);
         } else if (job.state === 'error') {
           throw new Error(job.error || 'Draft creation job failed');
         }
