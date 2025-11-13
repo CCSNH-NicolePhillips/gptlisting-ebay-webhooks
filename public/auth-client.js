@@ -119,27 +119,30 @@
       const createAuth0 = getCreateAuth0();
       if (!createAuth0) throw new Error('Auth0 SDK not loaded');
       
+      // Track if we get 403s during init (expired refresh token)
+      let got403 = false;
+      
       // Suppress Auth0 403 token refresh errors (network + console)
       // These happen when refresh tokens expire and are harmless (user will re-login)
       const origFetch = window.fetch.bind(window);
       const origConsoleError = console.error;
       
-      // Intercept fetch to suppress Auth0 token 403s
+      // Intercept fetch to detect and suppress Auth0 token 403s
       window.fetch = async function(...args) {
         const url = typeof args[0] === 'string' ? args[0] : args[0]?.url;
         const isAuth0Token = url && url.includes('.auth0.com/oauth/token');
         
         try {
           const response = await origFetch(...args);
-          // If it's a 403 from Auth0 token endpoint, don't throw or log
+          // Track 403s from Auth0 token endpoint
           if (isAuth0Token && response.status === 403) {
-            // Return the response without triggering errors
+            got403 = true;
             return response;
           }
           return response;
         } catch (err) {
-          // Suppress Auth0 token fetch errors
           if (isAuth0Token) {
+            got403 = true;
             return Promise.reject(err);
           }
           throw err;
@@ -184,6 +187,18 @@
     }
 
     const isAuth = await state.auth0.isAuthenticated();
+    
+    // If we got 403s during init, refresh token is dead - force re-login
+    if (got403) {
+      console.warn('[Auth] Detected expired refresh token (403), forcing re-login');
+      clearLocalAuthState();
+      window.fetch = origFetch;
+      console.error = origConsoleError;
+      sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
+      window.location.href = '/login.html';
+      return;
+    }
+    
     if (isAuth) {
       state.user = await state.auth0.getUser();
       // Try to acquire an API access token; if audience is not configured, fall back to ID token
