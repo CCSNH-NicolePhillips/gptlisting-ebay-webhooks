@@ -385,9 +385,10 @@ function normalizeAspects(aspects: any, product: PairedProduct): Record<string, 
   return normalized;
 }
 
-async function createDraftForProduct(product: PairedProduct): Promise<Draft> {
+async function createDraftForProduct(product: PairedProduct, retryAttempt: number = 0): Promise<Draft> {
   const startTime = Date.now();
-  console.log(`[Draft] Creating for: ${product.productId}`);
+  const retryLabel = retryAttempt > 0 ? ` (retry ${retryAttempt})` : '';
+  console.log(`[Draft] Creating for: ${product.productId}${retryLabel}`);
   
   const catListStart = Date.now();
   const relevantCategories = await getRelevantCategories(product);
@@ -465,6 +466,26 @@ async function createDraftForProduct(product: PairedProduct): Promise<Draft> {
     price: draft.price,
     condition: draft.condition
   }, null, 2));
+  
+  // Validate draft completeness - check for minimum required data
+  const aspectsCount = Object.keys(draft.aspects || {}).length;
+  const hasCategory = draft.category && draft.category.id && draft.category.id !== '';
+  const hasBrand = draft.aspects?.Brand && draft.aspects.Brand.length > 0;
+  const hasType = draft.aspects?.Type && draft.aspects.Type.length > 0;
+  
+  // Consider draft incomplete if it's missing critical fields
+  const isIncomplete = !hasCategory || !hasBrand || aspectsCount < 3;
+  
+  if (isIncomplete && retryAttempt < 2) {
+    console.warn(`[Draft] ⚠️ Incomplete draft for ${product.productId}: category=${hasCategory}, brand=${hasBrand}, aspectsCount=${aspectsCount}`);
+    console.warn(`[Draft] 🔄 Retrying draft creation (attempt ${retryAttempt + 1}/2)...`);
+    await sleep(1000); // Brief delay before retry
+    return createDraftForProduct(product, retryAttempt + 1);
+  }
+  
+  if (isIncomplete && retryAttempt >= 2) {
+    console.error(`[Draft] ❌ Failed to create complete draft after ${retryAttempt + 1} attempts for ${product.productId}`);
+  }
   
   return draft;
 }
