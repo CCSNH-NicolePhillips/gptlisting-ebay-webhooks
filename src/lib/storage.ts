@@ -61,8 +61,10 @@ export function createStorageClient(config?: StagingConfig): S3Client {
     // For R2, use the account-specific endpoint
     // IMPORTANT: Do NOT include bucket name in endpoint
     clientConfig.endpoint = `https://${cfg.accountId}.r2.cloudflarestorage.com`;
-    // R2 requires path-style for presigned URLs to work properly
+    // R2 REQUIRES path-style for presigned URLs to work with CORS
+    // This generates: https://account-id.r2.cloudflarestorage.com/bucket-name/key
     clientConfig.forcePathStyle = true;
+    console.log('[R2] Using path-style URLs with endpoint:', clientConfig.endpoint);
   }
   
   return new S3Client(clientConfig);
