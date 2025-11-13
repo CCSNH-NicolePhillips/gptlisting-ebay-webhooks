@@ -187,15 +187,27 @@
     if (isAuth) {
       state.user = await state.auth0.getUser();
       // Try to acquire an API access token; if audience is not configured, fall back to ID token
-      // Suppress 403 console spam from failed token refresh attempts (common with expired refresh tokens)
       try {
         state.token = await state.auth0.getTokenSilently();
       } catch (e) {
-        // Silently ignore 403 Forbidden errors from refresh token attempts
-        // User will be prompted to login again when needed
-        if (!e.message?.includes('403')) {
-          console.warn('Token refresh failed:', e.message || e);
+        // If refresh token fails (403/401), clear auth state and force re-login
+        const isForbidden = e.message?.includes('403') || e.message?.includes('Forbidden');
+        const isUnauthorized = e.message?.includes('401') || e.message?.includes('Unauthorized');
+        
+        if (isForbidden || isUnauthorized) {
+          console.warn('[Auth] Refresh token expired, forcing re-login');
+          // Clear all Auth0 state
+          clearLocalAuthState();
+          // Restore fetch/console before redirect
+          window.fetch = origFetch;
+          console.error = origConsoleError;
+          // Redirect to login
+          sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
+          window.location.href = '/login.html';
+          return;
         }
+        
+        console.warn('Token refresh failed:', e.message || e);
         state.token = null;
       }
       try {
