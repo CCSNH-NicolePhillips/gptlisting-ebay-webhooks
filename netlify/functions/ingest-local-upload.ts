@@ -46,9 +46,13 @@ export const handler: Handler = async (event) => {
   }
   
   try {
+    console.log('[ingest-local-upload] Starting upload process');
+    
     // Auth check
     const bearer = getBearerToken(event);
     const userId = getJwtSubUnverified(event);
+    
+    console.log('[ingest-local-upload] User ID:', userId);
     
     if (!bearer || !userId) {
       return jsonResponse(401, { error: 'Unauthorized' });
@@ -57,6 +61,8 @@ export const handler: Handler = async (event) => {
     // Parse request
     const body = JSON.parse(event.body || '{}');
     const files = body.files as UploadFile[] | undefined;
+    
+    console.log('[ingest-local-upload] Files received:', files?.length || 0);
     
     if (!Array.isArray(files) || files.length === 0) {
       return jsonResponse(400, { error: 'files array required' });
@@ -72,14 +78,22 @@ export const handler: Handler = async (event) => {
       });
     }
     
+    console.log('[ingest-local-upload] Creating storage client...');
     const client = createStorageClient();
     const config = getStagingConfig();
+    console.log('[ingest-local-upload] Storage config loaded, bucket:', config.bucket);
+    
     const keys: string[] = [];
     
     // Upload each file
-    for (const file of files) {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      console.log(`[ingest-local-upload] Processing file ${i + 1}/${files.length}: ${file.name}`);
+      
       const key = generateStagingKey(userId, file.name);
       const buffer = Buffer.from(file.data, 'base64');
+      
+      console.log(`[ingest-local-upload] Generated key: ${key}, size: ${buffer.length} bytes`);
       
       const command = new PutObjectCommand({
         Bucket: config.bucket,
@@ -95,8 +109,10 @@ export const handler: Handler = async (event) => {
       await client.send(command);
       keys.push(key);
       
-      console.log(`[ingest-local-upload] Uploaded ${file.name} (${buffer.length} bytes) as ${key}`);
+      console.log(`[ingest-local-upload] ✓ Uploaded ${file.name} (${buffer.length} bytes) as ${key}`);
     }
+    
+    console.log(`[ingest-local-upload] Upload complete! ${keys.length} files uploaded`);
     
     return jsonResponse(200, {
       ok: true,
@@ -107,10 +123,12 @@ export const handler: Handler = async (event) => {
     
   } catch (error: any) {
     console.error('[ingest-local-upload] Error:', error);
+    console.error('[ingest-local-upload] Error stack:', error.stack);
     
     return jsonResponse(500, {
       error: 'Failed to upload files',
       message: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
     });
   }
 };
