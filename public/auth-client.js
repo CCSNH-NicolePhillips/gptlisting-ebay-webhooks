@@ -121,6 +121,18 @@
       
       // Track if we get 403s during init (expired refresh token)
       let got403 = false;
+      let redirectPending = false;
+      
+      const forceRelogin = () => {
+        if (redirectPending) return; // Prevent multiple redirects
+        redirectPending = true;
+        console.warn('[Auth] Detected expired refresh token (403), forcing re-login');
+        clearLocalAuthState();
+        window.fetch = origFetch;
+        console.error = origConsoleError;
+        sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
+        window.location.href = '/login.html';
+      };
       
       // Suppress Auth0 403 token refresh errors (network + console)
       // These happen when refresh tokens expire and are harmless (user will re-login)
@@ -134,15 +146,18 @@
         
         try {
           const response = await origFetch(...args);
-          // Track 403s from Auth0 token endpoint
+          // Track 403s from Auth0 token endpoint and force re-login
           if (isAuth0Token && response.status === 403) {
             got403 = true;
+            // Force re-login immediately on first 403
+            setTimeout(() => forceRelogin(), 100);
             return response;
           }
           return response;
         } catch (err) {
           if (isAuth0Token) {
             got403 = true;
+            setTimeout(() => forceRelogin(), 100);
             return Promise.reject(err);
           }
           throw err;
