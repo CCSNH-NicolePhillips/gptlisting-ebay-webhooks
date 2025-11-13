@@ -144,10 +144,13 @@
       let redirectPending = false; // CRITICAL: Check this before EVERY redirect
       
       const forceRelogin = () => {
-        if (redirectPending) return; // Already redirecting
+        if (redirectPending) {
+          // Already redirecting, throw to stop execution
+          throw new Error('AUTH_REDIRECT_PENDING');
+        }
         redirectPending = true;
         console.warn('[Auth] Detected expired refresh token (403), forcing re-login');
-        
+
         // Clear auth immediately and aggressively
         clearLocalAuthState();
 
@@ -179,21 +182,16 @@
       
       // Intercept fetch to detect and suppress Auth0 token 403s
       window.fetch = async function(...args) {
-        if (redirectPending) {
-          // Already redirecting, don't make any more requests
-          throw new Error('AUTH_REDIRECT_PENDING');
-        }
-        
         const url = typeof args[0] === 'string' ? args[0] : args[0]?.url;
         const isAuth0Token = url && url.includes('.auth0.com/oauth/token');
-        
+
         try {
           const response = await origFetch(...args);
           // Track 403s from Auth0 token endpoint and force re-login
           if (isAuth0Token && response.status === 403) {
             got403 = true;
-            // Throw to stop SDK - don't return fake success
-            forceRelogin(); // This throws
+            // Call forceRelogin which throws
+            forceRelogin();
           }
           return response;
         } catch (err) {
@@ -201,7 +199,7 @@
           if (err.message === 'AUTH_REDIRECT_PENDING') {
             throw err;
           }
-          
+
           if (isAuth0Token) {
             got403 = true;
             forceRelogin(); // This throws
@@ -300,6 +298,15 @@
           console.error = origConsoleError;
         }
       }
+    } catch (e) {
+      // Outer catch: If we're redirecting due to 403, silently return (redirect is already in progress)
+      if (e.message === 'AUTH_REDIRECT_PENDING') {
+        console.log('[Auth] Redirect in progress, stopping initialization');
+        return;
+      }
+      // Re-throw other errors
+      throw e;
+    }
   }
 
   function initIdentity() {
