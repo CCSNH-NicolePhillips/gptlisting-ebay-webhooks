@@ -95,6 +95,8 @@ export function App() {
           await new Promise(resolve => setTimeout(resolve, 2000));
           const job = await pollAnalyzeLive(jobId);
           
+          console.log(`[doAnalyze] Poll attempt ${i + 1}: job state = ${job.state}`, job);
+          
           if (job.state === 'complete') {
             a = {
               groups: job.groups || [],
@@ -104,12 +106,14 @@ export function App() {
               folder: job.folder,
               jobId: jobId  // Include jobId for Redis fallback in pairing
             };
+            console.log(`[doAnalyze] Scan complete! Groups: ${a.groups.length}, Orphans: ${a.orphans?.length || 0}`);
             setLoadingStatus('✅ Complete!');
             showToast(force ? '✨ Analysis complete (live, force)' : '✨ Analysis complete (live)');
             break;
           }
           
           if (job.state === 'error') {
+            console.error(`[doAnalyze] Scan error:`, job.error);
             throw new Error(job.error || 'Scan failed');
           }
           
