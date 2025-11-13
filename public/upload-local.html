@@ -408,23 +408,69 @@
           fileData.push({
             name: file.name,
             mime: file.type,
-            data: base64
+            data: base64,
+            size: file.size,
+            base64Size: base64.length
           });
           updateProgress(((i + 1) / selectedFiles.length) * 20); // 0-20% for prep
         }
         
-        // Upload in batches to avoid 6MB payload limit
-        // Base64 adds ~33% overhead, so 2MB files become ~2.7MB
-        // Safe batch size: 2 files at a time
-        const BATCH_SIZE = 2;
-        const allKeys = [];
+        // Smart batching: group files to stay under 4MB per batch
+        // Base64 adds ~33% overhead, so we use conservative 4MB limit
+        const MAX_BATCH_SIZE_BYTES = 4 * 1024 * 1024; // 4MB
+        const batches = [];
+        let currentBatch = [];
+        let currentBatchSize = 0;
         
+        for (const file of fileData) {
+          // If single file is huge (>4MB base64), upload it alone
+          if (file.base64Size > MAX_BATCH_SIZE_BYTES) {
+            if (currentBatch.length > 0) {
+              batches.push(currentBatch);
+              currentBatch = [];
+              currentBatchSize = 0;
+            }
+            batches.push([file]); // Upload this file alone
+            continue;
+          }
+          
+          // If adding this file would exceed limit, start new batch
+          if (currentBatchSize + file.base64Size > MAX_BATCH_SIZE_BYTES && currentBatch.length > 0) {
+            batches.push(currentBatch);
+            currentBatch = [];
+            currentBatchSize = 0;
+          }
+          
+          currentBatch.push(file);
+          currentBatchSize += file.base64Size;
+        }
+        
+        // Add last batch
+        if (currentBatch.length > 0) {
+          batches.push(currentBatch);
+        }
+        
+        console.log(`[upload] Created ${batches.length} batches for ${fileData.length} files`);
+        batches.forEach((batch, i) => {
+          const totalSize = batch.reduce((sum, f) => sum + f.base64Size, 0);
+          console.log(`[upload] Batch ${i + 1}: ${batch.length} files, ${(totalSize / 1024 / 1024).toFixed(2)}MB`);
+        });
+        
+        const allKeys = [];
         showStatus('info', 'Uploading to storage...');
         const statusEls = selectedFiles.map((_, i) => document.getElementById(`status-${i}`));
         
-        for (let batchStart = 0; batchStart < fileData.length; batchStart += BATCH_SIZE) {
-          const batch = fileData.slice(batchStart, batchStart + BATCH_SIZE);
-          const batchIndices = Array.from({ length: batch.length }, (_, i) => batchStart + i);
+        let filesUploaded = 0;
+        
+        for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
+          const batch = batches[batchIdx];
+          const batchIndices = [];
+          
+          // Find indices of files in this batch
+          for (const batchFile of batch) {
+            const idx = fileData.indexOf(batchFile);
+            batchIndices.push(idx);
+          }
           
           // Update status for this batch
           batchIndices.forEach(i => {
@@ -432,10 +478,13 @@
             statusEls[i].textContent = 'Uploading...';
           });
           
+          // Remove size info before sending (server doesn't need it)
+          const batchToSend = batch.map(({ name, mime, data }) => ({ name, mime, data }));
+          
           const uploadRes = await window.authClient.authFetch('/.netlify/functions/ingest-local-upload', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ files: batch }),
+            body: JSON.stringify({ files: batchToSend }),
           });
           
           if (!uploadRes.ok) {
@@ -453,7 +502,7 @@
               // Response is not JSON (probably HTML error page)
               const text = await uploadRes.text();
               console.error('Server returned non-JSON error:', text.substring(0, 500));
-              errorMessage = `Server error (${uploadRes.status}). Check function logs.`;
+              errorMessage = `Server error (${uploadRes.status}). Batch ${batchIdx + 1}/${batches.length} failed. Check function logs.`;
             }
             throw new Error(errorMessage);
           }
@@ -467,8 +516,10 @@
             statusEls[i].textContent = 'Complete';
           });
           
+          filesUploaded += batch.length;
+          
           // Update progress (20% prep + 70% upload)
-          const uploadProgress = ((batchStart + batch.length) / fileData.length) * 70;
+          const uploadProgress = (filesUploaded / fileData.length) * 70;
           updateProgress(20 + uploadProgress);
         }
         
