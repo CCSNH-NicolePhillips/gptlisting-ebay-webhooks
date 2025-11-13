@@ -12,7 +12,8 @@
 
 import type { Handler } from '@netlify/functions';
 import { getJwtSubUnverified, getBearerToken } from '../../src/lib/_auth.js';
-import { uploadFilesServerSide } from '../../src/ingestion/local.js';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { createHash } from 'crypto';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -79,8 +80,61 @@ export const handler: Handler = async (event) => {
     
     console.log('[ingest-local-upload] Creating storage client...');
     
-    // Upload files using helper function from ingestion layer
-    const keys = await uploadFilesServerSide(userId, files);
+    // Get S3/R2 config from environment
+    const bucket = process.env.S3_BUCKET || process.env.R2_BUCKET;
+    const region = process.env.AWS_REGION || process.env.R2_ACCOUNT_ID || 'us-east-1';
+    const accessKeyId = process.env.AWS_ACCESS_KEY_ID || process.env.R2_ACCESS_KEY_ID || '';
+    const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY || process.env.R2_SECRET_ACCESS_KEY || '';
+    
+    if (!bucket || !accessKeyId || !secretAccessKey) {
+      return jsonResponse(500, { 
+        error: 'Storage not configured',
+        message: 'S3_BUCKET/AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY environment variables required'
+      });
+    }
+    
+    console.log('[ingest-local-upload] Bucket:', bucket, 'Region:', region);
+    
+    // Create S3 client
+    const client = new S3Client({
+      region,
+      credentials: { accessKeyId, secretAccessKey }
+    });
+    
+    const keys: string[] = [];
+    
+    // Upload each file
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      console.log(`[ingest-local-upload] [${i + 1}/${files.length}] Uploading ${file.name}`);
+      
+      // Generate staging key: staging/{userId}/{jobId}/{hash}-{filename}
+      const hash = createHash('md5').update(`${userId}-${file.name}-${Date.now()}`).digest('hex').substring(0, 16);
+      const key = `staging/${userId}/default/${hash}-${file.name}`;
+      const buffer = Buffer.from(file.data, 'base64');
+      
+      console.log(`[ingest-local-upload] Key: ${key}, Size: ${buffer.length} bytes`);
+      
+      try {
+        await client.send(new PutObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          Body: buffer,
+          ContentType: file.mime,
+          Metadata: {
+            uploadedAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 72 * 3600000).toISOString(), // 72 hours
+          },
+        }));
+        
+        keys.push(key);
+        console.log(`[ingest-local-upload] [${i + 1}/${files.length}] ✓ Success`);
+        
+      } catch (uploadError: any) {
+        console.error(`[ingest-local-upload] [${i + 1}/${files.length}] ✗ Failed:`, uploadError.message);
+        throw uploadError;
+      }
+    }
     
     console.log(`[ingest-local-upload] Upload complete! ${keys.length} files uploaded`);
     
