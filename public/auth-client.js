@@ -119,6 +119,24 @@
       const createAuth0 = getCreateAuth0();
       if (!createAuth0) throw new Error('Auth0 SDK not loaded');
       
+      // PROACTIVE CHECK: If we have auth state in localStorage, it might be expired
+      // Clear it BEFORE initializing Auth0 to prevent 403 spam
+      const hasAuth0Data = Object.keys(localStorage).some(k => k.startsWith('@@auth0'));
+      if (hasAuth0Data) {
+        console.log('[Auth] Found existing Auth0 state, checking if expired...');
+        // Try a quick validation - if we're on a protected page and have tokens,
+        // they should work. If not, clear and force re-login.
+        const authKeys = Object.keys(localStorage).filter(k => k.startsWith('@@auth0'));
+        const hasRefreshToken = authKeys.some(k => localStorage.getItem(k)?.includes('refresh_token'));
+        
+        if (hasRefreshToken) {
+          console.log('[Auth] Has refresh token, will let SDK try to use it...');
+        } else {
+          console.log('[Auth] No refresh token found, clearing stale state');
+          clearLocalAuthState();
+        }
+      }
+      
       // Track if we get 403s during init (expired refresh token)
       let got403 = false;
       let redirectPending = false;
@@ -127,11 +145,26 @@
         if (redirectPending) return; // Prevent multiple redirects
         redirectPending = true;
         console.warn('[Auth] Detected expired refresh token (403), forcing re-login');
+        
+        // NUCLEAR: Clear auth immediately and aggressively
         clearLocalAuthState();
+        
+        // Also clear any Auth0 state that might be in-flight
+        try {
+          sessionStorage.clear();
+          Object.keys(localStorage).forEach(k => {
+            if (k.startsWith('@@auth0') || k.includes('auth0')) {
+              localStorage.removeItem(k);
+            }
+          });
+        } catch (e) { }
+        
         window.fetch = origFetch;
         console.error = origConsoleError;
         sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
-        window.location.href = '/login.html';
+        
+        // Redirect immediately - don't use location.href, use replace to avoid back button
+        window.location.replace('/login.html');
       };
       
       // Suppress Auth0 403 token refresh errors (network + console)
@@ -149,16 +182,24 @@
           // Track 403s from Auth0 token endpoint and force re-login
           if (isAuth0Token && response.status === 403) {
             got403 = true;
-            // Force re-login immediately on first 403
-            setTimeout(() => forceRelogin(), 100);
-            return response;
+            // Force re-login IMMEDIATELY - don't let SDK continue
+            forceRelogin();
+            // Return a fake successful response to prevent SDK error handling
+            return new Response(JSON.stringify({ error: 'redirecting' }), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' }
+            });
           }
           return response;
         } catch (err) {
           if (isAuth0Token) {
             got403 = true;
-            setTimeout(() => forceRelogin(), 100);
-            return Promise.reject(err);
+            forceRelogin();
+            // Return fake success instead of error
+            return new Response(JSON.stringify({ error: 'redirecting' }), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' }
+            });
           }
           throw err;
         }
