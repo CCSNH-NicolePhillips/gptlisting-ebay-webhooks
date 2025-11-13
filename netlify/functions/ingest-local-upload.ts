@@ -81,15 +81,16 @@ export const handler: Handler = async (event) => {
     console.log('[ingest-local-upload] Creating storage client...');
     
     // Get S3/R2 config from environment
+    // Note: AWS_* variables are reserved by Netlify, so we use STORAGE_* instead
     const bucket = process.env.S3_BUCKET || process.env.R2_BUCKET;
-    const region = process.env.AWS_REGION || process.env.R2_ACCOUNT_ID || 'us-east-1';
-    const accessKeyId = process.env.AWS_ACCESS_KEY_ID || process.env.R2_ACCESS_KEY_ID || '';
-    const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY || process.env.R2_SECRET_ACCESS_KEY || '';
+    const region = process.env.STORAGE_REGION || process.env.AWS_REGION || process.env.R2_ACCOUNT_ID || 'us-east-1';
+    const accessKeyId = process.env.STORAGE_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID || process.env.R2_ACCESS_KEY_ID || '';
+    const secretAccessKey = process.env.STORAGE_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY || process.env.R2_SECRET_ACCESS_KEY || '';
     
     if (!bucket || !accessKeyId || !secretAccessKey) {
       return jsonResponse(500, { 
         error: 'Storage not configured',
-        message: 'S3_BUCKET/AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY environment variables required'
+        message: 'S3_BUCKET/STORAGE_ACCESS_KEY_ID/STORAGE_SECRET_ACCESS_KEY environment variables required'
       });
     }
     
