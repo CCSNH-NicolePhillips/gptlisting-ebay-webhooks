@@ -65,6 +65,8 @@
   async function initAuth0() {
     if (!state.cfg?.AUTH0_DOMAIN || !state.cfg?.AUTH0_CLIENT_ID) return;
     if (state.auth0) return;
+
+    try {
     // Load SPA SDK if not present. Prefer same-origin proxy to satisfy strict CSP.
     function beginAmdDisable() {
       const hadDefine = typeof window.define === 'function';
@@ -142,13 +144,16 @@
       let redirectPending = false;
       
       const forceRelogin = () => {
-        if (redirectPending) return; // Prevent multiple redirects
+        if (redirectPending) {
+          // Already redirecting, throw to stop all execution
+          throw new Error('AUTH_REDIRECT_PENDING');
+        }
         redirectPending = true;
         console.warn('[Auth] Detected expired refresh token (403), forcing re-login');
-        
+
         // NUCLEAR: Clear auth immediately and aggressively
         clearLocalAuthState();
-        
+
         // Also clear any Auth0 state that might be in-flight
         try {
           sessionStorage.clear();
@@ -158,13 +163,16 @@
             }
           });
         } catch (e) { }
-        
+
         window.fetch = origFetch;
         console.error = origConsoleError;
         sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
-        
+
         // Redirect immediately - don't use location.href, use replace to avoid back button
         window.location.replace('/login.html');
+
+        // CRITICAL: Throw to stop all subsequent code execution
+        throw new Error('AUTH_REDIRECT');
       };
       
       // Suppress Auth0 403 token refresh errors (network + console)
@@ -243,15 +251,16 @@
     }
 
     const isAuth = await state.auth0.isAuthenticated();
-    
+
     // If we got 403s during init, refresh token is dead - force re-login
-    if (got403) {
+    // (This code should be unreachable now since forceRelogin() throws, but kept as safety net)
+    if (got403 && !redirectPending) {
       console.warn('[Auth] Detected expired refresh token (403), forcing re-login');
       clearLocalAuthState();
       window.fetch = origFetch;
       console.error = origConsoleError;
       sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
-      window.location.href = '/login.html';
+      window.location.replace('/login.html');
       return;
     }
     
@@ -264,9 +273,10 @@
         // If refresh token fails (403/401), clear auth state and force re-login
         const isForbidden = e.message?.includes('403') || e.message?.includes('Forbidden');
         const isUnauthorized = e.message?.includes('401') || e.message?.includes('Unauthorized');
-        
-        if (isForbidden || isUnauthorized) {
+
+        if ((isForbidden || isUnauthorized) && !redirectPending) {
           console.warn('[Auth] Refresh token expired, forcing re-login');
+          redirectPending = true;
           // Clear all Auth0 state
           clearLocalAuthState();
           // Restore fetch/console before redirect
@@ -274,7 +284,7 @@
           console.error = origConsoleError;
           // Redirect to login
           sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
-          window.location.href = '/login.html';
+          window.location.replace('/login.html');
           return;
         }
         
@@ -292,6 +302,15 @@
     // Restore original fetch and console.error after Auth0 initialization
     window.fetch = origFetch;
     console.error = origConsoleError;
+    } catch (e) {
+      // If we're redirecting due to 403, silently return (redirect is already in progress)
+      if (e.message === 'AUTH_REDIRECT' || e.message === 'AUTH_REDIRECT_PENDING') {
+        console.log('[Auth] Redirect in progress, stopping initialization');
+        return;
+      }
+      // Re-throw other errors
+      throw e;
+    }
   }
 
   function initIdentity() {
