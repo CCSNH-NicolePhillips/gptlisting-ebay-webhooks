@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Local Upload - SmartDrafts</title>
-  <link rel="stylesheet" href="/auth-client.js" />
+  <script src="/auth-client.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { 
@@ -168,6 +168,24 @@
   </div>
 
   <script type="module">
+    // Wait for auth client to initialize
+    async function initAuth() {
+      if (!window.authClient) {
+        console.error('Auth client not loaded');
+        window.location.href = '/login.html';
+        return false;
+      }
+      
+      const isAuth = await window.authClient.isAuthenticated();
+      if (!isAuth) {
+        console.log('Not authenticated, redirecting to login...');
+        window.location.href = '/login.html';
+        return false;
+      }
+      
+      return true;
+    }
+    
     const dropZone = document.getElementById('dropZone');
     const fileInput = document.getElementById('fileInput');
     const fileList = document.getElementById('fileList');
@@ -178,6 +196,12 @@
     const statusMessage = document.getElementById('statusMessage');
     
     let selectedFiles = [];
+    
+    // Check auth on page load
+    initAuth().then(isAuth => {
+      if (!isAuth) return;
+      console.log('Authenticated, ready to upload');
+    });
     
     // Drag and drop handlers
     dropZone.addEventListener('click', () => fileInput.click());
@@ -283,9 +307,11 @@
         updateProgress(0);
         
         // Step 1: Initialize upload (get presigned URLs)
-        const authFetch = window.authClient?.authFetch || fetch;
+        if (!window.authClient?.authFetch) {
+          throw new Error('Auth client not available. Please refresh the page.');
+        }
         
-        const initRes = await authFetch('/.netlify/functions/ingest-local-init', {
+        const initRes = await window.authClient.authFetch('/.netlify/functions/ingest-local-init', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -328,7 +354,7 @@
         showStatus('info', 'Processing images...');
         
         // Step 3: Complete upload and get staged files
-        const completeRes = await authFetch('/.netlify/functions/ingest-local-complete', {
+        const completeRes = await window.authClient.authFetch('/.netlify/functions/ingest-local-complete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ keys }),
