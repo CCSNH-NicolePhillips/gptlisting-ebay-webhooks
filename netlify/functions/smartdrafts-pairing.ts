@@ -1,5 +1,5 @@
 import type { Handler } from "@netlify/functions";
-import { createHash } from "node:crypto";
+import { createHash } from "crypto";
 import fetch from "node-fetch";
 import { getOrigin, isOriginAllowed, jsonResponse } from "../../src/lib/http.js";
 import { getCachedSmartDraftGroups } from "../../src/lib/smartdrafts-store.js";

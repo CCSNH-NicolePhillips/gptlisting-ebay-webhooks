@@ -1,5 +1,5 @@
 import type { Handler } from "@netlify/functions";
-import { createHash } from "node:crypto";
+import { createHash } from "crypto";
 import { runSmartDraftScan, type SmartDraftScanResponse } from "../../src/lib/smartdrafts-scan-core.js";
 import { putJob, redisSet } from "../../src/lib/job-store.js";
 import { k } from "../../src/lib/user-keys.js";
