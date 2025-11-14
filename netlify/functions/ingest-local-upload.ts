@@ -12,7 +12,8 @@
 
 import type { Handler } from '@netlify/functions';
 import { getJwtSubUnverified, getBearerToken } from '../../src/lib/_auth.js';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createHash } from 'crypto';
 
 const CORS_HEADERS = {
@@ -102,7 +103,7 @@ export const handler: Handler = async (event) => {
       credentials: { accessKeyId, secretAccessKey }
     });
     
-    const keys: string[] = [];
+    const uploadedFiles: Array<{ key: string; name: string; stagedUrl: string }> = [];
     
     // Upload each file
     for (let i = 0; i < files.length; i++) {
@@ -128,8 +129,20 @@ export const handler: Handler = async (event) => {
           },
         }));
         
-        keys.push(key);
-        console.log(`[ingest-local-upload] [${i + 1}/${files.length}] ✓ Success`);
+        // Generate signed URL for the uploaded file (valid for 24 hours)
+        const signedUrl = await getSignedUrl(
+          client,
+          new GetObjectCommand({ Bucket: bucket, Key: key }),
+          { expiresIn: 86400 } // 24 hours
+        );
+        
+        uploadedFiles.push({
+          key,
+          name: file.name,
+          stagedUrl: signedUrl,
+        });
+        
+        console.log(`[ingest-local-upload] [${i + 1}/${files.length}] ✓ Success - ${signedUrl.substring(0, 80)}...`);
         
       } catch (uploadError: any) {
         console.error(`[ingest-local-upload] [${i + 1}/${files.length}] ✗ Failed:`, uploadError.message);
@@ -137,13 +150,13 @@ export const handler: Handler = async (event) => {
       }
     }
     
-    console.log(`[ingest-local-upload] Upload complete! ${keys.length} files uploaded`);
+    console.log(`[ingest-local-upload] Upload complete! ${uploadedFiles.length} files uploaded`);
     
     return jsonResponse(200, {
       ok: true,
-      keys,
-      count: keys.length,
-      message: `${keys.length} file(s) uploaded successfully`,
+      files: uploadedFiles,
+      count: uploadedFiles.length,
+      message: `${uploadedFiles.length} file(s) uploaded successfully`,
     });
     
   } catch (error: any) {
