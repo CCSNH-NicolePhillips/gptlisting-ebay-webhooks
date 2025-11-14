@@ -1,18 +1,17 @@
 import type { Handler } from "@netlify/functions";
-import { createHash } from "crypto";
 import fetch from "node-fetch";
+import { createHash } from "node:crypto";
 import { getOrigin, isOriginAllowed, jsonResponse } from "../../src/lib/http.js";
 import { getCachedSmartDraftGroups } from "../../src/lib/smartdrafts-store.js";
-import { getJob } from "../../src/lib/job-store.js";
 
 /**
  * POST /.netlify/functions/smartdrafts-pairing
  * Body: { analysis?: VisionOutput, folder?: string, overrides?: Record<string, any> }
- * 
+ *
  * NEW: Can now accept EITHER:
  *   - analysis object (old way, prone to data loss through UI)
  *   - folder URL (new way, fetches fresh scan data from cache)
- * 
+ *
  * CHUNK Z2: Bullet-proof pairing with 4 products (supplements + hair), ignoring dummy
  */
 
@@ -20,22 +19,22 @@ import { getJob } from "../../src/lib/job-store.js";
 async function redisGet(key: string): Promise<any | null> {
   const BASE = (process.env.UPSTASH_REDIS_REST_URL || "").replace(/\/$/, "");
   const TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
-  
+
   if (!BASE || !TOKEN) return null;
-  
+
   try {
     const url = `${BASE}/GET/${encodeURIComponent(key)}`;
     const res = await fetch(url, {
       method: "POST",
       headers: { Authorization: `Bearer ${TOKEN}` },
     });
-    
+
     if (!res.ok) return null;
-    
+
     const json = await res.json() as { result: unknown };
     const val = json.result;
     if (typeof val !== "string" || !val) return null;
-    
+
     return JSON.parse(val);
   } catch {
     return null;
@@ -131,7 +130,7 @@ export const handler: Handler = async (event) => {
   let analysis: any = payload.analysis || null;
   const jobId = (payload as any)?.jobId || (analysis as any)?.jobId || null;
   const folder = payload.folder || (analysis as any)?.folder || '';
-  
+
   // Helper function to check if analysis has valid visualDescription fields
   function hasVD(a: any): boolean {
     if (!a?.imageInsights) return false;
@@ -140,7 +139,7 @@ export const handler: Handler = async (event) => {
     const first = arr[0] as any;
     return !!first?.visualDescription && (first.visualDescription.length > 20);
   }
-  
+
   // ZF-2.1: Try by jobId first (if present in request)
   if (!hasVD(analysis) && jobId) {
     console.log(`[PAIR] Attempting Redis fetch for jobId=${jobId}`);
@@ -148,8 +147,8 @@ export const handler: Handler = async (event) => {
       const raw = await redisGet(`analysis:${jobId}`);
       if (raw) {
         analysis = raw;
-        const arr = Array.isArray(analysis.imageInsights) 
-          ? analysis.imageInsights 
+        const arr = Array.isArray(analysis.imageInsights)
+          ? analysis.imageInsights
           : Object.values(analysis.imageInsights || {});
         console.log(`[PAIR] loaded analysis by jobId: ${jobId}, insights=${arr.length}`);
       }
@@ -157,12 +156,12 @@ export const handler: Handler = async (event) => {
       console.error(`[PAIR] Redis fetch failed for jobId=${jobId}:`, err);
     }
   }
-  
+
   // ZF-2.2: If still no VD and we have a folder, try by folder signature
   if (!hasVD(analysis) && folder) {
     const folderSig = createHash('sha1').update(folder).digest('hex');
     console.log(`[PAIR] No VD yet, trying by folderSig: ${folderSig}`);
-    
+
     try {
       // Try direct folder lookup
       const rawByFolder = await redisGet(`analysis:byFolder:${folderSig}`);
@@ -185,7 +184,7 @@ export const handler: Handler = async (event) => {
       console.error(`[PAIR] Redis folder-based fetch failed:`, err);
     }
   }
-  
+
   // ZF-2.3: Final fallback to old folder cache (for backward compatibility)
   if (!analysis && folder) {
     console.log(`[pairing] Fallback to old folder cache for: ${folder}`);
@@ -194,16 +193,16 @@ export const handler: Handler = async (event) => {
     };
     const cacheKey = normalizeFolderKey(folder);
     const cached = await getCachedSmartDraftGroups(cacheKey);
-    
+
     if (!cached) {
-      return jsonResponse(404, { 
-        error: "No cached scan found for this folder", 
-        hint: "Run Analyze first, then Run Pairing" 
+      return jsonResponse(404, {
+        error: "No cached scan found for this folder",
+        hint: "Run Analyze first, then Run Pairing"
       }, originHdr, methods);
     }
-    
+
     console.log(`[pairing] Found cached scan with ${Object.keys(cached.imageInsights || {}).length} imageInsights`);
-    
+
     // Log sample to verify visualDescription is present
     const sampleKey = Object.keys(cached.imageInsights || {})[0];
     if (sampleKey) {
@@ -212,26 +211,26 @@ export const handler: Handler = async (event) => {
       console.log(`  - has visualDescription: ${!!sample.visualDescription}`);
       console.log(`  - visualDescription length: ${(sample.visualDescription || '').length}`);
     }
-    
+
     analysis = {
       groups: cached.groups,
       orphans: cached.orphans,
       imageInsights: cached.imageInsights
     };
   }
-  
+
   // ZF-2.4: Check if we have visualDescription after all fallbacks
   if (!hasVD(analysis)) {
     console.warn('[PAIR] no visualDescription available after redis fallbacks');
     // Continue with degraded pairing (visual similarity will be 0)
   } else {
-    const arr = Array.isArray(analysis.imageInsights) 
-      ? analysis.imageInsights 
+    const arr = Array.isArray(analysis.imageInsights)
+      ? analysis.imageInsights
       : Object.values(analysis.imageInsights || {});
     const first = arr[0] as any;
     console.log(`[PAIR] ✓ visualDescription available (first insight len=${first?.visualDescription?.length || 0})`);
   }
-  
+
   // Final check: do we have analysis?
   if (!analysis) {
     return jsonResponse(400, {
@@ -239,11 +238,11 @@ export const handler: Handler = async (event) => {
       hint: "Provide jobId, folder, or analysis in request body"
     }, originHdr, methods);
   }
-  
+
   // Log final state
   if (hasVD(analysis)) {
-    const arr = Array.isArray(analysis.imageInsights) 
-      ? analysis.imageInsights 
+    const arr = Array.isArray(analysis.imageInsights)
+      ? analysis.imageInsights
       : Object.values(analysis.imageInsights || {});
     const first = arr[0] as any;
     console.log(`[PAIR] Final analysis has visualDescription ✓ (first insight len=${first?.visualDescription?.length || 0})`);
@@ -295,19 +294,19 @@ export const handler: Handler = async (event) => {
     const facts = new Set<string>();
     const hairB = new Set<string>();
     const visual = new Map<string, string>(); // Store visualDescription for each image
-    
+
     for (const ins of insights) {
       const k = ins.key || urlKey(ins.url);
       const ev = (ins.evidenceTriggers || []).join(' ').toLowerCase();
       const tx = (ins.textExtracted || '').toLowerCase();
       const vd = String((ins as any).visualDescription || '').toLowerCase();
-      
+
       console.log(`[Z2-DEBUG] Image ${k}:`);
       console.log(`  - visualDescription present: ${!!(ins as any).visualDescription}`);
       console.log(`  - visualDescription length: ${vd.length}`);
       console.log(`  - visualDescription value: "${vd}"`);
       visual.set(k, vd);
-      
+
       if (/(supplement facts|nutrition facts|drug facts|serving size|other ingredients)/.test(ev) ||
           /(supplement facts|nutrition facts|drug facts|serving size|other ingredients)/.test(tx)) {
         facts.add(k);
@@ -321,7 +320,7 @@ export const handler: Handler = async (event) => {
     function extractVisualFeatures(desc: string): Set<string> {
       const features = new Set<string>();
       const words = desc.toLowerCase().split(/[\s,\-/]+/);
-      
+
       // Packaging types
       const packaging = ['bottle', 'jar', 'pouch', 'tube', 'canister', 'dropper', 'pump', 'spray', 'tin', 'box'];
       // Shapes
@@ -334,15 +333,15 @@ export const handler: Handler = async (event) => {
       const closures = ['screw', 'flip', 'pump', 'dropper', 'spray', 'twist', 'zip', 'resealable'];
       // Special features
       const special = ['window', 'embossed', 'holographic', 'tear', 'tamper', 'band'];
-      
+
       const allKeywords = [...packaging, ...shapes, ...materials, ...colors, ...closures, ...special];
-      
+
       for (const word of words) {
         if (allKeywords.includes(word)) {
           features.add(word);
         }
       }
-      
+
       return features;
     }
 
@@ -350,18 +349,18 @@ export const handler: Handler = async (event) => {
     function visualSimilarity(key1: string, key2: string): number {
       const desc1 = visual.get(key1) || '';
       const desc2 = visual.get(key2) || '';
-      
+
       if (!desc1 || !desc2) return 0;
-      
+
       const features1 = extractVisualFeatures(desc1);
       const features2 = extractVisualFeatures(desc2);
-      
+
       if (features1.size === 0 || features2.size === 0) return 0;
-      
+
       // Jaccard similarity
       const intersection = new Set([...features1].filter(x => features2.has(x)));
       const union = new Set([...features1, ...features2]);
-      
+
       return intersection.size / union.size;
     }
 
@@ -444,9 +443,9 @@ export const handler: Handler = async (event) => {
         .filter(b => gOfKey.get(b) !== gOfKey.get(f))
         .map(b => ({ b, s: preScore(f, b) }))
         .sort((a, b) => b.s - a.s);
-      
+
       console.log(`[Z2-DEBUG] Front ${f} scores:`, scored);
-      
+
       if (!scored.length) continue;
 
       const best = scored[0], runner = scored[1];
@@ -470,9 +469,9 @@ export const handler: Handler = async (event) => {
         pairedF.add(f); pairedB.add(best.b as string);
         continue;
       }
-      
+
       // soft accept only with cue & higher score (Step 2A)
-      const hasCue = (fBuck === 'supp' && facts.has(best.b as string)) 
+      const hasCue = (fBuck === 'supp' && facts.has(best.b as string))
                   || (fBuck === 'hair' && hairB.has(best.b as string));
       if (hasCue && best.s >= 2.6 && gap >= 0.8) {
         const msg = `✓ SOFT ACCEPT (${fBuck}, with cue): ${f} ↔ ${best.b}`;
@@ -486,7 +485,7 @@ export const handler: Handler = async (event) => {
         pairedF.add(f); pairedB.add(best.b as string);
         continue;
       }
-      
+
       // Reject if no rule matched
       const msg = `✗ REJECT: ${f} (score=${best.s.toFixed(2)}, gap=${gap.toFixed(2)}, bucket=${fBuck}, needs cue+score>=2.6+gap>=0.8)`;
       console.log(`[Z2-DEBUG] ${msg}`);
