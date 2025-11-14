@@ -165,6 +165,12 @@
           <button id="bannerLogin" class="btn" style="padding:.45rem .8rem">Sign in</button>
         </div>
       </div>
+      <div id="authLoopBanner" style="display:none;margin: .75rem 0 1rem; padding:.75rem 1rem; border:2px solid #ef4444; background:#1a0f0f; border-radius:10px;">
+        <div style="display:flex; align-items:center; gap:.75rem; flex-wrap:wrap;">
+          <span class="small" style="color:#fca5a5;">⚠️ Stuck in a login loop? Your session may have expired.</span>
+          <button onclick="window.location.href='/clear-auth.html?auto=1'" class="btn" style="padding:.45rem .8rem; background:#ef4444;">Clear & Retry</button>
+        </div>
+      </div>
       <div class="row">
         <div class="col">
           <h3>Dropbox</h3>
@@ -350,30 +356,41 @@
         el.addEventListener('click', async (e) => {
           try {
             e.preventDefault();
+            console.log('[OAuth] Starting', fnPath);
             const ok = await authClient.ensureAuth();
+            console.log('[OAuth] ensureAuth result:', ok);
             if (!ok) {
               // If not signed in, prompt Universal Login
+              console.log('[OAuth] Not authenticated, redirecting to login');
               return await authClient.login({});
             }
             // Ask the start function for an auth URL via POST JSON (so Authorization is included)
+            console.log('[OAuth] Making POST request to', fnPath);
             const r = await authClient.authFetch(fnPath, {
               method: 'POST',
               headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
               body: JSON.stringify({ returnTo: window.location.href })
             });
+            console.log('[OAuth] Response status:', r.status);
             const text = await r.text();
+            console.log('[OAuth] Response body:', text);
             let j = null; try { j = JSON.parse(text); } catch {}
             if (r.ok && j?.redirect) {
+              console.log('[OAuth] Redirecting to:', j.redirect);
               window.location.assign(j.redirect);
               return;
             }
             if (r.status === 401) {
               // Session missing server-side; force re-login to refresh tokens
+              console.log('[OAuth] Got 401, forcing re-login');
               return await authClient.login({});
             }
-            console.error('Start flow failed', { status: r.status, body: text });
-            alert('Could not start the connect flow. Check console for details.');
-          } catch {}
+            console.error('[OAuth] Start flow failed', { status: r.status, body: text });
+            alert('Could not start the connect flow. Status: ' + r.status + '\nCheck console for details.');
+          } catch (err) {
+            console.error('[OAuth] Exception in wireConnectLink:', err);
+            alert('Error starting OAuth flow: ' + (err?.message || String(err)));
+          }
           // No fallback GET; we require authenticated POST for proper state binding
           return;
         });
