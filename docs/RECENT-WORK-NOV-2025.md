@@ -1,0 +1,290 @@
+# Recent Work - November 2025
+
+## Summary
+Major rebrand from GPTListing to **DraftPilot** and implementation of local file upload feature for Quick List page.
+
+---
+
+## 🎨 Rebrand: GPTListing → DraftPilot
+
+### What Changed
+- **App Name**: GPTListing → DraftPilot
+- **Domain**: ebaywebhooks.netlify.app → draftpilot-ai.netlify.app
+- **Logo**: Added to `public/logo/` folder
+  - `DraftPilot_Logo.png` (with background)
+  - `DraftPilot_NoBG.png` (transparent background)
+
+### Files Updated
+
+**User-Facing Pages** (HTML titles and text):
+- `public/index.html` - Title: "DraftPilot – Connect"
+- `public/welcome.html` - Header: "Welcome to DraftPilot"
+- `public/setup.html` - All references to GPTListing → DraftPilot
+- `public/policy-create.html` - Title updated
+- `public/policies.html` - Title updated
+- `public/policies-manage.html` - Title updated
+- `public/location.html` - Title updated
+
+**Configuration**:
+- `netlify-env.json`:
+  - `ALLOWED_ORIGINS`: draftpilot-ai.netlify.app
+  - `APP_URL`: draftpilot-ai.netlify.app
+  - `DROPBOX_REDIRECT_URI`: draftpilot-ai.netlify.app
+  - `EBAY_ENDPOINT_URL`: draftpilot-ai.netlify.app
+
+**Backend Functions** (fallback URLs):
+- `netlify/functions/analyze-images-bg-user.ts`
+- `netlify/functions/analyze-images-bg.ts`
+- `netlify/functions/ebay-fetch-all-categories.ts`
+- `netlify/functions/ebay-fetch-categories-background.ts`
+- `netlify/functions/smartdrafts-create-drafts-bg.ts`
+- `netlify/functions/smartdrafts-scan-bg.ts`
+- `src/lib/openai.ts` - User-Agent header
+
+**Test Scripts**:
+- `scripts/test-smartdrafts-endpoints.ts`
+- `scripts/test-create-drafts.ts`
+- `test-pairing-direct.mjs`
+
+**Documentation**:
+- All docs in `docs/` folder updated with new domain
+- `docs/copilot-notes.md` - Primary domain reference updated
+
+**Local Storage Keys**:
+- `index.html`: `draftpilotVisitedSetup`, `draftpilotSuppressSetupRedirect`
+- `setup.html`: `draftpilotVisitedSetup`
+
+### External Services That Need Updating ⚠️
+
+**CRITICAL - These must be updated for OAuth to work:**
+
+1. **eBay Developer App** (https://developer.ebay.com/my/auth/)
+   - Redirect URI: `https://draftpilot-ai.netlify.app/login.html`
+   - Logout URI: `https://draftpilot-ai.netlify.app/`
+
+2. **Dropbox App** (https://www.dropbox.com/developers/apps)
+   - Redirect URI: `https://draftpilot-ai.netlify.app/.netlify/functions/dropbox-oauth-callback`
+
+3. **Auth0** (https://manage.auth0.com/)
+   - Allowed Callback URLs: `https://draftpilot-ai.netlify.app/login.html`
+   - Allowed Logout URLs: `https://draftpilot-ai.netlify.app/`
+   - Allowed Web Origins: `https://draftpilot-ai.netlify.app`
+
+4. **Netlify Site Settings**
+   - Site name changed from `ebaywebhooks` to `draftpilot-ai`
+
+### Commits
+- `a903014` - rebrand: Update app name from GPTListing to DraftPilot
+- `3a8aeb2` - config: Update domain to draftpilot-ai.netlify.app
+- `c42f306` - docs: Update remaining domain references to draftpilot-ai.netlify.app
+- `cca76d4` - assets: Add DraftPilot logo without background
+
+---
+
+## 📤 Local File Upload Feature
+
+### Overview
+Implemented local file upload capability on Quick List page to bypass Dropbox requirement. Users can now upload photos directly from their computer.
+
+### Architecture
+
+**Storage**: AWS S3
+- Bucket: `ebay-drafts-staging` (us-east-2)
+- Environment variables:
+  - `STORAGE_REGION` (not AWS_* to avoid Netlify conflicts)
+  - `STORAGE_ACCESS_KEY_ID`
+  - `STORAGE_SECRET_ACCESS_KEY`
+- Signed URLs: 24-hour expiration
+- File retention: 72 hours (no auto-cleanup yet - future enhancement)
+
+**Upload Flow**:
+1. User selects/drags files in browser
+2. Files converted to base64
+3. Smart batching: 4MB per batch, large files (>4MB) upload alone
+4. Netlify function (`ingest-local-upload`) → S3
+5. Returns: `{ files: [{ key, name, stagedUrl }] }`
+6. Auto-redirects to vision scan with jobId
+
+**Vision Integration**:
+- `smartdrafts-scan-bg` accepts `stagedUrls` parameter (in addition to Dropbox `path`)
+- Vision API scans uploaded files using signed URLs
+- Returns groups with product detection
+- Full pipeline: Upload → Scan → Pair → Drafts
+
+### Key Files
+
+**Backend**:
+- `netlify/functions/ingest-local-upload.ts` - S3 upload with signed URL generation
+- `netlify/functions/smartdrafts-scan-bg.ts` - Accepts `stagedUrls` parameter
+- `src/lib/smartdrafts-scan-core.ts` - `runSmartDraftScanFromStagedUrls()` implementation
+
+**Frontend**:
+- `public/upload-local.html` - Standalone upload page with drag-drop UI
+- `public/quick-list.html` - **Revamped with local upload as primary method**
+- `public/smartdrafts-dropbox.html` - Auto-poll with jobId parameter
+
+### Quick List Page Updates
+
+**UI Changes**:
+- Tabbed interface: "Upload Files" (primary) vs "Dropbox Folder" (secondary)
+- Drag & drop area with file previews
+- Thumbnail display (80x80px) with individual remove buttons
+- File size limit: 4MB each (updated from misleading 10MB)
+- "Start Quick List" button (was broken, now fixed)
+
+**Bug Fixes**:
+- **Duplicate button ID issue** (commit `caea2ed`):
+  - Had TWO buttons with `id="btnStart"` (lines 407 and 474)
+  - First button had no onclick handler
+  - Removed duplicate, added onclick to correct button
+- **File count in button text** (commit `ce45c2b`):
+  - User requested removal of file count from button
+  - Now just says "🚀 Start Quick List"
+- **Progress percentage instead of time** (commit `ce45c2b`):
+  - Changed from "Analyzing... (4.5s)" to "Analyzing... 15%"
+  - User didn't want people timing the process
+  - Percentage based on polling attempts (capped at 95%)
+
+**JavaScript Functions**:
+- `switchUploadMethod(method)` - Toggle between local/Dropbox tabs
+- `uploadFilesInBatches(files)` - Smart batching with 4MB limit
+- `startPipeline()` - Unified handler for both upload methods
+- `renderFileList()` - Display thumbnails with remove buttons
+- `removeFile(index)` - Remove individual file from selection
+
+### Technical Details
+
+**Smart Batching**:
+```javascript
+// Group files by size
+if (file.size > 4 * 1024 * 1024) {
+  largeBatches.push([file]); // Upload alone
+} else {
+  // Add to current batch if fits, else start new batch
+  if (currentSize + file.size <= 4 * 1024 * 1024) {
+    currentBatch.push(file);
+  } else {
+    batches.push(currentBatch);
+    currentBatch = [file];
+  }
+}
+```
+
+**Signed URL Generation** (ingest-local-upload.ts):
+```typescript
+import { GetObjectCommand, getSignedUrl } from '@aws-sdk/s3-request-presigner';
+
+const signedUrl = await getSignedUrl(
+  s3Client, 
+  new GetObjectCommand({ Bucket, Key }), 
+  { expiresIn: 86400 } // 24 hours
+);
+```
+
+**Image Deduplication** (smartdrafts-scan-core.ts):
+```typescript
+const uniqueImages = Array.from(new Set(
+  group.images.map(url => httpsByKey.get(urlKey(url)) || url)
+));
+```
+
+### Testing Results
+- ✅ Upload → S3 storage working
+- ✅ Signed URLs accessible by Vision API
+- ✅ Full pipeline tested: Upload → Scan → Groups (9 products detected)
+- ✅ Duplicate images removed from groups
+- ✅ Auto-redirect and polling working
+- ⏳ Mobile testing pending
+
+### Known Issues
+- **Analyze sometimes hangs**: User reported scan running indefinitely (need more details)
+  - Polling timeout: 80 attempts × 1.5s = 2 minutes max
+  - Should show error after timeout, but user saw it run longer
+  - Need to investigate: backend stuck or frontend polling issue?
+
+### Future Enhancements
+- [ ] S3 lifecycle policy for automatic file deletion after 72 hours
+- [ ] Image compression/resizing for files >4MB
+- [ ] Better error handling for stuck scans
+- [ ] Cancel button for long-running operations
+- [ ] Support for >2 images per product (user mentioned future feature)
+- [ ] Mobile optimization
+
+### Commits
+- `418307d` - feat: Revamp quick-list with local upload as primary method
+- `caea2ed` - fix: Remove duplicate Start button and add onclick handler
+- `ce45c2b` - feat: Replace elapsed time with progress percentage
+- `48a68e4` - fix: Update file size limit text to 4MB on quick-list
+
+---
+
+## 🔧 Environment Variables Reference
+
+### Storage (AWS S3)
+```bash
+STORAGE_REGION=us-east-2
+STORAGE_ACCESS_KEY_ID=<your-key>
+STORAGE_SECRET_ACCESS_KEY=<your-secret>
+```
+
+### eBay
+```bash
+EBAY_CLIENT_ID=<your-client-id>
+EBAY_CLIENT_SECRET=<your-client-secret>
+EBAY_ENV=PROD
+EBAY_ENDPOINT_URL=https://draftpilot-ai.netlify.app/.netlify/functions/ebay-mad
+```
+
+### Dropbox
+```bash
+DROPBOX_CLIENT_ID=<your-client-id>
+DROPBOX_CLIENT_SECRET=<your-client-secret>
+DROPBOX_REDIRECT_URI=https://draftpilot-ai.netlify.app/.netlify/functions/dropbox-oauth-callback
+```
+
+### App Config
+```bash
+APP_URL=https://draftpilot-ai.netlify.app
+ALLOWED_ORIGINS=https://draftpilot-ai.netlify.app,https://www.draftpilot-ai.netlify.app
+AUTH_MODE=mixed
+```
+
+### OpenAI
+```bash
+OPENAI_API_KEY=<your-key>
+GPT_MODEL=gpt-4o-mini
+```
+
+---
+
+## 📝 Next Session Priorities
+
+1. **Test OAuth flows** - Verify eBay/Dropbox/Auth0 work with new domain
+2. **Debug analyze hang issue** - User reported it running indefinitely
+3. **Add logo to UI** - Logos are ready but not integrated into pages yet
+4. **S3 lifecycle policy** - Automate file cleanup after 72 hours
+5. **Test Quick List end-to-end** - Upload → Scan → Pair → Drafts → Publish
+
+---
+
+## 🔗 Quick Links
+
+**Production URLs**:
+- Main app: https://draftpilot-ai.netlify.app
+- Quick List: https://draftpilot-ai.netlify.app/quick-list.html
+- Upload: https://draftpilot-ai.netlify.app/upload-local.html
+- New SmartDrafts: https://draftpilot-ai.netlify.app/new-smartdrafts/
+
+**Admin/Dev**:
+- Netlify Dashboard: https://app.netlify.com/sites/draftpilot-ai
+- GitHub Repo: https://github.com/CCSNH-NicolePhillips/gptlisting-ebay-webhooks
+
+**External Services**:
+- eBay Developer: https://developer.ebay.com/my/auth/
+- Dropbox Apps: https://www.dropbox.com/developers/apps
+- Auth0 Dashboard: https://manage.auth0.com/
+
+---
+
+**Last Updated**: November 14, 2025  
+**Session**: Rebrand + Local Upload Implementation
