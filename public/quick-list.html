@@ -840,7 +840,8 @@
           } else if (statusRes.state === 'error') {
             throw new Error(statusRes.error || 'Scan failed');
           } else {
-            $('status1').innerHTML = `<span class="spinner"></span>Analyzing... (${attempts * 1.5}s)`;
+            const progress = Math.min(95, Math.round((attempts / maxAttempts) * 100));
+            $('status1').innerHTML = `<span class="spinner"></span>Analyzing... ${progress}%`;
           }
         }
         
