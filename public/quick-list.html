@@ -619,10 +619,30 @@
     window.clearFiles = clearFiles;
     
     async function fetchJSON(url, opts = {}) {
-      const r = await exec(url, opts);
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
-      return data;
+      try {
+        const r = await exec(url, opts);
+        const data = await r.json();
+        if (!r.ok) {
+          // Check for auth errors
+          if (r.status === 401 || r.status === 403) {
+            console.error('[Auth] Unauthorized request, redirecting to login...');
+            sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
+            window.location.replace('/login.html');
+            throw new Error('Authentication required');
+          }
+          throw new Error(data.error || `HTTP ${r.status}`);
+        }
+        return data;
+      } catch (err) {
+        // Check if it's an auth-related error
+        if (err.message?.includes('Authentication expired') || 
+            err.message?.includes('AUTH_EXPIRED')) {
+          console.error('[Auth] Token expired, redirecting to login...');
+          sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
+          window.location.replace('/login.html');
+        }
+        throw err;
+      }
     }
     
     async function loadFolders() {
@@ -1006,6 +1026,15 @@
         
       } catch (err) {
         console.error('Pipeline error:', err);
+        
+        // Check if it's an auth error - user will be redirected, so don't show alert
+        if (err.message?.includes('Authentication') || 
+            err.message?.includes('AUTH_EXPIRED') ||
+            err.message?.includes('Unauthorized')) {
+          // Auth error - redirect is already happening in fetchJSON
+          return;
+        }
+        
         alert(`Error: ${err.message}`);
         btn.disabled = false;
         btn.textContent = '🔄 Retry Quick List';
