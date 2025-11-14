@@ -7,7 +7,18 @@
 [functions]
   node_bundler = "esbuild"
   directory = "netlify/functions"
-  external_node_modules = ["openai", "@aws-sdk/client-s3", "@aws-sdk/s3-request-presigner"]
+  external_node_modules = [
+    "openai",
+    "@aws-sdk/client-s3",
+    "@aws-sdk/s3-request-presigner",
+    "@netlify/blobs",
+    "@anthropic-ai/sdk",
+    "@google/generative-ai",
+    "cheerio",
+    "dotenv",
+    "jose",
+    "node-fetch"
+  ]
 
 # Increase timeout for functions that call external APIs (ChatGPT, eBay)
 [functions."smartdrafts-create-drafts"]
