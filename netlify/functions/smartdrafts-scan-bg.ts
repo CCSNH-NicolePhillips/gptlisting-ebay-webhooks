@@ -1,7 +1,7 @@
 import type { Handler } from "@netlify/functions";
 import crypto from "node:crypto";
 import { requireUserAuth } from "../../src/lib/auth-user.js";
-import { getOrigin, isOriginAllowed, json } from "../../src/lib/http.js";
+import { getOrigin, isOriginAllowed, json, parseAllowedOrigins } from "../../src/lib/http.js";
 import { putJob } from "../../src/lib/job-store.js";
 import { k } from "../../src/lib/user-keys.js";
 import { canStartJob, incRunning, decRunning } from "../../src/lib/quota.js";
@@ -32,7 +32,8 @@ export const handler: Handler = async (event) => {
   }
 
   if (!isOriginAllowed(originHdr)) {
-    return json(403, { ok: false, error: "Forbidden" }, originHdr, METHODS);
+    console.error("[smartdrafts-scan-bg] Origin not allowed:", originHdr, "Allowed:", parseAllowedOrigins());
+    return json(403, { ok: false, error: "Forbidden", origin: originHdr, allowed: parseAllowedOrigins() }, originHdr, METHODS);
   }
 
   let user;
