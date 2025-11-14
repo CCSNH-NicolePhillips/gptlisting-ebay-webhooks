@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>GPTListing · Setup</title>
+    <title>DraftPilot · Setup</title>
     <style>
       body {
         margin: 0;
@@ -53,7 +53,7 @@
 
         <div class="section" id="connections">
           <h2>1. Connect your accounts</h2>
-          <p class="muted">Authorize GPTListing to read your Dropbox listing photos and manage eBay listings in your production account.</p>
+          <p class="muted">Authorize DraftPilot to read your Dropbox listing photos and manage eBay listings in your production account.</p>
           <div class="grid">
             <div class="panel">
               <h3>Dropbox</h3>
@@ -62,7 +62,7 @@
                 <a class="btn" id="dbxConnect" href="/.netlify/functions/dropbox-oauth-start">Connect Dropbox</a>
                 <button class="secondary" id="dbxDisconnect">Disconnect</button>
               </div>
-              <div class="small muted" style="margin-top:0.45rem;">Connection is required so GPTListing can pull product photos automatically.</div>
+              <div class="small muted" style="margin-top:0.45rem;">Connection is required so DraftPilot can pull product photos automatically.</div>
             </div>
             <div class="panel">
               <h3>eBay</h3>
@@ -71,14 +71,14 @@
                 <a class="btn" id="ebayConnect" href="/.netlify/functions/ebay-oauth-start">Connect eBay</a>
                 <button class="secondary" id="ebayDisconnect">Disconnect</button>
               </div>
-              <div class="small muted" style="margin-top:0.45rem;">This link grants GPTListing permission to create policies, locations, and draft offers on your behalf.</div>
+              <div class="small muted" style="margin-top:0.45rem;">This link grants DraftPilot permission to create policies, locations, and draft offers on your behalf.</div>
             </div>
           </div>
         </div>
 
         <div class="section" id="optin">
           <h2>2. Opt in to Business Policies</h2>
-          <p class="muted">eBay needs Business Policies for payments, shipping, and returns before GPTListing can post offers on your behalf outside of the standard eBay website.</p>
+          <p class="muted">eBay needs Business Policies for payments, shipping, and returns before DraftPilot can post offers on your behalf outside of the standard eBay website.</p>
           <div class="panel">
             <div class="status" id="optinStatus">Connect eBay to manage Business Policies.</div>
             <div class="actions">
@@ -91,7 +91,7 @@
 
         <div class="section" id="policies">
           <h2>3. Create your core policies</h2>
-          <p class="muted">Use the recommended templates below or customize each policy in detail. GPTListing will reuse these policies whenever it provisions draft listings.</p>
+          <p class="muted">Use the recommended templates below or customize each policy in detail. DraftPilot will reuse these policies whenever it provisions draft listings.</p>
 
           <div class="panel">
             <h3>Payment policy</h3>
@@ -129,7 +129,7 @@
 
         <div class="section" id="inventory">
           <h2>4. Confirm your shipping location</h2>
-          <p class="muted">eBay drafts require at least one inventory location. Add your warehouse address directly on eBay before returning to GPTListing.</p>
+          <p class="muted">eBay drafts require at least one inventory location. Add your warehouse address directly on eBay before returning to DraftPilot.</p>
           <div class="panel">
             <div class="status" id="locationStatus">Connect eBay to manage locations.</div>
             <div class="actions">
@@ -154,7 +154,7 @@
     <script>
       (async () => { try { await authClient.requireAuth(); } catch {} })();
 
-      const SETUP_STORAGE_KEY = 'gptlistingVisitedSetup';
+      const SETUP_STORAGE_KEY = 'draftpilotVisitedSetup';
       try { localStorage.setItem(SETUP_STORAGE_KEY, '1'); } catch {}
 
       const state = {
