@@ -4,7 +4,7 @@
  * Handles presigned URLs, signed GET URLs, and file staging
  */
 
-import { createHash } from 'crypto';
+import { createHash } from 'node:crypto';
 import type { StagingConfig, PresignedUpload, IngestError, IngestErrorCode } from '../ingestion/types.js';
 import { getExtensionFromMime, sanitizeFilename } from './mime.js';
 
