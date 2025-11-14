@@ -3,7 +3,7 @@
 > This file holds reminders the user expects me to retain across sessions. Update it whenever the user says, "you already know this" or repeats an instruction.
 
 ## Domains & Environments
-- Primary admin/API host: https://ebaywebhooks.netlify.app/
+- Primary admin/API host: https://draftpilot-ai.netlify.app/
 - Use this domain in testing instructions and curl examples unless the user explicitly asks for another environment.
 
 ## Tokens / Headers
@@ -156,7 +156,7 @@
    - Handles query params, encoding, path differences
 
 ### Testing URLs
-- **Production**: https://ebaywebhooks.netlify.app/new-smartdrafts/
+- **Production**: https://draftpilot-ai.netlify.app/new-smartdrafts/
 - **Local Dev**: Open `public/new-smartdrafts/index.html` in browser (Mock mode works offline)
 
 ### Current Limitations
@@ -303,7 +303,7 @@ function basenameFrom(u: string): string {
    {"evt":"analyze-images.done", "batches":9, "groups":9, ...}
    ```
 
-**UI verification** (https://ebaywebhooks.netlify.app/new-smartdrafts/):
+**UI verification** (https://draftpilot-ai.netlify.app/new-smartdrafts/):
 - All images show role chips: front (blue), back (green), other (gray)
 - No "role:null" or "unknown" labels
 - No "<imgUrl>" in displayed URLs
@@ -562,7 +562,7 @@ This means Phase S3 Part A is working - Vision returned a placeholder, we replac
 **NEXT STEPS FOR FUTURE-ME:**
 
 1. **If user says "test":**
-   - Open https://ebaywebhooks.netlify.app/new-smartdrafts/
+   - Open https://draftpilot-ai.netlify.app/new-smartdrafts/
    - Verify Products tab shows front/back pairs
    - Verify Metrics tab shows totals and thresholds
    - Check that pairing results display correctly
@@ -633,7 +633,7 @@ You got this! 🚀
 P.S. Check the "Troubleshooting Guide" section if anything goes wrong. It's comprehensive.
 
 ### Test SmartDrafts End-to-End
-1. Open https://ebaywebhooks.netlify.app/new-smartdrafts/
+1. Open https://draftpilot-ai.netlify.app/new-smartdrafts/
 2. Sign in (Auth0)
 3. Select Dropbox folder from dropdown
 4. Toggle "Live" mode
@@ -671,7 +671,7 @@ P.S. Check the "Troubleshooting Guide" section if anything goes wrong. It's comp
 
 **Option B - API call**:
 ```bash
-curl -X POST https://ebaywebhooks.netlify.app/.netlify/functions/smartdrafts-reset \
+curl -X POST https://draftpilot-ai.netlify.app/.netlify/functions/smartdrafts-reset \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"folder":"YOUR_FOLDER_PATH"}'
@@ -724,7 +724,7 @@ git diff HEAD~1 HEAD          # Compare last 2 commits
 ### API Testing with curl
 **Enqueue scan**:
 ```bash
-curl -X POST https://ebaywebhooks.netlify.app/.netlify/functions/smartdrafts-scan-bg \
+curl -X POST https://draftpilot-ai.netlify.app/.netlify/functions/smartdrafts-scan-bg \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"folder":"YOUR_FOLDER","force":true,"debug":true}'
@@ -733,13 +733,13 @@ curl -X POST https://ebaywebhooks.netlify.app/.netlify/functions/smartdrafts-sca
 
 **Check status**:
 ```bash
-curl https://ebaywebhooks.netlify.app/.netlify/functions/smartdrafts-scan-status?jobId=YOUR_JOB_ID \
+curl https://draftpilot-ai.netlify.app/.netlify/functions/smartdrafts-scan-status?jobId=YOUR_JOB_ID \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
 **Run pairing**:
 ```bash
-curl -X POST https://ebaywebhooks.netlify.app/.netlify/functions/smartdrafts-pairing \
+curl -X POST https://draftpilot-ai.netlify.app/.netlify/functions/smartdrafts-pairing \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d @pairing-input.json

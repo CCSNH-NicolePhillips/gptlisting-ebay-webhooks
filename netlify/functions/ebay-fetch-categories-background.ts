@@ -327,7 +327,7 @@ export const handler: Handler = async (event) => {
             console.log(`Waiting ${waitTime}ms before retrying due to rate limit...`);
             
             // Schedule retry by re-triggering after delay
-            const baseUrl = process.env.APP_URL || process.env.URL || process.env.DEPLOY_PRIME_URL || process.env.DEPLOY_URL || 'https://ebaywebhooks.netlify.app';
+            const baseUrl = process.env.APP_URL || process.env.URL || process.env.DEPLOY_PRIME_URL || process.env.DEPLOY_URL || 'https://draftpilot-ai.netlify.app';
             const target = `${baseUrl.replace(/\/$/, '')}/.netlify/functions/ebay-fetch-categories-background`;
             
             setTimeout(async () => {
@@ -529,7 +529,7 @@ export const handler: Handler = async (event) => {
       );
       
       // Re-trigger this function for the next batch with retry logic
-      const baseUrl = process.env.APP_URL || process.env.URL || process.env.DEPLOY_PRIME_URL || process.env.DEPLOY_URL || 'https://ebaywebhooks.netlify.app';
+      const baseUrl = process.env.APP_URL || process.env.URL || process.env.DEPLOY_PRIME_URL || process.env.DEPLOY_URL || 'https://draftpilot-ai.netlify.app';
       const target = `${baseUrl.replace(/\/$/, '')}/.netlify/functions/ebay-fetch-categories-background`;
       
       console.log(`Triggering next batch for job ${targetJobId}, ${queue.categories.length} categories remaining`);

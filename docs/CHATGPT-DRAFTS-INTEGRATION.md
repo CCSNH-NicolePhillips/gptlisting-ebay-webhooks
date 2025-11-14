@@ -170,7 +170,7 @@ Integrated ChatGPT (GPT-4o-mini) into SmartDrafts workflow to automatically gene
 
 ⏳ **UI Testing Pending**:
 - Code is deployed to production
-- User needs to test on: `https://ebaywebhooks.netlify.app/new-smartdrafts/`
+- User needs to test on: `https://draftpilot-ai.netlify.app/new-smartdrafts/`
 - Workflow: Analyze → Run Pairing → Create Drafts → View Drafts tab
 
 ### Known Issues & Gotchas
@@ -199,7 +199,7 @@ Integrated ChatGPT (GPT-4o-mini) into SmartDrafts workflow to automatically gene
 **.env file** (what's on Netlify):
 ```
 AUTH_MODE=mixed
-APP_URL=https://ebaywebhooks.netlify.app
+APP_URL=https://draftpilot-ai.netlify.app
 OPENAI_API_KEY=sk-proj-...
 GPT_MODEL=gpt-4o-mini (default if not set)
 GPT_MAX_TOKENS=1000 (default if not set)
@@ -208,7 +208,7 @@ GPT_MAX_TOKENS=1000 (default if not set)
 ### Next Steps (For User to Test)
 
 1. **Test on Production**:
-   - Go to `https://ebaywebhooks.netlify.app/new-smartdrafts/`
+   - Go to `https://draftpilot-ai.netlify.app/new-smartdrafts/`
    - Sign in
    - Select test folder (e.g., `/test3`)
    - Click "Analyze" and wait for completion
@@ -403,18 +403,18 @@ npx tsx scripts/test-create-drafts.ts
 
 **Check deployment status**:
 - Wait ~2 minutes after `git push`
-- Check: https://app.netlify.com/sites/ebaywebhooks/deploys
+- Check: https://app.netlify.com/sites/draftpilot-ai/deploys
 
 **Production URLs**:
-- Main app: https://ebaywebhooks.netlify.app
-- New SmartDrafts: https://ebaywebhooks.netlify.app/new-smartdrafts/
-- Old SmartDrafts: https://ebaywebhooks.netlify.app/smartdrafts-dropbox.html
+- Main app: https://draftpilot-ai.netlify.app
+- New SmartDrafts: https://draftpilot-ai.netlify.app/new-smartdrafts/
+- Old SmartDrafts: https://draftpilot-ai.netlify.app/smartdrafts-dropbox.html
 
 **Key Environment Variables**:
 ```bash
 AUTH_MODE=mixed
 OPENAI_API_KEY=sk-proj-...
-APP_URL=https://ebaywebhooks.netlify.app
+APP_URL=https://draftpilot-ai.netlify.app
 ```
 
 ---

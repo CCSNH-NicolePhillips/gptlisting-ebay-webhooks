@@ -69,7 +69,7 @@ out = await runPairingLive(null, { folder, jobId: analysis?.jobId });
 **All failed because**: ES6 module imports (`import { App } from './App.js'`) are cached separately from the HTML, and the version parameter on main.js doesn't propagate to child imports.
 
 ## Deployment Platform
-- **Netlify** (ebaywebhooks.netlify.app)
+- **Netlify** (draftpilot-ai.netlify.app)
 - Static files in `public/` folder
 - No build step for frontend JavaScript (vanilla JS, direct file serving)
 - Aggressive CDN caching on static assets
