@@ -194,7 +194,7 @@
       border-radius: 8px;
       font-size: 1rem;
     }
-    
+
     /* Upload UI styles */
     .upload-tab {
       padding: 0.75rem 1.5rem;
@@ -315,7 +315,7 @@
 </head>
 <body>
   <script src="/auth-client.js"></script>
-  
+
   <div class="container">
     <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem;">
       <div style="flex: 1;">
@@ -324,7 +324,7 @@
       </div>
       <a href="/index.html" class="btn secondary" style="width: auto; padding: 0.6rem 1rem; font-size: 0.9rem;">← Back</a>
     </div>
-    
+
     <!-- Feature highlights -->
     <div class="card" style="background: linear-gradient(135deg, rgba(79, 124, 255, 0.1) 0%, rgba(79, 124, 255, 0.05) 100%); border-color: rgba(79, 124, 255, 0.3); margin-bottom: 1.5rem;">
       <div style="display: flex; gap: 2rem; flex-wrap: wrap; align-items: center;">
@@ -358,10 +358,10 @@
         </div>
       </div>
     </div>
-    
+
     <div class="card">
       <h3 style="margin-top: 0; margin-bottom: 1rem;">📸 Upload Your Product Photos</h3>
-      
+
       <!-- Upload method tabs -->
       <div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--line);">
         <button id="tabLocal" class="upload-tab active" onclick="switchUploadMethod('local')">
@@ -371,7 +371,7 @@
           �📁 Dropbox Folder
         </button>
       </div>
-      
+
       <!-- Local upload panel -->
       <div id="uploadLocal" class="upload-panel">
         <div class="upload-area" id="uploadArea">
@@ -383,7 +383,7 @@
           <div class="upload-hint">Supports JPG, PNG, WebP (max 4MB each)</div>
         </div>
         <input type="file" id="fileInput" accept="image/*" multiple style="display: none;">
-        
+
         <!-- Selected files preview -->
         <div id="selectedFiles" style="display: none; margin-top: 1rem;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
@@ -393,7 +393,7 @@
           <div id="fileList" class="file-list"></div>
         </div>
       </div>
-      
+
       <!-- Dropbox panel -->
       <div id="uploadDropbox" class="upload-panel" style="display: none;">
         <select id="folderSelect" class="btn secondary" style="margin-bottom: 0; width: 100%;">
@@ -403,18 +403,18 @@
           Select a Dropbox folder containing your product photos
         </p>
       </div>
-      
+
       <button id="btnStart" class="btn primary" onclick="startPipeline()" style="margin-top: 1.5rem; width: 100%;" disabled>
         🚀 Start Quick List
       </button>
     </div>
-    
+
     <div class="card">
       <h3 style="margin-top: 0; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
         <span>🔄 Automated Pipeline</span>
         <span style="font-size: 0.75rem; font-weight: normal; color: var(--muted);">All steps run automatically</span>
       </h3>
-      
+
       <div class="step" id="step1">
         <div class="step-num">1</div>
         <div class="step-content">
@@ -423,7 +423,7 @@
         </div>
         <div class="step-status" id="status1">Pending</div>
       </div>
-      
+
       <div class="step" id="step2">
         <div class="step-num">2</div>
         <div class="step-content">
@@ -432,7 +432,7 @@
         </div>
         <div class="step-status" id="status2">Pending</div>
       </div>
-      
+
       <!-- Orphans warning (shown if images couldn't be paired) -->
       <div id="orphansWarning" style="display: none; margin-top: 1rem; padding: 1rem; background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.5); border-radius: 8px;">
         <div style="display: flex; align-items: center; gap: 0.75rem;">
@@ -447,7 +447,7 @@
           </div>
         </div>
       </div>
-      
+
       <div class="step" id="step3">
         <div class="step-num">3</div>
         <div class="step-content">
@@ -456,7 +456,7 @@
         </div>
         <div class="step-status" id="status3">Pending</div>
       </div>
-      
+
       <div class="step" id="step4">
         <div class="step-num">4</div>
         <div class="step-content">
@@ -465,19 +465,19 @@
         </div>
         <div class="step-status" id="status4">Pending</div>
       </div>
-      
+
       <div class="progress">
         <div class="progress-bar" id="progressBar" style="width: 0%"></div>
       </div>
     </div>
-    
+
     <div class="results" id="results">
       <div class="card" style="background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(34, 197, 94, 0.05) 100%); border-color: var(--success);">
         <h3 style="margin-top: 0; color: var(--success); display: flex; align-items: center; gap: 0.5rem;">
           <span style="font-size: 1.5rem;">🎉</span>
           <span>Success! Drafts Created</span>
         </h3>
-        
+
         <div class="result-summary">
           <div class="result-stat">
             <div class="result-num" id="totalDrafts">0</div>
@@ -492,7 +492,7 @@
             <div class="result-label">📸 Images Analyzed</div>
           </div>
         </div>
-        
+
         <div class="actions">
           <a href="/drafts.html" class="btn" style="background: var(--success); font-weight: 700;">✓ View & Publish Drafts</a>
           <button class="btn secondary" onclick="resetPipeline()">🔄 Run Again</button>
@@ -500,37 +500,37 @@
       </div>
     </div>
   </div>
-  
+
   <script>
     const $ = (id) => document.getElementById(id);
     const exec = window.authClient?.authFetch || fetch;
-    
+
     let currentJobId = null;
     let selectedFolder = null;
     let selectedFiles = [];
     let uploadMethod = 'local'; // 'local' or 'dropbox'
-    
+
     // Upload method switching
     function switchUploadMethod(method) {
       uploadMethod = method;
-      
+
       // Update tabs
       $('tabLocal').classList.toggle('active', method === 'local');
       $('tabDropbox').classList.toggle('active', method === 'dropbox');
-      
+
       // Update panels
       $('uploadLocal').style.display = method === 'local' ? 'block' : 'none';
       $('uploadDropbox').style.display = method === 'dropbox' ? 'block' : 'none';
-      
+
       // Update button state
       updateStartButton();
     }
-    
+
     function updateStartButton() {
       const btn = $('btnStart');
       if (uploadMethod === 'local') {
         btn.disabled = selectedFiles.length === 0;
-        btn.innerHTML = selectedFiles.length > 0 
+        btn.innerHTML = selectedFiles.length > 0
           ? `🚀 Start Quick List (${selectedFiles.length} files)`
           : '🚀 Start Quick List';
       } else {
@@ -538,65 +538,65 @@
         btn.innerHTML = '🚀 Start Quick List';
       }
     }
-    
+
     // Local file upload handling
     const uploadArea = $('uploadArea');
     const fileInput = $('fileInput');
-    
+
     uploadArea.addEventListener('click', () => fileInput.click());
-    
+
     uploadArea.addEventListener('dragover', (e) => {
       e.preventDefault();
       uploadArea.classList.add('drag-over');
     });
-    
+
     uploadArea.addEventListener('dragleave', () => {
       uploadArea.classList.remove('drag-over');
     });
-    
+
     uploadArea.addEventListener('drop', (e) => {
       e.preventDefault();
       uploadArea.classList.remove('drag-over');
       const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
       addFiles(files);
     });
-    
+
     fileInput.addEventListener('change', (e) => {
       addFiles(Array.from(e.target.files));
       fileInput.value = ''; // Reset input
     });
-    
+
     function addFiles(files) {
       selectedFiles.push(...files);
       renderFileList();
       updateStartButton();
     }
-    
+
     function removeFile(index) {
       selectedFiles.splice(index, 1);
       renderFileList();
       updateStartButton();
     }
-    
+
     function clearFiles() {
       selectedFiles = [];
       renderFileList();
       updateStartButton();
     }
-    
+
     function renderFileList() {
       const container = $('selectedFiles');
       const list = $('fileList');
       const count = $('fileCount');
-      
+
       if (selectedFiles.length === 0) {
         container.style.display = 'none';
         return;
       }
-      
+
       container.style.display = 'block';
       count.textContent = selectedFiles.length;
-      
+
       list.innerHTML = selectedFiles.map((file, idx) => {
         const url = URL.createObjectURL(file);
         const sizeMB = (file.size / 1024 / 1024).toFixed(2);
@@ -612,21 +612,21 @@
         `;
       }).join('');
     }
-    
+
     // Make functions global
     window.switchUploadMethod = switchUploadMethod;
     window.removeFile = removeFile;
     window.clearFiles = clearFiles;
-    
+
     async function fetchJSON(url, opts = {}) {
       try {
         const r = await exec(url, opts);
-        
+
         // Check if response is valid
         if (!r) {
           throw new Error('No response received from server');
         }
-        
+
         const data = await r.json();
         if (!r.ok) {
           // Check for auth errors
@@ -647,7 +647,7 @@
         return data;
       } catch (err) {
         // Check if it's an auth-related error
-        if (err.message?.includes('Authentication expired') || 
+        if (err.message?.includes('Authentication expired') ||
             err.message?.includes('AUTH_EXPIRED')) {
           console.error('[Auth] Token expired, redirecting to login...');
           sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
@@ -656,17 +656,17 @@
         throw err;
       }
     }
-    
+
     async function loadFolders() {
       try {
         const data = await fetchJSON('/.netlify/functions/dropbox-list-folders');
         const select = $('folderSelect');
-        
+
         if (!data.folders || data.folders.length === 0) {
           select.innerHTML = '<option value="">No folders found</option>';
           return;
         }
-        
+
         select.innerHTML = '<option value="">-- Select a folder --</option>';
         data.folders.forEach(folder => {
           const opt = document.createElement('option');
@@ -674,22 +674,22 @@
           opt.textContent = folder.name;
           select.appendChild(opt);
         });
-        
+
         select.addEventListener('change', (e) => {
           selectedFolder = e.target.value;
           $('btnStart').disabled = !selectedFolder;
         });
-        
+
       } catch (err) {
         console.error('Failed to load folders:', err);
         $('folderSelect').innerHTML = '<option value="">Error loading folders</option>';
       }
     }
-    
+
     function updateStep(num, status) {
       const step = $(`step${num}`);
       const statusEl = $(`status${num}`);
-      
+
       step.classList.remove('active', 'complete', 'warning');
       if (status === 'active') {
         step.classList.add('active');
@@ -701,17 +701,17 @@
         step.classList.add('warning');
         // Status text set by caller
       }
-      
+
       // Update progress bar
       const progress = (num / 4) * 100;
       $('progressBar').style.width = `${progress}%`;
     }
-    
+
     // Upload files in batches to avoid payload limits
     async function uploadFilesInBatches(files) {
       const MAX_BATCH_SIZE_BYTES = 4 * 1024 * 1024; // 4MB per batch
       const allUploadedFiles = [];
-      
+
       // Prepare file data with base64 encoding
       const fileData = await Promise.all(files.map(async (file) => {
         const base64 = await new Promise((resolve) => {
@@ -719,7 +719,7 @@
           reader.onload = () => resolve(reader.result.split(',')[1]);
           reader.readAsDataURL(file);
         });
-        
+
         return {
           name: file.name,
           mime: file.type,
@@ -727,12 +727,12 @@
           base64Size: base64.length,
         };
       }));
-      
+
       // Smart batching by size
       const batches = [];
       let currentBatch = [];
       let currentBatchSize = 0;
-      
+
       for (const file of fileData) {
         if (file.base64Size > MAX_BATCH_SIZE_BYTES) {
           // Large file goes alone
@@ -753,34 +753,34 @@
           currentBatchSize += file.base64Size;
         }
       }
-      
+
       if (currentBatch.length > 0) {
         batches.push(currentBatch);
       }
-      
+
       // Upload batches
       for (let i = 0; i < batches.length; i++) {
         const batch = batches[i];
         $('status1').innerHTML = `<span class="spinner"></span>Uploading batch ${i + 1}/${batches.length}...`;
-        
+
         const uploadRes = await fetchJSON('/.netlify/functions/ingest-local-upload', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ files: batch }),
         });
-        
+
         allUploadedFiles.push(...uploadRes.files);
       }
-      
+
       return allUploadedFiles;
     }
-    
+
     async function startPipeline() {
       const btn = $('btnStart');
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner"></span>Processing...';
       $('results').classList.remove('show');
-      
+
       // Reset all steps to clear previous run state
       for (let i = 1; i <= 4; i++) {
         const step = $(`step${i}`);
@@ -789,81 +789,81 @@
         status.textContent = 'Pending';
       }
       $('progressBar').style.width = '0%';
-      
+
       // Hide orphans warning from previous run
       $('orphansWarning').style.display = 'none';
-      
+
       try {
         let scanJobId;
-        
+
         if (uploadMethod === 'local') {
           // LOCAL UPLOAD FLOW
           if (selectedFiles.length === 0) {
             alert('Please select files to upload');
             return;
           }
-          
+
           // Step 1a: Upload files
           updateStep(1, 'active');
           $('status1').innerHTML = '<span class="spinner"></span>Uploading files...';
-          
+
           const uploadedFiles = await uploadFilesInBatches(selectedFiles);
           const stagedUrls = uploadedFiles.map(f => f.stagedUrl);
-          
+
           // Step 1b: Start scan with stagedUrls
           $('status1').innerHTML = '<span class="spinner"></span>Starting analysis...';
-          
+
           const scanRes = await fetchJSON('/.netlify/functions/smartdrafts-scan-bg', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ stagedUrls })
           });
-          
+
           if (!scanRes.ok || !scanRes.jobId) {
             throw new Error(scanRes.error || 'Scan failed to start');
           }
-          
+
           scanJobId = scanRes.jobId;
-          
+
         } else {
           // DROPBOX FLOW
           if (!selectedFolder) {
             alert('Please select a Dropbox folder first');
             return;
           }
-          
+
           // Step 1: Scan/Analyze (enqueue background job)
           updateStep(1, 'active');
           const scanRes = await fetchJSON('/.netlify/functions/smartdrafts-scan-bg', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
+            body: JSON.stringify({
               path: selectedFolder,
               force: false
             })
           });
-          
+
           if (!scanRes.ok || !scanRes.jobId) {
             throw new Error(scanRes.error || 'Scan failed to start');
           }
-          
+
           scanJobId = scanRes.jobId;
         }
-        
+
         currentJobId = scanJobId;
         console.log('[Quick List] Scan job started:', currentJobId);
-        
+
         // Poll for scan completion
         let scanComplete = false;
         let attempts = 0;
         const maxAttempts = 80; // 2 minutes max (1.5s intervals)
-        
+
         while (!scanComplete && attempts < maxAttempts) {
           await new Promise(resolve => setTimeout(resolve, 1500));
           attempts++;
-          
+
           const statusRes = await fetchJSON(`/.netlify/functions/smartdrafts-scan-status?jobId=${currentJobId}`);
-          
+
           if (statusRes.state === 'complete') {
             scanComplete = true;
             updateStep(1, 'complete');
@@ -876,11 +876,11 @@
             $('status1').innerHTML = `<span class="spinner"></span>Analyzing... ${progress}%`;
           }
         }
-        
+
         if (!scanComplete) {
           throw new Error('Scan timeout after 2 minutes');
         }
-        
+
         // Step 2: Pair
         updateStep(2, 'active');
         const pairRes = await fetchJSON('/.netlify/functions/smartdrafts-pairing', {
@@ -888,73 +888,73 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ jobId: currentJobId })
         });
-        
+
         if (!pairRes.ok) {
           throw new Error(pairRes.error || 'Pairing failed');
         }
-        
+
         const products = pairRes.pairing?.products || [];
         const orphans = pairRes.pairing?.orphans || [];
         const singletons = pairRes.pairing?.singletons || [];
-        
+
         // Count unpaired images (orphans + singletons)
         const unpairedCount = orphans.length + singletons.length;
-        
+
         $('totalPaired').textContent = products.length;
-        
+
         // Show orphans warning if any images couldn't be paired
         if (unpairedCount > 0) {
           $('orphansCount').textContent = unpairedCount;
           $('orphansWarning').style.display = 'block';
           console.log(`[Quick List] ${unpairedCount} unpaired images (${orphans.length} orphans, ${singletons.length} singletons)`);
         }
-        
+
         // Allow partial success - only fail if NO products paired AND no drafts can be created
         if (products.length === 0) {
           updateStep(2, 'warning');
           $('status2').innerHTML = '⚠️ No products could be paired automatically';
           throw new Error(`No products were paired from ${unpairedCount} image(s). Please review the images and try pairing manually.`);
         }
-        
+
         updateStep(2, 'complete');
         console.log('[Quick List] Paired', products.length, 'products');
-        
+
         // Step 3: Create Drafts (using background job)
         updateStep(3, 'active');
         $('status3').innerHTML = `<span class="spinner"></span>Starting draft creation...`;
-        
+
         // Start background job
         const draftBgRes = await fetchJSON('/.netlify/functions/smartdrafts-create-drafts-bg', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ products })
         });
-        
+
         if (!draftBgRes.ok || !draftBgRes.jobId) {
           throw new Error(draftBgRes.error || 'Failed to start draft creation job');
         }
-        
+
         const draftJobId = draftBgRes.jobId;
         console.log('[Quick List] Draft creation job started:', draftJobId);
-        
+
         // Poll for completion (max 120 attempts = 3 minutes)
         let draftAttempts = 0;
         let drafts = [];
         while (draftAttempts++ < 120) {
           await new Promise(resolve => setTimeout(resolve, 1500));
-          
+
           const statusRes = await fetchJSON(`/.netlify/functions/smartdrafts-create-drafts-status?jobId=${encodeURIComponent(draftJobId)}`);
-          
+
           if (!statusRes.ok) {
             throw new Error(statusRes.error || 'Failed to get draft creation status');
           }
-          
+
           const job = statusRes.job || {};
           const processed = job.processedProducts || 0;
           const total = job.totalProducts || products.length;
-          
+
           $('status3').innerHTML = `<span class="spinner"></span>Creating drafts (${processed}/${total})...`;
-          
+
           if (job.state === 'completed') {
             drafts = job.drafts || [];
             updateStep(3, 'complete');
@@ -965,28 +965,28 @@
             throw new Error(job.error || 'Draft creation failed');
           }
         }
-        
+
         if (draftAttempts >= 120) {
           throw new Error('Draft creation timed out after 3 minutes');
         }
-        
+
         console.log('[Quick List] Drafts received:', JSON.stringify(drafts, null, 2));
-        
+
         // Step 4: Publish to eBay Drafts
         updateStep(4, 'active');
-        
+
         // Build groups with proper structure for create-ebay-draft-user
         // Match drafts to products by index
         const groupsWithDrafts = drafts
           .map((draft, idx) => {
             if (!draft) return null; // Skip failed drafts
-            
+
             const product = products[idx];
             if (!product) return null;
-            
+
             // Build images array from draft data
             const images = draft.images || [];
-            
+
             return {
               groupId: draft.productId || product.productId || product.groupId,
               brand: draft.brand || 'Unknown',
@@ -1006,54 +1006,54 @@
             };
           })
           .filter(g => g !== null); // Remove nulls
-        
+
         if (groupsWithDrafts.length === 0) {
           throw new Error('No valid drafts to publish to eBay');
         }
-        
+
         console.log('[Quick List] Publishing', groupsWithDrafts.length, 'drafts to eBay');
-        
+
         const pubRes = await fetchJSON('/.netlify/functions/create-ebay-draft-user', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
+          body: JSON.stringify({
             jobId: currentJobId,
             groups: groupsWithDrafts
           })
         });
-        
+
         if (!pubRes.ok) {
           throw new Error(pubRes.error || 'Publishing to eBay failed');
         }
-        
+
         updateStep(4, 'complete');
         const published = pubRes.created || 0;
         console.log('[Quick List] Published', published, 'drafts to eBay');
-        
+
         // Show results
         $('progressBar').style.width = '100%';
         $('results').classList.add('show');
         btn.textContent = '✓ Complete!';
         btn.style.background = 'var(--success)';
-        
+
       } catch (err) {
         console.error('Pipeline error:', err);
-        
+
         // Check if it's an auth error - user will be redirected, so don't show alert
-        if (err.message?.includes('Authentication') || 
+        if (err.message?.includes('Authentication') ||
             err.message?.includes('AUTH_EXPIRED') ||
             err.message?.includes('Unauthorized')) {
           // Auth error - redirect is already happening in fetchJSON
           return;
         }
-        
+
         alert(`Error: ${err.message}`);
         btn.disabled = false;
         btn.textContent = '🔄 Retry Quick List';
         btn.style.background = 'linear-gradient(135deg, var(--primary) 0%, var(--primary-600) 100%)';
       }
     }
-    
+
     function resetPipeline() {
       // Reset all steps
       for (let i = 1; i <= 4; i++) {
@@ -1062,10 +1062,10 @@
         step.classList.remove('active', 'complete', 'warning');
         status.textContent = 'Pending';
       }
-      
+
       // Hide orphans warning
       $('orphansWarning').style.display = 'none';
-      
+
       $('progressBar').style.width = '0%';
       $('results').classList.remove('show');
       $('btnStart').disabled = false;
@@ -1073,19 +1073,19 @@
       $('btnStart').style.background = 'linear-gradient(135deg, var(--primary) 0%, var(--primary-600) 100%)';
       currentJobId = null;
     }
-    
+
     async function bootstrap() {
       try {
         const ok = await authClient.requireAuth();
         if (!ok) return;
-        
+
         // Load Dropbox folders
         await loadFolders();
       } catch (e) {
         console.error('Auth check failed', e);
       }
     }
-    
+
     bootstrap();
   </script>
 </body>
