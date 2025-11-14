@@ -2,6 +2,71 @@
 
 > This file holds reminders the user expects me to retain across sessions. Update it whenever the user says, "you already know this" or repeats an instruction.
 
+## November 14, 2025 Session - Auth0 Token Refresh & Netlify Build Issues
+
+### Auth0 Token Refresh Race Condition - FIXED ✅
+**Problem**: Multiple concurrent token refresh attempts caused Auth0 rotating refresh tokens to be reused, invalidating the entire token family. This resulted in "Token could not be decoded or is missing in DB" errors.
+
+**Solution Implemented**:
+1. **Token Refresh Gating** - Created `getTokenWithGating()` function that ensures only one token refresh can be in-flight at a time using a promise-based gate
+2. **Lazy Token Fetching** - Removed token fetching from `initAuth0()` and `ensureAuth()`. Tokens are now only fetched when actually needed for API calls
+3. **Timeout Protection** - Added 10-second timeout to prevent infinite waiting if token refresh hangs
+4. **Better Error Handling** - Added proper detection and handling of expired/invalid refresh tokens with graceful redirect to login
+
+**Files Modified**:
+- `public/auth-client.js` - Added gating mechanism, lazy loading, timeout protection
+- `public/quick-list.html` - Improved error handling for auth failures
+- `docs/AUTH-TOKEN-REFRESH-FIX.md` - Full documentation of the fix
+
+**Key Pattern**:
+```javascript
+// Don't fetch tokens during initialization
+async function initAuth0() {
+  // Only check if authenticated, don't fetch tokens
+  console.log('[Auth] User authenticated, token will be fetched on first use');
+}
+
+// Fetch tokens lazily with gating
+async function getTokenWithGating() {
+  if (state.tokenRefreshPromise) {
+    console.log('[Auth] Token refresh already in progress, waiting...');
+    return await Promise.race([state.tokenRefreshPromise, timeoutPromise]);
+  }
+  // Start new refresh...
+}
+```
+
+### Netlify esbuild Crypto Import Issues - ONGOING ⚠️
+**Problem**: Netlify functions returning 404 because esbuild fails to bundle functions with bare `'crypto'` imports. Must use `'node:crypto'` instead.
+
+**What We Fixed**:
+- Changed ALL imports from `'crypto'` → `'node:crypto'` in:
+  - **Netlify Functions** (9 files): smartdrafts-scan-bg, smartdrafts-scan-background, smartdrafts-pairing, smartdrafts-create-drafts-bg, ebay-mad, ingest-local-upload, dbx-list-tree-user, analyze-images-bg, analyze-images-bg-user
+  - **Source Libraries** (2 files): src/lib/storage.ts, src/lib/merge.ts
+
+**Current Issue**: Despite all crypto imports being fixed, `smartdrafts-scan-background` still returns 404 when deployed to Netlify. The function exists, builds locally without errors, but Netlify cannot find it at runtime.
+
+**Investigation Needed**:
+- Check Netlify build logs for function-specific build failures
+- Verify function actually deploys (might be silently failing during esbuild bundling)
+- Check if there are other import issues preventing bundling
+- Consider function size limits or other Netlify constraints
+
+**Key Files**:
+- `NETLIFY-404-ISSUE.md` - Detailed summary for troubleshooting
+- All crypto imports now use `'node:crypto'` pattern
+
+**Pattern to Remember**:
+```typescript
+// ✅ Correct for Netlify esbuild
+import crypto from "node:crypto";
+import { createHash } from "node:crypto";
+
+// ❌ Wrong - causes bundling failure
+import crypto from "crypto";
+import { createHash } from "crypto";
+```
+
 ## Domains & Environments
 - Primary admin/API host: https://draftpilot-ai.netlify.app/
 - Use this domain in testing instructions and curl examples unless the user explicitly asks for another environment.
