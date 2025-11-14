@@ -1517,15 +1517,22 @@ async function runSmartDraftScanFromStagedUrls(options: {
   });
   
   // Use vision groups as-is (they already have productIds and grouping)
-  const groups = visionGroups.map((group: any) => ({
-    ...group,
-    images: (group.images || []).map((url: string) => {
-      const key = urlKey(url);
-      return httpsByKey.get(key) || url;
-    }),
-    heroDisplayUrl: group.heroUrl ? (httpsByKey.get(urlKey(group.heroUrl)) || group.heroUrl) : null,
-    backDisplayUrl: group.backUrl ? (httpsByKey.get(urlKey(group.backUrl)) || group.backUrl) : null,
-  }));
+  const groups = visionGroups.map((group: any) => {
+    // Deduplicate images by URL
+    const uniqueImages = Array.from(new Set(
+      (group.images || []).map((url: string) => {
+        const key = urlKey(url);
+        return httpsByKey.get(key) || url;
+      })
+    ));
+    
+    return {
+      ...group,
+      images: uniqueImages,
+      heroDisplayUrl: group.heroUrl ? (httpsByKey.get(urlKey(group.heroUrl)) || group.heroUrl) : null,
+      backDisplayUrl: group.backUrl ? (httpsByKey.get(urlKey(group.backUrl)) || group.backUrl) : null,
+    };
+  });
   
   console.log(`[smartdrafts-scan-core] Generated ${groups.length} product groups from staged URLs`);
   
