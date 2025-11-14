@@ -1395,21 +1395,144 @@ async function runSmartDraftScanFromStagedUrls(options: {
   force: boolean;
   debug: boolean;
 }): Promise<SmartDraftScanResponse> {
-  const { stagedUrls } = options;
+  const { userId, stagedUrls, limit, force, debug: debugEnabled } = options;
   
-  // For Phase 1: Return error directing users to use Dropbox
-  // Full staged URL support requires vision pipeline integration
-  return jsonEnvelope(501, {
-    ok: false,
-    error: "Staged URL scanning not yet implemented. Please use Dropbox folder upload for now.",
+  console.log(`[smartdrafts-scan-core] Processing ${stagedUrls.length} staged URLs for user ${userId}`);
+  
+  // Limit URLs to max
+  const limitedUrls = stagedUrls.slice(0, limit);
+  
+  // Build signature from URLs for caching
+  const signature = createHash("sha256")
+    .update(JSON.stringify(limitedUrls.sort()))
+    .digest("hex")
+    .slice(0, 16);
+  
+  // Check cache (using special key for staged URLs)
+  const cacheKey = makeCacheKey(userId, `staged:${signature}`);
+  const cached = await getCachedSmartDraftGroups(cacheKey);
+  
+  if (!force && !debugEnabled && cached && cached.signature === signature && Array.isArray(cached.groups) && cached.groups.length) {
+    console.log(`[smartdrafts-scan-core] Cache hit for staged URLs (${cached.groups.length} groups)`);
+    return jsonEnvelope(200, {
+      ok: true,
+      cached: true,
+      signature,
+      count: cached.groups.length,
+      warnings: cached.warnings || [],
+      groups: cached.groups,
+      imageInsights: cached.imageInsights && typeof cached.imageInsights === "object" ? cached.imageInsights : {},
+    });
+  }
+  
+  // Build analysis metadata from URLs
+  const analysisMeta = limitedUrls.map((url) => ({
+    url,
+    name: basenameFrom(url),
+    folder: "uploads",
+  }));
+  
+  // Sanitize URLs
+  const urls = sanitizeUrls(limitedUrls);
+  
+  if (!urls.length) {
+    return jsonEnvelope(400, {
+      ok: false,
+      error: "No valid image URLs provided",
+    });
+  }
+  
+  // Check quota
+  if (!debugEnabled) {
+    const allowed = await canConsumeImages(userId, urls.length);
+    if (!allowed) {
+      return jsonEnvelope(429, { ok: false, error: "Daily image quota exceeded" });
+    }
+    await consumeImages(userId, urls.length);
+  }
+  
+  // Run vision analysis
+  console.log(`[smartdrafts-scan-core] Running vision analysis on ${urls.length} staged images...`);
+  const analysis = await runAnalysis(urls, 12, {
+    skipPricing: true,
+    metadata: analysisMeta,
+    debugVisionResponse: debugEnabled,
+    force,
   });
   
-  // TODO Phase 2: Implement full vision pipeline for staged URLs
-  // - Create DropboxEntry-like structures from URLs
-  // - Run vision analysis on each URL
-  // - Run CLIP/pairing logic
-  // - Cache results
-  // - Return formatted response
+  // Use vision groups directly (productIds from GPT-4 Vision)
+  const visionGroups = analysis?.groups || [];
+  console.log(`[smartdrafts-scan-core] Vision returned ${visionGroups.length} groups`);
+  
+  // Build imageInsights from analysis
+  const rawInsights = analysis?.imageInsights || {};
+  const insightList: ImageInsight[] = USE_NEW_SORTER && Array.isArray(analysis?._rawVisionInsights)
+    ? (analysis._rawVisionInsights as ImageInsight[])
+    : Array.isArray(rawInsights)
+    ? (rawInsights as ImageInsight[])
+    : Object.entries(rawInsights)
+        .map(([url, insight]) => {
+          if (!insight) return null;
+          return { ...(insight as ImageInsight), url };
+        })
+        .filter((value): value is ImageInsight => Boolean(value));
+  
+  // Build display URL maps
+  const httpsByKey = new Map<string, string>();
+  const originalByKey = new Map<string, string>();
+  
+  for (let idx = 0; idx < limitedUrls.length; idx++) {
+    const url = limitedUrls[idx];
+    const key = urlKey(url);
+    httpsByKey.set(key, url);
+    originalByKey.set(key, url);
+  }
+  
+  // Build imageInsights record with display URLs
+  const imageInsights: Record<string, ImageInsight> = {};
+  insightList.forEach((insight, idx) => {
+    const originalUrl = limitedUrls[idx] || urls[idx] || '';
+    const key = urlKey(originalUrl);
+    imageInsights[originalUrl] = {
+      ...insight,
+      url: originalUrl,
+      key,
+      displayUrl: originalUrl,
+    } as ImageInsight;
+  });
+  
+  // Use vision groups as-is (they already have productIds and grouping)
+  const groups = visionGroups.map((group: any) => ({
+    ...group,
+    images: (group.images || []).map((url: string) => {
+      const key = urlKey(url);
+      return httpsByKey.get(key) || url;
+    }),
+    heroDisplayUrl: group.heroUrl ? (httpsByKey.get(urlKey(group.heroUrl)) || group.heroUrl) : null,
+    backDisplayUrl: group.backUrl ? (httpsByKey.get(urlKey(group.backUrl)) || group.backUrl) : null,
+  }));
+  
+  console.log(`[smartdrafts-scan-core] Generated ${groups.length} product groups from staged URLs`);
+  
+  // Cache results
+  const cacheData: SmartDraftGroupCache = {
+    signature,
+    groups,
+    warnings: [],
+    imageInsights,
+    updatedAt: Date.now(),
+  };
+  
+  await setCachedSmartDraftGroups(cacheKey, cacheData);
+  
+  return jsonEnvelope(200, {
+    ok: true,
+    signature,
+    count: groups.length,
+    warnings: [],
+    groups,
+    imageInsights,
+  });
 }
 
 export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise<SmartDraftScanResponse> {
