@@ -110,7 +110,7 @@ export const handler: Handler = async (event) => {
   }
 
   const baseUrl =
-    process.env.APP_URL || process.env.URL || process.env.DEPLOY_PRIME_URL || process.env.DEPLOY_URL || "https://ebaywebhooks.netlify.app";
+    process.env.APP_URL || process.env.URL || process.env.DEPLOY_PRIME_URL || process.env.DEPLOY_URL || "https://draftpilot-ai.netlify.app";
   const backgroundUrl = `${baseUrl.replace(/\/$/, "")}/.netlify/functions/analyze-images-background`;
 
   try {

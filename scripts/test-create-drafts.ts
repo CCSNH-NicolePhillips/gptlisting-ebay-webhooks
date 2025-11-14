@@ -43,7 +43,7 @@ async function testCreateDrafts() {
   
   const url = process.env.APP_URL 
     ? `${process.env.APP_URL}/.netlify/functions/smartdrafts-create-drafts`
-    : 'https://ebaywebhooks.netlify.app/.netlify/functions/smartdrafts-create-drafts';
+    : 'https://draftpilot-ai.netlify.app/.netlify/functions/smartdrafts-create-drafts';
   
   console.log(`📍 Endpoint: ${url}`);
   console.log(`📦 Sending ${sampleProducts.length} products...\n`);

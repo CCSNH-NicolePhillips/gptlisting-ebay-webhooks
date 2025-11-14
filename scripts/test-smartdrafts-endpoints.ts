@@ -6,7 +6,7 @@
 import { config } from "dotenv";
 config();
 
-const APP_URL = process.env.APP_URL || "https://ebaywebhooks.netlify.app";
+const APP_URL = process.env.APP_URL || "https://draftpilot-ai.netlify.app";
 
 async function testFullEndpointFlow() {
   console.log("🧪 Testing full SmartDrafts endpoint flow\n");
