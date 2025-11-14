@@ -14,6 +14,8 @@
     token: null,
     user: null,
     idTokenRaw: null,
+    // Token refresh gating to prevent race conditions
+    tokenRefreshPromise: null,
   };
 
   function clearLocalAuthState() {
@@ -256,21 +258,19 @@
           
           if (redirectPending) return;
           
-          // Try to acquire an API access token; if audience is not configured, fall back to ID token
+          // Use gated token refresh on initial load
+          // This prevents race conditions during app initialization
           try {
-            state.token = await state.auth0.getTokenSilently();
+            state.token = await getTokenWithGating();
           } catch (e) {
             if (redirectPending) return;
             
-            // If refresh token fails (403/401), clear auth state and force re-login
-            const isForbidden = e.message?.includes('403') || e.message?.includes('Forbidden');
-            const isUnauthorized = e.message?.includes('401') || e.message?.includes('Unauthorized');
-            
-            if (isForbidden || isUnauthorized) {
+            // If token expired/invalid, the gated function already handles it
+            if (e.message === 'AUTH_EXPIRED') {
               forceRelogin(); // This throws and redirects
             }
             
-            console.warn('Token refresh failed:', e.message || e);
+            console.warn('Token acquisition failed during init:', e.message || e);
             state.token = null;
           }
           
@@ -342,9 +342,8 @@
       const isAuth = state.auth0 && (await state.auth0.isAuthenticated());
       if (!isAuth) return false;
       state.user = await state.auth0.getUser();
-      // Prefer a freshly refreshed token to avoid expired JWTs in subsequent calls
-      state.token = (await state.auth0.getTokenSilently({ cacheMode: 'off' }).catch(() => null))
-        || (await state.auth0.getTokenSilently().catch(() => null));
+      // Use gated token refresh to avoid race conditions
+      state.token = await getTokenWithGating().catch(() => null);
       attachAuthFetch();
       return true;
     }
@@ -424,42 +423,123 @@
     }
   }
 
+  // CRITICAL: Gate token refresh to prevent race conditions
+  // Only one token refresh can be in-flight at a time
+  async function getTokenWithGating() {
+    // If a refresh is already in progress, wait for it
+    if (state.tokenRefreshPromise) {
+      console.log('[Auth] Token refresh already in progress, waiting...');
+      try {
+        return await state.tokenRefreshPromise;
+      } catch (e) {
+        // If the in-flight request failed, clear it and try again
+        console.log('[Auth] In-flight token refresh failed, retrying...');
+        state.tokenRefreshPromise = null;
+      }
+    }
+
+    // Start a new refresh operation
+    console.log('[Auth] Starting new token refresh...');
+    state.tokenRefreshPromise = (async () => {
+      try {
+        if (state.mode === 'auth0' && state.auth0) {
+          // Prefer ID token only if it's still valid; otherwise, acquire a fresh access token.
+          const nowSec = Math.floor(Date.now() / 1000);
+          const isJwtValid = (raw) => {
+            try {
+              const parts = String(raw || '').split('.');
+              if (parts.length < 2) return false;
+              const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+              const exp = Number(payload?.exp || 0);
+              return Number.isFinite(exp) && exp > nowSec + 60; // 60s buffer to avoid edge cases
+            } catch { return false; }
+          };
+          
+          // First, check if we have a valid cached token
+          if (state.token && isJwtValid(state.token)) {
+            return state.token;
+          }
+          
+          // Check ID token
+          try {
+            const idc = await state.auth0.getIdTokenClaims();
+            const idRaw = (idc && (idc.__raw || idc.raw)) || null;
+            if (idRaw && isJwtValid(idRaw)) {
+              state.token = idRaw;
+              state.idTokenRaw = idRaw;
+              return idRaw;
+            }
+          } catch (e) {
+            console.warn('[Auth] Failed to get ID token claims:', e.message);
+          }
+          
+          if (state.idTokenRaw && isJwtValid(state.idTokenRaw)) {
+            state.token = state.idTokenRaw;
+            return state.idTokenRaw;
+          }
+          
+          // Need to refresh - use cache by default (SDK will handle refresh internally)
+          try {
+            const at = await state.auth0.getTokenSilently();
+            if (at) {
+              state.token = at;
+              return at;
+            }
+          } catch (e) {
+            console.warn('[Auth] Token refresh failed:', e.message);
+            
+            // If refresh failed due to expired/invalid refresh token, clear state
+            const isAuthError = e.message?.includes('403') || 
+                               e.message?.includes('401') || 
+                               e.message?.includes('login_required') ||
+                               e.message?.includes('consent_required');
+            
+            if (isAuthError) {
+              console.error('[Auth] Refresh token expired or invalid, clearing auth state');
+              clearLocalAuthState();
+              state.token = null;
+              state.user = null;
+              throw new Error('AUTH_EXPIRED');
+            }
+            throw e;
+          }
+          
+          // Fallback to cached token if we have one
+          if (state.token) return state.token;
+          return null;
+        }
+        
+        if (state.mode === 'identity' && window.netlifyIdentity) {
+          const u = window.netlifyIdentity.currentUser();
+          const jwt = await u?.jwt?.();
+          state.token = jwt;
+          return jwt;
+        }
+        
+        return null;
+      } finally {
+        // Clear the promise after completion (success or failure)
+        state.tokenRefreshPromise = null;
+      }
+    })();
+
+    return state.tokenRefreshPromise;
+  }
+
+  // Backwards compatibility - keep getToken() but use gated version
   async function getToken() {
-    if (state.mode === 'auth0' && state.auth0) {
-      // Prefer ID token only if it's still valid; otherwise, acquire a fresh access token.
-      const nowSec = Math.floor(Date.now() / 1000);
-      const isJwtValid = (raw) => {
-        try {
-          const parts = String(raw || '').split('.');
-          if (parts.length < 2) return false;
-          const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-          const exp = Number(payload?.exp || 0);
-          return Number.isFinite(exp) && exp > nowSec + 30; // 30s skew
-        } catch { return false; }
-      };
-      try {
-        const idc = await state.auth0.getIdTokenClaims();
-        const idRaw = (idc && (idc.__raw || idc.raw)) || null;
-        if (idRaw && isJwtValid(idRaw)) return idRaw;
-      } catch {}
-      if (state.idTokenRaw && isJwtValid(state.idTokenRaw)) return state.idTokenRaw;
-      // Try to force-refresh the access token
-      try {
-        const atFresh = await state.auth0.getTokenSilently({ cacheMode: 'off' });
-        if (atFresh) return atFresh;
-      } catch {}
-      try {
-        const at = await state.auth0.getTokenSilently();
-        if (at) return at;
-      } catch {}
-      if (state.token) return state.token;
-      return null;
+    try {
+      return await getTokenWithGating();
+    } catch (e) {
+      if (e.message === 'AUTH_EXPIRED') {
+        // Token expired, redirect to login
+        console.log('[Auth] Token expired, redirecting to login...');
+        sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
+        window.location.replace('/login.html');
+        return null;
+      }
+      throw e;
     }
-    if (state.mode === 'identity' && window.netlifyIdentity) {
-      const u = window.netlifyIdentity.currentUser();
-      return await u?.jwt?.();
-    }
-    return null;
   }
 
   // Explicit helper to always send Authorization for first-party function calls
@@ -467,9 +547,15 @@
     try { await ensureAuth(); } catch {}
     const headers = Object.assign({}, init.headers);
     try {
-      const token = await getToken();
+      // Use gated token refresh to prevent race conditions
+      const token = await getTokenWithGating();
       if (token) headers.Authorization = headers.Authorization || `Bearer ${token}`;
-    } catch {}
+    } catch (e) {
+      // If auth expired, let the error propagate so caller can handle
+      if (e.message === 'AUTH_EXPIRED') {
+        throw new Error('Authentication expired. Please log in again.');
+      }
+    }
     return fetch(input, Object.assign({}, init, { headers }));
   }
 
@@ -482,14 +568,20 @@
         const url = typeof input === 'string' ? input : input.url;
         const isFn = /\/\.netlify\/functions\//.test(url);
         if (isFn) {
-          const token = state.token || (await getToken());
+          // Use gated token refresh to prevent race conditions
+          const token = state.token || (await getTokenWithGating());
           if (token) {
             init.headers = Object.assign({}, init.headers, {
               Authorization: init.headers?.Authorization || `Bearer ${token}`,
             });
           }
         }
-      } catch {}
+      } catch (e) {
+        // If auth expired, continue without token (let backend return 401)
+        if (e.message !== 'AUTH_EXPIRED') {
+          console.warn('[Auth] Failed to attach token to request:', e.message);
+        }
+      }
       return orig(input, init);
     };
     window.__authFetchPatched = true;
