@@ -473,11 +473,15 @@
 
           // First, check if we have a valid cached token
           if (state.token && isJwtValid(state.token)) {
-            console.log('[Auth] Using cached token');
+            console.log('[Auth] ✅ Using cached token');
             return state.token;
           }
 
-          // Check ID token - try multiple methods
+          const hasAudience = Boolean(state.cfg?.AUTH0_AUDIENCE);
+          console.log('[Auth] Token retrieval starting (audience configured:', hasAudience, ')');
+
+          // STRATEGY: Try ID token first (fast, synchronous reads)
+          // Only try access token if we have an audience configured
           console.log('[Auth] Attempting to retrieve ID token...');
           let idRaw = null;
 
@@ -509,7 +513,7 @@
             return state.idTokenRaw;
           }
 
-          // Method 3: Try to extract from Auth0 localStorage cache (last resort)
+          // Method 3: Try to extract from Auth0 localStorage cache (most reliable)
           if (!idRaw) {
             try {
               console.log('[Auth] Method 3: Attempting to read ID token from localStorage...');
@@ -522,6 +526,7 @@
                   const parsed = JSON.parse(val);
                   if (parsed && parsed.body && parsed.body.id_token) {
                     const token = parsed.body.id_token;
+                    console.log('[Auth] Found ID token in cache, validating...');
                     if (isJwtValid(token)) {
                       console.log('[Auth] ✅ Found valid ID token in localStorage cache');
                       idRaw = token;
@@ -544,48 +549,59 @@
             }
           }
 
-          // Try to get access token (only if audience is configured)
-          console.log('[Auth] Requesting access token from Auth0...');
-          try {
-            const at = await state.auth0.getTokenSilently();
-            if (at) {
-              console.log('[Auth] ✅ Successfully got access token');
-              state.token = at;
-              return at;
-            } else {
-              console.log('[Auth] getTokenSilently() returned null (no audience configured)');
-            }
-          } catch (e) {
-            console.warn('[Auth] getTokenSilently() failed:', e.message);
-
-            // If refresh failed due to expired/invalid refresh token, clear state
-            const isAuthError = e.message?.includes('403') ||
-                               e.message?.includes('401') ||
-                               e.message?.includes('login_required') ||
-                               e.message?.includes('consent_required');
-
-            if (isAuthError) {
-              console.error('[Auth] Refresh token expired or invalid, clearing auth state');
-              clearLocalAuthState();
-              state.token = null;
-              state.user = null;
-              throw new Error('AUTH_EXPIRED');
-            }
-            // For other errors (like no audience configured), fall through to ID token fallback
-            console.log('[Auth] Will attempt ID token fallback...');
-          }
-
-          // Fallback: Use ID token if we have it (from earlier methods)
+          // If we found a valid ID token, use it
           if (idRaw && isJwtValid(idRaw)) {
-            console.log('[Auth] ✅ Using ID token as final fallback');
+            console.log('[Auth] ✅ Using ID token (no audience configured or preferred)');
             state.token = idRaw;
             state.idTokenRaw = idRaw;
             return idRaw;
           }
 
-          // Last resort: Try cached state.idTokenRaw one more time
-          if (state.idTokenRaw && isJwtValid(state.idTokenRaw)) {
-            console.log('[Auth] ✅ Using cached ID token as final fallback');
+          // Only try access token if we have an audience configured
+          // Without audience, getTokenSilently() can hang or fail
+          if (hasAudience) {
+            console.log('[Auth] No ID token available, trying access token...');
+            try {
+              const at = await state.auth0.getTokenSilently({ timeoutInSeconds: 5 });
+              if (at) {
+                console.log('[Auth] ✅ Successfully got access token');
+                state.token = at;
+                return at;
+              } else {
+                console.log('[Auth] getTokenSilently() returned null');
+              }
+            } catch (e) {
+              console.warn('[Auth] getTokenSilently() failed:', e.message);
+
+              // If refresh failed due to expired/invalid refresh token, clear state
+              const isAuthError = e.message?.includes('403') ||
+                                 e.message?.includes('401') ||
+                                 e.message?.includes('login_required') ||
+                                 e.message?.includes('consent_required');
+
+              if (isAuthError) {
+                console.error('[Auth] Refresh token expired or invalid, clearing auth state');
+                clearLocalAuthState();
+                state.token = null;
+                state.user = null;
+                throw new Error('AUTH_EXPIRED');
+              }
+            }
+          } else {
+            console.log('[Auth] Skipping access token (no audience configured)');
+          }
+
+          // Final fallback: Use any ID token we found (even if expired)
+          if (idRaw) {
+            console.warn('[Auth] ⚠️ Using ID token as last resort (may be expired)');
+            state.token = idRaw;
+            state.idTokenRaw = idRaw;
+            return idRaw;
+          }
+
+          // Last resort: cached state.idTokenRaw (even if expired)
+          if (state.idTokenRaw) {
+            console.warn('[Auth] ⚠️ Using cached ID token as last resort (may be expired)');
             state.token = state.idTokenRaw;
             return state.idTokenRaw;
           }
