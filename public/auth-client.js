@@ -477,37 +477,86 @@
             return state.token;
           }
 
-          // Check ID token
+          // Check ID token - try multiple methods
+          console.log('[Auth] Attempting to retrieve ID token...');
+          let idRaw = null;
+
+          // Method 1: Try getIdTokenClaims()
           try {
+            console.log('[Auth] Method 1: Calling getIdTokenClaims()...');
             const idc = await state.auth0.getIdTokenClaims();
-            const idRaw = (idc && (idc.__raw || idc.raw)) || null;
+            console.log('[Auth] getIdTokenClaims() result:', idc ? 'claims received' : 'null');
+            if (idc) {
+              idRaw = idc.__raw || idc.raw || null;
+              console.log('[Auth] Extracted ID token:', idRaw ? `token (${idRaw.substring(0, 20)}...)` : 'null');
+            }
             if (idRaw && isJwtValid(idRaw)) {
-              console.log('[Auth] Using ID token');
+              console.log('[Auth] ✅ Using ID token from getIdTokenClaims()');
               state.token = idRaw;
               state.idTokenRaw = idRaw;
               return idRaw;
+            } else if (idRaw) {
+              console.warn('[Auth] ID token found but invalid/expired');
             }
           } catch (e) {
-            console.warn('[Auth] Failed to get ID token claims:', e.message);
+            console.warn('[Auth] getIdTokenClaims() failed:', e.message);
           }
 
-          if (state.idTokenRaw && isJwtValid(state.idTokenRaw)) {
-            console.log('[Auth] Using cached ID token');
+          // Method 2: Try cached state.idTokenRaw
+          if (!idRaw && state.idTokenRaw && isJwtValid(state.idTokenRaw)) {
+            console.log('[Auth] ✅ Using cached ID token from state');
             state.token = state.idTokenRaw;
             return state.idTokenRaw;
           }
 
-          // Need to refresh - use cache by default (SDK will handle refresh internally)
-          console.log('[Auth] Requesting fresh token from Auth0...');
+          // Method 3: Try to extract from Auth0 localStorage cache (last resort)
+          if (!idRaw) {
+            try {
+              console.log('[Auth] Method 3: Attempting to read ID token from localStorage...');
+              const auth0Keys = Object.keys(localStorage).filter(k => k.startsWith('@@auth0spajs@@'));
+              console.log('[Auth] Found', auth0Keys.length, 'Auth0 cache entries');
+
+              for (const key of auth0Keys) {
+                try {
+                  const val = localStorage.getItem(key);
+                  const parsed = JSON.parse(val);
+                  if (parsed && parsed.body && parsed.body.id_token) {
+                    const token = parsed.body.id_token;
+                    if (isJwtValid(token)) {
+                      console.log('[Auth] ✅ Found valid ID token in localStorage cache');
+                      idRaw = token;
+                      state.idTokenRaw = token;
+                      state.token = token;
+                      return token;
+                    } else {
+                      console.warn('[Auth] Found ID token in localStorage but it\'s invalid/expired');
+                    }
+                  }
+                } catch (e) {
+                  // Skip invalid entries
+                }
+              }
+              if (!idRaw) {
+                console.warn('[Auth] No valid ID token found in localStorage');
+              }
+            } catch (e) {
+              console.warn('[Auth] Failed to read from localStorage:', e.message);
+            }
+          }
+
+          // Try to get access token (only if audience is configured)
+          console.log('[Auth] Requesting access token from Auth0...');
           try {
             const at = await state.auth0.getTokenSilently();
             if (at) {
-              console.log('[Auth] Successfully refreshed token');
+              console.log('[Auth] ✅ Successfully got access token');
               state.token = at;
               return at;
+            } else {
+              console.log('[Auth] getTokenSilently() returned null (no audience configured)');
             }
           } catch (e) {
-            console.error('[Auth] Token refresh failed:', e.message, e);
+            console.warn('[Auth] getTokenSilently() failed:', e.message);
 
             // If refresh failed due to expired/invalid refresh token, clear state
             const isAuthError = e.message?.includes('403') ||
@@ -523,23 +572,38 @@
               throw new Error('AUTH_EXPIRED');
             }
             // For other errors (like no audience configured), fall through to ID token fallback
-            console.warn('[Auth] Access token unavailable, will try ID token fallback');
+            console.log('[Auth] Will attempt ID token fallback...');
           }
 
-          // Fallback to ID token if no access token available
-          if (!state.token && state.idTokenRaw) {
-            console.log('[Auth] Using ID token as fallback (no audience configured)');
+          // Fallback: Use ID token if we have it (from earlier methods)
+          if (idRaw && isJwtValid(idRaw)) {
+            console.log('[Auth] ✅ Using ID token as final fallback');
+            state.token = idRaw;
+            state.idTokenRaw = idRaw;
+            return idRaw;
+          }
+
+          // Last resort: Try cached state.idTokenRaw one more time
+          if (state.idTokenRaw && isJwtValid(state.idTokenRaw)) {
+            console.log('[Auth] ✅ Using cached ID token as final fallback');
             state.token = state.idTokenRaw;
             return state.idTokenRaw;
           }
 
-          // Fallback to cached token if we have one
+          // Fallback to cached token if we have one (even if expired)
           if (state.token) {
-            console.warn('[Auth] Using fallback cached token');
+            console.warn('[Auth] ⚠️ Using stale cached token as last resort');
             return state.token;
           }
 
-          console.error('[Auth] No token available');
+          console.error('[Auth] ❌ FAILED: No token available after all methods');
+          console.error('[Auth] Debug info:', {
+            isAuthenticated: true,
+            hasAuth0: !!state.auth0,
+            hasIdTokenRaw: !!state.idTokenRaw,
+            hasCachedToken: !!state.token,
+            mode: state.mode
+          });
           return null;
         }
 
