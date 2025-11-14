@@ -426,15 +426,24 @@
   // CRITICAL: Gate token refresh to prevent race conditions
   // Only one token refresh can be in-flight at a time
   async function getTokenWithGating() {
-    // If a refresh is already in progress, wait for it
+    // If a refresh is already in progress, wait for it (with timeout)
     if (state.tokenRefreshPromise) {
       console.log('[Auth] Token refresh already in progress, waiting...');
+      
+      // Add a timeout to prevent infinite waiting
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Token refresh timeout')), 10000); // 10 second timeout
+      });
+      
       try {
-        return await state.tokenRefreshPromise;
+        return await Promise.race([state.tokenRefreshPromise, timeoutPromise]);
       } catch (e) {
-        // If the in-flight request failed, clear it and try again
-        console.log('[Auth] In-flight token refresh failed, retrying...');
-        state.tokenRefreshPromise = null;
+        if (e.message === 'Token refresh timeout') {
+          console.error('[Auth] Token refresh timed out, clearing and retrying');
+          state.tokenRefreshPromise = null;
+          // Don't retry here, let the caller try again
+        }
+        throw e;
       }
     }
 
@@ -442,7 +451,20 @@
     console.log('[Auth] Starting new token refresh...');
     state.tokenRefreshPromise = (async () => {
       try {
-        if (state.mode === 'auth0' && state.auth0) {
+        if (state.mode === 'auth0') {
+          // Ensure Auth0 is initialized
+          if (!state.auth0) {
+            console.error('[Auth] Auth0 not initialized yet');
+            return null;
+          }
+          
+          // Check if authenticated
+          const isAuth = await state.auth0.isAuthenticated().catch(() => false);
+          if (!isAuth) {
+            console.warn('[Auth] Not authenticated, cannot get token');
+            return null;
+          }
+          
           // Prefer ID token only if it's still valid; otherwise, acquire a fresh access token.
           const nowSec = Math.floor(Date.now() / 1000);
           const isJwtValid = (raw) => {
@@ -457,6 +479,7 @@
           
           // First, check if we have a valid cached token
           if (state.token && isJwtValid(state.token)) {
+            console.log('[Auth] Using cached token');
             return state.token;
           }
           
@@ -465,6 +488,7 @@
             const idc = await state.auth0.getIdTokenClaims();
             const idRaw = (idc && (idc.__raw || idc.raw)) || null;
             if (idRaw && isJwtValid(idRaw)) {
+              console.log('[Auth] Using ID token');
               state.token = idRaw;
               state.idTokenRaw = idRaw;
               return idRaw;
@@ -474,19 +498,22 @@
           }
           
           if (state.idTokenRaw && isJwtValid(state.idTokenRaw)) {
+            console.log('[Auth] Using cached ID token');
             state.token = state.idTokenRaw;
             return state.idTokenRaw;
           }
           
           // Need to refresh - use cache by default (SDK will handle refresh internally)
+          console.log('[Auth] Requesting fresh token from Auth0...');
           try {
             const at = await state.auth0.getTokenSilently();
             if (at) {
+              console.log('[Auth] Successfully refreshed token');
               state.token = at;
               return at;
             }
           } catch (e) {
-            console.warn('[Auth] Token refresh failed:', e.message);
+            console.error('[Auth] Token refresh failed:', e.message, e);
             
             // If refresh failed due to expired/invalid refresh token, clear state
             const isAuthError = e.message?.includes('403') || 
@@ -505,7 +532,12 @@
           }
           
           // Fallback to cached token if we have one
-          if (state.token) return state.token;
+          if (state.token) {
+            console.warn('[Auth] Using fallback cached token');
+            return state.token;
+          }
+          
+          console.error('[Auth] No token available');
           return null;
         }
         
@@ -517,8 +549,12 @@
         }
         
         return null;
+      } catch (err) {
+        console.error('[Auth] Token refresh error:', err);
+        throw err;
       } finally {
         // Clear the promise after completion (success or failure)
+        console.log('[Auth] Token refresh complete, clearing gate');
         state.tokenRefreshPromise = null;
       }
     })();

@@ -621,6 +621,12 @@
     async function fetchJSON(url, opts = {}) {
       try {
         const r = await exec(url, opts);
+        
+        // Check if response is valid
+        if (!r) {
+          throw new Error('No response received from server');
+        }
+        
         const data = await r.json();
         if (!r.ok) {
           // Check for auth errors
@@ -629,6 +635,12 @@
             sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
             window.location.replace('/login.html');
             throw new Error('Authentication required');
+          }
+          // More descriptive error for 502
+          if (r.status === 502) {
+            const errorMsg = data.error || 'Backend service unavailable';
+            console.error('[API] 502 Error:', errorMsg, 'URL:', url);
+            throw new Error(`Service Error: ${errorMsg}`);
           }
           throw new Error(data.error || `HTTP ${r.status}`);
         }
