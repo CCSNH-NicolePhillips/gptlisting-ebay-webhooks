@@ -3,8 +3,8 @@ import crypto from "node:crypto";
 import { requireUserAuth } from "../../src/lib/auth-user.js";
 import { getOrigin, isOriginAllowed, json, parseAllowedOrigins } from "../../src/lib/http.js";
 import { putJob } from "../../src/lib/job-store.js";
+import { canStartJob, decRunning, incRunning } from "../../src/lib/quota.js";
 import { k } from "../../src/lib/user-keys.js";
-import { canStartJob, incRunning, decRunning } from "../../src/lib/quota.js";
 
 const METHODS = "POST, OPTIONS";
 const MAX_IMAGES = Math.max(1, Math.min(100, Number(process.env.SMARTDRAFT_MAX_IMAGES || 100)));
@@ -58,11 +58,11 @@ export const handler: Handler = async (event) => {
   // Support either folder path OR staged URLs (but not both)
   const folder = typeof payload?.path === "string" ? payload.path.trim() : "";
   const stagedUrls = Array.isArray(payload?.stagedUrls) ? payload.stagedUrls : [];
-  
+
   if (!folder && stagedUrls.length === 0) {
     return json(400, { ok: false, error: "Provide either 'path' (Dropbox folder) or 'stagedUrls' (uploaded files)" }, originHdr, METHODS);
   }
-  
+
   if (folder && stagedUrls.length > 0) {
     return json(400, { ok: false, error: "Provide either 'path' or 'stagedUrls', not both" }, originHdr, METHODS);
   }
@@ -121,14 +121,14 @@ export const handler: Handler = async (event) => {
     const resp = await fetch(target, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ 
-        jobId, 
-        userId: user.userId, 
+      body: JSON.stringify({
+        jobId,
+        userId: user.userId,
         folder: folder || undefined,
         stagedUrls: stagedUrls.length > 0 ? stagedUrls : undefined,
-        force, 
-        limit, 
-        debug: debugEnabled 
+        force,
+        limit,
+        debug: debugEnabled
       }),
     });
 
@@ -163,10 +163,10 @@ export const handler: Handler = async (event) => {
     return json(502, { ok: false, error: "Background fetch exception", jobId }, originHdr, METHODS);
   }
 
-  console.log(JSON.stringify({ 
-    evt: "smartdrafts-scan.enqueued", 
-    userId: user.userId, 
-    jobId, 
+  console.log(JSON.stringify({
+    evt: "smartdrafts-scan.enqueued",
+    userId: user.userId,
+    jobId,
     folder: folder || undefined,
     stagedUrlCount: stagedUrls.length || undefined
   }));
