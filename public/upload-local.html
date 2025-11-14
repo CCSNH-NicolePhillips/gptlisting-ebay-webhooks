@@ -456,7 +456,7 @@
           console.log(`[upload] Batch ${i + 1}: ${batch.length} files, ${(totalSize / 1024 / 1024).toFixed(2)}MB`);
         });
         
-        const allKeys = [];
+        const allUploadedFiles = [];
         showStatus('info', 'Uploading to storage...');
         const statusEls = selectedFiles.map((_, i) => document.getElementById(`status-${i}`));
         
@@ -507,8 +507,9 @@
             throw new Error(errorMessage);
           }
           
-          const { keys } = await uploadRes.json();
-          allKeys.push(...keys);
+          const uploadData = await uploadRes.json();
+          const batchFiles = uploadData.files || [];
+          allUploadedFiles.push(...batchFiles);
           
           // Mark batch as complete
           batchIndices.forEach(i => {
@@ -524,21 +525,10 @@
         }
         
         showStatus('info', 'Processing images...');
-        
-        // Get staged file info
-        const completeRes = await window.authClient.authFetch('/.netlify/functions/ingest-local-complete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ keys: allKeys }),
-        });
-        
-        if (!completeRes.ok) {
-          const error = await completeRes.json();
-          throw new Error(error.error || `Complete failed: ${completeRes.status}`);
-        }
-        
-        const { files } = await completeRes.json();
         updateProgress(90);
+        
+        // Files now have stagedUrl from upload response
+        const files = allUploadedFiles;
         
         // Start vision scan job
         showStatus('info', 'Starting vision analysis...');
