@@ -1,10 +1,10 @@
 import type { Handler } from "@netlify/functions";
-import { createHash } from "crypto";
-import { runSmartDraftScan, type SmartDraftScanResponse } from "../../src/lib/smartdrafts-scan-core.js";
-import { putJob, redisSet } from "../../src/lib/job-store.js";
-import { k } from "../../src/lib/user-keys.js";
-import { decRunning } from "../../src/lib/quota.js";
+import { createHash } from "node:crypto";
 import { USE_CLIP, USE_NEW_SORTER, USE_ROLE_SORTING } from "../../src/config.js";
+import { putJob, redisSet } from "../../src/lib/job-store.js";
+import { decRunning } from "../../src/lib/quota.js";
+import { runSmartDraftScan, type SmartDraftScanResponse } from "../../src/lib/smartdrafts-scan-core.js";
+import { k } from "../../src/lib/user-keys.js";
 
 type BackgroundPayload = {
   jobId?: string;
@@ -114,7 +114,7 @@ export const handler: Handler = async (event) => {
       cached: payload.cached,
       debug: payload.debug,
     });
-    
+
     // Step 1A: Store analysis by jobId for pairing function to fetch
     const analysis = {
       groups: payload.groups,
@@ -123,33 +123,33 @@ export const handler: Handler = async (event) => {
       signature: payload.signature,
       jobId,
     };
-    
+
     // ZF-1: Compute stable folder signature for zero-frontend lookup
     const folderSig = createHash('sha1').update(folder).digest('hex');
-    
+
     try {
       // Store by jobId (existing)
       await redisSet(`analysis:${jobId}`, JSON.stringify(analysis), 60 * 60); // 1 hr TTL
-      
+
       // ZF-1: Store by folder signature (so pairing can find by folder alone)
       await redisSet(`analysis:byFolder:${folderSig}`, JSON.stringify(analysis), 60 * 60);
-      
+
       // ZF-1: Store lastJobId pointer for this folder
       await redisSet(`analysis:lastJobId:${folderSig}`, jobId, 60 * 60);
-      
-      console.log('[cache] write analysis', { 
-        jobId, 
-        folderSig, 
+
+      console.log('[cache] write analysis', {
+        jobId,
+        folderSig,
         keys: [
-          `analysis:${jobId}`, 
-          `analysis:byFolder:${folderSig}`, 
+          `analysis:${jobId}`,
+          `analysis:byFolder:${folderSig}`,
           `analysis:lastJobId:${folderSig}`
         ]
       });
     } catch (err) {
       console.warn('[cache] failed to write analysis', { jobId, folderSig, err });
     }
-    
+
     await release();
   } catch (err: any) {
     console.error("[smartdrafts-scan-background] execution failed", err);
