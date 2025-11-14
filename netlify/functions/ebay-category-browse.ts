@@ -22,25 +22,18 @@ export const handler: Handler = async (event) => {
 			marketplaceId: MARKETPLACE_ID,
 			response: tJson 
 		});
-		let treeId = tJson?.categoryTreeId;
+		const treeId = tJson?.categoryTreeId;
 		if (!treeId) {
-			const fallbackEnv = (process.env.EBAY_DEFAULT_CATEGORY_TREE_ID || '').trim();
-			const fallback = fallbackEnv || (MARKETPLACE_ID === 'EBAY_US' ? '0' : '');
-			if (fallback) {
-				console.warn('[ebay-category-browse] Falling back to default tree ID', fallback);
-				treeId = fallback;
-			} else {
-				console.error('[ebay-category-browse] No tree ID returned from eBay and no fallback configured:', tJson);
-				return {
-					statusCode: 500,
-					body: JSON.stringify({
-						error: 'no tree id',
-						detail: tJson,
-						marketplaceId: MARKETPLACE_ID,
-						apiHost,
-					})
-				};
-			}
+			console.error('[ebay-category-browse] No tree ID returned from eBay:', tJson);
+			return { 
+				statusCode: 500, 
+				body: JSON.stringify({ 
+					error: 'no tree id', 
+					detail: tJson,
+					marketplaceId: MARKETPLACE_ID,
+					apiHost 
+				}) 
+			};
 		}
 
 		function mapChildren(
@@ -76,27 +69,9 @@ export const handler: Handler = async (event) => {
 
 		if (!categoryId) {
 			// Root browse: fetch tree root
-			const rootUrl = `${apiHost}/commerce/taxonomy/v1/category_tree/${treeId}`;
-			const r = await fetch(rootUrl, { headers });
-			if (!r.ok) {
-				const detail = await r.text().catch(() => '');
-				console.error('[ebay-category-browse] Root fetch failed', { treeId, status: r.status, detail });
-				return {
-					statusCode: 502,
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ error: 'taxonomy root fetch failed', treeId, status: r.status, detail }),
-				};
-			}
+			const r = await fetch(`${apiHost}/commerce/taxonomy/v1/category_tree/${treeId}`, { headers });
 			const j = await r.json();
-			const root = j?.rootCategoryNode;
-			if (!root) {
-				console.error('[ebay-category-browse] Root payload missing node', { treeId, payload: j });
-				return {
-					statusCode: 502,
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ error: 'taxonomy root missing', treeId, payload: j }),
-				};
-			}
+			const root = j.rootCategoryNode;
 			const res = mapChildren(root, []);
 			return {
 				statusCode: 200,
@@ -108,26 +83,8 @@ export const handler: Handler = async (event) => {
 		// Subtree browse
 		const url = `${apiHost}/commerce/taxonomy/v1/category_tree/${treeId}/get_category_subtree?category_id=${encodeURIComponent(categoryId)}`;
 		const r = await fetch(url, { headers });
-		if (!r.ok) {
-			const detail = await r.text().catch(() => '');
-			console.error('[ebay-category-browse] Subtree fetch failed', { treeId, categoryId, status: r.status, detail });
-			return {
-				statusCode: 502,
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ error: 'taxonomy subtree fetch failed', treeId, categoryId, status: r.status, detail }),
-			};
-		}
 		const j = await r.json();
-		const subtree = j?.categorySubtreeNode;
-		if (!subtree) {
-			console.error('[ebay-category-browse] Subtree payload missing node', { treeId, categoryId, payload: j });
-			return {
-				statusCode: 502,
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ error: 'taxonomy subtree missing', treeId, categoryId, payload: j }),
-			};
-		}
-		const ancestors = (subtree?.categoryTreeNodeAncestors || []).map(
+		const ancestors = (j?.categorySubtreeNode?.categoryTreeNodeAncestors || []).map(
 			(a: any) =>
 				({
 					id: String(a.category?.categoryId),
@@ -136,7 +93,7 @@ export const handler: Handler = async (event) => {
 					leaf: false,
 				}) as BrowseNode
 		);
-		const res = mapChildren(subtree, ancestors);
+		const res = mapChildren(j, ancestors);
 		return {
 			statusCode: 200,
 			headers: { 'Content-Type': 'application/json' },

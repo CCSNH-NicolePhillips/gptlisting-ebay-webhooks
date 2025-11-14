@@ -1435,6 +1435,13 @@ async function runSmartDraftScanFromStagedUrls(options: {
   // Sanitize URLs
   const urls = sanitizeUrls(limitedUrls);
   
+  console.log(`[smartdrafts-scan-core] Staged URLs input: ${limitedUrls.length}, after sanitize: ${urls.length}`);
+  console.log(`[smartdrafts-scan-core] Sample URLs:`, urls.slice(0, 3).map(u => ({ 
+    original: u.slice(0, 100), 
+    isHttp: u.startsWith('http'),
+    isS3: u.includes('.s3.') || u.includes('amazonaws.com')
+  })));
+  
   if (!urls.length) {
     return jsonEnvelope(400, {
       ok: false,
@@ -1458,6 +1465,14 @@ async function runSmartDraftScanFromStagedUrls(options: {
     metadata: analysisMeta,
     debugVisionResponse: debugEnabled,
     force,
+  });
+  
+  console.log(`[smartdrafts-scan-core] Analysis result:`, {
+    hasGroups: !!analysis?.groups,
+    groupCount: (analysis?.groups || []).length,
+    hasInsights: !!analysis?.imageInsights,
+    insightCount: Object.keys(analysis?.imageInsights || {}).length,
+    analysisKeys: Object.keys(analysis || {}),
   });
   
   // Use vision groups directly (productIds from GPT-4 Vision)
