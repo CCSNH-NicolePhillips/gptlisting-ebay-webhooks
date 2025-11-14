@@ -14,7 +14,7 @@ import type { Handler } from '@netlify/functions';
 import { getJwtSubUnverified, getBearerToken } from '../../src/lib/_auth.js';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { createHash } from 'crypto';
+import { createHash } from 'node:crypto';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',

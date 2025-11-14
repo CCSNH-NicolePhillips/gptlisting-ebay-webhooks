@@ -1,5 +1,5 @@
 import type { Handler } from "@netlify/functions";
-import crypto from "crypto";
+import crypto from "node:crypto";
 import { requireUserAuth } from "../../src/lib/auth-user.js";
 import { getOrigin, isOriginAllowed, json, parseAllowedOrigins } from "../../src/lib/http.js";
 import { putJob } from "../../src/lib/job-store.js";
