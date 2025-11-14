@@ -14,10 +14,11 @@
     "@netlify/blobs",
     "@anthropic-ai/sdk",
     "@google/generative-ai",
-    "cheerio",
+    "sharp",
     "dotenv",
     "jose",
-    "node-fetch"
+    "node-fetch",
+    "cheerio"
   ]
 
 # Increase timeout for functions that call external APIs (ChatGPT, eBay)
@@ -28,6 +29,10 @@
 [functions."ingest-local-upload"]
   timeout = 26
   included_files = []  # Don't bundle extra files
+
+# Background scan function needs extended timeout for image processing
+[functions."smartdrafts-scan-background"]
+  timeout = 26  # Max for Pro tier, handles vision API calls and analysis
 
 # Reduce false positives in Netlify Secrets Scanning by omitting non-sensitive keys.
 [build.environment]
