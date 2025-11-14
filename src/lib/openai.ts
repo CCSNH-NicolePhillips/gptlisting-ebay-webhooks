@@ -8,5 +8,5 @@ if (!apiKey) {
 
 export const openai = new OpenAI({
   apiKey: apiKey || "",
-  defaultHeaders: { "User-Agent": "ebaywebhooks-product-analyzer/1.0" },
+  defaultHeaders: { "User-Agent": "draftpilot-ai-product-analyzer/1.0" },
 });

@@ -359,7 +359,7 @@ All debug logs have unique prefixes for easy searching:
 
 ## Reproduction Steps
 
-1. Open SmartDrafts UI: https://ebaywebhooks.netlify.app/new-smartdrafts/
+1. Open SmartDrafts UI: https://draftpilot-ai.netlify.app/new-smartdrafts/
 2. Select test3 folder: `https://www.dropbox.com/scl/fo/eqcqbslf6xnb9aaexfttf/...`
 3. Check "Force Rescan" checkbox
 4. Click "Analyze" button
@@ -396,7 +396,7 @@ Without visualDescription, visual similarity scoring fails:
 
 ## System Context
 
-**Deployment:** Netlify (ebaywebhooks.netlify.app)  
+**Deployment:** Netlify (draftpilot-ai.netlify.app)  
 **Project ID:** b44b1d07-6357-421a-bedc-960ad1ad9a5d  
 **Backend:** TypeScript compiled to JS, runs in Netlify Functions  
 **Frontend:** Vanilla JavaScript (no build step), served as static files  

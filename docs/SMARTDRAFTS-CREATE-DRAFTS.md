@@ -222,7 +222,7 @@ Drafts Page (review and publish)
 
 ### Quick List Page (Recommended)
 ```
-1. Go to https://ebaywebhooks.netlify.app/quick-list.html
+1. Go to https://draftpilot-ai.netlify.app/quick-list.html
 2. Select Dropbox folder
 3. Click "Start Pipeline"
 4. Watch all 4 steps complete automatically

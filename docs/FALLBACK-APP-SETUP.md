@@ -32,7 +32,7 @@ After creating the app, you'll see:
 
 ### 3. Add to Netlify Environment Variables
 
-1. Go to [Netlify Site Settings](https://app.netlify.com/sites/ebaywebhooks/settings/env)
+1. Go to [Netlify Site Settings](https://app.netlify.com/sites/draftpilot-ai/settings/env)
 2. Add these new variables:
    ```
    EBAY_FALLBACK_CLIENT_ID=YourName-GPTListi-PRD-xxxxxxxxx-xxxxxxxx
