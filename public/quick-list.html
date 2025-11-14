@@ -194,6 +194,119 @@
       border-radius: 8px;
       font-size: 1rem;
     }
+    
+    /* Upload UI styles */
+    .upload-tab {
+      padding: 0.75rem 1.5rem;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 0.95rem;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .upload-tab:hover {
+      color: var(--text);
+    }
+    .upload-tab.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+    .upload-panel {
+      animation: fadeIn 0.3s;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .upload-area {
+      border: 2px dashed var(--line);
+      border-radius: 12px;
+      padding: 3rem 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .upload-area:hover {
+      border-color: var(--primary);
+      background: rgba(79, 124, 255, 0.05);
+    }
+    .upload-area.drag-over {
+      border-color: var(--primary);
+      background: rgba(79, 124, 255, 0.1);
+      border-style: solid;
+    }
+    .upload-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+    .upload-text {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      font-size: 1.05rem;
+      margin-bottom: 0.5rem;
+    }
+    .upload-text span {
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+    .upload-hint {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .file-list {
+      display: grid;
+      gap: 0.5rem;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .file-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+    .file-thumbnail {
+      width: 50px;
+      height: 50px;
+      border-radius: 6px;
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+    .file-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .file-name {
+      font-size: 0.9rem;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .file-size {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .file-remove {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: rgb(239, 68, 68);
+      padding: 0.4rem 0.8rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: all 0.2s;
+    }
+    .file-remove:hover {
+      background: rgba(239, 68, 68, 0.2);
+    }
     h3 {
       color: var(--text);
       margin-bottom: 0.75rem;
@@ -247,10 +360,53 @@
     </div>
     
     <div class="card">
-      <h3 style="margin-top: 0;">📁 Select Dropbox Folder</h3>
-      <select id="folderSelect" class="btn secondary" style="margin-bottom: 0;">
-        <option value="">Loading folders...</option>
-      </select>
+      <h3 style="margin-top: 0; margin-bottom: 1rem;">📸 Upload Your Product Photos</h3>
+      
+      <!-- Upload method tabs -->
+      <div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--line);">
+        <button id="tabLocal" class="upload-tab active" onclick="switchUploadMethod('local')">
+          � Upload Files
+        </button>
+        <button id="tabDropbox" class="upload-tab" onclick="switchUploadMethod('dropbox')">
+          �📁 Dropbox Folder
+        </button>
+      </div>
+      
+      <!-- Local upload panel -->
+      <div id="uploadLocal" class="upload-panel">
+        <div class="upload-area" id="uploadArea">
+          <div class="upload-icon">📁</div>
+          <div class="upload-text">
+            <strong>Drag & drop photos here</strong>
+            <span>or click to browse</span>
+          </div>
+          <div class="upload-hint">Supports JPG, PNG, WebP (max 10MB each)</div>
+        </div>
+        <input type="file" id="fileInput" accept="image/*" multiple style="display: none;">
+        
+        <!-- Selected files preview -->
+        <div id="selectedFiles" style="display: none; margin-top: 1rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+            <strong><span id="fileCount">0</span> files selected</strong>
+            <button class="btn secondary" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;" onclick="clearFiles()">Clear All</button>
+          </div>
+          <div id="fileList" class="file-list"></div>
+        </div>
+      </div>
+      
+      <!-- Dropbox panel -->
+      <div id="uploadDropbox" class="upload-panel" style="display: none;">
+        <select id="folderSelect" class="btn secondary" style="margin-bottom: 0; width: 100%;">
+          <option value="">Loading folders...</option>
+        </select>
+        <p style="font-size: 0.85rem; color: var(--muted); margin-top: 0.5rem; margin-bottom: 0;">
+          Select a Dropbox folder containing your product photos
+        </p>
+      </div>
+      
+      <button id="btnStart" class="btn primary" style="margin-top: 1.5rem; width: 100%;" disabled>
+        🚀 Start Quick List
+      </button>
     </div>
     
     <div class="card">
@@ -355,6 +511,116 @@
     
     let currentJobId = null;
     let selectedFolder = null;
+    let selectedFiles = [];
+    let uploadMethod = 'local'; // 'local' or 'dropbox'
+    
+    // Upload method switching
+    function switchUploadMethod(method) {
+      uploadMethod = method;
+      
+      // Update tabs
+      $('tabLocal').classList.toggle('active', method === 'local');
+      $('tabDropbox').classList.toggle('active', method === 'dropbox');
+      
+      // Update panels
+      $('uploadLocal').style.display = method === 'local' ? 'block' : 'none';
+      $('uploadDropbox').style.display = method === 'dropbox' ? 'block' : 'none';
+      
+      // Update button state
+      updateStartButton();
+    }
+    
+    function updateStartButton() {
+      const btn = $('btnStart');
+      if (uploadMethod === 'local') {
+        btn.disabled = selectedFiles.length === 0;
+        btn.innerHTML = selectedFiles.length > 0 
+          ? `🚀 Start Quick List (${selectedFiles.length} files)`
+          : '🚀 Start Quick List';
+      } else {
+        btn.disabled = !selectedFolder;
+        btn.innerHTML = '🚀 Start Quick List';
+      }
+    }
+    
+    // Local file upload handling
+    const uploadArea = $('uploadArea');
+    const fileInput = $('fileInput');
+    
+    uploadArea.addEventListener('click', () => fileInput.click());
+    
+    uploadArea.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadArea.classList.add('drag-over');
+    });
+    
+    uploadArea.addEventListener('dragleave', () => {
+      uploadArea.classList.remove('drag-over');
+    });
+    
+    uploadArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadArea.classList.remove('drag-over');
+      const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+      addFiles(files);
+    });
+    
+    fileInput.addEventListener('change', (e) => {
+      addFiles(Array.from(e.target.files));
+      fileInput.value = ''; // Reset input
+    });
+    
+    function addFiles(files) {
+      selectedFiles.push(...files);
+      renderFileList();
+      updateStartButton();
+    }
+    
+    function removeFile(index) {
+      selectedFiles.splice(index, 1);
+      renderFileList();
+      updateStartButton();
+    }
+    
+    function clearFiles() {
+      selectedFiles = [];
+      renderFileList();
+      updateStartButton();
+    }
+    
+    function renderFileList() {
+      const container = $('selectedFiles');
+      const list = $('fileList');
+      const count = $('fileCount');
+      
+      if (selectedFiles.length === 0) {
+        container.style.display = 'none';
+        return;
+      }
+      
+      container.style.display = 'block';
+      count.textContent = selectedFiles.length;
+      
+      list.innerHTML = selectedFiles.map((file, idx) => {
+        const url = URL.createObjectURL(file);
+        const sizeMB = (file.size / 1024 / 1024).toFixed(2);
+        return `
+          <div class="file-item">
+            <img src="${url}" class="file-thumbnail" alt="">
+            <div class="file-info">
+              <div class="file-name">${file.name}</div>
+              <div class="file-size">${sizeMB} MB</div>
+            </div>
+            <button class="file-remove" onclick="removeFile(${idx})">Remove</button>
+          </div>
+        `;
+      }).join('');
+    }
+    
+    // Make functions global
+    window.switchUploadMethod = switchUploadMethod;
+    window.removeFile = removeFile;
+    window.clearFiles = clearFiles;
     
     async function fetchJSON(url, opts = {}) {
       const r = await exec(url, opts);
@@ -413,12 +679,75 @@
       $('progressBar').style.width = `${progress}%`;
     }
     
-    async function startPipeline() {
-      if (!selectedFolder) {
-        alert('Please select a Dropbox folder first');
-        return;
+    // Upload files in batches to avoid payload limits
+    async function uploadFilesInBatches(files) {
+      const MAX_BATCH_SIZE_BYTES = 4 * 1024 * 1024; // 4MB per batch
+      const allUploadedFiles = [];
+      
+      // Prepare file data with base64 encoding
+      const fileData = await Promise.all(files.map(async (file) => {
+        const base64 = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result.split(',')[1]);
+          reader.readAsDataURL(file);
+        });
+        
+        return {
+          name: file.name,
+          mime: file.type,
+          data: base64,
+          base64Size: base64.length,
+        };
+      }));
+      
+      // Smart batching by size
+      const batches = [];
+      let currentBatch = [];
+      let currentBatchSize = 0;
+      
+      for (const file of fileData) {
+        if (file.base64Size > MAX_BATCH_SIZE_BYTES) {
+          // Large file goes alone
+          if (currentBatch.length > 0) {
+            batches.push(currentBatch);
+            currentBatch = [];
+            currentBatchSize = 0;
+          }
+          batches.push([file]);
+        } else if (currentBatchSize + file.base64Size > MAX_BATCH_SIZE_BYTES) {
+          // Start new batch
+          batches.push(currentBatch);
+          currentBatch = [file];
+          currentBatchSize = file.base64Size;
+        } else {
+          // Add to current batch
+          currentBatch.push(file);
+          currentBatchSize += file.base64Size;
+        }
       }
       
+      if (currentBatch.length > 0) {
+        batches.push(currentBatch);
+      }
+      
+      // Upload batches
+      for (let i = 0; i < batches.length; i++) {
+        const batch = batches[i];
+        $('status1').innerHTML = `<span class="spinner"></span>Uploading batch ${i + 1}/${batches.length}...`;
+        
+        const uploadRes = await fetchJSON('/.netlify/functions/ingest-local-upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ files: batch }),
+        });
+        
+        allUploadedFiles.push(...uploadRes.files);
+      }
+      
+      return allUploadedFiles;
+    }
+    
+    async function startPipeline() {
       const btn = $('btnStart');
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner"></span>Processing...';
@@ -437,22 +766,63 @@
       $('orphansWarning').style.display = 'none';
       
       try {
-        // Step 1: Scan/Analyze (enqueue background job)
-        updateStep(1, 'active');
-        const scanRes = await fetchJSON('/.netlify/functions/smartdrafts-scan-bg', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            path: selectedFolder,
-            force: false
-          })
-        });
+        let scanJobId;
         
-        if (!scanRes.ok || !scanRes.jobId) {
-          throw new Error(scanRes.error || 'Scan failed to start');
+        if (uploadMethod === 'local') {
+          // LOCAL UPLOAD FLOW
+          if (selectedFiles.length === 0) {
+            alert('Please select files to upload');
+            return;
+          }
+          
+          // Step 1a: Upload files
+          updateStep(1, 'active');
+          $('status1').innerHTML = '<span class="spinner"></span>Uploading files...';
+          
+          const uploadedFiles = await uploadFilesInBatches(selectedFiles);
+          const stagedUrls = uploadedFiles.map(f => f.stagedUrl);
+          
+          // Step 1b: Start scan with stagedUrls
+          $('status1').innerHTML = '<span class="spinner"></span>Starting analysis...';
+          
+          const scanRes = await fetchJSON('/.netlify/functions/smartdrafts-scan-bg', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ stagedUrls })
+          });
+          
+          if (!scanRes.ok || !scanRes.jobId) {
+            throw new Error(scanRes.error || 'Scan failed to start');
+          }
+          
+          scanJobId = scanRes.jobId;
+          
+        } else {
+          // DROPBOX FLOW
+          if (!selectedFolder) {
+            alert('Please select a Dropbox folder first');
+            return;
+          }
+          
+          // Step 1: Scan/Analyze (enqueue background job)
+          updateStep(1, 'active');
+          const scanRes = await fetchJSON('/.netlify/functions/smartdrafts-scan-bg', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              path: selectedFolder,
+              force: false
+            })
+          });
+          
+          if (!scanRes.ok || !scanRes.jobId) {
+            throw new Error(scanRes.error || 'Scan failed to start');
+          }
+          
+          scanJobId = scanRes.jobId;
         }
         
-        currentJobId = scanRes.jobId;
+        currentJobId = scanJobId;
         console.log('[Quick List] Scan job started:', currentJobId);
         
         // Poll for scan completion
