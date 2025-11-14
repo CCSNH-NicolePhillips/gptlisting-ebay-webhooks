@@ -1,5 +1,11 @@
 import { createHash } from "node:crypto";
-import { STRICT_TWO_ONLY, USE_NEW_SORTER, USE_ROLE_SORTING, USE_CLIP } from "../config.js";
+import { STRICT_TWO_ONLY, USE_CLIP, USE_NEW_SORTER, USE_ROLE_SORTING } from "../config.js";
+import { makeDisplayUrl } from "../utils/displayUrl.js";
+import { finalizeDisplayUrls } from "../utils/finalizeDisplay.js";
+import { categoryCompat, jaccard, normBrand, tokenize } from "../utils/groupingHelpers.js";
+import { buildRoleMap } from "../utils/roles.js";
+import { urlKey } from "../utils/urlKey.js";
+import { sanitizeInsightUrl } from "../utils/urlSanitize.js";
 import { userScopedKey } from "./_auth.js";
 import { tokensStore } from "./_blobs.js";
 import { runAnalysis } from "./analyze-core.js";
@@ -14,12 +20,6 @@ import {
     type SmartDraftGroupCache,
 } from "./smartdrafts-store.js";
 import { frontBackStrict } from "./sorter/frontBackStrict.js";
-import { urlKey } from "../utils/urlKey.js";
-import { sanitizeInsightUrl } from "../utils/urlSanitize.js";
-import { makeDisplayUrl } from "../utils/displayUrl.js";
-import { buildRoleMap } from "../utils/roles.js";
-import { normBrand, tokenize, jaccard, categoryCompat } from "../utils/groupingHelpers.js";
-import { finalizeDisplayUrls } from "../utils/finalizeDisplay.js";
 
 type DropboxEntry = {
   ".tag": "file" | "folder";
@@ -844,7 +844,7 @@ async function buildHybridGroups(
           const targetGroup = product.group;
           const targetCategory = targetGroup?.categoryPath || '';
           const catCompat = categoryCompat(unassignedCategory, targetCategory);
-          
+
           // Hard block: cross-category mismatches (hair vs supplement/food)
           if (catCompat <= -0.5) {
             console.log(`  ✗ Blocked ${product.brand} - ${product.product}: category mismatch (hair↔supp/food)`);
@@ -855,7 +855,7 @@ async function buildHybridGroups(
           const unassignedBrandNorm = normBrand(unassignedBrand);
           const targetBrandNorm = normBrand(product.brand);
           const brandMatch = !!(unassignedBrandNorm && targetBrandNorm && unassignedBrandNorm === targetBrandNorm);
-          
+
           // GUARDRAILS: Check product token similarity
           const unassignedProdTokens = tokenize(unassignedProduct);
           const targetProdTokens = tokenize(product.product);
@@ -1015,18 +1015,18 @@ async function buildHybridGroups(
           const finalBrandMatch = (bestMatch as any)._brandMatch;
           const finalProdSim = (bestMatch as any)._prodSim || 0;
           const finalCatCompat = (bestMatch as any)._catCompat || 0;
-          
+
           // Hard block: category mismatch (should already be filtered, but double-check)
           const catBlock = finalCatCompat <= -0.5;
-          
+
           // Weak match: not enough evidence to be confident
           const weak = finalScore < 40 && !(finalBrandMatch && finalProdSim >= 0.6);
-          
+
           if (catBlock) {
             console.log(`[buildHybridGroups] ✗ BLOCKED ${filename}: category incompatible (${finalCatCompat.toFixed(2)})`);
             continue;
           }
-          
+
           if (weak) {
             console.log(`[buildHybridGroups] ✗ BLOCKED ${filename}: weak match (score=${finalScore}, brand=${finalBrandMatch}, prodSim=${finalProdSim.toFixed(2)})`);
             continue;
@@ -1103,7 +1103,7 @@ async function buildHybridGroups(
       // GUARDRAILS: Check category compatibility first
       const frontCategory = frontGroup.categoryPath || '';
       const catCompat = categoryCompat(backCategory, frontCategory);
-      
+
       // Hard block: cross-category mismatches (hair vs supplement/food)
       if (catCompat <= -0.5) {
         console.log(`    ✗ Skip ${frontGroup.brand}: category mismatch (${catCompat.toFixed(2)})`);
@@ -1117,7 +1117,7 @@ async function buildHybridGroups(
       const frontBrandNorm = normBrand(frontGroup.brand);
       const backBrandNorm = normBrand(backBrand);
       const brandMatch = !!(frontBrandNorm && backBrandNorm && frontBrandNorm === backBrandNorm);
-      
+
       const frontProdTokens = tokenize(frontGroup.product || frontGroup.name || '');
       const backProdTokens = tokenize(backProduct);
       const prodSim = jaccard(frontProdTokens, backProdTokens);
@@ -1248,15 +1248,15 @@ async function buildHybridGroups(
     if (bestFrontGroup && bestScore >= 20) {
       // Hard block: category mismatch (should already be filtered, but double-check)
       const catBlock = bestCatCompat <= -0.5;
-      
+
       // Weak match: not enough evidence to be confident
       const weak = bestScore < 40 && !(bestBrandMatch && bestProdSim >= 0.6);
-      
+
       if (catBlock) {
         console.log(`[buildHybridGroups]   ✗ BLOCKED: category incompatible (${bestCatCompat.toFixed(2)})`);
         continue;
       }
-      
+
       if (weak) {
         console.log(`[buildHybridGroups]   ✗ BLOCKED: weak match (score=${bestScore}, brand=${bestBrandMatch}, prodSim=${bestProdSim.toFixed(2)})`);
         continue;
@@ -1396,22 +1396,22 @@ async function runSmartDraftScanFromStagedUrls(options: {
   debug: boolean;
 }): Promise<SmartDraftScanResponse> {
   const { userId, stagedUrls, limit, force, debug: debugEnabled } = options;
-  
+
   console.log(`[smartdrafts-scan-core] Processing ${stagedUrls.length} staged URLs for user ${userId}`);
-  
+
   // Limit URLs to max
   const limitedUrls = stagedUrls.slice(0, limit);
-  
+
   // Build signature from URLs for caching
   const signature = createHash("sha256")
     .update(JSON.stringify(limitedUrls.sort()))
     .digest("hex")
     .slice(0, 16);
-  
+
   // Check cache (using special key for staged URLs)
   const cacheKey = makeCacheKey(userId, `staged:${signature}`);
   const cached = await getCachedSmartDraftGroups(cacheKey);
-  
+
   if (!force && !debugEnabled && cached && cached.signature === signature && Array.isArray(cached.groups) && cached.groups.length) {
     console.log(`[smartdrafts-scan-core] Cache hit for staged URLs (${cached.groups.length} groups)`);
     return jsonEnvelope(200, {
@@ -1424,31 +1424,31 @@ async function runSmartDraftScanFromStagedUrls(options: {
       imageInsights: cached.imageInsights && typeof cached.imageInsights === "object" ? cached.imageInsights : {},
     });
   }
-  
+
   // Build analysis metadata from URLs
   const analysisMeta = limitedUrls.map((url) => ({
     url,
     name: basenameFrom(url),
     folder: "uploads",
   }));
-  
+
   // Sanitize URLs
   const urls = sanitizeUrls(limitedUrls);
-  
+
   console.log(`[smartdrafts-scan-core] Staged URLs input: ${limitedUrls.length}, after sanitize: ${urls.length}`);
-  console.log(`[smartdrafts-scan-core] Sample URLs:`, urls.slice(0, 3).map(u => ({ 
-    original: u.slice(0, 100), 
+  console.log(`[smartdrafts-scan-core] Sample URLs:`, urls.slice(0, 3).map(u => ({
+    original: u.slice(0, 100),
     isHttp: u.startsWith('http'),
     isS3: u.includes('.s3.') || u.includes('amazonaws.com')
   })));
-  
+
   if (!urls.length) {
     return jsonEnvelope(400, {
       ok: false,
       error: "No valid image URLs provided",
     });
   }
-  
+
   // Check quota
   if (!debugEnabled) {
     const allowed = await canConsumeImages(userId, urls.length);
@@ -1457,7 +1457,7 @@ async function runSmartDraftScanFromStagedUrls(options: {
     }
     await consumeImages(userId, urls.length);
   }
-  
+
   // Run vision analysis
   console.log(`[smartdrafts-scan-core] Running vision analysis on ${urls.length} staged images...`);
   const analysis = await runAnalysis(urls, 12, {
@@ -1466,7 +1466,7 @@ async function runSmartDraftScanFromStagedUrls(options: {
     debugVisionResponse: debugEnabled,
     force,
   });
-  
+
   console.log(`[smartdrafts-scan-core] Analysis result:`, {
     hasGroups: !!analysis?.groups,
     groupCount: (analysis?.groups || []).length,
@@ -1474,11 +1474,11 @@ async function runSmartDraftScanFromStagedUrls(options: {
     insightCount: Object.keys(analysis?.imageInsights || {}).length,
     analysisKeys: Object.keys(analysis || {}),
   });
-  
+
   // Use vision groups directly (productIds from GPT-4 Vision)
   const visionGroups = analysis?.groups || [];
   console.log(`[smartdrafts-scan-core] Vision returned ${visionGroups.length} groups`);
-  
+
   // Build imageInsights from analysis
   const rawInsights = analysis?.imageInsights || {};
   const insightList: ImageInsight[] = USE_NEW_SORTER && Array.isArray(analysis?._rawVisionInsights)
@@ -1491,18 +1491,18 @@ async function runSmartDraftScanFromStagedUrls(options: {
           return { ...(insight as ImageInsight), url };
         })
         .filter((value): value is ImageInsight => Boolean(value));
-  
+
   // Build display URL maps
   const httpsByKey = new Map<string, string>();
   const originalByKey = new Map<string, string>();
-  
+
   for (let idx = 0; idx < limitedUrls.length; idx++) {
     const url = limitedUrls[idx];
     const key = urlKey(url);
     httpsByKey.set(key, url);
     originalByKey.set(key, url);
   }
-  
+
   // Build imageInsights record with display URLs
   const imageInsights: Record<string, ImageInsight> = {};
   insightList.forEach((insight, idx) => {
@@ -1515,7 +1515,7 @@ async function runSmartDraftScanFromStagedUrls(options: {
       displayUrl: originalUrl,
     } as ImageInsight;
   });
-  
+
   // Use vision groups as-is (they already have productIds and grouping)
   const groups = visionGroups.map((group: any) => {
     // Deduplicate images by URL
@@ -1525,7 +1525,7 @@ async function runSmartDraftScanFromStagedUrls(options: {
         return httpsByKey.get(key) || url;
       })
     ));
-    
+
     return {
       ...group,
       images: uniqueImages,
@@ -1533,9 +1533,9 @@ async function runSmartDraftScanFromStagedUrls(options: {
       backDisplayUrl: group.backUrl ? (httpsByKey.get(urlKey(group.backUrl)) || group.backUrl) : null,
     };
   });
-  
+
   console.log(`[smartdrafts-scan-core] Generated ${groups.length} product groups from staged URLs`);
-  
+
   // Cache results
   const cacheData: SmartDraftGroupCache = {
     signature,
@@ -1544,9 +1544,9 @@ async function runSmartDraftScanFromStagedUrls(options: {
     imageInsights,
     updatedAt: Date.now(),
   };
-  
+
   await setCachedSmartDraftGroups(cacheKey, cacheData);
-  
+
   return jsonEnvelope(200, {
     ok: true,
     signature,
@@ -1574,7 +1574,7 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
   if (!folder && stagedUrls.length === 0) {
     return { status: 400, body: { ok: false, error: "Provide either 'folder' (Dropbox) or 'stagedUrls' (uploaded files)" } };
   }
-  
+
   if (folder && stagedUrls.length > 0) {
     return { status: 400, body: { ok: false, error: "Provide either 'folder' or 'stagedUrls', not both" } };
   }
@@ -1737,7 +1737,7 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
     // Build maps for displayUrl hydration: key -> https URL
     const httpsByKey = new Map<string, string>();   // key -> https URL
     const originalByKey = new Map<string, string>(); // key -> original request URL
-    
+
     for (const tuple of fileTuples) {
       const k = urlKey(tuple.url);
       originalByKey.set(k, tuple.url);
@@ -1812,18 +1812,18 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       const originalUrl = urls[idx] || fileTuples[idx]?.url || '';
       const sanitizedUrl = sanitizeInsightUrl(insight.url, originalUrl);
       const key = urlKey(sanitizedUrl);
-      
+
       // Harvest https URLs for displayUrl hydration
       if (/^https?:\/\//i.test(sanitizedUrl)) {
         httpsByKey.set(key, sanitizedUrl);
       }
-      
+
       // Use the original URL for displayUrl (it's a real Dropbox URL)
       // This ensures thumbnails can load even if sanitizedUrl is a basename
       const displayUrl = makeDisplayUrl(originalUrl, key);
-      
-      return { 
-        ...insight, 
+
+      return {
+        ...insight,
         url: sanitizedUrl,
         key,
         displayUrl
@@ -1848,23 +1848,23 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
     insightList.forEach((insight) => {
       const normalizedUrl = typeof insight.url === "string" ? toDirectDropbox(insight.url) : "";
       if (!normalizedUrl) return;
-      
+
       // Ensure key and displayUrl are set
       const key = (insight as any).key || urlKey(normalizedUrl);
       const displayUrl = (insight as any).displayUrl || normalizedUrl;
-      
-      const payload: ImageInsight = { 
-        ...insight, 
+
+      const payload: ImageInsight = {
+        ...insight,
         url: normalizedUrl,
         key,
         displayUrl
       } as any;
-      
+
       // Use key for consistent indexing (already has prefix stripped)
       if (!insightMap.has(key)) {
         insightMap.set(key, payload);
       }
-      
+
       const base = basenameFrom(normalizedUrl).toLowerCase();
       if (base) {
         if (!insightByBase.has(base)) {
@@ -1997,16 +1997,16 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
 
     // Phase R0: Hybrid approach - Use Vision product IDs + CLIP similarity matching
     console.log(`[Phase R0] Starting - USE_NEW_SORTER=${USE_NEW_SORTER}, USE_CLIP=${USE_CLIP}, fileTuples=${fileTuples.length}, insightList=${insightList.length}`);
-    
+
     if (!USE_CLIP) {
       console.log('[Phase R0] CLIP verification disabled; using vision-only roles and grouping');
     }
-    
+
     let groups: AnalyzedGroup[];
     if (USE_NEW_SORTER) {
       // NEW HYBRID APPROACH: Trust Vision's product identification, use CLIP for image matching
       const visionGroups = Array.isArray(analysis?.groups) ? (analysis.groups as AnalyzedGroup[]) : [];
-      
+
       // Sanitize all URLs in vision groups immediately
       visionGroups.forEach((g, idx) => {
         const originalUrl = urls[idx] || fileTuples[idx]?.url || '';
@@ -2045,7 +2045,7 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
           }
         }
       }
-      
+
       console.log(`[displayUrl] Harvested ${httpsByKey.size} https URLs for display`);
 
       if (visionGroups.length > 0) {
@@ -2332,7 +2332,7 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       if (!USE_CLIP) {
         return Promise.resolve(null);
       }
-      
+
       const normalized = toDirectDropbox(url);
       if (!imageVectorCache.has(normalized)) {
         imageVectorCache.set(
@@ -3291,7 +3291,7 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
         .map(urlKey)
         .filter(k => k && k !== 'imgurl' && !k.startsWith('<')); // Skip placeholders
       const uniqueBasenames = Array.from(new Set(normalizedImages));
-      
+
       const normalizedGroup = {
         ...group,
         images: uniqueBasenames,
@@ -3300,7 +3300,7 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
         backUrl: group.backUrl ? urlKey(group.backUrl) : null,
         secondaryImageUrl: group.secondaryImageUrl ? urlKey(group.secondaryImageUrl) : null,
       };
-      
+
       normalizedGroups.push(normalizedGroup);
     }
 
@@ -3311,7 +3311,7 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
     const payloadGroups = hydrateGroups(normalizedGroups, folder);
 
     const insightOutput = new Map<string, ImageInsight>();
-    
+
     // Helper: detect facts panel cues for pairing
     const detectFactsCues = (insight: any): string[] => {
       const cues: string[] = [];
@@ -3327,21 +3327,21 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
         'warnings:',
         'allergen'
       ];
-      
+
       // Check OCR text
       const ocrText = (insight?.ocrText || insight?.textExtracted || '').toLowerCase();
       const visualDesc = ((insight as any)?.visualDescription || '').toLowerCase();
       const combinedText = `${ocrText} ${visualDesc}`;
-      
+
       for (const pattern of patterns) {
         if (combinedText.includes(pattern)) {
           cues.push(pattern);
         }
       }
-      
+
       return cues;
     };
-    
+
     const mergeInsight = (url: string | null | undefined, source?: Partial<ImageInsight>) => {
       if (!url) return;
       const normalized = toDirectDropbox(url);
@@ -3417,46 +3417,46 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
     // De-duplicate imageInsights by key before returning
     const seen = new Set<string>();
     const uniqueInsights: Array<[string, ImageInsight]> = [];
-    
+
     for (const [key, value] of insightOutput.entries()) {
       const normalized = toDirectDropbox(key);
       const insightKey = (value as any).key || urlKey(normalized);
-      
+
       // Skip any lingering placeholder URLs
       if (!insightKey || insightKey === 'imgurl' || insightKey.startsWith('<')) {
         console.warn(`[role-index] Skipping placeholder URL: "${insightKey}" from "${key}"`);
         continue;
       }
-      
+
       if (seen.has(insightKey)) continue;
       seen.add(insightKey);
-      
+
       // Hydrate with proper displayUrl using harvested https URLs
       const displayUrl = computeDisplayUrl(insightKey);
-      
+
       const insight = {
         ...value,
         url: normalized,
         key: insightKey,
         displayUrl
       } as ImageInsight;
-      
+
       uniqueInsights.push([insightKey, insight]);
     }
 
     const imageInsightsRecord = Object.fromEntries(uniqueInsights);
-    
+
     // Debug: log keys sample to verify no placeholders
     const keySample = Array.from(seen).slice(0, 12);
     console.log('[role-index] keys:', keySample);
-    
+
     // Debug: check for duplicates
     const allKeys = Array.from(insightOutput.entries()).map(([k, v]) => (v as any).key || urlKey(toDirectDropbox(k)));
     const dupes = allKeys.filter((k, i) => allKeys.indexOf(k) !== i);
     if (dupes.length) {
       console.warn('[role-index] DUPES found (before dedup):', dupes);
     }
-    
+
     // Debug: check for missing displayUrls
     const allInsights = Object.values(imageInsightsRecord) as any[];
     const noDisplay = allInsights.filter(x => !x.displayUrl || !/^https?:\/\//i.test(x.displayUrl));
@@ -3484,7 +3484,7 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
         const key = typeof img === 'string' ? urlKey(img) : urlKey(img.url || '');
         const entry = roleByKey.get(key);
         const role = entry?.role || 'other';
-        
+
         if (role === 'front') fronts.push(img);
         else if (role === 'back') backs.push(img);
         else if (role === 'side') sides.push(img);
@@ -3509,7 +3509,7 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
 
       // Pick hero: front > side > other > any
       let hero = fronts[0] || sides[0] || others[0] || images[0];
-      
+
       // Pick back: back > second front > different side > null
       let back: any = backs[0];
       if (!back && fronts.length >= 2) back = fronts[1];

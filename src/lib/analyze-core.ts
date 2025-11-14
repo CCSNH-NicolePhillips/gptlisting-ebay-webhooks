@@ -1,10 +1,10 @@
-import { mergeGroups, sanitizeUrls, toDirectDropbox } from "./merge.js";
-import { lookupMarketPrice } from "./price-lookup.js";
-import { applyPricingFormula } from "./price-formula.js";
-import { runVision } from "./vision-router.js";
-import { getCachedBatch, setCachedBatch, deleteCachedBatch } from "./vision-cache.js";
-import type { ImageInsight } from "./image-insight.js";
 import { clipImageEmbedding, cosine } from "./clip-client-split.js";
+import type { ImageInsight } from "./image-insight.js";
+import { mergeGroups, sanitizeUrls, toDirectDropbox } from "./merge.js";
+import { applyPricingFormula } from "./price-formula.js";
+import { lookupMarketPrice } from "./price-lookup.js";
+import { deleteCachedBatch, getCachedBatch, setCachedBatch } from "./vision-cache.js";
+import { runVision } from "./vision-router.js";
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -222,7 +222,7 @@ async function analyzeBatchViaVision(
                 typeof ins.dominantColor === "string" ? ins.dominantColor.toLowerCase().trim() : undefined;
               const role = typeof ins.role === "string" ? ins.role.toLowerCase().trim() : undefined;
               const roleScore = typeof ins.roleScore === "number" ? ins.roleScore : undefined;
-              const evidenceTriggers = Array.isArray(ins.evidenceTriggers) 
+              const evidenceTriggers = Array.isArray(ins.evidenceTriggers)
                 ? ins.evidenceTriggers.filter((t: any) => typeof t === "string")
                 : undefined;
               const textBlocks = normalizeTextArray(ins.textBlocks);
@@ -493,7 +493,7 @@ async function analyzeBatchViaVision(
           .map((ins: any, idx: number) => {
             if (!ins || typeof ins !== "object") return null;
             const rawUrl = typeof ins.url === "string" ? ins.url : "";
-            
+
             // Phase S3: Fix <imgUrl> placeholders - use actual batch URL as fallback
             let normalizedUrl: string;
             if (!rawUrl || rawUrl === '<imgUrl>' || rawUrl === 'imgUrl' || rawUrl.trim() === '') {
@@ -676,13 +676,13 @@ export async function runAnalysis(
     if (result?._error) {
       warnings.push(`Image ${idx + 1}: ${result._error}`);
     }
-    
+
     // Since we're analyzing individually, we should always get 1 insight per image
     const insightsReturned = Array.isArray((result as any)?.imageInsights) ? (result as any).imageInsights.length : 0;
     if (insightsReturned === 0 && !result?._error) {
       console.warn(`⚠️ Image ${idx + 1}: Vision returned no insights for ${base(batch[0])}`);
     }
-    
+
     if (Array.isArray((result as any)?.imageInsights)) {
       console.log(`📦 Image ${idx + 1}: Using ${(result as any)?._cache ? 'CACHED' : 'FRESH'} data, ${(result as any).imageInsights.length} insights`);
       for (const insight of (result as any).imageInsights as ImageInsight[]) {
@@ -707,7 +707,7 @@ export async function runAnalysis(
   uniqueImages.forEach((url) => ensureInsightEntry(url));
 
   const useNewSorter = process.env.USE_NEW_SORTER === "true";
-  
+
   if (!useLegacyAssignment && !useNewSorter && merged.groups.length) {
     type FolderState = {
       key: string;
