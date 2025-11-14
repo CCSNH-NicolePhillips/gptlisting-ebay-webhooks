@@ -134,6 +134,8 @@ export const handler: Handler = async (event) => {
 
     if (!resp.ok) {
       const detail = await resp.text().catch(() => "");
+      const errorMsg = `Background worker returned ${resp.status} ${resp.statusText}: ${detail.slice(0, 300)}`;
+      console.error("[smartdrafts-scan-bg]", errorMsg);
       await putJob(jobId, {
         jobId,
         userId: user.userId,
@@ -141,10 +143,10 @@ export const handler: Handler = async (event) => {
         finishedAt: Date.now(),
         folder: folder || undefined,
         stagedUrls: stagedUrls.length > 0 ? stagedUrls : undefined,
-        error: `${resp.status} ${resp.statusText}: ${detail.slice(0, 300)}`,
+        error: errorMsg,
       }, { key: jobKey });
       await decRunning(user.userId).catch(() => {});
-      return json(502, { ok: false, error: "Background invoke failed", jobId }, originHdr, METHODS);
+      return json(502, { ok: false, error: errorMsg, jobId, detail: detail.slice(0, 500) }, originHdr, METHODS);
     }
   } catch (err: any) {
     await putJob(jobId, {
