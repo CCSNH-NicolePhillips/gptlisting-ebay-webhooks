@@ -404,7 +404,7 @@
         </p>
       </div>
       
-      <button id="btnStart" class="btn primary" style="margin-top: 1.5rem; width: 100%;" disabled>
+      <button id="btnStart" class="btn primary" onclick="startPipeline()" style="margin-top: 1.5rem; width: 100%;" disabled>
         🚀 Start Quick List
       </button>
     </div>
@@ -470,10 +470,6 @@
         <div class="progress-bar" id="progressBar" style="width: 0%"></div>
       </div>
     </div>
-    
-    <button class="btn" id="btnStart" onclick="startPipeline()" disabled style="font-size: 1.1rem; padding: 1rem 2rem; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-600) 100%); box-shadow: 0 4px 16px rgba(79, 124, 255, 0.4);">
-      🚀 Start Quick List
-    </button>
     
     <div class="results" id="results">
       <div class="card" style="background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(34, 197, 94, 0.05) 100%); border-color: var(--success);">
