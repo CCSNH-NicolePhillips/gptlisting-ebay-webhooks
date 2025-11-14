@@ -522,7 +522,15 @@
               state.user = null;
               throw new Error('AUTH_EXPIRED');
             }
-            throw e;
+            // For other errors (like no audience configured), fall through to ID token fallback
+            console.warn('[Auth] Access token unavailable, will try ID token fallback');
+          }
+
+          // Fallback to ID token if no access token available
+          if (!state.token && state.idTokenRaw) {
+            console.log('[Auth] Using ID token as fallback (no audience configured)');
+            state.token = state.idTokenRaw;
+            return state.idTokenRaw;
           }
 
           // Fallback to cached token if we have one
