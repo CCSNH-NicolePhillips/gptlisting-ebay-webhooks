@@ -68,7 +68,7 @@ body {
 
 /* ===== SIDEBAR ===== */
 .dp-sidebar {
-  width: 250px;
+  width: 260px;
   background: var(--bg-sidebar);
   box-shadow: var(--shadow-sidebar);
   display: flex;
@@ -83,8 +83,14 @@ body {
 
 /* Brand Area */
 .dp-sidebar__brand {
-  padding: 28px 20px 24px;
+  padding: 20px 16px 20px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.dp-brand-logo {
+  width: 100%;
+  height: auto;
+  display: block;
 }
 
 .dp-brand {
@@ -281,7 +287,7 @@ body {
 
 /* ===== MAIN CONTENT AREA ===== */
 .dp-main-wrapper {
-  margin-left: 250px;
+  margin-left: 260px;
   flex: 1;
   display: flex;
   flex-direction: column;
