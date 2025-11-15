@@ -919,7 +919,7 @@
         // Poll for scan completion
         let scanComplete = false;
         let attempts = 0;
-        const maxAttempts = 80; // 2 minutes max (1.5s intervals)
+        const maxAttempts = 200; // 5 minutes max (1.5s intervals) - increased for large batches
 
         while (!scanComplete && attempts < maxAttempts) {
           await new Promise(resolve => setTimeout(resolve, 1500));
@@ -941,7 +941,7 @@
         }
 
         if (!scanComplete) {
-          throw new Error('Scan timeout after 2 minutes');
+          throw new Error('Scan timeout after 5 minutes');
         }
 
         // Step 2: Pair
