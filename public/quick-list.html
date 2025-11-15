@@ -374,11 +374,24 @@
 
       <!-- Local upload panel -->
       <div id="uploadLocal" class="upload-panel">
+        <!-- Upload mode toggle -->
+        <div style="display: inline-flex; gap: 0.5rem; border-radius: 0.5rem; border: 1px solid var(--border); padding: 0.25rem; background: #f8f9fa; margin-bottom: 1rem;">
+          <button id="btnModeFiles" class="btn secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem; border-radius: 0.375rem; margin: 0; background: var(--primary); color: white;" onclick="setUploadMode('files')">
+            📄 Upload Files
+          </button>
+          <button id="btnModeFolder" class="btn secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem; border-radius: 0.375rem; margin: 0;" onclick="setUploadMode('folder')">
+            📁 Upload Folder
+          </button>
+        </div>
+        <div id="folderModeHint" style="display: none; font-size: 0.85rem; color: #856404; margin-bottom: 0.75rem; padding: 0.5rem; background: #fff3cd; border-radius: 0.375rem; border: 1px solid #ffc107;">
+          💡 <strong>Desktop only:</strong> Select an entire folder of images. Mobile users should use "Upload Files".
+        </div>
+        
         <div class="upload-area" id="uploadArea">
           <div class="upload-icon">📁</div>
           <div class="upload-text">
-            <strong>Drag & drop photos here</strong>
-            <span>or click to browse</span>
+            <strong id="uploadTitle">Drag & drop photos here</strong>
+            <span id="uploadSubtitle">or click to browse</span>
           </div>
           <div class="upload-hint">Supports JPG, PNG, WebP (max 4MB each)</div>
         </div>
@@ -509,6 +522,7 @@
     let selectedFolder = null;
     let selectedFiles = [];
     let uploadMethod = 'local'; // 'local' or 'dropbox'
+    let uploadMode = 'files'; // 'files' or 'folder' (for local uploads)
 
     // Upload method switching
     function switchUploadMethod(method) {
@@ -524,6 +538,37 @@
 
       // Update button state
       updateStartButton();
+    }
+
+    // Upload mode switching (files vs folder)
+    function setUploadMode(mode) {
+      uploadMode = mode;
+      const fileInput = $('fileInput');
+      
+      // Update button styles
+      $('btnModeFiles').style.background = mode === 'files' ? 'var(--primary)' : '';
+      $('btnModeFiles').style.color = mode === 'files' ? 'white' : '';
+      $('btnModeFolder').style.background = mode === 'folder' ? 'var(--primary)' : '';
+      $('btnModeFolder').style.color = mode === 'folder' ? 'white' : '';
+      
+      // Show/hide folder mode hint
+      $('folderModeHint').style.display = mode === 'folder' ? 'block' : 'none';
+      
+      // Update UI text
+      $('uploadTitle').textContent = mode === 'folder' ? 'Drag & drop a folder here' : 'Drag & drop photos here';
+      $('uploadSubtitle').textContent = mode === 'folder' ? 'or click to select folder' : 'or click to browse';
+      
+      // Update file input attributes
+      if (mode === 'folder') {
+        fileInput.setAttribute('webkitdirectory', '');
+        fileInput.setAttribute('directory', '');
+      } else {
+        fileInput.removeAttribute('webkitdirectory');
+        fileInput.removeAttribute('directory');
+      }
+      
+      // Clear selected files when switching modes
+      clearFiles();
     }
 
     function updateStartButton() {
@@ -600,11 +645,18 @@
       list.innerHTML = selectedFiles.map((file, idx) => {
         const url = URL.createObjectURL(file);
         const sizeMB = (file.size / 1024 / 1024).toFixed(2);
+        
+        // Show folder path if available (from folder upload)
+        const relativePath = file.webkitRelativePath || file.name;
+        const displayName = relativePath.includes('/') 
+          ? `<span style="color: #666; font-size: 0.85em;">${relativePath.split('/').slice(0, -1).join('/')}/</span>${file.name}`
+          : file.name;
+        
         return `
           <div class="file-item">
             <img src="${url}" class="file-thumbnail" alt="">
             <div class="file-info">
-              <div class="file-name">${file.name}</div>
+              <div class="file-name">${displayName}</div>
               <div class="file-size">${sizeMB} MB</div>
             </div>
             <button class="file-remove" onclick="removeFile(${idx})">Remove</button>
@@ -615,6 +667,7 @@
 
     // Make functions global
     window.switchUploadMethod = switchUploadMethod;
+    window.setUploadMode = setUploadMode;
     window.removeFile = removeFile;
     window.clearFiles = clearFiles;
 
