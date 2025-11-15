@@ -322,58 +322,40 @@
           <!-- Dashboard Grid -->
           <div class="dp-grid">
             <!-- Hero Card: SmartDrafts AI -->
-            <div class="dp-card dp-card--hero" id="createListingsSection">
-              <div class="dp-card__header">
-                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
-                  <div class="dp-badge dp-badge--ai">AI Powered</div>
-                </div>
-                <h2 class="dp-card__title" style="font-size: 1.75rem; margin-bottom: 8px;">SmartDrafts AI</h2>
-                <p class="dp-card__subtitle">
-                  Fully automated AI listing creation. Drop product photos and let our AI handle everything—image analysis, pricing research, category selection, and complete eBay draft generation.
-                </p>
-              </div>
-              
-              <div class="dp-card__content">
-                <div style="display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.875rem; color: var(--text-muted);">
-                  <span style="display: flex; align-items: center; gap: 6px;">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 2l2 7h7l-5.5 4.5 2 7L12 16l-5.5 4.5 2-7L3 9h7z"></path>
-                    </svg>
-                    Vision AI
-                  </span>
-                  <span style="display: flex; align-items: center; gap: 6px;">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 2l2 7h7l-5.5 4.5 2 7L12 16l-5.5 4.5 2-7L3 9h7z"></path>
-                    </svg>
-                    GPT-4
-                  </span>
-                  <span style="display: flex; align-items: center; gap: 6px;">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 2l2 7h7l-5.5 4.5 2 7L12 16l-5.5 4.5 2-7L3 9h7z"></path>
-                    </svg>
-                    Auto-pricing
-                  </span>
-                  <span style="display: flex; align-items: center; gap: 6px;">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 2l2 7h7l-5.5 4.5 2 7L12 16l-5.5 4.5 2-7L3 9h7z"></path>
-                    </svg>
-                    Smart categories
-                  </span>
-                </div>
-              </div>
-              
-              <div class="dp-card__actions">
-                <a id="goQuickList" class="dp-btn dp-btn-primary disabled" href="/quick-list.html" aria-disabled="true">
+            <section class="dp-card dp-card--hero" id="createListingsSection">
+              <div class="dp-hero-left">
+                <div class="dp-hero-overline">AI Powered</div>
+                <h2 class="dp-hero-title">SmartDrafts AI Quick List</h2>
+                <p class="dp-hero-subtext">Drop product photos into Dropbox or upload from your device. DraftPilot groups images, analyzes them, and creates ready-to-publish eBay drafts.</p>
+
+                <a id="goQuickList" class="dp-btn dp-btn-primary dp-hero-cta disabled" href="/quick-list.html" aria-disabled="true">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
                   </svg>
                   Create AI Listings
                 </a>
-                <a class="dp-btn dp-btn-secondary" href="/drafts.html">
-                  View All Drafts
-                </a>
+
+                <div class="dp-hero-feature-chips">
+                  <span class="dp-chip">Vision AI</span>
+                  <span class="dp-chip">GPT-4</span>
+                  <span class="dp-chip">Auto-pricing</span>
+                  <span class="dp-chip">Smart categories</span>
+                </div>
               </div>
-            </div>
+
+              <div class="dp-hero-right">
+                <div class="dp-hero-metrics">
+                  <div class="dp-metric">
+                    <div class="dp-metric-value">24</div>
+                    <div class="dp-metric-label">Drafts this week</div>
+                  </div>
+                  <div class="dp-metric">
+                    <div class="dp-metric-value">7.4m</div>
+                    <div class="dp-metric-label">Time saved</div>
+                  </div>
+                </div>
+              </div>
+            </section>
             
             <!-- Connections Card -->
             <div class="dp-card" id="connectionsSection">
