@@ -451,11 +451,15 @@ async function buildClipGroups(files: Array<{ entry: DropboxEntry; url: string }
   const assigned = new Set<number>();
   const clusters: number[][] = [];
 
+  console.log(`[buildClipGroups] Starting clustering with threshold=${SIMILARITY_THRESHOLD}`);
+  console.log(`[buildClipGroups] Files to cluster:`, files.map(f => f.entry.name).join(', '));
+
   for (let i = 0; i < n; i++) {
     if (assigned.has(i)) continue;
 
     const cluster = [i];
     assigned.add(i);
+    console.log(`[buildClipGroups] 🆕 Starting new cluster with: ${files[i].entry.name}`);
 
     // Find all images similar to this one
     for (let j = i + 1; j < n; j++) {
@@ -468,10 +472,8 @@ async function buildClipGroups(files: Array<{ entry: DropboxEntry; url: string }
         minSim = Math.min(minSim, similarities[ci][j]);
       }
 
-      // Debug: Log when we're close to the threshold
-      if (minSim >= 0.80 && minSim < 0.95) {
-        console.log(`[buildClipGroups] Considering ${files[j].entry.name} for cluster starting with ${files[i].entry.name}: minSim=${minSim.toFixed(3)}, threshold=${SIMILARITY_THRESHOLD}`);
-      }
+      // Log ALL similarity decisions to help debug pairing
+      console.log(`[buildClipGroups] Checking ${files[j].entry.name} vs cluster [${cluster.map(c => files[c].entry.name).join(', ')}]: minSim=${minSim.toFixed(3)}, threshold=${SIMILARITY_THRESHOLD}, will${minSim >= SIMILARITY_THRESHOLD ? '' : ' NOT'} add`);
 
       if (minSim >= SIMILARITY_THRESHOLD) {
         console.log(`[buildClipGroups] ✓ Added ${files[j].entry.name} to cluster (minSim=${minSim.toFixed(3)})`);
@@ -480,6 +482,7 @@ async function buildClipGroups(files: Array<{ entry: DropboxEntry; url: string }
       }
     }
 
+    console.log(`[buildClipGroups] ✅ Cluster complete with ${cluster.length} images: [${cluster.map(c => files[c].entry.name).join(', ')}]`);
     clusters.push(cluster);
   }
 
