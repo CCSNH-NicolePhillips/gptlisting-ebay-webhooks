@@ -1147,10 +1147,13 @@
             const row = document.createElement('div');
             row.className = 'dp-drafts-table__row';
             row.onclick = () => window.location.href = `/edit-draft.html?offerId=${draft.offerId}`;
+            
+            const titleSpan = document.createElement('span');
+            titleSpan.className = 'dp-draft-title';
+            titleSpan.textContent = title;
+            
             row.innerHTML = `
-              <div class="dp-drafts-table__col dp-drafts-table__col--title">
-                <span class="dp-draft-title">${escapeHtml(title)}</span>
-              </div>
+              <div class="dp-drafts-table__col dp-drafts-table__col--title"></div>
               <div class="dp-drafts-table__col dp-drafts-table__col--status">
                 <span class="dp-status-pill ${statusClass}">${statusLabel}</span>
               </div>
@@ -1161,8 +1164,19 @@
                 <span class="dp-time-ago">${timeAgo}</span>
               </div>
             `;
+            
+            // Insert title span into first column
+            row.querySelector('.dp-drafts-table__col--title').appendChild(titleSpan);
+            
+            // Store SKU and title element for enrichment
+            row.dataset.sku = draft.sku;
+            row._titleElement = titleSpan;
+            
             rowsContainer.appendChild(row);
           });
+          
+          // Enrich titles from inventory API (async, don't block UI)
+          enrichDraftTitles(recentDrafts);
           
         } catch (error) {
           console.error('[Recent Drafts] Error loading drafts:', error);
@@ -1171,6 +1185,37 @@
           document.getElementById('recentDraftsEmpty').style.display = 'block';
           document.getElementById('recentDraftsFooter').style.display = 'flex';
           document.getElementById('recentDraftsCTA').style.display = 'inline-flex';
+        }
+      }
+      
+      // Enrich draft titles from inventory API
+      async function enrichDraftTitles(drafts) {
+        const exec = authClient && typeof authClient.authFetch === 'function' ? authClient.authFetch : fetch;
+        
+        for (const draft of drafts) {
+          if (!draft.sku) continue;
+          if (draft.title && draft.title !== draft.sku) continue; // Already has a good title
+          
+          try {
+            const url = '/.netlify/functions/ebay-get-inventory-item?sku=' + encodeURIComponent(draft.sku);
+            const response = await exec(url);
+            if (!response.ok) continue;
+            
+            const data = await response.json();
+            const enrichedTitle = data?.item?.product?.title || data?.item?.title || '';
+            
+            if (enrichedTitle) {
+              // Find the row with this SKU and update its title
+              const rows = document.querySelectorAll('#recentDraftsRows .dp-drafts-table__row');
+              rows.forEach(row => {
+                if (row.dataset.sku === draft.sku && row._titleElement) {
+                  row._titleElement.textContent = enrichedTitle;
+                }
+              });
+            }
+          } catch (err) {
+            console.warn('[Recent Drafts] Failed to enrich title for SKU:', draft.sku, err);
+          }
         }
       }
       
@@ -1203,7 +1248,7 @@
         const mc = document.getElementById('mainCard');
         if (lc) lc.style.display = 'none';
         if (mc) mc.style.display = 'block';
-        // Load recent drafts after main UI is visible
+        // Load recent drafts after main UI is visible (only once on boot)
         setTimeout(() => { 
           try { evaluatePrereqs(); } catch {} 
           try { loadRecentDrafts(); } catch {}
@@ -1214,10 +1259,6 @@
       } else {
         boot();
       }
-      window.addEventListener('focus', () => { 
-        try { evaluatePrereqs(); } catch {} 
-        try { loadRecentDrafts(); } catch {}
-      });
     </script>
   </body>
 </html>
