@@ -711,9 +711,10 @@
             
             // Check if there are more to delete
             if (!j.summary?.hasMore && !j.timedOut) {
-              // All done
+              // All done - show no drafts message without reloading
               flash.textContent = `✓ Deleted ${totalDeleted} drafts total`;
-              load();
+              list.innerHTML =
+                '<div class="empty">No drafts found (UNPUBLISHED/DRAFT/INACTIVE). Create your first listing draft from the wizard.</div>';
               break;
             }
             
@@ -723,6 +724,9 @@
           
           if (attempts >= maxAttempts) {
             flash.textContent = `Deleted ${totalDeleted} drafts (stopped after ${maxAttempts} batches)`;
+            // Show no drafts message without reloading
+            list.innerHTML =
+              '<div class="empty">No drafts found (UNPUBLISHED/DRAFT/INACTIVE). Create your first listing draft from the wizard.</div>';
           }
           
         } catch (e) {
