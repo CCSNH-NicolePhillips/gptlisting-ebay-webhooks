@@ -161,61 +161,79 @@
       <p class="muted">Preparing your workspace</p>
     </div>
     <div class="card" id="mainCard" style="display:none;">
+      <!-- User badge in top-right corner -->
+      <div style="position: absolute; top: 1.5rem; right: 1.5rem;">
+        <span class="small muted" id="signedInAs" style="background: #0f1530; padding: 0.35rem 0.75rem; border-radius: 20px; border: 1px solid #2a335c; white-space: nowrap;"></span>
+      </div>
+
       <!-- ========== CONNECTIONS SECTION ========== -->
       <section id="connectionsSection">
-        <h1>Connect your accounts</h1>
-        <p class="small muted" id="signedInAs" style="margin-top:-.5rem; margin-bottom: .75rem;"></p>
-        <p class="muted">
-          Link Dropbox to read photos, and eBay to create draft listings in your production account.
-        </p>
-        <div id="authBanner" style="display:none;margin: .75rem 0 1rem; padding:.75rem 1rem; border:1px solid #3d4a86; background:#0f1530; border-radius:10px;">
+        <h1 style="margin-bottom: 1rem;">Connections</h1>
+        
+        <!-- Auth banner -->
+        <div id="authBanner" style="display:none; margin-bottom: 1rem; padding:.75rem 1rem; border:1px solid #3d4a86; background:#0f1530; border-radius:10px;">
           <div style="display:flex; align-items:center; gap:.75rem; flex-wrap:wrap;">
             <span class="small">You need to sign in to view and connect your accounts.</span>
             <button id="bannerLogin" class="btn" style="padding:.45rem .8rem">Sign in</button>
           </div>
         </div>
-        <div class="row">
-          <div class="col">
-            <h3>Dropbox</h3>
-            <p class="status" id="dbxStatus">Loading…</p>
-            <p class="small muted" id="dbxWho" style="margin-top:-.5rem"></p>
-            <div>
-              <a id="dbxConnect" class="btn" href="/.netlify/functions/dropbox-oauth-start">Connect Dropbox</a>
-              <button id="dbxDisconnect" class="secondary">Disconnect</button>
-            </div>
-            <div id="dbxFolderBox" style="margin-top: .75rem;">
-              <label for="dbxFolderSelect" class="small muted" style="display:block;margin-bottom:.25rem">Default listing folder</label>
-              <select id="dbxFolderSelect" style="width:100%" disabled>
-                <option>Loading folders…</option>
-              </select>
-              <div id="dbxFolderMsg" class="small muted" style="margin-top:.25rem"></div>
-            </div>
-          </div>
-          <div class="col">
-            <h3>eBay</h3>
-            <p class="status" id="ebayStatus">Loading…</p>
-            <p class="small muted" id="ebayWho" style="margin-top:-.5rem"></p>
-            <div>
-              <a id="ebayConnect" class="btn" href="/.netlify/functions/ebay-oauth-start">Connect eBay</a>
-              <button id="ebayDisconnect" class="secondary">Disconnect</button>
-            </div>
-          </div>
-        </div>
-      </section>
 
-      <!-- ========== QUICK LINKS SECTION ========== -->
-      <section id="quickLinksSection">
-        <div style="margin-top:1rem; display:flex; gap:.5rem; flex-wrap:wrap;">
-          <a class="btn" href="/setup.html">Setup checklist</a>
-          <a class="btn secondary" href="/policies-manage.html">Policies</a>
-          <a class="btn secondary" href="/location.html">Inventory location</a>
+        <!-- Connections card -->
+        <div style="background: #0f1530; border: 1px solid #2a335c; border-radius: 10px; padding: 1.25rem; margin-bottom: 1rem;">
+          <div class="row">
+            <!-- Dropbox column -->
+            <div class="col">
+              <h3 style="margin-top: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem;">
+                📦 Dropbox
+              </h3>
+              <p class="status" id="dbxStatus" style="margin: 0.5rem 0; font-size: 0.9rem;">Loading…</p>
+              <p class="small muted" id="dbxWho" style="margin: 0 0 0.75rem 0;"></p>
+              
+              <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem;">
+                <a id="dbxConnect" class="btn" href="/.netlify/functions/dropbox-oauth-start" style="padding: 0.5rem 1rem; font-size: 0.9rem;">Connect</a>
+                <button id="dbxDisconnect" class="secondary" style="padding: 0.5rem 1rem; font-size: 0.9rem;">Disconnect</button>
+              </div>
+              
+              <div id="dbxFolderBox">
+                <label for="dbxFolderSelect" class="small muted" style="display:block; margin-bottom: 0.35rem;">Default folder</label>
+                <select id="dbxFolderSelect" style="width:100%; padding: 0.4rem; border-radius: 6px; background: #141a33; border: 1px solid #2a335c; color: #f4f6fb;" disabled>
+                  <option>Loading folders…</option>
+                </select>
+                <div id="dbxFolderMsg" class="small muted" style="margin-top: 0.35rem;"></div>
+              </div>
+            </div>
+
+            <!-- eBay column -->
+            <div class="col">
+              <h3 style="margin-top: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem;">
+                🛒 eBay
+              </h3>
+              <p class="status" id="ebayStatus" style="margin: 0.5rem 0; font-size: 0.9rem;">Loading…</p>
+              <p class="small muted" id="ebayWho" style="margin: 0 0 0.75rem 0;"></p>
+              
+              <div style="display: flex; gap: 0.5rem;">
+                <a id="ebayConnect" class="btn" href="/.netlify/functions/ebay-oauth-start" style="padding: 0.5rem 1rem; font-size: 0.9rem;">Connect</a>
+                <button id="ebayDisconnect" class="secondary" style="padding: 0.5rem 1rem; font-size: 0.9rem;">Disconnect</button>
+              </div>
+            </div>
+          </div>
         </div>
+
+        <!-- Quick links row -->
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
+          <a class="btn secondary" href="/setup.html" style="padding: 0.5rem 1rem; font-size: 0.9rem;">⚙️ Setup checklist</a>
+          <a class="btn secondary" href="/policies-manage.html" style="padding: 0.5rem 1rem; font-size: 0.9rem;">📋 Policies</a>
+          <a class="btn secondary" href="/location.html" style="padding: 0.5rem 1rem; font-size: 0.9rem;">📍 Inventory location</a>
+        </div>
+
+        <div id="setupMsg" class="small muted" style="margin-top: 0.5rem;"></div>
+        
+        <!-- Hidden legacy controls -->
         <div style="margin-top: 1rem; display:none">
           <button id="process" disabled>Process folder → Drafts</button>
           <span id="processMsg" class="small"></span>
         </div>
-        <div id="setupMsg" class="small muted" style="margin-top:.5rem"></div>
-        <div style="margin-top: .5rem; display:none">
+        <div style="margin-top: 0.5rem; display:none">
           <button id="claimLegacy" class="secondary">Claim legacy connections</button>
           <span id="claimMsg" class="small"></span>
         </div>
