@@ -172,59 +172,99 @@
     <div class="dp-shell" id="mainCard" style="display:none;">
       <!-- Sidebar -->
       <aside class="dp-sidebar">
+        <!-- Brand Area -->
         <div class="dp-sidebar__brand">
-          <div class="dp-sidebar__logo">DraftPilot</div>
+          <div class="dp-brand">
+            <div class="dp-brand__icon">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <path d="M12 18v-6"></path>
+                <path d="M9 15l3 3 3-3"></path>
+              </svg>
+            </div>
+            <div class="dp-brand__text">
+              <div class="dp-brand__wordmark">DraftPilot</div>
+              <div class="dp-brand__subtitle">AI Listing Studio</div>
+            </div>
+          </div>
         </div>
         
+        <!-- Navigation -->
         <nav class="dp-sidebar__nav">
-          <a href="/index.html" class="dp-nav-item dp-nav-item--active">
-            <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-            </svg>
-            Dashboard
-          </a>
-          <a href="/quick-list.html" class="dp-nav-item" id="navQuickList">
-            <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-            </svg>
-            SmartDrafts AI
-          </a>
-          <a href="/drafts.html" class="dp-nav-item">
-            <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-              <polyline points="14 2 14 8 20 8"></polyline>
-            </svg>
-            All Drafts
-          </a>
-          <a href="/setup.html" class="dp-nav-item">
-            <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="3"></circle>
-              <path d="M12 1v6m0 6v6"></path>
-            </svg>
-            Setup
-          </a>
-          <a href="/policies-manage.html" class="dp-nav-item">
-            <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-              <polyline points="14 2 14 8 20 8"></polyline>
-            </svg>
-            Policies
-          </a>
-          <a href="/location.html" class="dp-nav-item">
-            <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-              <circle cx="12" cy="10" r="3"></circle>
-            </svg>
-            Location
-          </a>
+          <!-- Primary Navigation Group -->
+          <div class="dp-nav-group">
+            <div class="dp-nav-group__label">APP</div>
+            <div class="dp-nav-group__items">
+              <a href="/index.html" class="dp-nav-item dp-nav-item--active">
+                <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                  <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                </svg>
+                <span class="dp-nav-item__label">Overview</span>
+              </a>
+              <a href="/quick-list.html" class="dp-nav-item" id="navQuickList">
+                <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                </svg>
+                <span class="dp-nav-item__label">Create Listings</span>
+              </a>
+              <a href="/drafts.html" class="dp-nav-item">
+                <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                </svg>
+                <span class="dp-nav-item__label">Drafts</span>
+              </a>
+              <a href="/analyze.html" class="dp-nav-item">
+                <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                </svg>
+                <span class="dp-nav-item__label">Analytics</span>
+              </a>
+              <a href="/setup.html" class="dp-nav-item">
+                <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <path d="M12 1v6m0 6v6m5.196-15.196l-4.243 4.243m0 5.656l-4.242 4.243m15.195-5.196l-4.242-4.243m-5.657 0l-4.243-4.243"></path>
+                </svg>
+                <span class="dp-nav-item__label">Settings</span>
+              </a>
+            </div>
+          </div>
+          
+          <!-- Account Navigation Group -->
+          <div class="dp-nav-group">
+            <div class="dp-nav-group__label">ACCOUNT</div>
+            <div class="dp-nav-group__items">
+              <a href="/policies-manage.html" class="dp-nav-item">
+                <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                  <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+                </svg>
+                <span class="dp-nav-item__label">Billing</span>
+              </a>
+              <a href="/privacy.html" class="dp-nav-item">
+                <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                  <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+                <span class="dp-nav-item__label">Support</span>
+              </a>
+            </div>
+          </div>
         </nav>
         
+        <!-- Spacer -->
+        <div class="dp-sidebar__spacer"></div>
+        
+        <!-- User Footer -->
         <div class="dp-sidebar__footer">
           <div class="dp-user-card">
             <div class="dp-user-card__avatar" id="userAvatar">U</div>
             <div class="dp-user-card__info">
               <div class="dp-user-card__name" id="userName">Loading...</div>
-              <div class="dp-user-card__email" id="userEmail"></div>
+              <div class="dp-user-card__status" id="userEmail">Signed in</div>
             </div>
           </div>
         </div>
@@ -513,7 +553,7 @@
             const initial = (name || email || 'U').charAt(0).toUpperCase();
             
             if (userName) userName.textContent = name || 'User';
-            if (userEmail) userEmail.textContent = email || '';
+            if (userEmail) userEmail.textContent = 'Signed in';
             if (userAvatar) userAvatar.textContent = initial;
           }
           
