@@ -4,15 +4,23 @@
 /* ===== CSS Variables ===== */
 
 :root {
-  --dp-bg: #020617;
-  --dp-border-subtle: rgba(148, 163, 184, 0.35);
-  --dp-accent: #38bdf8;
-  --dp-accent-soft: rgba(56, 189, 248, 0.18);
-  --dp-text-main: #e5e7eb;
-  --dp-text-muted: #94a3b8;
-  --dp-radius-card: 16px;
+  /* Professional SaaS palette - inspired by Linear/Vercel/Notion */
+  --dp-bg: #0a0a0a;
+  --dp-bg-elevated: #111111;
+  --dp-bg-card: #171717;
+  --dp-border-subtle: rgba(255, 255, 255, 0.08);
+  --dp-border-medium: rgba(255, 255, 255, 0.12);
+  --dp-accent: #3b82f6; /* Professional blue instead of cyan */
+  --dp-accent-hover: #60a5fa;
+  --dp-accent-soft: rgba(59, 130, 246, 0.12);
+  --dp-text-main: #fafafa;
+  --dp-text-secondary: #d4d4d8;
+  --dp-text-muted: #71717a;
+  --dp-success: #10b981;
+  --dp-radius-card: 12px;
   --dp-radius-pill: 999px;
-  --dp-shadow-card: 0 24px 50px rgba(15, 23, 42, 0.8);
+  --dp-shadow-card: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --dp-shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.6);
 }
 
 /* ===== Base Reset ===== */
@@ -33,9 +41,10 @@ body {
 body {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
     "Segoe UI", sans-serif;
-  background:
-    radial-gradient(circle at top left, #0f172a 0, #020617 45%, #020617 100%);
+  background: var(--dp-bg);
   color: var(--dp-text-main);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* ===== Shell Layout ===== */
@@ -74,21 +83,23 @@ body {
 /* ===== Cards ===== */
 
 .dp-card {
-  background: linear-gradient(
-      135deg,
-      rgba(148, 163, 184, 0.16),
-      rgba(15, 23, 42, 0.9)
-    );
+  background: var(--dp-bg-card);
   border-radius: var(--dp-radius-card);
   border: 1px solid var(--dp-border-subtle);
   padding: 20px 18px 18px;
   box-shadow: var(--dp-shadow-card);
+  transition: border-color 0.2s ease;
+}
+
+.dp-card:hover {
+  border-color: var(--dp-border-medium);
 }
 
 .dp-card h2,
 .dp-card h3 {
   margin-top: 0;
   margin-bottom: 6px;
+  color: var(--dp-text-main);
 }
 
 .dp-card p {
@@ -96,13 +107,15 @@ body {
   margin-bottom: 10px;
   font-size: 0.9rem;
   color: var(--dp-text-muted);
+  line-height: 1.5;
 }
 
 /* ===== Hero Card Special ===== */
 
 .dp-card--hero {
-  border-color: rgba(56, 189, 248, 0.7);
-  box-shadow: 0 28px 60px rgba(56, 189, 248, 0.3);
+  background: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 100%);
+  border-color: var(--dp-accent);
+  box-shadow: 0 0 0 1px var(--dp-accent), var(--dp-shadow-elevated);
 }
 
 /* ===== Buttons ===== */
@@ -111,38 +124,41 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border-radius: 999px;
+  border-radius: 8px;
   border: 1px solid transparent;
-  padding: 7px 14px;
-  font-size: 0.85rem;
+  padding: 8px 16px;
+  font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
   background: transparent;
   color: var(--dp-text-main);
   text-decoration: none;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
 }
 
 .dp-btn-primary {
   background: var(--dp-accent);
   border-color: var(--dp-accent);
-  color: #020617;
-  box-shadow: 0 16px 30px rgba(56, 189, 248, 0.4);
+  color: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 .dp-btn-primary:hover {
-  filter: brightness(1.08);
-  transform: translateY(-0.5px);
+  background: var(--dp-accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
 }
 
 .dp-btn-ghost {
-  border-color: rgba(148, 163, 184, 0.45);
-  color: var(--dp-text-muted);
+  border-color: var(--dp-border-medium);
+  color: var(--dp-text-secondary);
+  background: var(--dp-bg-elevated);
 }
 
 .dp-btn-ghost:hover {
   border-color: var(--dp-accent);
   color: var(--dp-text-main);
+  background: var(--dp-bg-card);
 }
 
 /* ===== Chips ===== */
@@ -151,19 +167,20 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border-radius: 999px;
+  border-radius: 8px;
   border: 1px solid var(--dp-border-subtle);
-  background: transparent;
-  color: var(--dp-text-muted);
-  font-size: 0.78rem;
-  padding: 4px 12px;
+  background: var(--dp-bg-elevated);
+  color: var(--dp-text-secondary);
+  font-size: 0.8125rem;
+  padding: 5px 12px;
   cursor: pointer;
   text-decoration: none;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
 }
 
 .dp-chip:hover {
-  border-color: var(--dp-accent);
+  border-color: var(--dp-border-medium);
+  background: var(--dp-bg-card);
   color: var(--dp-text-main);
 }
 
@@ -180,13 +197,13 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 10px;
+  padding: 4px 10px;
   border-radius: var(--dp-radius-pill);
   background: var(--dp-accent-soft);
   color: var(--dp-accent);
-  font-size: 0.7rem;
-  font-weight: 500;
-  letter-spacing: 0.08em;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   margin-bottom: 6px;
 }
@@ -203,21 +220,26 @@ body {
 .dp-conn-block h3 {
   margin: 0 0 4px;
   font-size: 0.95rem;
+  color: var(--dp-text-main);
 }
 
 .dp-status {
-  font-size: 0.8rem;
+  font-size: 0.8125rem;
   color: var(--dp-text-muted);
   margin-bottom: 8px;
+}
+
+.dp-status--connected {
+  color: var(--dp-success);
 }
 
 .dp-status--connected::before {
   content: "";
   display: inline-block;
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 999px;
-  background: #22c55e;
+  background: var(--dp-success);
   margin-right: 6px;
 }
 
@@ -225,17 +247,99 @@ body {
   font-size: 0.75rem;
   color: var(--dp-text-muted);
   margin: 4px 0 8px;
+  line-height: 1.4;
 }
 
 /* ===== Responsive ===== */
 
+/* === MOBILE LAYOUT: full-width app feel === */
+@media (max-width: 768px) {
+  /* Remove the "skinny tube" effect - make it full width on mobile */
+  .dp-page {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 16px;
+    box-sizing: border-box;
+  }
+
+  /* Full-width cards */
+  .dp-card {
+    width: 100%;
+    max-width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+    padding: 16px 14px;
+  }
+
+  /* Make sure inline-styled cards also go full width */
+  body .card {
+    max-width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  /* Stack connection columns vertically on mobile */
+  .dp-connections-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Make buttons stack better on mobile */
+  .row {
+    flex-direction: column;
+  }
+
+  .col {
+    flex: 1 1 100%;
+  }
+
+  /* Adjust hero card padding for mobile */
+  .dp-card--hero {
+    padding: 20px 16px;
+  }
+
+  /* Make topbar more compact */
+  .dp-topbar {
+    padding-bottom: 16px;
+    gap: 12px;
+  }
+
+  .dp-logo {
+    font-size: 1.2rem;
+  }
+
+  .dp-user {
+    font-size: 0.75rem;
+  }
+
+  /* Adjust quick links for mobile */
+  .dp-quicklinks {
+    gap: 6px;
+  }
+
+  /* Full width buttons on mobile for better touch targets */
+  .dp-btn,
+  .btn {
+    width: 100%;
+    justify-content: center;
+    padding: 10px 16px;
+  }
+
+  /* Exception: keep inline flex buttons in rows */
+  .row .btn,
+  .row .dp-btn {
+    width: auto;
+    flex: 1;
+  }
+}
+
 @media (max-width: 640px) {
   .dp-page {
-    padding-inline: 12px;
+    padding: 12px;
   }
 
   .dp-card {
-    padding: 16px 14px;
+    padding: 14px 12px;
   }
 }
 
@@ -250,6 +354,6 @@ body {
 
   .dp-btn {
     font-size: 0.8rem;
-    padding: 6px 12px;
+    padding: 8px 14px;
   }
 }
