@@ -575,7 +575,14 @@
             if (url && n._img) {
               try {
                 const resp = await exec(url);
-                if (!resp.ok) throw new Error(`thumb fetch failed: ${resp.status}`);
+                if (!resp.ok) {
+                  // Silently skip if thumb endpoint isn't available
+                  if (resp.status === 404) {
+                    n._sk?.remove?.();
+                    return;
+                  }
+                  throw new Error(`thumb fetch failed: ${resp.status}`);
+                }
                 const type = (resp.headers.get('content-type') || '').toLowerCase();
                 if (type && !type.startsWith('image/')) throw new Error('unexpected content-type');
                 const blob = await resp.blob();
