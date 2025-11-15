@@ -3,6 +3,12 @@
    Professional SaaS design inspired by Linear/Vercel/Notion
    ================================================================ */
 
+/* ===== GLOBAL OVERRIDES ===== */
+/* Hide auth badge - using sidebar user card instead */
+#auth-badge {
+  display: none !important;
+}
+
 /* ===== CSS VARIABLES ===== */
 :root {
   /* Colors - Calm Cyan Accent */
