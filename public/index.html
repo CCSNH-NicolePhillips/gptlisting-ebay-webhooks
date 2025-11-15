@@ -104,6 +104,13 @@
     </style>
   </head>
   <body>
+    <!-- 
+      TODO: Dashboard layout cleanup planned:
+      - ConnectionsSection: Dropbox/eBay connection cards
+      - QuickLinksSection: Setup checklist, Policies, Location links  
+      - CreateListingsSection: AI quick list hero card
+      - ManualDraftSection: Manual wizard accordion/card
+    -->
     <script src="/auth-client.js"></script>
     <script>
       // If we're returning from a provider logout that could only come back to origin,
@@ -154,109 +161,125 @@
       <p class="muted">Preparing your workspace</p>
     </div>
     <div class="card" id="mainCard" style="display:none;">
-  <h1>Connect your accounts</h1>
-  <p class="small muted" id="signedInAs" style="margin-top:-.5rem; margin-bottom: .75rem;"></p>
-      <p class="muted">
-        Link Dropbox to read photos, and eBay to create draft listings in your production account.
-      </p>
-      <div id="authBanner" style="display:none;margin: .75rem 0 1rem; padding:.75rem 1rem; border:1px solid #3d4a86; background:#0f1530; border-radius:10px;">
-        <div style="display:flex; align-items:center; gap:.75rem; flex-wrap:wrap;">
-          <span class="small">You need to sign in to view and connect your accounts.</span>
-          <button id="bannerLogin" class="btn" style="padding:.45rem .8rem">Sign in</button>
-        </div>
-      </div>
-      <div class="row">
-        <div class="col">
-          <h3>Dropbox</h3>
-          <p class="status" id="dbxStatus">Loading…</p>
-          <p class="small muted" id="dbxWho" style="margin-top:-.5rem"></p>
-          <div>
-            <a id="dbxConnect" class="btn" href="/.netlify/functions/dropbox-oauth-start">Connect Dropbox</a>
-            <button id="dbxDisconnect" class="secondary">Disconnect</button>
-          </div>
-          <div id="dbxFolderBox" style="margin-top: .75rem;">
-            <label for="dbxFolderSelect" class="small muted" style="display:block;margin-bottom:.25rem">Default listing folder</label>
-            <select id="dbxFolderSelect" style="width:100%" disabled>
-              <option>Loading folders…</option>
-            </select>
-            <div id="dbxFolderMsg" class="small muted" style="margin-top:.25rem"></div>
+      <!-- ========== CONNECTIONS SECTION ========== -->
+      <section id="connectionsSection">
+        <h1>Connect your accounts</h1>
+        <p class="small muted" id="signedInAs" style="margin-top:-.5rem; margin-bottom: .75rem;"></p>
+        <p class="muted">
+          Link Dropbox to read photos, and eBay to create draft listings in your production account.
+        </p>
+        <div id="authBanner" style="display:none;margin: .75rem 0 1rem; padding:.75rem 1rem; border:1px solid #3d4a86; background:#0f1530; border-radius:10px;">
+          <div style="display:flex; align-items:center; gap:.75rem; flex-wrap:wrap;">
+            <span class="small">You need to sign in to view and connect your accounts.</span>
+            <button id="bannerLogin" class="btn" style="padding:.45rem .8rem">Sign in</button>
           </div>
         </div>
-        <div class="col">
-          <h3>eBay</h3>
-          <p class="status" id="ebayStatus">Loading…</p>
-          <p class="small muted" id="ebayWho" style="margin-top:-.5rem"></p>
-          <div>
-            <a id="ebayConnect" class="btn" href="/.netlify/functions/ebay-oauth-start">Connect eBay</a>
-            <button id="ebayDisconnect" class="secondary">Disconnect</button>
+        <div class="row">
+          <div class="col">
+            <h3>Dropbox</h3>
+            <p class="status" id="dbxStatus">Loading…</p>
+            <p class="small muted" id="dbxWho" style="margin-top:-.5rem"></p>
+            <div>
+              <a id="dbxConnect" class="btn" href="/.netlify/functions/dropbox-oauth-start">Connect Dropbox</a>
+              <button id="dbxDisconnect" class="secondary">Disconnect</button>
+            </div>
+            <div id="dbxFolderBox" style="margin-top: .75rem;">
+              <label for="dbxFolderSelect" class="small muted" style="display:block;margin-bottom:.25rem">Default listing folder</label>
+              <select id="dbxFolderSelect" style="width:100%" disabled>
+                <option>Loading folders…</option>
+              </select>
+              <div id="dbxFolderMsg" class="small muted" style="margin-top:.25rem"></div>
+            </div>
+          </div>
+          <div class="col">
+            <h3>eBay</h3>
+            <p class="status" id="ebayStatus">Loading…</p>
+            <p class="small muted" id="ebayWho" style="margin-top:-.5rem"></p>
+            <div>
+              <a id="ebayConnect" class="btn" href="/.netlify/functions/ebay-oauth-start">Connect eBay</a>
+              <button id="ebayDisconnect" class="secondary">Disconnect</button>
+            </div>
           </div>
         </div>
-      </div>
-      <div style="margin-top:1rem; display:flex; gap:.5rem; flex-wrap:wrap;">
-        <a class="btn" href="/setup.html">Setup checklist</a>
-        <a class="btn secondary" href="/policies-manage.html">Policies</a>
-        <a class="btn secondary" href="/location.html">Inventory location</a>
-      </div>
-      <div style="margin-top: 1rem; display:none">
-        <button id="process" disabled>Process folder → Drafts</button>
-        <span id="processMsg" class="small"></span>
-      </div>
-      <div id="setupMsg" class="small muted" style="margin-top:.5rem"></div>
-      <div style="margin-top: .5rem; display:none">
-        <button id="claimLegacy" class="secondary">Claim legacy connections</button>
-        <span id="claimMsg" class="small"></span>
-      </div>
+      </section>
+
+      <!-- ========== QUICK LINKS SECTION ========== -->
+      <section id="quickLinksSection">
+        <div style="margin-top:1rem; display:flex; gap:.5rem; flex-wrap:wrap;">
+          <a class="btn" href="/setup.html">Setup checklist</a>
+          <a class="btn secondary" href="/policies-manage.html">Policies</a>
+          <a class="btn secondary" href="/location.html">Inventory location</a>
+        </div>
+        <div style="margin-top: 1rem; display:none">
+          <button id="process" disabled>Process folder → Drafts</button>
+          <span id="processMsg" class="small"></span>
+        </div>
+        <div id="setupMsg" class="small muted" style="margin-top:.5rem"></div>
+        <div style="margin-top: .5rem; display:none">
+          <button id="claimLegacy" class="secondary">Claim legacy connections</button>
+          <span id="claimMsg" class="small"></span>
+        </div>
+      </section>
 
       <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid #2a335c" />
-      <h2 style="margin-bottom: 1.5rem; font-size: 1.75rem;">🚀 Create Listings</h2>
       
-      <!-- AI-Powered SmartDrafts -->
-      <div style="background: linear-gradient(135deg, #1a2845 0%, #0f1530 100%); border: 2px solid #4f7cff; border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem; position: relative; overflow: hidden;">
-        <div style="position: absolute; top: 10px; right: 10px; background: #4f7cff; color: white; padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase;">✨ AI Powered</div>
-        <h3 style="margin-top: 0; font-size: 1.4rem; color: #fff;">SmartDrafts Quick List</h3>
-        <p style="color: #cbd5ff; margin: 0.5rem 0 1rem;">
-          <strong>Fully automated AI listing creation.</strong> Simply drop product photos in Dropbox, and our AI analyzes images, researches prices, selects categories, and creates complete eBay drafts ready to publish.
-        </p>
-        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
-          <a id="goQuickList" class="btn disabled" href="/quick-list.html" aria-disabled="true" style="background: #4f7cff; font-size: 1rem; padding: 0.8rem 1.5rem; box-shadow: 0 4px 12px rgba(79, 124, 255, 0.3);">
-            <span style="font-size: 1.1rem; font-weight: 700;">⚡ Quick List (AI)</span>
-          </a>
-          <span class="small" style="color: #a8c1ff;">• Vision AI • GPT-4 • Auto-pricing • Smart categories</span>
+      <!-- ========== CREATE LISTINGS SECTION ========== -->
+      <section id="createListingsSection">
+        <h2 style="margin-bottom: 1.5rem; font-size: 1.75rem;">🚀 Create Listings</h2>
+        
+        <!-- AI-Powered SmartDrafts -->
+        <div style="background: linear-gradient(135deg, #1a2845 0%, #0f1530 100%); border: 2px solid #4f7cff; border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem; position: relative; overflow: hidden;">
+          <div style="position: absolute; top: 10px; right: 10px; background: #4f7cff; color: white; padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase;">✨ AI Powered</div>
+          <h3 style="margin-top: 0; font-size: 1.4rem; color: #fff;">SmartDrafts Quick List</h3>
+          <p style="color: #cbd5ff; margin: 0.5rem 0 1rem;">
+            <strong>Fully automated AI listing creation.</strong> Simply drop product photos in Dropbox, and our AI analyzes images, researches prices, selects categories, and creates complete eBay drafts ready to publish.
+          </p>
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+            <a id="goQuickList" class="btn disabled" href="/quick-list.html" aria-disabled="true" style="background: #4f7cff; font-size: 1rem; padding: 0.8rem 1.5rem; box-shadow: 0 4px 12px rgba(79, 124, 255, 0.3);">
+              <span style="font-size: 1.1rem; font-weight: 700;">⚡ Quick List (AI)</span>
+            </a>
+            <span class="small" style="color: #a8c1ff;">• Vision AI • GPT-4 • Auto-pricing • Smart categories</span>
+          </div>
         </div>
-      </div>
+      </section>
 
-      <!-- Manual Draft Creation -->
-      <div style="background: #0f1530; border: 1px solid #3d4a86; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
-        <h3 style="margin-top: 0; font-size: 1.2rem; color: #fff;">Manual Draft Wizard</h3>
-        <p style="color: #a2a9c8; margin: 0.5rem 0 1rem; font-size: 0.95rem;">
-          Traditional workflow for creating drafts one at a time. Select images, fill in details manually, and create individual listings with full control.
-        </p>
-        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
-          <a id="goCreateDraft" class="btn secondary full-width disabled" href="/draft-wizard.html" aria-disabled="true" style="max-width: 200px;">
-            <span>📝 Manual Draft</span>
-          </a>
-          <a class="btn secondary full-width" href="/drafts.html" id="viewDraftsBtn" style="max-width: 200px;">📋 View Drafts</a>
+      <!-- ========== MANUAL DRAFT SECTION ========== -->
+      <section id="manualDraftSection">
+        <!-- Manual Draft Creation -->
+        <div style="background: #0f1530; border: 1px solid #3d4a86; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
+          <h3 style="margin-top: 0; font-size: 1.2rem; color: #fff;">Manual Draft Wizard</h3>
+          <p style="color: #a2a9c8; margin: 0.5rem 0 1rem; font-size: 0.95rem;">
+            Traditional workflow for creating drafts one at a time. Select images, fill in details manually, and create individual listings with full control.
+          </p>
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+            <a id="goCreateDraft" class="btn secondary full-width disabled" href="/draft-wizard.html" aria-disabled="true" style="max-width: 200px;">
+              <span>📝 Manual Draft</span>
+            </a>
+            <a class="btn secondary full-width" href="/drafts.html" id="viewDraftsBtn" style="max-width: 200px;">📋 View Drafts</a>
+          </div>
         </div>
-      </div>
+      </section>
 
       <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid #2a335c" />
-      <h2>Setup checklist</h2>
-      <ul class="small" id="checklist" style="line-height: 1.9">
-        <li id="chkDropbox">Dropbox: <span class="muted">Unknown</span></li>
-        <li id="chkEbay">eBay: <span class="muted">Unknown</span></li>
-        <li id="chkPolicies">
-          Business policies: <span class="muted">Connect eBay to view status.</span>
-          <a href="/policies-manage.html" id="policiesLink" style="display: none">Manage</a>
-        </li>
-        <li id="chkLocation">
-          Inventory location: <span class="muted">Connect eBay to view status.</span>
-          <a href="/location.html" id="locationLink" style="display: none">Manage</a>
-        </li>
-      </ul>
-      <div class="footer">Need help? See <a href="/privacy.html" target="_blank">Privacy</a>.</div>
-  </div>
-
-    <script>
+      
+      <!-- ========== SETUP CHECKLIST SECTION ========== -->
+      <section id="setupChecklistSection">
+        <h2>Setup checklist</h2>
+        <ul class="small" id="checklist" style="line-height: 1.9">
+          <li id="chkDropbox">Dropbox: <span class="muted">Unknown</span></li>
+          <li id="chkEbay">eBay: <span class="muted">Unknown</span></li>
+          <li id="chkPolicies">
+            Business policies: <span class="muted">Connect eBay to view status.</span>
+            <a href="/policies-manage.html" id="policiesLink" style="display: none">Manage</a>
+          </li>
+          <li id="chkLocation">
+            Inventory location: <span class="muted">Connect eBay to view status.</span>
+            <a href="/location.html" id="locationLink" style="display: none">Manage</a>
+          </li>
+        </ul>
+        <div class="footer">Need help? See <a href="/privacy.html" target="_blank">Privacy</a>.</div>
+      </section>
+    </div>    <script>
       const SETUP_STORAGE_KEY = 'draftpilotVisitedSetup';
       const SETUP_REDIRECT_GUARD = 'draftpilotSuppressSetupRedirect';
       let lastStatus = null;
