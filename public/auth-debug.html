@@ -50,13 +50,32 @@
 
       (async function() {
         try {
-          // 1) Load public config from Netlify function
+          // 1) Check if SDK loaded
+          S('Checking Auth0 SDK...', '');
+          log('preflight', 'window.createAuth0Client exists: ' + (!!window.createAuth0Client));
+          if (!window.createAuth0Client) {
+            S('Auth0 SDK failed to load', 'warn');
+            log('err', 'The Auth0 SPA SDK script tag failed to load.');
+            log('err', 'Possible causes:');
+            log('err', '- Content Security Policy (CSP) blocking cdn.auth0.com');
+            log('err', '- Browser extension blocking the script');
+            log('err', '- Network connectivity issue');
+            log('err', '- Check the browser console for additional errors');
+            return;
+          }
+
+          // 2) Load public config from Netlify function
+          S('Loading config...', '');
           const res = await fetch('/.netlify/functions/get-public-config', { cache: 'no-store' });
+          log('preflight', 'get-public-config status: ' + res.status);
           const cfg = await res.json().catch(() => ({}));
           set('cfg', cfg);
+
           if (!res.ok) throw new Error('get-public-config failed: ' + (cfg.error || res.status));
+
           const rawMode = (cfg.AUTH_MODE_RAW || cfg.AUTH_MODE || 'none').toLowerCase();
           const mode = ['admin', 'user', 'mixed', 'auth0'].includes(rawMode) ? 'auth0' : rawMode;
+
           if (mode !== 'auth0') {
             S('Auth is not configured for Auth0. Set AUTH_MODE=user (or mixed) with valid AUTH0_DOMAIN/CLIENT_ID.', 'warn');
             return;
@@ -66,12 +85,10 @@
             return;
           }
 
-          // 2) Ensure Auth0 SDK is available
-          if (!window.createAuth0Client) {
-            throw new Error('Auth0 SPA SDK not available on window.createAuth0Client');
-          }
+          log('preflight', 'Config validated successfully');
 
           // 3) Initialize Auth0
+          S('Initializing Auth0 client...', '');
           const auth0 = await window.createAuth0Client({
             domain: cfg.AUTH0_DOMAIN,
             clientId: cfg.AUTH0_CLIENT_ID,
@@ -83,43 +100,88 @@
             },
           });
           window.__auth0Debug = auth0;
+          log('preflight', 'Auth0 client created successfully');
 
           // 4) Handle callback if returning from Auth0
           if (location.search.includes('code=') && location.search.includes('state=')) {
-            try { await auth0.handleRedirectCallback(); }
-            catch (e) { log('err', e); }
+            S('Handling Auth0 callback...', '');
+            try {
+              await auth0.handleRedirectCallback();
+              log('preflight', 'Callback handled successfully');
+            } catch (e) {
+              log('err', 'Callback error: ' + describe(e));
+            }
             history.replaceState({}, document.title, window.location.origin + '/auth-debug.html');
           }
 
-          // 5) Try silent token (ok to fail on first run)
-          try { await auth0.getTokenSilently(); } catch (e) { log('err', 'Silent token failed (ok on first run): ' + describe(e)); }
-
+          // 5) Check authentication status
+          S('Checking authentication status...', '');
           const authed = await auth0.isAuthenticated();
-          S(authed ? 'Authenticated' : 'Not authenticated', authed ? 'ok' : 'warn');
+          log('preflight', 'isAuthenticated: ' + authed);
+
+          S(authed ? 'Authenticated ✓' : 'Not authenticated', authed ? 'ok' : 'warn');
+
           if (authed) {
             const user = await auth0.getUser();
             set('out', user);
+
+            // Try to get token
+            try {
+              const token = await auth0.getTokenSilently();
+              log('out', '\n--- TOKEN ---');
+              log('out', 'Token (first 40 chars): ' + (token ? token.slice(0, 40) + '...' : 'null'));
+              log('out', 'Token length: ' + (token ? token.length : 0));
+            } catch (e) {
+              log('err', 'getTokenSilently error: ' + describe(e));
+            }
           }
 
+          // 6) Wire up buttons
           document.getElementById('btnLogin').onclick = async () => {
             try {
-              await auth0.loginWithRedirect({ authorizationParams: { redirect_uri: window.location.origin + '/auth-debug.html' } });
-            } catch (e) { log('err', e); }
+              S('Redirecting to Auth0...', '');
+              await auth0.loginWithRedirect({
+                authorizationParams: {
+                  redirect_uri: window.location.origin + '/auth-debug.html'
+                }
+              });
+            } catch (e) {
+              log('err', 'Login error: ' + describe(e));
+              S('Login failed', 'warn');
+            }
           };
+
           document.getElementById('btnLogout').onclick = async () => {
-            try { await auth0.logout({ logoutParams: { returnTo: location.origin + '/' } }); }
-            catch (e) { log('err', e); }
+            try {
+              S('Logging out...', '');
+              await auth0.logout({ logoutParams: { returnTo: location.origin + '/' } });
+            } catch (e) {
+              log('err', 'Logout error: ' + describe(e));
+              S('Logout failed', 'warn');
+            }
           };
+
           document.getElementById('btnSilent').onclick = async () => {
             try {
+              S('Fetching token silently...', '');
               const t = await auth0.getTokenSilently();
-              log('out', { tokenSnippet: t && (t.slice(0, 20) + '…') });
-            } catch (e) { log('err', e); }
+              log('out', '\n--- NEW TOKEN ---');
+              log('out', 'Token (first 40 chars): ' + (t ? t.slice(0, 40) + '...' : 'null'));
+              log('out', 'Token length: ' + (t ? t.length : 0));
+              S('Token fetched successfully', 'ok');
+            } catch (e) {
+              log('err', 'getTokenSilently error: ' + describe(e));
+              S('Token fetch failed', 'warn');
+            }
           };
         } catch (e) {
-          S('Init error', 'warn');
-          log('err', e);
-          log('err', 'Tip: Ensure Auth0 Allowed Callback URLs includes ' + (location.origin + '/auth-debug.html') + ' and Web Origins includes ' + location.origin + '.');
+          S('Initialization error', 'warn');
+          log('err', describe(e));
+          log('err', '\nTroubleshooting tips:');
+          log('err', '- Ensure Auth0 Allowed Callback URLs includes: ' + (location.origin + '/auth-debug.html'));
+          log('err', '- Ensure Auth0 Allowed Web Origins includes: ' + location.origin);
+          log('err', '- Check browser console for CSP or network errors');
+          log('err', '- Try disabling browser extensions');
         }
       })();
     </script>

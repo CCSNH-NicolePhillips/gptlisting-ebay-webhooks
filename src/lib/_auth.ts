@@ -37,15 +37,33 @@ export function getJwtSubUnverified(event: HandlerEvent): string | null {
 
 export async function requireAuthVerified(event: HandlerEvent): Promise<{ sub: string; claims: Record<string, any> } | null> {
   try {
-    if (!JWKS || !ISSUER || !AUTH0_CLIENT_ID) return null;
+    if (!JWKS || !ISSUER || !AUTH0_CLIENT_ID) {
+      console.error('[Auth] Missing Auth0 configuration:', {
+        hasJWKS: !!JWKS,
+        hasISSUER: !!ISSUER,
+        hasClientId: !!AUTH0_CLIENT_ID,
+      });
+      return null;
+    }
     const token = getBearerToken(event);
-    if (!token) return null;
+    if (!token) {
+      console.log('[Auth] No bearer token found in request');
+      return null;
+    }
     const audiences = AUTH0_AUDIENCE ? [AUTH0_CLIENT_ID, AUTH0_AUDIENCE] : [AUTH0_CLIENT_ID];
     const { payload } = await jwtVerify(token, JWKS, { issuer: ISSUER, audience: audiences as any });
     const sub = typeof payload?.sub === 'string' ? payload.sub : null;
-    if (!sub) return null;
+    if (!sub) {
+      console.error('[Auth] Token verified but no sub claim found');
+      return null;
+    }
     return { sub, claims: payload as any };
-  } catch {
+  } catch (err) {
+    console.error('[Auth] Token verification failed:', {
+      error: err instanceof Error ? err.message : String(err),
+      hasAudience: !!AUTH0_AUDIENCE,
+      audiences: AUTH0_AUDIENCE ? [AUTH0_CLIENT_ID, AUTH0_AUDIENCE] : [AUTH0_CLIENT_ID],
+    });
     return null;
   }
 }
