@@ -110,15 +110,7 @@
     }
       const getCreateAuth0 = () => (window.auth0 && window.auth0.createAuth0Client) || window.createAuth0Client;
     if (!window.createAuth0Client) {
-      try {
-        await loadSdk('/.netlify/functions/cdn-auth0-spa?v=2.5');
-      } catch {
-        await loadSdkFromBlob('/.netlify/functions/cdn-auth0-spa?v=2.5');
-        if (!window.createAuth0Client) {
-          try { await loadSdk('https://cdn.auth0.com/js/auth0-spa-js/2.5/auth0-spa-js.production.js'); }
-          catch {}
-        }
-      }
+      await loadSdk('https://cdn.auth0.com/js/auth0-spa-js/2.5/auth0-spa-js.production.js');
     }
       const createAuth0 = getCreateAuth0();
       if (!createAuth0) throw new Error('Auth0 SDK not loaded');
