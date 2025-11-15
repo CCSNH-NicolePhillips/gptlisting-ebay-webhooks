@@ -1187,6 +1187,28 @@ body {
 .mt-3 { margin-top: 24px; }
 
 /* ===== RECENT DRAFTS TABLE ===== */
+/* Empty State */
+.dp-empty-state {
+  text-align: center;
+  padding: 48px 24px;
+}
+
+.dp-empty-state__title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.dp-empty-state__description {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+/* Drafts Table */
 .dp-drafts-table {
   width: 100%;
   border-radius: var(--radius-md);

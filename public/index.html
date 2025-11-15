@@ -444,8 +444,21 @@
               </div>
               
               <div class="dp-card__content">
-                <!-- Drafts Table -->
-                <div class="dp-drafts-table">
+                <!-- Empty State (shown when no drafts) -->
+                <div class="dp-empty-state" id="recentDraftsEmpty">
+                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--text-muted); margin-bottom: 16px;">
+                    <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                  </svg>
+                  <h4 class="dp-empty-state__title">No recent drafts</h4>
+                  <p class="dp-empty-state__description">Connect your Dropbox or upload images to create your first eBay listing draft.</p>
+                  <div style="display: flex; gap: 12px; margin-top: 20px; justify-content: center;">
+                    <a href="/smartdrafts-dropbox.html" class="dp-btn dp-btn-primary">Connect Dropbox</a>
+                    <a href="/upload-local.html" class="dp-btn dp-btn-secondary">Upload Images</a>
+                  </div>
+                </div>
+                
+                <!-- Drafts Table (hidden until drafts exist, will be populated by JS) -->
+                <div class="dp-drafts-table" id="recentDraftsTable" style="display: none;">
                   <!-- Table Header -->
                   <div class="dp-drafts-table__header">
                     <div class="dp-drafts-table__col dp-drafts-table__col--title">Title</div>
@@ -454,85 +467,12 @@
                     <div class="dp-drafts-table__col dp-drafts-table__col--updated">Updated</div>
                   </div>
                   
-                  <!-- Table Rows -->
-                  <div class="dp-drafts-table__row">
-                    <div class="dp-drafts-table__col dp-drafts-table__col--title">
-                      <span class="dp-draft-title">Vintage Canon AE-1 35mm Film Camera</span>
-                    </div>
-                    <div class="dp-drafts-table__col dp-drafts-table__col--status">
-                      <span class="dp-status-pill dp-status-pill--ready">Ready</span>
-                    </div>
-                    <div class="dp-drafts-table__col dp-drafts-table__col--source">
-                      <span class="dp-source-chip">Dropbox /EBAY</span>
-                    </div>
-                    <div class="dp-drafts-table__col dp-drafts-table__col--updated">
-                      <span class="dp-time-ago">3m ago</span>
-                    </div>
-                  </div>
-                  
-                  <div class="dp-drafts-table__row">
-                    <div class="dp-drafts-table__col dp-drafts-table__col--title">
-                      <span class="dp-draft-title">Apple iPhone 13 Pro 256GB Unlocked</span>
-                    </div>
-                    <div class="dp-drafts-table__col dp-drafts-table__col--status">
-                      <span class="dp-status-pill dp-status-pill--draft">Draft</span>
-                    </div>
-                    <div class="dp-drafts-table__col dp-drafts-table__col--source">
-                      <span class="dp-source-chip">Dropbox /EBAY</span>
-                    </div>
-                    <div class="dp-drafts-table__col dp-drafts-table__col--updated">
-                      <span class="dp-time-ago">1h ago</span>
-                    </div>
-                  </div>
-                  
-                  <div class="dp-drafts-table__row">
-                    <div class="dp-drafts-table__col dp-drafts-table__col--title">
-                      <span class="dp-draft-title">Sony PlayStation 5 Console Bundle</span>
-                    </div>
-                    <div class="dp-drafts-table__col dp-drafts-table__col--status">
-                      <span class="dp-status-pill dp-status-pill--needs-review">Needs Review</span>
-                    </div>
-                    <div class="dp-drafts-table__col dp-drafts-table__col--source">
-                      <span class="dp-source-chip">Local Upload</span>
-                    </div>
-                    <div class="dp-drafts-table__col dp-drafts-table__col--updated">
-                      <span class="dp-time-ago">2h ago</span>
-                    </div>
-                  </div>
-                  
-                  <div class="dp-drafts-table__row">
-                    <div class="dp-drafts-table__col dp-drafts-table__col--title">
-                      <span class="dp-draft-title">Herman Miller Aeron Office Chair</span>
-                    </div>
-                    <div class="dp-drafts-table__col dp-drafts-table__col--status">
-                      <span class="dp-status-pill dp-status-pill--ready">Ready</span>
-                    </div>
-                    <div class="dp-drafts-table__col dp-drafts-table__col--source">
-                      <span class="dp-source-chip">Dropbox /EBAY</span>
-                    </div>
-                    <div class="dp-drafts-table__col dp-drafts-table__col--updated">
-                      <span class="dp-time-ago">5h ago</span>
-                    </div>
-                  </div>
-                  
-                  <div class="dp-drafts-table__row">
-                    <div class="dp-drafts-table__col dp-drafts-table__col--title">
-                      <span class="dp-draft-title">Nintendo Switch OLED Model White</span>
-                    </div>
-                    <div class="dp-drafts-table__col dp-drafts-table__col--status">
-                      <span class="dp-status-pill dp-status-pill--draft">Draft</span>
-                    </div>
-                    <div class="dp-drafts-table__col dp-drafts-table__col--source">
-                      <span class="dp-source-chip">Local Upload</span>
-                    </div>
-                    <div class="dp-drafts-table__col dp-drafts-table__col--updated">
-                      <span class="dp-time-ago">1d ago</span>
-                    </div>
-                  </div>
+                  <!-- Rows will be populated dynamically by JavaScript -->
+                  <div id="recentDraftsRows"></div>
                 </div>
               </div>
               
-              <div class="dp-card__footer">
+              <div class="dp-card__footer" id="recentDraftsFooter" style="display: none;">
                 <a href="/drafts.html" class="dp-link-button">
                   View all drafts
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; margin-left: 4px; vertical-align: middle;">
