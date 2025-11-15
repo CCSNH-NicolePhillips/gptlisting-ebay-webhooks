@@ -1050,6 +1050,110 @@
   }
       }
 
+      // Load recent drafts
+      async function loadRecentDrafts() {
+        try {
+          const base = '/.netlify/functions/ebay-list-offers?limit=100&status=' + encodeURIComponent('UNPUBLISHED,DRAFT,INACTIVE');
+          const exec = authClient && typeof authClient.authFetch === 'function' ? authClient.authFetch : fetch;
+          const response = await exec(base);
+          
+          if (!response.ok) {
+            console.warn('[Recent Drafts] Failed to load:', response.status);
+            return;
+          }
+          
+          const data = await response.json();
+          const offers = Array.isArray(data?.offers) ? data.offers : [];
+          
+          if (offers.length === 0) {
+            // Show empty state
+            document.getElementById('recentDraftsEmpty').style.display = 'block';
+            document.getElementById('recentDraftsTable').style.display = 'none';
+            document.getElementById('recentDraftsFooter').style.display = 'none';
+            return;
+          }
+          
+          // Hide empty state, show table
+          document.getElementById('recentDraftsEmpty').style.display = 'none';
+          document.getElementById('recentDraftsTable').style.display = 'block';
+          document.getElementById('recentDraftsFooter').style.display = 'flex';
+          
+          // Get most recent 5 drafts (sorted by listing start date, descending)
+          const recentDrafts = offers
+            .sort((a, b) => {
+              const aTime = a?.listing?.listingStartDate || a?.creationDate || 0;
+              const bTime = b?.listing?.listingStartDate || b?.creationDate || 0;
+              return new Date(bTime) - new Date(aTime);
+            })
+            .slice(0, 5);
+          
+          // Populate table rows
+          const rowsContainer = document.getElementById('recentDraftsRows');
+          rowsContainer.innerHTML = '';
+          
+          recentDrafts.forEach(draft => {
+            const title = draft?.listing?.title || 'Untitled';
+            const status = (draft?.status || 'DRAFT').toUpperCase();
+            const updatedTime = draft?.listing?.listingStartDate || draft?.creationDate;
+            
+            // Determine status pill class
+            let statusClass = 'dp-status-pill--draft';
+            if (status === 'INACTIVE') statusClass = 'dp-status-pill--needs-review';
+            if (status === 'ACTIVE') statusClass = 'dp-status-pill--ready';
+            
+            // Format time ago
+            const timeAgo = formatTimeAgo(updatedTime);
+            
+            // Determine source (placeholder for now)
+            const source = 'SmartDrafts';
+            
+            const row = document.createElement('div');
+            row.className = 'dp-drafts-table__row';
+            row.onclick = () => window.location.href = `/edit-draft.html?offerId=${draft.offerId}`;
+            row.innerHTML = `
+              <div class="dp-drafts-table__col dp-drafts-table__col--title">
+                <span class="dp-draft-title">${escapeHtml(title)}</span>
+              </div>
+              <div class="dp-drafts-table__col dp-drafts-table__col--status">
+                <span class="dp-status-pill ${statusClass}">${status}</span>
+              </div>
+              <div class="dp-drafts-table__col dp-drafts-table__col--source">
+                <span class="dp-source-chip">${source}</span>
+              </div>
+              <div class="dp-drafts-table__col dp-drafts-table__col--updated">
+                <span class="dp-time-ago">${timeAgo}</span>
+              </div>
+            `;
+            rowsContainer.appendChild(row);
+          });
+          
+        } catch (error) {
+          console.error('[Recent Drafts] Error loading drafts:', error);
+        }
+      }
+      
+      // Helper: Format time ago
+      function formatTimeAgo(dateString) {
+        if (!dateString) return 'recently';
+        const now = new Date();
+        const date = new Date(dateString);
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+        
+        if (diffMins < 60) return `${diffMins}m ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        return `${diffDays}d ago`;
+      }
+      
+      // Helper: Escape HTML
+      function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+      }
+
       // Single boot: load auth/status first, then reveal main UI to avoid flashes
       async function boot() {
         try { await evaluatePrereqs(); } catch {}
@@ -1057,15 +1161,21 @@
         const mc = document.getElementById('mainCard');
         if (lc) lc.style.display = 'none';
         if (mc) mc.style.display = 'block';
-        // secondary pass after brief delay to pick up async token propagation
-        setTimeout(() => { try { evaluatePrereqs(); } catch {} }, 600);
+        // Load recent drafts after main UI is visible
+        setTimeout(() => { 
+          try { evaluatePrereqs(); } catch {} 
+          try { loadRecentDrafts(); } catch {}
+        }, 600);
       }
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', boot);
       } else {
         boot();
       }
-      window.addEventListener('focus', () => { try { evaluatePrereqs(); } catch {} });
+      window.addEventListener('focus', () => { 
+        try { evaluatePrereqs(); } catch {} 
+        try { loadRecentDrafts(); } catch {}
+      });
     </script>
   </body>
 </html>
