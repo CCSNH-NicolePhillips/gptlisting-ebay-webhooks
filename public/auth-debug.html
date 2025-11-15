@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Auth0 Debug</title>
-  <script src="/.netlify/functions/cdn-auth0-spa?v=2.5"></script>
+    <script src="https://cdn.auth0.com/js/auth0-spa-js/2.5/auth0-spa-js.production.js"></script>
     <style>
       body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 20px; }
       pre { background: #0b1020; color: #a8ff60; padding: 10px; border-radius: 6px; white-space: pre-wrap; }
@@ -66,109 +66,29 @@
             return;
           }
 
-          // 2) Ensure Auth0 SDK is available (diagnose CDN/CSP issues)
-          async function preflight(url){
-            try{
-              const r = await fetch(url, { cache: 'no-store' });
-              const ct = r.headers.get('content-type');
-              const txt = await r.text();
-              set('preflight', {
-                url,
-                status: r.status,
-                contentType: ct,
-                snippet: txt.slice(0, 120)
-              });
-              return { ok: r.ok, txt };
-            }catch(e){
-              set('preflight', { url, error: describe(e) });
-              return { ok: false };
-            }
-          }
-          function beginAmdDisable(){
-            const hadDefine = typeof window.define === 'function';
-            const saved = hadDefine ? window.define : undefined;
-            try { if (hadDefine) window.define = undefined; } catch {}
-            return () => {
-              try {
-                if (hadDefine && saved) window.define = saved;
-                else if (hadDefine && !saved) delete window.define;
-              } catch {}
-            };
-          }
-          async function injectScript(url){
-            return new Promise((resolve, reject) => {
-              const restore = beginAmdDisable();
-              const s = document.createElement('script');
-              s.src = url; s.async = true;
-              s.onload = () => { try { restore(); } catch{}; resolve(); };
-              s.onerror = (e) => { try { restore(); } catch{}; reject(e); };
-              document.head.appendChild(s);
-            });
-          }
-          async function injectFromBlob(js){
-            const blob = new Blob([js], { type: 'application/javascript' });
-            const u = URL.createObjectURL(blob);
-            try { await injectScript(u); } finally { URL.revokeObjectURL(u); }
-          }
-          async function ensureSdk(version) {
-            if (window.createAuth0Client) return true;
-            await new Promise((resolve) => setTimeout(resolve, 50));
-            if (window.createAuth0Client) return true;
-            return new Promise((resolve) => {
-              const s = document.createElement('script');
-              s.src = `https://cdn.auth0.com/js/auth0-spa-js/${version}/auth0-spa-js.production.js`;
-              s.onload = () => resolve(true);
-              s.onerror = () => resolve(false);
-              document.head.appendChild(s);
-            });
-          }
-
-          const proxyUrl = '/.netlify/functions/cdn-auth0-spa?v=2.5';
-          const amdDetected = typeof window.define === 'function';
-          await preflight(proxyUrl);
-          if (amdDetected) log('err', 'AMD loader detected (window.define is a function). Applying AMD guard while loading SDK.');
-          const hasCreate = () => (window.auth0 && window.auth0.createAuth0Client) || window.createAuth0Client;
-          let sdkOk = !!hasCreate();
-          if (!sdkOk) {
-            try { await injectScript(proxyUrl); } catch {}
-            sdkOk = !!hasCreate();
-          }
-          if (!sdkOk) {
-            // Try blob-based injection from proxy fetch
-            const pf = await preflight(proxyUrl);
-            if (pf.ok && pf.txt) {
-              try { await injectFromBlob(pf.txt); } catch {}
-              sdkOk = !!hasCreate();
-            }
-          }
-          if (!sdkOk) sdkOk = await ensureSdk('2.5');
-          if (!sdkOk) sdkOk = await ensureSdk('2.1');
-          if (!sdkOk || !window.createAuth0Client) {
-            S('Init error', 'warn');
-            log('err', 'Auth0 SDK failed to load. We tried: proxy script tag, proxy blob injection, and CDN. Check network/CSP and extensions.');
-            return;
+          // 2) Ensure Auth0 SDK is available
+          if (!window.createAuth0Client) {
+            throw new Error('Auth0 SPA SDK not available on window.createAuth0Client');
           }
 
           // 3) Initialize Auth0
-          const redirectUri = location.origin + '/auth-debug.html';
-          const mk = (window.auth0 && window.auth0.createAuth0Client) || window.createAuth0Client;
-          if (!mk) throw new Error('Auth0 SDK not loaded');
-          const auth0 = await mk({
+          const auth0 = await window.createAuth0Client({
             domain: cfg.AUTH0_DOMAIN,
             clientId: cfg.AUTH0_CLIENT_ID,
             cacheLocation: 'localstorage',
             useRefreshTokens: true,
             authorizationParams: {
-              redirect_uri: redirectUri,
               audience: cfg.AUTH0_AUDIENCE || undefined,
+              redirect_uri: window.location.origin + '/auth-debug.html',
             },
           });
+          window.__auth0Debug = auth0;
 
           // 4) Handle callback if returning from Auth0
           if (location.search.includes('code=') && location.search.includes('state=')) {
             try { await auth0.handleRedirectCallback(); }
             catch (e) { log('err', e); }
-            history.replaceState({}, document.title, redirectUri);
+            history.replaceState({}, document.title, window.location.origin + '/auth-debug.html');
           }
 
           // 5) Try silent token (ok to fail on first run)
@@ -183,7 +103,7 @@
 
           document.getElementById('btnLogin').onclick = async () => {
             try {
-              await auth0.loginWithRedirect({ authorizationParams: { redirect_uri: redirectUri } });
+              await auth0.loginWithRedirect({ authorizationParams: { redirect_uri: window.location.origin + '/auth-debug.html' } });
             } catch (e) { log('err', e); }
           };
           document.getElementById('btnLogout').onclick = async () => {
