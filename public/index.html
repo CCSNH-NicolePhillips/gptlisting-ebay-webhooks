@@ -176,70 +176,105 @@
     <div class="card" id="mainCard" style="display:none;">
       <!-- User badge in top-right corner -->
       <div style="position: absolute; top: 1.5rem; right: 1.5rem;">
-        <span class="small muted" id="signedInAs" style="background: #0f1530; padding: 0.35rem 0.75rem; border-radius: 20px; border: 1px solid #2a335c; white-space: nowrap;"></span>
+        <span class="small muted" id="signedInAs" style="background: rgba(15, 21, 48, 0.8); padding: 0.4rem 0.85rem; border-radius: 20px; border: 1px solid rgba(42, 51, 92, 0.6); backdrop-filter: blur(10px); white-space: nowrap; font-size: 0.8rem;"></span>
       </div>
 
       <!-- ========== CONNECTIONS SECTION ========== -->
-      <section id="connectionsSection">
-        <h1 style="margin-bottom: 1rem;">Connections</h1>
+      <section id="connectionsSection" style="margin-bottom: 2.5rem;">
+        <h1 style="margin-bottom: 1.25rem; font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.9;">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+          </svg>
+          Connections
+        </h1>
         
         <!-- Auth banner -->
-        <div id="authBanner" style="display:none; margin-bottom: 1rem; padding:.75rem 1rem; border:1px solid #3d4a86; background:#0f1530; border-radius:10px;">
+        <div id="authBanner" style="display:none; margin-bottom: 1.25rem; padding: 1rem 1.25rem; border:1px solid #3d4a86; background: linear-gradient(135deg, rgba(15, 21, 48, 0.6) 0%, rgba(15, 21, 48, 0.4) 100%); border-radius: 12px; backdrop-filter: blur(10px);">
           <div style="display:flex; align-items:center; gap:.75rem; flex-wrap:wrap;">
             <span class="small">You need to sign in to view and connect your accounts.</span>
-            <button id="bannerLogin" class="btn" style="padding:.45rem .8rem">Sign in</button>
+            <button id="bannerLogin" class="btn" style="padding:.5rem 1rem; font-size: 0.9rem;">Sign in</button>
           </div>
         </div>
 
         <!-- Connections card -->
-        <div style="background: #0f1530; border: 1px solid #2a335c; border-radius: 10px; padding: 1.25rem; margin-bottom: 1rem;">
+        <div style="background: linear-gradient(135deg, rgba(15, 21, 48, 0.6) 0%, rgba(15, 21, 48, 0.3) 100%); border: 1px solid rgba(42, 51, 92, 0.6); border-radius: 14px; padding: 1.5rem; margin-bottom: 1.25rem; backdrop-filter: blur(20px); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);">
           <div class="row">
             <!-- Dropbox column -->
-            <div class="col">
-              <h3 style="margin-top: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem;">
-                📦 Dropbox
+            <div class="col" style="background: rgba(15, 21, 48, 0.4); border: 1px solid rgba(38, 48, 90, 0.6); border-radius: 10px; padding: 1.25rem;">
+              <h3 style="margin: 0 0 0.75rem 0; font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem; font-weight: 600; color: #e0e7ff;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                </svg>
+                Dropbox
               </h3>
-              <p class="status" id="dbxStatus" style="margin: 0.5rem 0; font-size: 0.9rem;">Loading…</p>
-              <p class="small muted" id="dbxWho" style="margin: 0 0 0.75rem 0;"></p>
+              <p class="status" id="dbxStatus" style="margin: 0 0 0.5rem 0; font-size: 0.9rem;">Loading…</p>
+              <p class="small muted" id="dbxWho" style="margin: 0 0 1rem 0; font-size: 0.85rem;"></p>
               
-              <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem;">
-                <a id="dbxConnect" class="btn" href="/.netlify/functions/dropbox-oauth-start" style="padding: 0.5rem 1rem; font-size: 0.9rem;">Connect</a>
-                <button id="dbxDisconnect" class="secondary" style="padding: 0.5rem 1rem; font-size: 0.9rem;">Disconnect</button>
+              <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                <a id="dbxConnect" class="btn" href="/.netlify/functions/dropbox-oauth-start" style="padding: 0.5rem 1rem; font-size: 0.875rem;">Connect</a>
+                <button id="dbxDisconnect" class="secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem;">Disconnect</button>
               </div>
               
               <div id="dbxFolderBox">
-                <label for="dbxFolderSelect" class="small muted" style="display:block; margin-bottom: 0.35rem;">Default folder</label>
-                <select id="dbxFolderSelect" style="width:100%; padding: 0.4rem; border-radius: 6px; background: #141a33; border: 1px solid #2a335c; color: #f4f6fb;" disabled>
+                <label for="dbxFolderSelect" class="small muted" style="display:block; margin-bottom: 0.5rem; font-weight: 500; font-size: 0.85rem;">Default folder</label>
+                <select id="dbxFolderSelect" style="width:100%; padding: 0.5rem 0.75rem; border-radius: 8px; background: rgba(20, 26, 51, 0.8); border: 1px solid rgba(42, 51, 92, 0.8); color: #f4f6fb; font-size: 0.9rem;" disabled>
                   <option>Loading folders…</option>
                 </select>
-                <div id="dbxFolderMsg" class="small muted" style="margin-top: 0.35rem;"></div>
+                <div id="dbxFolderMsg" class="small muted" style="margin-top: 0.5rem; font-size: 0.8rem;"></div>
               </div>
             </div>
 
             <!-- eBay column -->
-            <div class="col">
-              <h3 style="margin-top: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem;">
-                🛒 eBay
+            <div class="col" style="background: rgba(15, 21, 48, 0.4); border: 1px solid rgba(38, 48, 90, 0.6); border-radius: 10px; padding: 1.25rem;">
+              <h3 style="margin: 0 0 0.75rem 0; font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem; font-weight: 600; color: #e0e7ff;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="9" cy="21" r="1"></circle>
+                  <circle cx="20" cy="21" r="1"></circle>
+                  <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                </svg>
+                eBay
               </h3>
-              <p class="status" id="ebayStatus" style="margin: 0.5rem 0; font-size: 0.9rem;">Loading…</p>
-              <p class="small muted" id="ebayWho" style="margin: 0 0 0.75rem 0;"></p>
+              <p class="status" id="ebayStatus" style="margin: 0 0 0.5rem 0; font-size: 0.9rem;">Loading…</p>
+              <p class="small muted" id="ebayWho" style="margin: 0 0 1rem 0; font-size: 0.85rem;"></p>
               
-              <div style="display: flex; gap: 0.5rem;">
-                <a id="ebayConnect" class="btn" href="/.netlify/functions/ebay-oauth-start" style="padding: 0.5rem 1rem; font-size: 0.9rem;">Connect</a>
-                <button id="ebayDisconnect" class="secondary" style="padding: 0.5rem 1rem; font-size: 0.9rem;">Disconnect</button>
+              <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <a id="ebayConnect" class="btn" href="/.netlify/functions/ebay-oauth-start" style="padding: 0.5rem 1rem; font-size: 0.875rem;">Connect</a>
+                <button id="ebayDisconnect" class="secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem;">Disconnect</button>
               </div>
             </div>
           </div>
         </div>
 
         <!-- Quick links row -->
-        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
-          <a class="btn secondary" href="/setup.html" style="padding: 0.5rem 1rem; font-size: 0.9rem;">⚙️ Setup checklist</a>
-          <a class="btn secondary" href="/policies-manage.html" style="padding: 0.5rem 1rem; font-size: 0.9rem;">📋 Policies</a>
-          <a class="btn secondary" href="/location.html" style="padding: 0.5rem 1rem; font-size: 0.9rem;">📍 Inventory location</a>
+        <div style="display: flex; gap: 0.65rem; flex-wrap: wrap; margin-bottom: 1.25rem;">
+          <a class="btn secondary" href="/setup.html" style="padding: 0.6rem 1.15rem; font-size: 0.875rem; border-radius: 8px; display: inline-flex; align-items: center; gap: 0.5rem;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M12 1v6m0 6v6m5.196-15.196l-4.243 4.243m0 5.656l-4.242 4.243m15.195-5.196l-4.242-4.243m-5.657 0l-4.243-4.243"></path>
+            </svg>
+            Setup
+          </a>
+          <a class="btn secondary" href="/policies-manage.html" style="padding: 0.6rem 1.15rem; font-size: 0.875rem; border-radius: 8px; display: inline-flex; align-items: center; gap: 0.5rem;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+            Policies
+          </a>
+          <a class="btn secondary" href="/location.html" style="padding: 0.6rem 1.15rem; font-size: 0.875rem; border-radius: 8px; display: inline-flex; align-items: center; gap: 0.5rem;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+              <circle cx="12" cy="10" r="3"></circle>
+            </svg>
+            Location
+          </a>
         </div>
 
-        <div id="setupMsg" class="small muted" style="margin-top: 0.5rem;"></div>
+        <div id="setupMsg" class="small muted" style="margin-top: 0.75rem; font-size: 0.85rem; line-height: 1.5;"></div>
         
         <!-- Hidden legacy controls -->
         <div style="margin-top: 1rem; display:none">
@@ -252,53 +287,67 @@
         </div>
       </section>
 
-      <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid #2a335c" />
+      <hr style="margin: 2.5rem 0; border: none; border-top: 1px solid rgba(42, 51, 92, 0.4);" />
       
       <!-- ========== CREATE LISTINGS SECTION ========== -->
-      <section id="createListingsSection">
+      <section id="createListingsSection" style="margin-bottom: 2.5rem;">
         <!-- SmartDrafts Hero Card -->
-        <div style="background: linear-gradient(135deg, #2d3f6e 0%, #1a2845 50%, #0f1530 100%); border: 2px solid #4f7cff; border-radius: 16px; padding: 2.5rem; margin-bottom: 1.5rem; position: relative; overflow: hidden; box-shadow: 0 8px 32px rgba(79, 124, 255, 0.2);">
+        <div style="background: linear-gradient(135deg, #2d3f6e 0%, #1a2845 50%, #0f1530 100%); border: 2px solid #4f7cff; border-radius: 16px; padding: 2.75rem; margin-bottom: 2rem; position: relative; overflow: hidden; box-shadow: 0 10px 40px rgba(79, 124, 255, 0.25);">
           <!-- Decorative background pattern -->
-          <div style="position: absolute; top: -50px; right: -50px; width: 200px; height: 200px; background: radial-gradient(circle, rgba(79, 124, 255, 0.15) 0%, transparent 70%); border-radius: 50%;"></div>
-          <div style="position: absolute; bottom: -30px; left: -30px; width: 150px; height: 150px; background: radial-gradient(circle, rgba(79, 124, 255, 0.1) 0%, transparent 70%); border-radius: 50%;"></div>
+          <div style="position: absolute; top: -50px; right: -50px; width: 220px; height: 220px; background: radial-gradient(circle, rgba(79, 124, 255, 0.18) 0%, transparent 70%); border-radius: 50%;"></div>
+          <div style="position: absolute; bottom: -30px; left: -30px; width: 160px; height: 160px; background: radial-gradient(circle, rgba(79, 124, 255, 0.12) 0%, transparent 70%); border-radius: 50%;"></div>
           
-          <!-- AI Badge -->
-          <div style="position: absolute; top: 1.25rem; right: 1.25rem; background: #4f7cff; color: white; padding: 0.4rem 1rem; border-radius: 20px; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 2px 8px rgba(79, 124, 255, 0.4);">
-            ✨ AI Powered
+          <!-- AI Badge with sparkle icon -->
+          <div style="position: absolute; top: 1.35rem; right: 1.35rem; background: #4f7cff; color: white; padding: 0.45rem 1.1rem; border-radius: 20px; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; box-shadow: 0 3px 12px rgba(79, 124, 255, 0.5); display: inline-flex; align-items: center; gap: 0.4rem;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0L14.59 9.41L24 12L14.59 14.59L12 24L9.41 14.59L0 12L9.41 9.41L12 0Z"></path>
+            </svg>
+            AI Powered
           </div>
           
           <!-- Content -->
           <div style="position: relative; z-index: 1;">
-            <h2 style="margin: 0 0 0.75rem 0; font-size: 2.25rem; font-weight: 700; color: #fff; line-height: 1.2;">
+            <h2 style="margin: 0 0 0.85rem 0; font-size: 2.35rem; font-weight: 700; color: #fff; line-height: 1.15;">
               SmartDrafts
-              <span style="display: block; font-size: 1.25rem; font-weight: 500; color: #a8c1ff; margin-top: 0.25rem;">AI Quick List</span>
+              <span style="display: block; font-size: 1.3rem; font-weight: 500; color: #a8c1ff; margin-top: 0.35rem;">AI Quick List</span>
             </h2>
             
-            <p style="color: #cbd5ff; margin: 0 0 1.75rem 0; font-size: 1.05rem; line-height: 1.6; max-width: 600px;">
+            <p style="color: #cbd5ff; margin: 0 0 2rem 0; font-size: 1.05rem; line-height: 1.65; max-width: 620px; opacity: 0.95;">
               Fully automated AI listing creation. Drop product photos and let our AI handle everything—image analysis, pricing research, category selection, and complete eBay draft generation.
             </p>
             
             <!-- CTA Button -->
-            <a id="goQuickList" class="btn disabled" href="/quick-list.html" aria-disabled="true" style="display: inline-flex; align-items: center; gap: 0.5rem; background: #4f7cff; color: white; font-size: 1.15rem; font-weight: 700; padding: 1rem 2rem; border-radius: 10px; box-shadow: 0 6px 20px rgba(79, 124, 255, 0.4); text-decoration: none; border: none; cursor: pointer; transition: all 0.2s ease;">
-              🚀 Create AI Listings
+            <a id="goQuickList" class="btn disabled" href="/quick-list.html" aria-disabled="true" style="display: inline-flex; align-items: center; gap: 0.6rem; background: #4f7cff; color: white; font-size: 1.15rem; font-weight: 700; padding: 1.1rem 2.25rem; border-radius: 10px; box-shadow: 0 6px 24px rgba(79, 124, 255, 0.45); text-decoration: none; border: none; cursor: pointer; transition: all 0.2s ease;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+              </svg>
+              Create AI Listings
             </a>
             
             <!-- Feature badges -->
-            <div style="margin-top: 1.25rem; display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.85rem; color: #a8c1ff;">
-              <span style="display: flex; align-items: center; gap: 0.35rem;">
-                <span style="display: inline-block; width: 4px; height: 4px; background: #4f7cff; border-radius: 50%;"></span>
+            <div style="margin-top: 1.5rem; display: flex; gap: 1.15rem; flex-wrap: wrap; font-size: 0.875rem; color: #a8c1ff; opacity: 0.9;">
+              <span style="display: flex; align-items: center; gap: 0.4rem;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
                 Vision AI
               </span>
-              <span style="display: flex; align-items: center; gap: 0.35rem;">
-                <span style="display: inline-block; width: 4px; height: 4px; background: #4f7cff; border-radius: 50%;"></span>
+              <span style="display: flex; align-items: center; gap: 0.4rem;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
                 GPT-4
               </span>
-              <span style="display: flex; align-items: center; gap: 0.35rem;">
-                <span style="display: inline-block; width: 4px; height: 4px; background: #4f7cff; border-radius: 50%;"></span>
+              <span style="display: flex; align-items: center; gap: 0.4rem;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
                 Auto-pricing
               </span>
-              <span style="display: flex; align-items: center; gap: 0.35rem;">
-                <span style="display: inline-block; width: 4px; height: 4px; background: #4f7cff; border-radius: 50%;"></span>
+              <span style="display: flex; align-items: center; gap: 0.4rem;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
                 Smart categories
               </span>
             </div>
@@ -307,41 +356,59 @@
       </section>
 
       <!-- ========== MANUAL DRAFT SECTION ========== -->
-      <section id="manualDraftSection">
+      <section id="manualDraftSection" style="margin-bottom: 2.5rem;">
         <!-- Collapsible Manual Draft Wizard -->
-        <details style="background: #0f1530; border: 1px solid #2a335c; border-radius: 10px; margin-bottom: 1.5rem; overflow: hidden;">
-          <summary style="padding: 1rem 1.25rem; cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; user-select: none; transition: background 0.2s ease;">
-            <div>
-              <h3 style="margin: 0; font-size: 1.05rem; color: #cbd5ff; font-weight: 600;">
-                📝 Manual Draft Wizard
-              </h3>
-              <p style="margin: 0.25rem 0 0 0; font-size: 0.85rem; color: #7a8ab0;">
-                Create listings the traditional way
-              </p>
+        <details style="background: linear-gradient(135deg, rgba(15, 21, 48, 0.4) 0%, rgba(15, 21, 48, 0.2) 100%); border: 1px solid rgba(42, 51, 92, 0.5); border-radius: 12px; margin-bottom: 2rem; overflow: hidden; backdrop-filter: blur(10px);">
+          <summary style="padding: 1.1rem 1.35rem; cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; user-select: none; transition: background 0.2s ease;">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a8c1ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
+              <div>
+                <h3 style="margin: 0; font-size: 1.05rem; color: #cbd5ff; font-weight: 600;">
+                  Manual Draft Wizard
+                </h3>
+                <p style="margin: 0.3rem 0 0 0; font-size: 0.85rem; color: #7a8ab0;">
+                  Create listings the traditional way
+                </p>
+              </div>
             </div>
-            <span style="color: #7a8ab0; font-size: 1.2rem; transition: transform 0.2s ease;">▾</span>
+            <span style="color: #7a8ab0; font-size: 1.25rem; transition: transform 0.2s ease;">▾</span>
           </summary>
           
-          <div style="padding: 0 1.25rem 1.25rem 1.25rem; border-top: 1px solid #1a2240;">
-            <p style="color: #a2a9c8; margin: 1rem 0 1rem 0; font-size: 0.9rem; line-height: 1.5;">
+          <div style="padding: 0 1.35rem 1.35rem 1.35rem; border-top: 1px solid rgba(26, 34, 64, 0.6); margin-top: 0.5rem;">
+            <p style="color: #a2a9c8; margin: 1.25rem 0 1.25rem 0; font-size: 0.9rem; line-height: 1.6;">
               Traditional workflow for creating drafts one at a time. Select images, fill in details manually, and create individual listings with full control.
             </p>
-            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
-              <a id="goCreateDraft" class="btn secondary disabled" href="/draft-wizard.html" aria-disabled="true" style="padding: 0.65rem 1.25rem; font-size: 0.9rem;">
+            <div style="display: flex; gap: 0.65rem; flex-wrap: wrap; align-items: center;">
+              <a id="goCreateDraft" class="btn secondary disabled" href="/draft-wizard.html" aria-disabled="true" style="padding: 0.7rem 1.35rem; font-size: 0.9rem; border-radius: 8px;">
                 Create Manual Draft
               </a>
-              <a class="btn secondary" href="/drafts.html" id="viewDraftsBtn" style="padding: 0.65rem 1.25rem; font-size: 0.9rem;">📋 View All Drafts</a>
+              <a class="btn secondary" href="/drafts.html" id="viewDraftsBtn" style="padding: 0.7rem 1.35rem; font-size: 0.9rem; border-radius: 8px; display: inline-flex; align-items: center; gap: 0.5rem;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                </svg>
+                View All Drafts
+              </a>
             </div>
           </div>
         </details>
       </section>
 
-      <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid #2a335c" />
+      <hr style="margin: 2.5rem 0; border: none; border-top: 1px solid rgba(42, 51, 92, 0.4);" />
       
       <!-- ========== SETUP CHECKLIST SECTION ========== -->
-      <section id="setupChecklistSection">
-        <h2>Setup checklist</h2>
-        <ul class="small" id="checklist" style="line-height: 1.9">
+      <section id="setupChecklistSection" style="margin-bottom: 2rem;">
+        <h2 style="margin-bottom: 1.25rem; font-size: 1.35rem; display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.85;">
+            <polyline points="9 11 12 14 22 4"></polyline>
+            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+          </svg>
+          Setup Checklist
+        </h2>
+        <ul class="small" id="checklist" style="line-height: 2; font-size: 0.9rem; margin: 0; padding-left: 1.5rem;">
           <li id="chkDropbox">Dropbox: <span class="muted">Unknown</span></li>
           <li id="chkEbay">eBay: <span class="muted">Unknown</span></li>
           <li id="chkPolicies">
