@@ -14,8 +14,6 @@
     token: null,
     user: null,
     idTokenRaw: null,
-    // Token refresh gating to prevent race conditions
-    tokenRefreshPromise: null,
   };
 
   function clearLocalAuthState() {
@@ -68,8 +66,9 @@
     if (!state.cfg?.AUTH0_DOMAIN || !state.cfg?.AUTH0_CLIENT_ID) return;
     if (state.auth0) return;
 
-    try {
-    // Load SPA SDK if not present. Prefer same-origin proxy to satisfy strict CSP.
+    console.log('[Auth] Initializing Auth0...');
+
+    // Load SPA SDK if not present
     function beginAmdDisable() {
       const hadDefine = typeof window.define === 'function';
       const saved = hadDefine ? window.define : undefined;
@@ -81,215 +80,111 @@
         } catch {}
       };
     }
+
     async function loadSdk(url) {
       return new Promise((resolve, reject) => {
         const restore = beginAmdDisable();
         const s = document.createElement('script');
         s.src = url;
         s.async = true;
-        s.onload = () => { try { restore(); } catch {} ; resolve(); };
-        s.onerror = (e) => { try { restore(); } catch {} ; reject(e); };
+        s.onload = () => {
+          try { restore(); } catch {}
+          console.log('[Auth] Auth0 SDK loaded from', url);
+          resolve();
+        };
+        s.onerror = (e) => {
+          try { restore(); } catch {}
+          console.error('[Auth] Failed to load Auth0 SDK from', url);
+          reject(e);
+        };
         document.head.appendChild(s);
       });
     }
-    async function loadSdkFromBlob(url) {
-      try {
-        const res = await fetch(url, { cache: 'no-store' });
-        if (!res.ok) throw new Error('fetch failed: ' + res.status);
-        const js = await res.text();
-        const blob = new Blob([js], { type: 'application/javascript' });
-        const u = URL.createObjectURL(blob);
-        try {
-          await loadSdk(u);
-        } finally {
-          URL.revokeObjectURL(u);
-        }
-      } catch (e) {
-        // swallow
-      }
-    }
-      const getCreateAuth0 = () => (window.auth0 && window.auth0.createAuth0Client) || window.createAuth0Client;
-    if (!window.createAuth0Client) {
-      await loadSdk('https://cdn.auth0.com/js/auth0-spa-js/2.5/auth0-spa-js.production.js');
-    }
-      const createAuth0 = getCreateAuth0();
-      if (!createAuth0) throw new Error('Auth0 SDK not loaded');
 
-      // PROACTIVE CHECK: If we have auth state in localStorage, it might be expired
-      // Clear it BEFORE initializing Auth0 to prevent 403 spam
-      const hasAuth0Data = Object.keys(localStorage).some(k => k.startsWith('@@auth0'));
-      if (hasAuth0Data) {
-        console.log('[Auth] Found existing Auth0 state, checking if expired...');
-        // Try a quick validation - if we're on a protected page and have tokens,
-        // they should work. If not, clear and force re-login.
-        const authKeys = Object.keys(localStorage).filter(k => k.startsWith('@@auth0'));
-        const hasRefreshToken = authKeys.some(k => localStorage.getItem(k)?.includes('refresh_token'));
-
-        if (hasRefreshToken) {
-          console.log('[Auth] Has refresh token, will let SDK try to use it...');
-        } else {
-          console.log('[Auth] No refresh token found, clearing stale state');
-          clearLocalAuthState();
-        }
+    try {
+      // Ensure SDK is loaded
+      if (!window.createAuth0Client) {
+        console.log('[Auth] Loading Auth0 SDK from CDN...');
+        await loadSdk('https://cdn.auth0.com/js/auth0-spa-js/2.5/auth0-spa-js.production.js');
       }
 
-      // Track if we get 403s during init (expired refresh token)
-      let got403 = false;
-      let redirectPending = false; // CRITICAL: Check this before EVERY redirect
+      const createAuth0 = window.createAuth0Client;
+      if (!createAuth0) {
+        throw new Error('[Auth] Auth0 SDK failed to load - window.createAuth0Client is not available');
+      }
 
-      const forceRelogin = () => {
-        if (redirectPending) {
-          // Already redirecting, throw to stop execution
-          throw new Error('AUTH_REDIRECT_PENDING');
+      console.log('[Auth] Creating Auth0 client...');
+      state.auth0 = await createAuth0({
+        domain: state.cfg.AUTH0_DOMAIN,
+        clientId: state.cfg.AUTH0_CLIENT_ID,
+        cacheLocation: 'localstorage',
+        useRefreshTokens: true,
+        authorizationParams: {
+          redirect_uri: window.location.origin + '/login.html',
+          audience: state.cfg.AUTH0_AUDIENCE || undefined,
+        },
+      });
+
+      console.log('[Auth] Auth0 client created successfully');
+
+      // Handle redirect callback on /login.html
+      if (window.location.pathname.endsWith('/login.html')) {
+        const q = window.location.search;
+        if (q.includes('code=') && q.includes('state=')) {
+          console.log('[Auth] Handling Auth0 redirect callback...');
+          try {
+            await state.auth0.handleRedirectCallback();
+            console.log('[Auth] Callback handled successfully');
+            const returnTo = sessionStorage.getItem('returnTo') || '/';
+            sessionStorage.removeItem('returnTo');
+            window.history.replaceState({}, document.title, '/login.html');
+            console.log('[Auth] Redirecting to', returnTo);
+            window.location.assign(returnTo);
+            return; // navigation in progress
+          } catch (e) {
+            console.error('[Auth] Callback error:', e);
+            // Clear any stale state and let user try again
+            clearLocalAuthState();
+            throw e;
+          }
         }
-        redirectPending = true;
-        console.warn('[Auth] Detected expired refresh token (403), forcing re-login');
+      }
 
-        // Clear auth immediately and aggressively
-        clearLocalAuthState();
+      // Check authentication status
+      const isAuth = await state.auth0.isAuthenticated();
+      console.log('[Auth] isAuthenticated:', isAuth);
 
-        // Also clear any Auth0 state that might be in-flight
+      if (isAuth) {
+        state.user = await state.auth0.getUser();
+        console.log('[Auth] User:', state.user?.email || state.user?.name || 'unknown');
+
+        // Proactively fetch and validate token
         try {
-          sessionStorage.clear();
-          Object.keys(localStorage).forEach(k => {
-            if (k.startsWith('@@auth0') || k.includes('auth0')) {
-              localStorage.removeItem(k);
-            }
-          });
-        } catch (e) { }
-
-        window.fetch = origFetch;
-        console.error = origConsoleError;
-        sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
-
-        // Redirect - use replace to prevent back button issues
-        window.location.replace('/login.html');
-
-        // Throw error to stop all execution
-        throw new Error('AUTH_REDIRECT_PENDING');
-      };
-
-      // Suppress Auth0 403 token refresh errors (network + console)
-      // These happen when refresh tokens expire and are harmless (user will re-login)
-      const origFetch = window.fetch.bind(window);
-      const origConsoleError = console.error;
-
-      // Intercept fetch to detect and suppress Auth0 token 403s
-      window.fetch = async function(...args) {
-        const url = typeof args[0] === 'string' ? args[0] : args[0]?.url;
-        const isAuth0Token = url && url.includes('.auth0.com/oauth/token');
-
-        try {
-          const response = await origFetch(...args);
-          // Track 403s from Auth0 token endpoint and force re-login
-          if (isAuth0Token && response.status === 403) {
-            got403 = true;
-            // Call forceRelogin which throws
-            forceRelogin();
+          const token = await state.auth0.getTokenSilently();
+          if (token) {
+            state.token = token;
+            console.log('[Auth] Token fetched successfully');
           }
-          return response;
-        } catch (err) {
-          // If it's our redirect error, re-throw it
-          if (err.message === 'AUTH_REDIRECT_PENDING') {
-            throw err;
-          }
-
-          if (isAuth0Token) {
-            got403 = true;
-            forceRelogin(); // This throws
-          }
-          throw err;
-        }
-      };
-
-      // Also suppress console.error messages
-      console.error = function(...args) {
-        const msg = args.join(' ');
-        if (msg.includes('auth0.com/oauth/token') && (msg.includes('403') || msg.includes('Forbidden'))) {
-          return; // Silently ignore
-        }
-        origConsoleError.apply(console, args);
-      };
-
-      try {
-        state.auth0 = await createAuth0({
-          domain: state.cfg.AUTH0_DOMAIN,
-          clientId: state.cfg.AUTH0_CLIENT_ID,
-          cacheLocation: 'localstorage',
-          useRefreshTokens: true,
-          authorizationParams: {
-            redirect_uri: window.location.origin + '/login.html',
-            audience: state.cfg.AUTH0_AUDIENCE || undefined,
-          },
-        });
-
-        // Handle redirect callback
-        if (window.location.pathname.endsWith('/login.html')) {
-          const q = window.location.search;
-          if (q.includes('code=') && q.includes('state=')) {
-            try {
-              await state.auth0.handleRedirectCallback();
-              const returnTo = sessionStorage.getItem('returnTo') || '/';
-              sessionStorage.removeItem('returnTo');
-              window.history.replaceState({}, document.title, '/login.html');
-              window.location.assign(returnTo);
-              return; // navigation
-            } catch (e) {
-              console.error('Auth0 callback error', e);
-            }
-          }
-        }
-
-        const isAuth = await state.auth0.isAuthenticated();
-
-        // Check redirectPending before continuing
-        if (redirectPending) return;
-
-        if (isAuth) {
-          state.user = await state.auth0.getUser();
-
-          if (redirectPending) return;
-
-          // Don't fetch token during initialization - it will be fetched on-demand
-          // This prevents hanging during page load
-          console.log('[Auth] User authenticated, token will be fetched on first use');
-
-          // Try to get ID token claims for future use, but don't block on it
+        } catch (e) {
+          console.warn('[Auth] Could not fetch token silently:', e.message);
+          // Try ID token as fallback
           try {
             const idc = await state.auth0.getIdTokenClaims();
             state.idTokenRaw = idc && (idc.__raw || idc.raw || null);
             if (state.idTokenRaw) {
-              console.log('[Auth] ID token cached for future use');
+              state.token = state.idTokenRaw;
+              console.log('[Auth] Using ID token as fallback');
             }
-          } catch (e) {
-            console.warn('[Auth] Could not cache ID token:', e.message);
+          } catch (e2) {
+            console.warn('[Auth] Could not get ID token:', e2.message);
           }
-          
-          // Make sure function calls carry Authorization as soon as we detect auth
-          try { attachAuthFetch(); } catch {}
         }
 
-      } catch (err) {
-        // If it's our redirect error, just return - redirect is already happening
-        if (err.message === 'AUTH_REDIRECT_PENDING') {
-          return;
-        }
-        // Re-throw other errors
-        throw err;
-      } finally {
-        // Always restore original fetch and console.error
-        if (!redirectPending) {
-          window.fetch = origFetch;
-          console.error = origConsoleError;
-        }
+        // Attach auth to fetch calls
+        try { attachAuthFetch(); } catch {}
       }
     } catch (e) {
-      // Outer catch: If we're redirecting due to 403, silently return (redirect is already in progress)
-      if (e.message === 'AUTH_REDIRECT_PENDING') {
-        console.log('[Auth] Redirect in progress, stopping initialization');
-        return;
-      }
-      // Re-throw other errors
+      console.error('[Auth] Initialization failed:', e);
       throw e;
     }
   }
@@ -325,11 +220,34 @@
     if (state.mode === 'auth0') {
       await initAuth0();
       const isAuth = state.auth0 && (await state.auth0.isAuthenticated());
-      if (!isAuth) return false;
-      state.user = await state.auth0.getUser();
-      // Don't fetch token here - it will be fetched on-demand when needed
-      // This prevents blocking during initial auth check
-      console.log('[Auth] User authenticated via ensureAuth, token will be fetched on first API call');
+      if (!isAuth) {
+        console.log('[Auth] ensureAuth: not authenticated');
+        return false;
+      }
+
+      // Ensure we have user info
+      if (!state.user) {
+        state.user = await state.auth0.getUser();
+      }
+
+      // Ensure we have a valid token
+      if (!state.token) {
+        console.log('[Auth] ensureAuth: fetching token...');
+        try {
+          state.token = await state.auth0.getTokenSilently();
+        } catch (e) {
+          console.warn('[Auth] ensureAuth: getTokenSilently failed, trying ID token');
+          try {
+            const idc = await state.auth0.getIdTokenClaims();
+            state.token = idc && (idc.__raw || idc.raw || null);
+          } catch (e2) {
+            console.error('[Auth] ensureAuth: failed to get any token');
+            return false;
+          }
+        }
+      }
+
+      console.log('[Auth] ensureAuth: authenticated with token');
       attachAuthFetch();
       return true;
     }
@@ -409,159 +327,68 @@
     }
   }
 
-  // CRITICAL: Gate token refresh to prevent race conditions
-  // Only one token refresh can be in-flight at a time
-  async function getTokenWithGating() {
-    // If a refresh is already in progress, wait for it (with timeout)
-    if (state.tokenRefreshPromise) {
-      console.log('[Auth] Token refresh already in progress, waiting...');
-
-      // Add a timeout to prevent infinite waiting
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Token refresh timeout')), 10000); // 10 second timeout
-      });
-
-      try {
-        return await Promise.race([state.tokenRefreshPromise, timeoutPromise]);
-      } catch (e) {
-        if (e.message === 'Token refresh timeout') {
-          console.error('[Auth] Token refresh timed out, clearing and retrying');
-          state.tokenRefreshPromise = null;
-          // Don't retry here, let the caller try again
-        }
-        throw e;
-      }
-    }
-
-    // Start a new refresh operation
-    console.log('[Auth] Starting new token refresh...');
-    state.tokenRefreshPromise = (async () => {
-      try {
-        if (state.mode === 'auth0') {
-          // Ensure Auth0 is initialized
-          if (!state.auth0) {
-            console.error('[Auth] Auth0 not initialized yet');
-            return null;
-          }
-
-          // Check if authenticated
-          const isAuth = await state.auth0.isAuthenticated().catch(() => false);
-          if (!isAuth) {
-            console.warn('[Auth] Not authenticated, cannot get token');
-            return null;
-          }
-
-          // Prefer ID token only if it's still valid; otherwise, acquire a fresh access token.
-          const nowSec = Math.floor(Date.now() / 1000);
-          const isJwtValid = (raw) => {
-            try {
-              const parts = String(raw || '').split('.');
-              if (parts.length < 2) return false;
-              const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-              const exp = Number(payload?.exp || 0);
-              return Number.isFinite(exp) && exp > nowSec + 60; // 60s buffer to avoid edge cases
-            } catch { return false; }
-          };
-
-          // First, check if we have a valid cached token
-          if (state.token && isJwtValid(state.token)) {
-            console.log('[Auth] Using cached token');
-            return state.token;
-          }
-
-          // Check ID token
-          try {
-            const idc = await state.auth0.getIdTokenClaims();
-            const idRaw = (idc && (idc.__raw || idc.raw)) || null;
-            if (idRaw && isJwtValid(idRaw)) {
-              console.log('[Auth] Using ID token');
-              state.token = idRaw;
-              state.idTokenRaw = idRaw;
-              return idRaw;
-            }
-          } catch (e) {
-            console.warn('[Auth] Failed to get ID token claims:', e.message);
-          }
-
-          if (state.idTokenRaw && isJwtValid(state.idTokenRaw)) {
-            console.log('[Auth] Using cached ID token');
-            state.token = state.idTokenRaw;
-            return state.idTokenRaw;
-          }
-
-          // Need to refresh - use cache by default (SDK will handle refresh internally)
-          console.log('[Auth] Requesting fresh token from Auth0...');
-          try {
-            const at = await state.auth0.getTokenSilently();
-            if (at) {
-              console.log('[Auth] Successfully refreshed token');
-              state.token = at;
-              return at;
-            }
-          } catch (e) {
-            console.error('[Auth] Token refresh failed:', e.message, e);
-
-            // If refresh failed due to expired/invalid refresh token, clear state
-            const isAuthError = e.message?.includes('403') ||
-                               e.message?.includes('401') ||
-                               e.message?.includes('login_required') ||
-                               e.message?.includes('consent_required');
-
-            if (isAuthError) {
-              console.error('[Auth] Refresh token expired or invalid, clearing auth state');
-              clearLocalAuthState();
-              state.token = null;
-              state.user = null;
-              throw new Error('AUTH_EXPIRED');
-            }
-            throw e;
-          }
-
-          // Fallback to cached token if we have one
-          if (state.token) {
-            console.warn('[Auth] Using fallback cached token');
-            return state.token;
-          }
-
-          console.error('[Auth] No token available');
-          return null;
-        }
-
-        if (state.mode === 'identity' && window.netlifyIdentity) {
-          const u = window.netlifyIdentity.currentUser();
-          const jwt = await u?.jwt?.();
-          state.token = jwt;
-          return jwt;
-        }
-
-        return null;
-      } catch (err) {
-        console.error('[Auth] Token refresh error:', err);
-        throw err;
-      } finally {
-        // Clear the promise after completion (success or failure)
-        console.log('[Auth] Token refresh complete, clearing gate');
-        state.tokenRefreshPromise = null;
-      }
-    })();
-
-    return state.tokenRefreshPromise;
-  }
-
-  // Backwards compatibility - keep getToken() but use gated version
   async function getToken() {
-    try {
-      return await getTokenWithGating();
-    } catch (e) {
-      if (e.message === 'AUTH_EXPIRED') {
-        // Token expired, redirect to login
-        console.log('[Auth] Token expired, redirecting to login...');
-        sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
-        window.location.replace('/login.html');
+    if (state.mode === 'auth0') {
+      // Ensure Auth0 is initialized and we have a token
+      if (!state.auth0) {
+        await initAuth0();
+      }
+
+      // Check if authenticated
+      const isAuth = state.auth0 && (await state.auth0.isAuthenticated().catch(() => false));
+      if (!isAuth) {
+        console.log('[Auth] getToken: not authenticated');
         return null;
       }
-      throw e;
+
+      // Validate current token
+      const nowSec = Math.floor(Date.now() / 1000);
+      const isJwtValid = (raw) => {
+        try {
+          const parts = String(raw || '').split('.');
+          if (parts.length < 2) return false;
+          const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+          const exp = Number(payload?.exp || 0);
+          return Number.isFinite(exp) && exp > nowSec + 60; // 60s buffer
+        } catch { return false; }
+      };
+
+      // Return cached token if valid
+      if (state.token && isJwtValid(state.token)) {
+        return state.token;
+      }
+
+      // Fetch new token
+      console.log('[Auth] getToken: fetching new token...');
+      try {
+        const token = await state.auth0.getTokenSilently();
+        state.token = token;
+        return token;
+      } catch (e) {
+        console.warn('[Auth] getToken: getTokenSilently failed, trying ID token');
+        try {
+          const idc = await state.auth0.getIdTokenClaims();
+          const idToken = idc && (idc.__raw || idc.raw || null);
+          if (idToken) {
+            state.token = idToken;
+            state.idTokenRaw = idToken;
+            return idToken;
+          }
+        } catch (e2) {
+          console.error('[Auth] getToken: failed to get any token');
+        }
+        return null;
+      }
     }
+
+    if (state.mode === 'identity' && window.netlifyIdentity) {
+      const u = window.netlifyIdentity.currentUser();
+      const jwt = await u?.jwt?.();
+      state.token = jwt;
+      return jwt;
+    }
+
+    return null;
   }
 
   // Explicit helper to always send Authorization for first-party function calls
@@ -569,14 +396,10 @@
     try { await ensureAuth(); } catch {}
     const headers = Object.assign({}, init.headers);
     try {
-      // Use gated token refresh to prevent race conditions
-      const token = await getTokenWithGating();
+      const token = await getToken();
       if (token) headers.Authorization = headers.Authorization || `Bearer ${token}`;
     } catch (e) {
-      // If auth expired, let the error propagate so caller can handle
-      if (e.message === 'AUTH_EXPIRED') {
-        throw new Error('Authentication expired. Please log in again.');
-      }
+      console.warn('[Auth] authFetch: failed to get token:', e.message);
     }
     return fetch(input, Object.assign({}, init, { headers }));
   }
@@ -590,8 +413,7 @@
         const url = typeof input === 'string' ? input : input.url;
         const isFn = /\/\.netlify\/functions\//.test(url);
         if (isFn) {
-          // Use gated token refresh to prevent race conditions
-          const token = state.token || (await getTokenWithGating());
+          const token = state.token || (await getToken());
           if (token) {
             init.headers = Object.assign({}, init.headers, {
               Authorization: init.headers?.Authorization || `Bearer ${token}`,
@@ -599,10 +421,7 @@
           }
         }
       } catch (e) {
-        // If auth expired, continue without token (let backend return 401)
-        if (e.message !== 'AUTH_EXPIRED') {
-          console.warn('[Auth] Failed to attach token to request:', e.message);
-        }
+        console.warn('[Auth] Failed to attach token to request:', e.message);
       }
       return orig(input, init);
     };
