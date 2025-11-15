@@ -394,7 +394,7 @@
             <span id="uploadSubtitle">or click to browse</span>
           </div>
           <div class="upload-hint">
-            Supports JPG, PNG, WebP (max 4MB each)<br>
+            Supports JPG, PNG, WebP (max 10MB each)<br>
             <strong>Tip:</strong> On mobile, tap and hold to select multiple photos at once
           </div>
         </div>
@@ -772,7 +772,7 @@
 
     // Upload files in batches to avoid payload limits
     async function uploadFilesInBatches(files) {
-      const MAX_BATCH_SIZE_BYTES = 4 * 1024 * 1024; // 4MB per batch
+      const MAX_BATCH_SIZE_BYTES = 5 * 1024 * 1024; // 5MB per batch (Netlify limit is 6MB)
       const allUploadedFiles = [];
 
       // Prepare file data with base64 encoding

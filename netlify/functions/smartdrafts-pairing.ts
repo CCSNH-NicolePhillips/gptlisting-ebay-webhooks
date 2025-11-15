@@ -515,6 +515,41 @@ export const handler: Handler = async (event) => {
         evidence: p.evidence
       }));
 
+    // 6b) Convert unpaired fronts into front-only products
+    // Filter out: dummies (role='other'), non-products (Unknown/Unidentified), already paired
+    const unpairedFronts = fr.filter(f => {
+      if (pairedF.has(f) || dummy.has(f)) return false;
+      
+      // Exclude non-product images (dogs, selfies, etc.) marked by Vision AI
+      const brandName = (brand.get(f) || '').toLowerCase();
+      const productName = (prod.get(f) || '').toLowerCase();
+      if (brandName === 'unknown' || productName.includes('unidentified')) {
+        console.log(`[Z2-DEBUG] Skipping non-product front: ${f} (brand=${brandName}, product=${productName})`);
+        return false;
+      }
+      
+      return true;
+    });
+    console.log(`[Z2-DEBUG] Creating ${unpairedFronts.length} front-only products`);
+    
+    for (const f of unpairedFronts) {
+      products.push({
+        productId: `${(brand.get(f) || '').toLowerCase().replace(/[^a-z0-9]+/g, '_')}_${tok(prod.get(f)).join('_')}`.replace(/^_+|_+$/g, '') || `front_only_${f}`,
+        brand: brand.get(f) || '',
+        product: prod.get(f) || '',
+        variant: null,
+        size: null,
+        categoryPath: cat.get(f) || '',
+        frontUrl: f,
+        backUrl: null as any, // Front-only product has no back
+        heroDisplayUrl: disp.get(f) || f,
+        backDisplayUrl: null as any,
+        extras: [],
+        evidence: ['FRONT-ONLY: No matching back photo found']
+      });
+      console.log(`[Z2-DEBUG] Created front-only product: ${f}`);
+    }
+
     // 7) Debug summary
     console.log('[pairs]', pairs.map(p => `${p.frontUrl}↔${p.backUrl}:${p.matchScore}`));
 

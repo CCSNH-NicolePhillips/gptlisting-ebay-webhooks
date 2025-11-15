@@ -62,9 +62,9 @@ type PairedProduct = {
   size?: string | null;
   categoryPath?: string;
   frontUrl: string;
-  backUrl: string;
+  backUrl: string | null; // Allow null for front-only products
   heroDisplayUrl: string;
-  backDisplayUrl: string;
+  backDisplayUrl: string | null; // Allow null for front-only products
   extras?: string[];
   evidence?: string[];
 };
@@ -429,8 +429,8 @@ async function createDraftForProduct(product: PairedProduct): Promise<Draft> {
   // Step 7: Normalize aspects
   const aspects = normalizeAspects(parsed.aspects, product);
   
-  // Step 8: Collect images
-  const images = [product.heroDisplayUrl, product.backDisplayUrl, ...(product.extras || [])].filter(Boolean);
+  // Step 8: Collect images (filter removes nulls for front-only products)
+  const images = [product.heroDisplayUrl, product.backDisplayUrl, ...(product.extras || [])].filter((url): url is string => Boolean(url));
   
   // Step 9: Build final draft
   // Apply pricing formula: ChatGPT provides retail price, we apply our discount formula with category caps
