@@ -663,21 +663,16 @@ export async function runAnalysis(
     }
   }
 
-  // Process images individually to avoid Vision API confusion, but use parallel execution
-  // Use mapLimit to process up to 6 images concurrently (balances speed vs API limits)
-  const PARALLEL_LIMIT = 6;
-  
+  // ALWAYS analyze images individually to avoid Vision API confusion
+  const verifiedBatches = verified.map(url => [url]); // Each "batch" is 1 image
+
   const analyzedResults: any[] = [];
   const warnings: string[] = [...preflightWarnings];
 
-  console.log(`🧠 Analyzing ${verified.length} images with parallelism=${PARALLEL_LIMIT}`);
-  
-  const results = await mapLimit(verified, PARALLEL_LIMIT, async (url, idx) => {
-    console.log(`🧠 Starting image ${idx + 1}/${verified.length}: ${base(url)}`);
-    const singleImageBatch = [url]; // Single image per call
-    const metaForBatch = singleImageBatch.map((url) => metaLookup.get(url) || { url, name: "", folder: "" });
-    const result = await analyzeBatchViaVision(singleImageBatch, metaForBatch, debugVisionResponse, force);
-    
+  for (const [idx, batch] of verifiedBatches.entries()) {
+    console.log(`🧠 Analyzing image ${idx + 1}/${verifiedBatches.length} individually`);
+  const metaForBatch = batch.map((url) => metaLookup.get(url) || { url, name: "", folder: "" });
+  const result = await analyzeBatchViaVision(batch, metaForBatch, debugVisionResponse, force);
     if (result?._error) {
       warnings.push(`Image ${idx + 1}: ${result._error}`);
     }
@@ -685,7 +680,7 @@ export async function runAnalysis(
     // Since we're analyzing individually, we should always get 1 insight per image
     const insightsReturned = Array.isArray((result as any)?.imageInsights) ? (result as any).imageInsights.length : 0;
     if (insightsReturned === 0 && !result?._error) {
-      console.warn(`⚠️ Image ${idx + 1}: Vision returned no insights for ${base(singleImageBatch[0])}`);
+      console.warn(`⚠️ Image ${idx + 1}: Vision returned no insights for ${base(batch[0])}`);
     }
 
     if (Array.isArray((result as any)?.imageInsights)) {
@@ -702,12 +697,8 @@ export async function runAnalysis(
         insightMap.set(insight.url, insight);
       }
     }
-    
-    console.log(`✅ Completed image ${idx + 1}/${verified.length}`);
-    return result;
-  });
-  
-  analyzedResults.push(...results);
+    analyzedResults.push(result);
+  }
 
   const merged = mergeGroups(analyzedResults);
   let orphanDetails: Array<{ url: string; name?: string; folder?: string }> = [];
@@ -1079,7 +1070,7 @@ export async function runAnalysis(
   console.log(
     JSON.stringify({
       evt: "analyze-images.done",
-      batches: verified.length,
+      batches: verifiedBatches.length,
       groups: merged.groups.length,
       warningsCount: warnings.length,
     })
@@ -1089,7 +1080,7 @@ export async function runAnalysis(
     return {
       info: "Image analysis complete (pricing skipped)",
       summary: {
-        batches: verified.length,
+        batches: verifiedBatches.length,
         totalGroups: merged.groups.length,
       },
       warnings,
@@ -1142,7 +1133,7 @@ export async function runAnalysis(
   return {
     info: "Full analysis with market pricing and auto-reduction schedule.",
     summary: {
-      batches: verified.length,
+      batches: verifiedBatches.length,
       totalGroups: finalGroups.length,
     },
     warnings,
