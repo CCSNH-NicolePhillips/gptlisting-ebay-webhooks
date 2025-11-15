@@ -1381,3 +1381,112 @@ body {
     justify-content: flex-end;
   }
 }
+
+/* ===== SETUP CHECKLIST (PHASE 7) ===== */
+.dp-checklist-section {
+  margin-bottom: 24px;
+}
+
+.dp-checklist-section:last-child {
+  margin-bottom: 0;
+}
+
+.dp-checklist-section--optional {
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.dp-checklist-heading {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  font-weight: 600;
+  margin: 0 0 16px 0;
+}
+
+.dp-checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dp-checklist-item {
+  padding: 16px 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.dp-checklist-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.dp-checklist-item:first-child {
+  padding-top: 0;
+}
+
+.dp-check-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: not-allowed;
+  user-select: none;
+}
+
+.dp-check-input {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  min-height: 20px;
+  border-radius: 5px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(255, 255, 255, 0.03);
+  cursor: not-allowed;
+  position: relative;
+  margin-top: 2px;
+  transition: all 0.2s ease;
+}
+
+.dp-check-input:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 6px rgba(56, 189, 248, 0.5);
+}
+
+.dp-check-input:checked::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 2px;
+  width: 5px;
+  height: 10px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.dp-check-text {
+  flex: 1;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+.dp-check-description {
+  margin: 8px 0 0 32px;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .dp-check-description {
+    margin-left: 0;
+    padding-left: 32px;
+  }
+}

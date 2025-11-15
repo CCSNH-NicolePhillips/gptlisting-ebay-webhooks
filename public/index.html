@@ -483,8 +483,8 @@
             </div>
             
             <!-- Setup Checklist Card -->
-            <div class="dp-card dp-card--full" id="setupChecklistSection">
-              <div class="dp-card__header">
+            <section class="dp-card dp-card--checklist" id="setupChecklistSection">
+              <header class="dp-card__header">
                 <h3 class="dp-card__title">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; margin-right: 6px; vertical-align: text-bottom;">
                     <polyline points="9 11 12 14 22 4"></polyline>
@@ -492,29 +492,69 @@
                   </svg>
                   Setup Checklist
                 </h3>
-              </div>
-              
+                <p class="dp-card__subtitle">
+                  Complete the essentials to start creating eBay drafts with DraftPilot.
+                </p>
+              </header>
+
               <div class="dp-card__content">
-                <ul style="margin: 0; padding-left: 24px; line-height: 2; font-size: 0.9rem;">
-                  <li id="chkDropbox">Dropbox: <span class="text-muted">Unknown</span></li>
-                  <li id="chkEbay">eBay: <span class="text-muted">Unknown</span></li>
-                  <li id="chkPolicies">
-                    Business policies: <span class="text-muted">Connect eBay to view status.</span>
-                    <a href="/policies-manage.html" id="policiesLink" style="display: none; color: var(--accent); margin-left: 8px;">Manage</a>
-                  </li>
-                  <li id="chkLocation">
-                    Inventory location: <span class="text-muted">Connect eBay to view status.</span>
-                    <a href="/location.html" id="locationLink" style="display: none; color: var(--accent); margin-left: 8px;">Manage</a>
-                  </li>
-                </ul>
-              </div>
-              
-              <div class="dp-card__actions">
-                <div style="font-size: 0.875rem; color: var(--text-muted);">
-                  Need help? See <a href="/privacy.html" target="_blank" style="color: var(--accent);">Privacy</a>.
+                <!-- REQUIRED STEPS -->
+                <div class="dp-checklist-section">
+                  <h4 class="dp-checklist-heading">Required</h4>
+
+                  <ul class="dp-checklist dp-checklist--required">
+                    <li class="dp-checklist-item" id="chkEbay">
+                      <label class="dp-check-label">
+                        <input type="checkbox" disabled class="dp-check-input" />
+                        <span class="dp-check-text">Connect eBay</span>
+                      </label>
+                    </li>
+
+                    <li class="dp-checklist-item">
+                      <label class="dp-check-label">
+                        <input type="checkbox" disabled class="dp-check-input" />
+                        <span class="dp-check-text">Run your first SmartDrafts batch</span>
+                      </label>
+                      <p class="dp-check-description">
+                        Upload photos directly from your computer to generate your first AI listing batch.
+                      </p>
+                    </li>
+
+                    <li class="dp-checklist-item">
+                      <label class="dp-check-label">
+                        <input type="checkbox" disabled class="dp-check-input" />
+                        <span class="dp-check-text">Review and publish your first 5 drafts</span>
+                      </label>
+                    </li>
+                  </ul>
+                </div>
+
+                <!-- OPTIONAL ENHANCEMENTS -->
+                <div class="dp-checklist-section dp-checklist-section--optional">
+                  <h4 class="dp-checklist-heading">Optional Enhancements</h4>
+                  
+                  <ul class="dp-checklist dp-checklist--optional">
+                    <li class="dp-checklist-item" id="chkDropbox">
+                      <label class="dp-check-label">
+                        <input type="checkbox" disabled class="dp-check-input" />
+                        <span class="dp-check-text">Connect Dropbox for auto-import</span>
+                      </label>
+                      <p class="dp-check-description">
+                        Automatically sync new product photos from a chosen Dropbox folder into DraftPilot.
+                      </p>
+                    </li>
+                  </ul>
+                </div>
+
+                <!-- Legacy elements for JS compatibility -->
+                <div style="display: none;">
+                  <span id="chkPolicies"></span>
+                  <a href="/policies-manage.html" id="policiesLink"></a>
+                  <span id="chkLocation"></span>
+                  <a href="/location.html" id="locationLink"></a>
                 </div>
               </div>
-            </div>
+            </section>
           </div>
         </main>
       </div>
