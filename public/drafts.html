@@ -684,8 +684,16 @@
             const j = await res.json();
             
             if (!res.ok) {
-              flash.textContent = `Delete failed: ${j.error || j.detail || 'Unknown error'}`;
-              console.error('[Delete All] Error:', j);
+              const errorMsg = j.error || j.detail || 'Unknown error';
+              
+              // Check for eBay token errors
+              if (errorMsg.includes('invalid_grant') || errorMsg.includes('token refresh failed')) {
+                flash.textContent = '⚠️ eBay token expired - please reconnect eBay on the Connections page';
+                console.error('[Delete All] eBay token expired:', j);
+              } else {
+                flash.textContent = `Delete failed: ${errorMsg}`;
+                console.error('[Delete All] Error:', j);
+              }
               break;
             }
             
