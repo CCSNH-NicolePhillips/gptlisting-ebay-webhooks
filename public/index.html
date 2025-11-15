@@ -263,20 +263,45 @@
       <div class="dp-main-wrapper">
         <!-- Top Bar -->
         <header class="dp-topbar">
-          <div class="dp-topbar__title">Dashboard</div>
-          <div class="dp-topbar__actions">
-            <button class="dp-icon-btn" title="Notifications">
+          <!-- Left: Page Title & Subtitle -->
+          <div class="dp-topbar-left">
+            <h1 class="dp-topbar__title">Dashboard</h1>
+            <p class="dp-topbar__subtitle">Connect sources and generate eBay drafts with AI.</p>
+          </div>
+          
+          <!-- Center: Search -->
+          <div class="dp-topbar-center">
+            <div class="dp-search">
+              <svg class="dp-search__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"></circle>
+                <path d="m21 21-4.35-4.35"></path>
+              </svg>
+              <input type="text" class="dp-search__input" placeholder="Search drafts, SKUs, or notes…" />
+            </div>
+          </div>
+          
+          <!-- Right: Icon Cluster -->
+          <div class="dp-topbar-right">
+            <button class="dp-topbar-icon" title="Theme Toggle" aria-label="Toggle theme">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="5"></circle>
+                <line x1="12" y1="1" x2="12" y2="3"></line>
+                <line x1="12" y1="21" x2="12" y2="23"></line>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                <line x1="1" y1="12" x2="3" y2="12"></line>
+                <line x1="21" y1="12" x2="23" y2="12"></line>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+              </svg>
+            </button>
+            <button class="dp-topbar-icon" title="Notifications" aria-label="View notifications">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
                 <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
               </svg>
             </button>
-            <button class="dp-icon-btn" title="Settings">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="3"></circle>
-                <path d="M12 1v6m0 6v6"></path>
-              </svg>
-            </button>
+            <div class="dp-topbar-avatar" id="topbarAvatar" title="User menu">U</div>
           </div>
         </header>
         
@@ -529,6 +554,7 @@
           const userName = document.getElementById('userName');
           const userEmail = document.getElementById('userEmail');
           const userAvatar = document.getElementById('userAvatar');
+          const topbarAvatar = document.getElementById('topbarAvatar');
           if (cj?.user) {
             const name = cj.user?.name || '';
             const email = cj.user?.email || '';
@@ -537,6 +563,7 @@
             if (userName) userName.textContent = name || 'User';
             if (userEmail) userEmail.textContent = 'Signed in';
             if (userAvatar) userAvatar.textContent = initial;
+            if (topbarAvatar) topbarAvatar.textContent = initial;
           }
           
           const dbxWho = document.getElementById('dbxWho');
