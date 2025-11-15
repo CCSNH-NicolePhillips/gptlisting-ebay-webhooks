@@ -2,10 +2,10 @@ import type { Handler } from '@netlify/functions';
 import { putInventoryItem } from '../../src/lib/ebay-sell.js';
 import { accessTokenFromRefresh, tokenHosts } from '../../src/lib/_common.js';
 import { tokensStore } from '../../src/lib/_blobs.js';
+import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
 import { getOrigin, isAuthorized, isOriginAllowed, jsonResponse } from '../../src/lib/http.js';
 import { maybeRequireUserAuth } from '../../src/lib/auth-user.js';
 import type { UserAuth } from '../../src/lib/auth-user.js';
-import { userScopedKey } from '../../src/lib/_auth.js';
 
 const METHODS = 'POST, OPTIONS';
 
@@ -58,14 +58,18 @@ export const handler: Handler = async (event) => {
   console.log('[ebay-fix-draft-aspects] Processing offerId:', offerId, 'userId:', userAuth?.userId || 'global');
 
   try {
-    // Get eBay refresh token (same logic as create-draft)
+    // Get eBay refresh token using user-scoped storage
+    const bearer = getBearerToken(event);
+    let sub = (await requireAuthVerified(event))?.sub || null;
+    if (!sub) sub = getJwtSubUnverified(event);
+    
     let refreshToken = (process.env.EBAY_REFRESH_TOKEN || '').trim();
-    let refreshSource: 'env' | 'user' | 'global' | null = refreshToken ? 'env' : null;
+    let refreshSource: 'env' | 'user' | null = refreshToken ? 'env' : null;
 
-    if (!refreshToken && userAuth?.userId) {
+    if (!refreshToken && sub) {
       try {
         const store = tokensStore();
-        const saved = (await store.get(userScopedKey(userAuth.userId, 'ebay.json'), { type: 'json' })) as any;
+        const saved = (await store.get(userScopedKey(sub, 'ebay.json'), { type: 'json' })) as any;
         const candidate = typeof saved?.refresh_token === 'string' ? saved.refresh_token.trim() : '';
         if (candidate) {
           refreshToken = candidate;
@@ -77,21 +81,7 @@ export const handler: Handler = async (event) => {
     }
 
     if (!refreshToken) {
-      try {
-        const store = tokensStore();
-        const saved = (await store.get('ebay.json', { type: 'json' })) as any;
-        const candidate = typeof saved?.refresh_token === 'string' ? saved.refresh_token.trim() : '';
-        if (candidate) {
-          refreshToken = candidate;
-          refreshSource = 'global';
-        }
-      } catch (err) {
-        console.warn('[ebay-fix-draft-aspects] failed to load global refresh token', err);
-      }
-    }
-
-    if (!refreshToken) {
-      return jsonResponse(500, { error: 'No eBay credentials' }, originHdr, METHODS);
+      return jsonResponse(500, { error: 'No eBay credentials - connect eBay first' }, originHdr, METHODS);
     }
 
     console.log('[ebay-fix-draft-aspects] Using refresh token from:', refreshSource);

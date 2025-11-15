@@ -1,6 +1,7 @@
 import type { Handler } from '@netlify/functions';
 import { accessTokenFromRefresh, tokenHosts } from '../../src/lib/_common.js';
 import { tokensStore } from '../../src/lib/_blobs.js';
+import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
 import { putCategory } from '../../src/lib/taxonomy-store.js';
 import type { CategoryDef, ItemSpecific } from '../../src/lib/taxonomy-schema.js';
 import { getOrigin, isAuthorized, isOriginAllowed, jsonResponse } from '../../src/lib/http.js';
@@ -59,6 +60,14 @@ export const handler: Handler = async (event) => {
   // }
 
   try {
+    // Auth check
+    const bearer = getBearerToken(event);
+    let sub = (await requireAuthVerified(event))?.sub || null;
+    if (!sub) sub = getJwtSubUnverified(event);
+    if (!bearer || !sub) {
+      return jsonResponse(401, { error: 'Unauthorized' }, originHdr, METHODS);
+    }
+
     const body = JSON.parse(event.body || '{}');
     const categoryId = String(body.categoryId || '').trim();
     const marketplaceId = String(body.marketplaceId || 'EBAY_US').trim();
@@ -83,7 +92,7 @@ export const handler: Handler = async (event) => {
 
     // Get eBay access token
     const store = tokensStore();
-    const saved = (await store.get('ebay.json', { type: 'json' })) as any;
+    const saved = (await store.get(userScopedKey(sub, 'ebay.json'), { type: 'json' })) as any;
     const refresh = saved?.refresh_token as string | undefined;
     if (!refresh) {
       return jsonResponse(400, { error: 'Connect eBay first' }, originHdr, METHODS);

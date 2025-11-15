@@ -1,6 +1,7 @@
 import type { Handler } from '@netlify/functions';
 import { accessTokenFromRefresh, tokenHosts } from '../../src/lib/_common.js';
 import { tokensStore } from '../../src/lib/_blobs.js';
+import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
 
 function tryJson(t: string) {
 	try {
@@ -12,17 +13,27 @@ function tryJson(t: string) {
 
 export const handler: Handler = async (event) => {
 	try {
-		// Prefer stored user token; fallback to env diagnostic token
+		// Auth check
+		const bearer = getBearerToken(event);
+		let sub = (await requireAuthVerified(event))?.sub || null;
+		if (!sub) sub = getJwtSubUnverified(event);
+		if (!bearer || !sub) {
+			return {
+				statusCode: 401,
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ error: 'Unauthorized' }),
+			};
+		}
+
+		// Use stored user token
 		const store = tokensStore();
-		const saved = (await store.get('ebay.json', { type: 'json' })) as any;
-		const refresh =
-			(saved?.refresh_token as string | undefined) ||
-			(process.env.EBAY_TEST_REFRESH_TOKEN as string | undefined);
+		const saved = (await store.get(userScopedKey(sub, 'ebay.json'), { type: 'json' })) as any;
+		const refresh = saved?.refresh_token as string | undefined;
 		if (!refresh)
 			return {
 				statusCode: 400,
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ error: 'Connect eBay first or set EBAY_TEST_REFRESH_TOKEN.' }),
+				body: JSON.stringify({ error: 'Connect eBay first' }),
 			};
 
 		const { access_token } = await accessTokenFromRefresh(refresh);

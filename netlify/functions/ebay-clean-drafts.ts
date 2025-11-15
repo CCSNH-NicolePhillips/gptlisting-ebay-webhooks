@@ -1,11 +1,24 @@
 import type { Handler } from '@netlify/functions';
 import { accessTokenFromRefresh, tokenHosts } from '../../src/lib/_common.js';
 import { tokensStore } from '../../src/lib/_blobs.js';
+import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
 
 type CleanupItem = { sku: string; excludeOfferId?: string };
 
 export const handler: Handler = async (event) => {
 	try {
+		// Auth check
+		const bearer = getBearerToken(event);
+		let sub = (await requireAuthVerified(event))?.sub || null;
+		if (!sub) sub = getJwtSubUnverified(event);
+		if (!bearer || !sub) {
+			return {
+				statusCode: 401,
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ error: 'Unauthorized' }),
+			};
+		}
+
 		const method = (event.httpMethod || 'GET').toUpperCase();
 		let items: CleanupItem[] = [];
 		if (method === 'POST' || method === 'PUT') {
@@ -21,7 +34,7 @@ export const handler: Handler = async (event) => {
 		}
 
 		const store = tokensStore();
-		const saved = (await store.get('ebay.json', { type: 'json' })) as any;
+		const saved = (await store.get(userScopedKey(sub, 'ebay.json'), { type: 'json' })) as any;
 		const refresh = saved?.refresh_token as string | undefined;
 		if (!refresh) return { statusCode: 400, body: JSON.stringify({ error: 'Connect eBay first' }) };
 		const { access_token } = await accessTokenFromRefresh(refresh);

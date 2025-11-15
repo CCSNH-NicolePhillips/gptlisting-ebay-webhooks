@@ -1,6 +1,7 @@
 import type { Handler } from '@netlify/functions';
 import { tokenHosts, appAccessToken, accessTokenFromRefresh } from '../../src/lib/_common.js';
 import { tokensStore } from '../../src/lib/_blobs.js';
+import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
 
 type Json = Record<string, any>;
 
@@ -23,10 +24,10 @@ async function fetchJsonPass(url: string, headers: Record<string, string>) {
 	return { ok: r.ok, status: r.status, body, text };
 }
 
-async function getUserAccessToken(): Promise<string | null> {
+async function getUserAccessToken(sub: string): Promise<string | null> {
 	try {
 		const store = tokensStore();
-		const saved = (await store.get('ebay.json', { type: 'json' })) as Json | null;
+		const saved = (await store.get(userScopedKey(sub, 'ebay.json'), { type: 'json' })) as Json | null;
 		const refresh = saved?.refresh_token as string | undefined;
 		if (!refresh) return null;
 		const { access_token } = await accessTokenFromRefresh(refresh);
@@ -37,6 +38,18 @@ async function getUserAccessToken(): Promise<string | null> {
 }
 
 export const handler: Handler = async (event) => {
+	// Auth check
+	const bearer = getBearerToken(event);
+	let userSub = (await requireAuthVerified(event))?.sub || null;
+	if (!userSub) userSub = getJwtSubUnverified(event);
+	if (!bearer || !userSub) {
+		return {
+			statusCode: 401,
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ error: 'Unauthorized' }),
+		};
+	}
+
 	const categoryId = event.queryStringParameters?.categoryId?.trim();
 	let treeId = event.queryStringParameters?.treeId?.trim() || '';
 	if (!categoryId) {
@@ -78,7 +91,7 @@ export const handler: Handler = async (event) => {
 		const treeUrl = `${apiHost}/commerce/taxonomy/v1/get_default_category_tree_id?marketplace_id=${MARKETPLACE_ID}`;
 		let tree = await fetchJsonPass(treeUrl, appH);
 		if (!tree.ok) {
-			const userTok = await getUserAccessToken();
+			const userTok = await getUserAccessToken(userSub);
 			if (userTok) tree = await fetchJsonPass(treeUrl, headersFor(userTok));
 		}
 		if (tree.ok && tree.body?.categoryTreeId) treeId = String(tree.body.categoryTreeId);
@@ -91,7 +104,7 @@ export const handler: Handler = async (event) => {
 		let res = await fetchJsonPass(url, appH);
 		const bodyStr = JSON.stringify(res.body) || res.text || '';
 		if (!res.ok && (/invalid_scope|401|403|502|503/i.test(bodyStr) || res.status >= 500)) {
-			const userTok = await getUserAccessToken();
+			const userTok = await getUserAccessToken(userSub!);
 			if (userTok) res = await fetchJsonPass(url, headersFor(userTok));
 		}
 		return res;
@@ -146,7 +159,7 @@ export const handler: Handler = async (event) => {
 		const condPath = `/sell/metadata/v1/marketplace/${MARKETPLACE_ID}/get_item_condition_policies?category_id=${encodeURIComponent(categoryId)}`;
 		const condUrl = `${apiHost}${condPath}`;
 		// prefer user token
-		const userTok = await getUserAccessToken();
+		const userTok = await getUserAccessToken(userSub);
 		let cres = userTok ? await fetchJsonPass(condUrl, headersFor(userTok)) : null;
 		if (!cres || !cres.ok) {
 			// try app token fallback

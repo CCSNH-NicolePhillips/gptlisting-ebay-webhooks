@@ -1,11 +1,24 @@
 import type { Handler } from '@netlify/functions';
 import { tokenHosts, appAccessToken, accessTokenFromRefresh } from '../../src/lib/_common.js';
 import { cacheStore, tokensStore } from '../../src/lib/_blobs.js';
+import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
 
 type FlatCategory = { categoryId: string; categoryName: string; categoryPath: string };
 
 export const handler: Handler = async (event) => {
 	try {
+		// Auth check
+		const bearer = getBearerToken(event);
+		let sub = (await requireAuthVerified(event))?.sub || null;
+		if (!sub) sub = getJwtSubUnverified(event);
+		if (!bearer || !sub) {
+			return {
+				statusCode: 401,
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ error: 'Unauthorized' }),
+			};
+		}
+
 		const MARKETPLACE_ID = (
 			event.queryStringParameters?.marketplaceId ||
 			process.env.EBAY_MARKETPLACE_ID ||
@@ -30,7 +43,7 @@ export const handler: Handler = async (event) => {
 				const msg = String(e?.message || e);
 				if (msg.includes('invalid_scope')) {
 					const tstore = tokensStore();
-					const saved = (await tstore.get('ebay.json', { type: 'json' })) as any;
+					const saved = (await tstore.get(userScopedKey(sub!, 'ebay.json'), { type: 'json' })) as any;
 					const refresh = saved?.refresh_token as string | undefined;
 					if (!refresh)
 						throw new Error(
