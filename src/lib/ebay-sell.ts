@@ -155,9 +155,11 @@ export async function putInventoryItem(
     );
   }
 
-  if (inventory.condition) {
-    payload.condition = inventory.condition;
-  }
+  // DO NOT add condition to inventory item - condition is set on the offer, not the inventory
+  // Some categories reject inventory items with condition field
+  // if (inventory.condition) {
+  //   payload.condition = inventory.condition;
+  // }
 
   // Log the payload being sent to eBay for debugging
   console.log('[putInventoryItem] Sending to eBay:', JSON.stringify({
