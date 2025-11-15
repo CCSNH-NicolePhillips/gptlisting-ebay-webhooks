@@ -128,7 +128,7 @@ body {
 .dp-sidebar__nav {
   flex: 1;
   padding: 20px 12px 12px;
-  overflow-y: auto;
+  overflow-y: hidden;
 }
 
 .dp-nav-group {
