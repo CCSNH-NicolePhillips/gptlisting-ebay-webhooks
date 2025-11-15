@@ -376,10 +376,10 @@
       <div id="uploadLocal" class="upload-panel">
         <!-- Upload mode toggle -->
         <div style="display: inline-flex; gap: 0.5rem; border-radius: 0.5rem; border: 1px solid var(--border); padding: 0.25rem; background: #f8f9fa; margin-bottom: 1rem;">
-          <button id="btnModeFiles" class="btn secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem; border-radius: 0.375rem; margin: 0; background: var(--primary); color: white;" onclick="setUploadMode('files')">
+          <button id="btnModeFiles" class="btn secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem; border-radius: 0.375rem; margin: 0; background: var(--primary); color: white; border: none;" onclick="setUploadMode('files')">
             📄 Upload Files
           </button>
-          <button id="btnModeFolder" class="btn secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem; border-radius: 0.375rem; margin: 0;" onclick="setUploadMode('folder')">
+          <button id="btnModeFolder" class="btn secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem; border-radius: 0.375rem; margin: 0; background: transparent; color: #666; border: none;" onclick="setUploadMode('folder')">
             📁 Upload Folder
           </button>
         </div>
@@ -546,10 +546,17 @@
       const fileInput = $('fileInput');
       
       // Update button styles
-      $('btnModeFiles').style.background = mode === 'files' ? 'var(--primary)' : '';
-      $('btnModeFiles').style.color = mode === 'files' ? 'white' : '';
-      $('btnModeFolder').style.background = mode === 'folder' ? 'var(--primary)' : '';
-      $('btnModeFolder').style.color = mode === 'folder' ? 'white' : '';
+      if (mode === 'files') {
+        $('btnModeFiles').style.background = 'var(--primary)';
+        $('btnModeFiles').style.color = 'white';
+        $('btnModeFolder').style.background = 'transparent';
+        $('btnModeFolder').style.color = '#666';
+      } else {
+        $('btnModeFiles').style.background = 'transparent';
+        $('btnModeFiles').style.color = '#666';
+        $('btnModeFolder').style.background = 'var(--primary)';
+        $('btnModeFolder').style.color = 'white';
+      }
       
       // Show/hide folder mode hint
       $('folderModeHint').style.display = mode === 'folder' ? 'block' : 'none';
