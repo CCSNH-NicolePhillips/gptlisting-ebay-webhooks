@@ -149,6 +149,13 @@
     <script>
       authClient.requireAuth();
     </script>
+    <script>
+      // TEMPORARY: Redirect to Quick List until ChatGPT guided wizard is ready
+      // TODO: Remove this redirect when implementing ChatGPT chat box feature
+      if (!window.location.search.includes('dev')) {
+        window.location.href = '/quick-list.html';
+      }
+    </script>
     <div id="pageLoader" class="overlay hide" role="status" aria-live="polite">
       <div class="overlay-box">
         <div class="spinner-lg" aria-hidden="true"></div>
