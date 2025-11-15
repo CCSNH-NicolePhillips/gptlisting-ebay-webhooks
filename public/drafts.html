@@ -669,18 +669,50 @@
         const sure = confirm('Delete ALL UNPUBLISHED drafts? This cannot be undone.');
         if (!sure) return;
         const q = '?deleteAll=true';
+        
+        let totalDeleted = 0;
+        let attempts = 0;
+        const maxAttempts = 10; // Safety limit
+        
         try {
           flash.textContent = 'Deleting drafts…';
-          const res = await fetch('/.netlify/functions/ebay-clean-broken-drafts' + q);
-          const j = await res.json();
-          if (res.ok && j.ok) {
-            flash.textContent = `Deleted drafts: ${j.deletedOffers?.length || 0}`;
-            load();
-          } else {
-            flash.textContent = 'Delete failed';
+          
+          // Loop until no more deletions (handles partial batches due to timeout)
+          while (attempts < maxAttempts) {
+            attempts++;
+            const res = await fetch('/.netlify/functions/ebay-clean-broken-drafts' + q);
+            const j = await res.json();
+            
+            if (!res.ok) {
+              flash.textContent = `Delete failed: ${j.error || j.detail || 'Unknown error'}`;
+              console.error('[Delete All] Error:', j);
+              break;
+            }
+            
+            const deleted = j.deletedOffers?.length || 0;
+            totalDeleted += deleted;
+            
+            flash.textContent = `Deleted ${totalDeleted} drafts so far…`;
+            
+            // Check if there are more to delete
+            if (!j.summary?.hasMore && !j.timedOut) {
+              // All done
+              flash.textContent = `✓ Deleted ${totalDeleted} drafts total`;
+              load();
+              break;
+            }
+            
+            // Wait a bit before next batch
+            await new Promise(resolve => setTimeout(resolve, 1000));
           }
+          
+          if (attempts >= maxAttempts) {
+            flash.textContent = `Deleted ${totalDeleted} drafts (stopped after ${maxAttempts} batches)`;
+          }
+          
         } catch (e) {
           flash.textContent = 'Delete error: ' + (e?.message || String(e));
+          console.error('[Delete All] Exception:', e);
         }
       });
       

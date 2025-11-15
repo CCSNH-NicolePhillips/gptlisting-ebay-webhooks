@@ -5,6 +5,9 @@ import { tokensStore } from '../../src/lib/_blobs.js';
 type J = Record<string, any>;
 
 export const handler: Handler = async (event) => {
+	const startTime = Date.now();
+	const MAX_EXECUTION_TIME = 20000; // 20 seconds (leave buffer before Netlify timeout)
+	
 	try {
 		const qp = event.queryStringParameters || ({} as any);
 		const dryRun = /^1|true|yes$/i.test(String(qp.dryRun || qp.dry || 'false'));
@@ -153,19 +156,38 @@ export const handler: Handler = async (event) => {
 				const badSku = !validSku(sku);
 				return (deleteAllUnpublished && stat === 'UNPUBLISHED') || badSku;
 			});
+			
+			console.log(`[clean-broken-drafts] Found ${target.length} offers to delete`);
+			let deleted = 0;
+			
 			for (const o of target) {
+				// Check timeout
+				if (Date.now() - startTime > MAX_EXECUTION_TIME) {
+					console.log(`[clean-broken-drafts] Timeout approaching, stopping after ${deleted} deletions`);
+					break;
+				}
 				await deleteOffer(o.offerId);
+				deleted++;
 			}
+			
+			const hasMore = deleted < target.length;
+			
 			return {
 				statusCode: 200,
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					ok: true,
 					mode: results.mode,
-					summary: { offersScanned: offers.length, offersDeleted: results.deletedOffers.length },
+					summary: { 
+						offersScanned: offers.length, 
+						offersDeleted: results.deletedOffers.length,
+						hasMore,
+						remaining: hasMore ? target.length - deleted : 0
+					},
 					attempts: results.attempts,
 					deletedOffers: results.deletedOffers,
 					errors: results.errors,
+					message: hasMore ? 'Partial deletion - run again to continue' : 'All drafts deleted'
 				}),
 			};
 		}
@@ -191,7 +213,16 @@ export const handler: Handler = async (event) => {
 		let invOffset = 0;
 		let scanned = 0;
 		const maxScans = 2000;
+		let timedOut = false;
+		
 		while (scanned < maxScans) {
+			// Check timeout
+			if (Date.now() - startTime > MAX_EXECUTION_TIME) {
+				console.log(`[clean-broken-drafts] Timeout approaching at ${scanned} items scanned`);
+				timedOut = true;
+				break;
+			}
+			
 			const page = await listInventory(invOffset);
 			const items: any[] = page.items;
 			if (!items.length) break;
@@ -225,17 +256,25 @@ export const handler: Handler = async (event) => {
 				ok: true,
 				mode: results.mode,
 				scanned,
+				timedOut,
 				deletedOffers: results.deletedOffers,
 				deletedInventory: results.deletedInventory,
 				attempts: results.attempts,
 				errors: results.errors,
+				message: timedOut ? 'Partial deletion - run again to continue' : 'Completed'
 			}),
 		};
 	} catch (e: any) {
+		console.error('[ebay-clean-broken-drafts] Error:', e);
+		console.error('[ebay-clean-broken-drafts] Stack:', e?.stack);
 		return {
 			statusCode: 500,
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ error: 'clean-broken-drafts error', detail: e?.message || String(e) }),
+			body: JSON.stringify({ 
+				error: 'clean-broken-drafts error', 
+				detail: e?.message || String(e),
+				stack: process.env.NODE_ENV === 'development' ? e?.stack : undefined
+			}),
 		};
 	}
 };
