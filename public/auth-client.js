@@ -105,7 +105,7 @@
       // Ensure SDK is loaded
       if (!window.createAuth0Client) {
         console.log('[Auth] Loading Auth0 SDK from CDN...');
-        await loadSdk('https://cdn.auth0.com/js/auth0-spa-js/2.5/auth0-spa-js.production.js');
+        await loadSdk('https://cdn.auth0.com/js/auth0-spa-js/2.1/auth0-spa-js.production.js');
       }
 
       const createAuth0 = window.createAuth0Client;
