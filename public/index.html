@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>DraftPilot – Connect</title>
+    <link rel="stylesheet" href="/draftpilot.css">
     <style>
       body {
         font-family:
@@ -174,13 +175,19 @@
       <p class="muted">Preparing your workspace</p>
     </div>
     <div class="card" id="mainCard" style="display:none;">
-      <!-- User badge in top-right corner -->
-      <div style="position: absolute; top: 1.5rem; right: 1.5rem;">
-        <span class="small muted" id="signedInAs" style="background: rgba(15, 21, 48, 0.8); padding: 0.4rem 0.85rem; border-radius: 20px; border: 1px solid rgba(42, 51, 92, 0.6); backdrop-filter: blur(10px); white-space: nowrap; font-size: 0.8rem;"></span>
-      </div>
+      <div class="dp-page">
+      <header class="dp-topbar" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid rgba(42, 51, 92, 0.3);">
+        <div class="dp-logo" style="font-size: 1.5rem; font-weight: 700; color: #4f7cff; letter-spacing: -0.5px;">
+          DraftPilot
+        </div>
+        <div class="dp-user">
+          <span class="small muted" id="signedInAs" style="background: rgba(15, 21, 48, 0.8); padding: 0.4rem 0.85rem; border-radius: 20px; border: 1px solid rgba(42, 51, 92, 0.6); backdrop-filter: blur(10px); white-space: nowrap; font-size: 0.8rem;"></span>
+        </div>
+      </header>
 
+      <main class="dp-main">
       <!-- ========== CONNECTIONS SECTION ========== -->
-      <section id="connectionsSection" style="margin-bottom: 2.5rem;">
+      <section id="connectionsSection" class="dp-card dp-card--connections" style="margin-bottom: 2.5rem;">
         <h1 style="margin-bottom: 1.25rem; font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.9;">
             <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
@@ -290,7 +297,7 @@
       <hr style="margin: 2.5rem 0; border: none; border-top: 1px solid rgba(42, 51, 92, 0.4);" />
       
       <!-- ========== CREATE LISTINGS SECTION ========== -->
-      <section id="createListingsSection" style="margin-bottom: 2.5rem;">
+      <section id="createListingsSection" class="dp-card dp-card--hero" style="margin-bottom: 2.5rem;">
         <!-- SmartDrafts Hero Card -->
         <div style="background: linear-gradient(135deg, #2d3f6e 0%, #1a2845 50%, #0f1530 100%); border: 2px solid #4f7cff; border-radius: 16px; padding: 2.75rem; margin-bottom: 2rem; position: relative; overflow: hidden; box-shadow: 0 10px 40px rgba(79, 124, 255, 0.25);">
           <!-- Decorative background pattern -->
@@ -356,7 +363,7 @@
       </section>
 
       <!-- ========== MANUAL DRAFT SECTION ========== -->
-      <section id="manualDraftSection" style="margin-bottom: 2.5rem;">
+      <section id="manualDraftSection" class="dp-card dp-card--manual" style="margin-bottom: 2.5rem;">
         <!-- Collapsible Manual Draft Wizard -->
         <details style="background: linear-gradient(135deg, rgba(15, 21, 48, 0.4) 0%, rgba(15, 21, 48, 0.2) 100%); border: 1px solid rgba(42, 51, 92, 0.5); border-radius: 12px; margin-bottom: 2rem; overflow: hidden; backdrop-filter: blur(10px);">
           <summary style="padding: 1.1rem 1.35rem; cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; user-select: none; transition: background 0.2s ease;">
@@ -400,7 +407,7 @@
       <hr style="margin: 2.5rem 0; border: none; border-top: 1px solid rgba(42, 51, 92, 0.4);" />
       
       <!-- ========== SETUP CHECKLIST SECTION ========== -->
-      <section id="setupChecklistSection" style="margin-bottom: 2rem;">
+      <section id="setupChecklistSection" class="dp-card dp-card--setup" style="margin-bottom: 2rem;">
         <h2 style="margin-bottom: 1.25rem; font-size: 1.35rem; display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.85;">
             <polyline points="9 11 12 14 22 4"></polyline>
@@ -422,7 +429,11 @@
         </ul>
         <div class="footer">Need help? See <a href="/privacy.html" target="_blank">Privacy</a>.</div>
       </section>
-    </div>    <script>
+    </main>
+    </div>
+    </div>
+    
+    <script>
       const SETUP_STORAGE_KEY = 'draftpilotVisitedSetup';
       const SETUP_REDIRECT_GUARD = 'draftpilotSuppressSetupRedirect';
       let lastStatus = null;
