@@ -50,9 +50,19 @@ export const handler: Handler = async (event) => {
 		let outBuf: Buffer = buf as Buffer;
 		try {
 			const s = sharp(buf, { failOnError: false });
-			// Rotate according to EXIF orientation and output JPEG which strips EXIF by default
-			const rotated = await s.rotate().jpeg({ quality: 92, mozjpeg: true }).toBuffer();
-			if (rotated && rotated.length) outBuf = Buffer.from(rotated);
+			const metadata = await s.metadata();
+			
+			// Only process if image has EXIF orientation data, otherwise keep original
+			if (metadata.orientation && metadata.orientation !== 1) {
+				// Rotate according to EXIF orientation and output high-quality JPEG
+				const rotated = await s.rotate().jpeg({ quality: 95, mozjpeg: true }).toBuffer();
+				if (rotated && rotated.length) outBuf = Buffer.from(rotated);
+			} else {
+				// No rotation needed - keep original quality
+				// Just ensure it's JPEG format for eBay compatibility
+				const original = type === 'image/jpeg' ? buf : await s.jpeg({ quality: 98, mozjpeg: true }).toBuffer();
+				if (original && original.length) outBuf = Buffer.from(original);
+			}
 		} catch {
 			// If sharp fails, fallback to original buffer
 		}
