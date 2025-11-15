@@ -444,19 +444,19 @@
               </div>
               
               <div class="dp-card__content">
+                <!-- Loading State -->
+                <div class="dp-loading-state" id="recentDraftsLoading">
+                  <div class="dp-spinner"></div>
+                  <p class="dp-loading-text">Loading drafts...</p>
+                </div>
+                
                 <!-- Empty State (shown when no drafts) -->
-                <div class="dp-empty-state" id="recentDraftsEmpty">
+                <div class="dp-empty-state" id="recentDraftsEmpty" style="display: none;">
                   <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--text-muted); margin-bottom: 16px;">
                     <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                   </svg>
                   <h4 class="dp-empty-state__title">No recent drafts</h4>
                   <p class="dp-empty-state__description">Upload product images to create your first AI-powered eBay listing drafts.</p>
-                  <a href="/quick-list.html" class="dp-hero-cta" style="margin-top: 20px;">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-                    </svg>
-                    Create Drafts
-                  </a>
                 </div>
                 
                 <!-- Drafts Table (hidden until drafts exist, will be populated by JS) -->
@@ -475,7 +475,13 @@
               </div>
               
               <div class="dp-card__footer" id="recentDraftsFooter" style="display: none;">
-                <a href="/drafts.html" class="dp-link-button">
+                <a href="/quick-list.html" class="dp-hero-cta" id="recentDraftsCTA" style="display: none;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                  </svg>
+                  Create Drafts
+                </a>
+                <a href="/drafts.html" class="dp-link-button" id="recentDraftsViewAll" style="display: none;">
                   View all drafts
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; margin-left: 4px; vertical-align: middle;">
                     <path d="M5 12h14M12 5l7 7-7 7"/>
@@ -1053,23 +1059,43 @@
       // Load recent drafts
       async function loadRecentDrafts() {
         try {
+          // Show loading state
+          document.getElementById('recentDraftsLoading').style.display = 'block';
+          document.getElementById('recentDraftsEmpty').style.display = 'none';
+          document.getElementById('recentDraftsTable').style.display = 'none';
+          document.getElementById('recentDraftsFooter').style.display = 'none';
+          
           const base = '/.netlify/functions/ebay-list-offers?limit=100&status=' + encodeURIComponent('UNPUBLISHED,DRAFT,INACTIVE');
           const exec = authClient && typeof authClient.authFetch === 'function' ? authClient.authFetch : fetch;
           const response = await exec(base);
           
+          // Hide loading state
+          document.getElementById('recentDraftsLoading').style.display = 'none';
+          
           if (!response.ok) {
             console.warn('[Recent Drafts] Failed to load:', response.status);
+            // Show empty state on error
+            document.getElementById('recentDraftsEmpty').style.display = 'block';
+            document.getElementById('recentDraftsFooter').style.display = 'flex';
+            document.getElementById('recentDraftsCTA').style.display = 'inline-flex';
             return;
           }
           
           const data = await response.json();
           const offers = Array.isArray(data?.offers) ? data.offers : [];
           
+          console.log('[Recent Drafts] Loaded', offers.length, 'drafts');
+          if (offers.length > 0) {
+            console.log('[Recent Drafts] First draft structure:', offers[0]);
+          }
+          
           if (offers.length === 0) {
-            // Show empty state
+            // Show empty state with CTA button
             document.getElementById('recentDraftsEmpty').style.display = 'block';
             document.getElementById('recentDraftsTable').style.display = 'none';
-            document.getElementById('recentDraftsFooter').style.display = 'none';
+            document.getElementById('recentDraftsFooter').style.display = 'flex';
+            document.getElementById('recentDraftsCTA').style.display = 'inline-flex';
+            document.getElementById('recentDraftsViewAll').style.display = 'none';
             return;
           }
           
@@ -1077,12 +1103,14 @@
           document.getElementById('recentDraftsEmpty').style.display = 'none';
           document.getElementById('recentDraftsTable').style.display = 'block';
           document.getElementById('recentDraftsFooter').style.display = 'flex';
+          document.getElementById('recentDraftsCTA').style.display = 'none';
+          document.getElementById('recentDraftsViewAll').style.display = 'inline-flex';
           
           // Get most recent 5 drafts (sorted by listing start date, descending)
           const recentDrafts = offers
             .sort((a, b) => {
-              const aTime = a?.listing?.listingStartDate || a?.creationDate || 0;
-              const bTime = b?.listing?.listingStartDate || b?.creationDate || 0;
+              const aTime = a?.listingStartDate || a?.creationDate || 0;
+              const bTime = b?.listingStartDate || b?.creationDate || 0;
               return new Date(bTime) - new Date(aTime);
             })
             .slice(0, 5);
@@ -1092,14 +1120,23 @@
           rowsContainer.innerHTML = '';
           
           recentDrafts.forEach(draft => {
-            const title = draft?.listing?.title || 'Untitled';
+            const title = draft?.title || draft?.sku || 'Untitled Draft';
             const status = (draft?.status || 'DRAFT').toUpperCase();
-            const updatedTime = draft?.listing?.listingStartDate || draft?.creationDate;
+            const updatedTime = draft?.listingStartDate || draft?.creationDate;
             
             // Determine status pill class
             let statusClass = 'dp-status-pill--draft';
-            if (status === 'INACTIVE') statusClass = 'dp-status-pill--needs-review';
-            if (status === 'ACTIVE') statusClass = 'dp-status-pill--ready';
+            let statusLabel = 'Draft';
+            if (status === 'UNPUBLISHED') {
+              statusClass = 'dp-status-pill--draft';
+              statusLabel = 'Draft';
+            } else if (status === 'INACTIVE') {
+              statusClass = 'dp-status-pill--needs-review';
+              statusLabel = 'Inactive';
+            } else if (status === 'ACTIVE') {
+              statusClass = 'dp-status-pill--ready';
+              statusLabel = 'Active';
+            }
             
             // Format time ago
             const timeAgo = formatTimeAgo(updatedTime);
@@ -1115,7 +1152,7 @@
                 <span class="dp-draft-title">${escapeHtml(title)}</span>
               </div>
               <div class="dp-drafts-table__col dp-drafts-table__col--status">
-                <span class="dp-status-pill ${statusClass}">${status}</span>
+                <span class="dp-status-pill ${statusClass}">${statusLabel}</span>
               </div>
               <div class="dp-drafts-table__col dp-drafts-table__col--source">
                 <span class="dp-source-chip">${source}</span>
@@ -1129,6 +1166,11 @@
           
         } catch (error) {
           console.error('[Recent Drafts] Error loading drafts:', error);
+          // Hide loading, show empty state on error
+          document.getElementById('recentDraftsLoading').style.display = 'none';
+          document.getElementById('recentDraftsEmpty').style.display = 'block';
+          document.getElementById('recentDraftsFooter').style.display = 'flex';
+          document.getElementById('recentDraftsCTA').style.display = 'inline-flex';
         }
       }
       

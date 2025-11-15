@@ -1187,6 +1187,32 @@ body {
 .mt-3 { margin-top: 24px; }
 
 /* ===== RECENT DRAFTS TABLE ===== */
+/* Loading State */
+.dp-loading-state {
+  text-align: center;
+  padding: 64px 24px;
+}
+
+.dp-spinner {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto 16px;
+  border: 3px solid rgba(56, 189, 248, 0.2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: dp-spin 0.8s linear infinite;
+}
+
+@keyframes dp-spin {
+  to { transform: rotate(360deg); }
+}
+
+.dp-loading-text {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
 /* Empty State */
 .dp-empty-state {
   text-align: center;
@@ -1322,7 +1348,8 @@ body {
   border-top: 1px solid var(--border-color);
   margin-top: 16px;
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
+  align-items: center;
 }
 
 .dp-link-button {
