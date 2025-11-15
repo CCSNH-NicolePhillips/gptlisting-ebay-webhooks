@@ -43,7 +43,7 @@
 ## Make a stable self-hosted ESM path that rewrites to the SDK proxy
 [[redirects]]
   from = "/vendor/auth0-spa.esm.js"
-  to = "/.netlify/functions/cdn-auth0-spa?esm=1&v=2.5.0"
+  to = "/.netlify/functions/cdn-auth0-spa?esm=1&v=2.1.0"
   status = 200
   force = true
 
