@@ -277,6 +277,8 @@ export const handler: Handler = async (event) => {
     const prod = new Map<string, string>();
     const cat = new Map<string, string>();
     const gOfKey = new Map<string, string>();
+    const textExtracted = new Map<string, string>(); // Store extracted text for each image
+    
     for (const g of (analysis.groups || [])) {
       const b = String(g.brand || '').trim();
       const p = String(g.product || '').trim();
@@ -287,6 +289,15 @@ export const handler: Handler = async (event) => {
         if (b) brand.set(k, b);
         if (p) prod.set(k, p);
         if (c) cat.set(k, c);
+      }
+    }
+    
+    // Collect extracted text from imageInsights
+    for (const ins of insights) {
+      const k = ins.key || urlKey(ins.url);
+      const text = String((ins as any).textExtracted || '').trim();
+      if (text) {
+        textExtracted.set(k, text);
       }
     }
 
@@ -512,7 +523,8 @@ export const handler: Handler = async (event) => {
         heroDisplayUrl: disp.get(p.frontUrl) || p.frontUrl,
         backDisplayUrl: disp.get(p.backUrl) || p.backUrl,
         extras: [],
-        evidence: p.evidence
+        evidence: p.evidence,
+        extractedText: [textExtracted.get(p.frontUrl), textExtracted.get(p.backUrl)].filter(Boolean).join('\n\n')
       }));
 
     // 6b) Convert unpaired fronts into front-only products
@@ -545,7 +557,8 @@ export const handler: Handler = async (event) => {
         heroDisplayUrl: disp.get(f) || f,
         backDisplayUrl: null as any,
         extras: [],
-        evidence: ['FRONT-ONLY: No matching back photo found']
+        evidence: ['FRONT-ONLY: No matching back photo found'],
+        extractedText: textExtracted.get(f) || ''
       });
       console.log(`[Z2-DEBUG] Created front-only product: ${f}`);
     }

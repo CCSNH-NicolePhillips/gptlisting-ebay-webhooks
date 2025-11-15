@@ -67,6 +67,7 @@ type PairedProduct = {
   backDisplayUrl: string | null; // Allow null for front-only products
   extras?: string[];
   evidence?: string[];
+  extractedText?: string; // Text extracted from product photos (front + back)
 };
 
 type CategoryHint = {
@@ -112,10 +113,12 @@ async function callOpenAI(prompt: string): Promise<string> {
               content:
                 "You are an expert eBay listing writer with real-time web access.\n" +
                 "Return ONLY strict JSON with keys: title, description, bullets, aspects, price, condition.\n" +
-                "- title: <=80 chars, high-signal product name, no emojis, no fluff.\n" +
-                "- description: 2-4 sentences, neutral factual claims (no medical), highlight key features.\n" +
-                "- bullets: array of 3-5 short benefit/feature points.\n" +
-                "- aspects: object with Brand, Type, Features, Size, etc. Include all relevant item specifics.\n" +
+                "- title: <=80 chars, SEO-RICH product name with specific details (vitamins, dosages, formulation). NO generic words. NO emojis. Include brand + key ingredients/benefits.\n" +
+                "  Examples: 'Nusava Vitamin B12 5000mcg + B6 Liquid Drops Sublingual 2 Fl Oz'\n" +
+                "           'Garden of Life Raw Probiotics Women 90 Capsules 32 Strains 85 Billion CFU'\n" +
+                "- description: 2-4 sentences with SPECIFIC details from the label. Include ingredients, dosages, benefits. NO vague marketing language.\n" +
+                "- bullets: array of 3-5 specific feature/benefit points with numbers and details.\n" +
+                "- aspects: object with Brand, Type, Features, Size, Active Ingredients, Formulation, etc. Be SPECIFIC.\n" +
                 "- price: IMPORTANT - Search Amazon.com and Walmart.com for the CURRENT regular selling price (not sale/clearance prices). For books, use the new hardcover/paperback price from Amazon. Return ONLY the number (e.g. 24.99). If product not found, estimate based on similar items.\n" +
                 "- condition: one of 'NEW', 'LIKE_NEW', 'USED_EXCELLENT', 'USED_GOOD', 'USED_ACCEPTABLE'. Assume NEW unless description indicates otherwise.\n",
             },
@@ -214,6 +217,21 @@ function buildPrompt(product: PairedProduct, categoryHint: CategoryHint | null, 
   
   if (product.categoryPath) {
     lines.push(`Category hint: ${product.categoryPath}`);
+  }
+  
+  // Add extracted text from product photos (CRITICAL for SEO-rich titles)
+  if (product.extractedText && product.extractedText.length > 0) {
+    lines.push("");
+    lines.push("=== TEXT EXTRACTED FROM PRODUCT PHOTOS ===");
+    lines.push(product.extractedText);
+    lines.push("=== END EXTRACTED TEXT ===");
+    lines.push("");
+    lines.push("IMPORTANT: Use the extracted text above to create an SEO-rich title that includes:");
+    lines.push("- Specific vitamins/ingredients mentioned (e.g., B12, B6, Folate, Niacin)");
+    lines.push("- Dosages if visible (e.g., 5000mcg, 2400mcg)");
+    lines.push("- Formulation (Liquid, Sublingual, Drops, etc.)");
+    lines.push("- Key benefits/claims from the label");
+    lines.push("");
   }
   
   if (categoryHint) {
