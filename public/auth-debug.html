@@ -52,8 +52,10 @@
         try {
           // 1) Check if SDK loaded
           S('Checking Auth0 SDK...', '');
+          const hasSDK = window.createAuth0Client || (window.auth0 && window.auth0.createAuth0Client);
           log('preflight', 'window.createAuth0Client exists: ' + (!!window.createAuth0Client));
-          if (!window.createAuth0Client) {
+          log('preflight', 'window.auth0.createAuth0Client exists: ' + (!!(window.auth0 && window.auth0.createAuth0Client)));
+          if (!hasSDK) {
             S('Auth0 SDK failed to load', 'warn');
             log('err', 'The Auth0 SPA SDK script tag failed to load.');
             log('err', 'Possible causes:');
@@ -89,7 +91,8 @@
 
           // 3) Initialize Auth0
           S('Initializing Auth0 client...', '');
-          const auth0 = await window.createAuth0Client({
+          const createAuth0 = window.createAuth0Client || window.auth0.createAuth0Client;
+          const auth0 = await createAuth0({
             domain: cfg.AUTH0_DOMAIN,
             clientId: cfg.AUTH0_CLIENT_ID,
             cacheLocation: 'localstorage',

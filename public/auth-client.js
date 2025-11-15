@@ -103,14 +103,14 @@
 
     try {
       // Ensure SDK is loaded
-      if (!window.createAuth0Client) {
+      if (!window.createAuth0Client && !(window.auth0 && window.auth0.createAuth0Client)) {
         console.log('[Auth] Loading Auth0 SDK via proxy...');
         await loadSdk('/.netlify/functions/cdn-auth0-spa?v=2.1');
       }
 
-      const createAuth0 = window.createAuth0Client;
+      const createAuth0 = window.createAuth0Client || (window.auth0 && window.auth0.createAuth0Client);
       if (!createAuth0) {
-        throw new Error('[Auth] Auth0 SDK failed to load - window.createAuth0Client is not available');
+        throw new Error('[Auth] Auth0 SDK failed to load - createAuth0Client is not available');
       }
 
       console.log('[Auth] Creating Auth0 client...');
