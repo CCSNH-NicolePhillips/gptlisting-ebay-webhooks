@@ -101,6 +101,19 @@
         font-size: 0.85rem;
         color: #a2a9c8;
       }
+      /* Accordion styles */
+      details summary::-webkit-details-marker {
+        display: none;
+      }
+      details[open] summary {
+        background: #141a33;
+      }
+      details[open] summary span {
+        transform: rotate(180deg);
+      }
+      details summary:hover {
+        background: #141a33;
+      }
     </style>
   </head>
   <body>
@@ -295,19 +308,32 @@
 
       <!-- ========== MANUAL DRAFT SECTION ========== -->
       <section id="manualDraftSection">
-        <!-- Manual Draft Creation -->
-        <div style="background: #0f1530; border: 1px solid #3d4a86; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
-          <h3 style="margin-top: 0; font-size: 1.2rem; color: #fff;">Manual Draft Wizard</h3>
-          <p style="color: #a2a9c8; margin: 0.5rem 0 1rem; font-size: 0.95rem;">
-            Traditional workflow for creating drafts one at a time. Select images, fill in details manually, and create individual listings with full control.
-          </p>
-          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
-            <a id="goCreateDraft" class="btn secondary full-width disabled" href="/draft-wizard.html" aria-disabled="true" style="max-width: 200px;">
-              <span>📝 Manual Draft</span>
-            </a>
-            <a class="btn secondary full-width" href="/drafts.html" id="viewDraftsBtn" style="max-width: 200px;">📋 View Drafts</a>
+        <!-- Collapsible Manual Draft Wizard -->
+        <details style="background: #0f1530; border: 1px solid #2a335c; border-radius: 10px; margin-bottom: 1.5rem; overflow: hidden;">
+          <summary style="padding: 1rem 1.25rem; cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; user-select: none; transition: background 0.2s ease;">
+            <div>
+              <h3 style="margin: 0; font-size: 1.05rem; color: #cbd5ff; font-weight: 600;">
+                📝 Manual Draft Wizard
+              </h3>
+              <p style="margin: 0.25rem 0 0 0; font-size: 0.85rem; color: #7a8ab0;">
+                Create listings the traditional way
+              </p>
+            </div>
+            <span style="color: #7a8ab0; font-size: 1.2rem; transition: transform 0.2s ease;">▾</span>
+          </summary>
+          
+          <div style="padding: 0 1.25rem 1.25rem 1.25rem; border-top: 1px solid #1a2240;">
+            <p style="color: #a2a9c8; margin: 1rem 0 1rem 0; font-size: 0.9rem; line-height: 1.5;">
+              Traditional workflow for creating drafts one at a time. Select images, fill in details manually, and create individual listings with full control.
+            </p>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+              <a id="goCreateDraft" class="btn secondary disabled" href="/draft-wizard.html" aria-disabled="true" style="padding: 0.65rem 1.25rem; font-size: 0.9rem;">
+                Create Manual Draft
+              </a>
+              <a class="btn secondary" href="/drafts.html" id="viewDraftsBtn" style="padding: 0.65rem 1.25rem; font-size: 0.9rem;">📋 View All Drafts</a>
+            </div>
           </div>
-        </div>
+        </details>
       </section>
 
       <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid #2a335c" />
