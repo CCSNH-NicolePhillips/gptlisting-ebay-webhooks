@@ -4,23 +4,23 @@
 /* ===== CSS Variables ===== */
 
 :root {
-  /* Professional SaaS palette - inspired by Linear/Vercel/Notion */
-  --dp-bg: #0a0a0a;
-  --dp-bg-elevated: #111111;
-  --dp-bg-card: #171717;
-  --dp-border-subtle: rgba(255, 255, 255, 0.08);
-  --dp-border-medium: rgba(255, 255, 255, 0.12);
-  --dp-accent: #3b82f6; /* Professional blue instead of cyan */
-  --dp-accent-hover: #60a5fa;
-  --dp-accent-soft: rgba(59, 130, 246, 0.12);
-  --dp-text-main: #fafafa;
-  --dp-text-secondary: #d4d4d8;
-  --dp-text-muted: #71717a;
+  /* Professional SaaS palette with subtle enterprise-friendly tones */
+  --dp-bg: #02030a;
+  --dp-bg-elevated: #0d1528;
+  --dp-bg-card: rgba(17, 24, 48, 0.9);
+  --dp-border-subtle: rgba(120, 160, 255, 0.18);
+  --dp-border-medium: rgba(120, 160, 255, 0.28);
+  --dp-accent: #5b8def; /* Muted professional blue */
+  --dp-accent-hover: #7ba3f2;
+  --dp-accent-soft: rgba(91, 141, 239, 0.15);
+  --dp-text-main: #e5ecff;
+  --dp-text-secondary: #b8c5e0;
+  --dp-text-muted: #8091b8;
   --dp-success: #10b981;
-  --dp-radius-card: 12px;
+  --dp-radius-card: 18px;
   --dp-radius-pill: 999px;
-  --dp-shadow-card: 0 4px 16px rgba(0, 0, 0, 0.4);
-  --dp-shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.6);
+  --dp-shadow-card: 0 18px 45px rgba(0, 0, 0, 0.85);
+  --dp-shadow-elevated: 0 24px 60px rgba(4, 14, 40, 0.9);
 }
 
 /* ===== Base Reset ===== */
@@ -41,8 +41,8 @@ body {
 body {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
     "Segoe UI", sans-serif;
-  background: var(--dp-bg);
-  color: var(--dp-text-main);
+  background: radial-gradient(circle at top, #1b2a4a 0%, #050816 55%, #02030a 100%);
+  color: #e5ecff;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -83,16 +83,24 @@ body {
 /* ===== Cards ===== */
 
 .dp-card {
-  background: var(--dp-bg-card);
-  border-radius: var(--dp-radius-card);
-  border: 1px solid var(--dp-border-subtle);
+  background: linear-gradient(
+    135deg,
+    rgba(17, 24, 48, 0.9),
+    rgba(10, 18, 38, 0.9)
+  );
+  border-radius: 18px;
+  border: 1px solid rgba(120, 160, 255, 0.18);
   padding: 20px 18px 18px;
-  box-shadow: var(--dp-shadow-card);
+  box-shadow:
+    0 18px 45px rgba(0, 0, 0, 0.85),
+    0 0 0 1px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
   transition: border-color 0.2s ease;
 }
 
 .dp-card:hover {
-  border-color: var(--dp-border-medium);
+  border-color: rgba(120, 160, 255, 0.28);
 }
 
 .dp-card h2,
@@ -113,9 +121,10 @@ body {
 /* ===== Hero Card Special ===== */
 
 .dp-card--hero {
-  background: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 100%);
-  border-color: var(--dp-accent);
-  box-shadow: 0 0 0 1px var(--dp-accent), var(--dp-shadow-elevated);
+  border-color: rgba(120, 180, 255, 0.45);
+  box-shadow:
+    0 24px 60px rgba(4, 14, 40, 0.9),
+    0 0 60px rgba(80, 140, 255, 0.35);
 }
 
 /* ===== Buttons ===== */
@@ -124,7 +133,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border-radius: 8px;
+  border-radius: 10px;
   border: 1px solid transparent;
   padding: 8px 16px;
   font-size: 0.875rem;
@@ -137,28 +146,34 @@ body {
 }
 
 .dp-btn-primary {
-  background: var(--dp-accent);
-  border-color: var(--dp-accent);
+  background: linear-gradient(135deg, #5b8def 0%, #4a7cd8 100%);
+  border-color: rgba(91, 141, 239, 0.5);
   color: white;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  box-shadow: 
+    0 2px 8px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(91, 141, 239, 0.2);
 }
 
 .dp-btn-primary:hover {
-  background: var(--dp-accent-hover);
+  background: linear-gradient(135deg, #7ba3f2 0%, #5b8def 100%);
   transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+  box-shadow: 
+    0 6px 16px rgba(0, 0, 0, 0.5),
+    0 0 24px rgba(91, 141, 239, 0.3);
 }
 
 .dp-btn-ghost {
-  border-color: var(--dp-border-medium);
+  border-color: var(--dp-border-subtle);
   color: var(--dp-text-secondary);
-  background: var(--dp-bg-elevated);
+  background: rgba(13, 21, 40, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .dp-btn-ghost:hover {
-  border-color: var(--dp-accent);
+  border-color: var(--dp-border-medium);
   color: var(--dp-text-main);
-  background: var(--dp-bg-card);
+  background: rgba(17, 24, 48, 0.8);
 }
 
 /* ===== Chips ===== */
@@ -167,20 +182,22 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border-radius: 8px;
+  border-radius: 10px;
   border: 1px solid var(--dp-border-subtle);
-  background: var(--dp-bg-elevated);
+  background: rgba(13, 21, 40, 0.6);
   color: var(--dp-text-secondary);
   font-size: 0.8125rem;
   padding: 5px 12px;
   cursor: pointer;
   text-decoration: none;
   transition: all 0.15s ease;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .dp-chip:hover {
   border-color: var(--dp-border-medium);
-  background: var(--dp-bg-card);
+  background: rgba(17, 24, 48, 0.8);
   color: var(--dp-text-main);
 }
 
@@ -198,9 +215,10 @@ body {
   align-items: center;
   gap: 4px;
   padding: 4px 10px;
-  border-radius: var(--dp-radius-pill);
-  background: var(--dp-accent-soft);
-  color: var(--dp-accent);
+  border-radius: 8px;
+  background: rgba(91, 141, 239, 0.18);
+  border: 1px solid rgba(91, 141, 239, 0.3);
+  color: #7ba3f2;
   font-size: 0.6875rem;
   font-weight: 600;
   letter-spacing: 0.05em;
