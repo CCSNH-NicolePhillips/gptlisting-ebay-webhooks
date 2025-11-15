@@ -47,6 +47,7 @@ export const handler: Handler = async (event) => {
 			return { statusCode: 415, body: `Not an image (type=${type})` };
 		}
 		// Auto-orient images based on EXIF to avoid sideways photos on eBay
+		// Priority: Maximum quality for product photos
 		let outBuf: Buffer = buf as Buffer;
 		try {
 			const s = sharp(buf, { failOnError: false });
@@ -54,14 +55,12 @@ export const handler: Handler = async (event) => {
 			
 			// Only process if image has EXIF orientation data, otherwise keep original
 			if (metadata.orientation && metadata.orientation !== 1) {
-				// Rotate according to EXIF orientation and output high-quality JPEG
-				const rotated = await s.rotate().jpeg({ quality: 95, mozjpeg: true }).toBuffer();
+				// Rotate according to EXIF orientation - use quality 100 for product photos
+				const rotated = await s.rotate().jpeg({ quality: 100, mozjpeg: false }).toBuffer();
 				if (rotated && rotated.length) outBuf = Buffer.from(rotated);
 			} else {
-				// No rotation needed - keep original quality
-				// Just ensure it's JPEG format for eBay compatibility
-				const original = type === 'image/jpeg' ? buf : await s.jpeg({ quality: 98, mozjpeg: true }).toBuffer();
-				if (original && original.length) outBuf = Buffer.from(original);
+				// No rotation needed - pass through original buffer to avoid ANY recompression
+				outBuf = buf;
 			}
 		} catch {
 			// If sharp fails, fallback to original buffer
