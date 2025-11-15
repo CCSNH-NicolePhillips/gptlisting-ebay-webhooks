@@ -799,37 +799,210 @@ body {
   color: var(--text-primary);
 }
 
-/* ===== CONNECTIONS GRID ===== */
+/* ===== CONNECTIONS CARD ===== */
+.dp-card-header {
+  margin-bottom: 20px;
+}
+
+.dp-card-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 8px 0;
+  letter-spacing: -0.01em;
+}
+
+.dp-card-subtitle {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
 .dp-connections-grid {
   display: grid;
   gap: 16px;
-  margin-top: 12px;
+  margin-bottom: 20px;
 }
 
-@media (min-width: 600px) {
+@media (min-width: 768px) {
   .dp-connections-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 }
 
-.dp-conn-block {
+/* Connection Block (Provider Mini-Card) */
+.dp-connection {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 14px;
   padding: 16px;
-  background: rgba(148, 163, 184, 0.03);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   transition: all 0.15s ease;
 }
 
-.dp-conn-block:hover {
-  background: rgba(148, 163, 184, 0.06);
-  border-color: var(--border-medium);
+.dp-connection:hover {
+  background: rgba(15, 23, 42, 0.75);
+  border-color: rgba(148, 163, 184, 0.3);
 }
 
-.dp-conn-block h3 {
+/* Connection Header */
+.dp-connection-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.dp-connection-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #ffffff;
+}
+
+.dp-connection-icon--dropbox {
+  background: rgba(56, 189, 248, 0.2);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.dp-connection-icon--ebay {
+  background: rgba(168, 85, 247, 0.2);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.dp-connection-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.dp-connection-name {
   font-size: 0.9375rem;
   font-weight: 600;
+  color: #e5e7eb;
+  margin: 0 0 6px 0;
+}
+
+.dp-connection-status {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: rgba(148, 163, 184, 0.08);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.dp-connection-status--connected {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+  border-color: rgba(34, 197, 94, 0.4);
+}
+
+/* Connection Details */
+.dp-connection-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dp-connection-meta {
+  font-size: 0.8125rem;
+  color: #94a3b8;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.dp-connection-folder {
+  margin-top: 4px;
+}
+
+.dp-connection-folder-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.dp-connection-folder-select {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.2);
   color: var(--text-primary);
-  margin-bottom: 8px;
+  font-size: 0.8125rem;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.dp-connection-folder-select:focus {
+  background: rgba(148, 163, 184, 0.12);
+  border-color: #38bdf8;
+}
+
+.dp-connection-folder-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.dp-connection-folder-msg {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-top: 4px;
+}
+
+/* Connection Actions */
+.dp-connection-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+}
+
+.dp-btn-sm {
+  padding: 8px 16px;
+  font-size: 0.8125rem;
+  border-radius: 9999px;
+}
+
+.dp-connection-actions .dp-btn-ghost {
+  padding: 6px 12px;
+  font-size: 0.75rem;
+}
+
+/* Connection Footer */
+.dp-card-footer {
+  padding-top: 16px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.dp-connections-footer {
+  text-align: center;
+}
+
+.dp-muted {
+  font-size: 0.8125rem;
+  color: #94a3b8;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Legacy Compatibility */
+.dp-conn-block {
+  display: none;
 }
 
 .dp-meta {
@@ -917,6 +1090,16 @@ body {
   
   .dp-hero-subtext {
     font-size: 0.875rem;
+  }
+  
+  /* Connections Card Mobile */
+  .dp-connection {
+    padding: 14px;
+  }
+  
+  .dp-connection-icon {
+    width: 32px;
+    height: 32px;
   }
 }
 
