@@ -542,9 +542,10 @@
           if (cj?.user) {
             const name = cj.user?.name || '';
             const email = cj.user?.email || '';
-            const initial = (name || email || 'U').charAt(0).toUpperCase();
+            const initial = (email || name || 'U').charAt(0).toUpperCase();
             
-            if (userName) userName.textContent = name || 'User';
+            // Show email as name until we have structured signup
+            if (userName) userName.textContent = email || name || 'User';
             if (userEmail) userEmail.textContent = 'Signed in';
             if (userAvatar) userAvatar.textContent = initial;
             if (topbarAvatar) topbarAvatar.textContent = initial;

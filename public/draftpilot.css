@@ -420,7 +420,7 @@ body {
   color: #ffffff;
   font-size: 0.875rem;
   font-weight: 600;
-  display: flex;
+  display: none; /* Hidden - using sidebar user card instead */
   align-items: center;
   justify-content: center;
   cursor: pointer;
