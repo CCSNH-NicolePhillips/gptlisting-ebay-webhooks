@@ -190,12 +190,12 @@ export function App() {
       
       // Poll for completion
       setLoadingStatus(`⏳ Generating drafts...`);
-      for (let i = 0; i < 120; i++) { // 4 minutes max
+      for (let i = 0; i < 600; i++) { // 20 minutes max (each product can take 30-60s)
         await new Promise(resolve => setTimeout(resolve, 2000));
         
         const status = await pollDraftStatus(jobId);
         
-        if (status.job.state === 'complete') {
+        if (status.job.state === 'complete' || status.job.state === 'completed') {
           const drafts = status.job.drafts || [];
           setDrafts(drafts);
           console.log(`[doCreateDrafts] Complete: created ${drafts.length} drafts`);
@@ -217,7 +217,7 @@ export function App() {
         }
       }
       
-      throw new Error('Draft generation timed out after 4 minutes');
+      throw new Error('Draft generation timed out after 20 minutes - each product takes 30-60 seconds');
       
     } catch (e) {
       console.error(e); showToast('❌ ' + (e.message || 'Draft creation failed'));
