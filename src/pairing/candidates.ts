@@ -138,6 +138,7 @@ function computeScore(front: FeatureRow, back: FeatureRow, isFrontUnique: boolea
   
   // Brand match
   const brandMatch = front.brandNorm !== '' && back.brandNorm !== '' && front.brandNorm === back.brandNorm;
+  console.log(`[Z2-BRAND] ${front.url.split('/').pop()} (brandNorm="${front.brandNorm}") ↔ ${back.url.split('/').pop()} (brandNorm="${back.brandNorm}"): match=${brandMatch}`);
   if (brandMatch) score += 3;
   
   // Product token Jaccard
