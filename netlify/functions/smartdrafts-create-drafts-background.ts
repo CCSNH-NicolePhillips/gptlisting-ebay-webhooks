@@ -15,6 +15,7 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" });
 
 // Cache categories in memory for the lifetime of this function instance
 let categoriesCache: any[] | null = null;
+let categoriesLoadingPromise: Promise<any[]> | null = null;
 
 type BackgroundPayload = {
   jobId?: string;
@@ -150,10 +151,25 @@ async function callOpenAI(prompt: string): Promise<string> {
 async function getRelevantCategories(product: PairedProduct): Promise<string> {
   try {
     // Use cached categories to avoid repeated Redis calls (15+ seconds each!)
+    // Ensure only ONE concurrent load happens even when multiple products start simultaneously
     if (!categoriesCache) {
-      const start = Date.now();
-      categoriesCache = await listCategories();
-      console.log(`[Cache] Loaded ${categoriesCache.length} categories in ${Date.now() - start}ms`);
+      if (!categoriesLoadingPromise) {
+        const start = Date.now();
+        console.log('[Cache] Starting category load...');
+        categoriesLoadingPromise = listCategories();
+        
+        try {
+          categoriesCache = await categoriesLoadingPromise;
+          console.log(`[Cache] Loaded ${categoriesCache.length} categories in ${Date.now() - start}ms`);
+        } finally {
+          categoriesLoadingPromise = null; // Clear promise after load completes
+        }
+      } else {
+        // Another product is already loading - wait for it
+        console.log('[Cache] Waiting for concurrent category load...');
+        categoriesCache = await categoriesLoadingPromise;
+        console.log('[Cache] Category load completed (from concurrent request)');
+      }
     }
     const allCategories = categoriesCache;
     
