@@ -235,11 +235,15 @@
         console.log('[Auth] ensureAuth: fetching token...');
         try {
           state.token = await state.auth0.getTokenSilently();
+          console.log('[Auth] ensureAuth: authenticated with token');
         } catch (e) {
           console.warn('[Auth] ensureAuth: getTokenSilently failed, trying ID token');
           try {
             const idc = await state.auth0.getIdTokenClaims();
             state.token = idc && (idc.__raw || idc.raw || null);
+            if (state.token) {
+              console.log('[Auth] ensureAuth: authenticated with ID token');
+            }
           } catch (e2) {
             console.error('[Auth] ensureAuth: failed to get any token');
             return false;
@@ -247,7 +251,7 @@
         }
       }
 
-      console.log('[Auth] ensureAuth: authenticated with token');
+      // Token already cached - no need to log
       attachAuthFetch();
       return true;
     }
