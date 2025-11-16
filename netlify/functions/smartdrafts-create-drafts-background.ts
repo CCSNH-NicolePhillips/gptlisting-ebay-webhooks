@@ -129,6 +129,7 @@ async function callOpenAI(prompt: string): Promise<string> {
             },
             { role: "user", content: prompt },
           ],
+          max_tokens: 1500, // Ensure enough tokens for complete JSON response with all aspects
         }),
         GPT_TIMEOUT_MS
       );
