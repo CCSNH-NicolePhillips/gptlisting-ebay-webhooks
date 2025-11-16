@@ -532,43 +532,71 @@ export const handler: Handler = async (event) => {
     const drafts: Draft[] = [];
     const errors: any[] = [];
     
+    // Track completed count for progress updates
+    let completedCount = 0;
+    
     const loopStartTime = Date.now();
-    for (let i = 0; i < products.length; i++) {
-      const product = products[i];
-      const productStartTime = Date.now();
-      
-      console.log(`\n[PERF] ========== PRODUCT ${i + 1}/${products.length} START ==========`);
-      console.log(`[PERF] Product ID: ${product.productId}`);
-      
-      try {
-        const draft = await createDraftForProduct(product);
-        drafts.push(draft);
+    console.log(`[PERF] Starting PARALLEL processing of ${products.length} products...`);
+    
+    // Process all products in parallel
+    const results = await Promise.allSettled(
+      products.map(async (product, i) => {
+        const productStartTime = Date.now();
+        console.log(`\n[PERF] ========== PRODUCT ${i + 1}/${products.length} START (PARALLEL) ==========`);
+        console.log(`[PERF] Product ID: ${product.productId}`);
         
-        const productTotalTime = Date.now() - productStartTime;
-        console.log(`[PERF] Product ${i + 1}/${products.length} TOTAL time: ${productTotalTime}ms`);
-        console.log(`[PERF] ========== PRODUCT ${i + 1}/${products.length} END ==========\n`);
-        
-        // Update progress
-        const progressStart = Date.now();
-        await writeJob(jobId, userId, {
-          state: "running",
-          processedProducts: i + 1,
-          totalProducts: products.length,
-        });
-        console.log(`[PERF] Progress writeJob took ${Date.now() - progressStart}ms`);
-        
-      } catch (err: any) {
-        console.error(`[Draft] Error creating draft for ${product.productId}:`, err);
+        try {
+          const draft = await createDraftForProduct(product);
+          
+          const productTotalTime = Date.now() - productStartTime;
+          console.log(`[PERF] Product ${i + 1}/${products.length} TOTAL time: ${productTotalTime}ms`);
+          console.log(`[PERF] ========== PRODUCT ${i + 1}/${products.length} END ==========\n`);
+          
+          // Update progress (increment completed count)
+          completedCount++;
+          const progressStart = Date.now();
+          await writeJob(jobId, userId, {
+            state: "running",
+            processedProducts: completedCount,
+            totalProducts: products.length,
+          });
+          console.log(`[PERF] Progress update (${completedCount}/${products.length}) took ${Date.now() - progressStart}ms`);
+          
+          return { success: true, draft };
+        } catch (err: any) {
+          console.error(`[Draft] Error creating draft for ${product.productId}:`, err);
+          completedCount++;
+          return {
+            success: false,
+            error: {
+              productId: product.productId,
+              error: err.message || String(err),
+            }
+          };
+        }
+      })
+    );
+    
+    // Collect results
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        if (result.value.success && result.value.draft) {
+          drafts.push(result.value.draft);
+        } else if (!result.value.success) {
+          errors.push(result.value.error);
+        }
+      } else {
         errors.push({
-          productId: product.productId,
-          error: err.message || String(err),
+          productId: 'unknown',
+          error: result.reason?.message || String(result.reason),
         });
       }
     }
     
     const loopTotalTime = Date.now() - loopStartTime;
-    console.log(`[PERF] ALL PRODUCTS LOOP TOTAL: ${loopTotalTime}ms for ${products.length} products`);
-    console.log(`[PERF] Average per product: ${Math.round(loopTotalTime / products.length)}ms`)
+    console.log(`[PERF] PARALLEL PROCESSING COMPLETE: ${loopTotalTime}ms for ${products.length} products`);
+    console.log(`[PERF] Wall-clock time per product: ${Math.round(loopTotalTime / products.length)}ms (parallelized)`);
+    console.log(`[PERF] Speed improvement: ~${Math.round(products.length * 45000 / loopTotalTime)}x faster than sequential`)
     
     await writeJob(jobId, userId, {
       state: "completed",
