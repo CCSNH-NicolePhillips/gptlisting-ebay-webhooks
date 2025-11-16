@@ -651,13 +651,15 @@ export async function runAnalysis(
   const batchSize = Math.min(Math.max(Number(rawBatchSize) || 12, 4), 12);
 
   const checks = await mapLimit(images, 6, (url) => verifyUrl(url));
+  console.log(`[runAnalysis] verifyUrl checks: ${checks.filter(Boolean).length}/${checks.length} passed`);
   let verified = images.filter((_, idx) => {
     const reachable = Boolean(checks[idx]);
     if (!reachable) {
-      console.warn(`⚠️ Skipping unreachable image: ${images[idx]}`);
+      console.warn(`⚠️ Skipping unreachable image (#${idx + 1}): ${images[idx]}`);
     }
     return reachable;
   });
+  console.log(`[runAnalysis] After verification: ${verified.length}/${images.length} images are reachable`);
 
   // Store raw vision insights before they get corrupted by old logic
   const rawVisionInsights: ImageInsight[] = [];
