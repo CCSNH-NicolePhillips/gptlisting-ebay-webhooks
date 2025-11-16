@@ -53,12 +53,34 @@ type Analysis = {
 
 function normalizeBrand(raw: string): string {
   if (!raw || raw === 'Unknown') return '';
-  return raw
+  
+  // Normalize to lowercase and remove corporate suffixes
+  let normalized = raw
     .toLowerCase()
-    .replace(/\b(inc|llc|ltd|corp|company)\b\.?/gi, '')
+    .replace(/\b(inc|llc|ltd|corp|company|brands|supplements|nutrition|wellness|fuel)\b\.?/gi, '')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
     .replace(/\s+/g, ' ');
+  
+  // Handle common brand variations - extract core brand name
+  // "jocko fuel" -> "jocko", "root brands" -> "root", "root wellness" -> "root"
+  // "naked nutrition" -> "naked", "ryse supplements" -> "ryse"
+  // "rkmd rob keller md" -> "rkmd", "evereden barbie collaboration" -> "evereden"
+  const tokens = normalized.split(/\s+/);
+  
+  // If brand has multiple words, keep first significant word (unless it's a common prefix)
+  if (tokens.length > 1) {
+    // Filter out generic words that shouldn't be the primary brand identifier
+    const genericWords = ['by', 'from', 'the', 'a', 'an'];
+    const significantTokens = tokens.filter(t => !genericWords.includes(t) && t.length > 0);
+    
+    // Return first significant token as the core brand
+    if (significantTokens.length > 0) {
+      normalized = significantTokens[0];
+    }
+  }
+  
+  return normalized;
 }
 
 function tokenize(text: string): string[] {

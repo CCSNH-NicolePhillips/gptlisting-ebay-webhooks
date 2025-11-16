@@ -6,14 +6,34 @@
 /**
  * Normalize brand name for comparison.
  * Removes dots, punctuation, corporate suffixes, and normalizes whitespace.
+ * Extracts core brand name to handle variations like "Jocko Fuel" vs "Jocko".
  */
 export function normBrand(s?: string | null): string {
-  return (s || '')
+  if (!s || s === 'Unknown') return '';
+  
+  // Normalize to lowercase and remove corporate suffixes
+  let normalized = (s || '')
     .toLowerCase()
     .replace(/\./g, '')
-    .replace(/\b(inc|llc|co|corp|ltd|company)\b/g, '')
+    .replace(/\b(inc|llc|co|corp|ltd|company|brands|supplements|nutrition|wellness|fuel)\b/g, '')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
+  
+  // Handle common brand variations - extract core brand name
+  const tokens = normalized.split(/\s+/).filter(Boolean);
+  
+  // If brand has multiple words, keep first significant word
+  if (tokens.length > 1) {
+    const genericWords = ['by', 'from', 'the', 'a', 'an'];
+    const significantTokens = tokens.filter(t => !genericWords.includes(t) && t.length > 0);
+    
+    // Return first significant token as the core brand
+    if (significantTokens.length > 0) {
+      return significantTokens[0];
+    }
+  }
+  
+  return normalized;
 }
 
 /**
