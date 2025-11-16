@@ -380,6 +380,18 @@ async function analyzeBatchViaVision(
   try {
     const result = await withRetry(() => runVision({ images: batch, prompt }));
     console.log(`[vision-cache] Vision API returned ${force ? 'FRESH' : 'NEW'} data for ${batch.length} images`);
+    
+    // Log Vision API response structure for debugging
+    console.log(`[vision-debug] Response keys:`, Object.keys(result || {}));
+    console.log(`[vision-debug] Groups count:`, Array.isArray(result?.groups) ? result.groups.length : 0);
+    console.log(`[vision-debug] ImageInsights count:`, Array.isArray(result?.imageInsights) ? result.imageInsights.length : 0);
+    if (Array.isArray(result?.groups) && result.groups.length > 0) {
+      console.log(`[vision-debug] First group:`, JSON.stringify(result.groups[0], null, 2));
+    }
+    if (Array.isArray(result?.imageInsights) && result.imageInsights.length > 0) {
+      console.log(`[vision-debug] First insight:`, JSON.stringify(result.imageInsights[0], null, 2));
+    }
+    
     if (debugLog || LOG_VISION_RESPONSES) {
       try {
         console.log("🤖 Vision raw response:", JSON.stringify(result, null, 2));
@@ -551,6 +563,14 @@ async function analyzeBatchViaVision(
   } catch (err: any) {
     const status = err?.status ?? err?.response?.status;
     console.error("❌ Vision batch failed permanently:", status, err?.message || err);
+    console.error("❌ Full error details:", JSON.stringify({
+      status,
+      message: err?.message,
+      code: err?.code,
+      type: err?.type,
+      error: err?.error,
+      response: err?.response?.data || err?.response,
+    }, null, 2));
     return {
       groups: [],
       _error: `Vision failed: status=${status ?? "n/a"} msg=${err?.message ?? "unknown"}`,
