@@ -128,15 +128,25 @@ export async function runVision(input: VisionInput): Promise<any> {
     const { provider, name } = attempt;
     try {
       if (provider === "openai") {
+        console.log(`[vision-router] Attempting OpenAI with model: ${name}`);
         return await tryOpenAI(images, prompt, name);
       }
       if (provider === "anthropic") {
+        console.log(`[vision-router] Attempting Anthropic with model: ${name}`);
         return await tryAnthropic(images, prompt, name);
       }
       if (provider === "google") {
+        console.log(`[vision-router] Attempting Google with model: ${name}`);
         return await tryGoogle(images, prompt, name);
       }
-    } catch (err) {
+    } catch (err: any) {
+      console.error(`[vision-router] ❌ ${provider} (${name}) failed:`, {
+        status: err?.status,
+        code: err?.code,
+        type: err?.type,
+        message: err?.message,
+        error: err?.error?.message || err?.error,
+      });
       lastError = err;
       continue;
     }
