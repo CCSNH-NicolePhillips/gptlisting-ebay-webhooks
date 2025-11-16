@@ -30,6 +30,7 @@ import { buildCandidates, getCandidateScoresForFront, shouldAutoPairHairCosmetic
 import { cfg, getThresholdsSnapshot, ENGINE_VERSION } from "./config.js";
 import { buildMetrics, formatMetricsLog, PairingMetrics } from "./metrics.js";
 import { groupExtrasWithProducts } from "./groupExtras.js";
+import { enrichListingWithAI } from "../services/listing-enrichment.js";
 
 type Analysis = {
   groups: any[];
@@ -335,6 +336,41 @@ export async function runPairing(opts: {
   
   // Group extras with products
   const products = groupExtrasWithProducts(allPairs, features);
+  
+  // ENRICH LISTINGS: Generate SEO-optimized titles and descriptions with ChatGPT
+  log(`📝 Enriching ${products.length} products with AI-generated titles and descriptions...`);
+  await Promise.all(products.map(async (product) => {
+    try {
+      // Get feature data for front/back images
+      const frontFeature = features.get(product.frontUrl);
+      const backFeature = features.get(product.backUrl);
+      
+      const enriched = await enrichListingWithAI({
+        brand: product.evidence.brand,
+        product: product.evidence.product,
+        variant: product.evidence.variant || undefined,
+        size: frontFeature?.sizeCanonical || backFeature?.sizeCanonical || undefined,
+        category: frontFeature?.categoryTail || backFeature?.categoryTail || undefined,
+        categoryPath: frontFeature?.categoryPath || backFeature?.categoryPath || undefined,
+        claims: [], // TODO: Extract claims from features if available
+        options: {} // TODO: Extract options from features if available
+      });
+      
+      // Add enriched fields to product (extend the type)
+      (product as any).title = enriched.title;
+      (product as any).description = enriched.description;
+      
+      log(`  ✓ ${product.evidence.brand} ${product.evidence.product} - "${enriched.title.slice(0, 50)}..."`);
+    } catch (error) {
+      log(`  ⚠️ Failed to enrich ${product.evidence.brand} ${product.evidence.product}: ${error}`);
+      // Fallback: use simple concatenation
+      (product as any).title = [product.evidence.brand, product.evidence.product, product.evidence.variant]
+        .filter(p => p)
+        .join(' ')
+        .slice(0, 80);
+    }
+  }));
+  log(`✅ Listing enrichment complete`);
   
   // Hydrate display URLs for products
   const displayUrlByKey = new Map<string, string>();
