@@ -16,6 +16,9 @@
     idTokenRaw: null,
   };
 
+  // Track in-flight config load to prevent duplicate requests
+  let configLoadingPromise = null;
+
   function clearLocalAuthState() {
     state.token = null;
     state.user = null;
@@ -45,20 +48,38 @@
   }
 
   async function loadConfig() {
+    // Return cached config if already loaded
+    if (state.cfg) return;
+
+    // If already loading, wait for existing load to complete
+    if (configLoadingPromise) {
+      await configLoadingPromise;
+      return;
+    }
+
+    // Start new load
+    configLoadingPromise = (async () => {
+      try {
+        const res = await fetch('/.netlify/functions/get-public-config');
+        const j = await res.json();
+        if (!res.ok) throw new Error(j.error || 'config');
+        state.cfg = j;
+        const rawMode = (j.AUTH_MODE_RAW || j.AUTH_MODE || 'none').toLowerCase();
+        const hasAuth0 = Boolean(j.AUTH0_DOMAIN && j.AUTH0_CLIENT_ID);
+        state.rawMode = rawMode;
+        state.mode = hasAuth0 && ['admin', 'user', 'mixed', 'auth0'].includes(rawMode) ? 'auth0' : rawMode;
+      } catch (e) {
+        console.warn('Auth config missing; continuing unauthenticated', e);
+        state.mode = 'none';
+        state.cfg = {};
+        state.rawMode = 'none';
+      }
+    })();
+
     try {
-      const res = await fetch('/.netlify/functions/get-public-config');
-      const j = await res.json();
-      if (!res.ok) throw new Error(j.error || 'config');
-      state.cfg = j;
-      const rawMode = (j.AUTH_MODE_RAW || j.AUTH_MODE || 'none').toLowerCase();
-      const hasAuth0 = Boolean(j.AUTH0_DOMAIN && j.AUTH0_CLIENT_ID);
-      state.rawMode = rawMode;
-      state.mode = hasAuth0 && ['admin', 'user', 'mixed', 'auth0'].includes(rawMode) ? 'auth0' : rawMode;
-    } catch (e) {
-      console.warn('Auth config missing; continuing unauthenticated', e);
-      state.mode = 'none';
-      state.cfg = {};
-      state.rawMode = 'none';
+      await configLoadingPromise;
+    } finally {
+      configLoadingPromise = null; // Clear promise after load completes
     }
   }
 
