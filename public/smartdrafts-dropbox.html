@@ -84,17 +84,28 @@
       <!-- Local Upload Panel -->
       <div id="localPanel" style="display:none;">
         <p class="muted">Select photos from your computer to analyze and create listings.</p>
-        <input type="file" id="fileInput" multiple accept="image/*" style="display:none;" />
-        <button id="btnSelectFiles" onclick="document.getElementById('fileInput').click()" style="width:100%;padding:16px;background:#2266dd;">📁 Select Photos</button>
-        <div id="filePreview" style="margin-top:12px;display:none;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-            <span class="muted"><span id="fileCount">0</span> files selected</span>
-            <button onclick="clearFiles()" style="background:#ef4444;padding:6px 12px;">Clear All</button>
+        
+        <div id="uploadArea" style="border:2px dashed #ddd;border-radius:12px;padding:32px;text-align:center;cursor:pointer;transition:all 0.2s;background:#fafafa;">
+          <div style="font-size:48px;margin-bottom:12px;">📁</div>
+          <div style="font-size:16px;font-weight:600;margin-bottom:8px;">Drag & drop photos here</div>
+          <div style="font-size:14px;color:#666;margin-bottom:12px;">or click to browse</div>
+          <div style="font-size:13px;color:#888;">
+            Supports JPG, PNG, WebP (max 10MB each)<br>
+            <strong>Tip:</strong> Select multiple photos at once
           </div>
-          <div id="fileList" style="max-height:200px;overflow-y:auto;border:1px solid #eee;border-radius:8px;padding:8px;"></div>
         </div>
+        <input type="file" id="fileInput" multiple accept="image/*" style="display:none;" />
+        
+        <div id="selectedFiles" style="display:none;margin-top:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <strong><span id="fileCount">0</span> files selected</strong>
+            <button onclick="clearFiles()" style="background:#ef4444;color:white;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;font-weight:600;">Clear All</button>
+          </div>
+          <div id="fileList" style="max-height:240px;overflow-y:auto;border:1px solid #eee;border-radius:8px;padding:8px;background:#fff;"></div>
+        </div>
+        
         <div class="controls" style="margin-top:16px;">
-          <button id="btnScanLocal" disabled>Scan Selected Files</button>
+          <button id="btnScanLocal" disabled style="width:100%;padding:12px;font-size:16px;">🔍 Scan Selected Files</button>
         </div>
       </div>
     </div>
@@ -1205,6 +1216,9 @@
       let selectedFiles = [];
       let uploadMethod = 'dropbox'; // 'dropbox' or 'local'
       
+      const uploadArea = $('#uploadArea');
+      const fileInput = $('#fileInput');
+      
       function switchToDropbox() {
         uploadMethod = 'dropbox';
         $('#dropboxPanel').style.display = 'block';
@@ -1225,40 +1239,73 @@
         $('#tabDropbox').style.color = '#666';
       }
       
-      $('#fileInput')?.addEventListener('change', (e) => {
-        const files = Array.from(e.target.files || []);
-        if (files.length === 0) return;
-        
-        selectedFiles = files;
-        renderFilePreview();
-        $('#btnScanLocal').disabled = false;
+      uploadArea?.addEventListener('click', () => fileInput.click());
+      
+      uploadArea?.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadArea.style.borderColor = '#2266dd';
+        uploadArea.style.background = '#f0f7ff';
       });
       
-      function renderFilePreview() {
-        const preview = $('#filePreview');
+      uploadArea?.addEventListener('dragleave', () => {
+        uploadArea.style.borderColor = '#ddd';
+        uploadArea.style.background = '#fafafa';
+      });
+      
+      uploadArea?.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadArea.style.borderColor = '#ddd';
+        uploadArea.style.background = '#fafafa';
+        const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+        addFiles(files);
+      });
+      
+      fileInput?.addEventListener('change', (e) => {
+        addFiles(Array.from(e.target.files));
+        fileInput.value = ''; // Reset
+      });
+      
+      function addFiles(files) {
+        selectedFiles.push(...files);
+        renderFileList();
+        $('#btnScanLocal').disabled = selectedFiles.length === 0;
+      }
+      
+      function removeFile(idx) {
+        selectedFiles.splice(idx, 1);
+        renderFileList();
+        $('#btnScanLocal').disabled = selectedFiles.length === 0;
+      }
+      
+      function renderFileList() {
+        const container = $('#selectedFiles');
         const list = $('#fileList');
         const count = $('#fileCount');
         
         if (selectedFiles.length === 0) {
-          preview.style.display = 'none';
+          container.style.display = 'none';
           return;
         }
         
-        preview.style.display = 'block';
+        container.style.display = 'block';
         count.textContent = selectedFiles.length;
         
         list.innerHTML = selectedFiles.map((file, idx) => {
           const sizeMB = (file.size / 1024 / 1024).toFixed(2);
-          return `<div style="padding:4px 8px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;">
-            <span style="font-size:13px;">${file.name} <span style="color:#666;">(${sizeMB} MB)</span></span>
+          return `<div style="padding:8px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;">
+            <div style="flex:1;">
+              <div style="font-size:14px;font-weight:500;">${file.name}</div>
+              <div style="font-size:12px;color:#666;">${sizeMB} MB</div>
+            </div>
+            <button onclick="removeFile(${idx})" style="background:#ef4444;color:white;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:12px;">Remove</button>
           </div>`;
         }).join('');
       }
       
       function clearFiles() {
         selectedFiles = [];
-        $('#fileInput').value = '';
-        $('#filePreview').style.display = 'none';
+        fileInput.value = '';
+        renderFileList();
         $('#btnScanLocal').disabled = true;
       }
       
@@ -1376,6 +1423,7 @@
       window.switchToDropbox = switchToDropbox;
       window.switchToLocal = switchToLocal;
       window.clearFiles = clearFiles;
+      window.removeFile = removeFile;
 
       (async () => {
         const authed = await ensureAuth();
