@@ -200,14 +200,20 @@ async function listFolder(token: string, path: string): Promise<DropboxEntry[]> 
     recursive: true,
     path,
   });
+  console.log(`[listFolder] Initial batch: ${resp?.entries?.length || 0} entries, has_more: ${resp?.has_more}`);
   entries = entries.concat((resp?.entries as DropboxEntry[]) || []);
   while (resp?.has_more) {
     resp = await dropboxApi(token, "https://api.dropboxapi.com/2/files/list_folder/continue", {
       cursor: resp.cursor,
     });
+    console.log(`[listFolder] Continue batch: ${resp?.entries?.length || 0} entries, has_more: ${resp?.has_more}`);
     entries = entries.concat((resp?.entries as DropboxEntry[]) || []);
   }
-  return entries.filter((entry) => entry[".tag"] === "file" && isImage(entry.name));
+  const allFiles = entries.filter((entry) => entry[".tag"] === "file");
+  const imageFiles = allFiles.filter((entry) => isImage(entry.name));
+  console.log(`[listFolder] Total entries: ${entries.length}, files: ${allFiles.length}, images: ${imageFiles.length}`);
+  console.log(`[listFolder] Image filenames:`, imageFiles.map(e => e.name).sort());
+  return imageFiles;
 }
 
 async function dbxSharedRawLink(access: string, filePath: string): Promise<string> {
