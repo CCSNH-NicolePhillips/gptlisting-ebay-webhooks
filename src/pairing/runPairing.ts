@@ -387,6 +387,14 @@ export async function runPairing(opts: {
     const backKey = p.backUrl?.toLowerCase() || '';
     p.heroDisplayUrl = displayUrlByKey.get(frontKey) || p.frontUrl;
     p.backDisplayUrl = displayUrlByKey.get(backKey) || p.backUrl;
+    
+    // Convert extras URLs to display URLs
+    if (p.extras && p.extras.length > 0) {
+      p.extras = p.extras.map(extraUrl => {
+        const extraKey = extraUrl?.toLowerCase() || '';
+        return displayUrlByKey.get(extraKey) || extraUrl;
+      });
+    }
   }
   
   // Filter out singletons for images that were auto-paired
