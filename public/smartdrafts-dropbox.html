@@ -52,23 +52,51 @@
     </header>
 
     <div class="panel">
-      <h2>Pick a Dropbox folder</h2>
-      <p class="muted">We load your Dropbox folders, defaulting to the path saved on the Connect page. Change the selection to scan a different folder.</p>
-      <select id="folderSelect"></select>
-      <div class="controls">
-        <button id="btnScanFolder">Scan Folder</button>
-        <button id="btnRescanFolder" style="background:#555;">Force Rescan</button>
-        <label class="muted" style="display:flex;align-items:center;gap:6px;">
-          <input id="includeDebug" type="checkbox" />
-          Include debug output
-        </label>
+      <h2>Source Selection</h2>
+      <p class="muted">Choose your image source: upload files from your computer or scan a Dropbox folder.</p>
+      
+      <!-- Upload Method Tabs -->
+      <div style="display:flex;gap:8px;margin-bottom:16px;border-bottom:2px solid #eee;">
+        <button id="tabDropbox" onclick="switchToDropbox()" style="background:transparent;color:#111;border:none;border-bottom:3px solid #111;padding:8px 16px;font-weight:600;">Dropbox Folder</button>
+        <button id="tabLocal" onclick="switchToLocal()" style="background:transparent;color:#666;border:none;border-bottom:3px solid transparent;padding:8px 16px;font-weight:600;">Local Upload</button>
       </div>
-      <div style="margin:12px 0; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-        <input id="defaultBrand" type="text" placeholder="Default Brand (optional)" style="width:260px;" autocomplete="off" />
-        <input id="keywords" type="text" placeholder="Keywords (comma separated, optional)" style="width:320px;" autocomplete="off" />
-        <button id="btnGenerate">Generate with GPT</button>
+      
+      <!-- Dropbox Panel -->
+      <div id="dropboxPanel">
+        <p class="muted">We load your Dropbox folders, defaulting to the path saved on the Connect page. Change the selection to scan a different folder.</p>
+        <select id="folderSelect"></select>
+        <div class="controls">
+          <button id="btnScanFolder">Scan Folder</button>
+          <button id="btnRescanFolder" style="background:#555;">Force Rescan</button>
+          <label class="muted" style="display:flex;align-items:center;gap:6px;">
+            <input id="includeDebug" type="checkbox" />
+            Include debug output
+          </label>
+        </div>
+        <div style="margin:12px 0; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <input id="defaultBrand" type="text" placeholder="Default Brand (optional)" style="width:260px;" autocomplete="off" />
+          <input id="keywords" type="text" placeholder="Keywords (comma separated, optional)" style="width:320px;" autocomplete="off" />
+          <button id="btnGenerate">Generate with GPT</button>
+        </div>
+        <div class="muted" id="folderInfo"></div>
       </div>
-      <div class="muted" id="folderInfo"></div>
+      
+      <!-- Local Upload Panel -->
+      <div id="localPanel" style="display:none;">
+        <p class="muted">Select photos from your computer to analyze and create listings.</p>
+        <input type="file" id="fileInput" multiple accept="image/*" style="display:none;" />
+        <button id="btnSelectFiles" onclick="document.getElementById('fileInput').click()" style="width:100%;padding:16px;background:#2266dd;">📁 Select Photos</button>
+        <div id="filePreview" style="margin-top:12px;display:none;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <span class="muted"><span id="fileCount">0</span> files selected</span>
+            <button onclick="clearFiles()" style="background:#ef4444;padding:6px 12px;">Clear All</button>
+          </div>
+          <div id="fileList" style="max-height:200px;overflow-y:auto;border:1px solid #eee;border-radius:8px;padding:8px;"></div>
+        </div>
+        <div class="controls" style="margin-top:16px;">
+          <button id="btnScanLocal" disabled>Scan Selected Files</button>
+        </div>
+      </div>
     </div>
 
     <div id="status" class="muted"></div>
@@ -1168,10 +1196,186 @@
         });
       }
 
-  updateGenerateState();
-  setWarnings([]);
-  renderDebugData(null);
-  setRawOutput(null);
+      updateGenerateState();
+      setWarnings([]);
+      renderDebugData(null);
+      setRawOutput(null);
+
+      // === FILE UPLOAD FUNCTIONALITY ===
+      let selectedFiles = [];
+      let uploadMethod = 'dropbox'; // 'dropbox' or 'local'
+      
+      function switchToDropbox() {
+        uploadMethod = 'dropbox';
+        $('#dropboxPanel').style.display = 'block';
+        $('#localPanel').style.display = 'none';
+        $('#tabDropbox').style.borderBottom = '3px solid #111';
+        $('#tabDropbox').style.color = '#111';
+        $('#tabLocal').style.borderBottom = '3px solid transparent';
+        $('#tabLocal').style.color = '#666';
+      }
+      
+      function switchToLocal() {
+        uploadMethod = 'local';
+        $('#dropboxPanel').style.display = 'none';
+        $('#localPanel').style.display = 'block';
+        $('#tabLocal').style.borderBottom = '3px solid #111';
+        $('#tabLocal').style.color = '#111';
+        $('#tabDropbox').style.borderBottom = '3px solid transparent';
+        $('#tabDropbox').style.color = '#666';
+      }
+      
+      $('#fileInput')?.addEventListener('change', (e) => {
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
+        
+        selectedFiles = files;
+        renderFilePreview();
+        $('#btnScanLocal').disabled = false;
+      });
+      
+      function renderFilePreview() {
+        const preview = $('#filePreview');
+        const list = $('#fileList');
+        const count = $('#fileCount');
+        
+        if (selectedFiles.length === 0) {
+          preview.style.display = 'none';
+          return;
+        }
+        
+        preview.style.display = 'block';
+        count.textContent = selectedFiles.length;
+        
+        list.innerHTML = selectedFiles.map((file, idx) => {
+          const sizeMB = (file.size / 1024 / 1024).toFixed(2);
+          return `<div style="padding:4px 8px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:13px;">${file.name} <span style="color:#666;">(${sizeMB} MB)</span></span>
+          </div>`;
+        }).join('');
+      }
+      
+      function clearFiles() {
+        selectedFiles = [];
+        $('#fileInput').value = '';
+        $('#filePreview').style.display = 'none';
+        $('#btnScanLocal').disabled = true;
+      }
+      
+      async function uploadFilesInBatches(files) {
+        const BATCH_SIZE = 6;
+        const MAX_SIZE_MB = 4;
+        const uploaded = [];
+        
+        for (let i = 0; i < files.length; i += BATCH_SIZE) {
+          const batch = files.slice(i, i + BATCH_SIZE);
+          setStatus(`Uploading files ${i + 1}-${Math.min(i + BATCH_SIZE, files.length)} of ${files.length}...`);
+          
+          const batchResults = await Promise.all(
+            batch.map(async (file) => {
+              if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+                console.warn(`File ${file.name} exceeds ${MAX_SIZE_MB}MB, skipping`);
+                return null;
+              }
+              
+              const formData = new FormData();
+              formData.append('file', file);
+              
+              const resp = await exec('/.netlify/functions/stage-image-bg', {
+                method: 'POST',
+                body: formData,
+              });
+              
+              if (!resp.ok || !resp.stagedUrl) {
+                throw new Error(`Upload failed for ${file.name}: ${resp.error || 'Unknown error'}`);
+              }
+              
+              return { name: file.name, stagedUrl: resp.stagedUrl };
+            })
+          );
+          
+          uploaded.push(...batchResults.filter(r => r !== null));
+        }
+        
+        return uploaded;
+      }
+      
+      $('#btnScanLocal')?.addEventListener('click', async () => {
+        if (selectedFiles.length === 0) {
+          setStatus('Please select files first.');
+          return;
+        }
+        
+        try {
+          $('#btnScanLocal').disabled = true;
+          $('#btnScanLocal').textContent = 'Uploading...';
+          
+          // Upload files
+          const uploadedFiles = await uploadFilesInBatches(selectedFiles);
+          const stagedUrls = uploadedFiles.map(f => f.stagedUrl);
+          
+          setStatus('Starting analysis...');
+          $('#btnScanLocal').textContent = 'Analyzing...';
+          
+          // Start scan with stagedUrls
+          const scanRes = await exec('/.netlify/functions/smartdrafts-scan-bg', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ stagedUrls })
+          });
+          
+          if (!scanRes.ok || !scanRes.jobId) {
+            throw new Error(scanRes.error || 'Scan failed to start');
+          }
+          
+          const jobId = scanRes.jobId;
+          setStatus(`Scan started (Job ID: ${jobId}). Polling for results...`);
+          
+          // Poll for completion
+          const job = await pollSmartDraftScan(jobId, {
+            onUpdate: (data) => {
+              if (data.progress) {
+                const pct = Math.round((data.progress.current / data.progress.total) * 100);
+                setStatus(`Analyzing... ${pct}% complete (${data.progress.current}/${data.progress.total} images)`);
+              } else {
+                setStatus(`Analyzing... (${data.state || 'pending'})`);
+              }
+            },
+            maxAttempts: 120,
+          });
+          
+          setRawOutput({ jobId, ...job }, true);
+          
+          if (job.state === 'complete' && job.result) {
+            const groups = job.result.groups || [];
+            renderGroups(groups);
+            if (groups.length) {
+              setStatus(`✅ Scan complete! Found ${groups.length} product group(s).`);
+              
+              // Show pairing section
+              if (pairingSection) pairingSection.style.display = 'block';
+            } else {
+              setStatus('Scan complete, but no products detected.');
+            }
+          } else if (job.state === 'error') {
+            setStatus(`❌ Scan failed: ${job.error || 'Unknown error'}`);
+          } else {
+            setStatus(`Job finished with state: ${job.state}`);
+          }
+          
+        } catch (err) {
+          setStatus(`❌ Error: ${err?.message || 'Unknown error'}`);
+          console.error('Scan error:', err);
+        } finally {
+          $('#btnScanLocal').disabled = false;
+          $('#btnScanLocal').textContent = 'Scan Selected Files';
+        }
+      });
+      
+      // Make functions global
+      window.switchToDropbox = switchToDropbox;
+      window.switchToLocal = switchToLocal;
+      window.clearFiles = clearFiles;
 
       (async () => {
         const authed = await ensureAuth();
