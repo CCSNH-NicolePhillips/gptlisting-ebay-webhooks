@@ -28,7 +28,7 @@ export interface CandidateScore {
   packagingBoost: number;    // e.g., +2.0 for dropper-bottle matches
   catTailOverlap: boolean;
   cosmeticBackCue: boolean;
-  brandFlag: 'equal'|'mismatch'|'unknownRescue'|'unknown';
+  brandFlag: 'equal'|'mismatch'|'unknownRescue'|'distributorRescue'|'unknown';
   proximityBoost: number;    // +0.5 if same folder or similar filename
   barcodeBoost: number;      // +0.5 if back has barcode and front is unique
   // Legacy fields for backward compat
@@ -181,6 +181,19 @@ function computeScore(front: FeatureRow, back: FeatureRow, isFrontUnique: boolea
       score += 1.0;
       unknownRescueApplied = true;
       brandFlag = 'unknownRescue';
+    }
+  }
+  
+  // Distributor mismatch rescue: if brands don't match but other evidence is strong
+  // (handles contract manufacturing where back says "Vitaminne" but front says "RKMD")
+  // Give partial credit if: product match + packaging + (size OR category)
+  if (!brandMatch && !unknownRescueApplied && front.brandNorm && back.brandNorm) {
+    const hasStrongProductMatch = prodJaccard >= 0.5;
+    const hasSupportingEvidence = (sizeEq || catTailOverlap) && pkgMatch;
+    if (hasStrongProductMatch && hasSupportingEvidence) {
+      score += 1.5; // Less than brand match (3) but enough to compensate
+      brandFlag = 'distributorRescue';
+      console.log(`[Z2-DISTRIBUTOR-RESCUE] ${front.url.split('/').pop()} (brand="${front.brandNorm}") ↔ ${back.url.split('/').pop()} (brand="${back.brandNorm}"): prodJac=${prodJaccard.toFixed(2)} pkg=${pkgMatch} size=${sizeEq} cat=${catTailOverlap}`);
     }
   }
   if (!brandMatch && !unknownRescueApplied && (!front.brandNorm || !back.brandNorm)) {
