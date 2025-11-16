@@ -1159,6 +1159,7 @@ body {
     gap: 12px;
     padding: 16px;
     min-height: auto;
+    position: relative; /* Remove sticky on mobile to prevent overlay */
   }
   
   .dp-topbar-left {
