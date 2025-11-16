@@ -8,7 +8,7 @@ import { DraftsPanel } from './components/DraftsPanel.js';
 import { MetricsPanel } from './components/MetricsPanel.js';
 import { DebugPanel } from './components/DebugPanel.js';
 import { FolderSelector } from './components/FolderSelector.js';
-import { enqueueAnalyzeLive, pollAnalyzeLive, runPairingLive, resetFolderLive, getMetricsLive, createDraftsLive, publishDraftsToEbay } from './lib/api.js';
+import { enqueueAnalyzeLive, pollAnalyzeLive, runPairingLive, resetFolderLive, getMetricsLive, createDraftsLive, pollDraftStatus, publishDraftsToEbay } from './lib/api.js';
 import { mockLoadAnalysis, mockRunPairing } from './lib/mockServer.js';
 import { normalizeFolderInput } from './lib/urlKey.js';
 
@@ -176,40 +176,52 @@ export function App() {
         throw new Error('Run Pairing first to get products');
       }
       
-      // Server caps at 1 product per request to avoid timeout - send sequentially with delay
-      const BATCH_SIZE = 1;
-      const allDrafts = [];
-      const totalProducts = pairing.products.length;
+      // Start background job to create drafts
+      setLoadingStatus(`🚀 Starting draft generation...`);
+      const startRes = await createDraftsLive(pairing.products);
       
-      for (let i = 0; i < totalProducts; i += BATCH_SIZE) {
-        const batch = pairing.products.slice(i, i + BATCH_SIZE);
-        const batchNum = Math.floor(i / BATCH_SIZE) + 1;
-        const totalBatches = Math.ceil(totalProducts / BATCH_SIZE);
+      if (!startRes.ok || !startRes.jobId) {
+        throw new Error(startRes.error || 'Failed to start draft generation');
+      }
+      
+      const jobId = startRes.jobId;
+      console.log(`[doCreateDrafts] Job started: ${jobId}`);
+      showToast(`Draft generation started (${jobId.slice(0,8)}...)`);
+      
+      // Poll for completion
+      setLoadingStatus(`⏳ Generating drafts...`);
+      for (let i = 0; i < 120; i++) { // 4 minutes max
+        await new Promise(resolve => setTimeout(resolve, 2000));
         
-        setLoadingStatus(`🤖 Generating draft ${batchNum}/${totalBatches}...`);
+        const status = await pollDraftStatus(jobId);
         
-        const result = await createDraftsLive(batch);
+        if (status.job.state === 'complete') {
+          const drafts = status.job.drafts || [];
+          setDrafts(drafts);
+          console.log(`[doCreateDrafts] Complete: created ${drafts.length} drafts`);
+          console.log(`[doCreateDrafts] Draft IDs:`, drafts.map(d => d.productId));
+          showToast(`✨ Generated ${drafts.length} listing(s)!`);
+          setLoadingStatus('');
+          setTab('Drafts');
+          return;
+        }
         
-        // Server returns x-drafts-processed header if capped
-        const processed = result.summary?.succeeded || result.drafts?.length || 0;
-        console.log(`[doCreateDrafts] Batch ${batchNum}: processed ${processed}/${batch.length}`);
+        if (status.job.state === 'error') {
+          throw new Error(status.job.error || 'Draft generation failed');
+        }
         
-        allDrafts.push(...(result.drafts || []));
-        
-        // Small delay between items to avoid overwhelming serverless
-        if (i + BATCH_SIZE < totalProducts) {
-          await new Promise(r => setTimeout(r, 500));
+        // Update progress
+        if (status.job.processedProducts && status.job.totalProducts) {
+          const pct = Math.round((status.job.processedProducts / status.job.totalProducts) * 100);
+          setLoadingStatus(`🤖 Generating drafts... ${pct}% (${status.job.processedProducts}/${status.job.totalProducts})`);
         }
       }
       
-      setDrafts(allDrafts);
-      console.log(`[doCreateDrafts] Final: created ${allDrafts.length} drafts from ${totalProducts} products`);
-      console.log(`[doCreateDrafts] Draft IDs:`, allDrafts.map(d => d.productId));
-      showToast(`✨ Generated ${allDrafts.length} listing(s)!`);
-      setLoadingStatus('');
-      setTab('Drafts');
+      throw new Error('Draft generation timed out after 4 minutes');
+      
     } catch (e) {
       console.error(e); showToast('❌ ' + (e.message || 'Draft creation failed'));
+      setLoadingStatus('');
     } finally { setLoading(false); }
   }
 
