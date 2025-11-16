@@ -694,10 +694,9 @@
         if (!r.ok) {
           // Check for auth errors
           if (r.status === 401 || r.status === 403) {
-            console.error('[Auth] Unauthorized request - Status:', r.status, 'URL:', url, 'Response:', data);
-            alert(`DEBUG: Auth error ${r.status} - ${JSON.stringify(data).slice(0, 200)}`);
-            // TEMPORARILY DISABLED: sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
-            // TEMPORARILY DISABLED: window.location.replace('/login.html');
+            console.error('[Auth] Unauthorized request, redirecting to login...');
+            sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
+            window.location.replace('/login.html');
             throw new Error('Authentication required');
           }
           // More descriptive error for 502
@@ -713,10 +712,9 @@
         // Check if it's an auth-related error
         if (err.message?.includes('Authentication expired') ||
             err.message?.includes('AUTH_EXPIRED')) {
-          console.error('[Auth] Token expired - Error:', err.message);
-          alert(`DEBUG: Token expired - ${err.message}`);
-          // TEMPORARILY DISABLED: sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
-          // TEMPORARILY DISABLED: window.location.replace('/login.html');
+          console.error('[Auth] Token expired, redirecting to login...');
+          sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
+          window.location.replace('/login.html');
         }
         throw err;
       }
