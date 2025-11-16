@@ -536,46 +536,71 @@ export const handler: Handler = async (event) => {
     let completedCount = 0;
     
     const loopStartTime = Date.now();
-    console.log(`[PERF] Starting PARALLEL processing of ${products.length} products...`);
+    console.log(`[PERF] Starting BATCHED processing of ${products.length} products...`);
     
-    // Process all products in parallel
-    const results = await Promise.allSettled(
-      products.map(async (product, i) => {
-        const productStartTime = Date.now();
-        console.log(`\n[PERF] ========== PRODUCT ${i + 1}/${products.length} START (PARALLEL) ==========`);
-        console.log(`[PERF] Product ID: ${product.productId}`);
-        
-        try {
-          const draft = await createDraftForProduct(product);
+    // Process products in batches to avoid overwhelming connections
+    // CONCURRENCY_LIMIT controls how many products process simultaneously
+    const CONCURRENCY_LIMIT = 3; // Conservative: 3 products at a time
+    const batches: typeof products[] = [];
+    
+    for (let i = 0; i < products.length; i += CONCURRENCY_LIMIT) {
+      batches.push(products.slice(i, i + CONCURRENCY_LIMIT));
+    }
+    
+    console.log(`[PERF] Processing ${batches.length} batches with concurrency limit of ${CONCURRENCY_LIMIT}`);
+    
+    const results: PromiseSettledResult<any>[] = [];
+    
+    // Process each batch sequentially, but products within batch run in parallel
+    for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+      const batch = batches[batchIndex];
+      const batchStartTime = Date.now();
+      console.log(`[PERF] === Starting batch ${batchIndex + 1}/${batches.length} (${batch.length} products) ===`);
+      
+      const batchResults = await Promise.allSettled(
+        batch.map(async (product, i) => {
+          const absoluteIndex = batchIndex * CONCURRENCY_LIMIT + i;
+          const productStartTime = Date.now();
+          console.log(`\n[PERF] ========== PRODUCT ${absoluteIndex + 1}/${products.length} START (Batch ${batchIndex + 1}) ==========`);
+          console.log(`[PERF] Product ID: ${product.productId}`);
           
-          const productTotalTime = Date.now() - productStartTime;
-          console.log(`[PERF] Product ${i + 1}/${products.length} TOTAL time: ${productTotalTime}ms`);
-          console.log(`[PERF] ========== PRODUCT ${i + 1}/${products.length} END ==========\n`);
-          
-          // Update progress (increment completed count)
-          completedCount++;
-          const progressStart = Date.now();
-          await writeJob(jobId, userId, {
-            state: "running",
-            processedProducts: completedCount,
-            totalProducts: products.length,
-          });
-          console.log(`[PERF] Progress update (${completedCount}/${products.length}) took ${Date.now() - progressStart}ms`);
-          
-          return { success: true, draft };
-        } catch (err: any) {
-          console.error(`[Draft] Error creating draft for ${product.productId}:`, err);
-          completedCount++;
-          return {
-            success: false,
-            error: {
-              productId: product.productId,
-              error: err.message || String(err),
-            }
-          };
-        }
-      })
-    );
+          try {
+            const draft = await createDraftForProduct(product);
+            
+            const productTotalTime = Date.now() - productStartTime;
+            console.log(`[PERF] Product ${absoluteIndex + 1}/${products.length} TOTAL time: ${productTotalTime}ms`);
+            console.log(`[PERF] ========== PRODUCT ${absoluteIndex + 1}/${products.length} END ==========\n`);
+            
+            // Update progress (increment completed count)
+            completedCount++;
+            const progressStart = Date.now();
+            await writeJob(jobId, userId, {
+              state: "running",
+              processedProducts: completedCount,
+              totalProducts: products.length,
+            });
+            console.log(`[PERF] Progress update (${completedCount}/${products.length}) took ${Date.now() - progressStart}ms`);
+            
+            return { success: true, draft };
+          } catch (err: any) {
+            console.error(`[Draft] Error creating draft for ${product.productId}:`, err);
+            completedCount++;
+            return {
+              success: false,
+              error: {
+                productId: product.productId,
+                error: err.message || String(err),
+              }
+            };
+          }
+        })
+      );
+      
+      results.push(...batchResults);
+      
+      const batchTotalTime = Date.now() - batchStartTime;
+      console.log(`[PERF] === Batch ${batchIndex + 1}/${batches.length} completed in ${batchTotalTime}ms ===\n`);
+    }
     
     // Collect results
     for (const result of results) {
@@ -594,9 +619,9 @@ export const handler: Handler = async (event) => {
     }
     
     const loopTotalTime = Date.now() - loopStartTime;
-    console.log(`[PERF] PARALLEL PROCESSING COMPLETE: ${loopTotalTime}ms for ${products.length} products`);
-    console.log(`[PERF] Wall-clock time per product: ${Math.round(loopTotalTime / products.length)}ms (parallelized)`);
-    console.log(`[PERF] Speed improvement: ~${Math.round(products.length * 45000 / loopTotalTime)}x faster than sequential`)
+    console.log(`[PERF] BATCHED PROCESSING COMPLETE: ${loopTotalTime}ms for ${products.length} products`);
+    console.log(`[PERF] Wall-clock time per product: ${Math.round(loopTotalTime / products.length)}ms (batched with concurrency ${CONCURRENCY_LIMIT})`);
+    console.log(`[PERF] Speed improvement vs sequential: ~${Math.round(products.length * 45000 / loopTotalTime)}x faster`);
     
     await writeJob(jobId, userId, {
       state: "completed",
