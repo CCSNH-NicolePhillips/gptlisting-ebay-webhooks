@@ -6,6 +6,13 @@ import { lookupMarketPrice } from "./price-lookup.js";
 import { deleteCachedBatch, getCachedBatch, setCachedBatch } from "./vision-cache.js";
 import { runVision } from "./vision-router.js";
 
+const VISION_CONCURRENCY: number = (() => {
+  const raw = process.env.VISION_CONCURRENCY ?? "1";
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 1) return 1;
+  return parsed;
+})();
+
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -131,6 +138,28 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T, index: nu
 
   const workers = new Array(Math.min(limit, items.length)).fill(0).map(() => worker());
   await Promise.all(workers);
+  return results;
+}
+
+async function runWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  if (!items.length) return [];
+  const limit = Math.max(1, Math.min(concurrency, items.length));
+  const results: R[] = new Array(items.length);
+  let index = 0;
+
+  const runners = Array.from({ length: limit }).map(async () => {
+    while (true) {
+      const current = index++;
+      if (current >= items.length) break;
+      results[current] = await worker(items[current], current);
+    }
+  });
+
+  await Promise.all(runners);
   return results;
 }
 
@@ -781,16 +810,21 @@ export async function runAnalysis(
     }
   }
 
-  // ALWAYS analyze images individually to avoid Vision API confusion
-  const verifiedBatches = verified.map(url => [url]); // Each "batch" is 1 image
+  // Analyze images individually (one image per Vision call) but allow controlled concurrency
+  const verifiedBatches = verified.map((url) => [url]);
 
-  const analyzedResults: any[] = [];
   const warnings: string[] = [...preflightWarnings];
 
-  for (const [idx, batch] of verifiedBatches.entries()) {
+  console.log(
+    `[vision] Starting analysis for ${verifiedBatches.length} images with concurrency=${VISION_CONCURRENCY}`
+  );
+  const visionStart = Date.now();
+
+  // Phase 1: TODO - run Vision analysis with controlled concurrency (3–4 in-flight requests).
+  const analyzedResults: any[] = await runWithConcurrency(verifiedBatches, VISION_CONCURRENCY, async (batch, idx) => {
     console.log(`🧠 Analyzing image ${idx + 1}/${verifiedBatches.length} individually`);
-  const metaForBatch = batch.map((url) => metaLookup.get(url) || { url, name: "", folder: "" });
-  const result = await analyzeBatchViaVision(batch, metaForBatch, debugVisionResponse, force);
+    const metaForBatch = batch.map((url) => metaLookup.get(url) || { url, name: "", folder: "" });
+    const result = await analyzeBatchViaVision(batch, metaForBatch, debugVisionResponse, force);
     if (result?._error) {
       warnings.push(`Image ${idx + 1}: ${result._error}`);
     }
@@ -802,7 +836,9 @@ export async function runAnalysis(
     }
 
     if (Array.isArray((result as any)?.imageInsights)) {
-      console.log(`📦 Image ${idx + 1}: Using ${(result as any)?._cache ? 'CACHED' : 'FRESH'} data, ${(result as any).imageInsights.length} insights`);
+      console.log(
+        `📦 Image ${idx + 1}: Using ${(result as any)?._cache ? "CACHED" : "FRESH"} data, ${(result as any).imageInsights.length} insights`
+      );
       for (const insight of (result as any).imageInsights as ImageInsight[]) {
         if (!insight?.url) continue;
         // Debug first insight to see what fields we have
@@ -815,8 +851,12 @@ export async function runAnalysis(
         insightMap.set(insight.url, insight);
       }
     }
-    analyzedResults.push(result);
-  }
+    return result;
+  });
+
+  console.log(
+    `[vision] Completed analysis for ${verifiedBatches.length} images in ${Date.now() - visionStart}ms (concurrency=${VISION_CONCURRENCY})`
+  );
 
   const merged = mergeGroups(analyzedResults);
   let orphanDetails: Array<{ url: string; name?: string; folder?: string }> = [];

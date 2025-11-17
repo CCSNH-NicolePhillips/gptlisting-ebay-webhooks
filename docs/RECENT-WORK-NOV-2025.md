@@ -1,7 +1,45 @@
 # Recent Work - November 2025
 
 ## Summary
-Major rebrand from GPTListing to **DraftPilot**, local file upload feature, and **visual-first image pairing system** achieving 92%+ pair rates.
+Major rebrand from GPTListing to **DraftPilot**, local file upload feature, **visual-first image pairing system** (92%+ pair rate), and **Phase 1 Vision concurrency groundwork**.
+
+---
+
+## ⚡ Vision Concurrency Phase 1 (November 17, 2025)
+
+### Goal
+Speed up SmartDrafts Vision analysis by running multiple single-image calls in parallel while keeping image quality, pairing behavior, and eBay outputs unchanged.
+
+### Code Changes
+- Added `VISION_CONCURRENCY` env-driven constant (default **1**) in `src/lib/analyze-core.ts`.
+- Implemented `runWithConcurrency()` helper for controlled parallelism.
+- Refactored the Vision loop to use concurrency while preserving per-image logging/order.
+- Added timing logs:
+  - `[vision] Starting analysis for N images with concurrency=X`
+  - `[vision] Completed analysis for N images in Yms (concurrency=X)`
+
+### Testing Instructions
+
+**Option A – Netlify Preview (safer)**
+1. Push branch: `git push origin feat/vision-concurrency-phase1`.
+2. Netlify generates preview: `https://deploy-preview-XYZ--draftpilot-ai.netlify.app`.
+3. Visit `/new-smartdrafts/`, select `testDropbox/newStuff`, click **Analyze** (no Force Rescan).
+4. Observe elapsed time vs. production; check logs for the new `[vision]` start/complete lines.
+
+**Option B – Production with feature flag**
+1. Merge branch with `VISION_CONCURRENCY` defaulting to **1** (no behavior change).
+2. In Netlify env vars, set `VISION_CONCURRENCY=4` and redeploy.
+3. Run `/new-smartdrafts/` on production with `testDropbox/newStuff`.
+4. Verify:
+   - Logs show concurrency level and duration.
+   - Total Vision time drops well below prior ~10 minutes.
+5. If issues appear, revert env value to **1** (no code change needed).
+
+**Acceptance Criteria**
+- Same number of detected products/pairs as before (no behavior drift).
+- Vision URLs/resolution untouched; high-res images still sent to eBay.
+- Setting `VISION_CONCURRENCY=1` restores fully serial behavior.
+- Concurrency >1 yields faster end-to-end Vision time on the 26-image dataset.
 
 ---
 
