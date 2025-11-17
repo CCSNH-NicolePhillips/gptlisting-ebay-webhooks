@@ -259,6 +259,14 @@ export const handler: Handler = async (event) => {
     }, originHdr, methods);
   }
 
+  // Convert imageInsights from object to array if needed (runPairing expects array)
+  const normalizedAnalysis = {
+    groups: analysis.groups,
+    imageInsights: Array.isArray(analysis.imageInsights)
+      ? analysis.imageInsights
+      : Object.values(analysis.imageInsights || {})
+  };
+
   try {
     // USE NEW PAIRING SYSTEM with color matching, distributor rescue, and role override
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || '' });
@@ -266,7 +274,7 @@ export const handler: Handler = async (event) => {
     console.log('[PAIR] Using NEW pairing system (runPairing) with visual similarity');
     const { result, metrics } = await runPairing({
       client,
-      analysis,
+      analysis: normalizedAnalysis,
       log: console.log
     });
     
@@ -296,10 +304,8 @@ export const handler: Handler = async (event) => {
     // Build debug summary
     const debugSummary: string[] = [];
     
-    // Add role information
-    const insights = Array.isArray(analysis.imageInsights)
-      ? analysis.imageInsights
-      : Object.values(analysis.imageInsights || {});
+    // Add role information (use normalizedAnalysis which has array)
+    const insights = normalizedAnalysis.imageInsights;
     const roleMap: [string, string][] = [];
     for (const ins of insights) {
       const k = ins.key || urlKey(ins.url);
@@ -309,7 +315,7 @@ export const handler: Handler = async (event) => {
 
     // Add brand information
     const brandMap: [string, string][] = [];
-    for (const g of (analysis.groups || [])) {
+    for (const g of (normalizedAnalysis.groups || [])) {
       const b = String(g.brand || '').trim();
       for (const u of (g.images || [])) {
         const k = urlKey(u);
@@ -320,7 +326,7 @@ export const handler: Handler = async (event) => {
 
     // Add category information
     const catMap: [string, string][] = [];
-    for (const g of (analysis.groups || [])) {
+    for (const g of (normalizedAnalysis.groups || [])) {
       const c = String(g.categoryPath || g.category || '').trim();
       for (const u of (g.images || [])) {
         const k = urlKey(u);
