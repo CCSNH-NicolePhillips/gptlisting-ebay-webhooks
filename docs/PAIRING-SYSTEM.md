@@ -1,10 +1,34 @@
 # Pairing System - Production Ready ✅
 
+**Last Updated**: November 17, 2025
+
 ## Overview
 
-Two-prompt image pairing system with **100% pair rate** on test data, **zero GPT calls** via intelligent auto-pairing, and comprehensive production hardening.
+Two-prompt image pairing system with **visual-first matching**, achieving **92%+ pair rates** on real-world data with intelligent auto-pairing and GPT tiebreaker for ambiguous cases.
 
 ## Architecture
+
+### Visual-First Matching (November 2025)
+
+**Philosophy**: Match by appearance first (like a 2-year-old would), then validate with text.
+
+**Visual Scoring** (Primary):
+- **Packaging match**: +3 points (bottle+bottle, box+box, tube+tube, etc.)
+- **Exact color match**: +2.5 points (white+white, navy-blue+navy-blue)
+- **Close color match**: +2 points (blue vs light-blue, amber vs dark-amber)
+- **Total visual max**: 5.5 points
+
+**Text Scoring** (Secondary):
+- Brand exact match: +3 points
+- Product Jaccard ≥ 0.5: +2 points
+- Variant Jaccard ≥ 0.5: +1 point
+- Size canonical equality: +1 point
+
+**Key Features**:
+- **Reduced empty brand penalty**: -0.5 (was -3) - visual can compensate
+- **Role="other" inclusion**: Captures Vision API mislabeled backs
+- **Candidate pool K=8**: Shows top 8 candidates per front (62% of backs)
+- **Color normalization**: "light-blue" matches "blue", "dark-amber" matches "amber"
 
 ### Phase 1-3: Core Pairing System
 - **Prompt 1 (Vision)**: Role classification with weighted scoring + evidence triggers
@@ -72,6 +96,15 @@ Two-prompt image pairing system with **100% pair rate** on test data, **zero GPT
 
 ## Current Performance
 
+**Real-World Test (26 images, 13 products - November 2025):**
+- ✅ **12/13 pairs achieved** (92.3% success)
+- ✅ **11 auto-pairs** (visual+text strong signals)
+- ✅ **1 GPT pair** (tiebreaker for ambiguous case)
+- ⚡ **15-22 second execution** (well under 26s timeout)
+- 🎯 **Visual-first matching working**: Navy boxes, colored bottles pairing by appearance
+
+**Notable Success**: Prequel navy box auto-paired with score 3.0 on visual similarity alone (navy-blue+navy-blue, box+box, product overlap 0.80) despite empty brand field and role="other" mislabel.
+
 **Test Batch (8 images, 4 products):**
 - ✅ **100% pair rate** (4/4 fronts paired)
 - ✅ **0 GPT calls** (all auto-paired)
@@ -87,7 +120,14 @@ Two-prompt image pairing system with **100% pair rate** on test data, **zero GPT
 
 ## Scoring Breakdown
 
-### Base Heuristics
+### Visual-First Heuristics (Primary)
+- **Packaging match**: **+3** (bottle, jar, tube, box, pouch, etc.)
+- **Exact color match**: **+2.5** (white+white, navy-blue+navy-blue)
+- **Close color match**: **+2** (blue vs light-blue, normalized)
+- **Empty brand penalty**: **-0.5** (allows visual to compensate)
+- **Role="other" penalty**: **-0.5** (captures mislabeled backs)
+
+### Base Heuristics (Secondary)
 - Brand exact match: **+3**
 - Product Jaccard ≥ 0.5: **+2** (or +1 if ≥ 0.3)
 - Variant Jaccard ≥ 0.5: **+1**
@@ -125,6 +165,9 @@ PAIR_PKG_DROPPER=2.0
 PAIR_PKG_POUCH=1.5
 PAIR_PKG_BOTTLE=1.0
 
+# Candidate pool (November 2025: increased for visual-only matches)
+PAIR_CANDIDATE_K=8         # Top K candidates per front (was 4)
+
 # Safety limits
 PAIR_MAX_BUILD_MS=30000
 PAIR_MAX_BACK_FRONT_RATIO=3
@@ -132,6 +175,25 @@ PAIR_MAX_BACK_FRONT_RATIO=3
 # Candidate threshold
 PAIR_MIN_PRESCORE=1.5
 ```
+
+### Tuning Guidelines
+
+**Candidate Pool (K)**:
+- **K=4**: Fast, works when text+brand signals are strong (31% of backs)
+- **K=8** (current): Better for visual-only matches, mixed brands (62% of backs)
+- **K=12+**: Large datasets with many similar products or weak text signals
+- **Trade-off**: Higher K = more candidates for GPT, slower but more thorough
+
+**When to increase K**:
+- Empty brand fields common in your dataset
+- Many visual-only matches needed (white bottles, similar packaging)
+- Products with similar names competing for same back
+- Pair rate < 90% despite good visual matches
+
+**When to decrease K**:
+- Strong brand + product text in all images
+- Auto-pair rate > 95%, minimal GPT calls needed
+- Performance concerns (K=8 is still fast, though)
 
 ## Output Files
 
@@ -242,6 +304,13 @@ npm test
 - Auto-comment with metrics diff
 
 ## Files Modified/Created
+
+### November 2025 - Visual-First Matching
+- `src/prompt/pairing-prompt.ts` - Visual-first scoring rules (packaging +3, color +2.5)
+- `src/pairing/candidates.ts` - Role="other" inclusion, K=8 default, color normalization
+- `src/pairing/metrics.ts` - Count "other" role as backs
+- `src/pairing/runPairing.ts` - Hallucination prevention, performance optimization
+- `netlify/functions/smartdrafts-pairing.ts` - Integration with new runPairing system
 
 ### Phase 4 (Hardening)
 - `src/pairing/metrics.ts` (NEW) - Metrics calculation + formatting

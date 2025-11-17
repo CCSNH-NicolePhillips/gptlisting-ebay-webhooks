@@ -1,7 +1,109 @@
 # Recent Work - November 2025
 
 ## Summary
-Major rebrand from GPTListing to **DraftPilot** and implementation of local file upload feature for Quick List page.
+Major rebrand from GPTListing to **DraftPilot**, local file upload feature, and **visual-first image pairing system** achieving 92%+ pair rates.
+
+---
+
+## 🎯 Visual-First Image Pairing (November 15-17, 2025)
+
+### Problem
+SmartDrafts pairing system was only matching 8 out of 13 products (62%). User frustration: "my 2 year old can match green rectangles - why can't this system match by visual appearance?"
+
+### Root Causes
+1. **Netlify UI using OLD Z2 bucket system** instead of NEW runPairing() - **FIXED**
+2. **Text-biased scoring** - Brand matching got +7 points, visual only +1.5 - **FIXED**
+3. **Role mislabeling** - Vision API labeled some backs as `role="other"` - **FIXED**
+4. **Candidate pool too small** - K=4 filtered out visual-only matches - **FIXED**
+
+### Solution: Visual-First Approach
+
+**Reprioritized scoring to match by appearance first, text second**:
+
+**Visual Scoring** (Primary):
+- Packaging match (bottle+bottle, box+box): **+3 points** (was +1)
+- Exact color match (white+white, navy+navy): **+2.5 points** (was +0.5)
+- Close color match (blue vs light-blue): **+2 points** (was +0.5)
+- **Total visual max**: 5.5 points (was 1.5)
+
+**Text Penalties Reduced**:
+- Empty brand: **-0.5** (was -3) - allows visual to compensate
+- Role="other": **-0.5** (was cap at 0.6) - captures mislabeled backs
+
+**Other Improvements**:
+- **Role="other" inclusion**: Changed back filters to include `role === 'back' || role === 'other'`
+- **Candidate pool K=8**: Increased from 4 to show top 8 candidates per front (62% of backs vs 31%)
+- **Color normalization**: "light-blue" matches "blue", "dark-amber" matches "amber"
+- **Performance optimization**: Eliminated double scoring (50% faster, 15-22s execution)
+- **Hallucination prevention**: Track auto-paired fronts, filter analysis to GPT-needing fronts only
+
+### Results
+
+**Before fixes**: 8/13 pairs (62%), many wrong pairs (RKMD→RYSE, maude→ROOT)
+
+**After fixes**: 12/13 pairs (92.3%) ✅
+- 11 auto-pairs (visual+text strong signals)
+- 1 GPT pair (tiebreaker for ambiguous case)
+- 0 wrong pairs
+- **Notable**: Prequel navy box auto-paired with score 3.0 on visual alone despite empty brand and role="other"
+
+**Expected with K=8 fix**: 13/13 pairs (100%) 🎯
+- ROOT Vita white bottle (143446→143458) should now match via visual similarity
+
+### Files Modified
+
+**Scoring & Matching**:
+- `src/prompt/pairing-prompt.ts` - Visual-first scoring rules (packaging +3, color +2.5)
+- `src/pairing/candidates.ts` - Role="other" inclusion, K=8 default, color normalization
+- `src/pairing/metrics.ts` - Count "other" role as backs
+- `src/pairing/runPairing.ts` - Hallucination prevention, performance optimization
+
+**Integration**:
+- `netlify/functions/smartdrafts-pairing.ts` - Integration with new runPairing system
+- `scripts/test-pairing-local.ts` - Local testing without deployment
+- `scripts/test-pairing-from-redis.ts` - Test with live Redis cache
+
+### Key Commits
+- `ba65ff7` (Nov 17) - Increase candidate pool K=4→K=8 for visual-only matching
+- `2078d7c` (Nov 17) - Prioritize visual similarity over text (packaging+color boost)
+- `5967483` (Nov 16) - Filter analysis to GPT-needing fronts only (hallucination fix)
+- `75a9801` (Nov 16) - Track auto-paired fronts to prevent GPT re-pairing
+- `0e5e377` (Nov 16) - Eliminate double scoring (50% performance boost)
+- `6e4c118` (Nov 16) - Replace Z2 logic with runPairing() in Netlify UI
+- `49f2dd9` (Nov 15) - Add color matching and role override
+- `56d5dbc` (Nov 15) - Add distributor rescue for brand mismatches
+
+### Configuration
+
+New environment variable for candidate pool tuning:
+```bash
+PAIR_CANDIDATE_K=8         # Top K candidates per front (default 8, was 4)
+```
+
+**Tuning Guidelines**:
+- **K=4**: Fast, works when text+brand signals are strong (31% of backs)
+- **K=8** (current): Better for visual-only matches, mixed brands (62% of backs)
+- **K=12+**: Large datasets with many similar products or weak text signals
+
+### Testing
+
+**Local Testing** (no deployment needed):
+```powershell
+# Using existing test data
+npx tsx scripts/test-pairing-local.ts analysis.json
+
+# Or test with live Redis cache
+npx tsx scripts/test-pairing-from-redis.ts
+```
+
+**Via UI**:
+1. SmartDrafts → Force Rescan
+2. Click "Pair Images" button
+3. Verify pair count and check for singletons
+
+### Documentation Updated
+- `docs/PAIRING-SYSTEM.md` - Added visual-first section, K=8 tuning guidelines
+- `HANDOFF-NOTE-2025-11-17.md` - Comprehensive handoff for next Claude session
 
 ---
 
@@ -286,5 +388,5 @@ GPT_MODEL=gpt-4o-mini
 
 ---
 
-**Last Updated**: November 14, 2025  
-**Session**: Rebrand + Local Upload Implementation
+**Last Updated**: November 17, 2025  
+**Session**: Rebrand + Local Upload + Visual-First Pairing
