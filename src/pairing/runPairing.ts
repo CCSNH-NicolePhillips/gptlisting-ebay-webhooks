@@ -264,17 +264,34 @@ export async function runPairing(opts: {
     };
   }
   
-  // Canonicalize URLs in analysis shallow copy
+  // Canonicalize URLs in analysis shallow copy, filtering to only fronts needing GPT
+  const frontsNeedingGPT = new Set(Object.keys(candidatesByFront).map(canon));
   const canonAnalysis = {
-    groups: analysis.groups.map(g => ({
-      ...g,
-      primaryImageUrl: canon(g.primaryImageUrl || g.images?.[0] || ''),
-      images: (g.images || []).map(canon)
-    })),
-    imageInsights: analysis.imageInsights.map(ins => ({
-      ...ins,
-      url: canon(ins.url)
-    }))
+    groups: analysis.groups
+      .filter(g => {
+        const primaryUrl = canon(g.primaryImageUrl || g.images?.[0] || '');
+        return frontsNeedingGPT.has(primaryUrl);
+      })
+      .map(g => ({
+        ...g,
+        primaryImageUrl: canon(g.primaryImageUrl || g.images?.[0] || ''),
+        images: (g.images || []).map(canon)
+      })),
+    imageInsights: analysis.imageInsights
+      .filter(ins => {
+        const insUrl = canon(ins.url);
+        // Include if it's a front needing GPT OR a back that's a candidate
+        if (frontsNeedingGPT.has(insUrl)) return true;
+        // Check if this back appears in any candidate list
+        for (const backs of Object.values(candidatesByFront)) {
+          if (backs.map(canon).includes(insUrl)) return true;
+        }
+        return false;
+      })
+      .map(ins => ({
+        ...ins,
+        url: canon(ins.url)
+      }))
   };
   
   const hints = { featuresByUrl, candidatesByFront };
@@ -305,10 +322,18 @@ export async function runPairing(opts: {
   const allowed = new Map(Object.entries(candidatesByFront));
   for (const p of parsed.pairs) {
     const f = canon(p.frontUrl), b = canon(p.backUrl);
-    const list = allowed.get(f) || [];
+    const list = allowed.get(f);
+    
+    // Reject hallucinated fronts - GPT returned a pair for a front we didn't send
+    if (!list) {
+      throw new Error(`Model returned pair for front not in input: front=${p.frontUrl} (may have been auto-paired already)`);
+    }
+    
+    // Validate back is in the candidate list for this front
     if (!list.map(canon).includes(b)) {
       throw new Error(`Model chose back not in candidates: front=${p.frontUrl} back=${p.backUrl}`);
     }
+    
     // Check uniqueness (no back used twice)
     if (usedBacks.has(b)) {
       throw new Error(`Model reused back: back=${p.backUrl} already used in auto-pair`);
