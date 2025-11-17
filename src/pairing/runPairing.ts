@@ -81,7 +81,8 @@ export async function runPairing(opts: {
   
   // General auto-pair (supplements/food with strong signals)
   for (const [frontUrl, candidates] of Object.entries(candidatesMap)) {
-    const scores = getCandidateScoresForFront(features, frontUrl).filter(s => s.preScore >= cfg.minPreScore);
+    // Use already-computed scores from candidatesMap (no re-scoring!)
+    const scores = candidates.filter(s => s.preScore >= cfg.minPreScore);
     
     if (scores.length > 0) {
       const best = scores[0];
@@ -120,10 +121,11 @@ export async function runPairing(opts: {
   }
   
   // Domain-specific fallback for hair/cosmetics (lower threshold, INCI-based)
-  for (const [frontUrl, _] of Object.entries(candidatesMap)) {
+  for (const [frontUrl, candidates] of Object.entries(candidatesMap)) {
     if (!frontsForGPT.has(frontUrl)) continue; // Skip already auto-paired
     
-    const scores = getCandidateScoresForFront(features, frontUrl).filter(s => s.preScore >= 1.5);
+    // Use already-computed scores from candidatesMap (no re-scoring!)
+    const scores = candidates.filter(s => s.preScore >= 1.5);
     if (scores.length === 0) continue;
     
     const [top, second] = [scores[0], scores[1]];
