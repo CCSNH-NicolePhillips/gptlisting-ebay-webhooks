@@ -279,9 +279,9 @@ export function buildCandidates(
 ): Record<string, CandidateScore[]> {
   const result: Record<string, CandidateScore[]> = {};
   
-  // Get all fronts and backs
+  // Get all fronts and backs (include 'other' as potential backs for visual matching)
   const fronts = Array.from(features.values()).filter(f => f.role === 'front');
-  const backs = Array.from(features.values()).filter(f => f.role === 'back');
+  const backs = Array.from(features.values()).filter(f => f.role === 'back' || f.role === 'other');
   
   // Compute front signature counts to detect uniqueness
   const signatureCounts = new Map<string, number>();
@@ -340,7 +340,7 @@ export function getCandidateScoresForFront(features: Map<string, FeatureRow>, fr
   const frontSig = getFrontSignature(front);
   const isFrontUnique = signatureCounts.get(frontSig) === 1;
   
-  const backs = Array.from(features.values()).filter(f => f.role === 'back');
+  const backs = Array.from(features.values()).filter(f => f.role === 'back' || f.role === 'other');
   const scores = backs.map(back => computeScore(front, back, isFrontUnique));
   
   // Sort by preScore descending

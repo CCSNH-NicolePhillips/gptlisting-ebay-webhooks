@@ -39,7 +39,7 @@ export function buildMetrics(opts: {
   const { features, candidatesMap, autoPairs, modelPairs, singletons, thresholds, durationMs } = opts;
   
   const fronts = Array.from(features.values()).filter(f => f.role === 'front');
-  const backs = Array.from(features.values()).filter(f => f.role === 'back');
+  const backs = Array.from(features.values()).filter(f => f.role === 'back' || f.role === 'other');
   
   // Total candidates across all fronts
   const totalCandidates = Object.values(candidatesMap).reduce((sum, c) => sum + c.length, 0);

@@ -17,6 +17,14 @@ Given:
 Do NOT modify any field. Only pair FRONT images to BACK images. Ignore SIDE/OTHER unless no back exists and you need to leave items unpaired.
 
 Scoring (compute matchScore for every front vs back; include details):
+
+VISUAL SIMILARITY (highest priority - your 2-year-old can do this):
+• +3 if packagingType matches exactly (from visualDescription: pouch, dropper-bottle, bottle, jar, tube, canister, box)
+• +2.5 if dominantColor matches exactly (same color name)
+• +2 if dominantColor is close/similar (e.g., "light-blue" vs "blue", "dark-red" vs "red")
+• +1.5 if packaging is compatible but not identical (bottle vs dropper-bottle)
+
+TEXT SIMILARITY (secondary - only when visual is ambiguous):
 • +3 × productNameSimilarity (0..1) using token overlap of product (lowercased, split on non-alphanumerics)
 • +2 × variantSimilarity (0..1) from variant
 • +2 × sizeMatch (1 if canonical sizes equal; allow fl oz↔ml, oz↔g)
@@ -29,13 +37,11 @@ Scoring (compute matchScore for every front vs back; include details):
   - unrelated top-level: −1.2
 • +1 × sharedOCR (0..1) overlap of 5+ char tokens between textExtracted
 • +2 if back has barcode/LOT/EXP/QR and productNameSimilarity ≥ 0.5
-• +1 if packagingType matches (from visualDescription: pouch, dropper-bottle, bottle, jar, tube, canister)
-• +0.5 if dominantColor close/similar
 
 Penalties:
-• −3 if brands disagree (when both known). If one side brand is Unknown, penalty −1 instead.
-• −1 if packagingType obviously mismatches (pouch vs dropper-bottle), unless productNameSimilarity ≥ 0.85
-• Role guardrail: if not FRONT vs BACK, cap total score at 0.6
+• −3 if brands disagree (when both known). If one side brand is Unknown or empty, penalty −0.5 instead (visual similarity can compensate).
+• −2 if packagingType obviously mismatches (pouch vs bottle), unless dominantColor matches exactly
+• Role guardrail: if not FRONT vs BACK (e.g., role="other"), reduce penalty to −0.5 if visual similarity is strong (packaging + color match)
 
 Unit normalization for sizeMatch:
 • Convert fl oz → ml by ×29.573 and round ml
