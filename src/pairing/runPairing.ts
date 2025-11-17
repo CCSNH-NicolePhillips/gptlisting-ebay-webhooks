@@ -77,6 +77,7 @@ export async function runPairing(opts: {
   // Auto-pair fallback: identify slam-dunk candidates before calling GPT
   const autoPairs: Pair[] = [];
   const usedBacks = new Set<string>();
+  const autoPairedFronts = new Set<string>(); // Track fronts that were auto-paired
   const frontsForGPT = new Set<string>();
   
   // General auto-pair (supplements/food with strong signals)
@@ -113,6 +114,7 @@ export async function runPairing(opts: {
           confidence: 0.95
         });
         usedBacks.add(best.backUrl);
+        autoPairedFronts.add(frontUrl); // Mark this front as auto-paired
         log(`AUTOPAIR front=${frontUrl} back=${best.backUrl} preScore=${best.preScore.toFixed(1)} Δ=${gap.toFixed(1)} brand=${best.brandFlag} pkg=${best.packaging} sizeEq=${best.sizeEq} prodJac=${best.prodJac.toFixed(2)} varJac=${best.varJac.toFixed(2)}`);
       } else {
         frontsForGPT.add(frontUrl);
@@ -122,7 +124,7 @@ export async function runPairing(opts: {
   
   // Domain-specific fallback for hair/cosmetics (lower threshold, INCI-based)
   for (const [frontUrl, candidates] of Object.entries(candidatesMap)) {
-    if (!frontsForGPT.has(frontUrl)) continue; // Skip already auto-paired
+    if (autoPairedFronts.has(frontUrl)) continue; // Skip already auto-paired
     
     // Use already-computed scores from candidatesMap (no re-scoring!)
     const scores = candidates.filter(s => s.preScore >= 1.5);
@@ -155,6 +157,7 @@ export async function runPairing(opts: {
         confidence: 0.90
       });
       usedBacks.add(top.backUrl);
+      autoPairedFronts.add(frontUrl); // Mark this front as auto-paired
       frontsForGPT.delete(frontUrl);
       log(`AUTOPAIR[hair] front=${frontUrl} back=${top.backUrl} preScore=${top.preScore.toFixed(2)} Δ=${(top.preScore - (second?.preScore ?? -Infinity)).toFixed(2)} pkg=${top.packaging} INCI=${top.cosmeticBackCue} brand=${top.brandFlag} sizeEq=${top.sizeEq}`);
     }
@@ -162,7 +165,7 @@ export async function runPairing(opts: {
   
   // Print candidate tables with enhanced details (only for fronts going to GPT)
   for (const [frontUrl, candidates] of Object.entries(candidatesMap)) {
-    if (!frontsForGPT.has(frontUrl)) continue;
+    if (autoPairedFronts.has(frontUrl)) continue; // Skip auto-paired fronts
     log(`CANDIDATES front=${frontUrl}`);
     for (const cand of candidates) {
       const details: string[] = [];
@@ -185,7 +188,7 @@ export async function runPairing(opts: {
   const candidatesByFront: Record<string, string[]> = {};
   for (const [frontUrl, candidates] of Object.entries(candidatesMap)) {
     // Skip auto-paired fronts
-    if (!frontsForGPT.has(frontUrl)) continue;
+    if (autoPairedFronts.has(frontUrl)) continue;
     
     // Filter out already-used backs
     const availableBacks = candidates
