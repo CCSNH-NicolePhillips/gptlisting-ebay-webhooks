@@ -96,6 +96,19 @@ function levenshtein(a: string, b: string): number {
 }
 
 // Check if front and back have proximate filenames or same folder
+// Check if two colors are similar (same base color, ignoring shades)
+function colorsMatch(colorA: string, colorB: string): boolean {
+  if (!colorA || !colorB) return false;
+  if (colorA === colorB) return true;
+  
+  // Normalize by removing shade modifiers (light-, dark-, deep-, bright-, etc.)
+  const normalizeColor = (c: string) => c.replace(/^(light-|dark-|deep-|bright-|pale-|dim-)/i, '');
+  const normA = normalizeColor(colorA);
+  const normB = normalizeColor(colorB);
+  
+  return normA === normB;
+}
+
 function computeProximity(frontUrl: string, backUrl: string): number {
   // Extract folder and filename stem (without extension)
   const getPathParts = (url: string) => {
@@ -206,6 +219,14 @@ function computeScore(front: FeatureRow, back: FeatureRow, isFrontUnique: boolea
     score += 0.5;
   }
   
+  // Visual similarity: color matching (simple but effective)
+  // If front and back have same dominant color, strong signal they're the same product
+  const colorMatch = colorsMatch(front.colorKey, back.colorKey);
+  if (colorMatch) {
+    score += 1.5; // Significant boost - visual confirmation
+    console.log(`[Z2-COLOR-MATCH] ${front.url.split('/').pop()} (color="${front.colorKey}") ↔ ${back.url.split('/').pop()} (color="${back.colorKey}"): MATCH`);
+  }
+  
   // Filename/folder proximity boost
   const proximityBoost = computeProximity(front.url, back.url);
   score += proximityBoost;
@@ -214,9 +235,16 @@ function computeScore(front: FeatureRow, back: FeatureRow, isFrontUnique: boolea
   const barcodeBoost = (isFrontUnique && hasBarcode(back)) ? 0.5 : 0;
   score += barcodeBoost;
   
-  // Role penalty
+  // Role penalty (relaxed for strong matches)
+  // If roles are wrong BUT we have strong visual+text evidence, reduce penalty
+  const hasStrongEvidence = colorMatch && (prodJaccard >= 0.4 || sizeEq) && pkgMatch;
   if (front.role !== 'front' || back.role !== 'back') {
-    score -= 2;
+    if (hasStrongEvidence) {
+      score -= 0.5; // Reduced penalty when visual+text evidence is strong
+      console.log(`[Z2-ROLE-OVERRIDE] ${front.url.split('/').pop()} (role="${front.role}") ↔ ${back.url.split('/').pop()} (role="${back.role}"): STRONG EVIDENCE overrides role mismatch`);
+    } else {
+      score -= 2; // Full penalty when evidence is weak
+    }
   }
   
   // Category conflict penalty
