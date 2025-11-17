@@ -68,8 +68,9 @@ import { createHash } from "crypto";
 ```
 
 ## Domains & Environments
-- Primary admin/API host: https://draftpilot-ai.netlify.app/
-- Use this domain in testing instructions and curl examples unless the user explicitly asks for another environment.
+- Primary domain: https://draftpilot.app/
+- Legacy Netlify URL: https://draftpilot-ai.netlify.app/ (still works but use draftpilot.app)
+- Use draftpilot.app in testing instructions and curl examples unless the user explicitly asks for another environment.
 
 ## Tokens / Headers
 - Auth uses Auth0 bearer tokens via `window.authClient.authFetch()` or `window.authClient.ensureAuth()` loaded from `/auth-client.js`
