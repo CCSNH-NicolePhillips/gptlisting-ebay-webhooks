@@ -275,7 +275,7 @@ function computeScore(front: FeatureRow, back: FeatureRow, isFrontUnique: boolea
 
 export function buildCandidates(
   features: Map<string, FeatureRow>,
-  K: number = 4
+  K: number = 8
 ): Record<string, CandidateScore[]> {
   const result: Record<string, CandidateScore[]> = {};
   
