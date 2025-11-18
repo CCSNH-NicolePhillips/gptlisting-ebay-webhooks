@@ -113,6 +113,12 @@ export type SmartDraftScanBody = {
   orphans?: any[];
   debug?: unknown;
   imageInsights?: Record<string, ImageInsight>;
+  // Phase 4: Metrics for telemetry
+  _metrics?: {
+    visionMs?: number;
+    uniqueImageKeys?: number;
+    imageCount?: number;
+  };
 };
 
 export type SmartDraftScanResponse = {
@@ -3583,6 +3589,8 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       groups: payloadGroups,
       orphans,
       imageInsights: imageInsightsRecord,
+      // Phase 4: Include metrics for telemetry
+      _metrics: analysis?._metrics,
     };
 
     if (debugCandidatesPerGroup) {

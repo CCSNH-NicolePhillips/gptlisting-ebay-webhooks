@@ -1,7 +1,9 @@
 import type { Handler } from "@netlify/functions";
 import { createHash } from "node:crypto";
 import { USE_CLIP, USE_NEW_SORTER, USE_ROLE_SORTING } from "../../src/config.js";
+import { config } from "../../src/config/smartdrafts.js";
 import { putJob, redisSet } from "../../src/lib/job-store.js";
+import { newMetrics, logMetrics } from "../../src/lib/smartdrafts-metrics.js";
 import { decRunning } from "../../src/lib/quota.js";
 import { runSmartDraftScan, type SmartDraftScanResponse } from "../../src/lib/smartdrafts-scan-core.js";
 import { k } from "../../src/lib/user-keys.js";
@@ -67,9 +69,11 @@ export const handler: Handler = async (event) => {
   };
 
   try {
+    const scanStartedAt = Date.now();
+    
     await writeJob(jobId, userId, {
       state: "running",
-      startedAt: Date.now(),
+      startedAt: scanStartedAt,
       folder: folder || undefined,
       stagedUrls: stagedUrls.length > 0 ? stagedUrls : undefined,
     });
@@ -99,6 +103,23 @@ export const handler: Handler = async (event) => {
       await release();
       return { statusCode: 200 };
     }
+
+    const totalScanMs = Date.now() - scanStartedAt;
+    
+    // Phase 4: Capture and log metrics
+    const metrics = newMetrics(jobId);
+    metrics.folder = folder;
+    metrics.cached = payload.cached;
+    metrics.imageCount = payload._metrics?.imageCount;
+    metrics.uniqueImageKeys = payload._metrics?.uniqueImageKeys;
+    metrics.visionMs = payload._metrics?.visionMs;
+    metrics.totalScanMs = totalScanMs;
+    metrics.orphanImageCount = Array.isArray(payload.orphans) ? payload.orphans.length : 0;
+    metrics.productCount = Array.isArray(payload.groups) ? payload.groups.length : 0;
+    metrics.visionConcurrency = config.visionConcurrency;
+    metrics.usedDownscale = config.visionDownscaleEnabled;
+    
+    logMetrics('scan-complete', metrics);
 
     await writeJob(jobId, userId, {
       state: "complete",

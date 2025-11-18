@@ -5,14 +5,10 @@ import { applyPricingFormula } from "./price-formula.js";
 import { lookupMarketPrice } from "./price-lookup.js";
 import { deleteCachedBatch, getCachedBatch, setCachedBatch } from "./vision-cache.js";
 import { runVision } from "./vision-router.js";
+import { config } from "../config/smartdrafts.js";
 
-// Vision concurrency configuration - controls how many Vision API calls run in parallel
-const VISION_CONCURRENCY: number = (() => {
-  const raw = process.env.VISION_CONCURRENCY ?? '1';
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed < 1) return 1;
-  return Math.floor(parsed);
-})();
+// Vision concurrency from central config
+const VISION_CONCURRENCY = config.visionConcurrency;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -726,6 +722,12 @@ export type AnalysisResult = {
   imageInsights: Record<string, ImageInsight>;
   _rawVisionInsights?: ImageInsight[]; // Raw insights before old logic corrupts them
   orphans: Array<{ url: string; name?: string; folder?: string }>;
+  // Phase 4: Metrics for telemetry
+  _metrics?: {
+    visionMs?: number;
+    uniqueImageKeys?: number;
+    imageCount?: number;
+  };
 };
 
 export async function runAnalysis(
@@ -890,7 +892,8 @@ export async function runAnalysis(
 
   analyzedResults.push(...results);
   
-  console.log(`[vision] Completed analysis for ${verifiedBatches.length} images in ${Date.now() - startedAt}ms`);
+  const visionElapsedMs = Date.now() - startedAt;
+  console.log(`[vision] Completed analysis for ${verifiedBatches.length} images in ${visionElapsedMs}ms`);
   console.log('[vision-dedupe] batch complete', {
     items: verifiedBatches.length,
     uniqueKeys: visionCache.size,
@@ -1337,5 +1340,10 @@ export async function runAnalysis(
     imageInsights: Object.fromEntries(insightMap),
     _rawVisionInsights: rawVisionInsights, // Clean vision insights for new sorter
     orphans: orphanDetails,
+    _metrics: {
+      visionMs: visionElapsedMs,
+      uniqueImageKeys: visionCache.size,
+      imageCount: verifiedBatches.length,
+    },
   };
 }
