@@ -26,6 +26,21 @@ function envFlag(value?: string | null): boolean {
 
 type RoleInfo = { role?: "front" | "back"; hasVisibleText?: boolean; ocr?: string };
 
+// Normalize URL to a key for deduplication (strip query params, lowercase basename)
+function normalizedKeyFor(url: string): string {
+  if (!url) return "";
+  try {
+    const trimmed = url.trim();
+    if (!trimmed) return "";
+    const noQuery = trimmed.split("?")[0];
+    const parts = noQuery.split("/");
+    const basename = parts[parts.length - 1] || "";
+    return basename.toLowerCase();
+  } catch {
+    return url.toLowerCase();
+  }
+}
+
 function base(u: string): string {
   if (!u) return "";
   try {
@@ -817,11 +832,33 @@ export async function runAnalysis(
   const startedAt = Date.now();
   console.log(`[vision] Starting analysis for ${verifiedBatches.length} images with concurrency=${VISION_CONCURRENCY}`);
 
+  // Dedupe Vision calls: Track in-flight promises by normalized key
+  const visionCache = new Map<string, Promise<any>>();
+  
+  // Helper to get or create Vision analysis for a batch (with dedupe)
+  async function getOrAnalyzeBatch(batch: string[], idx: number): Promise<any> {
+    const url = batch[0]; // Each batch is a single image
+    const key = normalizedKeyFor(url);
+    
+    // Check if we already have an in-flight request for this key
+    const existing = visionCache.get(key);
+    if (existing) {
+      console.log(`🔄 Image ${idx + 1}: Reusing analysis for ${base(url)} (dedupe)`);
+      return existing;
+    }
+    
+    // Start new Vision analysis and cache the promise
+    const metaForBatch = batch.map((url) => metaLookup.get(url) || { url, name: "", folder: "" });
+    const promise = analyzeBatchViaVision(batch, metaForBatch, debugVisionResponse, force);
+    visionCache.set(key, promise);
+    
+    return promise;
+  }
+
   // Process images concurrently while preserving order
   const results = await mapLimit(verifiedBatches, VISION_CONCURRENCY, async (batch, idx) => {
     console.log(`🧠 Analyzing image ${idx + 1}/${verifiedBatches.length} individually`);
-    const metaForBatch = batch.map((url) => metaLookup.get(url) || { url, name: "", folder: "" });
-    const result = await analyzeBatchViaVision(batch, metaForBatch, debugVisionResponse, force);
+    const result = await getOrAnalyzeBatch(batch, idx);
     
     if (result?._error) {
       warnings.push(`Image ${idx + 1}: ${result._error}`);
@@ -854,6 +891,10 @@ export async function runAnalysis(
   analyzedResults.push(...results);
   
   console.log(`[vision] Completed analysis for ${verifiedBatches.length} images in ${Date.now() - startedAt}ms`);
+  console.log('[vision-dedupe] batch complete', {
+    items: verifiedBatches.length,
+    uniqueKeys: visionCache.size,
+  });
 
   const merged = mergeGroups(analyzedResults);
   let orphanDetails: Array<{ url: string; name?: string; folder?: string }> = [];
