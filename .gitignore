@@ -14,6 +14,9 @@ tmp/
 .env
 coverage
 
+# Logs
+logs.txt
+
 # Sensitive analysis files
 PATENT-*.md
 *-ANALYSIS-*.md

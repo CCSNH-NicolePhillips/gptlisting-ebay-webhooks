@@ -6,6 +6,14 @@ import { lookupMarketPrice } from "./price-lookup.js";
 import { deleteCachedBatch, getCachedBatch, setCachedBatch } from "./vision-cache.js";
 import { runVision } from "./vision-router.js";
 
+// Vision concurrency configuration - controls how many Vision API calls run in parallel
+const VISION_CONCURRENCY: number = (() => {
+  const raw = process.env.VISION_CONCURRENCY ?? '1';
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 1) return 1;
+  return Math.floor(parsed);
+})();
+
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -787,10 +795,16 @@ export async function runAnalysis(
   const analyzedResults: any[] = [];
   const warnings: string[] = [...preflightWarnings];
 
-  for (const [idx, batch] of verifiedBatches.entries()) {
+  // Phase 1: Run Vision analysis with controlled concurrency (3–4 in-flight requests).
+  const startedAt = Date.now();
+  console.log(`[vision] Starting analysis for ${verifiedBatches.length} images with concurrency=${VISION_CONCURRENCY}`);
+
+  // Process images concurrently while preserving order
+  const results = await mapLimit(verifiedBatches, VISION_CONCURRENCY, async (batch, idx) => {
     console.log(`🧠 Analyzing image ${idx + 1}/${verifiedBatches.length} individually`);
-  const metaForBatch = batch.map((url) => metaLookup.get(url) || { url, name: "", folder: "" });
-  const result = await analyzeBatchViaVision(batch, metaForBatch, debugVisionResponse, force);
+    const metaForBatch = batch.map((url) => metaLookup.get(url) || { url, name: "", folder: "" });
+    const result = await analyzeBatchViaVision(batch, metaForBatch, debugVisionResponse, force);
+    
     if (result?._error) {
       warnings.push(`Image ${idx + 1}: ${result._error}`);
     }
@@ -815,8 +829,13 @@ export async function runAnalysis(
         insightMap.set(insight.url, insight);
       }
     }
-    analyzedResults.push(result);
-  }
+    
+    return result;
+  });
+
+  analyzedResults.push(...results);
+  
+  console.log(`[vision] Completed analysis for ${verifiedBatches.length} images in ${Date.now() - startedAt}ms`);
 
   const merged = mergeGroups(analyzedResults);
   let orphanDetails: Array<{ url: string; name?: string; folder?: string }> = [];
