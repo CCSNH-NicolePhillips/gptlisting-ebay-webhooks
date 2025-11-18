@@ -36,22 +36,35 @@ export function App() {
   const [loading, setLoading] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState(''); // Detailed status for loading spinner
   const [toast, setToast] = useState('');
+  const [authReady, setAuthReady] = useState(false); // Track if auth is initialized
 
   // Check authentication on mount
   useEffect(() => {
     async function checkAuth() {
       try {
+        if (!window.authClient) {
+          console.warn('[App] Auth client not loaded, waiting...');
+          // Wait a bit for auth-client.js to load
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        
         if (window.authClient?.ensureAuth) {
+          console.log('[App] Checking authentication...');
           const authed = await window.authClient.ensureAuth();
           if (!authed) {
             console.warn('[App] Not authenticated, redirecting to login');
             window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+            return;
           }
+          console.log('[App] Authentication verified');
+          setAuthReady(true);
         } else {
-          console.warn('[App] Auth client not available');
+          console.error('[App] Auth client not available after wait');
+          setLoadingStatus('❌ Authentication not available. Please refresh.');
         }
       } catch (err) {
         console.error('[App] Auth check failed:', err);
+        setLoadingStatus('❌ Authentication error: ' + (err?.message || 'Unknown'));
       }
     }
     checkAuth();
@@ -99,6 +112,11 @@ export function App() {
         a = await mockLoadAnalysis();
         showToast('✨ Analysis loaded (mock)');
       } else {
+        // Check auth is ready before making API calls
+        if (!authReady) {
+          throw new Error('Please wait for authentication to complete, then try again.');
+        }
+        
         if (!folder) throw new Error('Pick a Dropbox folder/link first');
         // Folder is now a Dropbox path (not a URL), use it directly
         localStorage.setItem('dbxDefaultFolder', folder);
@@ -409,7 +427,12 @@ export function App() {
           <p class="hint" style="margin: 4px 0 8px 0; font-size: 0.85em; color: #666;">
             Leave this off for normal runs. Turn it on only if cached results look wrong.
           </p>
-          <button class="btn" onClick=${doAnalyze}>Analyze</button>
+          ${!authReady ? html`
+            <p class="hint" style="margin: 4px 0 8px 0; font-size: 0.85em; color: #f60;">
+              ⏳ Authenticating... Please wait.
+            </p>
+          ` : null}
+          <button class="btn" onClick=${doAnalyze} disabled=${!authReady && mode === 'Live'}>Analyze</button>
           <button class="btn secondary" onClick=${doHardReset}>Hard Reset</button>
           <button class="btn" onClick=${doPairing} disabled=${!analysis && mode==='Mock'}>Run Pairing</button>
           <button class="btn secondary" onClick=${async () => { await doPairing(); setTab('Products'); }} disabled=${!analysis && mode==='Mock'}>
