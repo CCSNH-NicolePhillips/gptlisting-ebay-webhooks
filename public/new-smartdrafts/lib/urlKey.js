@@ -20,3 +20,6 @@ export function normalizeFolderInput(input='') {
   // No heavy parsing needed; just ensure no accidental spaces.
   return s;
 }
+
+
+

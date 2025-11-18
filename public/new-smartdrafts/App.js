@@ -1,6 +1,6 @@
-import { h } from 'https://esm.sh/preact@10.20.2';
-import { useState } from 'https://esm.sh/preact@10.20.2/hooks';
-import htm from 'https://esm.sh/htm@3.1.1';
+import { h } from 'https://unpkg.com/preact@10.20.2?module';
+import { useState } from 'https://unpkg.com/preact@10.20.2/hooks?module';
+import htm from 'https://unpkg.com/htm@3.1.1?module';
 import { AnalysisPanel } from './components/AnalysisPanel.js';
 import { PairingPanel } from './components/PairingPanel.js';
 import { ProductPanel } from './components/ProductPanel.js';
@@ -431,3 +431,6 @@ export function App() {
     </div>
   `;
 }
+
+
+

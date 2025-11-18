@@ -1,4 +1,4 @@
-import { h, render } from 'https://esm.sh/preact@10.20.2';
+import { h, render } from 'https://unpkg.com/preact@10.20.2?module';
 import { App } from './App.js';
 
 try {
@@ -14,3 +14,6 @@ try {
   console.error('Failed to render:', err);
   document.body.innerHTML = '<div style="color:white;padding:20px;">ERROR: ' + err.message + '</div>';
 }
+
+
+

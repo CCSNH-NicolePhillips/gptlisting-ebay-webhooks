@@ -1,6 +1,6 @@
-import { h } from 'https://esm.sh/preact@10.20.2';
-import { useState, useEffect } from 'https://esm.sh/preact@10.20.2/hooks';
-import htm from 'https://esm.sh/htm@3.1.1';
+import { h } from 'https://unpkg.com/preact@10.20.2?module';
+import { useState, useEffect } from 'https://unpkg.com/preact@10.20.2/hooks?module';
+import htm from 'https://unpkg.com/htm@3.1.1?module';
 
 const html = htm.bind(h);
 
@@ -106,3 +106,6 @@ export function FolderSelector({ value, onChange, disabled }) {
     </select>
   `;
 }
+
+
+
