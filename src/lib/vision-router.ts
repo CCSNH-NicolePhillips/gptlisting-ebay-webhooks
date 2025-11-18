@@ -103,57 +103,120 @@ async function tryGoogle(images: string[], prompt: string, model: string) {
   return JSON.parse(jsonLike);
 }
 
+/**
+ * Phase 4A: Check if error is a rate limit
+ */
+function isRateLimit(err: any): boolean {
+  if (!err) return false;
+  // Check status code
+  if (err.status === 429) return true;
+  // Check error type
+  if (err.type === "tokens" || err.code === "rate_limit_exceeded") return true;
+  // Check message
+  const msg = String(err.message || err.error || "").toLowerCase();
+  return msg.includes("rate limit") || msg.includes("tpm") || msg.includes("tokens per min");
+}
+
+/**
+ * Phase 4A: Automatic Vision Fallback (gpt-4o → gpt-4o-mini → retry gpt-4o)
+ */
 export async function runVision(input: VisionInput): Promise<any> {
   const images = normalizeImages(input.images);
   const prompt = input.prompt || "";
 
-  const primary = parseModel(process.env.VISION_MODEL);
-  console.log("[vision-router] Using", process.env.VISION_MODEL || "(default)");
-  const envFallbacks = (process.env.VISION_FALLBACK || "")
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter(Boolean)
-    .map(parseModel);
-  // Provide sensible defaults if no explicit fallbacks are configured
-  const defaultFallbacks: VisionModel[] = envFallbacks.length
-    ? []
-    : [parseModel("openai:gpt-4o"), parseModel("openai:gpt-4o-mini")];
-  const fallbacks = [...envFallbacks, ...defaultFallbacks];
+  const primaryModel = process.env.VISION_MODEL || "openai:gpt-4o";
+  const primary = parseModel(primaryModel);
+  
+  // Phase 4A: Automatic fallback to gpt-4o-mini on rate limit
+  const fallbackModel = "openai:gpt-4o-mini";
+  
+  console.log(`[vision-router] Using ${primaryModel}`);
 
-  const attempts = [primary, ...fallbacks];
-
-  let lastError: unknown;
-
-  for (const attempt of attempts) {
-    const { provider, name } = attempt;
-    try {
-      if (provider === "openai") {
-        console.log(`[vision-router] Attempting OpenAI with model: ${name}`);
-        return await tryOpenAI(images, prompt, name);
-      }
-      if (provider === "anthropic") {
-        console.log(`[vision-router] Attempting Anthropic with model: ${name}`);
-        return await tryAnthropic(images, prompt, name);
-      }
-      if (provider === "google") {
-        console.log(`[vision-router] Attempting Google with model: ${name}`);
-        return await tryGoogle(images, prompt, name);
-      }
-    } catch (err: any) {
-      console.error(`[vision-router] ❌ ${provider} (${name}) failed:`, {
-        status: err?.status,
-        code: err?.code,
-        type: err?.type,
-        message: err?.message,
-        error: err?.error?.message || err?.error,
-      });
-      lastError = err;
-      continue;
+  // Try primary model first
+  try {
+    if (primary.provider === "openai") {
+      console.log(`[vision-router] Attempting OpenAI with model: ${primary.name}`);
+      const result = await tryOpenAI(images, prompt, primary.name);
+      return result;
     }
-  }
+    if (primary.provider === "anthropic") {
+      console.log(`[vision-router] Attempting Anthropic with model: ${primary.name}`);
+      return await tryAnthropic(images, prompt, primary.name);
+    }
+    if (primary.provider === "google") {
+      console.log(`[vision-router] Attempting Google with model: ${primary.name}`);
+      return await tryGoogle(images, prompt, primary.name);
+    }
+  } catch (err: any) {
+    console.error(`[vision-router] ❌ ${primary.provider} (${primary.name}) failed:`, {
+      status: err?.status,
+      code: err?.code,
+      type: err?.type,
+      message: err?.message,
+      error: err?.error?.message || err?.error,
+    });
 
-  if (lastError) {
+    // Phase 4A: If rate limit and primary is gpt-4o, fallback to gpt-4o-mini
+    if (isRateLimit(err) && primary.provider === "openai" && primary.name === "gpt-4o") {
+      console.warn(`[vision-fallback] gpt-4o hit rate limit, switching to gpt-4o-mini`);
+      try {
+        const result = await tryOpenAI(images, prompt, "gpt-4o-mini");
+        (result as any)._modelUsed = "gpt-4o-mini";
+        console.log(`[vision-fallback] ✅ Successfully used gpt-4o-mini fallback`);
+        return result;
+      } catch (fallbackErr: any) {
+        console.error(`[vision-fallback] ❌ gpt-4o-mini also failed:`, {
+          status: fallbackErr?.status,
+          message: fallbackErr?.message,
+        });
+        throw fallbackErr;
+      }
+    }
+
+    // Not a rate limit or not gpt-4o, try configured fallbacks
+    const envFallbacks = (process.env.VISION_FALLBACK || "")
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .map(parseModel);
+    
+    const defaultFallbacks: VisionModel[] = envFallbacks.length
+      ? []
+      : [parseModel("anthropic:claude-3-5-sonnet"), parseModel("google:gemini-1.5-flash")];
+    
+    const fallbacks = [...envFallbacks, ...defaultFallbacks];
+    let lastError = err;
+
+    for (const attempt of fallbacks) {
+      const { provider, name } = attempt;
+      try {
+        if (provider === "openai") {
+          console.log(`[vision-router] Attempting OpenAI with model: ${name}`);
+          return await tryOpenAI(images, prompt, name);
+        }
+        if (provider === "anthropic") {
+          console.log(`[vision-router] Attempting Anthropic with model: ${name}`);
+          return await tryAnthropic(images, prompt, name);
+        }
+        if (provider === "google") {
+          console.log(`[vision-router] Attempting Google with model: ${name}`);
+          return await tryGoogle(images, prompt, name);
+        }
+      } catch (attemptErr: any) {
+        console.error(`[vision-router] ❌ ${provider} (${name}) failed:`, {
+          status: attemptErr?.status,
+          code: attemptErr?.code,
+          type: attemptErr?.type,
+          message: attemptErr?.message,
+          error: attemptErr?.error?.message || attemptErr?.error,
+        });
+        lastError = attemptErr;
+        continue;
+      }
+    }
+
     throw lastError;
   }
-  throw new Error("All vision providers failed");
+
+  throw new Error("Vision provider not recognized");
 }
