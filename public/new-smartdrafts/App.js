@@ -104,8 +104,25 @@ export function App() {
               folder: job.folder,
               jobId: jobId  // Include jobId for Redis fallback in pairing
             };
-            setLoadingStatus('✅ Complete!');
-            showToast(force ? '✨ Analysis complete (live, force)' : '✨ Analysis complete (live)');
+            
+            // Show cache status in UI
+            if (job.cached === true) {
+              setLoadingStatus('⚡ Loaded from cache');
+              showToast('⚡ Analysis loaded from cache');
+            } else {
+              setLoadingStatus('✅ Complete (live scan)');
+              showToast(force ? '✨ Analysis complete (live, force)' : '✨ Analysis complete (live)');
+            }
+            
+            // Log analysis result with cache status
+            console.log('[UI] Analysis result:', {
+              folder: a.folder,
+              jobId: a.jobId,
+              cached: a.cached,
+              groups: a.groups?.length || 0,
+              insights: a.imageInsights?.length || 0,
+            });
+            
             break;
           }
           
@@ -349,8 +366,11 @@ export function App() {
           </label>
           <label class="check">
             <input type="checkbox" checked=${force} onChange=${e=>setForce(e.currentTarget.checked)} />
-            <span>Force Rescan</span>
+            <span>Force Rescan (slow — re-run Vision)</span>
           </label>
+          <p class="hint" style="margin: 4px 0 8px 0; font-size: 0.85em; color: #666;">
+            Leave this off for normal runs. Turn it on only if cached results look wrong.
+          </p>
           <button class="btn" onClick=${doAnalyze}>Analyze</button>
           <button class="btn secondary" onClick=${doHardReset}>Hard Reset</button>
           <button class="btn" onClick=${doPairing} disabled=${!analysis && mode==='Mock'}>Run Pairing</button>

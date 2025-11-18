@@ -188,10 +188,18 @@ async function analyzeBatchViaVision(
 ) {
   const cacheEligible = !BYPASS_VISION_CACHE && !force;
 
+  // Log cache eligibility
+  console.log('[vision-cache] eligibility', {
+    batchSize: batch.length,
+    force,
+    bypass: BYPASS_VISION_CACHE,
+    cacheEligible,
+  });
+
   // If force=true, explicitly delete the cache first
   if (force && !BYPASS_VISION_CACHE) {
+    console.warn('[vision-cache] FORCE RESCAN REQUESTED — deleting cached batch (if any)');
     console.log(`[vision-cache] ========================================`);
-    console.log(`[vision-cache] FORCE RESCAN REQUESTED`);
     console.log(`[vision-cache] Batch size: ${batch.length} images`);
     console.log(`[vision-cache] First 3 images:`, batch.slice(0, 3).map(u => u.split('/').pop()));
     console.log(`[vision-cache] Deleting cache before analysis...`);
@@ -202,6 +210,10 @@ async function analyzeBatchViaVision(
   if (cacheEligible) {
     const cached = await getCachedBatch(batch);
     if (cached?.groups) {
+      console.log('[vision-cache] hit', {
+        batchSize: batch.length,
+        info: 'Returning cached Vision analysis for batch',
+      });
       console.log(`[vision-cache] Using CACHED data for batch (this should NOT happen after force delete!)`);
       // Ensure images are usable even for cached results
       try {
@@ -284,6 +296,12 @@ async function analyzeBatchViaVision(
       }
     }
   }
+
+  // Cache miss - need to call Vision API
+  console.log('[vision-cache] miss', {
+    batchSize: batch.length,
+    info: 'No cached Vision analysis found for batch',
+  });
 
   const hints = metadata
     .map((meta, idx) => {

@@ -53,7 +53,10 @@ export function AnalysisPanel({ data }) {
   if (groups.length > 0 && insights.length === 0) {
     return html`
       <div class="panel">
-        <h2>📊 Analysis Results</h2>
+        <h2>
+          📊 Analysis Results
+          ${data.cached && html`<span class="badge badge-soft" style="margin-left: 8px; font-size: 0.75em; font-weight: normal;">⚡ Cached (7 day cache)</span>`}
+        </h2>
         <p class="muted">Found ${groups.length} product group${groups.length !== 1 ? 's' : ''}</p>
         
         <div class="grid" style="margin-top: 16px;">
@@ -94,8 +97,14 @@ export function AnalysisPanel({ data }) {
   
   // Original imageInsights view
   return html`
-    <div class="grid">
-      ${insights.map((ins) => html`
+    <div class="panel">
+      ${data.cached && html`
+        <div style="margin-bottom: 12px;">
+          <span class="badge badge-soft">⚡ Cached (7 day cache)</span>
+        </div>
+      `}
+      <div class="grid">
+        ${insights.map((ins) => html`
         <article class="card" key=${ins.key || urlKey(ins.url)}>
           <img class="thumb" src="${ins.displayUrl || ins.url}" alt=${ins.key || urlKey(ins.url)} loading="lazy" />
           <div class="meta">
@@ -125,6 +134,7 @@ export function AnalysisPanel({ data }) {
           </div>
         </article>
       `)}
+      </div>
     </div>
   `;
 }
