@@ -1,6 +1,6 @@
-import { h } from 'https://unpkg.com/preact@10.20.2?module';
-import { useState, useEffect } from 'https://unpkg.com/preact@10.20.2/hooks?module';
-import htm from 'https://unpkg.com/htm@3.1.1?module';
+import { h } from 'https://unpkg.com/preact@10.20.2/dist/preact.module.js';
+import { useState, useEffect } from 'https://unpkg.com/preact@10.20.2/hooks/dist/hooks.module.js';
+import htm from 'https://unpkg.com/htm@3.1.1/dist/htm.module.js';
 
 const html = htm.bind(h);
 
@@ -106,6 +106,9 @@ export function FolderSelector({ value, onChange, disabled }) {
     </select>
   `;
 }
+
+
+
 
 
 

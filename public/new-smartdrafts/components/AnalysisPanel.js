@@ -1,5 +1,5 @@
-import { h } from 'https://unpkg.com/preact@10.20.2?module';
-import htm from 'https://unpkg.com/htm@3.1.1?module';
+import { h } from 'https://unpkg.com/preact@10.20.2/dist/preact.module.js';
+import htm from 'https://unpkg.com/htm@3.1.1/dist/htm.module.js';
 import { urlKey } from '../lib/urlKey.js';
 
 const html = htm.bind(h);
@@ -138,6 +138,9 @@ export function AnalysisPanel({ data }) {
     </div>
   `;
 }
+
+
+
 
 
 

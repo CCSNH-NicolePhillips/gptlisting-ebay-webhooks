@@ -1,6 +1,6 @@
 // public/new-smartdrafts/components/DraftsPanel.js
-import { h } from 'https://unpkg.com/preact@10.20.2?module';
-import htm from 'https://unpkg.com/htm@3.1.1?module';
+import { h } from 'https://unpkg.com/preact@10.20.2/dist/preact.module.js';
+import htm from 'https://unpkg.com/htm@3.1.1/dist/htm.module.js';
 const html = htm.bind(h);
 
 export function DraftsPanel({ drafts }) {
@@ -61,6 +61,9 @@ export function DraftsPanel({ drafts }) {
     </div>
   `;
 }
+
+
+
 
 
 
