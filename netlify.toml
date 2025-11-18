@@ -40,8 +40,8 @@
 # Reduce false positives in Netlify Secrets Scanning by omitting documentation/examples
 [build.environment]
   USE_NEW_SORTER = "false"
-  # Omit docs, examples, and test files from secrets scanning
-  SECRETS_SCAN_OMIT_PATHS = "**/*.md,**/*.example,configs/**,scripts/**,tests/**,tmp/**,testDropbox/**,public/**/*.html,public/**/*.js,public/**/*.css,*.json,*.csv"
+  # Omit docs, examples, build output, and test files from secrets scanning
+  SECRETS_SCAN_OMIT_PATHS = "**/*.md,**/*.example,configs/**,scripts/**,tests/**,tmp/**,testDropbox/**,public/**,dist/**,functions/**,*.json,*.csv,*.mjs,*.toml"
 
 ## Make a stable self-hosted ESM path that rewrites to the SDK proxy
 [[redirects]]
