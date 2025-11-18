@@ -1,5 +1,5 @@
 import { h } from 'https://unpkg.com/preact@10.20.2/dist/preact.module.js';
-import { useState } from 'https://unpkg.com/preact@10.20.2/hooks/dist/hooks.module.js';
+import { useState, useEffect } from 'https://unpkg.com/preact@10.20.2/hooks/dist/hooks.module.js';
 import htm from 'https://unpkg.com/htm@3.1.1/dist/htm.module.js';
 import { AnalysisPanel } from './components/AnalysisPanel.js';
 import { PairingPanel } from './components/PairingPanel.js';
@@ -36,6 +36,26 @@ export function App() {
   const [loading, setLoading] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState(''); // Detailed status for loading spinner
   const [toast, setToast] = useState('');
+
+  // Check authentication on mount
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        if (window.authClient?.ensureAuth) {
+          const authed = await window.authClient.ensureAuth();
+          if (!authed) {
+            console.warn('[App] Not authenticated, redirecting to login');
+            window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+          }
+        } else {
+          console.warn('[App] Auth client not available');
+        }
+      } catch (err) {
+        console.error('[App] Auth check failed:', err);
+      }
+    }
+    checkAuth();
+  }, []);
 
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(''), 3000); }
 
