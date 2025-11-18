@@ -41,7 +41,7 @@
 [build.environment]
   USE_NEW_SORTER = "false"
   # Omit non-sensitive default values from secrets scanning - these are config defaults, not actual secrets
-  SECRETS_SCAN_OMIT_KEYS = "DEFAULT_MARKETPLACE_ID,EBAY_ENV,PUBLISH_MODE,DEFAULT_CATEGORY_ID,OCR_PROVIDER,EBAY_MERCHANT_LOCATION_KEY,DROPBOX_LOCALE,SHIP_NAME,APP_URL,DROPBOX_REDIRECT_URI"
+  SECRETS_SCAN_OMIT_KEYS = "PUBLISH_MODE,DEFAULT_MARKETPLACE_ID,DEFAULT_CATEGORY_ID,EBAY_ENV,APP_URL,DROPBOX_LOCALE,EBAY_RUNAME,EBAY_ENDPOINT_URL,DROPBOX_REDIRECT_URI,PROMOTED_CAMPAIGN_ID,OCR_PROVIDER,SHIP_NAME,SHIP_ADDRESS1,SHIP_CITY,SHIP_STATE,SHIP_POSTAL,SHIP_COUNTRY,EBAY_MERCHANT_LOCATION_KEY,EBAY_RU_NAME"
   # Omit docs, examples, build output, and test files from secrets scanning
   SECRETS_SCAN_OMIT_PATHS = "**/*.md,**/*.example,configs/**,scripts/**,tests/**,tmp/**,testDropbox/**,public/**,dist/**,functions/**,*.json,*.csv,*.mjs,*.toml"
 
