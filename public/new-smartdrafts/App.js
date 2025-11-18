@@ -15,6 +15,7 @@ import { normalizeFolderInput } from './lib/urlKey.js';
 const html = htm.bind(h);
 
 const TABS = ['Analysis','Pairing','Products','Drafts','Metrics','Logs (soon)','Debug'];
+const MAX_ANALYZE_MS = 10 * 60 * 1000; // 10 minutes timeout for analysis
 
 export function App() {
   const [tab, setTab] = useState('Analysis');
@@ -83,6 +84,7 @@ export function App() {
         localStorage.setItem('dbxDefaultFolder', folder);
         
         // Enqueue job
+        const analyzeStartedAt = Date.now();
         setLoadingStatus('🚀 Queueing scan...');
         showToast('Queueing scan...');
         const jobId = await enqueueAnalyzeLive(folder, { force });
@@ -93,6 +95,17 @@ export function App() {
         // Vision API takes 5-10 seconds per image, so allow plenty of time
         for (let i = 0; i < 300; i++) {
           await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          // Check for timeout
+          const elapsed = Date.now() - analyzeStartedAt;
+          if (elapsed > MAX_ANALYZE_MS) {
+            console.error('[UI] Analyze timeout', { jobId, folder, elapsedMs: elapsed });
+            setLoadingStatus('❌ Analyze timed out. Please try again or contact support.');
+            showToast('Analyze timed out after 10 minutes. Check logs or try smaller batch.');
+            setLoading(false);
+            return;
+          }
+          
           const job = await pollAnalyzeLive(jobId);
           
           if (job.state === 'complete') {
@@ -127,7 +140,12 @@ export function App() {
           }
           
           if (job.state === 'error') {
-            throw new Error(job.error || 'Scan failed');
+            const errorMsg = job.error || 'Scan failed';
+            setLoadingStatus('❌ Analyze failed');
+            showToast(`❌ ${errorMsg}`);
+            console.error('[UI] Analyze error', { jobId, folder, error: errorMsg });
+            setLoading(false);
+            return;
           }
           
           // Update status toast every 10 seconds (every 5 polls)
