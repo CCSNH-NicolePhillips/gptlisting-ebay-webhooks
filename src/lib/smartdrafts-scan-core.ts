@@ -3539,6 +3539,12 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       if (conf.adjustedRole) {
         confidenceStats.corrected++;
         console.log(`[pairing-phase5] Role corrected: ${key.substring(0, 30)}... ${conf.role} (${conf.confidence.toFixed(2)}) - flags: ${conf.flags.join(', ')}`);
+        
+        // Update imageInsightsRecord with corrected role
+        const insight = imageInsightsRecord[key];
+        if (insight) {
+          (insight as any).role = conf.role;  // conf.role is already the adjusted role
+        }
       }
     }
     
@@ -3674,6 +3680,12 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
               ...existing,
               role: corr.correctedRole
             });
+          }
+          
+          // CRITICAL: Also update imageInsightsRecord so pairing function sees the correct role
+          const insight = imageInsightsRecord[corr.imageKey];
+          if (insight) {
+            (insight as any).role = corr.correctedRole;
           }
         }
       }
