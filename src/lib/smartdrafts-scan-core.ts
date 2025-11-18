@@ -4,6 +4,7 @@ import { makeDisplayUrl } from "../utils/displayUrl.js";
 import { finalizeDisplayUrls } from "../utils/finalizeDisplay.js";
 import { categoryCompat, jaccard, normBrand, tokenize } from "../utils/groupingHelpers.js";
 import { buildRoleMap } from "../utils/roles.js";
+import { computeRoleConfidenceBatch, crossCheckGroupRoles, type RoleConfidence } from "./role-confidence.js";
 import { urlKey } from "../utils/urlKey.js";
 import { sanitizeInsightUrl } from "../utils/urlSanitize.js";
 import { userScopedKey } from "./_auth.js";
@@ -3481,8 +3482,76 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       console.log('[displayUrl] ✓ All insights have valid display URLs');
     }
 
-    // Build role map for hero/back selection
-    const roleByKey = buildRoleMap(Object.values(imageInsightsRecord));
+    // === PHASE 5.4: Orphan Reassignment (before role confidence to allow re-evaluation) ===
+    console.log('[pairing-phase5] Attempting orphan reassignment...');
+    const { reassignOrphans } = await import('./orphan-reassignment.js');
+    
+    const insightsMap = new Map<string, any>();
+    for (const [key, insight] of Object.entries(imageInsightsRecord)) {
+      insightsMap.set(key, insight);
+    }
+    
+    const orphanMatches = reassignOrphans(orphans, normalizedGroups, insightsMap, 0.5);
+    
+    if (orphanMatches.length > 0) {
+      console.log('[pairing-phase5] Orphan reassignment found', orphanMatches.length, 'potential matches');
+      
+      for (const match of orphanMatches) {
+        console.log(`[pairing-phase5] Orphan reassignment: ${match.orphanKey.substring(0, 30)}... → group ${match.matchedGroupId} (confidence: ${(match.confidence * 100).toFixed(0)}%) - ${match.reason}`);
+        
+        // Find the target group and add the orphan
+        const targetGroup = normalizedGroups.find(g => (g.groupId || g.name) === match.matchedGroupId);
+        if (targetGroup) {
+          targetGroup.images = targetGroup.images || [];
+          targetGroup.images.push(match.orphanKey);
+          
+          // Remove from orphans array
+          const orphanIndex = orphans.findIndex((o: any) => (o.key || o.url) === match.orphanKey);
+          if (orphanIndex >= 0) {
+            orphans.splice(orphanIndex, 1);
+          }
+        }
+      }
+      
+      console.log('[pairing-phase5] Orphans remaining after reassignment:', orphans.length);
+    } else {
+      console.log('[pairing-phase5] No orphans could be reassigned');
+    }
+
+    // === PHASE 5.1: Role Confidence Layer ===
+    console.log('[pairing-phase5] Computing role confidence scores...');
+    const roleConfidenceMap = computeRoleConfidenceBatch(Object.values(imageInsightsRecord));
+    
+    // Log confidence summary
+    const confidenceStats = {
+      total: roleConfidenceMap.size,
+      highConfidence: 0,
+      mediumConfidence: 0,
+      lowConfidence: 0,
+      corrected: 0
+    };
+    
+    for (const [key, conf] of roleConfidenceMap.entries()) {
+      if (conf.confidence >= 0.7) confidenceStats.highConfidence++;
+      else if (conf.confidence >= 0.4) confidenceStats.mediumConfidence++;
+      else confidenceStats.lowConfidence++;
+      
+      if (conf.adjustedRole) {
+        confidenceStats.corrected++;
+        console.log(`[pairing-phase5] Role corrected: ${key.substring(0, 30)}... ${conf.role} (${conf.confidence.toFixed(2)}) - flags: ${conf.flags.join(', ')}`);
+      }
+    }
+    
+    console.log('[pairing-phase5] Confidence summary:', confidenceStats);
+
+    // Build role map for hero/back selection (using confidence-enhanced roles)
+    const roleByKey = new Map<string, { role: string; score: number }>();
+    for (const [key, conf] of roleConfidenceMap.entries()) {
+      roleByKey.set(key, {
+        role: conf.role,  // Use adjusted role if corrected
+        score: conf.confidence  // Use enhanced confidence score
+      });
+    }
 
     // Helper: pick hero and back from group images based on vision roles
     function pickHeroBackForGroup(g: any, roleByKey: Map<string, { role: string; score: number }>) {
@@ -3546,14 +3615,111 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       g.heroDisplayUrl = g.heroUrl ? (httpsByKey.get(g.heroUrl) || `/files/${encodeURIComponent(g.heroUrl)}`) : null;
       g.backDisplayUrl = g.backUrl ? (httpsByKey.get(g.backUrl) || `/files/${encodeURIComponent(g.backUrl)}`) : null;
 
-      // Reorder images: [hero, back, ...rest]
-      const rest = images.filter((x: any) => x !== hero && x !== back);
-      g.images = [hero, back, ...rest].filter(Boolean);
+      // === PHASE 5.3: Strict image ordering ===
+      // Order: front → back → side/angle → detail → label → misc
+      const roleOrder: Record<string, number> = {
+        'front': 0,
+        'back': 1,
+        'side': 2,
+        'angle': 2,
+        'detail': 3,
+        'label': 4,
+        'tag': 5,
+        'other': 6,
+        'unknown': 7
+      };
+      
+      const sortedImages = images.slice().sort((a: any, b: any) => {
+        const keyA = typeof a === 'string' ? urlKey(a) : urlKey(a.url || '');
+        const keyB = typeof b === 'string' ? urlKey(b) : urlKey(b.url || '');
+        
+        const roleA = roleByKey.get(keyA)?.role || 'unknown';
+        const roleB = roleByKey.get(keyB)?.role || 'unknown';
+        
+        const orderA = roleOrder[roleA] ?? 99;
+        const orderB = roleOrder[roleB] ?? 99;
+        
+        if (orderA !== orderB) return orderA - orderB;
+        
+        // Within same role, sort by confidence score
+        const scoreA = Math.abs(roleByKey.get(keyA)?.score || 0);
+        const scoreB = Math.abs(roleByKey.get(keyB)?.score || 0);
+        return scoreB - scoreA;
+      });
+      
+      g.images = sortedImages.filter(Boolean);
     }
+
+    // === PHASE 5.2: Reconciliation Loop ===
+    console.log('[pairing-phase5] Running reconciliation loop on', normalizedGroups.length, 'groups...');
+    let reconciliationChanges = 0;
+    
+    for (const g of normalizedGroups) {
+      const imageKeys = (g.images || []).map((img: any) => 
+        typeof img === 'string' ? urlKey(img) : urlKey(img.url || '')
+      );
+      
+      const correction = crossCheckGroupRoles(g.groupId || g.name || 'unknown', imageKeys, roleConfidenceMap);
+      
+      if (correction.corrections.length > 0) {
+        reconciliationChanges += correction.corrections.length;
+        
+        for (const corr of correction.corrections) {
+          console.log(`[pairing-phase5] Reconciliation: ${corr.imageKey.substring(0, 30)}... ${corr.originalRole} → ${corr.correctedRole} (${corr.reason})`);
+          
+          // Update roleByKey with corrected role
+          const existing = roleByKey.get(corr.imageKey);
+          if (existing) {
+            roleByKey.set(corr.imageKey, {
+              ...existing,
+              role: corr.correctedRole
+            });
+          }
+        }
+      }
+    }
+    
+    console.log('[pairing-phase5] Reconciliation complete:', reconciliationChanges, 'role adjustments');
 
     // Apply hero/back selection to all normalized groups
     for (const g of normalizedGroups) {
       pickHeroBackForGroup(g, roleByKey);
+    }
+
+    // === PHASE 5.5: Validation Layer ===
+    console.log('[pairing-phase5] Running final validation...');
+    const validationStats = {
+      groupsWithFront: 0,
+      groupsWithoutFront: 0,
+      groupsWithBack: 0,
+      groupsRepaired: 0,
+      totalGroups: normalizedGroups.length
+    };
+    
+    for (const g of normalizedGroups) {
+      const hasFront = !!g.heroUrl;
+      const hasBack = !!g.backUrl;
+      
+      if (hasFront) validationStats.groupsWithFront++;
+      if (!hasFront) validationStats.groupsWithoutFront++;
+      if (hasBack) validationStats.groupsWithBack++;
+      
+      // Auto-repair: if no front, pick first image
+      if (!hasFront && g.images && g.images.length > 0) {
+        const firstImg = g.images[0];
+        g.heroUrl = typeof firstImg === 'string' ? urlKey(firstImg) : urlKey(firstImg.url || '');
+        g.heroDisplayUrl = httpsByKey.get(g.heroUrl!) || `/files/${encodeURIComponent(g.heroUrl!)}`;
+        validationStats.groupsRepaired++;
+        console.log(`[pairing-phase5] Auto-repair: group ${g.groupId || g.name} had no front, assigned ${g.heroUrl?.substring(0, 30)}...`);
+      }
+    }
+    
+    console.log('[pairing-phase5] Validation stats:', validationStats);
+    
+    if (validationStats.groupsWithoutFront > validationStats.groupsRepaired) {
+      console.warn('[pairing-phase5] ⚠️  Some groups still missing fronts after auto-repair');
+    } else {
+      console.log('[pairing-phase5] ✅ All groups have valid front images');
     }
 
     // Debug: log hero/back for each group
