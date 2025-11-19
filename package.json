@@ -24,7 +24,8 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:verbose": "jest --verbose"
+    "test:verbose": "jest --verbose",
+    "test:direct-pairing": "tsx scripts/test-direct-pairing.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.21.1",
