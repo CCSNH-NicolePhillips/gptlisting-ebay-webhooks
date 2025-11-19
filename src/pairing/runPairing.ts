@@ -320,6 +320,8 @@ export async function runPairing(opts: {
   
   // Enforce contract: validate pairs use allowed backs
   const allowed = new Map(Object.entries(candidatesByFront));
+  const rejectedPairs: Pair[] = []; // Phase 5a.5: Track rejected low-score pairs
+  
   for (const p of parsed.pairs) {
     const f = canon(p.frontUrl), b = canon(p.backUrl);
     const list = allowed.get(f);
@@ -334,12 +336,27 @@ export async function runPairing(opts: {
       throw new Error(`Model chose back not in candidates: front=${p.frontUrl} back=${p.backUrl}`);
     }
     
+    // Phase 5a.5: Reject model pairs with score < 3.0 (likely wrong pairs)
+    if (p.matchScore < 3.0) {
+      log(`[model-pairing] REJECTED low-score pair: front=${p.frontUrl} back=${p.backUrl} score=${p.matchScore.toFixed(2)} (threshold=3.0)`);
+      rejectedPairs.push(p);
+      // Treat this front as a singleton instead
+      parsed.singletons.push({
+        url: p.frontUrl,
+        reason: `model-pair rejected: score=${p.matchScore.toFixed(2)} < 3.0 threshold`
+      });
+      continue; // Skip adding to usedBacks
+    }
+    
     // Check uniqueness (no back used twice)
     if (usedBacks.has(b)) {
       throw new Error(`Model reused back: back=${p.backUrl} already used in auto-pair`);
     }
     usedBacks.add(b);
   }
+  
+  // Filter out rejected pairs from parsed.pairs
+  parsed.pairs = parsed.pairs.filter(p => !rejectedPairs.includes(p));
   
   // Enforce contract: check singleton reasons and missing decisions
   const frontsSeen = new Set(parsed.pairs.map(p => canon(p.frontUrl)));

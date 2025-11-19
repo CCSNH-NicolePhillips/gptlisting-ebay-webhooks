@@ -3450,8 +3450,10 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       // Hydrate with proper displayUrl using harvested https URLs
       const displayUrl = computeDisplayUrl(insightKey);
 
+      const fromVision = value as any;
       const insight = {
-        ...value,
+        ...fromVision,
+        originalRole: fromVision.role || 'other', // Phase 5a.1: Preserve Vision ground truth
         url: normalized,
         key: insightKey,
         displayUrl
@@ -3685,6 +3687,19 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
           // CRITICAL: Also update imageInsightsRecord so pairing function sees the correct role
           const insight = imageInsightsRecord[corr.imageKey];
           if (insight) {
+            // Phase 5a.2: Preserve originalRole and never demote fronts
+            const original = (insight as any).originalRole ?? (insight as any).role;
+            
+            // Hard guard: never allow a front to be changed to back/other
+            if (original === 'front' && corr.correctedRole !== 'front') {
+              console.warn('[pairing-phase5] REFUSING to demote front', corr.imageKey, {
+                originalRole: original,
+                attemptedRole: corr.correctedRole,
+                reason: corr.reason
+              });
+              continue; // Skip this correction
+            }
+            
             (insight as any).role = corr.correctedRole;
           }
         }
@@ -3692,6 +3707,25 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
     }
     
     console.log('[pairing-phase5] Reconciliation complete:', reconciliationChanges, 'role adjustments');
+    
+    // Phase 5a.2: Validation pass - revert any fronts that were incorrectly changed
+    let revertedFronts = 0;
+    for (const [key, insight] of Object.entries(imageInsightsRecord)) {
+      const original = (insight as any).originalRole;
+      const current = (insight as any).role;
+      if (original === 'front' && current !== 'front') {
+        console.warn('[pairing-phase5] Validation: Front was changed, reverting', { 
+          key, 
+          originalRole: original, 
+          currentRole: current 
+        });
+        (insight as any).role = 'front';
+        revertedFronts++;
+      }
+    }
+    if (revertedFronts > 0) {
+      console.log('[pairing-phase5] Reverted', revertedFronts, 'incorrectly changed fronts');
+    }
 
     // Apply hero/back selection to all normalized groups
     for (const g of normalizedGroups) {

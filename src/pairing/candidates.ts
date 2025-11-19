@@ -281,7 +281,12 @@ export function buildCandidates(
   
   // Get all fronts and backs (include 'other' as potential backs for visual matching)
   const fronts = Array.from(features.values()).filter(f => f.role === 'front');
-  const backs = Array.from(features.values()).filter(f => f.role === 'back' || f.role === 'other');
+  // Phase 5a.4: Exclude any feature whose originalRole was 'front' from back candidates
+  const backs = Array.from(features.values()).filter(f => 
+    (f.role === 'back' || f.role === 'other') && f.originalRole !== 'front'
+  );
+  
+  console.log(`[buildCandidates] Phase 5a.4 filtering: fronts=${fronts.length} backs=${backs.length}`);
   
   // Compute front signature counts to detect uniqueness
   const signatureCounts = new Map<string, number>();

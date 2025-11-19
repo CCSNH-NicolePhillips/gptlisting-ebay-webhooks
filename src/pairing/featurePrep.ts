@@ -34,6 +34,7 @@ export type Role = 'front' | 'back' | 'side' | 'other';
 export interface FeatureRow {
   url: string;
   role: Role;
+  originalRole?: Role; // Phase 5a.3: Immutable Vision ground truth
   brandNorm: string; // lowercase, strip inc/llc/co/ltd/corp/company, collapse spaces
   productTokens: string[]; // lowercase tokens (a-z0-9+-.)
   variantTokens: string[];
@@ -195,7 +196,8 @@ export function buildFeatures(analysis: Analysis): Map<string, FeatureRow> {
     }
     
     matched++;
-    const role = (insight.role || 'other') as Role;
+    // Phase 5a.3: Use originalRole as fallback to preserve Vision ground truth
+    const role = ((insight as any).originalRole || insight.role || 'other') as Role;
     const brandNorm = normalizeBrand(group.brand || '');
     const productTokens = tokenize(group.product || '');
     const variantTokens = tokenize(group.variant || '');
@@ -210,6 +212,7 @@ export function buildFeatures(analysis: Analysis): Map<string, FeatureRow> {
     features.set(key, {  // Use canonical key instead of raw url
       url: key,           // Store canonical key as url
       role,
+      originalRole: (insight as any).originalRole, // Phase 5a.3: Preserve for downstream
       brandNorm,
       productTokens,
       variantTokens,
