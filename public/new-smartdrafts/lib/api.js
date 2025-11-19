@@ -2,13 +2,17 @@
 
 // Use window.authClient.authFetch for authenticated endpoints (with fallback)
 async function authGet(url, opts={}) {
-  const exec = window.authClient?.authFetch ?? fetch;
-  return exec(url, { method: 'GET', ...opts });
+  if (!window.authClient?.authFetch) {
+    throw new Error('Authentication not ready. Please wait and try again.');
+  }
+  return window.authClient.authFetch(url, { method: 'GET', ...opts });
 }
 
 async function authPost(url, body, opts={}) {
-  const exec = window.authClient?.authFetch ?? fetch;
-  return exec(url, {
+  if (!window.authClient?.authFetch) {
+    throw new Error('Authentication not ready. Please wait and try again.');
+  }
+  return window.authClient.authFetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...(opts.headers||{}) },
     body: body ? JSON.stringify(body) : undefined,

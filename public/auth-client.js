@@ -420,12 +420,14 @@
   async function authFetch(input, init = {}) {
     try { await ensureAuth(); } catch {}
     const headers = Object.assign({}, init.headers);
-    try {
-      const token = await getToken();
-      if (token) headers.Authorization = headers.Authorization || `Bearer ${token}`;
-    } catch (e) {
-      console.warn('[Auth] authFetch: failed to get token:', e.message);
+    
+    // CRITICAL: Must have a valid token for authenticated requests
+    const token = await getToken();
+    if (!token) {
+      throw new Error('Authentication token not available. Please login and try again.');
     }
+    
+    headers.Authorization = headers.Authorization || `Bearer ${token}`;
     return fetch(input, Object.assign({}, init, { headers }));
   }
 
