@@ -236,14 +236,19 @@ export function crossCheckGroupRoles(
   
   if (fronts.length === 0 && imageKeys.length > 0) {
     // Promote the best non-back image to front
-    const candidate = sides[0] || backs[0] || { key: imageKeys[0], conf: { confidence: 0 } };
+    // CRITICAL: Do NOT promote backs to fronts - this destroys pairing!
+    // Only promote sides/other images. If only backs exist, leave them alone.
+    const candidate = sides[0];
     
-    corrections.push({
-      imageKey: candidate.key,
-      originalRole: candidate.conf?.role || 'other',
-      correctedRole: 'front',
-      reason: `No front detected in group, promoting best candidate (confidence: ${candidate.conf?.confidence.toFixed(2)})`
-    });
+    if (candidate) {
+      corrections.push({
+        imageKey: candidate.key,
+        originalRole: candidate.conf?.role || 'other',
+        correctedRole: 'front',
+        reason: `No front detected in group, promoting best candidate (confidence: ${candidate.conf?.confidence.toFixed(2)})`
+      });
+    }
+    // If no sides available and only backs exist, do nothing - let pairing handle it
   }
   
   return {
