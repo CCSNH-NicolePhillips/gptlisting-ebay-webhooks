@@ -188,13 +188,27 @@ export const handler: Handler = async (event) => {
   }
 
   // ZF-2.3: Final fallback to old folder cache (for backward compatibility)
+  // DISABLED: Old cache contains pre-Phase-5b pairing results
   if (!analysis && folder) {
-    console.log(`[pairing] Fallback to old folder cache for: ${folder}`);
+    console.log(`[pairing] Old folder cache disabled - use jobId or fresh analysis`);
+    return jsonResponse(400, {
+      error: "No analysis available",
+      hint: "Provide jobId in request body, or ensure scan completed successfully"
+    }, originHdr, methods);
+    
+    /* OLD CODE - DISABLED
     const normalizeFolderKey = (value: string): string => {
       return value.replace(/^[\\/]+/, "").trim();
     };
     const cacheKey = normalizeFolderKey(folder);
     const cached = await getCachedSmartDraftGroups(cacheKey);
+
+    if (!cached) {
+      return jsonResponse(404, {
+        error: "No cached scan found for this folder",
+        hint: "Run Analyze first, then Run Pairing"
+      }, originHdr, methods);
+    }
 
     if (!cached) {
       return jsonResponse(404, {
@@ -219,6 +233,7 @@ export const handler: Handler = async (event) => {
       orphans: cached.orphans,
       imageInsights: cached.imageInsights
     };
+    */
   }
 
   // ZF-2.4: Check if we have visualDescription after all fallbacks
