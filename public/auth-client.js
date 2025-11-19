@@ -380,29 +380,61 @@
 
       // Return cached token if valid
       if (state.token && isJwtValid(state.token)) {
+        console.log('[Auth] getToken: returning cached valid token');
         return state.token;
       }
 
-      // Fetch new token
-      console.log('[Auth] getToken: fetching new token...');
+      // Token expired or missing - fetch new one
+      if (state.token) {
+        console.warn('[Auth] getToken: cached token expired, fetching new one...');
+      } else {
+        console.log('[Auth] getToken: no cached token, fetching new one...');
+      }
+
       try {
-        const token = await state.auth0.getTokenSilently();
+        // CRITICAL: Request access token with audience for API calls
+        // Do NOT use ID token for backend authentication
+        const options = {};
+        if (state.cfg?.AUTH0_AUDIENCE) {
+          options.authorizationParams = { audience: state.cfg.AUTH0_AUDIENCE };
+          console.log('[Auth] getToken: requesting access token with audience:', state.cfg.AUTH0_AUDIENCE);
+        }
+        
+        const token = await state.auth0.getTokenSilently(options);
+        
+        if (!token) {
+          console.error('[Auth] getToken: getTokenSilently returned null/undefined');
+          state.token = null;
+          return null;
+        }
+        
+        // Verify we got a valid access token (not ID token)
+        try {
+          const parts = token.split('.');
+          if (parts.length === 3) {
+            const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+            console.log('[Auth] getToken: received token with audience:', payload.aud);
+            if (state.cfg?.AUTH0_AUDIENCE && payload.aud !== state.cfg.AUTH0_AUDIENCE) {
+              console.warn('[Auth] getToken: WARNING - token audience mismatch!', {
+                expected: state.cfg.AUTH0_AUDIENCE,
+                received: payload.aud
+              });
+            }
+          }
+        } catch (e) {
+          console.warn('[Auth] getToken: failed to decode token for validation:', e);
+        }
+        
         state.token = token;
+        console.log('[Auth] getToken: successfully fetched new access token');
         return token;
       } catch (e) {
-        console.warn('[Auth] getToken: getTokenSilently failed, trying ID token');
-        try {
-          const idc = await state.auth0.getIdTokenClaims();
-          const idToken = idc && (idc.__raw || idc.raw || null);
-          if (idToken) {
-            state.token = idToken;
-            state.idTokenRaw = idToken;
-            return idToken;
-          }
-        } catch (e2) {
-          console.error('[Auth] getToken: failed to get any token');
-        }
-        return null;
+        console.error('[Auth] getToken: getTokenSilently failed:', e);
+        state.token = null;
+        
+        // DO NOT fall back to ID token - API requires access token
+        // If this fails, user needs to re-authenticate
+        throw new Error('Failed to get access token. Please login again.');
       }
     }
 
