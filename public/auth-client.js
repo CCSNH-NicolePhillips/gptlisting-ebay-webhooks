@@ -432,6 +432,33 @@
         console.error('[Auth] getToken: getTokenSilently failed:', e);
         state.token = null;
         
+        // Check if this is a "Missing Refresh Token" error
+        const errorMsg = String(e?.message || e || '');
+        if (errorMsg.includes('Missing Refresh Token') || errorMsg.includes('refresh token')) {
+          console.warn('[Auth] getToken: Missing refresh token - need to re-authenticate');
+          console.warn('[Auth] This happens when the session was created before refresh tokens were enabled');
+          console.warn('[Auth] Clearing local auth state and forcing fresh login...');
+          
+          // Clear stale auth state
+          clearLocalAuthState();
+          
+          // Force fresh login to get new session with refresh tokens
+          try {
+            await state.auth0.loginWithRedirect({
+              authorizationParams: {
+                redirect_uri: window.location.origin + '/login.html',
+                audience: state.cfg?.AUTH0_AUDIENCE || undefined,
+                prompt: 'login', // Force fresh login, not SSO
+              }
+            });
+            // Navigation will happen, this code won't continue
+            return null;
+          } catch (loginError) {
+            console.error('[Auth] getToken: Failed to initiate re-login:', loginError);
+            throw new Error('Session expired. Please refresh the page to login again.');
+          }
+        }
+        
         // DO NOT fall back to ID token - API requires access token
         // If this fails, user needs to re-authenticate
         throw new Error('Failed to get access token. Please login again.');
