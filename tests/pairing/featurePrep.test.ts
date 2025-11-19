@@ -20,7 +20,8 @@ test("brandNorm normalizes correctly", () => {
   
   const features = buildFeatures(analysis);
   
-  expect(features.get("a.jpg")?.brandNorm).toBe("r co");
+  // Phase 5b: normalizeBrand now extracts first significant token only
+  expect(features.get("a.jpg")?.brandNorm).toBe("r");
   expect(features.get("b.jpg")?.brandNorm).toBe("mybrainco");
 });
 
