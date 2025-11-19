@@ -8,13 +8,13 @@ import { DraftsPanel } from './components/DraftsPanel.js';
 import { MetricsPanel } from './components/MetricsPanel.js';
 import { DebugPanel } from './components/DebugPanel.js';
 import { FolderSelector } from './components/FolderSelector.js';
-import { enqueueAnalyzeLive, pollAnalyzeLive, runPairingLive, resetFolderLive, getMetricsLive, createDraftsLive, pollDraftStatus, publishDraftsToEbay } from './lib/api.js';
+import { enqueueAnalyzeLive, pollAnalyzeLive, runPairingLive, resetFolderLive, getMetricsLive, createDraftsLive, pollDraftStatus, publishDraftsToEbay, callDirectPairing } from './lib/api.js';
 import { mockLoadAnalysis, mockRunPairing } from './lib/mockServer.js';
 import { normalizeFolderInput } from './lib/urlKey.js';
 
 const html = htm.bind(h);
 
-const TABS = ['Analysis','Pairing','Products','Drafts','Metrics','Logs (soon)','Debug'];
+const TABS = ['Analysis','Pairing','Products','Drafts','Metrics','Comparison','Logs (soon)','Debug'];
 const MAX_ANALYZE_MS = 10 * 60 * 1000; // 10 minutes timeout for analysis
 
 export function App() {
@@ -37,6 +37,11 @@ export function App() {
   const [loadingStatus, setLoadingStatus] = useState(''); // Detailed status for loading spinner
   const [toast, setToast] = useState('');
   const [authReady, setAuthReady] = useState(false); // Track if auth is initialized
+  
+  // DP3: Direct pairing comparison
+  const [useDirectPairing, setUseDirectPairing] = useState(false);
+  const [directPairingResult, setDirectPairingResult] = useState(null);
+  const [directPairingError, setDirectPairingError] = useState(null);
 
   // Check authentication on mount
   useEffect(() => {
@@ -81,6 +86,31 @@ export function App() {
   }, []);
 
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(''), 3000); }
+  
+  // DP3: Helper to extract filename from URL
+  function basenameFromUrl(url) {
+    try {
+      if (!url) return 'unknown';
+      const parts = url.split('?')[0].split('/');
+      return parts[parts.length - 1] || 'unknown';
+    } catch {
+      return 'unknown';
+    }
+  }
+  
+  // DP3: Build image list for direct pairing
+  function buildDirectPairingImages(analysis) {
+    if (!analysis?.imageInsights) return [];
+    
+    const insights = Array.isArray(analysis.imageInsights) 
+      ? analysis.imageInsights
+      : Object.values(analysis.imageInsights);
+    
+    return insights.map(insight => ({
+      url: insight.url || insight.displayUrl,
+      filename: insight.filename || insight.imageKey || basenameFromUrl(insight.url || insight.displayUrl),
+    })).filter(img => img.url); // Filter out any invalid entries
+  }
 
   // Debug helper - expose analysis to console
   function debugAnalysis() {
@@ -242,6 +272,31 @@ export function App() {
       const { pairing, metrics } = out;
       setPairing(pairing); setMetrics(metrics || null);
       setLoadingStatus('');
+      
+      // DP3: Optionally run direct pairing for comparison
+      if (useDirectPairing && mode === 'Live' && analysis) {
+        try {
+          setLoadingStatus('🔮 Running direct GPT-4o pairing...');
+          setDirectPairingError(null);
+          const directImages = buildDirectPairingImages(analysis);
+          
+          if (directImages.length === 0) {
+            throw new Error('No images found for direct pairing');
+          }
+          
+          console.log('[directPairing] Sending images:', directImages.length);
+          const direct = await callDirectPairing(directImages);
+          setDirectPairingResult(direct);
+          console.log('[directPairing] products:', direct.products.length);
+          showToast(`✨ Direct pairing: ${direct.products.length} products`);
+        } catch (err) {
+          console.error('[directPairing] failed', err);
+          setDirectPairingError(err.message || String(err));
+          showToast('⚠️ Direct pairing failed: ' + err.message);
+        }
+        setLoadingStatus('');
+      }
+      
       setTab('Pairing');
     } catch (e) {
       console.error(e); showToast('❌ ' + (e.message || 'Pairing failed'));
@@ -437,6 +492,13 @@ export function App() {
           <p class="hint" style="margin: 4px 0 8px 0; font-size: 0.85em; color: #666;">
             Leave this off for normal runs. Turn it on only if cached results look wrong.
           </p>
+          <label class="check">
+            <input type="checkbox" checked=${useDirectPairing} onChange=${e=>setUseDirectPairing(e.currentTarget.checked)} disabled=${mode !== 'Live'} />
+            <span>Use Direct LLM Pairing (experimental)</span>
+          </label>
+          <p class="hint" style="margin: 4px 0 8px 0; font-size: 0.85em; color: #666;">
+            Compare one-shot GPT-4o pairing vs. legacy pairing. Only works in Live mode.
+          </p>
           ${!authReady ? html`
             <p class="hint" style="margin: 4px 0 8px 0; font-size: 0.85em; color: #f60;">
               ⏳ Authenticating... Please wait.
@@ -474,8 +536,59 @@ export function App() {
         ${!loading && tab==='Products' && html`<${ProductPanel} products=${pairing?.products} />`}
         ${!loading && tab==='Drafts' && html`<${DraftsPanel} drafts=${drafts} />`}
         ${!loading && tab==='Metrics' && html`<${MetricsPanel} pairing=${pairing} />`}
+        ${!loading && tab==='Comparison' && html`
+          <div class="panel">
+            <h2>Pairing Comparison: Legacy vs Direct LLM</h2>
+            ${!directPairingResult && !directPairingError ? html`
+              <p style="color: #666; margin: 20px 0;">
+                Enable "Use Direct LLM Pairing" and run pairing to see comparison.
+              </p>
+            ` : null}
+            ${directPairingError ? html`
+              <div style="background: #fee; border: 1px solid #f00; padding: 12px; margin: 12px 0; border-radius: 4px;">
+                <strong>Direct pairing error:</strong> ${directPairingError}
+              </div>
+            ` : null}
+            ${directPairingResult && !directPairingError ? html`
+              <div class="comparison-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px;">
+                <div style="border: 1px solid #ddd; padding: 16px; border-radius: 4px;">
+                  <h3>Legacy Pairing (${pairing?.products?.length || 0} products)</h3>
+                  <ul style="list-style: none; padding: 0;">
+                    ${(pairing?.products || []).map((p, i) => html`
+                      <li key=${i} style="margin: 12px 0; padding: 8px; background: #f9f9f9; border-radius: 4px;">
+                        <div style="font-weight: bold;">${p.evidence?.product || p.productName || 'Product ' + (i+1)}</div>
+                        <div style="font-size: 0.85em; color: #666; margin-top: 4px;">
+                          Front: ${p.frontUrl ? p.frontUrl.split('/').pop().split('?')[0] : 'N/A'}
+                        </div>
+                        <div style="font-size: 0.85em; color: #666;">
+                          Back: ${p.backUrl ? p.backUrl.split('/').pop().split('?')[0] : 'N/A'}
+                        </div>
+                      </li>
+                    `)}
+                  </ul>
+                </div>
+                <div style="border: 1px solid #ddd; padding: 16px; border-radius: 4px;">
+                  <h3>Direct LLM Pairing (${directPairingResult.products?.length || 0} products)</h3>
+                  <ul style="list-style: none; padding: 0;">
+                    ${(directPairingResult.products || []).map((p, i) => html`
+                      <li key=${i} style="margin: 12px 0; padding: 8px; background: #e8f5e9; border-radius: 4px;">
+                        <div style="font-weight: bold;">${p.productName || 'Product ' + (i+1)}</div>
+                        <div style="font-size: 0.85em; color: #666; margin-top: 4px;">
+                          Front: ${p.frontImage || 'N/A'}
+                        </div>
+                        <div style="font-size: 0.85em; color: #666;">
+                          Back: ${p.backImage || 'N/A'}
+                        </div>
+                      </li>
+                    `)}
+                  </ul>
+                </div>
+              </div>
+            ` : null}
+          </div>
+        `}
         ${!loading && tab==='Debug' && html`<${DebugPanel} analysis=${analysis} pairing=${pairing} />`}
-        ${!loading && tab!=='Analysis' && tab!=='Pairing' && tab!=='Products' && tab!=='Drafts' && tab!=='Metrics' && tab!=='Debug' && html`
+        ${!loading && tab!=='Analysis' && tab!=='Pairing' && tab!=='Products' && tab!=='Drafts' && tab!=='Metrics' && tab!=='Comparison' && tab!=='Debug' && html`
           <div class="placeholder">
             <p>${tab} — coming next.</p>
           </div>

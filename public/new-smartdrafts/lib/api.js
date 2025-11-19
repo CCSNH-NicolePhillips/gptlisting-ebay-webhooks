@@ -114,6 +114,21 @@ export async function publishDraftsToEbay(jobId, drafts) {
   return r.json(); // { ok, results }
 }
 
+// DP3: Direct pairing endpoint
+export async function callDirectPairing(images) {
+  if (!images || !images.length) throw new Error('images required');
+  
+  const r = await authPost(`/.netlify/functions/smartdrafts-pairing-direct`, { images });
+  if (!r.ok) throw new Error(`callDirectPairing ${r.status}: ${await r.text()}`);
+  
+  const json = await r.json();
+  if (!json.ok) {
+    throw new Error(json.error || 'Direct pairing failed');
+  }
+  
+  return json; // { ok: true, products: [...] }
+}
+
 
 
 
