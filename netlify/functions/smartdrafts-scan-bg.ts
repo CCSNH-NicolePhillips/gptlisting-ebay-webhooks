@@ -36,11 +36,32 @@ export const handler: Handler = async (event) => {
     return json(403, { ok: false, error: "Forbidden", origin: originHdr, allowed: parseAllowedOrigins() }, originHdr, METHODS);
   }
 
+  // DEBUG: Check all possible auth header variants
+  const rawAuth =
+    (headers.authorization as string | undefined) ||
+    (headers.Authorization as string | undefined) ||
+    (headers['x-forwarded-authorization'] as string | undefined);
+
+  console.log('[smartdrafts-scan-bg] Incoming auth header:', rawAuth ? `${rawAuth.slice(0, 32)}...` : 'MISSING');
+  console.log('[smartdrafts-scan-bg] All headers (redacted):', {
+    authorization: headers.authorization ? 'present' : 'missing',
+    Authorization: headers.Authorization ? 'present' : 'missing',
+    'x-forwarded-authorization': headers['x-forwarded-authorization'] ? 'present' : 'missing',
+    origin: headers.origin,
+    referer: headers.referer,
+  });
+
   let user;
   try {
-    user = await requireUserAuth(headers.authorization || headers.Authorization);
-  } catch {
-    return json(401, { ok: false, error: "Unauthorized" }, originHdr, METHODS);
+    user = await requireUserAuth(rawAuth);
+  } catch (err) {
+    console.error('[smartdrafts-scan-bg] Auth failed:', err);
+    return json(
+      401,
+      { ok: false, error: "Unauthorized", detail: (err as Error).message ?? String(err) },
+      originHdr,
+      METHODS
+    );
   }
 
   const ctype = (headers["content-type"] || headers["Content-Type"] || "").toLowerCase();
