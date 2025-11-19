@@ -31,6 +31,7 @@ import { cfg, getThresholdsSnapshot, ENGINE_VERSION } from "./config.js";
 import { buildMetrics, formatMetricsLog, PairingMetrics } from "./metrics.js";
 import { groupExtrasWithProducts } from "./groupExtras.js";
 import { enrichListingWithAI } from "../services/listing-enrichment.js";
+import { resolveSingletons } from "./resolveSingletons.js";
 
 type Analysis = {
   groups: any[];
@@ -50,6 +51,39 @@ export async function runPairing(opts: {
 
   // Build features and candidates
   const features = buildFeatures(analysis);
+  
+  // Phase 5b.3: Promote "other" to "back" for lone front groups
+  // Group features by their group ID to analyze role distribution
+  const groupFeatures = new Map<string, FeatureRow[]>();
+  for (const feat of features.values()) {
+    // Find the group this feature belongs to
+    const group = analysis.groups.find(g => 
+      g.images?.includes(feat.url) || 
+      g.primaryImageUrl === feat.url ||
+      g.id?.includes(feat.url)
+    );
+    if (group) {
+      const gid = group.id || group.base || 'unknown';
+      if (!groupFeatures.has(gid)) {
+        groupFeatures.set(gid, []);
+      }
+      groupFeatures.get(gid)!.push(feat);
+    }
+  }
+  
+  // Check each group for "1 front + 0 backs + 1 other" pattern
+  for (const [groupId, groupFeats] of groupFeatures.entries()) {
+    const fronts = groupFeats.filter(f => f.role === 'front');
+    const backs = groupFeats.filter(f => f.role === 'back');
+    const others = groupFeats.filter(f => f.role === 'other');
+    
+    if (fronts.length === 1 && backs.length === 0 && others.length === 1) {
+      log(`[pairing] Promoting other->back for lone front group: groupId=${groupId} front=${fronts[0].url} other=${others[0].url}`);
+      // Mutate the feature to change role from 'other' to 'back'
+      others[0].role = 'back';
+    }
+  }
+  
   const buildStart = Date.now();
   const candidatesMap = buildCandidates(features, 4);
   const buildDurationMs = Date.now() - buildStart;
@@ -382,7 +416,7 @@ export async function runPairing(opts: {
   const allPairs = [...autoPairs, ...parsed.pairs];
   
   // Group extras with products
-  const products = groupExtrasWithProducts(allPairs, features);
+  let products = groupExtrasWithProducts(allPairs, features);
   
   // ENRICH LISTINGS: Generate SEO-optimized titles and descriptions with ChatGPT
   log(`📝 Enriching ${products.length} products with AI-generated titles and descriptions...`);
@@ -451,11 +485,25 @@ export async function runPairing(opts: {
   ]);
   const filteredSingletons = parsed.singletons.filter(s => !autoPairedUrls.has(canon(s.url)));
   
+  // Phase 5b.4: Resolve singletons - promote to solo products or attach as extras
+  const singletonFeatures = filteredSingletons
+    .map(s => features.get(canon(s.url)))
+    .filter((f): f is FeatureRow => f !== undefined);
+  
+  const { products: resolvedProducts, remainingSingletons } = resolveSingletons(singletonFeatures, products);
+  products = resolvedProducts;
+  
+  // Convert remaining singletons back to original singleton format
+  const finalSingletons = remainingSingletons.map(f => ({
+    url: f.url,
+    reason: 'no matching product or unique brand'
+  }));
+  
   const mergedResult: PairingResult = {
     engineVersion: ENGINE_VERSION,
     pairs: allPairs,
     products,
-    singletons: filteredSingletons,
+    singletons: finalSingletons,
     debugSummary: parsed.debugSummary || []
   };
 
@@ -464,7 +512,7 @@ export async function runPairing(opts: {
     log(`PAIR  front=${p.frontUrl}  back=${p.backUrl}  score=${p.matchScore.toFixed(2)}  brand=${p.brand}  product=${p.product}`);
     if (p.evidence?.length) log(`EVID  ${p.evidence.join(" | ")}`);
   }
-  for (const s of filteredSingletons) {
+  for (const s of finalSingletons) {
     log(`SINGLETON url=${s.url} reason=${s.reason}`);
   }
 
@@ -475,14 +523,14 @@ export async function runPairing(opts: {
     candidatesMap,
     autoPairs,
     modelPairs: parsed.pairs,
-    singletons: filteredSingletons,
+    singletons: finalSingletons,
     thresholds: getThresholdsSnapshot(),
     durationMs
   });
   
   // Summary
   log(formatMetricsLog(metrics));
-  log(`SUMMARY frontsWithCandidates=${Object.keys(candidatesMap).length}/${Array.from(features.values()).filter(f => f.role === 'front').length} autoPairs=${autoPairs.length} modelPairs=${parsed.pairs.length} singletons=${filteredSingletons.length}`);
+  log(`SUMMARY frontsWithCandidates=${Object.keys(candidatesMap).length}/${Array.from(features.values()).filter(f => f.role === 'front').length} autoPairs=${autoPairs.length} modelPairs=${parsed.pairs.length} singletons=${finalSingletons.length} products=${products.length}`);
 
   return { result: mergedResult, rawText, metrics };
 }

@@ -187,12 +187,36 @@ export function buildFeatures(analysis: Analysis): Map<string, FeatureRow> {
     const url = insight.url;
     const key = urlKey(url);  // Canonicalize to key
     const base = basenameFrom(url).toLowerCase();
-    const group = groupByBase.get(base);
+    let group = groupByBase.get(base);
     
     if (!group) {
-      skipped++;
-      console.log(`[buildFeatures] SKIPPED: No group match for basename="${base}" from url="${url}"`);
-      continue; // Skip insights without matching groups
+      // Phase 5b.2: Create synthetic groups for orphan fronts
+      const originalRole = (insight as any).originalRole ?? insight.role;
+      if (originalRole === 'front') {
+        console.warn('[buildFeatures] Creating synthetic group for lone front', { base, url });
+        group = {
+          id: `synthetic:${base}`,
+          base,
+          images: [url],
+          brand: insight.brand || '',
+          product: insight.product || '',
+          variant: insight.variant || '',
+          size: insight.size || '',
+          categoryPath: insight.categoryPath || null,
+        };
+        analysis.groups.push(group);
+        groupByBase.set(base, group);
+      } else {
+        // Phase 5b.1: Log skipped non-front images
+        console.warn('[buildFeatures] SKIPPED image (no group, non-front)', {
+          url,
+          base,
+          role: insight.role,
+          originalRole,
+        });
+        skipped++;
+        continue;
+      }
     }
     
     matched++;
@@ -226,6 +250,10 @@ export function buildFeatures(analysis: Analysis): Map<string, FeatureRow> {
     });
   }
   
-  console.log(`[buildFeatures] Matched ${matched} insights to groups, skipped ${skipped}`);
+  console.log('[buildFeatures] summary', {
+    total: analysis.imageInsights.length,
+    matched,
+    skipped,
+  });
   return features;
 }
