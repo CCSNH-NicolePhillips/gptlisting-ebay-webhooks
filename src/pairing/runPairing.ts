@@ -343,7 +343,7 @@ export async function runPairing(opts: {
       // Treat this front as a singleton instead
       parsed.singletons.push({
         url: p.frontUrl,
-        reason: `model-pair rejected: score=${p.matchScore.toFixed(2)} < 3.0 threshold`
+        reason: `declined despite candidates (model-pair rejected: score=${p.matchScore.toFixed(2)} < 3.0 threshold)`
       });
       continue; // Skip adding to usedBacks
     }
