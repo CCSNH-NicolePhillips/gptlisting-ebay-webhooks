@@ -90,26 +90,55 @@ export function App() {
   // DP3: Helper to extract filename from URL
   function basenameFromUrl(url) {
     try {
-      if (!url) return 'unknown';
-      const parts = url.split('?')[0].split('/');
-      return parts[parts.length - 1] || 'unknown';
+      const u = new URL(url);
+      const parts = u.pathname.split('/');
+      return parts[parts.length - 1] || url;
     } catch {
-      return 'unknown';
+      const parts = String(url).split('/');
+      return parts[parts.length - 1] || String(url);
     }
   }
   
-  // DP3: Build image list for direct pairing
+  // DP3a: Build image list for direct pairing (with fallback for cached analysis)
   function buildDirectPairingImages(analysis) {
-    if (!analysis?.imageInsights) return [];
-    
-    const insights = Array.isArray(analysis.imageInsights) 
-      ? analysis.imageInsights
-      : Object.values(analysis.imageInsights);
-    
-    return insights.map(insight => ({
-      url: insight.url || insight.displayUrl,
-      filename: insight.filename || insight.imageKey || basenameFromUrl(insight.url || insight.displayUrl),
-    })).filter(img => img.url); // Filter out any invalid entries
+    // Prefer imageInsights when present
+    if (Array.isArray(analysis?.imageInsights) && analysis.imageInsights.length > 0) {
+      return analysis.imageInsights.map(insight => ({
+        url: insight.url,
+        filename:
+          insight.filename ||
+          insight.imageKey ||
+          basenameFromUrl(insight.url),
+      }));
+    }
+
+    // Fallback: reconstruct from groups if we're dealing with legacy cached analysis
+    if (Array.isArray(analysis?.groups) && analysis.groups.length > 0) {
+      const seen = new Set();
+      const images = [];
+
+      for (const group of analysis.groups) {
+        const arr = group.images || group.urls || [];
+        for (const url of arr) {
+          const key = String(url);
+          if (seen.has(key)) continue;
+          seen.add(key);
+          images.push({
+            url,
+            filename: basenameFromUrl(url),
+          });
+        }
+      }
+
+      console.warn('[directPairing] Using groups fallback to build image list', {
+        count: images.length,
+      });
+
+      return images;
+    }
+
+    console.warn('[directPairing] No imageInsights or groups available for direct pairing');
+    return [];
   }
 
   // Debug helper - expose analysis to console
@@ -280,14 +309,18 @@ export function App() {
           setDirectPairingError(null);
           const directImages = buildDirectPairingImages(analysis);
           
+          console.log('[directPairing] directImages count', directImages.length, {
+            useDirectPairing,
+            cached: analysis.cached,
+          });
+          
           if (directImages.length === 0) {
             throw new Error('No images found for direct pairing');
           }
           
-          console.log('[directPairing] Sending images:', directImages.length);
           const direct = await callDirectPairing(directImages);
+          console.log('[directPairing] UI got result', direct);
           setDirectPairingResult(direct);
-          console.log('[directPairing] products:', direct.products.length);
           showToast(`✨ Direct pairing: ${direct.products.length} products`);
         } catch (err) {
           console.error('[directPairing] failed', err);
