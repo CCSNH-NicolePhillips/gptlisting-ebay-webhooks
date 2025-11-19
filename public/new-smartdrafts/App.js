@@ -110,8 +110,8 @@ export function App() {
       if (insightValues.length > 0) {
         console.log('[directPairing] Using imageInsights object', { count: insightValues.length });
         return insightValues.map(insight => ({
-          url: insight.url,
-          filename: insight.filename || insight.imageKey || basenameFromUrl(insight.url),
+          url: insight.displayUrl || insight.url, // Use displayUrl (full https) over normalized url
+          filename: insight.filename || insight.key || insight.imageKey || basenameFromUrl(insight.displayUrl || insight.url),
         }));
       }
     }
@@ -120,8 +120,8 @@ export function App() {
     if (Array.isArray(insights) && insights.length > 0) {
       console.log('[directPairing] Using imageInsights array', { count: insights.length });
       return insights.map(insight => ({
-        url: insight.url,
-        filename: insight.filename || insight.imageKey || basenameFromUrl(insight.url),
+        url: insight.displayUrl || insight.url, // Use displayUrl (full https) over normalized url
+        filename: insight.filename || insight.key || insight.imageKey || basenameFromUrl(insight.displayUrl || insight.url),
       }));
     }
 
