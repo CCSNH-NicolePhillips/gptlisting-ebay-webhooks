@@ -102,13 +102,26 @@ export function App() {
   // DP3a: Build image list for direct pairing (with fallback for cached analysis)
   function buildDirectPairingImages(analysis) {
     // Prefer imageInsights when present
-    if (Array.isArray(analysis?.imageInsights) && analysis.imageInsights.length > 0) {
-      return analysis.imageInsights.map(insight => ({
+    const insights = analysis?.imageInsights;
+    
+    // Handle imageInsights as object (Record<url, ImageInsight>)
+    if (insights && typeof insights === 'object' && !Array.isArray(insights)) {
+      const insightValues = Object.values(insights);
+      if (insightValues.length > 0) {
+        console.log('[directPairing] Using imageInsights object', { count: insightValues.length });
+        return insightValues.map(insight => ({
+          url: insight.url,
+          filename: insight.filename || insight.imageKey || basenameFromUrl(insight.url),
+        }));
+      }
+    }
+    
+    // Handle imageInsights as array
+    if (Array.isArray(insights) && insights.length > 0) {
+      console.log('[directPairing] Using imageInsights array', { count: insights.length });
+      return insights.map(insight => ({
         url: insight.url,
-        filename:
-          insight.filename ||
-          insight.imageKey ||
-          basenameFromUrl(insight.url),
+        filename: insight.filename || insight.imageKey || basenameFromUrl(insight.url),
       }));
     }
 
@@ -235,12 +248,15 @@ export function App() {
             }
             
             // Log analysis result with cache status
+            const insightsCount = Array.isArray(a.imageInsights) 
+              ? a.imageInsights.length 
+              : (a.imageInsights && typeof a.imageInsights === 'object' ? Object.keys(a.imageInsights).length : 0);
             console.log('[UI] Analysis result:', {
               folder: a.folder,
               jobId: a.jobId,
               cached: a.cached,
               groups: a.groups?.length || 0,
-              insights: a.imageInsights?.length || 0,
+              insights: insightsCount,
             });
             
             break;
