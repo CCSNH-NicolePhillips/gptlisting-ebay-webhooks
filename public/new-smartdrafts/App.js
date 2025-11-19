@@ -56,7 +56,17 @@ export function App() {
             window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
             return;
           }
-          console.log('[App] Authentication verified');
+          
+          // CRITICAL: Verify we can actually get a token before marking ready
+          console.log('[App] Authentication verified, checking token availability...');
+          const token = await window.authClient.getToken();
+          if (!token) {
+            console.error('[App] Authentication succeeded but no token available');
+            setLoadingStatus('❌ Authentication error: No token available. Please refresh and login again.');
+            return;
+          }
+          
+          console.log('[App] Token available, auth ready');
           setAuthReady(true);
         } else {
           console.error('[App] Auth client not available after wait');
