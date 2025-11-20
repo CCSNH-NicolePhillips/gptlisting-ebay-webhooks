@@ -48,7 +48,7 @@ export const cfg = {
   maxTextChars: parseInt(process.env.PAIR_MAX_TEXT_CHARS || '1500', 10),
   
   // Model config
-  model: process.env.PAIR_MODEL || 'gpt-4o-mini',
+  model: process.env.PAIR_MODEL || 'gpt-4o',
   temperature: parseFloat(process.env.PAIR_TEMPERATURE || '0'),
   
   // SLO targets (for monitoring)
