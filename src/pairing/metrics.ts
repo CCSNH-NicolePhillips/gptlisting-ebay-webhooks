@@ -8,6 +8,7 @@ export interface PairingMetrics {
     candidates: number;
     autoPairs: number;
     modelPairs: number;
+    globalPairs: number; // HP1: global solver pairs for two-shot datasets
     singletons: number;
   };
   byBrand: Record<string, {
@@ -32,11 +33,12 @@ export function buildMetrics(opts: {
   candidatesMap: Record<string, any[]>;
   autoPairs: any[];
   modelPairs: any[];
+  globalPairs?: any[]; // HP1: optional global solver pairs
   singletons: any[];
   thresholds: PairingMetrics['thresholds'];
   durationMs: number;
 }): PairingMetrics {
-  const { features, candidatesMap, autoPairs, modelPairs, singletons, thresholds, durationMs } = opts;
+  const { features, candidatesMap, autoPairs, modelPairs, globalPairs = [], singletons, thresholds, durationMs } = opts;
   
   const fronts = Array.from(features.values()).filter(f => f.role === 'front');
   const backs = Array.from(features.values()).filter(f => f.role === 'back' || f.role === 'other');
@@ -84,6 +86,7 @@ export function buildMetrics(opts: {
       candidates: totalCandidates,
       autoPairs: autoPairs.length,
       modelPairs: modelPairs.length,
+      globalPairs: globalPairs.length,
       singletons: singletons.length
     },
     byBrand,
@@ -95,5 +98,5 @@ export function buildMetrics(opts: {
 }
 
 export function formatMetricsLog(m: PairingMetrics): string {
-  return `METRICS images=${m.totals.images} fronts=${m.totals.fronts} backs=${m.totals.backs} candidates=${m.totals.candidates} autoPairs=${m.totals.autoPairs} modelPairs=${m.totals.modelPairs} singletons=${m.totals.singletons}`;
+  return `METRICS images=${m.totals.images} fronts=${m.totals.fronts} backs=${m.totals.backs} candidates=${m.totals.candidates} autoPairs=${m.totals.autoPairs} modelPairs=${m.totals.modelPairs} globalPairs=${m.totals.globalPairs} singletons=${m.totals.singletons}`;
 }

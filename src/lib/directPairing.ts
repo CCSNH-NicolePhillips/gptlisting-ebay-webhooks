@@ -28,8 +28,8 @@ export async function directPairProductsFromImages(
   }
 
   // Batch processing to avoid timeouts with large image sets
-  // Process in batches of 6 images to stay well under 26s timeout
-  const BATCH_SIZE = 6;
+  // Process ALL images in one batch - let GPT-4o see everything at once
+  const BATCH_SIZE = images.length; // No batching, one shot
   const allProducts: DirectPairProduct[] = [];
 
   console.log("[directPairing] Processing", {
@@ -124,7 +124,7 @@ async function processSingleBatch(
       type: "image_url",
       image_url: { 
         url: img.base64,
-        detail: "auto" // Let GPT-4o decide detail level based on image content
+        detail: "auto" // Let GPT-4o decide detail level
       },
     });
   }

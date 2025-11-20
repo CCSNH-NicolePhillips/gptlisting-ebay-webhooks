@@ -115,49 +115,19 @@ export async function publishDraftsToEbay(jobId, drafts) {
 }
 
 // DP3: Direct pairing endpoint
-// Direct pairing with background job and polling
+// Direct pairing - single API call (may take 2-3 minutes)
 export async function callDirectPairing(images) {
   if (!images || !images.length) throw new Error('images required');
   
-  // Start the background job
-  const startResp = await authPost(`/.netlify/functions/smartdrafts-pairing-direct-start`, { images });
-  if (!startResp.ok) throw new Error(`callDirectPairing ${startResp.status}: ${await startResp.text()}`);
+  const r = await authPost(`/.netlify/functions/smartdrafts-pairing-direct`, { images });
+  if (!r.ok) throw new Error(`callDirectPairing ${r.status}: ${await r.text()}`);
   
-  const startJson = await startResp.json();
-  if (!startJson.ok || !startJson.jobId) {
-    throw new Error(startJson.error || 'Failed to start direct pairing job');
+  const json = await r.json();
+  if (!json.ok) {
+    throw new Error(json.error || 'Direct pairing failed');
   }
   
-  const jobId = startJson.jobId;
-  console.log('[directPairing] Job started:', jobId);
-  
-  // Poll for completion (check every 3 seconds, max 5 minutes)
-  const maxAttempts = 100; // 5 min
-  const pollInterval = 3000; // 3s
-  
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    await new Promise(resolve => setTimeout(resolve, pollInterval));
-    
-    const statusResp = await authGet(`/.netlify/functions/smartdrafts-pairing-direct-status?jobId=${encodeURIComponent(jobId)}`);
-    if (!statusResp.ok) {
-      throw new Error(`Poll failed ${statusResp.status}: ${await statusResp.text()}`);
-    }
-    
-    const status = await statusResp.json();
-    console.log(`[directPairing] Poll ${attempt + 1}: ${status.status}`);
-    
-    if (status.status === 'completed') {
-      return { ok: true, products: status.result?.products || [] };
-    }
-    
-    if (status.status === 'failed') {
-      throw new Error(status.error || 'Direct pairing job failed');
-    }
-    
-    // Status is 'pending' or 'processing', continue polling
-  }
-  
-  throw new Error('Direct pairing timed out after 5 minutes');
+  return json; // { ok: true, products: [...] }
 }
 
 

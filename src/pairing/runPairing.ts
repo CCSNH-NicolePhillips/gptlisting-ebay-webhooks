@@ -32,6 +32,7 @@ import { buildMetrics, formatMetricsLog, PairingMetrics } from "./metrics.js";
 import { groupExtrasWithProducts } from "./groupExtras.js";
 import { enrichListingWithAI } from "../services/listing-enrichment.js";
 import { resolveSingletons } from "./resolveSingletons.js";
+import { solveGlobalPairsTwoShot } from "./globalSolver.js";
 
 type Analysis = {
   groups: any[];
@@ -51,6 +52,23 @@ export async function runPairing(opts: {
 
   // Build features and candidates
   const features = buildFeatures(analysis);
+  
+  // Collect front and back features for analysis
+  const frontFeatures = Array.from(features.values()).filter(f => f.role === 'front');
+  const backFeatures = Array.from(features.values()).filter(f => f.role === 'back');
+  
+  // HP1.1: Detect "two-shot" dataset (equal fronts and backs, no extras)
+  const isTwoShotCandidate =
+    features.size === frontFeatures.length + backFeatures.length &&
+    frontFeatures.length === backFeatures.length &&
+    frontFeatures.length > 0;
+  
+  console.log('[pairing-global] isTwoShotCandidate', {
+    images: features.size,
+    fronts: frontFeatures.length,
+    backs: backFeatures.length,
+    isTwoShotCandidate,
+  });
   
   // Phase 5b.3: Promote "other" to "back" for lone front groups
   // Group features by their group ID to analyze role distribution
@@ -245,12 +263,13 @@ export async function runPairing(opts: {
       candidatesMap,
       autoPairs,
       modelPairs: [],
+      globalPairs: [],
       singletons: [],
       thresholds: getThresholdsSnapshot(),
       durationMs
     });
     log(formatMetricsLog(metrics));
-    log(`SUMMARY frontsWithCandidates=${Object.keys(candidatesMap).length}/${Array.from(features.values()).filter(f => f.role === 'front').length} autoPairs=${autoPairs.length} modelPairs=0 singletons=0`);
+    log(`SUMMARY frontsWithCandidates=${Object.keys(candidatesMap).length}/${Array.from(features.values()).filter(f => f.role === 'front').length} autoPairs=${autoPairs.length} modelPairs=0 globalPairs=0 singletons=0`);
     return {
       result: {
         engineVersion: ENGINE_VERSION,
@@ -279,12 +298,13 @@ export async function runPairing(opts: {
       candidatesMap,
       autoPairs,
       modelPairs: [],
+      globalPairs: [],
       singletons: remainingSingletons,
       thresholds: getThresholdsSnapshot(),
       durationMs
     });
     log(formatMetricsLog(metrics));
-    log(`SUMMARY frontsWithCandidates=${Object.keys(candidatesMap).length}/${Array.from(features.values()).filter(f => f.role === 'front').length} autoPairs=${autoPairs.length} modelPairs=0 singletons=${remainingSingletons.length}`);
+    log(`SUMMARY frontsWithCandidates=${Object.keys(candidatesMap).length}/${Array.from(features.values()).filter(f => f.role === 'front').length} autoPairs=${autoPairs.length} modelPairs=0 globalPairs=0 singletons=${remainingSingletons.length}`);
     return {
       result: {
         engineVersion: ENGINE_VERSION,
@@ -413,7 +433,49 @@ export async function runPairing(opts: {
   }
 
   // Merge auto-pairs + model pairs
-  const allPairs = [...autoPairs, ...parsed.pairs];
+  let allPairs = [...autoPairs, ...parsed.pairs];
+  let singletons = parsed.singletons;
+  
+  // HP1.4: Apply global solver for two-shot datasets
+  if (isTwoShotCandidate) {
+    log('[pairing-global] running two-shot global solver');
+    
+    const globalPairs = solveGlobalPairsTwoShot(frontFeatures, backFeatures);
+    
+    log('[pairing-global] result', {
+      globalPairs: globalPairs.length,
+      fronts: frontFeatures.length,
+      backs: backFeatures.length,
+    });
+    
+    // For the two-shot case, we treat these as the final authoritative pairs
+    // and ignore autoPairs/modelPairs. We can still log their counts for debugging.
+    allPairs = globalPairs.map(gp => ({
+      frontUrl: canon(gp.front.url),
+      backUrl: canon(gp.back.url),
+      matchScore: Math.round(gp.score * 10) / 10,
+      brand: gp.front.brandNorm || gp.back.brandNorm || 'unknown',
+      product: '', // Will be enriched later
+      variant: null,
+      sizeFront: gp.front.sizeCanonical || null,
+      sizeBack: gp.back.sizeCanonical || null,
+      evidence: [
+        `GLOBAL-PAIRED: score=${gp.score.toFixed(2)}`,
+        `brand=${gp.front.brandNorm === gp.back.brandNorm ? 'equal' : 'mismatch'}`,
+      ],
+      confidence: 0.98
+    }));
+    
+    // In strict two-shot mode, we expect no singletons
+    singletons = [];
+    
+    log('[pairing-global] two-shot pairing complete', {
+      autoPairsOriginal: autoPairs.length,
+      modelPairsOriginal: parsed.pairs.length,
+      globalPairsFinal: allPairs.length,
+      singletonsExpected: 0
+    });
+  }
   
   // Group extras with products
   let products = groupExtrasWithProducts(allPairs, features);
@@ -483,21 +545,53 @@ export async function runPairing(opts: {
     ...autoPairs.map(p => canon(p.frontUrl)),
     ...autoPairs.map(p => canon(p.backUrl))
   ]);
-  const filteredSingletons = parsed.singletons.filter(s => !autoPairedUrls.has(canon(s.url)));
+  const filteredSingletons = singletons.filter(s => !autoPairedUrls.has(canon(s.url)));
   
-  // Phase 5b.4: Resolve singletons - promote to solo products or attach as extras
-  const singletonFeatures = filteredSingletons
-    .map(s => features.get(canon(s.url)))
-    .filter((f): f is FeatureRow => f !== undefined);
+  // HP1.5: Skip singleton resolution in strict two-shot mode
+  let finalSingletons: Array<{ url: string; reason: string }>;
   
-  const { products: resolvedProducts, remainingSingletons } = resolveSingletons(singletonFeatures, products);
-  products = resolvedProducts;
-  
-  // Convert remaining singletons back to original singleton format
-  const finalSingletons = remainingSingletons.map(f => ({
-    url: f.url,
-    reason: 'no matching product or unique brand'
-  }));
+  if (isTwoShotCandidate) {
+    log('[pairing-global] skipping extras/solos in two-shot mode');
+    
+    // Build products directly from global pairs - no extras, no solos
+    products = allPairs.map((p, idx) => ({
+      productId: `twoShot:${idx}`,
+      frontUrl: p.frontUrl,
+      backUrl: p.backUrl,
+      heroDisplayUrl: '', // Will be hydrated below
+      backDisplayUrl: '', // Will be hydrated below
+      extras: [],
+      evidence: {
+        brand: p.brand,
+        product: p.product || '',
+        variant: p.variant,
+        matchScore: p.matchScore,
+        confidence: p.confidence,
+        triggers: p.evidence || []
+      }
+    }));
+    
+    finalSingletons = [];
+    
+    log('[pairing-global] two-shot products built', {
+      products: products.length,
+      singletons: 0
+    });
+  } else {
+    // Phase 5b.4: Resolve singletons - promote to solo products or attach as extras
+    const singletonFeatures = filteredSingletons
+      .map(s => features.get(canon(s.url)))
+      .filter((f): f is FeatureRow => f !== undefined);
+    
+    const { products: resolvedProducts, remainingSingletons } = resolveSingletons(singletonFeatures, products);
+    products = resolvedProducts;
+    
+    // Convert remaining singletons back to original singleton format
+    finalSingletons = remainingSingletons.map(f => ({
+      url: f.url,
+      reason: 'no matching product or unique brand'
+    }));
+  }
   
   const mergedResult: PairingResult = {
     engineVersion: ENGINE_VERSION,
@@ -521,8 +615,9 @@ export async function runPairing(opts: {
   const metrics = buildMetrics({
     features,
     candidatesMap,
-    autoPairs,
-    modelPairs: parsed.pairs,
+    autoPairs: isTwoShotCandidate ? [] : autoPairs,
+    modelPairs: isTwoShotCandidate ? [] : parsed.pairs,
+    globalPairs: isTwoShotCandidate ? allPairs : [],
     singletons: finalSingletons,
     thresholds: getThresholdsSnapshot(),
     durationMs
@@ -530,7 +625,7 @@ export async function runPairing(opts: {
   
   // Summary
   log(formatMetricsLog(metrics));
-  log(`SUMMARY frontsWithCandidates=${Object.keys(candidatesMap).length}/${Array.from(features.values()).filter(f => f.role === 'front').length} autoPairs=${autoPairs.length} modelPairs=${parsed.pairs.length} singletons=${finalSingletons.length} products=${products.length}`);
+  log(`SUMMARY frontsWithCandidates=${Object.keys(candidatesMap).length}/${Array.from(features.values()).filter(f => f.role === 'front').length} autoPairs=${isTwoShotCandidate ? 0 : autoPairs.length} modelPairs=${isTwoShotCandidate ? 0 : parsed.pairs.length} globalPairs=${isTwoShotCandidate ? allPairs.length : 0} singletons=${finalSingletons.length} products=${products.length}`);
 
   return { result: mergedResult, rawText, metrics };
 }
