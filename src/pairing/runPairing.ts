@@ -53,23 +53,6 @@ export async function runPairing(opts: {
   // Build features and candidates
   const features = buildFeatures(analysis);
   
-  // Collect front and back features for analysis
-  const frontFeatures = Array.from(features.values()).filter(f => f.role === 'front');
-  const backFeatures = Array.from(features.values()).filter(f => f.role === 'back');
-  
-  // HP1.1: Detect "two-shot" dataset (equal fronts and backs, no extras)
-  const isTwoShotCandidate =
-    frontFeatures.length === backFeatures.length &&
-    frontFeatures.length > 0 &&
-    features.size === frontFeatures.length + backFeatures.length;
-  
-  console.log('[globalSolver] twoShot?', {
-    fronts: frontFeatures.length,
-    backs: backFeatures.length,
-    images: features.size,
-    isTwoShotCandidate,
-  });
-  
   // Phase 5b.3: Promote "other" to "back" for lone front groups
   // Group features by their group ID to analyze role distribution
   const groupFeatures = new Map<string, FeatureRow[]>();
@@ -432,21 +415,61 @@ export async function runPairing(opts: {
     }
   }
 
+  // HP1b: Detect two-shot candidate AFTER Phase 5a.4 filtering
+  // Recompute final front/back counts after all role adjustments
+  const finalFronts = Array.from(features.values()).filter(f => f.role === 'front');
+  const finalBacks = Array.from(features.values()).filter(f => f.role === 'back');
+  
+  const isTwoShotCandidate =
+    finalFronts.length === finalBacks.length &&
+    finalFronts.length > 0 &&
+    features.size === finalFronts.length + finalBacks.length;
+  
+  console.log('[globalSolver] twoShot-final-check', {
+    fronts: finalFronts.length,
+    backs: finalBacks.length,
+    images: features.size,
+    isTwoShotCandidate,
+  });
+
   // Merge auto-pairs + model pairs
   let allPairs = [...autoPairs, ...parsed.pairs];
   let singletons = parsed.singletons;
+  let products: any[] = []; // Will be populated based on two-shot mode or normal mode
   
   // HP1.4: Apply global solver for two-shot datasets
   if (isTwoShotCandidate) {
     log('[globalSolver] running two-shot solver');
     
-    const global = solveTwoShot(frontFeatures, backFeatures);
+    const globalPairs = solveTwoShot(finalFronts, finalBacks);
     
-    log('[globalSolver] result pair count', global.length);
+    log('[globalSolver] result', {
+      globalPairs: globalPairs.length,
+      expectedPairs: finalFronts.length,
+    });
     
-    // For the two-shot case, we treat these as the final authoritative pairs
-    // and ignore autoPairs/modelPairs. We can still log their counts for debugging.
-    allPairs = global.map((g, idx) => ({
+    // Replace the existing pairs with the global ones
+    const pairs = globalPairs.map((g, idx) => ({
+      front: g.f,
+      back: g.b,
+      score: g.score,
+      reason: 'global',
+    }));
+    
+    // Reset singletons (we don't allow them in strict two-shot mode)
+    singletons = [];
+    
+    // Build products directly from global pairs
+    products = pairs.map((p, idx) => ({
+      id: `gs-${idx}`,
+      brandNorm: p.front.brandNorm || p.back.brandNorm || '',
+      frontUrl: p.front.url,
+      backUrl: p.back.url,
+      extras: [],
+    }));
+    
+    // For compatibility with the existing result structure, create allPairs for enrichment/display
+    allPairs = globalPairs.map((g, idx) => ({
       frontUrl: canon(g.f.url),
       backUrl: canon(g.b.url),
       matchScore: Math.round(g.score * 10) / 10,
@@ -462,20 +485,20 @@ export async function runPairing(opts: {
       confidence: 0.98
     }));
     
-    // In strict two-shot mode, we expect no singletons
-    singletons = [];
-    
-    log('[globalSolver] metrics', {
-      autoPairsOriginal: autoPairs.length,
-      modelPairsOriginal: parsed.pairs.length,
-      globalPairsFinal: allPairs.length,
-      productsExpected: allPairs.length,
-      singletonsExpected: 0
+    log('[globalSolver] metrics-final', {
+      images: features.size,
+      fronts: finalFronts.length,
+      backs: finalBacks.length,
+      autoPairs: 0,
+      modelPairs: 0,
+      globalPairs: pairs.length,
+      products: products.length,
+      singletons: 0
     });
+  } else {
+    // Group extras with products (normal mode)
+    products = groupExtrasWithProducts(allPairs, features);
   }
-  
-  // Group extras with products
-  let products = groupExtrasWithProducts(allPairs, features);
   
   // ENRICH LISTINGS: Generate SEO-optimized titles and descriptions with ChatGPT
   log(`📝 Enriching ${products.length} products with AI-generated titles and descriptions...`);
@@ -530,7 +553,7 @@ export async function runPairing(opts: {
     
     // Convert extras URLs to display URLs
     if (p.extras && p.extras.length > 0) {
-      p.extras = p.extras.map(extraUrl => {
+      p.extras = p.extras.map((extraUrl: string) => {
         const extraKey = extraUrl?.toLowerCase() || '';
         return displayUrlByKey.get(extraKey) || extraUrl;
       });
