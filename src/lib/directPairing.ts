@@ -28,8 +28,8 @@ export async function directPairProductsFromImages(
   }
 
   // Batch processing to avoid timeouts with large image sets
-  // Process in batches of 12 images (24 content blocks) to stay under timeout
-  const BATCH_SIZE = 12;
+  // Process in batches of 6 images to stay well under 26s timeout
+  const BATCH_SIZE = 6;
   const allProducts: DirectPairProduct[] = [];
 
   console.log("[directPairing] Processing", {
