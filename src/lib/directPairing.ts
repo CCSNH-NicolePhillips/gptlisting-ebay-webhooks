@@ -2,6 +2,7 @@
 // Sends all images to GPT-4o in a single request to get product pairs
 
 import OpenAI from "openai";
+import fetch from "node-fetch";
 
 export type DirectPairProduct = {
   productName: string;
@@ -72,7 +73,38 @@ async function processSingleBatch(
     "Use the image content plus the file names to decide front vs back and which images belong together. " +
     "Return strict JSON with an array of products. Never invent filenames; only use the ones provided.";
 
-  // Build user message with all images
+  // Download images and convert to base64 (OpenAI can't access Dropbox URLs)
+  const imageData: Array<{ filename: string; base64: string }> = [];
+  
+  for (const img of images) {
+    try {
+      console.log(`[directPairing] Downloading ${img.filename} from ${img.url}`);
+      const response = await fetch(img.url);
+      if (!response.ok) {
+        console.error(`[directPairing] Failed to download ${img.filename}: ${response.status} ${response.statusText}`);
+        continue;
+      }
+      const buffer = await response.buffer();
+      const base64 = buffer.toString('base64');
+      const mimeType = response.headers.get('content-type') || 'image/jpeg';
+      imageData.push({
+        filename: img.filename,
+        base64: `data:${mimeType};base64,${base64}`
+      });
+      console.log(`[directPairing] Downloaded ${img.filename} (${buffer.length} bytes)`);
+    } catch (err) {
+      console.error(`[directPairing] Error downloading ${img.filename}:`, err);
+    }
+  }
+
+  if (imageData.length === 0) {
+    console.error(`[directPairing] No images could be downloaded`);
+    return { products: [] };
+  }
+
+  console.log(`[directPairing] Successfully downloaded ${imageData.length}/${images.length} images`);
+
+  // Build user message with all images as base64
   const content: Array<{ type: string; text?: string; image_url?: { url: string; detail?: string } }> = [];
 
   content.push({
@@ -83,7 +115,7 @@ async function processSingleBatch(
       "Return strict JSON. Do not describe the images, just identify the pairs.",
   });
 
-  for (const img of images) {
+  for (const img of imageData) {
     content.push({
       type: "text",
       text: `Image: ${img.filename}`,
@@ -91,7 +123,7 @@ async function processSingleBatch(
     content.push({
       type: "image_url",
       image_url: { 
-        url: img.url,
+        url: img.base64,
         detail: "auto" // Let GPT-4o decide detail level based on image content
       },
     });
@@ -147,8 +179,8 @@ async function processSingleBatch(
 
   const result = JSON.parse(rawContent) as DirectPairsResult;
 
-  // Validate filenames
-  const validFilenames = new Set(images.map(img => img.filename));
+  // Validate filenames against downloaded images
+  const validFilenames = new Set(imageData.map(img => img.filename));
   const validProducts = result.products.filter(p => {
     const frontValid = validFilenames.has(p.frontImage);
     const backValid = validFilenames.has(p.backImage);
