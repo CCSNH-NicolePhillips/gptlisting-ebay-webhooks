@@ -26,10 +26,40 @@ export async function directPairProductsFromImages(
     return { products: [] };
   }
 
-  console.log("[directPairing] Calling GPT-4o with", {
-    imageCount: images.length,
+  // Batch processing to avoid timeouts with large image sets
+  // Process in batches of 12 images (24 content blocks) to stay under timeout
+  const BATCH_SIZE = 12;
+  const allProducts: DirectPairProduct[] = [];
+
+  console.log("[directPairing] Processing", {
+    totalImages: images.length,
+    batchSize: BATCH_SIZE,
+    batches: Math.ceil(images.length / BATCH_SIZE),
   });
 
+  for (let i = 0; i < images.length; i += BATCH_SIZE) {
+    const batch = images.slice(i, i + BATCH_SIZE);
+    const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+    const totalBatches = Math.ceil(images.length / BATCH_SIZE);
+    
+    console.log(`[directPairing] Processing batch ${batchNum}/${totalBatches} (${batch.length} images)`);
+    
+    const batchResult = await processSingleBatch(batch);
+    allProducts.push(...batchResult.products);
+    
+    console.log(`[directPairing] Batch ${batchNum}/${totalBatches} complete: ${batchResult.products.length} products`);
+  }
+
+  console.log("[directPairing] All batches complete:", {
+    totalProducts: allProducts.length,
+  });
+
+  return { products: allProducts };
+}
+
+async function processSingleBatch(
+  images: DirectPairImageInput[]
+): Promise<DirectPairsResult> {
   // Create OpenAI client (reuse env var like scan does)
   const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY || "",
@@ -62,7 +92,7 @@ export async function directPairProductsFromImages(
       type: "image_url",
       image_url: { 
         url: img.url,
-        detail: "low" // Use low-detail mode for faster processing
+        detail: "auto" // Let GPT-4o decide detail level based on image content
       },
     });
   }
