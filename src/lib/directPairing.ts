@@ -43,7 +43,7 @@ export async function directPairProductsFromImages(
     "Return strict JSON with an array of products. Never invent filenames; only use the ones provided.";
 
   // Build user message with all images
-  const content: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
+  const content: Array<{ type: string; text?: string; image_url?: { url: string; detail?: string } }> = [];
 
   content.push({
     type: "text",
@@ -62,7 +62,7 @@ export async function directPairProductsFromImages(
       type: "image_url",
       image_url: { 
         url: img.url,
-        detail: "low" as any // Use low-detail mode for faster processing
+        detail: "low" // Use low-detail mode for faster processing
       },
     });
   }
