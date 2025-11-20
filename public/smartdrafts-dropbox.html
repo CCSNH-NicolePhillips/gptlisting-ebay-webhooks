@@ -138,7 +138,20 @@
   <!-- Paired Products Display -->
   <div id="pairedProductsSection" style="display:none; margin-top:24px;">
     <h3>Paired Products</h3>
+    <div id="pairingMetrics" class="muted" style="margin-bottom:12px;"></div>
     <div id="pairedProductsGrid" class="grid"></div>
+  </div>
+
+  <!-- Pairing Debug Info -->
+  <div id="pairingDebugSection" style="display:none; margin-top:24px;">
+    <h3>Pairing Debug Info</h3>
+    <div id="pairingDebugContent" style="background:#f5f5f5; padding:12px; border-radius:4px; font-family:monospace; font-size:13px; white-space:pre-wrap; max-height:400px; overflow-y:auto;"></div>
+  </div>
+
+  <!-- Singletons (Unpaired Images) -->
+  <div id="singletonsSection" style="display:none; margin-top:24px;">
+    <h3>Unpaired Images (Singletons)</h3>
+    <div id="singletonsGrid" class="grid"></div>
   </div>
 
   <!-- Generated Drafts Display -->
@@ -1054,13 +1067,31 @@
             throw new Error(data?.error || `Pairing failed (${res.status})`);
           }
           
+          // Extract all pairing data
+          const pairs = data.pairs || [];
+          const singletons = data.singletons || [];
+          const debugSummary = data.debugSummary || [];
+          const metrics = data.metrics || {};
+          
           pairedProducts = data.products || [];
+          
+          // Update status with metrics
           if (pairingStatus) {
-            pairingStatus.textContent = `✅ Paired ${pairedProducts.length} product(s). Ready to generate listings.`;
+            const statusParts = [
+              `✅ Pairing complete!`,
+              `${pairs.length} pairs`,
+              metrics.autoPairs ? `(${metrics.autoPairs} auto` : '',
+              metrics.modelPairs ? `${metrics.modelPairs} model)` : ')',
+            ].filter(Boolean);
+            if (singletons.length > 0) {
+              statusParts.push(`${singletons.length} unpaired`);
+            }
+            pairingStatus.textContent = statusParts.join(' ');
           }
           btnCreateDrafts.disabled = false;
           
-          // Display paired products
+          // Display all pairing information
+          renderPairingResults({ pairs, singletons, debugSummary, metrics });
           renderPairedProducts(pairedProducts);
           
         } catch (err) {
@@ -1112,6 +1143,45 @@
           btnPairProducts.disabled = false;
         }
       });
+
+      function renderPairingResults({ pairs, singletons, debugSummary, metrics }) {
+        // Show metrics
+        const pairingMetrics = $('#pairingMetrics');
+        if (pairingMetrics && metrics) {
+          const metricsParts = [];
+          if (metrics.totalImages) metricsParts.push(`${metrics.totalImages} images`);
+          if (metrics.totalPairs) metricsParts.push(`${metrics.totalPairs} pairs`);
+          if (metrics.autoPairs) metricsParts.push(`${metrics.autoPairs} auto-paired`);
+          if (metrics.modelPairs) metricsParts.push(`${metrics.modelPairs} model-paired`);
+          if (metrics.singletons) metricsParts.push(`${metrics.singletons} unpaired`);
+          pairingMetrics.textContent = metricsParts.join(' • ');
+        }
+
+        // Show debug summary
+        const pairingDebugSection = $('#pairingDebugSection');
+        const pairingDebugContent = $('#pairingDebugContent');
+        if (pairingDebugSection && pairingDebugContent && debugSummary && debugSummary.length > 0) {
+          pairingDebugSection.style.display = 'block';
+          pairingDebugContent.textContent = debugSummary.join('\n\n');
+        }
+
+        // Show singletons (unpaired images)
+        const singletonsSection = $('#singletonsSection');
+        const singletonsGrid = $('#singletonsGrid');
+        if (singletonsSection && singletonsGrid && singletons && singletons.length > 0) {
+          singletonsSection.style.display = 'block';
+          singletonsGrid.innerHTML = '';
+          
+          singletons.forEach((singleton) => {
+            const card = el('div', { class: 'card' });
+            card.appendChild(el('div', { html: `<strong>${singleton.url}</strong>` }));
+            card.appendChild(el('div', { class: 'muted', text: `Reason: ${singleton.reason}` }));
+            singletonsGrid.appendChild(card);
+          });
+        } else if (singletonsSection) {
+          singletonsSection.style.display = 'none';
+        }
+      }
 
       function renderPairedProducts(products) {
         if (!pairedProductsSection || !pairedProductsGrid) return;
