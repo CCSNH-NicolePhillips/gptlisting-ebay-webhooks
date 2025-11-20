@@ -115,18 +115,49 @@ export async function publishDraftsToEbay(jobId, drafts) {
 }
 
 // DP3: Direct pairing endpoint
+// Direct pairing with background job and polling
 export async function callDirectPairing(images) {
   if (!images || !images.length) throw new Error('images required');
   
-  const r = await authPost(`/.netlify/functions/smartdrafts-pairing-direct`, { images });
-  if (!r.ok) throw new Error(`callDirectPairing ${r.status}: ${await r.text()}`);
+  // Start the background job
+  const startResp = await authPost(`/.netlify/functions/smartdrafts-pairing-direct-start`, { images });
+  if (!startResp.ok) throw new Error(`callDirectPairing ${startResp.status}: ${await startResp.text()}`);
   
-  const json = await r.json();
-  if (!json.ok) {
-    throw new Error(json.error || 'Direct pairing failed');
+  const startJson = await startResp.json();
+  if (!startJson.ok || !startJson.jobId) {
+    throw new Error(startJson.error || 'Failed to start direct pairing job');
   }
   
-  return json; // { ok: true, products: [...] }
+  const jobId = startJson.jobId;
+  console.log('[directPairing] Job started:', jobId);
+  
+  // Poll for completion (check every 2 seconds, max 120 seconds)
+  const maxAttempts = 60; // 2 min
+  const pollInterval = 2000; // 2s
+  
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    await new Promise(resolve => setTimeout(resolve, pollInterval));
+    
+    const statusResp = await authGet(`/.netlify/functions/smartdrafts-pairing-direct-status?jobId=${encodeURIComponent(jobId)}`);
+    if (!statusResp.ok) {
+      throw new Error(`Poll failed ${statusResp.status}: ${await statusResp.text()}`);
+    }
+    
+    const status = await statusResp.json();
+    console.log(`[directPairing] Poll ${attempt + 1}: ${status.status}`);
+    
+    if (status.status === 'completed') {
+      return { ok: true, products: status.result?.products || [] };
+    }
+    
+    if (status.status === 'failed') {
+      throw new Error(status.error || 'Direct pairing job failed');
+    }
+    
+    // Status is 'pending' or 'processing', continue polling
+  }
+  
+  throw new Error('Direct pairing timed out after 2 minutes');
 }
 
 
