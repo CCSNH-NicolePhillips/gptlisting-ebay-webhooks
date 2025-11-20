@@ -486,30 +486,30 @@
       throw new Error('Authentication token not available. Please login and try again.');
     }
     
-    // DEBUG: Log token details
-    console.log('[authFetch] Using token (first 32 chars):', token.slice(0, 32) + '...');
-    console.log('[authFetch] Request URL:', input);
-    console.log('[authFetch] Request headers (before):', headers);
+    // DEBUG: Log token details (commented out to reduce console spam)
+    // console.log('[authFetch] Using token (first 32 chars):', token.slice(0, 32) + '...');
+    // console.log('[authFetch] Request URL:', input);
+    // console.log('[authFetch] Request headers (before):', headers);
     
-    // Decode JWT to check expiry
+    // Decode JWT to check expiry (only log errors)
     try {
       const parts = token.split('.');
-      console.log('[authFetch] JWT parts length:', parts.length);
+      // console.log('[authFetch] JWT parts length:', parts.length);
       
       if (parts.length === 3) {
         const payload = JSON.parse(atob(parts[1]));
-        console.log('[authFetch] Token exp:', new Date(payload.exp * 1000).toISOString());
-        console.log('[authFetch] Now:', new Date().toISOString());
-        console.log('[authFetch] Expired?:', payload.exp < Date.now() / 1000);
-        console.log('[authFetch] Token audience:', payload.aud);
-        console.log('[authFetch] Token issuer:', payload.iss);
+        // console.log('[authFetch] Token exp:', new Date(payload.exp * 1000).toISOString());
+        // console.log('[authFetch] Now:', new Date().toISOString());
+        // console.log('[authFetch] Expired?:', payload.exp < Date.now() / 1000);
+        // console.log('[authFetch] Token audience:', payload.aud);
+        // console.log('[authFetch] Token issuer:', payload.iss);
       }
     } catch (decodeErr) {
       console.warn('[authFetch] Failed to decode JWT:', decodeErr);
     }
     
     headers.Authorization = headers.Authorization || `Bearer ${token}`;
-    console.log('[authFetch] Request headers (after):', headers);
+    // console.log('[authFetch] Request headers (after):', headers);
     
     return fetch(input, Object.assign({}, init, { headers }));
   }
