@@ -60,7 +60,10 @@ export async function directPairProductsFromImages(
     });
     content.push({
       type: "image_url",
-      image_url: { url: img.url },
+      image_url: { 
+        url: img.url,
+        detail: "low" as any // Use low-detail mode for faster processing
+      },
     });
   }
 

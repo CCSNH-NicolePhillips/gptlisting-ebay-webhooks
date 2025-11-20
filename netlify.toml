@@ -37,6 +37,10 @@
 [functions."smartdrafts-pairing"]
   timeout = 26  # Max for Pro tier, handles GPT API calls for ambiguous pairs
 
+# Direct pairing function needs extended timeout for GPT-4o with many images
+[functions."smartdrafts-pairing-direct"]
+  timeout = 26  # Max for Pro tier, processes all images in single GPT-4o call
+
 # Reduce false positives in Netlify Secrets Scanning by omitting documentation/examples
 [build.environment]
   USE_NEW_SORTER = "false"
