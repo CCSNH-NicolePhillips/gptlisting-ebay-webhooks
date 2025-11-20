@@ -317,39 +317,43 @@ export function App() {
       const { pairing, metrics } = out;
       setPairing(pairing); setMetrics(metrics || null);
       setLoadingStatus('');
-      
-      // DP3: Optionally run direct pairing for comparison
-      if (useDirectPairing && mode === 'Live' && analysis) {
-        try {
-          setLoadingStatus('🔮 Running direct GPT-4o pairing...');
-          setDirectPairingError(null);
-          const directImages = buildDirectPairingImages(analysis);
-          
-          console.log('[directPairing] directImages count', directImages.length, {
-            useDirectPairing,
-            cached: analysis.cached,
-          });
-          
-          if (directImages.length === 0) {
-            throw new Error('No images found for direct pairing');
-          }
-          
-          const direct = await callDirectPairing(directImages);
-          console.log('[directPairing] UI got result', direct);
-          setDirectPairingResult(direct);
-          showToast(`✨ Direct pairing: ${direct.products.length} products`);
-        } catch (err) {
-          console.error('[directPairing] failed', err);
-          setDirectPairingError(err.message || String(err));
-          showToast('⚠️ Direct pairing failed: ' + err.message);
-        }
-        setLoadingStatus('');
-      }
-      
       setTab('Pairing');
     } catch (e) {
       console.error(e); showToast('❌ ' + (e.message || 'Pairing failed'));
-    } finally { setLoading(false); }
+    } finally { 
+      setLoading(false); 
+    }
+    
+    // DP3: Run direct pairing for comparison (OUTSIDE try/catch so it runs even if legacy fails)
+    if (useDirectPairing && mode === 'Live' && analysis) {
+      try {
+        setLoading(true);
+        setLoadingStatus('🔮 Running direct GPT-4o pairing...');
+        setDirectPairingError(null);
+        const directImages = buildDirectPairingImages(analysis);
+        
+        console.log('[directPairing] directImages count', directImages.length, {
+          useDirectPairing,
+          cached: analysis.cached,
+        });
+        
+        if (directImages.length === 0) {
+          throw new Error('No images found for direct pairing');
+        }
+        
+        const direct = await callDirectPairing(directImages);
+        console.log('[directPairing] UI got result', direct);
+        setDirectPairingResult(direct);
+        showToast(`✨ Direct pairing: ${direct.products.length} products`);
+      } catch (err) {
+        console.error('[directPairing] failed', err);
+        setDirectPairingError(err.message || String(err));
+        showToast('⚠️ Direct pairing failed: ' + err.message);
+      } finally {
+        setLoadingStatus('');
+        setLoading(false);
+      }
+    }
   }
 
   async function doCreateDrafts() {
