@@ -30,7 +30,6 @@ import { buildCandidates, getCandidateScoresForFront, shouldAutoPairHairCosmetic
 import { cfg, getThresholdsSnapshot, ENGINE_VERSION } from "./config.js";
 import { buildMetrics, formatMetricsLog, PairingMetrics } from "./metrics.js";
 import { groupExtrasWithProducts } from "./groupExtras.js";
-import { enrichListingWithAI } from "../services/listing-enrichment.js";
 import { resolveSingletons } from "./resolveSingletons.js";
 import { solveTwoShot } from "./globalSolver.js";
 
@@ -40,6 +39,94 @@ type Analysis = {
 };
 
 const canon = (u: string) => u.trim().toLowerCase();
+
+// HP2: LLM-based leftover pairing for images that couldn't be auto-paired
+async function pairLeftoversWithLLM({
+  unpairedFronts,
+  unpairedBacks,
+  client,
+  model = 'gpt-4o-mini',
+  log = console.log,
+}: {
+  unpairedFronts: FeatureRow[];
+  unpairedBacks: FeatureRow[];
+  client: OpenAI;
+  model?: string;
+  log?: (line: string) => void;
+}): Promise<Array<{ frontId: string; backId: string }>> {
+  // If nothing or trivial, bail
+  if (unpairedFronts.length === 0 || unpairedBacks.length === 0) {
+    return [];
+  }
+
+  log(`[LLM-leftover] Pairing leftovers: ${unpairedFronts.length} fronts, ${unpairedBacks.length} backs`);
+
+  // Build compact payload: describe each front/back with filename + OCR summary + brand + color
+  const frontsPayload = unpairedFronts.map((f, idx) => ({
+    id: `F${idx + 1}`,
+    filename: f.url,
+    brand: f.brandNorm || '',
+    product: f.productTokens.join(' ') || '',
+    ocrSummary: f.textExtracted?.substring(0, 200) || '',
+    color: f.colorKey || '',
+  }));
+
+  const backsPayload = unpairedBacks.map((b, idx) => ({
+    id: `B${idx + 1}`,
+    filename: b.url,
+    brand: b.brandNorm || '',
+    product: b.productTokens.join(' ') || '',
+    ocrSummary: b.textExtracted?.substring(0, 200) || '',
+    color: b.colorKey || '',
+  }));
+
+  const systemPrompt = `You are matching product images: fronts to backs.
+Each product has exactly one front and one back.
+Use brand, product name text, size, flavor, and any clues on packaging.
+Return only JSON with an array "pairs", where each element is { "frontId": "F#", "backId": "B#" }.
+If an image labeled as front is clearly actually the BACK of another front, you may use it as a back.
+If brand names don't match exactly but are variations (e.g., "evereden" vs "Barbie x Evereden"), pair them if the product matches.
+If a back has empty brand, try to match it by color, product text, or packaging type.`;
+
+  const userContent = {
+    fronts: frontsPayload,
+    backs: backsPayload,
+  };
+
+  try {
+    const response = await client.chat.completions.create({
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: JSON.stringify(userContent, null, 2) },
+      ],
+      temperature: 0,
+      response_format: { type: 'json_object' },
+    });
+
+    const content = response.choices[0]?.message?.content || '{}';
+    const parsed = JSON.parse(content);
+    
+    log(`[LLM-leftover] Response: ${parsed.pairs?.length || 0} pairs`);
+
+    const idToFront = new Map(frontsPayload.map((f, idx) => [`F${idx + 1}`, unpairedFronts[idx]]));
+    const idToBack = new Map(backsPayload.map((b, idx) => [`B${idx + 1}`, unpairedBacks[idx]]));
+
+    const llmPairs = (parsed.pairs || [])
+      .map((p: any) => ({
+        frontId: idToFront.get(p.frontId)?.url,
+        backId: idToBack.get(p.backId)?.url,
+      }))
+      .filter((p: any) => p.frontId && p.backId);
+
+    log(`[LLM-leftover] Validated pairs: ${llmPairs.length}`);
+    
+    return llmPairs;
+  } catch (err) {
+    log(`[LLM-leftover] ERROR: ${String(err)}`);
+    return [];
+  }
+}
 
 export async function runPairing(opts: {
   client: OpenAI;
@@ -440,6 +527,49 @@ export async function runPairing(opts: {
   let singletons = parsed.singletons;
   let products: any[] = []; // Will be populated based on two-shot mode or normal mode
   
+  // HP2.1: Collect unpaired fronts/backs after heuristic pairing (for LLM leftover pairing)
+  const usedFrontIds = new Set(allPairs.map(p => canon(p.frontUrl)));
+  const usedBackIds = new Set(allPairs.map(p => canon(p.backUrl)));
+  const unpairedFronts = allFronts.filter(f => !usedFrontIds.has(canon(f.url)));
+  const unpairedBacks = allBacks.filter(b => !usedBackIds.has(canon(b.url)));
+  
+  log(`[HP2] Leftovers after heuristic pairing: fronts=${unpairedFronts.length} backs=${unpairedBacks.length}`);
+  
+  // HP2.2 & HP2.3: If we have unpaired fronts/backs, use LLM to pair them
+  let llmPairsCount = 0;
+  if (unpairedFronts.length > 0 && unpairedBacks.length > 0) {
+    const llmLeftovers = await pairLeftoversWithLLM({
+      unpairedFronts,
+      unpairedBacks,
+      client,
+      model: model || 'gpt-4o-mini',
+      log,
+    });
+    
+    log(`[HP2] LLM paired ${llmLeftovers.length} leftover pairs`);
+    
+    // HP2.3: Integrate LLM pairs into allPairs
+    for (const { frontId, backId } of llmLeftovers) {
+      const f = features.get(canon(frontId));
+      const b = features.get(canon(backId));
+      if (!f || !b) continue;
+      
+      allPairs.push({
+        frontUrl: canon(frontId),
+        backUrl: canon(backId),
+        matchScore: 7.5, // LLM pairs get a default score
+        brand: f.brandNorm || b.brandNorm || 'unknown',
+        product: f.productTokens.join(' ') || b.productTokens.join(' ') || '',
+        variant: null,
+        sizeFront: f.sizeCanonical || null,
+        sizeBack: b.sizeCanonical || null,
+        evidence: ['LLM-leftover-pairing'],
+        confidence: 0.90,
+      });
+      llmPairsCount++;
+    }
+  }
+  
   // HP1.4: Apply global solver for two-shot datasets
   if (isTwoShotCandidate) {
     log('[globalSolver] running two-shot solver');
@@ -503,49 +633,9 @@ export async function runPairing(opts: {
     products = groupExtrasWithProducts(allPairs, features);
   }
   
-  // ENRICH LISTINGS: Generate SEO-optimized titles and descriptions with ChatGPT
-  log(`📝 Enriching ${products.length} products with AI-generated titles and descriptions...`);
-  await Promise.all(products.map(async (product) => {
-    try {
-      // Get feature data for front/back images
-      const frontFeature = features.get(product.frontUrl);
-      const backFeature = features.get(product.backUrl);
-      
-      // Guard against missing evidence
-      const safeBrand = product.evidence?.brand || 'unknown';
-      const safeProduct = product.evidence?.product || 'unknown';
-      const safeVariant = product.evidence?.variant || undefined;
-      
-      const enriched = await enrichListingWithAI({
-        brand: safeBrand,
-        product: safeProduct,
-        variant: safeVariant,
-        size: frontFeature?.sizeCanonical || backFeature?.sizeCanonical || undefined,
-        category: frontFeature?.categoryTail || backFeature?.categoryTail || undefined,
-        categoryPath: frontFeature?.categoryPath || backFeature?.categoryPath || undefined,
-        claims: [], // TODO: Extract claims from features if available
-        options: {} // TODO: Extract options from features if available
-      });
-      
-      // Add enriched fields to product (extend the type)
-      (product as any).title = enriched.title;
-      (product as any).description = enriched.description;
-      
-      log(`  ✓ ${safeBrand} ${safeProduct} - "${enriched.title.slice(0, 50)}..."`);
-    } catch (error) {
-      const safeBrand = product.evidence?.brand || 'unknown';
-      const safeProduct = product.evidence?.product || 'unknown';
-      const safeVariant = product.evidence?.variant || undefined;
-      
-      log(`  ⚠️ Failed to enrich ${safeBrand} ${safeProduct}: ${error}`);
-      // Fallback: use simple concatenation
-      (product as any).title = [safeBrand, safeProduct, safeVariant]
-        .filter(p => p)
-        .join(' ')
-        .slice(0, 80);
-    }
-  }));
-  log(`✅ Listing enrichment complete`);
+  // NOTE: Listing enrichment (AI-generated titles/descriptions) has been moved
+  // to a separate step to avoid timeout issues. The pairing function should
+  // complete quickly. Enrichment can be done later in the create-drafts flow.
   
   // Hydrate display URLs for products
   const displayUrlByKey = new Map<string, string>();
@@ -657,7 +747,7 @@ export async function runPairing(opts: {
   
   // Summary
   log(formatMetricsLog(metrics));
-  log(`SUMMARY frontsWithCandidates=${Object.keys(candidatesMap).length}/${Array.from(features.values()).filter(f => f.role === 'front').length} autoPairs=${isTwoShotCandidate ? 0 : autoPairs.length} modelPairs=${isTwoShotCandidate ? 0 : parsed.pairs.length} globalPairs=${isTwoShotCandidate ? allPairs.length : 0} singletons=${finalSingletons.length} products=${products.length}`);
+  log(`SUMMARY frontsWithCandidates=${Object.keys(candidatesMap).length}/${Array.from(features.values()).filter(f => f.role === 'front').length} autoPairs=${isTwoShotCandidate ? 0 : autoPairs.length} modelPairs=${isTwoShotCandidate ? 0 : parsed.pairs.length} globalPairs=${isTwoShotCandidate ? allPairs.length : 0} llmPairs=${llmPairsCount} singletons=${finalSingletons.length} products=${products.length}`);
 
   return { result: mergedResult, rawText, metrics };
 }
