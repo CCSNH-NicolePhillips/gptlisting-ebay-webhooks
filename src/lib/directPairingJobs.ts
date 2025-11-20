@@ -1,19 +1,47 @@
 /**
  * Background job management for direct pairing
- * Uses Redis to store job state and Netlify background functions to process
+ * Uses Upstash Redis REST API to store job state
  */
 
 import { randomUUID } from "crypto";
-import { createClient } from "redis";
 import { directPairProductsFromImages, DirectPairImageInput } from "./directPairing.js";
 
-// Simple Redis client helper
-function getRedisClient() {
-  const redisUrl = process.env.REDIS_URL;
-  if (!redisUrl) {
-    throw new Error("REDIS_URL not configured");
+// Upstash Redis REST API helpers
+async function redisSet(key: string, value: string, exSeconds: number): Promise<void> {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  
+  if (!url || !token) {
+    throw new Error("UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN not configured");
   }
-  return createClient({ url: redisUrl });
+
+  const response = await fetch(`${url}/setex/${encodeURIComponent(key)}/${exSeconds}/${encodeURIComponent(value)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Redis SETEX failed: ${response.status} ${await response.text()}`);
+  }
+}
+
+async function redisGet(key: string): Promise<string | null> {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  
+  if (!url || !token) {
+    throw new Error("UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN not configured");
+  }
+
+  const response = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Redis GET failed: ${response.status} ${await response.text()}`);
+  }
+
+  const data = await response.json();
+  return data.result;
 }
 
 export interface DirectPairingJob {
@@ -38,8 +66,6 @@ export async function scheduleDirectPairingJob(
   userId: string,
   images: DirectPairImageInput[]
 ): Promise<string> {
-  const redis = getRedisClient();
-  await redis.connect();
   const jobId = randomUUID();
 
   const job: DirectPairingJob = {
@@ -52,13 +78,11 @@ export async function scheduleDirectPairingJob(
   };
 
   // Store job in Redis
-  await redis.setex(
+  await redisSet(
     `${JOB_KEY_PREFIX}${jobId}`,
-    JOB_TTL,
-    JSON.stringify(job)
+    JSON.stringify(job),
+    JOB_TTL
   );
-
-  await redis.disconnect();
 
   // Trigger background processing (don't await)
   processDirectPairingJobBackground(jobId).catch((err) => {
@@ -74,10 +98,7 @@ export async function scheduleDirectPairingJob(
 export async function getDirectPairingJobStatus(
   jobId: string
 ): Promise<DirectPairingJob | null> {
-  const redis = getRedisClient();
-  await redis.connect();
-  const data = await redis.get(`${JOB_KEY_PREFIX}${jobId}`);
-  await redis.disconnect();
+  const data = await redisGet(`${JOB_KEY_PREFIX}${jobId}`);
 
   if (!data) {
     return null;
@@ -91,13 +112,11 @@ export async function getDirectPairingJobStatus(
  * This runs without blocking the HTTP response
  */
 async function processDirectPairingJobBackground(jobId: string): Promise<void> {
-  const redis = getRedisClient();
-  await redis.connect();
   const key = `${JOB_KEY_PREFIX}${jobId}`;
 
   try {
     // Get job
-    const data = await redis.get(key);
+    const data = await redisGet(key);
     if (!data) {
       throw new Error(`Job ${jobId} not found`);
     }
@@ -107,7 +126,7 @@ async function processDirectPairingJobBackground(jobId: string): Promise<void> {
     // Update status to processing
     job.status = "processing";
     job.updatedAt = Date.now();
-    await redis.setex(key, JOB_TTL, JSON.stringify(job));
+    await redisSet(key, JSON.stringify(job), JOB_TTL);
 
     console.log(`[directPairingJobs] Processing job ${jobId} with ${job.images.length} images`);
 
@@ -118,30 +137,24 @@ async function processDirectPairingJobBackground(jobId: string): Promise<void> {
     job.status = "completed";
     job.result = result;
     job.updatedAt = Date.now();
-    await redis.setex(key, JOB_TTL, JSON.stringify(job));
+    await redisSet(key, JSON.stringify(job), JOB_TTL);
 
     console.log(`[directPairingJobs] Job ${jobId} completed with ${result.products.length} products`);
-    
-    await redis.disconnect();
   } catch (err) {
     console.error(`[directPairingJobs] Job ${jobId} failed:`, err);
 
     // Update job with error
     try {
-      const data = await redis.get(key);
+      const data = await redisGet(key);
       if (data) {
         const job: DirectPairingJob = JSON.parse(data);
         job.status = "failed";
         job.error = err instanceof Error ? err.message : "Unknown error";
         job.updatedAt = Date.now();
-        await redis.setex(key, JOB_TTL, JSON.stringify(job));
+        await redisSet(key, JSON.stringify(job), JOB_TTL);
       }
-      await redis.disconnect();
     } catch (updateErr) {
       console.error(`[directPairingJobs] Failed to update job ${jobId} error state:`, updateErr);
-      try {
-        await redis.disconnect();
-      } catch {}
     }
   }
 }
