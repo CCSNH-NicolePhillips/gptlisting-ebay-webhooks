@@ -131,9 +131,9 @@ export async function callDirectPairing(images) {
   const jobId = startJson.jobId;
   console.log('[directPairing] Job started:', jobId);
   
-  // Poll for completion (check every 2 seconds, max 120 seconds)
-  const maxAttempts = 60; // 2 min
-  const pollInterval = 2000; // 2s
+  // Poll for completion (check every 3 seconds, max 5 minutes)
+  const maxAttempts = 100; // 5 min
+  const pollInterval = 3000; // 3s
   
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     await new Promise(resolve => setTimeout(resolve, pollInterval));
@@ -157,7 +157,7 @@ export async function callDirectPairing(images) {
     // Status is 'pending' or 'processing', continue polling
   }
   
-  throw new Error('Direct pairing timed out after 2 minutes');
+  throw new Error('Direct pairing timed out after 5 minutes');
 }
 
 
