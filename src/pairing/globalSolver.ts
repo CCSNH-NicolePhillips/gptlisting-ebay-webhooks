@@ -4,78 +4,71 @@
 import type { FeatureRow } from './featurePrep.js';
 
 export type GlobalPair = {
-  front: FeatureRow;
-  back: FeatureRow;
+  f: FeatureRow;
+  b: FeatureRow;
   score: number;
 };
 
 /**
  * Build a dense score matrix from existing candidates
- * Uses preScore + brand bonus + filename stem bonus
+ * Uses preScore + brand bonus (3 pts) + filename stem bonus (2 pts)
  */
 export function buildScoreMatrix(
   fronts: FeatureRow[],
-  backs: FeatureRow[],
-): { pairs: GlobalPair[] } {
+  backs: FeatureRow[]
+): GlobalPair[] {
   const pairs: GlobalPair[] = [];
 
+  const stem = (id: string) => id.slice(0, 13);
+  const norm = (x: string | null | undefined) => (x || '').toLowerCase();
+
   for (const f of fronts) {
+    const fBrand = norm(f.brandNorm || (f as any).brand);
+    const fStem = stem((f as any).imageKey || f.url);
+
     for (const b of backs) {
-      // Base score: existing preScore / similarity if we have it
-      // Fallback to 0 if missing
-      const preScore = (f as any).candidates?.[b.url]?.preScore ?? 0;
+      const bBrand = norm(b.brandNorm || (b as any).brand);
+      const bStem = stem((b as any).imageKey || b.url);
 
-      // Brand bonus
-      const fb = (f.brandNorm || '').toLowerCase();
-      const bb = (b.brandNorm || '').toLowerCase();
-      const brandBonus = fb && bb && fb === bb ? 2 : 0;
+      const pre = (f as any).candidates?.[(b as any).imageKey || b.url]?.preScore ?? 0;
+      const brandBonus = fBrand && bBrand && fBrand === bBrand ? 3 : 0;
+      const stemBonus = fStem === bStem ? 2 : 0;
 
-      // Filename stem bonus (timestamp prefix, e.g. 20251115_1433)
-      const stem = (url: string) => {
-        const parts = url.split('/');
-        const filename = parts[parts.length - 1] || '';
-        return filename.slice(0, 13); // First 13 chars of filename
-      };
-      const fs = stem(f.url);
-      const bs = stem(b.url);
-      const stemBonus = fs && bs && fs === bs ? 1 : 0;
+      const score = pre + brandBonus + stemBonus;
 
-      const score = preScore + brandBonus + stemBonus;
-
-      pairs.push({ front: f, back: b, score });
+      pairs.push({ f, b, score });
     }
   }
 
-  return { pairs };
+  return pairs;
 }
 
 /**
  * Greedy global matching (one-to-one) for two-shot case
  * Picks highest-scoring pairs ensuring each front/back used only once
  */
-export function solveGlobalPairsTwoShot(
+export function solveTwoShot(
   fronts: FeatureRow[],
-  backs: FeatureRow[],
+  backs: FeatureRow[]
 ): GlobalPair[] {
-  const { pairs } = buildScoreMatrix(fronts, backs);
+  const pairs = buildScoreMatrix(fronts, backs);
 
-  // Sort all possible front-back pairs by score descending
   pairs.sort((a, b) => b.score - a.score);
 
-  const usedFronts = new Set<string>();
-  const usedBacks = new Set<string>();
+  const usedF = new Set<string>();
+  const usedB = new Set<string>();
   const result: GlobalPair[] = [];
 
   for (const p of pairs) {
-    if (p.score <= 0) continue; // ignore totally useless matches
+    if (p.score <= 0) continue;
 
-    const fKey = p.front.url;
-    const bKey = p.back.url;
+    const fKey = (p.f as any).imageKey || p.f.url;
+    const bKey = (p.b as any).imageKey || p.b.url;
 
-    if (usedFronts.has(fKey) || usedBacks.has(bKey)) continue;
+    if (usedF.has(fKey) || usedB.has(bKey)) continue;
 
-    usedFronts.add(fKey);
-    usedBacks.add(bKey);
+    usedF.add(fKey);
+    usedB.add(bKey);
     result.push(p);
   }
 

@@ -32,7 +32,7 @@ import { buildMetrics, formatMetricsLog, PairingMetrics } from "./metrics.js";
 import { groupExtrasWithProducts } from "./groupExtras.js";
 import { enrichListingWithAI } from "../services/listing-enrichment.js";
 import { resolveSingletons } from "./resolveSingletons.js";
-import { solveGlobalPairsTwoShot } from "./globalSolver.js";
+import { solveTwoShot } from "./globalSolver.js";
 
 type Analysis = {
   groups: any[];
@@ -59,14 +59,14 @@ export async function runPairing(opts: {
   
   // HP1.1: Detect "two-shot" dataset (equal fronts and backs, no extras)
   const isTwoShotCandidate =
-    features.size === frontFeatures.length + backFeatures.length &&
     frontFeatures.length === backFeatures.length &&
-    frontFeatures.length > 0;
+    frontFeatures.length > 0 &&
+    features.size === frontFeatures.length + backFeatures.length;
   
-  console.log('[pairing-global] isTwoShotCandidate', {
-    images: features.size,
+  console.log('[globalSolver] twoShot?', {
     fronts: frontFeatures.length,
     backs: backFeatures.length,
+    images: features.size,
     isTwoShotCandidate,
   });
   
@@ -438,30 +438,26 @@ export async function runPairing(opts: {
   
   // HP1.4: Apply global solver for two-shot datasets
   if (isTwoShotCandidate) {
-    log('[pairing-global] running two-shot global solver');
+    log('[globalSolver] running two-shot solver');
     
-    const globalPairs = solveGlobalPairsTwoShot(frontFeatures, backFeatures);
+    const global = solveTwoShot(frontFeatures, backFeatures);
     
-    log('[pairing-global] result', {
-      globalPairs: globalPairs.length,
-      fronts: frontFeatures.length,
-      backs: backFeatures.length,
-    });
+    log('[globalSolver] result pair count', global.length);
     
     // For the two-shot case, we treat these as the final authoritative pairs
     // and ignore autoPairs/modelPairs. We can still log their counts for debugging.
-    allPairs = globalPairs.map(gp => ({
-      frontUrl: canon(gp.front.url),
-      backUrl: canon(gp.back.url),
-      matchScore: Math.round(gp.score * 10) / 10,
-      brand: gp.front.brandNorm || gp.back.brandNorm || 'unknown',
+    allPairs = global.map((g, idx) => ({
+      frontUrl: canon(g.f.url),
+      backUrl: canon(g.b.url),
+      matchScore: Math.round(g.score * 10) / 10,
+      brand: g.f.brandNorm || g.b.brandNorm || 'unknown',
       product: '', // Will be enriched later
       variant: null,
-      sizeFront: gp.front.sizeCanonical || null,
-      sizeBack: gp.back.sizeCanonical || null,
+      sizeFront: g.f.sizeCanonical || null,
+      sizeBack: g.b.sizeCanonical || null,
       evidence: [
-        `GLOBAL-PAIRED: score=${gp.score.toFixed(2)}`,
-        `brand=${gp.front.brandNorm === gp.back.brandNorm ? 'equal' : 'mismatch'}`,
+        `GLOBAL-PAIRED: score=${g.score.toFixed(2)}`,
+        `brand=${g.f.brandNorm === g.b.brandNorm ? 'equal' : 'mismatch'}`,
       ],
       confidence: 0.98
     }));
@@ -469,10 +465,11 @@ export async function runPairing(opts: {
     // In strict two-shot mode, we expect no singletons
     singletons = [];
     
-    log('[pairing-global] two-shot pairing complete', {
+    log('[globalSolver] metrics', {
       autoPairsOriginal: autoPairs.length,
       modelPairsOriginal: parsed.pairs.length,
       globalPairsFinal: allPairs.length,
+      productsExpected: allPairs.length,
       singletonsExpected: 0
     });
   }
@@ -551,11 +548,11 @@ export async function runPairing(opts: {
   let finalSingletons: Array<{ url: string; reason: string }>;
   
   if (isTwoShotCandidate) {
-    log('[pairing-global] skipping extras/solos in two-shot mode');
+    log('[globalSolver] skipping extras/solos in two-shot mode');
     
     // Build products directly from global pairs - no extras, no solos
     products = allPairs.map((p, idx) => ({
-      productId: `twoShot:${idx}`,
+      productId: `gs-${idx}`,
       frontUrl: p.frontUrl,
       backUrl: p.backUrl,
       heroDisplayUrl: '', // Will be hydrated below
@@ -573,7 +570,7 @@ export async function runPairing(opts: {
     
     finalSingletons = [];
     
-    log('[pairing-global] two-shot products built', {
+    log('[globalSolver] products built', {
       products: products.length,
       singletons: 0
     });
