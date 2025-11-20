@@ -150,19 +150,22 @@ export function groupExtrasWithProducts(
     }
 
     // Create ProductGroup
-    const productId = `${pair.brand}_${pair.product}`.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
+    // Guard against undefined brand/product (shouldn't happen but be defensive)
+    const safeBrand = pair.brand || 'unknown';
+    const safeProduct = pair.product || 'unknown';
+    const productId = `${safeBrand}_${safeProduct}`.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
     products.push({
       productId,
       frontUrl: pair.frontUrl,
       backUrl: pair.backUrl,
       extras: productExtras,
       evidence: {
-        brand: pair.brand,
-        product: pair.product,
-        variant: pair.variant,
+        brand: safeBrand,
+        product: safeProduct,
+        variant: pair.variant || null,
         matchScore: pair.matchScore,
         confidence: pair.confidence,
-        triggers: pair.evidence
+        triggers: pair.evidence || []
       }
     });
   }

@@ -511,10 +511,15 @@ export async function runPairing(opts: {
       const frontFeature = features.get(product.frontUrl);
       const backFeature = features.get(product.backUrl);
       
+      // Guard against missing evidence
+      const safeBrand = product.evidence?.brand || 'unknown';
+      const safeProduct = product.evidence?.product || 'unknown';
+      const safeVariant = product.evidence?.variant || undefined;
+      
       const enriched = await enrichListingWithAI({
-        brand: product.evidence.brand,
-        product: product.evidence.product,
-        variant: product.evidence.variant || undefined,
+        brand: safeBrand,
+        product: safeProduct,
+        variant: safeVariant,
         size: frontFeature?.sizeCanonical || backFeature?.sizeCanonical || undefined,
         category: frontFeature?.categoryTail || backFeature?.categoryTail || undefined,
         categoryPath: frontFeature?.categoryPath || backFeature?.categoryPath || undefined,
@@ -526,11 +531,15 @@ export async function runPairing(opts: {
       (product as any).title = enriched.title;
       (product as any).description = enriched.description;
       
-      log(`  ✓ ${product.evidence.brand} ${product.evidence.product} - "${enriched.title.slice(0, 50)}..."`);
+      log(`  ✓ ${safeBrand} ${safeProduct} - "${enriched.title.slice(0, 50)}..."`);
     } catch (error) {
-      log(`  ⚠️ Failed to enrich ${product.evidence.brand} ${product.evidence.product}: ${error}`);
+      const safeBrand = product.evidence?.brand || 'unknown';
+      const safeProduct = product.evidence?.product || 'unknown';
+      const safeVariant = product.evidence?.variant || undefined;
+      
+      log(`  ⚠️ Failed to enrich ${safeBrand} ${safeProduct}: ${error}`);
       // Fallback: use simple concatenation
-      (product as any).title = [product.evidence.brand, product.evidence.product, product.evidence.variant]
+      (product as any).title = [safeBrand, safeProduct, safeVariant]
         .filter(p => p)
         .join(' ')
         .slice(0, 80);
@@ -626,7 +635,7 @@ export async function runPairing(opts: {
 
   // Debug logs
   for (const p of allPairs) {
-    log(`PAIR  front=${p.frontUrl}  back=${p.backUrl}  score=${p.matchScore.toFixed(2)}  brand=${p.brand}  product=${p.product}`);
+    log(`PAIR  front=${p.frontUrl}  back=${p.backUrl}  score=${p.matchScore.toFixed(2)}  brand=${p.brand || 'unknown'}  product=${p.product || 'unknown'}`);
     if (p.evidence?.length) log(`EVID  ${p.evidence.join(" | ")}`);
   }
   for (const s of finalSingletons) {
