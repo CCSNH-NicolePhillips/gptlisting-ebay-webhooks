@@ -38,17 +38,25 @@ export async function directPairProductsFromImages(
     batches: Math.ceil(images.length / BATCH_SIZE),
   });
 
+  // Process batches in parallel to avoid sequential timeout
+  const batchPromises: Promise<DirectPairsResult>[] = [];
+  
   for (let i = 0; i < images.length; i += BATCH_SIZE) {
     const batch = images.slice(i, i + BATCH_SIZE);
     const batchNum = Math.floor(i / BATCH_SIZE) + 1;
     const totalBatches = Math.ceil(images.length / BATCH_SIZE);
     
-    console.log(`[directPairing] Processing batch ${batchNum}/${totalBatches} (${batch.length} images)`);
+    console.log(`[directPairing] Starting batch ${batchNum}/${totalBatches} (${batch.length} images)`);
     
-    const batchResult = await processSingleBatch(batch);
-    allProducts.push(...batchResult.products);
-    
-    console.log(`[directPairing] Batch ${batchNum}/${totalBatches} complete: ${batchResult.products.length} products`);
+    batchPromises.push(processSingleBatch(batch, batchNum, totalBatches));
+  }
+
+  // Wait for all batches to complete in parallel
+  const batchResults = await Promise.all(batchPromises);
+  
+  // Combine all products
+  for (const result of batchResults) {
+    allProducts.push(...result.products);
   }
 
   console.log("[directPairing] All batches complete:", {
@@ -59,7 +67,9 @@ export async function directPairProductsFromImages(
 }
 
 async function processSingleBatch(
-  images: DirectPairImageInput[]
+  images: DirectPairImageInput[],
+  batchNum?: number,
+  totalBatches?: number
 ): Promise<DirectPairsResult> {
   // Create OpenAI client (reuse env var like scan does)
   const openai = new OpenAI({
@@ -192,6 +202,10 @@ async function processSingleBatch(
   });
 
   console.log("[directPairing] Result products:", validProducts.length);
+  
+  if (batchNum && totalBatches) {
+    console.log(`[directPairing] Batch ${batchNum}/${totalBatches} complete: ${validProducts.length} products`);
+  }
 
   return { products: validProducts };
 }
