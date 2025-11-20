@@ -124,11 +124,9 @@ export async function runVision(input: VisionInput): Promise<any> {
   const images = normalizeImages(input.images);
   const prompt = input.prompt || "";
 
-  const primaryModel = process.env.VISION_MODEL || "openai:gpt-4o";
+  // Default to gpt-4o-mini as the primary workhorse (cheaper, faster, good enough for most vision tasks)
+  const primaryModel = process.env.VISION_MODEL || "openai:gpt-4o-mini";
   const primary = parseModel(primaryModel);
-  
-  // Phase 4A: Automatic fallback to gpt-4o-mini on rate limit
-  const fallbackModel = "openai:gpt-4o-mini";
   
   console.log(`[vision-router] Using ${primaryModel}`);
 
@@ -173,7 +171,16 @@ export async function runVision(input: VisionInput): Promise<any> {
       }
     }
 
-    // Not a rate limit or not gpt-4o, try configured fallbacks
+    // If rate limit on gpt-4o-mini (primary), don't try it again - go straight to other providers
+    if (isRateLimit(err) && primary.provider === "openai" && primary.name === "gpt-4o-mini") {
+      console.warn(`[vision-fallback] gpt-4o-mini hit rate limit, skipping to other providers`);
+      // Continue to fallback providers below
+    }
+
+    // Not a rate limit or not OpenAI, try configured fallbacks
+    // Track which models we've already tried to avoid retrying rate-limited models
+    const triedModels = new Set<string>([`${primary.provider}:${primary.name}`]);
+    
     const envFallbacks = (process.env.VISION_FALLBACK || "")
       .split(",")
       .map((entry) => entry.trim())
@@ -189,6 +196,16 @@ export async function runVision(input: VisionInput): Promise<any> {
 
     for (const attempt of fallbacks) {
       const { provider, name } = attempt;
+      const modelKey = `${provider}:${name}`;
+      
+      // Skip models we've already tried (especially ones that rate limited)
+      if (triedModels.has(modelKey)) {
+        console.log(`[vision-router] Skipping ${modelKey} (already tried)`);
+        continue;
+      }
+      
+      triedModels.add(modelKey);
+      
       try {
         if (provider === "openai") {
           console.log(`[vision-router] Attempting OpenAI with model: ${name}`);
