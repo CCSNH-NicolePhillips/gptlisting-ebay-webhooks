@@ -305,23 +305,30 @@ export function App() {
         if (!analysis.imageInsights || (typeof analysis.imageInsights === 'object' && Object.keys(analysis.imageInsights).length === 0)) {
           throw new Error('No image insights found. Try running Analyze again with Force Rescan.');
         }
-        setLoadingStatus('🤖 Running GPT-4o-mini pairing...');
         
-        // NEW APPROACH: Pass folder AND jobId to pairing for Redis fallback
-        console.log('[UI] Sending folder to pairing (server-side fetch):', folder);
-        console.log('[UI] Analysis object has jobId?', !!analysis?.jobId);
-        console.log('[UI] Analysis jobId value:', analysis?.jobId);
-        out = await runPairingLive(null, { folder, jobId: analysis?.jobId });
-        showToast('✨ Pairing complete (live, server-side)');
+        // DP3: If direct pairing toggle is enabled, SKIP legacy pairing entirely
+        if (!useDirectPairing) {
+          setLoadingStatus('🤖 Running GPT-4o pairing...');
+          
+          // NEW APPROACH: Pass folder AND jobId to pairing for Redis fallback
+          console.log('[UI] Sending folder to pairing (server-side fetch):', folder);
+          console.log('[UI] Analysis object has jobId?', !!analysis?.jobId);
+          console.log('[UI] Analysis jobId value:', analysis?.jobId);
+          out = await runPairingLive(null, { folder, jobId: analysis?.jobId });
+          showToast('✨ Pairing complete (live, server-side)');
+          const { pairing, metrics } = out;
+          setPairing(pairing); setMetrics(metrics || null);
+          setTab('Pairing');
+        } else {
+          console.log('[UI] Skipping legacy pairing (direct toggle enabled)');
+          showToast('ℹ️ Direct pairing mode - check Comparison tab');
+        }
       }
-      const { pairing, metrics } = out;
-      setPairing(pairing); setMetrics(metrics || null);
-      setLoadingStatus('');
-      setTab('Pairing');
     } catch (e) {
       console.error(e); showToast('❌ ' + (e.message || 'Pairing failed'));
     } finally { 
-      setLoading(false); 
+      setLoading(false);
+      setLoadingStatus('');
     }
     
     // DP3: Run direct pairing for comparison (OUTSIDE try/catch so it runs even if legacy fails)
