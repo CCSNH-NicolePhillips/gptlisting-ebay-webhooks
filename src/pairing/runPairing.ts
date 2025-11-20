@@ -416,18 +416,21 @@ export async function runPairing(opts: {
   }
 
   // HP1b: Detect two-shot candidate AFTER Phase 5a.4 filtering
-  // Recompute final front/back counts after all role adjustments
-  const finalFronts = Array.from(features.values()).filter(f => f.role === 'front');
-  const finalBacks = Array.from(features.values()).filter(f => f.role === 'back');
+  // Use the SAME filtering logic as Phase 5a.4 in buildCandidates
+  // to get the true final front/back sets that will be used for pairing
+  const allFronts = Array.from(features.values()).filter(f => f.role === 'front');
+  const allBacks = Array.from(features.values()).filter(f => 
+    (f.role === 'back' || f.role === 'other') && f.originalRole !== 'front'
+  );
   
   const isTwoShotCandidate =
-    finalFronts.length === finalBacks.length &&
-    finalFronts.length > 0 &&
-    features.size === finalFronts.length + finalBacks.length;
+    allFronts.length === allBacks.length &&
+    allFronts.length > 0 &&
+    features.size === allFronts.length + allBacks.length;
   
   console.log('[globalSolver] twoShot-final-check', {
-    fronts: finalFronts.length,
-    backs: finalBacks.length,
+    fronts: allFronts.length,
+    backs: allBacks.length,
     images: features.size,
     isTwoShotCandidate,
   });
@@ -441,11 +444,11 @@ export async function runPairing(opts: {
   if (isTwoShotCandidate) {
     log('[globalSolver] running two-shot solver');
     
-    const globalPairs = solveTwoShot(finalFronts, finalBacks);
+    const globalPairs = solveTwoShot(allFronts, allBacks);
     
     log('[globalSolver] result', {
       globalPairs: globalPairs.length,
-      expectedPairs: finalFronts.length,
+      expectedPairs: allFronts.length,
     });
     
     // Replace the existing pairs with the global ones
@@ -487,8 +490,8 @@ export async function runPairing(opts: {
     
     log('[globalSolver] metrics-final', {
       images: features.size,
-      fronts: finalFronts.length,
-      backs: finalBacks.length,
+      fronts: allFronts.length,
+      backs: allBacks.length,
       autoPairs: 0,
       modelPairs: 0,
       globalPairs: pairs.length,
