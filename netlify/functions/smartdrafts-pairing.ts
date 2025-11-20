@@ -351,14 +351,17 @@ export const handler: Handler = async (event) => {
     debugSummary.push(`All categories: ${JSON.stringify(catMap)}`);
 
     return jsonResponse(200, {
+      ok: true,
       pairs,
+      products: result.products || [],
       singletons,
       debugSummary,
       metrics: {
         totalImages: metrics.totals.images,
-        totalPairs: metrics.totals.autoPairs + metrics.totals.modelPairs,
+        totalPairs: metrics.totals.autoPairs + metrics.totals.modelPairs + (metrics.totals.globalPairs || 0),
         autoPairs: metrics.totals.autoPairs,
         modelPairs: metrics.totals.modelPairs,
+        globalPairs: metrics.totals.globalPairs || 0,
         singletons: metrics.totals.singletons
       }
     }, originHdr, methods);
