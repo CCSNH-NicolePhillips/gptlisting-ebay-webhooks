@@ -132,53 +132,53 @@ If a back has empty brand, try to match it by color, product text, or packaging 
   }
 }
 
-// Phase 2: Direct LLM pairing - pair ALL fronts/backs at once (for labs mode)
+// Phase 3: Direct LLM pairing - let LLM determine fronts/backs (no pre-splitting)
 async function pairAllWithLLM({
-  allFronts,
-  allBacks,
+  allImages,
   client,
   model = "gpt-4o-mini",
   log = console.log,
 }: {
-  allFronts: FeatureRow[];
-  allBacks: FeatureRow[];
+  allImages: FeatureRow[];
   client: OpenAI;
   model?: string;
   log?: (line: string) => void;
 }): Promise<Array<{ frontUrl: string; backUrl: string }>> {
-  if (allFronts.length === 0 || allBacks.length === 0) {
+  if (allImages.length === 0) {
     return [];
   }
 
-  log(`[LLM-global] Pairing ALL images: fronts=${allFronts.length} backs=${allBacks.length}`);
+  log(`[LLM-global] Pairing ALL ${allImages.length} images (LLM determines fronts/backs)`);
 
-  const frontsPayload = allFronts.map((f, idx) => ({
-    id: `F${idx + 1}`,
-    filename: f.url,
-    brand: f.brandNorm || "",
-    product: f.productTokens.join(" ") || "",
-    ocrSummary: f.textExtracted?.substring(0, 200) || "",
-    color: f.colorKey || "",
+  const imagesPayload = allImages.map((img, idx) => ({
+    id: `IMG${idx + 1}`,
+    filename: img.url.split('/').pop() || img.url,
+    brand: img.brandNorm || "",
+    text: img.productTokens.join(" ") || "",
+    color: img.colorKey || "",
+    ocrSummary: img.textExtracted?.substring(0, 200) || "",
   }));
 
-  const backsPayload = allBacks.map((b, idx) => ({
-    id: `B${idx + 1}`,
-    filename: b.url,
-    brand: b.brandNorm || "",
-    product: b.productTokens.join(" ") || "",
-    ocrSummary: b.textExtracted?.substring(0, 200) || "",
-    color: b.colorKey || "",
-  }));
+  const systemPrompt = `You are pairing ${allImages.length} product images.
 
-  const systemPrompt = `You are matching product images: fronts to backs.
-Each product has exactly one front and one back.
-Use brand, product text, size, flavor, and packaging to decide.
-Return JSON with an array "pairs", each { "frontId": "F#", "backId": "B#" }.
-If an image labeled as front is clearly actually the BACK of another front, you may use it as a back.
-If brand names don't match exactly but are variations (e.g. "evereden" vs "Barbie x Evereden"), treat them as the same if the product matches.
-If a back has empty brand, still try to match it using product text, color, and packaging.`;
+Each product has:
+- one front image
+- one back image
 
-  const userContent = { fronts: frontsPayload, backs: backsPayload };
+Your job:
+1. Determine which images are fronts and which are backs.
+2. Pair each front with its corresponding back.
+3. Return JSON of the form:
+
+{
+  "pairs": [
+    { "front": "filename.jpg", "back": "filename.jpg" }
+  ]
+}
+
+Do NOT require equal counts.`;
+
+  const userContent = { images: imagesPayload };
 
   const response = await client.chat.completions.create({
     model,
@@ -199,13 +199,16 @@ If a back has empty brand, still try to match it using product text, color, and 
     return [];
   }
 
-  const idToFront = new Map(frontsPayload.map((f, idx) => [`F${idx + 1}`, allFronts[idx]]));
-  const idToBack = new Map(backsPayload.map((b, idx) => [`B${idx + 1}`, allBacks[idx]]));
+  // Map filename back to full URL
+  const filenameToUrl = new Map(allImages.map(img => {
+    const filename = img.url.split('/').pop() || img.url;
+    return [filename, img.url];
+  }));
 
   const llmPairs = (parsed.pairs || [])
     .map((p: any) => ({
-      frontUrl: idToFront.get(p.frontId)?.url,
-      backUrl: idToBack.get(p.backId)?.url,
+      frontUrl: filenameToUrl.get(p.front),
+      backUrl: filenameToUrl.get(p.back),
     }))
     .filter((p: any) => p.frontUrl && p.backUrl);
 
@@ -226,18 +229,16 @@ export async function runPairing(opts: {
   // Build features and candidates
   const features = buildFeatures(analysis);
   
-  // Phase 2: Direct LLM pairing mode - skip all heuristics, go straight to LLM
+  // Phase 3: Direct LLM pairing mode - let LLM determine fronts/backs
   if (mode === "direct-llm") {
-    const allFronts = Array.from(features.values()).filter(f => f.role === "front");
-    const allBacks = Array.from(features.values()).filter(f => f.role === "back" || f.role === "other");
+    const allImages = Array.from(features.values());
 
-    log(`[direct-llm] Mode enabled: fronts=${allFronts.length} backs=${allBacks.length}`);
+    log(`[direct-llm] Mode enabled: ${allImages.length} total images (LLM determines fronts/backs)`);
 
     // Guardrail for crazy-large folders
-    if (allFronts.length > 0 && allBacks.length > 0 && allFronts.length <= 50 && allBacks.length <= 50) {
+    if (allImages.length > 0 && allImages.length <= 50) {
       const llmPairs = await pairAllWithLLM({
-        allFronts,
-        allBacks,
+        allImages,
         client,
         model: model || "gpt-4o-mini",
         log,
