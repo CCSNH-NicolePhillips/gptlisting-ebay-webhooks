@@ -70,9 +70,10 @@ export function buildMetrics(opts: {
   // Singleton/decline reasons histogram
   const reasons: Record<string, number> = {};
   for (const s of singletons) {
-    const reasonKey = s.reason.startsWith('declined despite candidates') 
+    const reason = s.reason || 'unknown';
+    const reasonKey = reason.startsWith('declined despite candidates') 
       ? 'declined_despite_candidates'
-      : s.reason === 'no candidates'
+      : reason === 'no candidates'
       ? 'no_candidates'
       : 'other';
     reasons[reasonKey] = (reasons[reasonKey] || 0) + 1;

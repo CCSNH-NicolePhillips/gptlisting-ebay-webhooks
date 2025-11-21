@@ -333,11 +333,16 @@ export async function runPairing(opts: {
         }
       }
 
+      const singletonObjects = singletonsUrls.map((url) => ({ 
+        url, 
+        reason: "not paired by unified LLM" 
+      }));
+
       const result: PairingResult = {
         engineVersion: ENGINE_VERSION,
         pairs,
         products: [], // Will be built below if needed
-        singletons: singletonsUrls.map((url) => ({ url, reason: "not paired by unified LLM" })),
+        singletons: singletonObjects,
         debugSummary: [`Direct LLM unified: ${pairs.length} pairs`],
       };
 
@@ -349,14 +354,14 @@ export async function runPairing(opts: {
         autoPairs: [],
         modelPairs: pairs,
         globalPairs: [],
-        singletons: singletonsUrls,
+        singletons: singletonObjects, // Pass objects, not strings
         thresholds: getThresholdsSnapshot(),
         durationMs,
       });
 
       log(formatMetricsLog(metrics));
       log(
-        `[SUMMARY] direct-llm unified: pairs=${pairs.length} singletons=${singletonsUrls.length} durationMs=${durationMs}`
+        `[SUMMARY] direct-llm unified: pairs=${pairs.length} singletons=${singletonObjects.length} durationMs=${durationMs}`
       );
 
       return { result, rawText: "", metrics };
