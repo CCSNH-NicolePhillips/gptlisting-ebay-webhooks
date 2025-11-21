@@ -28,6 +28,51 @@ export interface PairingV2Output {
 }
 
 /**
+ * Phase 2: Normalized feature representation for deterministic matching
+ */
+interface V2Feature {
+  key: string; // unique image key, usually url
+  filename: string;
+  basename: string;
+  brandKey: string;
+  colorKey: string;
+  packagingKey: string;
+  sizeText: string;
+  productText: string;
+}
+
+function buildV2Feature(img: FeatureRow, idx: number): V2Feature | null {
+  const filename = img.url || `img-${idx + 1}`;
+  const basename = filename.split("/").pop() || filename;
+  const key = img.url || filename;
+  if (!key) return null;
+
+  const norm = (s?: string | null) =>
+    (s || "")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const brandKey = norm(img.brandNorm);
+  const colorKey = norm(img.colorKey);
+  const packagingKey = norm(img.packagingHint);
+  const sizeText = norm(img.sizeCanonical);
+  const productTokens = Array.isArray(img.productTokens) ? img.productTokens.join(" ") : "";
+  const productText = norm(productTokens);
+
+  return {
+    key,
+    filename,
+    basename,
+    brandKey,
+    colorKey,
+    packagingKey,
+    sizeText,
+    productText,
+  };
+}
+
+/**
  * Pairing v2 entrypoint.
  *
  * Phase 1: simply delegates to a unified direct-LLM global pairing
