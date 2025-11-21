@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pairing Labs</title>
   <link rel="stylesheet" href="/draftpilot.css">
+  <script src="/auth-client.js"></script>
   <style>
     body {
       max-width: 1200px;
@@ -99,10 +100,13 @@
       return folder || null;
     }
 
-    // Get auth token from localStorage (same as other SmartDrafts pages)
-    function getAuthToken() {
-      const token = localStorage.getItem('draftpilot_token');
-      return token;
+    // Get auth token using the authClient (same as other pages)
+    async function getAuthToken() {
+      try {
+        return await (window.authClient?.getToken?.() ?? null);
+      } catch {
+        return null;
+      }
     }
 
     btn.addEventListener('click', async () => {
@@ -112,7 +116,7 @@
         return;
       }
 
-      const token = getAuthToken();
+      const token = await getAuthToken();
       if (!token) {
         logEl.textContent = '❌ Error: Not logged in. Please log in first at /login.html';
         return;
