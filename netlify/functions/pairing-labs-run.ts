@@ -1,9 +1,11 @@
 import type { Handler, HandlerEvent } from '@netlify/functions';
+import { runSmartdraftsAnalysis } from '../../src/smartdrafts/analysisCore.js';
 
 /**
  * Pairing Labs Runner
  * POST /.netlify/functions/pairing-labs-run
  * 
+ * Phase 2: Runs SmartDrafts analysis pipeline
  * Experimental pairing endpoint for testing new algorithms.
  * Does not modify existing smartdrafts-pairing behavior.
  */
@@ -13,6 +15,10 @@ const ALLOWED_ORIGINS = [
   'http://localhost:3000',
   'https://draftpilot-ai.netlify.app'
 ];
+
+// TEMPORARY: Hard-code user ID for labs testing (no auth required)
+// TODO: Add proper auth in future phases
+const LABS_USER_ID = 'labs-test-user';
 
 function getCorsHeaders(origin: string | undefined) {
   const allowedOrigin = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[2];
@@ -48,9 +54,9 @@ export const handler: Handler = async (event: HandlerEvent) => {
   try {
     // Parse request body
     const body = JSON.parse(event.body || '{}');
-    const { folder } = body;
+    const { folder, overrides } = body;
 
-    console.log('[PAIRING_LABS] payload', body);
+    console.log('[PAIRING_LABS] start', { folder, overrides });
 
     // Validate folder
     if (!folder || typeof folder !== 'string') {
@@ -64,7 +70,22 @@ export const handler: Handler = async (event: HandlerEvent) => {
       };
     }
 
-    // Echo response
+    // Run analysis using shared core
+    const analysis = await runSmartdraftsAnalysis(
+      folder,
+      overrides || {},
+      LABS_USER_ID,
+      undefined, // no stagedUrls
+      true // skipQuota = true for labs
+    );
+
+    console.log('[PAIRING_LABS] analysis done', {
+      folder,
+      jobId: analysis.jobId,
+      groups: analysis.groups?.length || 0,
+    });
+
+    // Return clean JSON summary for UI
     return {
       statusCode: 200,
       headers: {
@@ -74,8 +95,15 @@ export const handler: Handler = async (event: HandlerEvent) => {
       body: JSON.stringify({
         ok: true,
         source: 'pairing-labs-run',
-        receivedFolder: folder,
-        timestamp: new Date().toISOString(),
+        folder,
+        analysisSummary: {
+          jobId: analysis.jobId,
+          cached: analysis.cached,
+          imageCount: analysis.imageCount ?? analysis.groups?.length ?? 0,
+          groupCount: analysis.groups?.length ?? 0,
+        },
+        // Expose raw groups for pairing debug later
+        groups: analysis.groups,
       }),
     };
   } catch (err) {

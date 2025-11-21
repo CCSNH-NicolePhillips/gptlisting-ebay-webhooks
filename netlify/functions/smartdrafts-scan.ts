@@ -1,7 +1,7 @@
 import type { Handler } from "@netlify/functions";
 import { requireUserAuth } from "../../src/lib/auth-user.js";
 import { getOrigin, jsonResponse } from "../../src/lib/http.js";
-import { runSmartDraftScan } from "../../src/lib/smartdrafts-scan-core.js";
+import { runSmartdraftsAnalysis } from "../../src/smartdrafts/analysisCore.js";
 
 const METHODS = "POST, OPTIONS";
 const MAX_IMAGES = Math.max(1, Math.min(100, Number(process.env.SMARTDRAFT_MAX_IMAGES || 100)));
@@ -46,13 +46,30 @@ export const handler: Handler = async (event) => {
     ? ["1", "true", "yes", "debug"].includes(debugRaw.toLowerCase())
     : Boolean(debugRaw);
 
-  const result = await runSmartDraftScan({
-    userId: user.userId,
-    folder,
-    force,
-    limit,
-    debug: debugEnabled,
-  });
+  try {
+    const analysis = await runSmartdraftsAnalysis(
+      folder,
+      { forceRescan: force },
+      user.userId,
+      undefined, // no stagedUrls
+      false // skipQuota = false (enforce quota)
+    );
 
-  return jsonResponse(result.status, result.body, originHdr, METHODS);
+    // Return same response format as before (for backward compatibility)
+    return jsonResponse(200, {
+      ok: true,
+      cached: analysis.cached,
+      folder: analysis.folder,
+      signature: analysis.signature,
+      count: analysis.groups.length,
+      warnings: analysis.warnings || [],
+      groups: analysis.groups,
+      imageInsights: analysis.imageInsights || {},
+    }, originHdr, METHODS);
+  } catch (err: any) {
+    return jsonResponse(500, { 
+      ok: false, 
+      error: err?.message || String(err) 
+    }, originHdr, METHODS);
+  }
 };

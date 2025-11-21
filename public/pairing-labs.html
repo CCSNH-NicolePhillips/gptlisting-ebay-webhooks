@@ -118,7 +118,27 @@
 
         const data = await res.json();
         
-        logEl.textContent = '✅ Response received:\n\n' + JSON.stringify(data, null, 2);
+        if (!data.ok) {
+          logEl.textContent = '❌ Error: ' + (data.error || 'Unknown error');
+          return;
+        }
+
+        // Phase 2: Show analysis summary instead of raw JSON
+        const summary = data.analysisSummary || {};
+        const groups = data.groups || [];
+        
+        let output = '✅ Analysis Complete\n\n';
+        output += 'OK: ' + data.ok + '\n';
+        output += 'Folder: ' + data.folder + '\n';
+        output += 'Job ID: ' + summary.jobId + '\n';
+        output += 'Images: ' + summary.imageCount + '\n';
+        output += 'Groups: ' + summary.groupCount + '\n';
+        output += 'Cached: ' + (summary.cached ? 'yes' : 'no') + '\n\n';
+        
+        output += 'First 5 groups:\n';
+        output += JSON.stringify(groups.slice(0, 5), null, 2);
+        
+        logEl.textContent = output;
       } catch (err) {
         logEl.textContent = '❌ Error: ' + (err?.message || String(err));
       } finally {
