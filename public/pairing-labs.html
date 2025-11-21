@@ -170,18 +170,17 @@ Compress-Archive -Path @(
         if (pairs.length > 0) {
           output += '📋 PAIRS:\n';
           pairs.forEach((pair, idx) => {
-            output += `\n${idx + 1}. FRONT: ${pair.frontUrl}\n`;
-            output += `   BACK:  ${pair.backUrl}\n`;
-            if (pair.score !== undefined) {
-              output += `   Score: ${pair.score}\n`;
-            }
+            const frontName = pair.frontUrl.split('/').pop() || pair.frontUrl;
+            const backName = pair.backUrl.split('/').pop() || pair.backUrl;
+            output += `\n${idx + 1}. ${frontName} ↔ ${backName}\n`;
           });
         }
         
         if (singletons.length > 0) {
           output += '\n\n🔸 SINGLETONS:\n';
-          singletons.forEach((img, idx) => {
-            output += `${idx + 1}. ${img}\n`;
+          singletons.forEach((s, idx) => {
+            const fn = s.filename || s.url || JSON.stringify(s);
+            output += `${idx + 1}. ${fn}\n`;
           });
         }
         

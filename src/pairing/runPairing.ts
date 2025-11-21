@@ -132,53 +132,85 @@ If a back has empty brand, try to match it by color, product text, or packaging 
   }
 }
 
-// Phase 3: Direct LLM pairing - let LLM determine fronts/backs (no pre-splitting)
-async function pairAllWithLLM({
-  allImages,
+// Phase 3: Unified LLM Pairing - ignore roles, let LLM decide everything
+interface UnifiedLLMImagePayload {
+  id: string;
+  filename: string;
+  brand: string;
+  product: string;
+  variant: string;
+  ocrSummary: string;
+  color: string;
+  packaging: string;
+}
+
+interface UnifiedLLMPair {
+  front: string;
+  back: string;
+}
+
+async function pairAllWithLLMUnified({
+  images,
   client,
-  model = "gpt-4o-mini",
+  model,
   log = console.log,
 }: {
-  allImages: FeatureRow[];
+  images: FeatureRow[];
   client: OpenAI;
-  model?: string;
+  model: string;
   log?: (line: string) => void;
-}): Promise<Array<{ frontUrl: string; backUrl: string }>> {
-  if (allImages.length === 0) {
-    return [];
-  }
+}): Promise<UnifiedLLMPair[]> {
+  if (!images.length) return [];
 
-  log(`[LLM-global] Pairing ALL ${allImages.length} images (LLM determines fronts/backs)`);
+  // Build a stable mapping from filename (basename) to FeatureRow.
+  const payload: UnifiedLLMImagePayload[] = images.map((img, idx) => {
+    const filename = img.url || `img-${idx + 1}`;
+    // Normalize to basename only so the model sees clean names
+    const basename = filename.split("/").pop() || filename;
 
-  const imagesPayload = allImages.map((img, idx) => ({
-    id: `IMG${idx + 1}`,
-    filename: img.url.split('/').pop() || img.url,
-    brand: img.brandNorm || "",
-    text: img.productTokens.join(" ") || "",
-    color: img.colorKey || "",
-    ocrSummary: img.textExtracted?.substring(0, 200) || "",
-  }));
+    return {
+      id: `IMG${idx + 1}`,
+      filename: basename,
+      brand: img.brandNorm || "",
+      product: (img.productTokens || []).join(" "),
+      variant: (img.variantTokens || []).join(" "),
+      ocrSummary: img.textExtracted?.slice(0, 400) || "",
+      color: img.colorKey || "",
+      packaging: img.packagingHint || "",
+    };
+  });
 
-  const systemPrompt = `You are pairing ${allImages.length} product images.
+  const systemPrompt = `
+You are pairing product images (front and back).
 
-Each product has:
+Each product has exactly:
 - one front image
 - one back image
 
-Your job:
-1. Determine which images are fronts and which are backs.
+You receive a flat list of images. Your tasks:
+
+1. Decide which images are fronts and which are backs.
 2. Pair each front with its corresponding back.
-3. Return JSON of the form:
+3. Use brand, product name, flavor, size, color, packaging, and OCR text to match.
+4. Some brands may differ slightly between front and back (e.g. "evereden" vs "Barbie x Evereden"). Treat them as the same product if the product details clearly match.
+5. Some backs may have missing brand. Still try to match them to the correct front using text, packaging, and color.
+
+Return ONLY valid front/back pairs. Do NOT leave images unpaired unless absolutely impossible.
+
+Return strict JSON of the form:
 
 {
   "pairs": [
-    { "front": "filename.jpg", "back": "filename.jpg" }
+    { "front": "20251115_142814.jpg", "back": "20251115_142824.jpg" }
   ]
 }
+`.trim();
 
-Do NOT require equal counts.`;
+  const userContent = {
+    images: payload,
+  };
 
-  const userContent = { images: imagesPayload };
+  log(`[LLM-unified] Sending ${payload.length} images to model for global pairing`);
 
   const response = await client.chat.completions.create({
     model,
@@ -191,31 +223,20 @@ Do NOT require equal counts.`;
   });
 
   const content = response.choices[0]?.message?.content || "{}";
+
   let parsed: any;
   try {
     parsed = JSON.parse(content);
   } catch (err) {
-    log(`[LLM-global] Failed to parse JSON: ${String(err)} content=${content.slice(0, 200)}`);
+    log(`[LLM-unified] Failed to parse JSON: ${String(err)} content=${content.slice(0, 200)}`);
     return [];
   }
 
-  // Map filename back to full URL
-  const filenameToUrl = new Map(allImages.map(img => {
-    const filename = img.url.split('/').pop() || img.url;
-    return [filename, img.url];
-  }));
+  const pairs: UnifiedLLMPair[] = Array.isArray(parsed.pairs) ? parsed.pairs : [];
+  log(`[LLM-unified] Model returned ${pairs.length} pairs`);
 
-  const llmPairs = (parsed.pairs || [])
-    .map((p: any) => ({
-      frontUrl: filenameToUrl.get(p.front),
-      backUrl: filenameToUrl.get(p.back),
-    }))
-    .filter((p: any) => p.frontUrl && p.backUrl);
-
-  log(`[LLM-global] Validated pairs: ${llmPairs.length}`);
-  return llmPairs;
+  return pairs;
 }
-
 export async function runPairing(opts: {
   client: OpenAI;
   model?: string; // default gpt-4o-mini (or from cfg)
@@ -229,77 +250,116 @@ export async function runPairing(opts: {
   // Build features and candidates
   const features = buildFeatures(analysis);
   
-  // Phase 3: Direct LLM pairing mode - let LLM determine fronts/backs
+  // Phase 3: Unified LLM pairing mode - ignore roles, let LLM decide everything
   if (mode === "direct-llm") {
+    const start = Date.now();
+
+    // Use ALL features, ignore role classification for this mode.
     const allImages = Array.from(features.values());
+    log(`[direct-llm] Starting unified pairing for ${allImages.length} images`);
 
-    log(`[direct-llm] Mode enabled: ${allImages.length} total images (LLM determines fronts/backs)`);
-
-    // Guardrail for crazy-large folders
-    if (allImages.length > 0 && allImages.length <= 50) {
-      const llmPairs = await pairAllWithLLM({
-        allImages,
+    // Guardrail: don't try to LLM-pair massive folders in this mode.
+    if (allImages.length === 0 || allImages.length > 100) {
+      log(`[direct-llm] Skipping unified LLM pairing (images=${allImages.length})`);
+    } else {
+      const unifiedPairs = await pairAllWithLLMUnified({
+        images: allImages,
         client,
-        model: model || "gpt-4o-mini",
+        model,
         log,
       });
 
-      const pairs: Pair[] = llmPairs.map(p => {
-        const frontFeat = features.get(canon(p.frontUrl));
-        const backFeat = features.get(canon(p.backUrl));
-        return {
-          frontUrl: canon(p.frontUrl),
-          backUrl: canon(p.backUrl),
-          matchScore: 8.0, // LLM global pairs get a high default score
-          brand: frontFeat?.brandNorm || backFeat?.brandNorm || "unknown",
-          product: frontFeat?.productTokens.join(" ") || backFeat?.productTokens.join(" ") || "",
-          variant: frontFeat?.variantTokens.join(" ") || null,
-          sizeFront: frontFeat?.sizeCanonical || null,
-          sizeBack: backFeat?.sizeCanonical || null,
-          evidence: ["LLM-GLOBAL: direct pairing mode"],
+      // Build mapping from basename -> FeatureRow
+      const byBasename = new Map<string, FeatureRow>();
+      for (const img of allImages) {
+        const filename = img.url || "";
+        const basename = filename.split("/").pop() || filename;
+        if (!byBasename.has(basename)) {
+          byBasename.set(basename, img);
+        }
+      }
+
+      const used = new Set<string>();
+      const pairs: Pair[] = [];
+
+      for (const p of unifiedPairs) {
+        if (!p || !p.front || !p.back) continue;
+
+        const frontBase = p.front.split("/").pop() || p.front;
+        const backBase = p.back.split("/").pop() || p.back;
+
+        const frontRow = byBasename.get(frontBase);
+        const backRow = byBasename.get(backBase);
+
+        if (!frontRow || !backRow) {
+          log(
+            `[direct-llm] Skipping pair front=${p.front} back=${p.back} (no matching feature rows)`
+          );
+          continue;
+        }
+
+        const frontKey = canon(frontRow.url);
+        const backKey = canon(backRow.url);
+
+        if (used.has(frontKey) || used.has(backKey)) {
+          log(
+            `[direct-llm] Skipping pair front=${frontBase} back=${backBase} (one side already used)`
+          );
+          continue;
+        }
+
+        used.add(frontKey);
+        used.add(backKey);
+
+        pairs.push({
+          frontUrl: frontKey,
+          backUrl: backKey,
+          matchScore: 1.0,
+          brand: frontRow.brandNorm || "",
+          product: frontRow.productTokens.join(" ") || "",
+          variant: frontRow.variantTokens.join(" ") || null,
+          sizeFront: frontRow.sizeCanonical || null,
+          sizeBack: backRow.sizeCanonical || null,
+          evidence: ["LLM-GLOBAL: unified direct pairing"],
           confidence: 0.95,
-        };
-      });
+        });
+      }
 
-      const pairedUrls = new Set([
-        ...pairs.map(p => p.frontUrl),
-        ...pairs.map(p => p.backUrl),
-      ]);
-
-      const singletons = Array.from(features.values())
-        .filter(f => !pairedUrls.has(canon(f.url)))
-        .map(f => ({
-          url: canon(f.url),
-          reason: "not paired by LLM",
-        }));
+      const singletonsUrls: string[] = [];
+      for (const img of allImages) {
+        const key = canon(img.url);
+        if (!used.has(key)) {
+          singletonsUrls.push(key);
+        }
+      }
 
       const result: PairingResult = {
         engineVersion: ENGINE_VERSION,
         pairs,
-        products: [], // Will be built below
-        singletons,
-        debugSummary: [`Direct LLM mode: ${pairs.length} pairs from global LLM`],
+        products: [], // Will be built below if needed
+        singletons: singletonsUrls.map((url) => ({ url, reason: "not paired by unified LLM" })),
+        debugSummary: [`Direct LLM unified: ${pairs.length} pairs`],
       };
 
-      const durationMs = Date.now() - startTime;
+      const durationMs = Date.now() - start;
+
       const metrics = buildMetrics({
         features,
-        candidatesMap: {}, // empty in this mode
+        candidatesMap: {}, // Not used in unified mode
         autoPairs: [],
         modelPairs: pairs,
         globalPairs: [],
-        singletons,
+        singletons: singletonsUrls,
         thresholds: getThresholdsSnapshot(),
         durationMs,
       });
 
       log(formatMetricsLog(metrics));
-      log(`[SUMMARY] direct-llm: pairs=${pairs.length} singletons=${singletons.length}`);
+      log(
+        `[SUMMARY] direct-llm unified: pairs=${pairs.length} singletons=${singletonsUrls.length} durationMs=${durationMs}`
+      );
 
-      return { result, rawText: JSON.stringify({ pairs: llmPairs }), metrics };
-    } else {
-      log(`[direct-llm] Folder too large or empty, falling back to HP2 mode`);
-      // Fall through to HP2 logic below
+      return { result, rawText: "", metrics };
     }
   }
   
