@@ -128,9 +128,19 @@ async function runPairingV2Direct(input: PairingV2Input): Promise<PairingV2Outpu
 
   // Build Analysis object from features
   // The direct-llm mode in runPairing needs { groups, imageInsights }
-  // We don't have groups, so pass empty array. ImageInsights can be derived from features.
+  // buildFeatures() requires groups to match imageInsights, so create synthetic groups
+  const groups = allImages.map((feature) => {
+    const basename = feature.url.split("/").pop() || feature.url;
+    return {
+      id: `synthetic:${basename}`,
+      base: basename,
+      images: [feature.url],
+      primaryImageUrl: feature.url,
+    };
+  });
+
   const analysis: Analysis = {
-    groups: [],
+    groups,
     imageInsights: allImages.map((feature) => ({
       url: feature.url,
       displayUrl: feature.url,
@@ -267,8 +277,19 @@ async function runPairingV2Experimental(input: PairingV2Input): Promise<PairingV
   // Original Phase 1 implementation preserved here
   log(`[pairing-v2] Experimental: Delegating ${allImages.length} images to direct-llm mode`);
 
+  // Create synthetic groups for buildFeatures compatibility
+  const groups = allImages.map((feature) => {
+    const basename = feature.url.split("/").pop() || feature.url;
+    return {
+      id: `synthetic:${basename}`,
+      base: basename,
+      images: [feature.url],
+      primaryImageUrl: feature.url,
+    };
+  });
+
   const analysis: Analysis = {
-    groups: [],
+    groups,
     imageInsights: allImages.map((feature) => ({
       url: feature.url,
       displayUrl: feature.url,
