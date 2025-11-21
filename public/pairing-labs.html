@@ -99,10 +99,22 @@
       return folder || null;
     }
 
+    // Get auth token from localStorage (same as other SmartDrafts pages)
+    function getAuthToken() {
+      const token = localStorage.getItem('draftpilot_token');
+      return token;
+    }
+
     btn.addEventListener('click', async () => {
       const folder = getSelectedFolder();
       if (!folder) {
         logEl.textContent = 'Please enter a folder path first.';
+        return;
+      }
+
+      const token = getAuthToken();
+      if (!token) {
+        logEl.textContent = '❌ Error: Not logged in. Please log in first at /login.html';
         return;
       }
 
@@ -112,7 +124,10 @@
       try {
         const res = await fetch('/.netlify/functions/pairing-labs-run', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token
+          },
           body: JSON.stringify({ folder }),
         });
 

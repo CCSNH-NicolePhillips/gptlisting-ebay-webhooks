@@ -1,5 +1,6 @@
 import type { Handler, HandlerEvent } from '@netlify/functions';
 import { runSmartdraftsAnalysis } from '../../src/smartdrafts/analysisCore.js';
+import { requireUserAuth } from '../../src/lib/auth-user.js';
 
 /**
  * Pairing Labs Runner
@@ -15,10 +16,6 @@ const ALLOWED_ORIGINS = [
   'http://localhost:3000',
   'https://draftpilot-ai.netlify.app'
 ];
-
-// TEMPORARY: Hard-code user ID for labs testing (no auth required)
-// TODO: Add proper auth in future phases
-const LABS_USER_ID = 'labs-test-user';
 
 function getCorsHeaders(origin: string | undefined) {
   const allowedOrigin = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[2];
@@ -52,11 +49,27 @@ export const handler: Handler = async (event: HandlerEvent) => {
   }
 
   try {
+    // Require authentication (user needs Dropbox access)
+    let user;
+    try {
+      user = await requireUserAuth(event.headers.authorization || event.headers.Authorization);
+    } catch (authErr) {
+      console.error('[PAIRING_LABS] auth failed:', authErr);
+      return {
+        statusCode: 401,
+        headers: corsHeaders,
+        body: JSON.stringify({
+          ok: false,
+          error: 'Unauthorized - please log in',
+        }),
+      };
+    }
+
     // Parse request body
     const body = JSON.parse(event.body || '{}');
     const { folder, overrides } = body;
 
-    console.log('[PAIRING_LABS] start', { folder, overrides });
+    console.log('[PAIRING_LABS] start', { folder, overrides, userId: user.userId });
 
     // Validate folder
     if (!folder || typeof folder !== 'string') {
@@ -74,7 +87,7 @@ export const handler: Handler = async (event: HandlerEvent) => {
     const analysis = await runSmartdraftsAnalysis(
       folder,
       overrides || {},
-      LABS_USER_ID,
+      user.userId, // Use authenticated user ID
       undefined, // no stagedUrls
       true // skipQuota = true for labs
     );
