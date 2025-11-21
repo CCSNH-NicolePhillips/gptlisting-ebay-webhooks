@@ -1,4 +1,15 @@
-<!DOCTYPE html>
+Compress-Archive -Path @(
+  'src/lib/smartdrafts-scan-core.ts',
+  'src/smartdrafts/analysisCore.ts',
+  'src/lib/analyze-core.ts',
+  'src/pairing/runPairing.ts',
+  'src/pairing/pairImages.ts',
+  'netlify/functions/pairing-labs-run.ts',
+  'netlify/functions/smartdrafts-pairing.ts',
+  'public/pairing-labs.html',
+  'src/config.ts',
+  'PAIRING-LABS-FILE-PATHS.md'
+) -DestinationPath 'pairing-labs-analysis.zip' -Force<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -142,20 +153,41 @@
           return;
         }
 
-        // Phase 2: Show analysis summary instead of raw JSON
-        const summary = data.analysisSummary || {};
-        const groups = data.groups || [];
+        // Phase 2: Display pairing results
+        const pairs = data.pairs || [];
+        const singletons = data.singletons || [];
+        const metrics = data.metrics || {};
         
-        let output = '✅ Analysis Complete\n\n';
+        let output = '✅ Direct LLM Pairing Complete\n\n';
         output += 'OK: ' + data.ok + '\n';
         output += 'Folder: ' + data.folder + '\n';
-        output += 'Job ID: ' + summary.jobId + '\n';
-        output += 'Images: ' + summary.imageCount + '\n';
-        output += 'Groups: ' + summary.groupCount + '\n';
-        output += 'Cached: ' + (summary.cached ? 'yes' : 'no') + '\n\n';
+        output += 'Job ID: ' + data.jobId + '\n';
+        output += 'Groups: ' + data.groups + '\n';
+        output += 'Pairs: ' + pairs.length + '\n';
+        output += 'Singletons: ' + singletons.length + '\n\n';
         
-        output += 'First 5 groups:\n';
-        output += JSON.stringify(groups.slice(0, 5), null, 2);
+        if (pairs.length > 0) {
+          output += '📋 PAIRS:\n';
+          pairs.forEach((pair, idx) => {
+            output += `\n${idx + 1}. FRONT: ${pair.frontUrl}\n`;
+            output += `   BACK:  ${pair.backUrl}\n`;
+            if (pair.score !== undefined) {
+              output += `   Score: ${pair.score}\n`;
+            }
+          });
+        }
+        
+        if (singletons.length > 0) {
+          output += '\n\n🔸 SINGLETONS:\n';
+          singletons.forEach((img, idx) => {
+            output += `${idx + 1}. ${img}\n`;
+          });
+        }
+        
+        if (metrics) {
+          output += '\n\n📊 METRICS:\n';
+          output += JSON.stringify(metrics, null, 2);
+        }
         
         logEl.textContent = output;
       } catch (err) {

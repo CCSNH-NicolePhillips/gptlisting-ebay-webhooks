@@ -1,6 +1,8 @@
 import type { Handler, HandlerEvent } from '@netlify/functions';
 import { runSmartdraftsAnalysis } from '../../src/smartdrafts/analysisCore.js';
 import { requireUserAuth } from '../../src/lib/auth-user.js';
+import OpenAI from 'openai';
+import { runPairing } from '../../src/pairing/runPairing.js';
 
 /**
  * Pairing Labs Runner
@@ -98,6 +100,27 @@ export const handler: Handler = async (event: HandlerEvent) => {
       groups: analysis.groups?.length || 0,
     });
 
+    // Phase 2: Run direct LLM pairing
+    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || '' });
+
+    const pairingAnalysis = {
+      groups: analysis.groups || [],
+      imageInsights: Object.values(analysis.imageInsights || {}),
+    };
+
+    const { result, metrics } = await runPairing({
+      client,
+      analysis: pairingAnalysis,
+      mode: 'direct-llm',
+      log: console.log,
+    });
+
+    console.log('[PAIRING_LABS] pairing done', {
+      folder,
+      pairs: result.pairs?.length || 0,
+      singletons: result.singletons?.length || 0,
+    });
+
     // Return clean JSON summary for UI
     return {
       statusCode: 200,
@@ -109,14 +132,11 @@ export const handler: Handler = async (event: HandlerEvent) => {
         ok: true,
         source: 'pairing-labs-run',
         folder,
-        analysisSummary: {
-          jobId: analysis.jobId,
-          cached: analysis.cached,
-          imageCount: analysis.imageCount ?? analysis.groups?.length ?? 0,
-          groupCount: analysis.groups?.length ?? 0,
-        },
-        // Expose raw groups for pairing debug later
-        groups: analysis.groups,
+        jobId: analysis.jobId,
+        groups: analysis.groups?.length || 0,
+        pairs: result.pairs || [],
+        singletons: result.singletons || [],
+        metrics,
       }),
     };
   } catch (err) {

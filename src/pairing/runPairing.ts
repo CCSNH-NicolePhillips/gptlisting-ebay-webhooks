@@ -132,17 +132,175 @@ If a back has empty brand, try to match it by color, product text, or packaging 
   }
 }
 
+// Phase 2: Direct LLM pairing - pair ALL fronts/backs at once (for labs mode)
+async function pairAllWithLLM({
+  allFronts,
+  allBacks,
+  client,
+  model = "gpt-4o-mini",
+  log = console.log,
+}: {
+  allFronts: FeatureRow[];
+  allBacks: FeatureRow[];
+  client: OpenAI;
+  model?: string;
+  log?: (line: string) => void;
+}): Promise<Array<{ frontUrl: string; backUrl: string }>> {
+  if (allFronts.length === 0 || allBacks.length === 0) {
+    return [];
+  }
+
+  log(`[LLM-global] Pairing ALL images: fronts=${allFronts.length} backs=${allBacks.length}`);
+
+  const frontsPayload = allFronts.map((f, idx) => ({
+    id: `F${idx + 1}`,
+    filename: f.url,
+    brand: f.brandNorm || "",
+    product: f.productTokens.join(" ") || "",
+    ocrSummary: f.textExtracted?.substring(0, 200) || "",
+    color: f.colorKey || "",
+  }));
+
+  const backsPayload = allBacks.map((b, idx) => ({
+    id: `B${idx + 1}`,
+    filename: b.url,
+    brand: b.brandNorm || "",
+    product: b.productTokens.join(" ") || "",
+    ocrSummary: b.textExtracted?.substring(0, 200) || "",
+    color: b.colorKey || "",
+  }));
+
+  const systemPrompt = `You are matching product images: fronts to backs.
+Each product has exactly one front and one back.
+Use brand, product text, size, flavor, and packaging to decide.
+Return JSON with an array "pairs", each { "frontId": "F#", "backId": "B#" }.
+If an image labeled as front is clearly actually the BACK of another front, you may use it as a back.
+If brand names don't match exactly but are variations (e.g. "evereden" vs "Barbie x Evereden"), treat them as the same if the product matches.
+If a back has empty brand, still try to match it using product text, color, and packaging.`;
+
+  const userContent = { fronts: frontsPayload, backs: backsPayload };
+
+  const response = await client.chat.completions.create({
+    model,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: JSON.stringify(userContent, null, 2) },
+    ],
+    temperature: 0,
+    response_format: { type: "json_object" },
+  });
+
+  const content = response.choices[0]?.message?.content || "{}";
+  let parsed: any;
+  try {
+    parsed = JSON.parse(content);
+  } catch (err) {
+    log(`[LLM-global] Failed to parse JSON: ${String(err)} content=${content.slice(0, 200)}`);
+    return [];
+  }
+
+  const idToFront = new Map(frontsPayload.map((f, idx) => [`F${idx + 1}`, allFronts[idx]]));
+  const idToBack = new Map(backsPayload.map((b, idx) => [`B${idx + 1}`, allBacks[idx]]));
+
+  const llmPairs = (parsed.pairs || [])
+    .map((p: any) => ({
+      frontUrl: idToFront.get(p.frontId)?.url,
+      backUrl: idToBack.get(p.backId)?.url,
+    }))
+    .filter((p: any) => p.frontUrl && p.backUrl);
+
+  log(`[LLM-global] Validated pairs: ${llmPairs.length}`);
+  return llmPairs;
+}
+
 export async function runPairing(opts: {
   client: OpenAI;
   model?: string; // default gpt-4o-mini (or from cfg)
   analysis: Analysis;
   log?: (line: string) => void;
+  mode?: "hp2-default" | "direct-llm"; // <-- Phase 2: direct LLM pairing mode
 }): Promise<{ result: PairingResult; rawText: string; metrics: PairingMetrics }> {
-  const { client, analysis, log = console.log, model = cfg.model } = opts;
+  const { client, analysis, log = console.log, model = cfg.model, mode = "hp2-default" } = opts;
   const startTime = Date.now();
 
   // Build features and candidates
   const features = buildFeatures(analysis);
+  
+  // Phase 2: Direct LLM pairing mode - skip all heuristics, go straight to LLM
+  if (mode === "direct-llm") {
+    const allFronts = Array.from(features.values()).filter(f => f.role === "front");
+    const allBacks = Array.from(features.values()).filter(f => f.role === "back" || f.role === "other");
+
+    log(`[direct-llm] Mode enabled: fronts=${allFronts.length} backs=${allBacks.length}`);
+
+    // Guardrail for crazy-large folders
+    if (allFronts.length > 0 && allBacks.length > 0 && allFronts.length <= 50 && allBacks.length <= 50) {
+      const llmPairs = await pairAllWithLLM({
+        allFronts,
+        allBacks,
+        client,
+        model: model || "gpt-4o-mini",
+        log,
+      });
+
+      const pairs: Pair[] = llmPairs.map(p => {
+        const frontFeat = features.get(canon(p.frontUrl));
+        const backFeat = features.get(canon(p.backUrl));
+        return {
+          frontUrl: canon(p.frontUrl),
+          backUrl: canon(p.backUrl),
+          matchScore: 8.0, // LLM global pairs get a high default score
+          brand: frontFeat?.brandNorm || backFeat?.brandNorm || "unknown",
+          product: frontFeat?.productTokens.join(" ") || backFeat?.productTokens.join(" ") || "",
+          variant: frontFeat?.variantTokens.join(" ") || null,
+          sizeFront: frontFeat?.sizeCanonical || null,
+          sizeBack: backFeat?.sizeCanonical || null,
+          evidence: ["LLM-GLOBAL: direct pairing mode"],
+          confidence: 0.95,
+        };
+      });
+
+      const pairedUrls = new Set([
+        ...pairs.map(p => p.frontUrl),
+        ...pairs.map(p => p.backUrl),
+      ]);
+
+      const singletons = Array.from(features.values())
+        .filter(f => !pairedUrls.has(canon(f.url)))
+        .map(f => ({
+          url: canon(f.url),
+          reason: "not paired by LLM",
+        }));
+
+      const result: PairingResult = {
+        engineVersion: ENGINE_VERSION,
+        pairs,
+        products: [], // Will be built below
+        singletons,
+        debugSummary: [`Direct LLM mode: ${pairs.length} pairs from global LLM`],
+      };
+
+      const durationMs = Date.now() - startTime;
+      const metrics = buildMetrics({
+        features,
+        candidatesMap: {}, // empty in this mode
+        autoPairs: [],
+        modelPairs: pairs,
+        globalPairs: [],
+        singletons,
+        thresholds: getThresholdsSnapshot(),
+        durationMs,
+      });
+
+      log(formatMetricsLog(metrics));
+      log(`[SUMMARY] direct-llm: pairs=${pairs.length} singletons=${singletons.length}`);
+
+      return { result, rawText: JSON.stringify({ pairs: llmPairs }), metrics };
+    } else {
+      log(`[direct-llm] Folder too large or empty, falling back to HP2 mode`);
+      // Fall through to HP2 logic below
+    }
+  }
   
   // Phase 5b.3: Promote "other" to "back" for lone front groups
   // Group features by their group ID to analyze role distribution
