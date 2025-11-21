@@ -253,7 +253,7 @@ export async function runPairingV2(input: PairingV2Input): Promise<PairingV2Outp
 
   if (allImages.length === 0) {
     const emptyResult: PairingResult = { 
-      engineVersion: "v2-phase1",
+      engineVersion: "v2-phase2",
       pairs: [], 
       products: [],
       singletons: [],
@@ -287,10 +287,11 @@ export async function runPairingV2(input: PairingV2Input): Promise<PairingV2Outp
   }
 
   if (allImages.length > maxImages) {
-    log(`[pairing-v2] Too many images for v2 sandbox (images=${allImages.length}, max=${maxImages})`);
-    // For now, just bail with empty result.
+    log(
+      `[pairing-v2] Too many images for v2 sandbox (images=${allImages.length}, max=${maxImages})`
+    );
     const emptyResult: PairingResult = { 
-      engineVersion: "v2-phase1",
+      engineVersion: "v2-phase2",
       pairs: [], 
       products: [],
       singletons: [],
@@ -322,32 +323,42 @@ export async function runPairingV2(input: PairingV2Input): Promise<PairingV2Outp
     return { result: emptyResult, metrics: emptyMetrics, rawText: "" };
   }
 
-  // Phase 1: delegate to a unified LLM global pairing helper (implemented below)
+  // Phase 2: deterministic pre-match + LLM fallback
+  const pre = deterministicPreMatch(allImages, log);
+  log(
+    `[pairing-v2] pre-match: autoPairs=${pre.pairs.length} remaining=${pre.remaining.length}`
+  );
+
   const started = Date.now();
-  const { pairs, singletons, rawText } = await unifiedGlobalLLMPairing({
-    images: allImages,
+  const { pairs: llmPairs, singletons, rawText } = await unifiedGlobalLLMPairing({
+    images: pre.remaining,
     client,
     model,
     log,
   });
   const durationMs = Date.now() - started;
 
+  const combinedPairs = [...pre.pairs, ...llmPairs];
+
   const result: PairingResult = {
-    engineVersion: "v2-phase1",
-    pairs,
+    engineVersion: "v2-phase2",
+    pairs: combinedPairs,
     products: [], // v2 doesn't build products yet
-    singletons: singletons.map((url) => ({ url, reason: "not paired by v2 unified LLM" })),
-    debugSummary: [`V2 unified LLM pairing: ${pairs.length} pairs, ${singletons.length} singletons`],
+    singletons: singletons.map((url) => ({ url, reason: "not paired by v2" })),
+    debugSummary: [
+      `V2 Phase 2: ${pre.pairs.length} heuristic pairs, ${llmPairs.length} LLM pairs, ${singletons.length} singletons`,
+      ...pre.debug,
+    ],
   };
 
   const metrics: PairingMetrics = {
     totals: {
       images: allImages.length,
-      fronts: 0, // v2 doesn't care about role yet
+      fronts: 0,
       backs: 0,
       candidates: 0,
-      autoPairs: 0,
-      modelPairs: pairs.length,
+      autoPairs: pre.pairs.length,
+      modelPairs: llmPairs.length,
       globalPairs: 0,
       singletons: singletons.length,
     },
@@ -365,7 +376,7 @@ export async function runPairingV2(input: PairingV2Input): Promise<PairingV2Outp
   };
 
   log(
-    `[pairing-v2] pairs=${pairs.length} singletons=${singletons.length} durationMs=${durationMs}`
+    `[pairing-v2] summary: totalPairs=${combinedPairs.length} singletons=${singletons.length} durationMs=${durationMs}`
   );
 
   return { result, metrics, rawText };
