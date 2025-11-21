@@ -1,0 +1,168 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Pairing V2 Labs</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        padding: 16px;
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+      h1 {
+        color: #333;
+      }
+      textarea {
+        width: 100%;
+        min-height: 400px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+          monospace;
+        font-size: 12px;
+        padding: 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background: #f9f9f9;
+      }
+      input[type="text"] {
+        width: 300px;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+      }
+      button {
+        margin-top: 8px;
+        padding: 10px 20px;
+        background: #0066cc;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+      }
+      button:hover:not(:disabled) {
+        background: #0052a3;
+      }
+      button:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+      }
+      label {
+        display: block;
+        margin-bottom: 12px;
+        font-weight: 500;
+      }
+      .hint {
+        color: #666;
+        font-size: 13px;
+        margin-top: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🧪 Pairing V2 Labs</h1>
+    <p class="hint">
+      Testing sandbox for pairing-v2.ts - the next-generation pairing system.
+      Currently uses unified LLM pairing (same as direct-llm mode).
+    </p>
+
+    <label>
+      Folder:
+      <input id="folderInput" type="text" value="/newStuff" />
+      <div class="hint">Dropbox folder path (e.g., /newStuff)</div>
+    </label>
+    <button id="runBtn">Run Pairing V2</button>
+
+    <h2>Output</h2>
+    <textarea id="output" readonly>Click "Run Pairing V2" to start...</textarea>
+
+    <script>
+      const runBtn = document.getElementById("runBtn");
+      const outputEl = document.getElementById("output");
+      const folderInput = document.getElementById("folderInput");
+
+      runBtn.addEventListener("click", async () => {
+        const folder = folderInput.value.trim() || "/newStuff";
+
+        runBtn.disabled = true;
+        outputEl.value = "Running Pairing V2...\nFolder: " + folder + "\n\n";
+
+        try {
+          const res = await fetch("/.netlify/functions/pairing-v2-labs-run", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ folder }),
+          });
+
+          const data = await res.json();
+
+          if (!data.ok) {
+            outputEl.value += `❌ ERROR:\n${JSON.stringify(data, null, 2)}`;
+            return;
+          }
+
+          const pairs = data.result?.pairs || [];
+          const singletons = data.result?.singletons || [];
+          const metrics = data.metrics || {};
+
+          let text = "✅ Pairing V2 Complete\n\n";
+          text += `Folder: ${data.folder}\n`;
+          text += `Job ID: ${data.jobId}\n`;
+          text += `Pairs: ${pairs.length}\n`;
+          text += `Singletons: ${singletons.length}\n`;
+          text += `Duration: ${metrics.durationMs || 0}ms\n\n`;
+
+          if (pairs.length > 0) {
+            text += "📋 PAIRS:\n";
+            pairs.forEach((p, idx) => {
+              const front = p.frontUrl?.split("/").pop() || p.frontUrl;
+              const back = p.backUrl?.split("/").pop() || p.backUrl;
+              text += `${idx + 1}. ${front} ↔ ${back}\n`;
+              if (p.brand) {
+                text += `   Brand: ${p.brand}\n`;
+              }
+              if (p.product) {
+                text += `   Product: ${p.product}\n`;
+              }
+            });
+          }
+
+          if (singletons.length > 0) {
+            text += "\n🔸 SINGLETONS:\n";
+            singletons.forEach((s, idx) => {
+              const fn = s.url || s.filename || s;
+              const base = (fn || "").split("/").pop() || fn;
+              const reason = s.reason ? ` (${s.reason})` : "";
+              text += `${idx + 1}. ${base}${reason}\n`;
+            });
+          }
+
+          if (data.logLines && data.logLines.length > 0) {
+            text += "\n📝 LOG LINES:\n";
+            data.logLines.slice(0, 10).forEach((line) => {
+              text += `${line}\n`;
+            });
+            if (data.logLines.length > 10) {
+              text += `... (${data.logLines.length - 10} more lines)\n`;
+            }
+          }
+
+          text += "\n\n📊 METRICS:\n";
+          text += JSON.stringify(metrics, null, 2);
+
+          text += "\n\n📦 FULL RESPONSE:\n";
+          text += JSON.stringify(data, null, 2);
+
+          outputEl.value = text;
+        } catch (err) {
+          outputEl.value += `\n❌ Exception: ${String(err)}`;
+          console.error(err);
+        } finally {
+          runBtn.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>
