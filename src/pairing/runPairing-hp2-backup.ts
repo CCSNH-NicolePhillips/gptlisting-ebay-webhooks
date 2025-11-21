@@ -1,7 +1,3 @@
-// NOTE: This file has been backed up as runPairing-hp2-backup.ts.
-// We are now refactoring runPairing to support a simpler "direct LLM pairing" mode
-// and a safer default mode for labs.
-
 // Copilot: Implement runPairing that:
 //  - Accepts { client, model, analysis } where analysis = { groups, imageInsights } from Prompt 1
 //  - Builds messages using getPairingSystemPrompt + getPairingUserPrompt

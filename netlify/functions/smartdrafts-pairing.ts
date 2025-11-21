@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { getOrigin, isOriginAllowed, jsonResponse } from "../../src/lib/http.js";
 import { getCachedSmartDraftGroups } from "../../src/lib/smartdrafts-store.js";
 import OpenAI from "openai";
-import { runPairing } from "../../src/pairing/runPairing.js";
+import { runPairing } from "../../src/pairing/runPairing.js"; // HP2 pairing entrypoint
 
 /**
  * POST /.netlify/functions/smartdrafts-pairing
