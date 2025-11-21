@@ -65,14 +65,15 @@ export async function pollAnalyzeLive(jobId) {
 }
 
 export async function runPairingLive(analysis, overrides = {}) {
-  // NEW: Support folder-based pairing (server-side fetch) OR traditional analysis object
+  // Phase 4a: Support folder-based pairing (server-side fetch) OR traditional analysis object
+  // Phase 4b: Support pairingMode override
   const body = overrides.folder 
     ? { folder: overrides.folder, overrides: { ...overrides, folder: undefined } }
     : { analysis, overrides };
   
   const r = await authPost(`/.netlify/functions/smartdrafts-pairing`, body);
   if (!r.ok) throw new Error(`runPairingLive ${r.status}: ${await r.text()}`);
-  return r.json(); // { pairing, metrics? }
+  return r.json(); // { pairing, metrics?, pairingMode? }
 }
 
 export async function resetFolderLive(folderUrl) {

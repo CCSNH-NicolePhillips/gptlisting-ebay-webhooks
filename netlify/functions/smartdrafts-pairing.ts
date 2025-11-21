@@ -286,11 +286,18 @@ export const handler: Handler = async (event) => {
     // USE NEW PAIRING SYSTEM with color matching, distributor rescue, and role override
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || '' });
     
+    // Phase 4a: Allow opt-in to direct-llm mode via request body
+    const pairingMode =
+      (payload?.overrides?.pairingMode as "hp2-default" | "direct-llm" | undefined) ??
+      (payload?.overrides?.useDirectLlm ? "direct-llm" : "hp2-default");
+    
+    console.log(`[PAIR] Using pairing mode: ${pairingMode}`);
     console.log('[PAIR] Using NEW pairing system (runPairing) with visual similarity');
     const { result, metrics } = await runPairing({
       client,
       analysis: normalizedAnalysis,
-      log: console.log
+      log: console.log,
+      mode: pairingMode, // Phase 4a: pass mode to runPairing
     });
     
     console.log('[PAIR] Pairing complete:', {
@@ -356,6 +363,7 @@ export const handler: Handler = async (event) => {
       products: result.products || [],
       singletons,
       debugSummary,
+      pairingMode, // Phase 4a: include mode in response for debugging
       metrics: {
         totalImages: metrics.totals.images,
         totalPairs: metrics.totals.autoPairs + metrics.totals.modelPairs + (metrics.totals.globalPairs || 0),

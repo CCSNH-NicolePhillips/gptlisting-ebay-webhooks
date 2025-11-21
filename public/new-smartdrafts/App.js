@@ -306,23 +306,38 @@ export function App() {
           throw new Error('No image insights found. Try running Analyze again with Force Rescan.');
         }
         
-        // DP3: If direct pairing toggle is enabled, SKIP legacy pairing entirely
-        if (!useDirectPairing) {
-          setLoadingStatus('🤖 Running GPT-4o pairing...');
-          
-          // NEW APPROACH: Pass folder AND jobId to pairing for Redis fallback
-          console.log('[UI] Sending folder to pairing (server-side fetch):', folder);
-          console.log('[UI] Analysis object has jobId?', !!analysis?.jobId);
-          console.log('[UI] Analysis jobId value:', analysis?.jobId);
-          out = await runPairingLive(null, { folder, jobId: analysis?.jobId });
-          showToast('✨ Pairing complete (live, server-side)');
-          const { pairing, metrics } = out;
-          setPairing(pairing); setMetrics(metrics || null);
-          setTab('Pairing');
-        } else {
-          console.log('[UI] Skipping legacy pairing (direct toggle enabled)');
-          showToast('ℹ️ Direct pairing mode - check Comparison tab');
-        }
+        // Phase 4b: Use pairingMode based on checkbox state
+        const pairingMode = useDirectPairing ? 'direct-llm' : 'hp2-default';
+        setLoadingStatus(`🤖 Running ${pairingMode === 'direct-llm' ? 'Direct LLM' : 'HP2'} pairing...`);
+        
+        // Pass folder, jobId, AND pairingMode to pairing for server-side handling
+        console.log('[UI] Sending folder to pairing (server-side fetch):', folder);
+        console.log('[UI] Analysis object has jobId?', !!analysis?.jobId);
+        console.log('[UI] Analysis jobId value:', analysis?.jobId);
+        console.log('[UI] Pairing mode:', pairingMode);
+        
+        out = await runPairingLive(null, { 
+          folder, 
+          jobId: analysis?.jobId,
+          pairingMode, // Phase 4b: pass mode to server
+        });
+        
+        showToast(`✨ Pairing complete (${out.pairingMode || pairingMode})`);
+        const { pairs, products, singletons, metrics, pairingMode: usedMode } = out;
+        
+        // Phase 4b: Build pairing object from response
+        const pairingResult = {
+          pairs: pairs || [],
+          products: products || [],
+          singletons: singletons || [],
+        };
+        
+        setPairing(pairingResult); 
+        setMetrics(metrics || null);
+        setTab('Pairing');
+        
+        // Phase 4b: Show which mode was actually used
+        console.log('[UI] Pairing mode used:', usedMode || pairingMode);
       }
     } catch (e) {
       console.error(e); showToast('❌ ' + (e.message || 'Pairing failed'));
@@ -554,10 +569,10 @@ export function App() {
           </p>
           <label class="check">
             <input type="checkbox" checked=${useDirectPairing} onChange=${e=>setUseDirectPairing(e.currentTarget.checked)} disabled=${mode !== 'Live'} />
-            <span>Use Direct LLM Pairing (experimental)</span>
+            <span>Use Direct LLM Pairing (beta)</span>
           </label>
           <p class="hint" style="margin: 4px 0 8px 0; font-size: 0.85em; color: #666;">
-            Compare one-shot GPT-4o pairing vs. legacy pairing. Only works in Live mode.
+            Direct LLM pairing ignores vision roles and lets GPT-4o determine fronts/backs autonomously.
           </p>
           ${!authReady ? html`
             <p class="hint" style="margin: 4px 0 8px 0; font-size: 0.85em; color: #f60;">
