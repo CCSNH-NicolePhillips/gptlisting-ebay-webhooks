@@ -3,6 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <title>Pairing V2 Labs</title>
+    <script src="/auth-client.js"></script>
     <style>
       body {
         font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -90,7 +91,15 @@
         outputEl.value = "Running Pairing V2...\nFolder: " + folder + "\n\n";
 
         try {
-          const res = await fetch("/.netlify/functions/pairing-v2-labs-run", {
+          // Ensure authenticated
+          if (!window.authClient) {
+            outputEl.value += "❌ ERROR: Auth client not loaded\n";
+            return;
+          }
+
+          await window.authClient.requireAuth();
+
+          const res = await window.authClient.authFetch("/.netlify/functions/pairing-v2-labs-run", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ folder }),
