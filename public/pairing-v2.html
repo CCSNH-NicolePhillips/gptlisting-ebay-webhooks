@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>SmartDrafts - Pairing v2</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        margin: 24px;
+        color: #111;
+        max-width: 1040px;
+      }
+      input[type=text] {
+        width: 100%;
+        padding: 8px 10px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 16px;
+      }
+      button {
+        padding: 8px 14px;
+        border: 1px solid #111;
+        border-radius: 8px;
+        cursor: pointer;
+        background: #111;
+        color: #fff;
+        font-weight: 600;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .muted {
+        color: #666;
+        font-size: 15px;
+      }
+      .panel {
+        border: 1px solid #ececec;
+        border-radius: 12px;
+        padding: 16px;
+        margin: 18px 0;
+        background: #fafafa;
+      }
+      .panel h2 {
+        margin: 0 0 8px;
+        font-size: 20px;
+      }
+      .panel p {
+        margin: 4px 0 12px;
+      }
+      header {
+        margin-bottom: 18px;
+      }
+      header h1 {
+        margin: 0 0 6px;
+        font-size: 26px;
+      }
+      .controls {
+        margin: 12px 0;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .progress-bar {
+        width: 100%;
+        height: 24px;
+        background: #eee;
+        border-radius: 8px;
+        overflow: hidden;
+        margin: 12px 0;
+      }
+      .progress-fill {
+        height: 100%;
+        background: #111;
+        transition: width 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 16px;
+        margin-top: 16px;
+      }
+      .card {
+        border: 1px solid #eee;
+        border-radius: 12px;
+        padding: 12px;
+        background: #fff;
+        box-shadow: 0 1px 2px rgba(17, 17, 17, 0.05);
+      }
+      .pair-images {
+        display: flex;
+        gap: 8px;
+        margin-top: 8px;
+      }
+      .pair-images img {
+        width: 140px;
+        height: 140px;
+        object-fit: cover;
+        border: 1px solid #eee;
+        border-radius: 8px;
+        background: #f5f5f5;
+      }
+      .status-badge {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 600;
+        margin-left: 8px;
+      }
+      .status-idle { background: #eee; color: #666; }
+      .status-pending { background: #fef3c7; color: #92400e; }
+      .status-processing { background: #dbeafe; color: #1e40af; }
+      .status-completed { background: #d1fae5; color: #065f46; }
+      .status-error { background: #fee2e2; color: #991b1b; }
+    </style>
+  </head>
+  <body>
+    <script src="/auth-client.js"></script>
+    <script>
+      try { window.authClient?.requireAuth?.(); } catch {}
+    </script>
+
+    <header>
+      <h1>SmartDrafts - Pairing v2</h1>
+      <p class="muted">Advanced image pairing using three-stage vision pipeline (classification → pairing → verification). Processes images in parallel for 5-10x faster results.</p>
+    </header>
+
+    <!-- PHASE 1: Basic structure with placeholders -->
+
+    <div class="panel">
+      <h2>1. Configure Job</h2>
+      <p class="muted">Select a Dropbox folder to pair front and back panel images.</p>
+      
+      <label for="folderInput" style="display: block; margin-bottom: 8px; font-weight: 600;">
+        Dropbox Folder Path
+      </label>
+      <input 
+        id="folderInput" 
+        type="text" 
+        placeholder="/Photos/To Pair" 
+        style="margin-bottom: 12px;"
+      />
+      
+      <div class="controls">
+        <button id="btnStart" disabled>
+          Start Pairing (Phase 2: Not wired yet)
+        </button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>2. Progress</h2>
+      <p class="muted">
+        Job status: 
+        <span id="statusText">idle</span>
+        <span id="statusBadge" class="status-badge status-idle">idle</span>
+      </p>
+      
+      <div class="progress-bar" id="progressBar" style="display: none;">
+        <div class="progress-fill" id="progressFill" style="width: 0%;">
+          0 / 0 images
+        </div>
+      </div>
+      
+      <p class="muted" id="progressDetail" style="display: none;">
+        <!-- TODO (PHASE 3): Show real progress details -->
+      </p>
+    </div>
+
+    <div class="panel">
+      <h2>3. Results</h2>
+      <div id="resultsContainer">
+        <p class="muted">No results yet. Start a job to see paired images.</p>
+        
+        <!-- TODO (PHASE 4): Replace with real grid UI -->
+        <div id="pairsGrid" class="grid" style="display: none;">
+          <!-- Pairs will be rendered here -->
+        </div>
+        
+        <div id="unpairedSection" style="display: none; margin-top: 24px;">
+          <h3>Unpaired Images</h3>
+          <div id="unpairedGrid" class="grid">
+            <!-- Unpaired images will be rendered here -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // PHASE 1: Types and state scaffold for Pairing v2 UI
+      // NOTE: These are provisional. They must be aligned to the real Netlify
+      // function responses in a later phase.
+
+      // TODO (PHASE 2): Sync these types with smartdrafts-pairing-v2-status.ts handler shape.
+
+      /**
+       * @typedef {'idle' | 'pending' | 'processing' | 'completed' | 'failed'} PairingV2BackendStatus
+       */
+
+      /**
+       * @typedef {Object} PairingV2StartResponse
+       * @property {string} jobId
+       * @property {number} imageCount
+       */
+
+      /**
+       * @typedef {Object} PairingV2Pair
+       * @property {string} front - Front panel filename
+       * @property {string} back - Back panel filename
+       * @property {number} confidence
+       * @property {string|null} brand
+       * @property {string|null} product
+       */
+
+      /**
+       * @typedef {Object} PairingV2Unpaired
+       * @property {string} imagePath
+       * @property {string} reason
+       * @property {boolean} needsReview
+       */
+
+      /**
+       * @typedef {Object} PairingV2StatusResponse
+       * @property {string} jobId
+       * @property {string} userId
+       * @property {PairingV2BackendStatus} status
+       * @property {string} folder
+       * @property {number} processedCount
+       * @property {Object} result
+       * @property {PairingV2Pair[]} result.pairs
+       * @property {PairingV2Unpaired[]} result.unpaired
+       * @property {string} [error]
+       */
+
+      // PHASE 1: Basic state (no logic yet)
+      let currentJobId = null;
+      let currentStatus = 'idle';
+      let pollingInterval = null;
+
+      // DOM elements
+      const folderInput = document.getElementById('folderInput');
+      const btnStart = document.getElementById('btnStart');
+      const statusText = document.getElementById('statusText');
+      const statusBadge = document.getElementById('statusBadge');
+      const progressBar = document.getElementById('progressBar');
+      const progressFill = document.getElementById('progressFill');
+      const progressDetail = document.getElementById('progressDetail');
+      const resultsContainer = document.getElementById('resultsContainer');
+      const pairsGrid = document.getElementById('pairsGrid');
+      const unpairedSection = document.getElementById('unpairedSection');
+      const unpairedGrid = document.getElementById('unpairedGrid');
+
+      // TODO (PHASE 2): Implement handleStart() to call /.netlify/functions/smartdrafts-pairing-v2-start
+      function handleStart() {
+        console.log('[PHASE 1] Start button clicked (not wired yet)');
+        // Will be implemented in Phase 2
+      }
+
+      // TODO (PHASE 3): Implement polling logic using setInterval
+      function startPolling(jobId) {
+        console.log('[PHASE 1] Start polling (not implemented yet)', jobId);
+        // Will be implemented in Phase 3
+      }
+
+      function stopPolling() {
+        if (pollingInterval) {
+          clearInterval(pollingInterval);
+          pollingInterval = null;
+        }
+      }
+
+      // TODO (PHASE 4): Implement renderResults() to display pairs and unpaired
+      function renderResults(statusResponse) {
+        console.log('[PHASE 1] Render results (not implemented yet)', statusResponse);
+        // Will be implemented in Phase 4
+      }
+
+      // Update UI based on status
+      function updateStatus(status) {
+        currentStatus = status;
+        statusText.textContent = status;
+        
+        // Update badge
+        statusBadge.className = 'status-badge status-' + status;
+        statusBadge.textContent = status;
+      }
+
+      // Enable folder input changes
+      folderInput.addEventListener('input', () => {
+        console.log('[PHASE 1] Folder input:', folderInput.value);
+        // TODO (PHASE 2): Enable start button when folder is valid
+      });
+
+      // Wire start button (disabled for Phase 1)
+      btnStart.addEventListener('click', handleStart);
+
+      console.log('[PHASE 1] Pairing v2 page loaded - scaffolding only, no API calls');
+    </script>
+  </body>
+</html>
