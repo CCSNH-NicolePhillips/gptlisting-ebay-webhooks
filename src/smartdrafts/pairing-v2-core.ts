@@ -133,40 +133,30 @@ For each image, provide:
 2. panel: "front", "back", "side", or "unknown"
 3. brand: the brand name (or null if unreadable)
 4. productName: the product name (or null if unreadable)
-5. packageType: describe the product format (e.g., "bottle", "pouch", "book", "box", "jar", etc.)
+5. packageType: bottle/jar/tub/pouch/box/sachet/book/unknown
 6. keyText: array of 3-5 short readable text snippets from the label
 7. colorSignature: array of dominant colors (e.g., ["green", "black", "bright green gradient"])
 8. layoutSignature: brief description of label layout (e.g., "pouch vertical label center", "bottle wraparound")
 9. confidence: 0.0-1.0 representing your confidence in the classification
+10. rationale: brief explanation of your classification choices
 
 DEFINITIONS:
-- PRODUCT: Any sellable item including:
-  * Consumer product packaging (supplements, cosmetics, food, etc.)
-  * Books (front cover = front panel, back cover = back panel)
-  * Electronics, toys, clothing with tags/packaging
-  * Any item that would be sold on eBay
-- NON_PRODUCT: Not a sellable item (furniture, room photos, person, pet, random background objects)
-- FRONT panel: 
-  * For packaging: Shows brand + product name prominently, marketing-facing
-  * For books: Front cover with title and author
-  * For other products: Primary display/marketing side
-- BACK panel: 
-  * For packaging: Shows Supplement/Nutrition Facts, ingredients, barcode, warnings
-  * For books: Back cover with description, ISBN, barcode
-  * For other products: Secondary information side
+- PRODUCT: Clear consumer product packaging (supplement, cosmetic, food, etc.)
+- NON_PRODUCT: Not packaging at all (purse, furniture, room, person, pet, random object)
+- FRONT panel: Shows brand + product name prominently, marketing-facing
+- BACK panel: Shows Supplement/Nutrition Facts, ingredients, barcode, warnings
 - SIDE panel: Additional information, not clearly front or back
 
 CRITICAL CROSS-IMAGE INFERENCE RULE:
 You receive ALL images in this batch at once. Use this to your advantage.
 
 If a BACK/SIDE panel is missing brand or productName, but you see a FRONT panel in the same batch that matches by:
-- Same packageType (pouch/bottle/jar/tub/box/book/etc)
-- Same color scheme and design
+- Same packageType (pouch/bottle/jar/tub/box)
+- Same color scheme and label design
 - Same shape/silhouette
 - Similar text patterns or repeated branding phrases
-- Same layout structure
-- For books: matching cover design, author, series
-- For packaging: same supplement facts alignment/style
+- Same label layout structure
+- Same supplement facts alignment/style
 
 Then INFER and fill in the missing brand/productName from that matching front.
 
@@ -187,11 +177,12 @@ Respond ONLY with valid JSON:
       "panel": "front | back | side | unknown",
       "brand": "Brand Name" or null,
       "productName": "Product Name" or null,
-      "packageType": "bottle | jar | tub | pouch | box | book | etc - describe the format",
+      "packageType": "bottle | jar | tub | pouch | box | sachet | unknown",
       "keyText": ["text1", "text2", "text3"],
       "colorSignature": ["color1", "color2", "pattern"],
       "layoutSignature": "layout description",
-      "confidence": 0.95
+      "confidence": 0.95,
+      "rationale": "Brief explanation of classification choices"
     }
   ]
 }
