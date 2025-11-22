@@ -58,9 +58,9 @@ export const handler: Handler = async (event) => {
     
     if (needsWork && (status.status === "pending" || status.status === "processing")) {
       const baseUrl = process.env.APP_URL || 'https://ebaywebhooks.netlify.app';
-      const processorUrl = `${baseUrl}/.netlify/functions/pairing-v2-processor?jobId=${jobId}`;
+      const processorUrl = `${baseUrl}/.netlify/functions/pairing-v2-processor-background?jobId=${jobId}`;
       
-      // Trigger chunk (fire and forget - client will poll again)
+      // Trigger background function (fire and forget - client will poll again)
       // This pattern is reliable because:
       // - Client polls every few seconds (retries if trigger fails)
       // - Redis locks prevent duplicate processing
