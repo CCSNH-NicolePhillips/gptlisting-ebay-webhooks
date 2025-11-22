@@ -10,6 +10,20 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 
+// ImageClassificationV2 type for proper typing
+interface ImageClassificationV2 {
+  filename: string;
+  kind: 'product' | 'non-product';
+  panel: 'front' | 'back' | 'side' | 'unclear';
+  brand: string | null;
+  productName: string | null;
+  packageType: 'bottle' | 'jar' | 'tub' | 'pouch' | 'box' | 'sachet' | 'unknown';
+  keyText: string[];
+  colorSignature: string[];
+  layoutSignature: string;
+  confidence: number;
+}
+
 // Redis helpers
 async function redisSet(key: string, value: string, exSeconds: number): Promise<void> {
   const url = process.env.UPSTASH_REDIS_REST_URL;
@@ -243,7 +257,9 @@ export const handler: Handler = async (event) => {
         console.log(`[pairing-v2-processor] Verification complete: ${acceptedPairs.length} accepted, ${rejectedPairs.length} rejected`);
 
         // Build final result with basenames and extract brand/product from front classification
-        const classMap = new Map(job.classifications.map((c: any) => [c.filename, c]));
+        const classMap = new Map<string, ImageClassificationV2>(
+          job.classifications.map((c: any) => [c.filename, c])
+        );
         const basenamePairs = acceptedPairs.map((pair: any) => {
           const frontClass = classMap.get(pair.front);
           return {
