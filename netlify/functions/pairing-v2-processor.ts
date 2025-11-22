@@ -64,8 +64,8 @@ async function redisGet(key: string): Promise<string | null> {
 
 const JOB_TTL = 3600;
 const JOB_KEY_PREFIX = "pairing-v2-job:";
-const CHUNK_SIZE = 8; // Process 8 images per chunk
-const PARALLEL_CHUNKS = 3; // Process 3 chunks concurrently
+const CHUNK_SIZE = 12; // Process 12 images per chunk (matches CLASSIFY_BATCH_SIZE for cross-image inference)
+const PARALLEL_CHUNKS = 2; // Process 2 chunks concurrently (24 images max per call)
 const LOCK_TTL = 60; // Lock timeout in seconds
 
 // Parallel processing helper (borrowed from analyze-core.ts)

@@ -272,7 +272,12 @@
       // Fetch Dropbox temporary link for thumbnail display
       async function getDropboxThumbnail(dropboxPath) {
         try {
-          const token = await window.authClient.getToken();
+          // Use Dropbox access token from job status, not Auth0 token
+          const token = jobStatusData?.dropboxAccessToken;
+          if (!token) {
+            console.warn('No Dropbox access token available for thumbnails');
+            return null;
+          }
           
           const response = await fetch('https://api.dropboxapi.com/2/files/get_temporary_link', {
             method: 'POST',

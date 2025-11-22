@@ -70,7 +70,16 @@ export const handler: Handler = async (event) => {
       });
     }
 
-    return json(200, status, originHdr);
+    // Return job data with dropboxAccessToken for thumbnail fetching
+    const response = {
+      ...status,
+      dropboxAccessToken: status.accessToken, // Expose for UI thumbnail fetching
+    };
+    
+    // Don't expose the full accessToken field for security
+    delete (response as any).accessToken;
+
+    return json(200, response, originHdr);
   } catch (err) {
     console.error("[smartdrafts-pairing-v2-status] Error:", err);
     return json(
