@@ -211,7 +211,7 @@ export const handler: Handler = async (event) => {
         job.result = finalResult;
         job.processedCount = totalImages;
         job.updatedAt = Date.now();
-        delete job.accessToken;
+        // Keep accessToken for thumbnail fetching in UI
 
         await redisSet(key, JSON.stringify(job), JOB_TTL);
         console.log(`[pairing-v2-processor] ✅ Job complete: ${basenamePairs.length} pairs, ${basenameSingletons.length} unpaired`);
@@ -238,8 +238,7 @@ export const handler: Handler = async (event) => {
       job.status = "failed";
       job.error = err instanceof Error ? err.message : String(err);
       job.updatedAt = Date.now();
-      // Clear access token from failed job for security
-      delete job.accessToken;
+      // Keep accessToken for potential retry
       await redisSet(key, JSON.stringify(job), JOB_TTL);
     }
 
