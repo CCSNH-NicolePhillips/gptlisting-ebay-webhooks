@@ -53,14 +53,20 @@ export const handler: Handler = async (event) => {
       return json(404, { error: "Job not found" }, originHdr);
     }
 
-    // If job is processing and needs another chunk, trigger it
-    if (status.status === "processing" && status.processedCount < status.dropboxPaths.length) {
+    // If job is pending or processing and needs work, trigger processor
+    const needsWork = status.processedCount < status.dropboxPaths.length;
+    
+    if (needsWork && (status.status === "pending" || status.status === "processing")) {
       const baseUrl = process.env.APP_URL || 'https://ebaywebhooks.netlify.app';
       const processorUrl = `${baseUrl}/.netlify/functions/pairing-v2-processor?jobId=${jobId}`;
       
-      // Trigger next chunk (fire and forget - client will poll again)
+      // Trigger chunk (fire and forget - client will poll again)
+      // This pattern is reliable because:
+      // - Client polls every few seconds (retries if trigger fails)
+      // - Redis locks prevent duplicate processing
+      // - Idempotent processor design
       fetch(processorUrl, { method: 'POST' }).catch((err) => {
-        console.error(`[pairing-v2-status] Failed to trigger next chunk:`, err);
+        console.error(`[pairing-v2-status] Failed to trigger chunk:`, err);
       });
     }
 
