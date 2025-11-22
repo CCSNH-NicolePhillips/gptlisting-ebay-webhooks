@@ -275,9 +275,14 @@
           // Use Dropbox access token from job status, not Auth0 token
           const token = jobStatusData?.dropboxAccessToken;
           if (!token) {
-            console.warn('No Dropbox access token available for thumbnails');
+            console.warn('No Dropbox access token available for thumbnails', { 
+              hasJobStatusData: !!jobStatusData,
+              keys: jobStatusData ? Object.keys(jobStatusData) : []
+            });
             return null;
           }
+          
+          console.log('Using Dropbox token for thumbnail:', dropboxPath.substring(0, 30));
           
           const response = await fetch('https://api.dropboxapi.com/2/files/get_temporary_link', {
             method: 'POST',
