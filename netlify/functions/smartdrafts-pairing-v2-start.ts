@@ -127,11 +127,13 @@ export const handler: Handler = async (event) => {
     });
 
     // Get Dropbox refresh token
-    const dropboxRefreshToken = await tokensStore().get(userScopedKey(userAuth.userId, "dropbox"));
+    const dropboxData = await tokensStore().get(userScopedKey(userAuth.userId, "dropbox.json"), { type: "json" }) as any;
 
-    if (!dropboxRefreshToken) {
+    if (!dropboxData?.refresh_token) {
       return json(400, { error: "Dropbox not connected. Please connect your Dropbox account first." }, originHdr);
     }
+
+    const dropboxRefreshToken = dropboxData.refresh_token;
 
     // Get Dropbox access token
     const accessToken = await dropboxAccessToken(dropboxRefreshToken);
