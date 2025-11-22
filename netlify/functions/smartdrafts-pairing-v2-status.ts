@@ -53,6 +53,17 @@ export const handler: Handler = async (event) => {
       return json(404, { error: "Job not found" }, originHdr);
     }
 
+    // If job is processing and needs another chunk, trigger it
+    if (status.status === "processing" && status.processedCount < status.dropboxPaths.length) {
+      const baseUrl = process.env.APP_URL || 'https://ebaywebhooks.netlify.app';
+      const processorUrl = `${baseUrl}/.netlify/functions/pairing-v2-processor?jobId=${jobId}`;
+      
+      // Trigger next chunk (fire and forget - client will poll again)
+      fetch(processorUrl, { method: 'POST' }).catch((err) => {
+        console.error(`[pairing-v2-status] Failed to trigger next chunk:`, err);
+      });
+    }
+
     return json(200, status, originHdr);
   } catch (err) {
     console.error("[smartdrafts-pairing-v2-status] Error:", err);

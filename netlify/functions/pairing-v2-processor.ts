@@ -226,18 +226,10 @@ export const handler: Handler = async (event) => {
         body: JSON.stringify({ ok: true, jobId, status: "completed", pairs: finalResult.pairs.length }),
       };
     } else {
-      // More chunks to process - save progress and trigger next chunk
+      // More chunks to process - save progress
       await redisSet(key, JSON.stringify(job), JOB_TTL);
 
-      console.log(`[pairing-v2-processor] Chunk saved. Triggering next chunk...`);
-
-      // Trigger next chunk (don't await - let it run async)
-      const baseUrl = process.env.APP_URL || 'https://ebaywebhooks.netlify.app';
-      const nextChunkUrl = `${baseUrl}/.netlify/functions/pairing-v2-processor?jobId=${jobId}`;
-      
-      fetch(nextChunkUrl, { method: 'POST' }).catch((err) => {
-        console.error(`[pairing-v2-processor] Failed to trigger next chunk:`, err);
-      });
+      console.log(`[pairing-v2-processor] Chunk saved. Client should trigger next chunk.`);
 
       return {
         statusCode: 200,
@@ -245,7 +237,8 @@ export const handler: Handler = async (event) => {
           ok: true, 
           jobId, 
           status: "processing", 
-          progress: `${chunkEnd}/${totalImages} images classified` 
+          progress: `${chunkEnd}/${totalImages} images classified`,
+          needsNextChunk: true // Tell client to trigger next chunk
         }),
       };
     }
