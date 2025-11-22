@@ -178,19 +178,7 @@
     <div class="panel">
       <h2>3. Results</h2>
       <div id="resultsContainer">
-        <p class="muted">No results yet. Start a job to see paired images.</p>
-        
-        <!-- TODO (PHASE 4): Replace with real grid UI -->
-        <div id="pairsGrid" class="grid" style="display: none;">
-          <!-- Pairs will be rendered here -->
-        </div>
-        
-        <div id="unpairedSection" style="display: none; margin-top: 24px;">
-          <h3>Unpaired Images</h3>
-          <div id="unpairedGrid" class="grid">
-            <!-- Unpaired images will be rendered here -->
-          </div>
-        </div>
+        <p class="muted">Results will appear here once the job has completed.</p>
       </div>
     </div>
 
@@ -217,11 +205,12 @@
       /**
        * @typedef {Object} PairingV2Pair
        * @property {string} front - Front panel filename
-       * @property {string} back - Back panel filename
+       * @property {string} back - Back panel filename  
        * @property {number} confidence
        * @property {string|null} brand
        * @property {string|null} product
        */
+      // NOTE: Matches pairing-v2-processor.ts basenamePairs shape
 
       /**
        * @typedef {Object} PairingV2Unpaired
@@ -267,9 +256,18 @@
       const progressFill = document.getElementById('progressFill');
       const progressDetail = document.getElementById('progressDetail');
       const resultsContainer = document.getElementById('resultsContainer');
-      const pairsGrid = document.getElementById('pairsGrid');
-      const unpairedSection = document.getElementById('unpairedSection');
-      const unpairedGrid = document.getElementById('unpairedGrid');
+
+      // Helper to build Dropbox direct link from folder + filename
+      function buildDropboxUrl(folder, filename) {
+        // Remove leading slash if present
+        const cleanFolder = folder.startsWith('/') ? folder : '/' + folder;
+        const fullPath = `${cleanFolder}/${filename}`;
+        
+        // Note: This builds a path-based reference. In production, these would be
+        // converted to temporary direct links via Dropbox API or similar.
+        // For now, we'll display the filename and path.
+        return fullPath;
+      }
 
       // PHASE 2: Implement handleStart() to call /.netlify/functions/smartdrafts-pairing-v2-start
       async function handleStart() {
@@ -284,8 +282,13 @@
         // Reset previous job state
         currentJobId = null;
         currentImageCount = 0;
+        jobStatusData = null;
         isStarting = true;
         updateStatus('pending');
+        
+        // Clear results
+        resultsContainer.innerHTML = '<p class="muted">Processing...</p>';
+        
         updateUI();
 
         try {
@@ -373,6 +376,11 @@
           if (data.status === 'completed' || data.status === 'failed') {
             console.log('[PHASE 3] Job finished, stopping polling');
             stopPolling();
+            
+            // PHASE 4: Render results when completed
+            if (data.status === 'completed') {
+              renderResults(data);
+            }
           }
         } catch (error) {
           console.error('[PHASE 3] Failed to poll pairing v2 status:', error);
@@ -399,10 +407,90 @@
         isPolling = false;
       }
 
-      // TODO (PHASE 4): Implement renderResults() to display pairs and unpaired
+      // PHASE 4: Implement renderResults() to display pairs and unpaired
       function renderResults(statusResponse) {
-        console.log('[PHASE 1] Render results (not implemented yet)', statusResponse);
-        // Will be implemented in Phase 4
+        const pairs = statusResponse?.result?.pairs ?? [];
+        const unpaired = statusResponse?.result?.unpaired ?? [];
+
+        // Update results summary
+        if (pairs.length === 0 && unpaired.length === 0) {
+          resultsContainer.innerHTML = '<p class="muted">No pairs or unpaired images found.</p>';
+          return;
+        }
+
+        let html = `
+          <div style="margin-bottom: 16px;">
+            <p class="muted">
+              Found <strong>${pairs.length}</strong> pair${pairs.length !== 1 ? 's' : ''} and 
+              <strong>${unpaired.length}</strong> unpaired image${unpaired.length !== 1 ? 's' : ''}.
+            </p>
+          </div>
+        `;
+
+        // Render pairs grid
+        if (pairs.length > 0) {
+          html += '<h3 style="margin: 24px 0 12px;">Paired Images</h3>';
+          html += '<div class="grid">';
+          
+          pairs.forEach((pair, idx) => {
+            const frontPath = buildDropboxUrl(currentFolder, pair.front);
+            const backPath = buildDropboxUrl(currentFolder, pair.back);
+            const confidencePct = Math.round(pair.confidence * 100);
+            
+            html += `
+              <div class="card">
+                <div style="font-weight: 600; margin-bottom: 8px;">Pair ${idx + 1}</div>
+                <div class="pair-images">
+                  <div style="text-align: center;">
+                    <div style="font-size: 12px; color: #666; margin-bottom: 4px;">Front Panel</div>
+                    <div style="padding: 4px; border: 1px solid #eee; border-radius: 8px; background: #fafafa; min-height: 160px; display: flex; align-items: center; justify-content: center;">
+                      <div style="font-size: 13px; color: #666;">${pair.front}</div>
+                    </div>
+                  </div>
+                  <div style="text-align: center;">
+                    <div style="font-size: 12px; color: #666; margin-bottom: 4px;">Back Panel</div>
+                    <div style="padding: 4px; border: 1px solid #eee; border-radius: 8px; background: #fafafa; min-height: 160px; display: flex; align-items: center; justify-content: center;">
+                      <div style="font-size: 13px; color: #666;">${pair.back}</div>
+                    </div>
+                  </div>
+                </div>
+                <div class="muted" style="margin-top: 8px; font-size: 13px;">
+                  Confidence: ${confidencePct}%
+                  ${pair.brand ? ` • Brand: ${pair.brand}` : ''}
+                  ${pair.product ? ` • Product: ${pair.product}` : ''}
+                </div>
+              </div>
+            `;
+          });
+          
+          html += '</div>';
+        }
+
+        // Render unpaired section
+        if (unpaired.length > 0) {
+          html += '<h3 style="margin: 24px 0 12px;">Unpaired Images</h3>';
+          html += '<div class="grid">';
+          
+          unpaired.forEach((item) => {
+            const badge = item.needsReview ? '<span style="background: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;">NEEDS REVIEW</span>' : '';
+            
+            html += `
+              <div class="card" style="background: #fef3c7;">
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                  <div style="font-weight: 600;">${item.imagePath}</div>
+                  ${badge}
+                </div>
+                <div class="muted" style="font-size: 13px;">
+                  ${item.reason || 'No reason provided'}
+                </div>
+              </div>
+            `;
+          });
+          
+          html += '</div>';
+        }
+
+        resultsContainer.innerHTML = html;
       }
 
       // Update UI based on status
@@ -472,7 +560,7 @@
       // Initialize UI
       updateUI();
 
-      console.log('[PHASE 3] Pairing v2 page loaded - polling enabled');
+      console.log('[PHASE 4] Pairing v2 page loaded - results rendering enabled');
     </script>
   </body>
 </html>
