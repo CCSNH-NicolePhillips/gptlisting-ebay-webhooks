@@ -12,7 +12,7 @@ import { runNewTwoStagePipeline, type PairingResult } from '../../src/smartdraft
  * SmartDrafts Pairing V2 - New Two-Stage Pipeline
  * POST /.netlify/functions/smartdrafts-pairing-v2
  * 
- * Phase 2: Backend wiring for the new deterministic + LLM pairing system.
+ * Phase 2: Backend wiring for the new deterministic + LLM pairing system
  * 
  * This function:
  * 1. Lists images in a Dropbox folder
