@@ -150,8 +150,8 @@
       />
       
       <div class="controls">
-        <button id="btnStart" disabled>
-          Start Pairing (Phase 2: Not wired yet)
+        <button id="btnStart">
+          Start Pairing
         </button>
       </div>
     </div>
@@ -207,9 +207,12 @@
 
       /**
        * @typedef {Object} PairingV2StartResponse
+       * @property {boolean} ok
        * @property {string} jobId
+       * @property {string} message
        * @property {number} imageCount
        */
+      // NOTE: Must match netlify/functions/smartdrafts-pairing-v2-start.ts response shape.
 
       /**
        * @typedef {Object} PairingV2Pair
@@ -240,9 +243,12 @@
        * @property {string} [error]
        */
 
-      // PHASE 1: Basic state (no logic yet)
+      // PHASE 1-2: State management
       let currentJobId = null;
       let currentStatus = 'idle';
+      let currentFolder = '';
+      let currentImageCount = 0;
+      let isStarting = false;
       let pollingInterval = null;
 
       // DOM elements
@@ -258,10 +264,67 @@
       const unpairedSection = document.getElementById('unpairedSection');
       const unpairedGrid = document.getElementById('unpairedGrid');
 
-      // TODO (PHASE 2): Implement handleStart() to call /.netlify/functions/smartdrafts-pairing-v2-start
-      function handleStart() {
-        console.log('[PHASE 1] Start button clicked (not wired yet)');
-        // Will be implemented in Phase 2
+      // PHASE 2: Implement handleStart() to call /.netlify/functions/smartdrafts-pairing-v2-start
+      async function handleStart() {
+        const folder = folderInput.value.trim();
+        
+        // Basic guard: require folder
+        if (!folder) {
+          alert('Please enter a Dropbox folder path');
+          return;
+        }
+
+        // Reset previous job state
+        currentJobId = null;
+        currentImageCount = 0;
+        isStarting = true;
+        updateStatus('pending');
+        updateUI();
+
+        try {
+          const token = await window.authClient.getToken();
+          
+          const res = await fetch('/.netlify/functions/smartdrafts-pairing-v2-start', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({ folder }),
+          });
+
+          if (!res.ok) {
+            const errorData = await res.json().catch(() => ({}));
+            throw new Error(errorData.error || `Start failed with status ${res.status}`);
+          }
+
+          const data = await res.json();
+
+          if (!data.ok || !data.jobId) {
+            throw new Error('Start response missing jobId');
+          }
+
+          currentJobId = data.jobId;
+          currentFolder = folder;
+          currentImageCount = data.imageCount || 0;
+          
+          console.log('[PHASE 2] Job started:', {
+            jobId: currentJobId,
+            folder: currentFolder,
+            imageCount: currentImageCount,
+          });
+
+          // Keep status as "pending" - polling will advance it in Phase 3
+          // TODO (PHASE 3): Start polling here with startPolling(currentJobId)
+
+        } catch (error) {
+          console.error('[PHASE 2] Failed to start pairing v2 job:', error);
+          updateStatus('failed');
+          alert('Failed to start job: ' + error.message);
+        } finally {
+          isStarting = false;
+          updateUI();
+        }
       }
 
       // TODO (PHASE 3): Implement polling logic using setInterval
@@ -293,16 +356,48 @@
         statusBadge.textContent = status;
       }
 
+      // Update UI elements based on current state
+      function updateUI() {
+        // Update button state
+        const canStart = !isStarting && 
+                        folderInput.value.trim().length > 0 && 
+                        (currentStatus === 'idle' || currentStatus === 'completed' || currentStatus === 'failed');
+        
+        btnStart.disabled = !canStart;
+        btnStart.textContent = isStarting ? 'Starting...' : 'Start Pairing';
+
+        // Show/hide progress bar
+        if (currentStatus === 'pending' || currentStatus === 'processing') {
+          progressBar.style.display = 'block';
+        } else {
+          progressBar.style.display = 'none';
+        }
+
+        // Update progress detail
+        if (currentJobId) {
+          progressDetail.style.display = 'block';
+          progressDetail.innerHTML = `
+            <strong>Job ID:</strong> <code>${currentJobId}</code><br>
+            <strong>Folder:</strong> ${currentFolder}<br>
+            <strong>Images:</strong> ${currentImageCount}
+          `;
+        } else {
+          progressDetail.style.display = 'none';
+        }
+      }
+
       // Enable folder input changes
       folderInput.addEventListener('input', () => {
-        console.log('[PHASE 1] Folder input:', folderInput.value);
-        // TODO (PHASE 2): Enable start button when folder is valid
+        updateUI();
       });
 
-      // Wire start button (disabled for Phase 1)
+      // Wire start button
       btnStart.addEventListener('click', handleStart);
 
-      console.log('[PHASE 1] Pairing v2 page loaded - scaffolding only, no API calls');
+      // Initialize UI
+      updateUI();
+
+      console.log('[PHASE 2] Pairing v2 page loaded - start endpoint wired');
     </script>
   </body>
 </html>
