@@ -245,20 +245,11 @@ ${JSON.stringify(filenames, null, 2)}`;
 }
 
 async function classifyAllImagesStage1(imagePaths: string[]): Promise<ImageClassificationV2[]> {
-  const all: ImageClassificationV2[] = [];
+  // For cross-image inference to work, ALL related images must be in the same batch
+  // Process all images in a single call (background function has 10min timeout)
+  console.log(`[pairing-v2] Classifying all ${imagePaths.length} images in single batch for cross-image inference...`);
   
-  // Process in batches to avoid payload size limits
-  const totalBatches = Math.ceil(imagePaths.length / CLASSIFY_BATCH_SIZE);
-  
-  for (let i = 0; i < imagePaths.length; i += CLASSIFY_BATCH_SIZE) {
-    const batch = imagePaths.slice(i, i + CLASSIFY_BATCH_SIZE);
-    const batchNum = Math.floor(i / CLASSIFY_BATCH_SIZE) + 1;
-    
-    console.log(`[pairing-v2] Processing batch ${batchNum}/${totalBatches} (${batch.length} images)...`);
-    
-    const batchResult = await classifyImagesBatch(batch);
-    all.push(...batchResult);
-  }
+  const all = await classifyImagesBatch(imagePaths);
   
   console.log(`[pairing-v2] Classification complete: ${all.length} total classifications`);
   
