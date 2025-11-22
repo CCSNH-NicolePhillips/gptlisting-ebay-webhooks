@@ -4,10 +4,7 @@
  */
 
 import { randomUUID } from "crypto";
-import { runNewTwoStagePipeline, type PairingResult } from "../smartdrafts/pairing-v2-core.js";
-import * as fs from "fs";
-import * as path from "path";
-import * as os from "os";
+import type { PairingResult } from "../smartdrafts/pairing-v2-core.js";
 
 // Upstash Redis REST API helpers
 async function redisSet(key: string, value: string, exSeconds: number): Promise<void> {
@@ -93,9 +90,11 @@ export async function schedulePairingV2Job(
     JOB_TTL
   );
 
-  // Trigger background processing (don't await)
-  processPairingV2JobBackground(jobId).catch((err) => {
-    console.error(`[pairingV2Jobs] Background job ${jobId} failed:`, err);
+  // Trigger background processing via dedicated processor function
+  const processorUrl = `${process.env.APP_URL || 'https://ebaywebhooks.netlify.app'}/.netlify/functions/pairing-v2-processor?jobId=${jobId}`;
+  
+  fetch(processorUrl, { method: 'POST' }).catch((err) => {
+    console.error(`[pairingV2Jobs] Failed to trigger processor for job ${jobId}:`, err);
   });
 
   return jobId;
@@ -114,119 +113,4 @@ export async function getPairingV2JobStatus(
   }
 
   return JSON.parse(data) as PairingV2Job;
-}
-
-/**
- * Process a pairing-v2 job in the background
- * This runs without blocking the HTTP response
- */
-async function processPairingV2JobBackground(jobId: string): Promise<void> {
-  const key = `${JOB_KEY_PREFIX}${jobId}`;
-  let workDir: string | null = null;
-
-  try {
-    // Get job
-    const data = await redisGet(key);
-    if (!data) {
-      throw new Error(`Job ${jobId} not found`);
-    }
-
-    const job: PairingV2Job = JSON.parse(data);
-
-    // Update status to processing
-    job.status = "processing";
-    job.updatedAt = Date.now();
-    await redisSet(key, JSON.stringify(job), JOB_TTL);
-
-    console.log(`[pairingV2Jobs] Processing job ${jobId} with ${job.dropboxPaths.length} images...`);
-
-    // Create temp directory for downloads
-    workDir = fs.mkdtempSync(path.join(os.tmpdir(), "pairing-v2-"));
-
-    // Download images from Dropbox
-    const localPaths: string[] = [];
-    for (const dropboxPath of job.dropboxPaths) {
-      const filename = path.basename(dropboxPath);
-      const localPath = path.join(workDir, filename);
-
-      // Download image from Dropbox
-      const response = await fetch("https://content.dropboxapi.com/2/files/download", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${job.accessToken}`,
-          "Dropbox-API-Arg": JSON.stringify({ path: dropboxPath }),
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to download ${dropboxPath}: ${response.status}`);
-      }
-
-      const buffer = Buffer.from(await response.arrayBuffer());
-      fs.writeFileSync(localPath, buffer);
-      localPaths.push(localPath);
-    }
-
-    console.log(`[pairingV2Jobs] Downloaded ${localPaths.length} images to ${workDir}`);
-
-    // Run the three-stage pairing pipeline
-    const result = await runNewTwoStagePipeline(localPaths);
-
-    // Clean up temp directory
-    if (workDir) {
-      fs.rmSync(workDir, { recursive: true, force: true });
-      workDir = null;
-    }
-
-    // Convert local paths back to basenames for result
-    const basenamePairs = result.pairs.map(pair => ({
-      ...pair,
-      front: path.basename(pair.front),
-      back: path.basename(pair.back),
-    }));
-
-    const basenameUnpaired = result.unpaired.map(item => ({
-      ...item,
-      imagePath: path.basename(item.imagePath),
-    }));
-
-    const finalResult: PairingResult = {
-      pairs: basenamePairs,
-      unpaired: basenameUnpaired,
-      metrics: result.metrics,
-    };
-
-    // Update job with result
-    job.status = "completed";
-    job.result = finalResult;
-    job.updatedAt = Date.now();
-    // Clear access token from completed job for security
-    job.accessToken = "";
-    await redisSet(key, JSON.stringify(job), JOB_TTL);
-
-    console.log(`[pairingV2Jobs] Job ${jobId} completed: ${finalResult.pairs.length} pairs`);
-  } catch (error) {
-    console.error(`[pairingV2Jobs] Job ${jobId} failed:`, error);
-
-    // Clean up temp directory on error
-    if (workDir) {
-      try {
-        fs.rmSync(workDir, { recursive: true, force: true });
-      } catch (cleanupErr) {
-        console.error(`[pairingV2Jobs] Failed to cleanup ${workDir}:`, cleanupErr);
-      }
-    }
-
-    // Update job with error
-    const data = await redisGet(key);
-    if (data) {
-      const job: PairingV2Job = JSON.parse(data);
-      job.status = "failed";
-      job.error = error instanceof Error ? error.message : String(error);
-      job.updatedAt = Date.now();
-      // Clear access token from failed job for security
-      job.accessToken = "";
-      await redisSet(key, JSON.stringify(job), JOB_TTL);
-    }
-  }
 }
