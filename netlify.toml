@@ -45,6 +45,10 @@
 [functions."smartdrafts-pairing-v2"]
   timeout = 26  # Max for Pro tier, handles vision API + text pairing + verification
 
+# Pairing V2 processor needs extended timeout for background job execution
+[functions."pairing-v2-processor"]
+  timeout = 26  # Max for Pro tier, runs full three-stage pipeline
+
 # Reduce false positives in Netlify Secrets Scanning by omitting documentation/examples
 [build.environment]
   USE_NEW_SORTER = "false"
