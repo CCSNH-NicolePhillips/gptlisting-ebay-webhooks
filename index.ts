@@ -835,8 +835,7 @@ MATCHING RULES FOR PASS 2:
 - Never pair different product names or formats (jar vs bottle vs pouch).
 - Only mark an image as "front" or "back" if it is clearly product packaging.
 - Images marked "non_product" MUST NOT be in any pair.
-- **CRITICAL: If only two images remain and they clearly share the same brand and product, you MUST classify one as "front" and one as "back" and include them together in the "pairs" array.**
-- **Do not classify an image as "front" or "back" without also including it in some pair.**
+- **If only two images remain and they clearly share the same brand/product and one is front and one is back, you MUST pair them.**
 - If a clear matching front and back exist for a product, they MUST appear together in "pairs".
 - If evidence is insufficient, mark as "unknown" and do NOT invent a pair.
 
@@ -1529,10 +1528,10 @@ async function runLegacyPairingPipeline(imagePaths: string[]): Promise<PairingRe
     pairedSet.add(p.back);
   });
 
-  // 2) Leftovers = unknown OR classified front/back but NOT in any pair
+  // 2) Leftovers = unknown OR classified front/back but NOT in any pair (skip non_product)
   const leftovers = allFilenames.filter(fn => {
     const label = pass1Result.classifications[fn];
-    return label === 'unknown' || !pairedSet.has(fn);
+    return (label === 'unknown' || (label !== 'non_product' && !pairedSet.has(fn)));
   });
 
   const unknownCount = allFilenames.filter(

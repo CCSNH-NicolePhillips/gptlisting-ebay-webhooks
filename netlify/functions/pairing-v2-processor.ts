@@ -50,7 +50,54 @@ async function redisGet(key: string): Promise<string | null> {
 
 const JOB_TTL = 3600;
 const JOB_KEY_PREFIX = "pairing-v2-job:";
-const CHUNK_SIZE = 8; // Process 8 images per invocation to stay under 26s timeout
+const CHUNK_SIZE = 8; // Process 8 images per chunk
+const PARALLEL_CHUNKS = 3; // Process 3 chunks concurrently
+const LOCK_TTL = 60; // Lock timeout in seconds
+
+// Parallel processing helper (borrowed from analyze-core.ts)
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const current = nextIndex++;
+      results[current] = await fn(items[current], current);
+    }
+  }
+
+  const workers = new Array(Math.min(limit, items.length)).fill(0).map(() => worker());
+  await Promise.all(workers);
+  return results;
+}
+
+// Redis lock helpers
+async function acquireLock(key: string, ttl: number): Promise<boolean> {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  
+  if (!url || !token) return false;
+
+  // Use SET NX (set if not exists)
+  const response = await fetch(`${url}/set/${encodeURIComponent(key)}/locked/EX/${ttl}/NX`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!response.ok) return false;
+  const data = await response.json();
+  return data.result === "OK";
+}
+
+async function releaseLock(key: string): Promise<void> {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  
+  if (!url || !token) return;
+
+  await fetch(`${url}/del/${encodeURIComponent(key)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  }).catch(() => {});
+}
 
 export const handler: Handler = async (event) => {
   const jobId = event.queryStringParameters?.jobId;
@@ -86,63 +133,98 @@ export const handler: Handler = async (event) => {
     const totalImages = job.dropboxPaths.length;
     const processedCount = job.processedCount || 0;
     
-    // Determine which chunk to process
-    const chunkStart = processedCount;
-    const chunkEnd = Math.min(chunkStart + CHUNK_SIZE, totalImages);
-    const chunk = job.dropboxPaths.slice(chunkStart, chunkEnd);
-    const isLastChunk = chunkEnd >= totalImages;
+    // Determine which chunks to process in parallel
+    const remainingImages = totalImages - processedCount;
+    const chunksToProcess = Math.min(PARALLEL_CHUNKS, Math.ceil(remainingImages / CHUNK_SIZE));
+    
+    const chunkRanges: Array<{ start: number; end: number; paths: string[] }> = [];
+    for (let i = 0; i < chunksToProcess; i++) {
+      const chunkStart = processedCount + (i * CHUNK_SIZE);
+      const chunkEnd = Math.min(chunkStart + CHUNK_SIZE, totalImages);
+      if (chunkStart < totalImages) {
+        chunkRanges.push({
+          start: chunkStart,
+          end: chunkEnd,
+          paths: job.dropboxPaths.slice(chunkStart, chunkEnd),
+        });
+      }
+    }
 
-    console.log(`[pairing-v2-processor] Processing chunk ${chunkStart}-${chunkEnd} of ${totalImages} images (${chunk.length} in this batch)...`);
+    console.log(`[pairing-v2-processor] Processing ${chunkRanges.length} chunks in parallel (${processedCount}/${totalImages} done)...`);
 
-    // Create temp directory for downloads
-    workDir = fs.mkdtempSync(path.join(os.tmpdir(), "pairing-v2-"));
-
-    // Download images from Dropbox for this chunk
-    const localPaths: string[] = [];
-    for (const dropboxPath of chunk) {
-      const filename = path.basename(dropboxPath);
-      const localPath = path.join(workDir, filename);
-
-      console.log(`[pairing-v2-processor] Downloading ${dropboxPath}...`);
-
-      // Download image from Dropbox
-      const response = await fetch("https://content.dropboxapi.com/2/files/download", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${job.accessToken}`,
-          "Dropbox-API-Arg": JSON.stringify({ path: dropboxPath }),
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to download ${dropboxPath}: ${response.status}`);
+    // Process chunks in parallel with locks to prevent duplicates
+    const { classifyImagesBatch } = await import("../../src/smartdrafts/pairing-v2-core.js");
+    
+    const chunkResults = await mapLimit(chunkRanges, PARALLEL_CHUNKS, async (chunkRange) => {
+      const lockKey = `${JOB_KEY_PREFIX}${jobId}:lock:${chunkRange.start}`;
+      
+      // Try to acquire lock for this chunk
+      const lockAcquired = await acquireLock(lockKey, LOCK_TTL);
+      if (!lockAcquired) {
+        console.log(`[pairing-v2-processor] Chunk ${chunkRange.start}-${chunkRange.end} already processing (locked), skipping`);
+        return null;
       }
 
-      const buffer = Buffer.from(await response.arrayBuffer());
-      fs.writeFileSync(localPath, buffer);
-      localPaths.push(localPath);
-    }
+      try {
+        console.log(`[pairing-v2-processor] Processing chunk ${chunkRange.start}-${chunkRange.end}...`);
+        
+        // Create temp directory for this chunk
+        const chunkWorkDir = fs.mkdtempSync(path.join(os.tmpdir(), `pairing-v2-${chunkRange.start}-`));
 
-    console.log(`[pairing-v2-processor] Downloaded ${localPaths.length} images to ${workDir}`);
+        try {
+          // Download images from Dropbox for this chunk
+          const localPaths: string[] = [];
+          for (const dropboxPath of chunkRange.paths) {
+            const filename = path.basename(dropboxPath);
+            const localPath = path.join(chunkWorkDir, filename);
 
-    // Classify this chunk using Stage 1 only
-    console.log(`[pairing-v2-processor] Classifying chunk...`);
+            // Download image from Dropbox
+            const response = await fetch("https://content.dropboxapi.com/2/files/download", {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${job.accessToken}`,
+                "Dropbox-API-Arg": JSON.stringify({ path: dropboxPath }),
+              },
+            });
+
+            if (!response.ok) {
+              throw new Error(`Failed to download ${dropboxPath}: ${response.status}`);
+            }
+
+            const buffer = Buffer.from(await response.arrayBuffer());
+            fs.writeFileSync(localPath, buffer);
+            localPaths.push(localPath);
+          }
+
+          console.log(`[pairing-v2-processor] Chunk ${chunkRange.start}-${chunkRange.end}: Downloaded ${localPaths.length} images`);
+
+          // Classify this chunk
+          const chunkClassifications = await classifyImagesBatch(localPaths);
+          console.log(`[pairing-v2-processor] Chunk ${chunkRange.start}-${chunkRange.end}: Classified ${chunkClassifications.length} images`);
+
+          return chunkClassifications;
+        } finally {
+          // Clean up temp directory for this chunk
+          fs.rmSync(chunkWorkDir, { recursive: true, force: true });
+        }
+      } finally {
+        // Release lock
+        await releaseLock(lockKey);
+      }
+    });
+
+    // Filter out null results (skipped due to locks) and flatten
+    const newClassifications = chunkResults.filter((c): c is any[] => c !== null).flat();
     
-    // Import classification function from pairing-v2-core
-    const { classifyImagesBatch } = await import("../../src/smartdrafts/pairing-v2-core.js");
-    const chunkClassifications = await classifyImagesBatch(localPaths);
-
-    // Clean up temp directory
-    if (workDir) {
-      fs.rmSync(workDir, { recursive: true, force: true });
-      workDir = null;
-    }
+    console.log(`[pairing-v2-processor] Parallel processing complete: ${newClassifications.length} new classifications`);
 
     // Accumulate classifications
     job.classifications = job.classifications || [];
-    job.classifications.push(...chunkClassifications);
-    job.processedCount = chunkEnd;
+    job.classifications.push(...newClassifications);
+    job.processedCount = processedCount + newClassifications.length;
     job.updatedAt = Date.now();
+
+    const isLastChunk = job.processedCount >= totalImages;
 
     console.log(`[pairing-v2-processor] Chunk complete. Total classified: ${job.classifications.length}/${totalImages}`);
 
@@ -237,7 +319,8 @@ export const handler: Handler = async (event) => {
           ok: true, 
           jobId, 
           status: "processing", 
-          progress: `${chunkEnd}/${totalImages} images classified`,
+          progress: `${job.processedCount}/${totalImages} images classified`,
+          chunksProcessed: chunkRanges.length,
           needsNextChunk: true // Tell client to trigger next chunk
         }),
       };

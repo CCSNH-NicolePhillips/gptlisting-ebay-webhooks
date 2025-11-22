@@ -55,6 +55,7 @@ export interface PairingV2Job {
   // Chunked processing state
   processedCount: number; // How many images have been classified
   classifications: any[]; // Accumulated classifications from all chunks
+  lastChunkTriggered?: number; // Timestamp of last chunk trigger (prevents duplicates)
   
   result?: PairingResult;
   error?: string;
