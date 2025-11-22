@@ -152,31 +152,29 @@ export const handler: Handler = async (event) => {
 
     console.log(`[pairing-v2-processor] Processing ${chunkRanges.length} chunks in parallel (${processedCount}/${totalImages} done)...`);
 
-    // Process chunks in parallel with locks to prevent duplicates
-    const { classifyImagesBatch } = await import("../../src/smartdrafts/pairing-v2-core.js");
+    // Create a single shared temp directory for all chunks
+    const workDir = fs.mkdtempSync(path.join(os.tmpdir(), `pairing-v2-${jobId}-`));
     
-    const chunkResults = await mapLimit(chunkRanges, PARALLEL_CHUNKS, async (chunkRange) => {
-      const lockKey = `${JOB_KEY_PREFIX}${jobId}:lock:${chunkRange.start}`;
-      
-      // Try to acquire lock for this chunk
-      const lockAcquired = await acquireLock(lockKey, LOCK_TTL);
-      if (!lockAcquired) {
-        console.log(`[pairing-v2-processor] Chunk ${chunkRange.start}-${chunkRange.end} already processing (locked), skipping`);
-        return null;
-      }
-
-      try {
-        console.log(`[pairing-v2-processor] Processing chunk ${chunkRange.start}-${chunkRange.end}...`);
+    try {
+      // Download all chunks in parallel (preserves speed)
+      const chunkResults = await mapLimit(chunkRanges, PARALLEL_CHUNKS, async (chunkRange) => {
+        const lockKey = `${JOB_KEY_PREFIX}${jobId}:lock:${chunkRange.start}`;
         
-        // Create temp directory for this chunk
-        const chunkWorkDir = fs.mkdtempSync(path.join(os.tmpdir(), `pairing-v2-${chunkRange.start}-`));
+        // Try to acquire lock for this chunk
+        const lockAcquired = await acquireLock(lockKey, LOCK_TTL);
+        if (!lockAcquired) {
+          console.log(`[pairing-v2-processor] Chunk ${chunkRange.start}-${chunkRange.end} already processing (locked), skipping`);
+          return null;
+        }
 
         try {
+          console.log(`[pairing-v2-processor] Downloading chunk ${chunkRange.start}-${chunkRange.end}...`);
+          
           // Download images from Dropbox for this chunk
           const localPaths: string[] = [];
           for (const dropboxPath of chunkRange.paths) {
             const filename = path.basename(dropboxPath);
-            const localPath = path.join(chunkWorkDir, filename);
+            const localPath = path.join(workDir, filename);
 
             // Download image from Dropbox
             const response = await fetch("https://content.dropboxapi.com/2/files/download", {
@@ -198,161 +196,159 @@ export const handler: Handler = async (event) => {
 
           console.log(`[pairing-v2-processor] Chunk ${chunkRange.start}-${chunkRange.end}: Downloaded ${localPaths.length} images`);
 
-          // Classify this chunk
-          const chunkClassifications = await classifyImagesBatch(localPaths);
-          console.log(`[pairing-v2-processor] Chunk ${chunkRange.start}-${chunkRange.end}: Classified ${chunkClassifications.length} images`);
-
-          return chunkClassifications;
+          return localPaths;
         } finally {
-          // Clean up temp directory for this chunk
-          fs.rmSync(chunkWorkDir, { recursive: true, force: true });
+          // Release lock
+          await releaseLock(lockKey);
         }
-      } finally {
-        // Release lock
-        await releaseLock(lockKey);
-      }
-    });
-
-    // Filter out null results (skipped due to locks) and flatten
-    const newClassifications = chunkResults.filter((c): c is any[] => c !== null).flat();
-    
-    console.log(`[pairing-v2-processor] Parallel processing complete: ${newClassifications.length} new classifications`);
-
-    // Accumulate classifications
-    job.classifications = job.classifications || [];
-    job.classifications.push(...newClassifications);
-    job.processedCount = processedCount + newClassifications.length;
-    job.updatedAt = Date.now();
-
-    const isLastChunk = job.processedCount >= totalImages;
-
-    console.log(`[pairing-v2-processor] Chunk complete. Total classified: ${job.classifications.length}/${totalImages}`);
-
-    if (isLastChunk) {
-      // All images classified - now run pairing and verification
-      console.log(`[pairing-v2-processor] All images classified. Running pairing pipeline...`);
-      
-      const { pairFromClassifications, verifyPairs } = await import("../../src/smartdrafts/pairing-v2-core.js");
-      
-      // Stage 2: Pair from classifications
-      const pairing = await pairFromClassifications(job.classifications);
-      
-      // Stage 3: Verify pairs
-      const verification = await verifyPairs(job.classifications, pairing);
-      
-      const acceptedPairs = verification.verifiedPairs.filter((p: any) => p.status === 'accepted');
-      const rejectedPairs = verification.verifiedPairs.filter((p: any) => p.status === 'rejected');
-
-      console.log(`[pairing-v2-processor] Verification complete: ${acceptedPairs.length} accepted, ${rejectedPairs.length} rejected`);
-
-      // Build final result with basenames
-      const basenamePairs = acceptedPairs.map((pair: any) => ({
-        front: path.basename(pair.front),
-        back: path.basename(pair.back),
-        confidence: pair.confidence,
-        brand: null,
-        product: null,
-      }));
-
-      const basenameSingletons = pairing.unpaired.map((item: any) => ({
-        imagePath: item.filename,
-        reason: item.reason,
-        needsReview: item.needsReview,
-      }));
-
-      // Add rejected pairs to unpaired
-      rejectedPairs.forEach((pair: any) => {
-        basenameSingletons.push({
-          imagePath: path.basename(pair.front),
-          reason: `Rejected pair: ${pair.issues?.join(', ')}`,
-          needsReview: true,
-        });
-        basenameSingletons.push({
-          imagePath: path.basename(pair.back),
-          reason: `Rejected pair: ${pair.issues?.join(', ')}`,
-          needsReview: true,
-        });
       });
 
-      const finalResult = {
-        pairs: basenamePairs,
-        unpaired: basenameSingletons,
-        metrics: {
-          totals: {
-            images: totalImages,
-            fronts: job.classifications.filter((c: any) => c.panel === 'front').length,
-            backs: job.classifications.filter((c: any) => c.panel === 'back' || c.panel === 'side').length,
-            candidates: basenamePairs.length,
-            autoPairs: 0,
-            modelPairs: basenamePairs.length,
-            globalPairs: 0,
-            singletons: basenameSingletons.length,
-          },
-          byBrand: {},
-          reasons: {},
-        },
-      };
+      // Filter out null results (skipped due to locks) and flatten
+      const downloadedPaths = chunkResults.filter((c): c is string[] => c !== null).flat();
+      
+      console.log(`[pairing-v2-processor] Parallel download complete: ${downloadedPaths.length} images downloaded`);
 
-      // Update job with result
-      job.status = "completed";
-      job.result = finalResult;
+      // Now classify ALL images together (preserves cross-image inference)
+      const { classifyImagesBatch } = await import("../../src/smartdrafts/pairing-v2-core.js");
+      console.log(`[pairing-v2-processor] Classifying all ${downloadedPaths.length} images together for cross-image inference...`);
+      
+      const newClassifications = await classifyImagesBatch(downloadedPaths);
+      console.log(`[pairing-v2-processor] Classification complete: ${newClassifications.length} images classified`);
+
+      // Accumulate classifications
+      job.classifications = job.classifications || [];
+      job.classifications.push(...newClassifications);
+      job.processedCount = processedCount + newClassifications.length;
       job.updatedAt = Date.now();
-      // Clear access token from completed job for security
-      job.accessToken = "";
-      await redisSet(key, JSON.stringify(job), JOB_TTL);
 
-      console.log(`[pairing-v2-processor] Job ${jobId} completed: ${finalResult.pairs.length} pairs`);
+      const isLastChunk = job.processedCount >= totalImages;
 
-      return {
-        statusCode: 200,
-        body: JSON.stringify({ ok: true, jobId, status: "completed", pairs: finalResult.pairs.length }),
-      };
-    } else {
-      // More chunks to process - save progress
-      await redisSet(key, JSON.stringify(job), JOB_TTL);
+      console.log(`[pairing-v2-processor] Chunk complete. Total classified: ${job.classifications.length}/${totalImages}`);
 
-      console.log(`[pairing-v2-processor] Chunk saved. Client should trigger next chunk.`);
+      if (isLastChunk) {
+        // All images classified - now run pairing and verification
+        console.log(`[pairing-v2-processor] All images classified. Running pairing pipeline...`);
+        
+        const { pairFromClassifications, verifyPairs } = await import("../../src/smartdrafts/pairing-v2-core.js");
+        
+        // Stage 2: Pair from classifications
+        const pairing = await pairFromClassifications(job.classifications);
+        
+        // Stage 3: Verify pairs
+        const verification = await verifyPairs(job.classifications, pairing);
+        
+        const acceptedPairs = verification.verifiedPairs.filter((p: any) => p.status === 'accepted');
+        const rejectedPairs = verification.verifiedPairs.filter((p: any) => p.status === 'rejected');
 
-      return {
-        statusCode: 200,
-        body: JSON.stringify({ 
-          ok: true, 
-          jobId, 
-          status: "processing", 
-          progress: `${job.processedCount}/${totalImages} images classified`,
-          chunksProcessed: chunkRanges.length,
-          needsNextChunk: true // Tell client to trigger next chunk
-        }),
-      };
-    }
-  } catch (error) {
-    console.error(`[pairing-v2-processor] Job ${jobId} failed:`, error);
+        console.log(`[pairing-v2-processor] Verification complete: ${acceptedPairs.length} accepted, ${rejectedPairs.length} rejected`);
 
-    // Clean up temp directory on error
-    if (workDir) {
-      try {
-        fs.rmSync(workDir, { recursive: true, force: true });
-      } catch (cleanupErr) {
-        console.error(`[pairing-v2-processor] Failed to cleanup ${workDir}:`, cleanupErr);
+        // Build final result with basenames and extract brand/product from front classification
+        const classMap = new Map(job.classifications.map((c: any) => [c.filename, c]));
+        const basenamePairs = acceptedPairs.map((pair: any) => {
+          const frontClass = classMap.get(pair.front);
+          return {
+            front: path.basename(pair.front),
+            back: path.basename(pair.back),
+            confidence: pair.confidence,
+            brand: frontClass?.brand || null,
+            product: frontClass?.productName || null,
+          };
+        });
+
+        const basenameSingletons = pairing.unpaired.map((item: any) => ({
+          imagePath: item.filename,
+          reason: item.reason,
+          needsReview: item.needsReview,
+        }));
+
+        // Add rejected pairs to unpaired
+        rejectedPairs.forEach((pair: any) => {
+          basenameSingletons.push({
+            imagePath: path.basename(pair.front),
+            reason: `Rejected pair: ${pair.issues?.join(', ')}`,
+            needsReview: true,
+          });
+          basenameSingletons.push({
+            imagePath: path.basename(pair.back),
+            reason: `Rejected pair: ${pair.issues?.join(', ')}`,
+            needsReview: true,
+          });
+        });
+
+        const finalResult = {
+          pairs: basenamePairs,
+          unpaired: basenameSingletons,
+          metrics: {
+            totals: {
+              images: totalImages,
+              fronts: job.classifications.filter((c: any) => c.panel === 'front').length,
+              backs: job.classifications.filter((c: any) => c.panel === 'back' || c.panel === 'side').length,
+              candidates: basenamePairs.length,
+              autoPairs: 0,
+              modelPairs: basenamePairs.length,
+              globalPairs: 0,
+              singletons: basenameSingletons.length,
+            },
+            byBrand: {},
+            reasons: {},
+          },
+        };
+
+        // Update job with result
+        job.status = "completed";
+        job.result = finalResult;
+        job.updatedAt = Date.now();
+        // Clear access token from completed job for security
+        delete job.accessToken;
+
+        await redisSet(key, JSON.stringify(job), JOB_TTL);
+        console.log(`[pairing-v2-processor] ✅ Job complete: ${acceptedPairs.length} pairs, ${basenameSingletons.length} unpaired`);
+
+        return {
+          statusCode: 200,
+          body: JSON.stringify({ ok: true, jobId, status: "completed", pairs: finalResult.pairs.length }),
+        };
+      } else {
+        // More chunks to process - save progress
+        await redisSet(key, JSON.stringify(job), JOB_TTL);
+
+        console.log(`[pairing-v2-processor] Progress saved: ${job.processedCount}/${totalImages} images`);
+
+        return {
+          statusCode: 200,
+          body: JSON.stringify({ 
+            ok: true, 
+            jobId, 
+            status: "processing", 
+            progress: `${job.processedCount}/${totalImages} images classified`,
+            chunksProcessed: chunkRanges.length,
+            needsNextChunk: true,
+          }),
+        };
       }
+    } finally {
+      // Clean up temp directory
+      fs.rmSync(workDir, { recursive: true, force: true });
     }
+  } catch (err) {
+    console.error(`[pairing-v2-processor] Job ${jobId} failed:`, err);
 
     // Update job with error
-    const data = await redisGet(key);
-    if (data) {
-      const job: any = JSON.parse(data);
+    const errorData = await redisGet(key);
+    if (errorData) {
+      const job: any = JSON.parse(errorData);
       job.status = "failed";
-      job.error = error instanceof Error ? error.message : String(error);
+      job.error = err instanceof Error ? err.message : String(err);
       job.updatedAt = Date.now();
       // Clear access token from failed job for security
-      job.accessToken = "";
+      delete job.accessToken;
       await redisSet(key, JSON.stringify(job), JOB_TTL);
     }
 
     return {
       statusCode: 500,
       body: JSON.stringify({
-        error: error instanceof Error ? error.message : String(error),
+        error: err instanceof Error ? err.message : String(err),
       }),
     };
   }
