@@ -236,20 +236,27 @@
        * @property {string} userId
        * @property {PairingV2BackendStatus} status
        * @property {string} folder
+       * @property {string[]} dropboxPaths
        * @property {number} processedCount
-       * @property {Object} result
-       * @property {PairingV2Pair[]} result.pairs
-       * @property {PairingV2Unpaired[]} result.unpaired
+       * @property {Array} classifications
+       * @property {Object} [result]
+       * @property {PairingV2Pair[]} [result.pairs]
+       * @property {PairingV2Unpaired[]} [result.unpaired]
        * @property {string} [error]
+       * @property {number} createdAt
+       * @property {number} updatedAt
        */
+      // IMPORTANT: keep in sync with src/lib/pairingV2Jobs.ts PairingV2Job interface
 
-      // PHASE 1-2: State management
+      // PHASE 1-3: State management
       let currentJobId = null;
       let currentStatus = 'idle';
       let currentFolder = '';
       let currentImageCount = 0;
       let isStarting = false;
+      let isPolling = false;
       let pollingInterval = null;
+      let jobStatusData = null; // Full status response from backend
 
       // DOM elements
       const folderInput = document.getElementById('folderInput');
@@ -314,11 +321,13 @@
             imageCount: currentImageCount,
           });
 
-          // Keep status as "pending" - polling will advance it in Phase 3
-          // TODO (PHASE 3): Start polling here with startPolling(currentJobId)
+          // PHASE 3: Start polling for status updates
+          isPolling = true;
+          startPolling(currentJobId);
 
         } catch (error) {
           console.error('[PHASE 2] Failed to start pairing v2 job:', error);
+          isPolling = false;
           updateStatus('failed');
           alert('Failed to start job: ' + error.message);
         } finally {
@@ -327,10 +336,59 @@
         }
       }
 
-      // TODO (PHASE 3): Implement polling logic using setInterval
+      // PHASE 3: Implement polling logic using setInterval
+      async function pollOnce(jobId) {
+        try {
+          const token = await window.authClient.getToken();
+          
+          const res = await fetch(
+            `/.netlify/functions/smartdrafts-pairing-v2-status?jobId=${jobId}`,
+            {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+              },
+            }
+          );
+
+          if (!res.ok) {
+            throw new Error(`Status failed with ${res.status}`);
+          }
+
+          const data = await res.json();
+          
+          // Update state
+          jobStatusData = data;
+          updateStatus(data.status);
+          
+          console.log('[PHASE 3] Status update:', {
+            status: data.status,
+            processed: data.processedCount,
+            total: data.dropboxPaths.length,
+          });
+
+          // Update UI
+          updateUI();
+
+          // Stop polling when done or in error
+          if (data.status === 'completed' || data.status === 'failed') {
+            console.log('[PHASE 3] Job finished, stopping polling');
+            stopPolling();
+          }
+        } catch (error) {
+          console.error('[PHASE 3] Failed to poll pairing v2 status:', error);
+          updateStatus('failed');
+          stopPolling();
+        }
+      }
+
       function startPolling(jobId) {
-        console.log('[PHASE 1] Start polling (not implemented yet)', jobId);
-        // Will be implemented in Phase 3
+        console.log('[PHASE 3] Starting polling for job:', jobId);
+        
+        // Fire once immediately
+        pollOnce(jobId);
+
+        // Then repeat every 2.5s
+        pollingInterval = setInterval(() => pollOnce(jobId), 2500);
       }
 
       function stopPolling() {
@@ -338,6 +396,7 @@
           clearInterval(pollingInterval);
           pollingInterval = null;
         }
+        isPolling = false;
       }
 
       // TODO (PHASE 4): Implement renderResults() to display pairs and unpaired
@@ -358,17 +417,25 @@
 
       // Update UI elements based on current state
       function updateUI() {
-        // Update button state
+        // Update button state - can't start while polling
         const canStart = !isStarting && 
+                        !isPolling &&
                         folderInput.value.trim().length > 0 && 
                         (currentStatus === 'idle' || currentStatus === 'completed' || currentStatus === 'failed');
         
         btnStart.disabled = !canStart;
         btnStart.textContent = isStarting ? 'Starting...' : 'Start Pairing';
 
+        // Calculate progress
+        const totalCount = jobStatusData ? jobStatusData.dropboxPaths.length : currentImageCount;
+        const processedCount = jobStatusData ? jobStatusData.processedCount : 0;
+        const progress = totalCount > 0 ? (processedCount / totalCount) * 100 : 0;
+
         // Show/hide progress bar
         if (currentStatus === 'pending' || currentStatus === 'processing') {
           progressBar.style.display = 'block';
+          progressFill.style.width = progress + '%';
+          progressFill.textContent = `${processedCount} / ${totalCount} images`;
         } else {
           progressBar.style.display = 'none';
         }
@@ -376,14 +443,22 @@
         // Update progress detail
         if (currentJobId) {
           progressDetail.style.display = 'block';
-          progressDetail.innerHTML = `
+          let detailHtml = `
             <strong>Job ID:</strong> <code>${currentJobId}</code><br>
             <strong>Folder:</strong> ${currentFolder}<br>
-            <strong>Images:</strong> ${currentImageCount}
+            <strong>Total Images:</strong> ${totalCount}
           `;
+          
+          if (jobStatusData) {
+            detailHtml += `<br><strong>Processed:</strong> ${processedCount} (${Math.round(progress)}%)`;
+          }
+          
+          progressDetail.innerHTML = detailHtml;
         } else {
           progressDetail.style.display = 'none';
         }
+        
+        // PHASE 4 will update results grid here
       }
 
       // Enable folder input changes
@@ -397,7 +472,7 @@
       // Initialize UI
       updateUI();
 
-      console.log('[PHASE 2] Pairing v2 page loaded - start endpoint wired');
+      console.log('[PHASE 3] Pairing v2 page loaded - polling enabled');
     </script>
   </body>
 </html>
