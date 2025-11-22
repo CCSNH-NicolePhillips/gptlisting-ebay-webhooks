@@ -51,6 +51,11 @@ export interface PairingV2Job {
   folder: string;
   dropboxPaths: string[];
   accessToken: string; // Store access token for background download
+  
+  // Chunked processing state
+  processedCount: number; // How many images have been classified
+  classifications: any[]; // Accumulated classifications from all chunks
+  
   result?: PairingResult;
   error?: string;
   createdAt: number;
@@ -79,6 +84,8 @@ export async function schedulePairingV2Job(
     folder,
     dropboxPaths,
     accessToken,
+    processedCount: 0,
+    classifications: [],
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };

@@ -50,6 +50,7 @@ async function redisGet(key: string): Promise<string | null> {
 
 const JOB_TTL = 3600;
 const JOB_KEY_PREFIX = "pairing-v2-job:";
+const CHUNK_SIZE = 8; // Process 8 images per invocation to stay under 26s timeout
 
 export const handler: Handler = async (event) => {
   const jobId = event.queryStringParameters?.jobId;
@@ -75,19 +76,30 @@ export const handler: Handler = async (event) => {
 
     const job: any = JSON.parse(data);
 
-    // Update status to processing
-    job.status = "processing";
-    job.updatedAt = Date.now();
-    await redisSet(key, JSON.stringify(job), JOB_TTL);
+    // Update status to processing if first chunk
+    if (job.status === "pending") {
+      job.status = "processing";
+      job.updatedAt = Date.now();
+      await redisSet(key, JSON.stringify(job), JOB_TTL);
+    }
 
-    console.log(`[pairing-v2-processor] Processing ${job.dropboxPaths.length} images...`);
+    const totalImages = job.dropboxPaths.length;
+    const processedCount = job.processedCount || 0;
+    
+    // Determine which chunk to process
+    const chunkStart = processedCount;
+    const chunkEnd = Math.min(chunkStart + CHUNK_SIZE, totalImages);
+    const chunk = job.dropboxPaths.slice(chunkStart, chunkEnd);
+    const isLastChunk = chunkEnd >= totalImages;
+
+    console.log(`[pairing-v2-processor] Processing chunk ${chunkStart}-${chunkEnd} of ${totalImages} images (${chunk.length} in this batch)...`);
 
     // Create temp directory for downloads
     workDir = fs.mkdtempSync(path.join(os.tmpdir(), "pairing-v2-"));
 
-    // Download images from Dropbox
+    // Download images from Dropbox for this chunk
     const localPaths: string[] = [];
-    for (const dropboxPath of job.dropboxPaths) {
+    for (const dropboxPath of chunk) {
       const filename = path.basename(dropboxPath);
       const localPath = path.join(workDir, filename);
 
@@ -113,9 +125,12 @@ export const handler: Handler = async (event) => {
 
     console.log(`[pairing-v2-processor] Downloaded ${localPaths.length} images to ${workDir}`);
 
-    // Run the three-stage pairing pipeline
-    console.log(`[pairing-v2-processor] Running pairing pipeline...`);
-    const result = await runNewTwoStagePipeline(localPaths);
+    // Classify this chunk using Stage 1 only
+    console.log(`[pairing-v2-processor] Classifying chunk...`);
+    
+    // Import classification function from pairing-v2-core
+    const { classifyImagesBatch } = await import("../../src/smartdrafts/pairing-v2-core.js");
+    const chunkClassifications = await classifyImagesBatch(localPaths);
 
     // Clean up temp directory
     if (workDir) {
@@ -123,38 +138,117 @@ export const handler: Handler = async (event) => {
       workDir = null;
     }
 
-    // Convert local paths back to basenames for result
-    const basenamePairs = result.pairs.map(pair => ({
-      ...pair,
-      front: path.basename(pair.front),
-      back: path.basename(pair.back),
-    }));
-
-    const basenameUnpaired = result.unpaired.map(item => ({
-      ...item,
-      imagePath: path.basename(item.imagePath),
-    }));
-
-    const finalResult: PairingResult = {
-      pairs: basenamePairs,
-      unpaired: basenameUnpaired,
-      metrics: result.metrics,
-    };
-
-    // Update job with result
-    job.status = "completed";
-    job.result = finalResult;
+    // Accumulate classifications
+    job.classifications = job.classifications || [];
+    job.classifications.push(...chunkClassifications);
+    job.processedCount = chunkEnd;
     job.updatedAt = Date.now();
-    // Clear access token from completed job for security
-    job.accessToken = "";
-    await redisSet(key, JSON.stringify(job), JOB_TTL);
 
-    console.log(`[pairing-v2-processor] Job ${jobId} completed: ${finalResult.pairs.length} pairs`);
+    console.log(`[pairing-v2-processor] Chunk complete. Total classified: ${job.classifications.length}/${totalImages}`);
 
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ ok: true, jobId, status: "completed" }),
-    };
+    if (isLastChunk) {
+      // All images classified - now run pairing and verification
+      console.log(`[pairing-v2-processor] All images classified. Running pairing pipeline...`);
+      
+      const { pairFromClassifications, verifyPairs } = await import("../../src/smartdrafts/pairing-v2-core.js");
+      
+      // Stage 2: Pair from classifications
+      const pairing = await pairFromClassifications(job.classifications);
+      
+      // Stage 3: Verify pairs
+      const verification = await verifyPairs(job.classifications, pairing);
+      
+      const acceptedPairs = verification.verifiedPairs.filter((p: any) => p.status === 'accepted');
+      const rejectedPairs = verification.verifiedPairs.filter((p: any) => p.status === 'rejected');
+
+      console.log(`[pairing-v2-processor] Verification complete: ${acceptedPairs.length} accepted, ${rejectedPairs.length} rejected`);
+
+      // Build final result with basenames
+      const basenamePairs = acceptedPairs.map((pair: any) => ({
+        front: path.basename(pair.front),
+        back: path.basename(pair.back),
+        confidence: pair.confidence,
+        brand: null,
+        product: null,
+      }));
+
+      const basenameSingletons = pairing.unpaired.map((item: any) => ({
+        imagePath: item.filename,
+        reason: item.reason,
+        needsReview: item.needsReview,
+      }));
+
+      // Add rejected pairs to unpaired
+      rejectedPairs.forEach((pair: any) => {
+        basenameSingletons.push({
+          imagePath: path.basename(pair.front),
+          reason: `Rejected pair: ${pair.issues?.join(', ')}`,
+          needsReview: true,
+        });
+        basenameSingletons.push({
+          imagePath: path.basename(pair.back),
+          reason: `Rejected pair: ${pair.issues?.join(', ')}`,
+          needsReview: true,
+        });
+      });
+
+      const finalResult = {
+        pairs: basenamePairs,
+        unpaired: basenameSingletons,
+        metrics: {
+          totals: {
+            images: totalImages,
+            fronts: job.classifications.filter((c: any) => c.panel === 'front').length,
+            backs: job.classifications.filter((c: any) => c.panel === 'back' || c.panel === 'side').length,
+            candidates: basenamePairs.length,
+            autoPairs: 0,
+            modelPairs: basenamePairs.length,
+            globalPairs: 0,
+            singletons: basenameSingletons.length,
+          },
+          byBrand: {},
+          reasons: {},
+        },
+      };
+
+      // Update job with result
+      job.status = "completed";
+      job.result = finalResult;
+      job.updatedAt = Date.now();
+      // Clear access token from completed job for security
+      job.accessToken = "";
+      await redisSet(key, JSON.stringify(job), JOB_TTL);
+
+      console.log(`[pairing-v2-processor] Job ${jobId} completed: ${finalResult.pairs.length} pairs`);
+
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ ok: true, jobId, status: "completed", pairs: finalResult.pairs.length }),
+      };
+    } else {
+      // More chunks to process - save progress and trigger next chunk
+      await redisSet(key, JSON.stringify(job), JOB_TTL);
+
+      console.log(`[pairing-v2-processor] Chunk saved. Triggering next chunk...`);
+
+      // Trigger next chunk (don't await - let it run async)
+      const baseUrl = process.env.APP_URL || 'https://ebaywebhooks.netlify.app';
+      const nextChunkUrl = `${baseUrl}/.netlify/functions/pairing-v2-processor?jobId=${jobId}`;
+      
+      fetch(nextChunkUrl, { method: 'POST' }).catch((err) => {
+        console.error(`[pairing-v2-processor] Failed to trigger next chunk:`, err);
+      });
+
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ 
+          ok: true, 
+          jobId, 
+          status: "processing", 
+          progress: `${chunkEnd}/${totalImages} images classified` 
+        }),
+      };
+    }
   } catch (error) {
     console.error(`[pairing-v2-processor] Job ${jobId} failed:`, error);
 

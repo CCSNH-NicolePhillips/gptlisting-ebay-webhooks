@@ -120,7 +120,7 @@ async function encodeImageToBase64(imagePath: string): Promise<string> {
 
 const CLASSIFY_BATCH_SIZE = 12; // Max images per API call to avoid payload limits
 
-async function classifyImagesBatch(imagePaths: string[]): Promise<ImageClassificationV2[]> {
+export async function classifyImagesBatch(imagePaths: string[]): Promise<ImageClassificationV2[]> {
   try {
     const filenames = imagePaths.map(p => path.basename(p));
     
@@ -269,7 +269,7 @@ async function classifyAllImagesStage1(imagePaths: string[]): Promise<ImageClass
 // Stage 2: Text-Only Pairing (no images sent)
 // ============================================================
 
-async function pairFromClassifications(items: ImageClassificationV2[]): Promise<PairingOutput> {
+export async function pairFromClassifications(items: ImageClassificationV2[]): Promise<PairingOutput> {
   try {
     const payload: PairingInputItem[] = items.map(x => ({
       filename: x.filename,
@@ -389,7 +389,7 @@ ${JSON.stringify(payload, null, 2)}`;
 // Stage 3: Verification (independent validation)
 // ============================================================
 
-async function verifyPairs(
+export async function verifyPairs(
   classifications: ImageClassificationV2[],
   pairing: PairingOutput
 ): Promise<VerificationOutput> {
