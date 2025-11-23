@@ -123,11 +123,11 @@ async function callOpenAI(prompt: string): Promise<string> {
           messages: [
             {
               role: "system",
-              content: "You are an eBay listing assistant. Respond only with valid JSON matching the requested format.",
+              content: "You are an eBay listing expert. Create SEO-optimized, conversion-focused listings with detailed descriptions and complete item specifics. Respond only with valid JSON matching the requested format.",
             },
             { role: "user", content: prompt },
           ],
-          max_tokens: 1500, // Ensure enough tokens for complete JSON response with all aspects
+          max_tokens: 2500, // Increased to allow for detailed 200-500 word descriptions + all aspects
         }),
         GPT_TIMEOUT_MS
       );
@@ -295,9 +295,30 @@ function buildPrompt(product: PairedProduct, categoryHint: CategoryHint | null, 
     lines.push("");
   }
   
-  lines.push("Create a professional eBay listing with accurate details.");
+  lines.push("Create a professional eBay listing with accurate, SEO-optimized details.");
   lines.push("IMPORTANT: Search Amazon.com and Walmart.com for CURRENT regular selling price (NOT sale/clearance/collectible prices). For books, use new hardcover/paperback price.");
   lines.push("Assess condition based on whether it appears to be new/sealed or used.");
+  lines.push("");
+  lines.push("TITLE REQUIREMENTS (SEO-CRITICAL):");
+  lines.push("- Must be 60-80 characters (use ALL available space for SEO)");
+  lines.push("- Include: Brand + Product Name + Key Features + Size/Type");
+  lines.push("- Use keywords buyers search for (e.g., 'Supplement', 'Capsules', 'Support', 'Health')");
+  lines.push("- Example: 'Natural Stacks Dopamine Brain Food 60 Capsules Focus Memory Supplement NEW'");
+  lines.push("- For books: 'Title by Author - Edition/Format (Hardcover/Paperback) ISBN - Condition'");
+  lines.push("- NO generic titles like 'Natural Stacks Dopamine Brain Food' - add DESCRIPTIVE KEYWORDS!");
+  lines.push("");
+  lines.push("DESCRIPTION REQUIREMENTS (CONVERSION-CRITICAL):");
+  lines.push("- Must be 200-500 words (detailed paragraph format, NOT one sentence!)");
+  lines.push("- Structure: Opening hook → Key benefits → Features → Specifications → Call to action");
+  lines.push("- Include WHY someone would want this product (benefits, use cases)");
+  lines.push("- List ALL ingredients, features, certifications visible on packaging");
+  lines.push("- Use engaging, professional language that sells the product");
+  lines.push("- Example structure:");
+  lines.push("  'Discover [Product Name], the premium [category] designed to [main benefit]...'");
+  lines.push("  '[Key features paragraph with specific benefits]...'");
+  lines.push("  'Perfect for [target audience/use cases]...'");
+  lines.push("  'Specifications: [size, count, ingredients, certifications]...'");
+  lines.push("- DO NOT write one-sentence descriptions! Expand with details, benefits, and selling points.");
   lines.push("");
   lines.push("CRITICAL REQUIREMENT: You MUST fill out ALL relevant item specifics (aspects) shown in parentheses for your chosen category above.");
   lines.push("Example: If category shows (aspects: Formulation, Main Purpose, Ingredients, Features, Active Ingredients)");
@@ -310,9 +331,9 @@ function buildPrompt(product: PairedProduct, categoryHint: CategoryHint | null, 
   if (categories && categories.length > 0) {
     lines.push('  "categoryId": "12345", // Choose the most appropriate eBay category ID from the list above');
   }
-  lines.push('  "title": "...", // 80 chars max');
-  lines.push('  "description": "...",');
-  lines.push('  "bullets": ["...", "...", "..."], // 3-5 bullet points');
+  lines.push('  "title": "...", // 60-80 chars, SEO-optimized with keywords (Brand + Product + Features + Size)');
+  lines.push('  "description": "...", // 200-500 word detailed description (NOT one sentence!)');
+  lines.push('  "bullets": ["...", "...", "..."], // 3-5 benefit-focused bullet points');
   lines.push('  "aspects": {');
   lines.push('    // REQUIRED: Include ALL aspects shown for your chosen category above');
   lines.push('    "Brand": ["..."],');
@@ -359,7 +380,7 @@ function parseGptResponse(responseText: string, product: PairedProduct): any {
     return {
       categoryId: typeof parsed.categoryId === 'string' ? parsed.categoryId.trim() : undefined,
       title: typeof parsed.title === 'string' ? parsed.title.slice(0, 80) : `${product.brand} ${product.product}`.slice(0, 80),
-      description: typeof parsed.description === 'string' ? parsed.description.slice(0, 1200) : `${product.brand} ${product.product}`,
+      description: typeof parsed.description === 'string' ? parsed.description.slice(0, 4000) : `${product.brand} ${product.product}`, // Allow up to 4000 chars for eBay
       bullets: Array.isArray(parsed.bullets) ? parsed.bullets.slice(0, 5).map((b: any) => String(b).slice(0, 200)) : [],
       aspects: typeof parsed.aspects === 'object' && parsed.aspects !== null ? parsed.aspects : {},
       price: typeof parsed.price === 'number' && parsed.price > 0 ? parsed.price : undefined,
