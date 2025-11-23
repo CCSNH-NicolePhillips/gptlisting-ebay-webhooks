@@ -126,6 +126,7 @@ export const handler: Handler = async (event) => {
       finishedAt: Date.now(),
       status: "ok",
       folder: payload.folder,
+      stagedUrls: stagedUrls.length > 0 ? stagedUrls : undefined,
       signature: payload.signature,
       count: payload.count,
       warnings: payload.warnings,
