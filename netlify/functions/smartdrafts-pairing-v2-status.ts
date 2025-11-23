@@ -54,7 +54,8 @@ export const handler: Handler = async (event) => {
     }
 
     // If job is pending or processing and needs work, trigger processor
-    const needsWork = status.processedCount < status.dropboxPaths.length;
+    const totalImages = (status.dropboxPaths || status.stagedUrls || []).length;
+    const needsWork = status.processedCount < totalImages;
     
     if (needsWork && (status.status === "pending" || status.status === "processing")) {
       const baseUrl = process.env.APP_URL || 'https://ebaywebhooks.netlify.app';
