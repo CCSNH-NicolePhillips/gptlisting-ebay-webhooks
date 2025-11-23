@@ -114,8 +114,16 @@ export async function schedulePairingV2Job(
     JOB_TTL
   );
 
-  // Status endpoint will trigger processor on first poll
-  // (No fire-and-forget - more reliable in Netlify's execution model)
+  // Trigger processor immediately (fire-and-forget)
+  // Client polls will re-trigger if this fails
+  const baseUrl = process.env.APP_URL || 'https://ebaywebhooks.netlify.app';
+  const processorUrl = `${baseUrl}/.netlify/functions/pairing-v2-processor-background?jobId=${jobId}`;
+  
+  console.log(`[schedulePairingV2Job] Triggering processor: ${processorUrl}`);
+  
+  fetch(processorUrl, { method: 'POST' }).catch((err) => {
+    console.error(`[schedulePairingV2Job] Failed to trigger processor (will retry on poll):`, err);
+  });
 
   return jobId;
 }

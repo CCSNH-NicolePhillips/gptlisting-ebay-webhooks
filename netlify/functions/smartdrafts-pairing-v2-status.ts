@@ -57,9 +57,18 @@ export const handler: Handler = async (event) => {
     const totalImages = (status.dropboxPaths || status.stagedUrls || []).length;
     const needsWork = status.processedCount < totalImages;
     
+    console.log(`[pairing-v2-status] Job ${jobId} status check:`, {
+      status: status.status,
+      totalImages,
+      processedCount: status.processedCount,
+      needsWork,
+    });
+    
     if (needsWork && (status.status === "pending" || status.status === "processing")) {
       const baseUrl = process.env.APP_URL || 'https://ebaywebhooks.netlify.app';
       const processorUrl = `${baseUrl}/.netlify/functions/pairing-v2-processor-background?jobId=${jobId}`;
+      
+      console.log(`[pairing-v2-status] Triggering processor: ${processorUrl}`);
       
       // Trigger background function (fire and forget - client will poll again)
       // This pattern is reliable because:
@@ -67,7 +76,7 @@ export const handler: Handler = async (event) => {
       // - Redis locks prevent duplicate processing
       // - Idempotent processor design
       fetch(processorUrl, { method: 'POST' }).catch((err) => {
-        console.error(`[pairing-v2-status] Failed to trigger chunk:`, err);
+        console.error(`[pairing-v2-status] Failed to trigger processor:`, err);
       });
     }
 
