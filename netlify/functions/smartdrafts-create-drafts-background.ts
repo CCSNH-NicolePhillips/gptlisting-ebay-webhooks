@@ -175,9 +175,13 @@ async function getRelevantCategories(product: PairedProduct): Promise<string> {
     }
     const allCategories = categoriesCache;
     
+    // For books (where brand is null), search by title instead of author/product name
+    // This prevents "Bobbi Brown" (author) from matching food categories like "Brown Sauce"
+    const isBook = !product.brand || product.brand === 'null';
+    
     const searchTerms = [
-      product.product,
-      product.brand,
+      isBook ? 'book' : product.product, // Use "book" keyword for books, product name for others
+      product.brand, // Will be null for books
       product.variant,
       product.categoryPath
     ].filter(Boolean).join(' ').toLowerCase();
