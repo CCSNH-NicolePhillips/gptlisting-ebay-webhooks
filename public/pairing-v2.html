@@ -654,9 +654,10 @@
           
           return {
             productId,
-            images: [frontPath, backPath],
+            heroDisplayUrl: frontPath,
+            backDisplayUrl: backPath,
             brand: pair.brand || pair.title || null,  // Use title as fallback for books
-            productName: pair.product,
+            product: pair.product || 'Unknown Product',
             // Additional metadata can be added here
           };
         });
