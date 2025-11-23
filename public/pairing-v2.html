@@ -715,10 +715,15 @@
               const drafts = job.drafts || [];
               draftStatus.innerHTML = `
                 <p style="color: #388e3c; font-weight: 600;">✅ Successfully created ${drafts.length} draft${drafts.length !== 1 ? 's' : ''}!</p>
-                <p style="margin-top: 8px;"><a href="/drafts.html" style="color: #1976d2;">View Drafts →</a></p>
+                <p style="margin-top: 8px; font-size: 14px; color: #666;">
+                  Drafts are ready to publish. Go to 
+                  <a href="/new-smartdrafts/create-draft.html?jobId=${encodeURIComponent(draftJobId)}" style="color: #1976d2;">SmartDrafts Create</a>
+                  to review and publish them.
+                </p>
               `;
               btn.textContent = `✓ Created ${drafts.length} Draft${drafts.length !== 1 ? 's' : ''}`;
               console.log('[Pairing v2] Draft creation completed:', drafts.length, 'drafts');
+              console.log('[Pairing v2] Job ID:', draftJobId, '- Use this in SmartDrafts Create page');
               return;
             }
             
