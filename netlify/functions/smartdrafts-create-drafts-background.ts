@@ -27,6 +27,7 @@ type PairedProduct = {
   productId: string;
   brand: string;
   product: string;
+  title?: string; // For books: the actual book title (brand will be null, product is author)
   variant?: string;
   size?: string;
   categoryPath?: string;
@@ -244,12 +245,17 @@ async function getRelevantCategories(product: PairedProduct): Promise<string> {
 }
 
 function buildPrompt(product: PairedProduct, categoryHint: CategoryHint | null, categories: string): string {
-  const lines: string[] = [
-    `Product: ${product.product}`,
-  ];
+  const lines: string[] = [];
   
-  if (product.brand && product.brand !== "Unknown") {
-    lines.push(`Brand: ${product.brand}`);
+  // For books: title is the book title, product is the author
+  if (product.title) {
+    lines.push(`Book Title: ${product.title}`);
+    lines.push(`Author: ${product.product}`);
+  } else {
+    lines.push(`Product: ${product.product}`);
+    if (product.brand && product.brand !== "Unknown") {
+      lines.push(`Brand: ${product.brand}`);
+    }
   }
   
   if (product.variant) {

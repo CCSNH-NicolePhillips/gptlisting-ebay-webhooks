@@ -657,8 +657,9 @@
             productId,
             heroDisplayUrl: frontPath,
             backDisplayUrl: backPath,
-            brand: pair.brand || pair.title || null,  // Use title as fallback for books
-            product: pair.product || 'Unknown Product',
+            brand: pair.brand || null,  // null for books
+            product: pair.product || 'Unknown Product',  // Author name for books
+            title: pair.title || null,  // Book title (null for products)
             // Additional metadata can be added here
           };
         });
