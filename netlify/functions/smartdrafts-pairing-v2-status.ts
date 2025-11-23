@@ -53,7 +53,7 @@ export const handler: Handler = async (event) => {
       return json(404, { error: "Job not found" }, originHdr);
     }
 
-    // If job is pending or processing and needs work, trigger processor
+    // If job is pending and needs work, trigger processor (but not if already processing)
     const totalImages = (status.dropboxPaths || status.stagedUrls || []).length;
     const needsWork = status.processedCount < totalImages;
     
@@ -64,7 +64,8 @@ export const handler: Handler = async (event) => {
       needsWork,
     });
     
-    if (needsWork && (status.status === "pending" || status.status === "processing")) {
+    // Only trigger if pending (not already processing) - reduces noise
+    if (needsWork && status.status === "pending") {
       const baseUrl = process.env.APP_URL || 'https://ebaywebhooks.netlify.app';
       const processorUrl = `${baseUrl}/.netlify/functions/pairing-v2-processor-background?jobId=${jobId}`;
       
