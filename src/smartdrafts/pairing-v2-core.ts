@@ -302,9 +302,9 @@ You will receive a list of classified images with metadata about each:
 - filename
 - kind: "product" or "non_product"
 - panel: "front", "back", "side", or "unknown"
-- brand: brand name or null
-- productName: product name or null
-- packageType: bottle/jar/tub/pouch/box/sachet/unknown
+- brand: brand name (or book title for books) or null
+- productName: product name (or author for books) or null
+- packageType: bottle/jar/tub/pouch/box/sachet/book/unknown
 - colorSignature: dominant colors array
 - layoutSignature: layout description
 - confidence: classification confidence (0.0-1.0)
