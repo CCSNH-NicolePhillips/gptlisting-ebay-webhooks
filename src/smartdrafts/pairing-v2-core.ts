@@ -248,6 +248,9 @@ ${JSON.stringify(filenames, null, 2)}`;
     const result = response.choices[0]?.message?.content?.trim() || '{}';
     const parsed: { items: ImageClassificationV2[] } = JSON.parse(result);
     
+    // Log full classification for debugging
+    console.log('[pairing-v2] Classification results:', JSON.stringify(parsed.items, null, 2));
+    
     // Log rationale for each classification
     parsed.items?.forEach((item: any) => {
       if (item.rationale) {
