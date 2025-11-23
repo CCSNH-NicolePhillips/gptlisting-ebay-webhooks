@@ -713,17 +713,65 @@
             
             if (job.state === 'completed') {
               const drafts = job.drafts || [];
+              
+              // Auto-publish drafts to eBay
               draftStatus.innerHTML = `
-                <p style="color: #388e3c; font-weight: 600;">✅ Successfully created ${drafts.length} draft${drafts.length !== 1 ? 's' : ''}!</p>
-                <p style="margin-top: 8px; font-size: 14px; color: #666;">
-                  Drafts are ready to publish. Go to 
-                  <a href="/new-smartdrafts/create-draft.html?jobId=${encodeURIComponent(draftJobId)}" style="color: #1976d2;">SmartDrafts Create</a>
-                  to review and publish them.
-                </p>
+                <p style="color: #388e3c; font-weight: 600;">✅ Created ${drafts.length} draft${drafts.length !== 1 ? 's' : ''}!</p>
+                <p class="muted">🔄 Publishing to eBay...</p>
               `;
-              btn.textContent = `✓ Created ${drafts.length} Draft${drafts.length !== 1 ? 's' : ''}`;
-              console.log('[Pairing v2] Draft creation completed:', drafts.length, 'drafts');
-              console.log('[Pairing v2] Job ID:', draftJobId, '- Use this in SmartDrafts Create page');
+              
+              try {
+                console.log('[Pairing v2] Auto-publishing drafts to eBay...');
+                const publishResponse = await fetch('/.netlify/functions/create-ebay-draft-user', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                  },
+                  body: JSON.stringify({
+                    jobId: draftJobId,
+                    groups: drafts
+                  })
+                });
+                
+                if (!publishResponse.ok) {
+                  const errorText = await publishResponse.text();
+                  throw new Error(`Publish failed: ${publishResponse.status} ${errorText.slice(0, 200)}`);
+                }
+                
+                const publishData = await publishResponse.json();
+                console.log('[Pairing v2] Publish response:', publishData);
+                
+                if (publishData.dryRun) {
+                  draftStatus.innerHTML = `
+                    <p style="color: #f57c00; font-weight: 600;">⚠️ DRY RUN MODE</p>
+                    <p style="margin-top: 8px; font-size: 14px;">Created ${drafts.length} draft${drafts.length !== 1 ? 's' : ''} but not published (dry run enabled).</p>
+                    <p style="margin-top: 8px;"><a href="/new-smartdrafts/create-draft.html?jobId=${encodeURIComponent(draftJobId)}" style="color: #1976d2;">View Draft Details →</a></p>
+                  `;
+                } else {
+                  draftStatus.innerHTML = `
+                    <p style="color: #388e3c; font-weight: 600;">✅ Successfully published ${drafts.length} draft${drafts.length !== 1 ? 's' : ''} to eBay!</p>
+                    <p style="margin-top: 8px;"><a href="/drafts.html" style="color: #1976d2;">View Drafts →</a></p>
+                  `;
+                }
+                
+                btn.textContent = `✓ Published ${drafts.length} Draft${drafts.length !== 1 ? 's' : ''}`;
+                console.log('[Pairing v2] Drafts published successfully');
+                
+              } catch (publishError) {
+                console.error('[Pairing v2] Publish error:', publishError);
+                draftStatus.innerHTML = `
+                  <p style="color: #f57c00; font-weight: 600;">⚠️ Drafts created but publish failed</p>
+                  <p style="margin-top: 8px; font-size: 14px; color: #666;">
+                    Error: ${publishError.message}
+                  </p>
+                  <p style="margin-top: 8px;">
+                    <a href="/new-smartdrafts/create-draft.html?jobId=${encodeURIComponent(draftJobId)}" style="color: #1976d2;">View & Publish Manually →</a>
+                  </p>
+                `;
+                btn.textContent = `⚠️ ${drafts.length} Draft${drafts.length !== 1 ? 's' : ''} Need Publishing`;
+              }
+              
               return;
             }
             

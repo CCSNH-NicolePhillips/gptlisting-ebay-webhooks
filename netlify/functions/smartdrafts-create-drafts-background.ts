@@ -44,6 +44,7 @@ type CategoryHint = {
 
 type Draft = {
   productId: string;
+  groupId: string; // For eBay publishing via create-ebay-draft-user
   brand: string;
   product: string;
   title: string;
@@ -457,6 +458,7 @@ async function createDraftForProduct(product: PairedProduct, retryAttempt: numbe
   
   const draft: Draft = {
     productId: product.productId,
+    groupId: product.productId, // Add groupId for eBay publishing
     brand: product.brand,
     product: product.product,
     title: parsed.title,
