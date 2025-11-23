@@ -58,7 +58,7 @@ async function dropboxAccessToken(refreshToken: string): Promise<string> {
 /**
  * Get scan job data from Redis
  */
-async function getScanJobData(jobId: string): Promise<any> {
+async function getScanJobData(userId: string, jobId: string): Promise<any> {
   const BASE = (process.env.UPSTASH_REDIS_REST_URL || "").replace(/\/$/, "");
   const TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 
@@ -66,7 +66,8 @@ async function getScanJobData(jobId: string): Promise<any> {
     throw new Error("Redis not configured");
   }
 
-  const url = `${BASE}/GET/${encodeURIComponent(`scan:${jobId}`)}`;
+  // Scan jobs use the format: job:${userId}:${jobId}
+  const url = `${BASE}/GET/${encodeURIComponent(`job:${userId}:${jobId}`)}`;
   const res = await fetch(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${TOKEN}` },
@@ -126,7 +127,7 @@ export const handler: Handler = async (event) => {
     });
 
     // Get scan job data
-    const scanJob = await getScanJobData(scanJobId);
+    const scanJob = await getScanJobData(userAuth.userId, scanJobId);
 
     if (scanJob.state !== "complete") {
       return json(400, { error: `Scan job not complete (state: ${scanJob.state})` }, originHdr);
