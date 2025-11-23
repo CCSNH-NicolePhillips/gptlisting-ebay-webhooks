@@ -141,7 +141,7 @@ For each image, provide:
 10. rationale: brief explanation of your classification choices
 
 DEFINITIONS:
-- PRODUCT: Clear consumer product packaging (supplement, cosmetic, food, etc.)
+- PRODUCT: Clear consumer product packaging (supplement, cosmetic, food, book, etc.)
 - NON_PRODUCT: Not packaging at all (purse, furniture, room, person, pet, random object)
 - FRONT panel: Shows brand + product name prominently, marketing-facing
 - BACK panel: Shows Supplement/Nutrition Facts, ingredients, barcode, warnings
@@ -177,7 +177,7 @@ Respond ONLY with valid JSON:
       "panel": "front | back | side | unknown",
       "brand": "Brand Name" or null,
       "productName": "Product Name" or null,
-      "packageType": "bottle | jar | tub | pouch | box | sachet | unknown",
+      "packageType": "bottle | jar | tub | pouch | box | sachet | book | unknown",
       "keyText": ["text1", "text2", "text3"],
       "colorSignature": ["color1", "color2", "pattern"],
       "layoutSignature": "layout description",
@@ -237,6 +237,13 @@ ${JSON.stringify(filenames, null, 2)}`;
 
     const result = response.choices[0]?.message?.content?.trim() || '{}';
     const parsed: { items: ImageClassificationV2[] } = JSON.parse(result);
+    
+    // Log rationale for each classification
+    parsed.items?.forEach((item: any) => {
+      if (item.rationale) {
+        console.log(`[pairing-v2] ${item.filename}: ${item.rationale}`);
+      }
+    });
     
     return parsed.items || [];
   } catch (error) {
