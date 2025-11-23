@@ -944,43 +944,87 @@
           throw new Error('Scan timeout after 5 minutes');
         }
 
-        // Step 2: Pair
+        // Step 2: Pair using pairing-v2 system
         updateStep(2, 'active');
-        const pairRes = await fetchJSON('/.netlify/functions/smartdrafts-pairing', {
+        $('status2').innerHTML = '<span class="spinner"></span>Starting pairing...';
+        
+        // For pairing-v2, we need to pass the scan jobId which contains the image data
+        const pairStartRes = await fetchJSON('/.netlify/functions/smartdrafts-pairing-v2-start-from-scan', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ jobId: currentJobId })
+          body: JSON.stringify({ 
+            scanJobId: currentJobId, // Pass the scan job ID
+            uploadMethod: uploadMethod // 'local' or 'dropbox'
+          })
         });
 
-        if (!pairRes.ok) {
-          throw new Error(pairRes.error || 'Pairing failed');
+        if (!pairStartRes.ok || !pairStartRes.jobId) {
+          throw new Error(pairStartRes.error || 'Failed to start pairing job');
         }
 
-        const products = pairRes.pairing?.products || [];
-        const orphans = pairRes.pairing?.orphans || [];
-        const singletons = pairRes.pairing?.singletons || [];
+        const pairingJobId = pairStartRes.jobId;
+        console.log('[Quick List] Pairing-v2 job started:', pairingJobId);
 
-        // Count unpaired images (orphans + singletons)
-        const unpairedCount = orphans.length + singletons.length;
+        // Poll for pairing completion
+        let pairingComplete = false;
+        let pairAttempts = 0;
+        const maxPairAttempts = 120; // 3 minutes max
+        let products = [];
+        let unpaired = [];
 
-        $('totalPaired').textContent = products.length;
+        while (!pairingComplete && pairAttempts < maxPairAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          pairAttempts++;
 
-        // Show orphans warning if any images couldn't be paired
-        if (unpairedCount > 0) {
-          $('orphansCount').textContent = unpairedCount;
-          $('orphansWarning').style.display = 'block';
-          console.log(`[Quick List] ${unpairedCount} unpaired images (${orphans.length} orphans, ${singletons.length} singletons)`);
+          const statusRes = await fetchJSON(`/.netlify/functions/smartdrafts-pairing-v2-status?jobId=${pairingJobId}`);
+
+          if (statusRes.state === 'complete') {
+            pairingComplete = true;
+            
+            // Extract products from pairing results
+            const pairs = statusRes.result?.pairs || [];
+            unpaired = statusRes.result?.unpaired || [];
+            
+            // Convert pairs to products format expected by create-drafts
+            products = pairs.map((pair, index) => ({
+              productId: `product-${index + 1}`,
+              brand: pair.brand || null,
+              title: pair.title || null,
+              product: pair.product || null,
+              heroDisplayUrl: pair.frontUrl || '',
+              backDisplayUrl: pair.backUrl || ''
+            }));
+
+            $('totalPaired').textContent = products.length;
+
+            // Show orphans warning if any images couldn't be paired
+            if (unpaired.length > 0) {
+              $('orphansCount').textContent = unpaired.length;
+              $('orphansWarning').style.display = 'block';
+              console.log(`[Quick List] ${unpaired.length} unpaired images`);
+            }
+
+            console.log('[Quick List] Pairing-v2 complete:', products.length, 'products');
+          } else if (statusRes.state === 'error') {
+            throw new Error(statusRes.error || 'Pairing failed');
+          } else {
+            const progress = Math.min(95, Math.round((pairAttempts / maxPairAttempts) * 100));
+            $('status2').innerHTML = `<span class="spinner"></span>Pairing images... ${progress}%`;
+          }
+        }
+
+        if (!pairingComplete) {
+          throw new Error('Pairing timeout after 3 minutes');
         }
 
         // Allow partial success - only fail if NO products paired AND no drafts can be created
         if (products.length === 0) {
           updateStep(2, 'warning');
           $('status2').innerHTML = '⚠️ No products could be paired automatically';
-          throw new Error(`No products were paired from ${unpairedCount} image(s). Please review the images and try pairing manually.`);
+          throw new Error(`No products were paired from ${unpaired.length} image(s). Please review the images and try pairing manually.`);
         }
 
         updateStep(2, 'complete');
-        console.log('[Quick List] Paired', products.length, 'products');
 
         // Step 3: Create Drafts (using background job)
         updateStep(3, 'active');

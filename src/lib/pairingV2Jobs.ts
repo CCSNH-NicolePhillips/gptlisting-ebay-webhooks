@@ -49,8 +49,14 @@ export interface PairingV2Job {
   userId: string;
   status: "pending" | "processing" | "completed" | "failed";
   folder: string;
-  dropboxPaths: string[];
-  accessToken: string; // Store access token for background download
+  uploadMethod: "dropbox" | "local";
+  
+  // Dropbox-specific fields
+  dropboxPaths?: string[];
+  accessToken?: string; // Store access token for background download
+  
+  // Local upload fields
+  stagedUrls?: string[]; // URLs of uploaded files
   
   // Chunked processing state
   processedCount: number; // How many images have been classified
@@ -73,23 +79,33 @@ const JOB_KEY_PREFIX = "pairing-v2-job:";
 export async function schedulePairingV2Job(
   userId: string,
   folder: string,
-  dropboxPaths: string[],
-  accessToken: string
+  imagePaths: string[],
+  accessToken?: string
 ): Promise<string> {
   const jobId = randomUUID();
+
+  // Determine if this is Dropbox or local upload based on presence of accessToken
+  const uploadMethod = accessToken ? "dropbox" : "local";
 
   const job: PairingV2Job = {
     jobId,
     userId,
     status: "pending",
     folder,
-    dropboxPaths,
-    accessToken,
+    uploadMethod,
     processedCount: 0,
     classifications: [],
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
+
+  // Add method-specific fields
+  if (uploadMethod === "dropbox") {
+    job.dropboxPaths = imagePaths;
+    job.accessToken = accessToken;
+  } else {
+    job.stagedUrls = imagePaths;
+  }
 
   // Store job in Redis
   await redisSet(
