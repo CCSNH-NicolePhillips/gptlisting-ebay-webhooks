@@ -968,7 +968,7 @@
         // Poll for pairing completion
         let pairingComplete = false;
         let pairAttempts = 0;
-        const maxPairAttempts = 120; // 3 minutes max
+        const maxPairAttempts = 240; // 6 minutes max (pairing-v2 has 3 stages: classify, pair, verify)
         let products = [];
         let unpaired = [];
 
@@ -1014,7 +1014,7 @@
         }
 
         if (!pairingComplete) {
-          throw new Error('Pairing timeout after 3 minutes');
+          throw new Error('Pairing timeout after 6 minutes');
         }
 
         // Allow partial success - only fail if NO products paired AND no drafts can be created
