@@ -266,6 +266,16 @@ ${JSON.stringify(filenames, null, 2)}`;
     const result = response.choices[0]?.message?.content?.trim() || '{}';
     const parsed: { items: ImageClassificationV2[] } = JSON.parse(result);
     
+    // HOTFIX: GPT-4o sometimes ignores the title field for books
+    // If packageType is book and title is missing, copy productName to title
+    parsed.items?.forEach((item: any) => {
+      if (item.packageType === 'book' && !item.title && item.productName) {
+        console.log(`[pairing-v2] HOTFIX: Moving productName "${item.productName}" to title for book ${item.filename}`);
+        item.title = item.productName;
+        // Keep productName as author name (it's usually correct)
+      }
+    });
+    
     // Log full classification for debugging
     console.log('[pairing-v2] Classification results:', JSON.stringify(parsed.items, null, 2));
     
