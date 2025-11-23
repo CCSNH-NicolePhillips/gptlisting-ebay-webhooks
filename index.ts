@@ -815,7 +815,7 @@ Your job is to:
 2. Pair fronts and backs that belong to the SAME physical product.
 3. Return a STRICT JSON object with:
    - "pairs": array of front/back matches
-   - "classifications": map from filename to "front" | "back" | "unknown" | "non_product"
+   - "classifications": map from filena gvcme to "front" | "back" | "unknown" | "non_product"
 
 DEFINITIONS:
 - FRONT:

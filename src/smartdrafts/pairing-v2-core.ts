@@ -23,6 +23,7 @@ export interface PairingResult {
     back: string;
     confidence: number;
     brand?: string | null;
+    title?: string | null;
     product?: string | null;
   }>;
   unpaired: Array<{
@@ -59,7 +60,8 @@ interface ImageClassificationV2 {
   panel: PanelType;
   brand: string | null;
   productName: string | null;
-  packageType: 'bottle' | 'jar' | 'tub' | 'pouch' | 'box' | 'sachet' | 'unknown';
+  title: string | null; // For books: the book title. For products: null
+  packageType: 'bottle' | 'jar' | 'tub' | 'pouch' | 'box' | 'sachet' | 'book' | 'unknown';
   keyText: string[];
   colorSignature: string[];
   layoutSignature: string;
@@ -72,6 +74,7 @@ interface PairingInputItem {
   panel: PanelType;
   brand: string | null;
   productName: string | null;
+  title: string | null;
   packageType: string;
   colorSignature: string[];
   layoutSignature: string;
@@ -133,13 +136,17 @@ For each image, provide:
 2. panel: "front", "back", "side", or "unknown"
 3. brand: 
    - For packaging: the brand name (e.g., "Root", "Jocko")
-   - For books: the book title (e.g., "Harry Potter and the Sorcerer's Stone")
+   - For books: null
    - null if unreadable
 4. productName: 
    - For packaging: the product name (e.g., "Clean Slate", "Fish Oil")
    - For books: the author name (e.g., "J.K. Rowling")
    - null if unreadable
-5. packageType: bottle/jar/tub/pouch/box/sachet/book/unknown
+5. title:
+   - For books: the book title (e.g., "Harry Potter and the Sorcerer's Stone")
+   - For packaging: null
+   - null if unreadable
+6. packageType: bottle/jar/tub/pouch/box/sachet/book/unknown
 6. keyText: array of 3-5 short readable text snippets from the label
 7. colorSignature: array of dominant colors (e.g., ["green", "black", "bright green gradient"])
 8. layoutSignature: brief description of label layout (e.g., "pouch vertical label center", "bottle wraparound")
@@ -187,6 +194,7 @@ Respond ONLY with valid JSON:
       "panel": "front | back | side | unknown",
       "brand": "Brand Name" or null,
       "productName": "Product Name" or null,
+      "title": "Book Title" or null,
       "packageType": "bottle | jar | tub | pouch | box | sachet | book | unknown",
       "keyText": ["text1", "text2", "text3"],
       "colorSignature": ["color1", "color2", "pattern"],
@@ -290,6 +298,7 @@ export async function pairFromClassifications(items: ImageClassificationV2[]): P
       panel: x.panel,
       brand: x.brand,
       productName: x.productName,
+      title: x.title,
       packageType: x.packageType,
       colorSignature: x.colorSignature,
       layoutSignature: x.layoutSignature,
@@ -302,8 +311,9 @@ You will receive a list of classified images with metadata about each:
 - filename
 - kind: "product" or "non_product"
 - panel: "front", "back", "side", or "unknown"
-- brand: brand name (or book title for books) or null
+- brand: brand name (null for books) or null
 - productName: product name (or author for books) or null
+- title: book title (null for products) or null
 - packageType: bottle/jar/tub/pouch/box/sachet/book/unknown
 - colorSignature: dominant colors array
 - layoutSignature: layout description
@@ -312,7 +322,8 @@ You will receive a list of classified images with metadata about each:
 Your ONLY job is to PAIR fronts and backs that belong to the SAME physical product.
 
 PAIRING RULES (STRICT):
-1. NEVER pair images from different brands (case-insensitive comparison)
+1. For products: NEVER pair images from different brands (case-insensitive comparison)
+   For books: NEVER pair images from different titles (case-insensitive comparison)
 2. STRICT MATCH: If BOTH images have productName, they MUST match
 3. SOFT MATCH: If productName is null/missing on ONE side but brand matches AND:
    - Same packageType
@@ -427,6 +438,7 @@ export async function verifyPairs(
           panel: frontClass.panel,
           brand: frontClass.brand,
           productName: frontClass.productName,
+          title: frontClass.title,
           packageType: frontClass.packageType,
           confidence: frontClass.confidence,
         } : null,
@@ -434,6 +446,7 @@ export async function verifyPairs(
           panel: backClass.panel,
           brand: backClass.brand,
           productName: backClass.productName,
+          title: backClass.title,
           packageType: backClass.packageType,
           confidence: backClass.confidence,
         } : null,
@@ -447,7 +460,8 @@ Your job is to VERIFY each pair independently.
 
 For each pair, you must:
 1. Check if the front metadata matches the back metadata
-2. Verify brand names match (case-insensitive) - REQUIRED for both sides
+2. For products: Verify brand names match (case-insensitive) - REQUIRED for both sides
+   For books: Verify title matches (case-insensitive) - REQUIRED for both sides
 3. Verify product names match OR one side is null (acceptable for books/products where back doesn't show product name)
 4. Verify package types match
 5. Check that front is actually a "front" panel
@@ -459,7 +473,8 @@ VERIFICATION RULES:
 - status: "rejected" if ANY critical check fails, with specific issues listed
 
 Critical checks (MUST pass):
-- Brand names must match (case-insensitive)
+- For products: Brand names must match (case-insensitive)
+- For books: Titles must match (case-insensitive)
 - Package types must match (bottle/jar/box/book/etc)
 - Front must be "front" panel
 - Back must be "back" or "side" panel
@@ -469,13 +484,14 @@ Flexible checks (one can be null):
 - Product name: Accept if both match OR if one side is null (common for backs/books)
 
 Common reasons to reject:
-- Brand mismatch (different brands)
+- Brand mismatch (different brands for products)
+- Title mismatch (different titles for books)
 - Package type mismatch (bottle vs jar vs book)
 - Panel type wrong (front paired with front, or back with non-back/side)
 - Low confidence (< 0.5 on either side)
-- Null brand on both sides (too uncertain)
+- Null brand AND null title on both sides (too uncertain)
 
-Be REASONABLE: If brand and packageType match, accept even if productName is null on one side.
+Be REASONABLE: If (brand OR title) and packageType match, accept even if productName is null on one side.
 
 OUTPUT FORMAT:
 Respond ONLY with valid JSON:
@@ -570,6 +586,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
       back: p.back,
       confidence: p.confidence,
       brand: frontClass?.brand || null,
+      title: frontClass?.title || null,
       product: frontClass?.productName || null,
     };
   });

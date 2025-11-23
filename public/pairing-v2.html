@@ -651,7 +651,7 @@
           
           return {
             images: [frontPath, backPath],
-            brand: pair.brand,
+            brand: pair.brand || pair.title || null,  // Use title as fallback for books
             productName: pair.product,
             // Additional metadata can be added here
           };
