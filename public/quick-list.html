@@ -978,7 +978,7 @@
 
           const statusRes = await fetchJSON(`/.netlify/functions/smartdrafts-pairing-v2-status?jobId=${pairingJobId}`);
 
-          if (statusRes.state === 'complete') {
+          if (statusRes.status === 'completed') {
             pairingComplete = true;
             
             // Extract products from pairing results
@@ -1005,7 +1005,7 @@
             }
 
             console.log('[Quick List] Pairing-v2 complete:', products.length, 'products');
-          } else if (statusRes.state === 'error') {
+          } else if (statusRes.status === 'failed') {
             throw new Error(statusRes.error || 'Pairing failed');
           } else {
             const progress = Math.min(95, Math.round((pairAttempts / maxPairAttempts) * 100));
