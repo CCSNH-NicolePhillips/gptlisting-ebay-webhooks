@@ -185,14 +185,86 @@ export const handler: Handler = async (event) => {
 
         console.log(`[pairing-v2-processor] Pipeline complete: ${result.pairs.length} pairs, ${result.unpaired.length} unpaired`);
 
+        // Create Dropbox shared links for each paired image
+        console.log(`[pairing-v2-processor] Creating Dropbox shared links for ${result.pairs.length} pairs...`);
+        const pairsWithUrls = await Promise.all(result.pairs.map(async (p) => {
+          const frontPath = `${job.folder}/${path.basename(p.front)}`;
+          const backPath = `${job.folder}/${path.basename(p.back)}`;
+          
+          // Helper to get or create share link
+          const getShareLink = async (dropboxPath: string): Promise<string> => {
+            try {
+              // Try to create a new shared link
+              const createResponse = await fetch('https://api.dropboxapi.com/2/sharing/create_shared_link_with_settings', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${job.accessToken}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  path: dropboxPath,
+                  settings: {
+                    requested_visibility: 'public'
+                  }
+                })
+              });
+              
+              if (createResponse.ok) {
+                const data = await createResponse.json();
+                return data.url.replace('?dl=0', '?dl=1');
+              }
+              
+              // Link might already exist, try to list existing links
+              const listResponse = await fetch('https://api.dropboxapi.com/2/sharing/list_shared_links', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${job.accessToken}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  path: dropboxPath,
+                  direct_only: true
+                })
+              });
+              
+              if (listResponse.ok) {
+                const listData = await listResponse.json();
+                if (listData.links && listData.links.length > 0) {
+                  return listData.links[0].url.replace('?dl=0', '?dl=1');
+                }
+              }
+              
+              // Fallback: return a constructed URL (may not work but better than nothing)
+              console.warn(`[pairing-v2-processor] Could not create share link for ${dropboxPath}`);
+              return `https://www.dropbox.com/home${dropboxPath}?dl=1`;
+            } catch (err) {
+              console.error(`[pairing-v2-processor] Error creating share link for ${dropboxPath}:`, err);
+              return `https://www.dropbox.com/home${dropboxPath}?dl=1`;
+            }
+          };
+          
+          const [frontUrl, backUrl] = await Promise.all([
+            getShareLink(frontPath),
+            getShareLink(backPath)
+          ]);
+          
+          return {
+            ...p,
+            frontUrl,
+            backUrl
+          };
+        }));
+
         // Convert full paths to basenames for storage
-        const basenamePairs = result.pairs.map(p => ({
+        const basenamePairs = pairsWithUrls.map(p => ({
           front: path.basename(p.front),
           back: path.basename(p.back),
           confidence: p.confidence,
           brand: p.brand,
           product: p.product,
           title: p.title, // Book title (null for products)
+          frontUrl: p.frontUrl,  // Dropbox shareable link for front image
+          backUrl: p.backUrl,    // Dropbox shareable link for back image
         }));
 
         const basenameSingletons = result.unpaired.map(u => ({

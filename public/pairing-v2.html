@@ -645,135 +645,41 @@
         
         const pairs = jobStatusData.result.pairs;
         
-        // Get Dropbox access token for creating share links
-        const dropboxToken = localStorage.getItem('dropbox_access_token');
-        if (!dropboxToken) {
-          throw new Error('Dropbox access token not found. Please reconnect Dropbox.');
-        }
+        // Check if we have image URLs already in the pairs (from updated backend)
+        // or if we need to construct them from Dropbox paths
+        const hasImageUrls = pairs.length > 0 && (pairs[0].frontUrl || pairs[0].backUrl);
         
         // Transform pairs into products format expected by draft creation
-        // We need to create shared links for each image
-        const products = [];
-        
-        draftStatus.innerHTML = '<p class="muted">🔄 Creating shareable links for images...</p>';
-        
-        for (let index = 0; index < pairs.length; index++) {
-          const pair = pairs[index];
-          
-          // Create shared links for front and back images
-          const frontFullPath = `${currentFolder}/${pair.front}`;
-          const backFullPath = `${currentFolder}/${pair.back}`;
-          
+        const products = pairs.map((pair, index) => {
           let frontUrl, backUrl;
           
-          try {
-            // Create shared link for front image
-            const frontResponse = await fetch('https://api.dropboxapi.com/2/sharing/create_shared_link_with_settings', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${dropboxToken}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                path: frontFullPath,
-                settings: {
-                  requested_visibility: 'public'
-                }
-              })
-            });
-            
-            if (frontResponse.ok) {
-              const frontData = await frontResponse.json();
-              frontUrl = frontData.url.replace('?dl=0', '?dl=1'); // Force direct download
-            } else {
-              // Link might already exist, try to get existing link
-              const listResponse = await fetch('https://api.dropboxapi.com/2/sharing/list_shared_links', {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${dropboxToken}`,
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                  path: frontFullPath,
-                  direct_only: true
-                })
-              });
-              
-              if (listResponse.ok) {
-                const listData = await listResponse.json();
-                if (listData.links && listData.links.length > 0) {
-                  frontUrl = listData.links[0].url.replace('?dl=0', '?dl=1');
-                } else {
-                  throw new Error(`Failed to create share link for ${pair.front}`);
-                }
-              } else {
-                throw new Error(`Failed to get share link for ${pair.front}`);
-              }
-            }
-            
-            // Create shared link for back image
-            const backResponse = await fetch('https://api.dropboxapi.com/2/sharing/create_shared_link_with_settings', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${dropboxToken}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                path: backFullPath,
-                settings: {
-                  requested_visibility: 'public'
-                }
-              })
-            });
-            
-            if (backResponse.ok) {
-              const backData = await backResponse.json();
-              backUrl = backData.url.replace('?dl=0', '?dl=1');
-            } else {
-              // Link might already exist
-              const listResponse = await fetch('https://api.dropboxapi.com/2/sharing/list_shared_links', {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${dropboxToken}`,
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                  path: backFullPath,
-                  direct_only: true
-                })
-              });
-              
-              if (listResponse.ok) {
-                const listData = await listResponse.json();
-                if (listData.links && listData.links.length > 0) {
-                  backUrl = listData.links[0].url.replace('?dl=0', '?dl=1');
-                } else {
-                  throw new Error(`Failed to create share link for ${pair.back}`);
-                }
-              } else {
-                throw new Error(`Failed to get share link for ${pair.back}`);
-              }
-            }
-          } catch (err) {
-            console.error(`Error creating share links for pair ${index}:`, err);
-            throw new Error(`Failed to create shareable links: ${err.message}`);
+          if (hasImageUrls) {
+            // Backend already provided shareable URLs
+            frontUrl = pair.frontUrl;
+            backUrl = pair.backUrl;
+          } else if (pair.frontShareUrl && pair.backShareUrl) {
+            // Alternative: backend provided share URLs
+            frontUrl = pair.frontShareUrl;
+            backUrl = pair.backShareUrl;
+          } else {
+            // Fallback: construct URLs (may not work if not properly formatted)
+            console.warn('No image URLs in pairing result - images may not display correctly');
+            frontUrl = `https://www.dropbox.com/home${currentFolder}/${pair.front}?dl=1`;
+            backUrl = `https://www.dropbox.com/home${currentFolder}/${pair.back}?dl=1`;
           }
           
           // Generate a unique productId for each pair
           const productId = `pairing-v2-${Date.now()}-${index}`;
           
-          products.push({
+          return {
             productId,
             heroDisplayUrl: frontUrl,
             backDisplayUrl: backUrl,
             brand: pair.brand || null,  // null for books
             product: pair.product || 'Unknown Product',  // Author name for books
             title: pair.title || null,  // Book title (null for products)
-          });
-          
-          // Update progress
-          draftStatus.innerHTML = `<p class="muted">🔄 Creating shareable links (${index + 1}/${pairs.length})...</p>`;
-        }
+          };
+        });
         
         btn.disabled = true;
         btn.textContent = 'Creating drafts...';
