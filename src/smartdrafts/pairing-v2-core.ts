@@ -135,16 +135,16 @@ For each image, provide:
 1. kind: "product" if it's consumer product packaging, "non_product" if not
 2. panel: "front", "back", "side", or "unknown"
 3. brand: 
-   - For packaging: the brand name (e.g., "Root", "Jocko")
-   - For books: null
+   - For supplements/cosmetics/food packaging: the brand name (e.g., "Root", "Jocko", "Natural Stacks")
+   - For books: MUST be null (books don't have brands in our system)
    - null if unreadable
 4. productName: 
-   - For packaging: the product name (e.g., "Clean Slate", "Fish Oil")
-   - For books: the author name (e.g., "J.K. Rowling")
+   - For supplements/cosmetics/food packaging: the product name (e.g., "Clean Slate", "Fish Oil", "Dopamine Brain Food")
+   - For books: the author name (e.g., "Bobbi Brown", "J.K. Rowling")
    - null if unreadable
 5. title:
-   - For books: the book title (e.g., "Harry Potter and the Sorcerer's Stone")
-   - For packaging: null
+   - For books ONLY: the book title (e.g., "Still Bobbi", "Harry Potter and the Sorcerer's Stone")
+   - For supplements/cosmetics/food packaging: MUST be null
    - null if unreadable
 6. packageType: bottle/jar/tub/pouch/box/sachet/book/unknown
 6. keyText: array of 3-5 short readable text snippets from the label
@@ -193,8 +193,8 @@ Respond ONLY with valid JSON:
       "kind": "product | non_product",
       "panel": "front | back | side | unknown",
       "brand": "Brand Name" or null,
-      "productName": "Product Name" or null,
-      "title": "Book Title" or null,
+      "productName": "Product Name or Author Name" or null,
+      "title": "Book Title (only for books)" or null,
       "packageType": "bottle | jar | tub | pouch | box | sachet | book | unknown",
       "keyText": ["text1", "text2", "text3"],
       "colorSignature": ["color1", "color2", "pattern"],
@@ -204,6 +204,16 @@ Respond ONLY with valid JSON:
     }
   ]
 }
+
+CRITICAL FIELD MAPPING FOR BOOKS:
+- If packageType is "book":
+  * brand MUST be null
+  * title MUST contain the book title (e.g., "Still Bobbi")
+  * productName MUST contain the author name (e.g., "Bobbi Brown")
+- If packageType is NOT "book":
+  * brand MUST contain the brand name (e.g., "Natural Stacks")
+  * title MUST be null
+  * productName MUST contain the product name (e.g., "Dopamine Brain Food")
 
 Every filename provided MUST appear in the items array.`;
 
@@ -394,6 +404,8 @@ ${JSON.stringify(payload, null, 2)}`;
     const result = response.choices[0]?.message?.content?.trim() || '{}';
     const parsed: PairingOutput = JSON.parse(result);
     
+    console.log('[pairing-v2] Pairing results:', JSON.stringify(parsed, null, 2));
+    
     return parsed;
   } catch (error) {
     console.error('[pairing-v2] Error in pairFromClassifications:', error);
@@ -453,6 +465,9 @@ export async function verifyPairs(
       };
     });
     
+    console.log('[pairing-v2] Verifying', pairing.pairs.length, 'pairs');
+    console.log('[pairing-v2] Verification payload:', JSON.stringify(payload, null, 2));
+    
     const systemMessage = `You are an expert verification system for product image pairs.
 
 You will receive candidate pairs along with their classification metadata.
@@ -460,8 +475,10 @@ Your job is to VERIFY each pair independently.
 
 For each pair, you must:
 1. Check if the front metadata matches the back metadata
-2. For products: Verify brand names match (case-insensitive) - REQUIRED for both sides
-   For books: Verify title matches (case-insensitive) - REQUIRED for both sides
+2. Verify identity:
+   - For products (packageType != 'book'): brand must match (case-insensitive)
+   - For books (packageType == 'book'): title must match (case-insensitive)
+   - IMPORTANT: Books have null brand by design - this is NORMAL and ACCEPTABLE
 3. Verify product names match OR one side is null (acceptable for books/products where back doesn't show product name)
 4. Verify package types match
 5. Check that front is actually a "front" panel
@@ -477,10 +494,11 @@ VERIFICATION RULES:
 - status: "rejected" if ANY critical check fails, with specific issues listed
 
 Critical checks (MUST pass):
-- Identity match: EITHER both have matching brands (case-insensitive) OR both have matching titles (case-insensitive)
-  * For products (packageType != book): brand must be non-null on at least one side and match if present on both
-  * For books (packageType == book): title must be non-null on at least one side and match if present on both
-  * REJECT only if BOTH brand AND title are null on both sides (completely uncertain)
+- Identity match:
+  * If packageType == 'book': Check if titles match (brand will be null - IGNORE IT)
+  * If packageType != 'book': Check if brands match (title will be null - IGNORE IT)
+  * NEVER reject a book pair just because brand is null - books don't have brands in our system
+  * ONLY reject if the identifying field (brand for products, title for books) is null on BOTH sides
 - Package types must match (bottle/jar/box/book/etc)
 - Front must be "front" panel
 - Back must be "back" or "side" panel
@@ -494,9 +512,15 @@ Common reasons to reject:
 - Package type mismatch (bottle vs jar vs book)
 - Panel type wrong (front paired with front, or back with non-back/side)
 - Low confidence (< 0.5 on either side)
-- Complete uncertainty: BOTH brand AND title are null on BOTH sides
+- Complete uncertainty: The identifying field (brand for products, title for books) is null on BOTH sides
 
-Be REASONABLE: Accept if EITHER (brand matches) OR (title matches), even if the other is null. Only reject if BOTH are null on BOTH sides.
+EXAMPLES:
+- Book with packageType='book', brand=null, title='Harry Potter' on both sides: ACCEPT (title matches)
+- Product with packageType='bottle', brand='Jocko', title=null on both sides: ACCEPT (brand matches)
+- Product with packageType='bottle', brand=null, title=null on both sides: REJECT (no identity)
+- Book with packageType='book', brand=null, title=null on both sides: REJECT (no identity)
+
+NEVER reject a book just because brand is null. Books don't use the brand field.
 
 OUTPUT FORMAT:
 Respond ONLY with valid JSON:
