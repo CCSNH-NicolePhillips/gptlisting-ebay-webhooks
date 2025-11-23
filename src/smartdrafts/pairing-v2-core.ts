@@ -469,12 +469,18 @@ For each pair, you must:
 7. Verify confidence scores are reasonable (>= 0.5)
 
 VERIFICATION RULES:
-- status: "accepted" if brand matches AND (productName matches OR one is null) AND packageType matches AND panels are correct
+- status: "accepted" if the following conditions are met:
+  * EITHER brand matches (for products) OR title matches (for books)
+  * AND packageType matches
+  * AND panels are correct (front with back/side)
+  * AND (productName matches OR one is null)
 - status: "rejected" if ANY critical check fails, with specific issues listed
 
 Critical checks (MUST pass):
-- For products: Brand names must match (case-insensitive)
-- For books: Titles must match (case-insensitive)
+- Identity match: EITHER both have matching brands (case-insensitive) OR both have matching titles (case-insensitive)
+  * For products (packageType != book): brand must be non-null on at least one side and match if present on both
+  * For books (packageType == book): title must be non-null on at least one side and match if present on both
+  * REJECT only if BOTH brand AND title are null on both sides (completely uncertain)
 - Package types must match (bottle/jar/box/book/etc)
 - Front must be "front" panel
 - Back must be "back" or "side" panel
@@ -484,14 +490,13 @@ Flexible checks (one can be null):
 - Product name: Accept if both match OR if one side is null (common for backs/books)
 
 Common reasons to reject:
-- Brand mismatch (different brands for products)
-- Title mismatch (different titles for books)
+- Identity mismatch: For products, brands don't match; for books, titles don't match
 - Package type mismatch (bottle vs jar vs book)
 - Panel type wrong (front paired with front, or back with non-back/side)
 - Low confidence (< 0.5 on either side)
-- Null brand AND null title on both sides (too uncertain)
+- Complete uncertainty: BOTH brand AND title are null on BOTH sides
 
-Be REASONABLE: If (brand OR title) and packageType match, accept even if productName is null on one side.
+Be REASONABLE: Accept if EITHER (brand matches) OR (title matches), even if the other is null. Only reject if BOTH are null on BOTH sides.
 
 OUTPUT FORMAT:
 Respond ONLY with valid JSON:
