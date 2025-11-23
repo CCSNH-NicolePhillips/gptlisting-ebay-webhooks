@@ -50,15 +50,49 @@ export const handler: Handler = async (event) => {
 			params.set('limit', String(limit));
 			params.set('offset', String(offset));
 			const url = `${apiHost}/sell/inventory/v1/offer?${params.toString()}`;
-			const r = await fetch(url, { headers });
-			const txt = await r.text();
-			let json: any;
+			
+			console.log('[ebay-list-offers] Calling eBay API:', url);
+			const callStart = Date.now();
+			
+			// Add timeout to prevent hanging
+			const controller = new AbortController();
+			const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+			
 			try {
-				json = JSON.parse(txt);
-			} catch {
-				json = { raw: txt };
+				const r = await fetch(url, { 
+					headers,
+					signal: controller.signal 
+				});
+				clearTimeout(timeoutId);
+				
+				const txt = await r.text();
+				const callElapsed = Date.now() - callStart;
+				console.log('[ebay-list-offers] eBay API responded in', callElapsed, 'ms, status:', r.status);
+				
+				let json: any;
+				try {
+					json = JSON.parse(txt);
+				} catch {
+					json = { raw: txt };
+				}
+				return { ok: r.ok, status: r.status, url, body: json };
+			} catch (err: any) {
+				clearTimeout(timeoutId);
+				const callElapsed = Date.now() - callStart;
+				
+				if (err.name === 'AbortError') {
+					console.error('[ebay-list-offers] eBay API timeout after', callElapsed, 'ms');
+					return { 
+						ok: false, 
+						status: 504, 
+						url, 
+						body: { error: 'eBay API timeout', detail: 'Request took longer than 8 seconds' } 
+					};
+				}
+				
+				console.error('[ebay-list-offers] eBay API error after', callElapsed, 'ms:', err.message);
+				throw err;
 			}
-			return { ok: r.ok, status: r.status, url, body: json };
 		}
 
 		// Safe fallback: enumerate inventory items and fetch offers per valid SKU
@@ -135,6 +169,19 @@ export const handler: Handler = async (event) => {
 		// This is much faster than multiple API calls
 		if (normalizedStatuses.length > 0) {
 			console.log('[ebay-list-offers] Trying single call with client-side filtering...');
+			
+			// Rate limit protection: add small delay if called too frequently
+			// This prevents 502 errors when drafts page loads immediately after draft creation
+			const now = Date.now();
+			const lastCallTime = (global as any).lastEbayListOffersCall || 0;
+			const timeSinceLastCall = now - lastCallTime;
+			if (timeSinceLastCall < 1000) {
+				const delayMs = 1000 - timeSinceLastCall;
+				console.log('[ebay-list-offers] Rate limit protection: waiting', delayMs, 'ms');
+				await new Promise(resolve => setTimeout(resolve, delayMs));
+			}
+			(global as any).lastEbayListOffersCall = Date.now();
+			
 			const r = await listOnce(false, true); // Get all offers, filter client-side
 			attempts.push(r);
 			
