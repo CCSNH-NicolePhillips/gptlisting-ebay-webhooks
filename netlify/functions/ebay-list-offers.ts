@@ -4,6 +4,9 @@ import { tokensStore } from '../../src/lib/_blobs.js';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
 
 export const handler: Handler = async (event) => {
+	const startTime = Date.now();
+	console.log('[ebay-list-offers] Request started:', { status: event.queryStringParameters?.status });
+	
 	try {
 		const rawSku = event.queryStringParameters?.sku?.trim();
 		const SKU_OK = (s: string) => /^[A-Za-z0-9]{1,50}$/.test(s || '');
@@ -15,11 +18,20 @@ export const handler: Handler = async (event) => {
 		const bearer = getBearerToken(event);
 		let sub = (await requireAuthVerified(event))?.sub || null;
 		if (!sub) sub = getJwtSubUnverified(event);
-		if (!bearer || !sub) return { statusCode: 401, body: 'Unauthorized' };
+		if (!bearer || !sub) {
+			console.log('[ebay-list-offers] Unauthorized');
+			return { statusCode: 401, body: 'Unauthorized' };
+		}
 		const saved = (await store.get(userScopedKey(sub, 'ebay.json'), { type: 'json' })) as any;
 		const refresh = saved?.refresh_token as string | undefined;
-		if (!refresh) return { statusCode: 400, body: JSON.stringify({ error: 'Connect eBay first' }) };
+		if (!refresh) {
+			console.log('[ebay-list-offers] No eBay refresh token');
+			return { statusCode: 400, body: JSON.stringify({ error: 'Connect eBay first' }) };
+		}
+		
+		console.log('[ebay-list-offers] Refreshing access token...');
 		const { access_token } = await accessTokenFromRefresh(refresh);
+		console.log('[ebay-list-offers] Access token refreshed in', Date.now() - startTime, 'ms');
 		const { apiHost } = tokenHosts(process.env.EBAY_ENV);
 		const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || 'EBAY_US';
 		const headers = {
@@ -114,17 +126,60 @@ export const handler: Handler = async (event) => {
 			.map((s) => s.trim())
 			.filter(Boolean);
 
+		console.log('[ebay-list-offers] Querying for statuses:', normalizedStatuses);
 
 		// Helper to read offers length safely
 		const getOffers = (body: any) => (Array.isArray(body?.offers) ? body.offers : []);
 
+		// For multiple statuses, try a single call first and filter client-side
+		// This is much faster than multiple API calls
+		if (normalizedStatuses.length > 0) {
+			console.log('[ebay-list-offers] Trying single call with client-side filtering...');
+			const r = await listOnce(false, true); // Get all offers, filter client-side
+			attempts.push(r);
+			
+			if (r.ok) {
+				const allOffers = getOffers(r.body);
+				console.log('[ebay-list-offers] Got', allOffers.length, 'total offers');
+				
+				// Filter client-side for requested statuses
+				const allowStatuses = normalizedStatuses.map(s => s.toUpperCase());
+				const filtered = allOffers.filter((o: any) => {
+					const st = String(o?.status || '').toUpperCase();
+					return allowStatuses.includes(st);
+				});
+				
+				console.log('[ebay-list-offers] Filtered to', filtered.length, 'offers matching', allowStatuses);
+				
+				if (filtered.length > 0) {
+					const elapsed = Date.now() - startTime;
+					console.log('[ebay-list-offers] Success in', elapsed, 'ms');
+					return {
+						statusCode: 200,
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ 
+							ok: true, 
+							total: filtered.length, 
+							offers: filtered.slice(0, limit),
+							attempts,
+							elapsed 
+						}),
+					};
+				}
+			}
+			
+			console.log('[ebay-list-offers] Client-side filtering returned no results, trying individual status queries...');
+		}
+
 		async function aggregateForStatuses(sts: string[], includeMarketplace: boolean) {
 			const agg: any[] = [];
 			for (const st of sts) {
+				console.log('[ebay-list-offers] Querying status:', st);
 				const r = await listOnce(true, includeMarketplace);
 				attempts.push(r);
 				if (!r.ok) continue;
 				const arr = getOffers(r.body);
+				console.log('[ebay-list-offers] Got', arr.length, 'offers for status:', st);
 				for (const o of arr) agg.push(o);
 			}
 			return agg;
@@ -277,9 +332,16 @@ export const handler: Handler = async (event) => {
 			body: JSON.stringify(meta),
 		};
 	} catch (e: any) {
+		const elapsed = Date.now() - startTime;
+		console.error('[ebay-list-offers] Error after', elapsed, 'ms:', e);
+		console.error('[ebay-list-offers] Stack:', e?.stack);
 		return {
 			statusCode: 500,
-			body: JSON.stringify({ error: 'list-offers error', detail: e?.message || String(e) }),
+			body: JSON.stringify({ 
+				error: 'list-offers error', 
+				detail: e?.message || String(e),
+				elapsed
+			}),
 		};
 	}
 };
