@@ -646,8 +646,9 @@
         
         // Transform pairs into products format expected by draft creation
         const products = pairs.map((pair, index) => {
-          const frontPath = buildDropboxUrl(currentFolder, pair.front);
-          const backPath = buildDropboxUrl(currentFolder, pair.back);
+          // Build full Dropbox share URLs (these will be converted to direct links by the backend)
+          const frontPath = `https://www.dropbox.com/home${currentFolder}/${pair.front}?dl=1`;
+          const backPath = `https://www.dropbox.com/home${currentFolder}/${pair.back}?dl=1`;
           
           // Generate a unique productId for each pair
           const productId = `pairing-v2-${Date.now()}-${index}`;
