@@ -664,7 +664,7 @@
         
         try {
           // Start background draft creation job
-          const token = await getAccessToken();
+          const token = await window.authClient.getToken();
           const bgResponse = await fetch('/.netlify/functions/smartdrafts-create-drafts-bg', {
             method: 'POST',
             headers: {
