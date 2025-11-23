@@ -129,6 +129,16 @@ export const handler: Handler = async (event) => {
     // Get scan job data
     const scanJob = await getScanJobData(userAuth.userId, scanJobId);
 
+    console.log("[pairing-v2-start-from-scan] Scan job data:", {
+      state: scanJob.state,
+      hasStagedUrls: !!scanJob.stagedUrls,
+      stagedUrlsCount: scanJob.stagedUrls?.length || 0,
+      hasFolder: !!scanJob.folder,
+      hasGroups: !!scanJob.groups,
+      groupsCount: scanJob.groups?.length || 0,
+      keys: Object.keys(scanJob),
+    });
+
     if (scanJob.state !== "complete") {
       return json(400, { error: `Scan job not complete (state: ${scanJob.state})` }, originHdr);
     }
