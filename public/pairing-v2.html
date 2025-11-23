@@ -547,6 +547,24 @@
         }
 
         resultsContainer.innerHTML = html;
+        
+        // Add Create Drafts button if we have pairs
+        if (pairs.length > 0) {
+          const btnContainer = document.createElement('div');
+          btnContainer.style.marginTop = '24px';
+          btnContainer.style.padding = '16px';
+          btnContainer.style.background = '#f9f9f9';
+          btnContainer.style.borderRadius = '8px';
+          btnContainer.innerHTML = `
+            <button id="btnCreateDrafts" style="width: 100%;">
+              Create ${pairs.length} Draft${pairs.length !== 1 ? 's' : ''} from Pairs
+            </button>
+            <div id="draftStatus" style="margin-top: 12px; display: none;"></div>
+          `;
+          resultsContainer.appendChild(btnContainer);
+          
+          document.getElementById('btnCreateDrafts').onclick = createDraftsFromPairs;
+        }
       }
 
       // Update UI based on status
@@ -612,6 +630,112 @@
 
       // Wire start button
       btnStart.addEventListener('click', handleStart);
+      
+      // Draft creation from pairs
+      async function createDraftsFromPairs() {
+        const btn = document.getElementById('btnCreateDrafts');
+        const draftStatus = document.getElementById('draftStatus');
+        
+        if (!jobStatusData || !jobStatusData.result || !jobStatusData.result.pairs) {
+          draftStatus.style.display = 'block';
+          draftStatus.innerHTML = '<p style="color: #d32f2f;">❌ No pairing results available</p>';
+          return;
+        }
+        
+        const pairs = jobStatusData.result.pairs;
+        
+        // Transform pairs into products format expected by draft creation
+        const products = pairs.map(pair => {
+          const frontPath = buildDropboxUrl(currentFolder, pair.front);
+          const backPath = buildDropboxUrl(currentFolder, pair.back);
+          
+          return {
+            images: [frontPath, backPath],
+            brand: pair.brand,
+            productName: pair.product,
+            // Additional metadata can be added here
+          };
+        });
+        
+        btn.disabled = true;
+        btn.textContent = 'Creating drafts...';
+        draftStatus.style.display = 'block';
+        draftStatus.innerHTML = '<p class="muted">🔄 Starting draft creation job...</p>';
+        
+        try {
+          // Start background draft creation job
+          const token = await getAccessToken();
+          const bgResponse = await fetch('/.netlify/functions/smartdrafts-create-drafts-bg', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ products })
+          });
+          
+          if (!bgResponse.ok) {
+            throw new Error(`Draft creation failed: ${bgResponse.status}`);
+          }
+          
+          const bgData = await bgResponse.json();
+          if (!bgData.ok || !bgData.jobId) {
+            throw new Error(bgData.error || 'Failed to start draft creation');
+          }
+          
+          const draftJobId = bgData.jobId;
+          console.log('[Pairing v2] Draft creation job started:', draftJobId);
+          
+          // Poll for draft creation completion
+          let attempts = 0;
+          const maxAttempts = 120; // 3 minutes max
+          
+          while (attempts++ < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            
+            const statusResponse = await fetch(
+              `/.netlify/functions/smartdrafts-create-drafts-status?jobId=${encodeURIComponent(draftJobId)}`,
+              {
+                headers: { 'Authorization': `Bearer ${token}` }
+              }
+            );
+            
+            if (!statusResponse.ok) {
+              throw new Error('Failed to get draft status');
+            }
+            
+            const statusData = await statusResponse.json();
+            const job = statusData.job || {};
+            const processed = job.processedProducts || 0;
+            const total = job.totalProducts || products.length;
+            
+            draftStatus.innerHTML = `<p class="muted">🔄 Creating drafts (${processed}/${total})...</p>`;
+            
+            if (job.state === 'completed') {
+              const drafts = job.drafts || [];
+              draftStatus.innerHTML = `
+                <p style="color: #388e3c; font-weight: 600;">✅ Successfully created ${drafts.length} draft${drafts.length !== 1 ? 's' : ''}!</p>
+                <p style="margin-top: 8px;"><a href="/drafts.html" style="color: #1976d2;">View Drafts →</a></p>
+              `;
+              btn.textContent = `✓ Created ${drafts.length} Draft${drafts.length !== 1 ? 's' : ''}`;
+              console.log('[Pairing v2] Draft creation completed:', drafts.length, 'drafts');
+              return;
+            }
+            
+            if (job.state === 'error') {
+              throw new Error(job.error || 'Draft creation failed');
+            }
+          }
+          
+          throw new Error('Draft creation timed out after 3 minutes');
+          
+        } catch (error) {
+          console.error('[Pairing v2] Draft creation error:', error);
+          draftStatus.innerHTML = `<p style="color: #d32f2f;">❌ ${error.message}</p>`;
+          btn.disabled = false;
+          btn.textContent = `Create ${products.length} Draft${products.length !== 1 ? 's' : ''} from Pairs`;
+        }
+      }
 
       // Initialize UI
       updateUI();
