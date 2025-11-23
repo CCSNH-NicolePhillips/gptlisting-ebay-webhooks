@@ -135,6 +135,51 @@ export function buildItemSpecifics(cat: CategoryDef, group: GroupRecord): Record
       console.log(`✓ ${aspectName} auto-filled with: "${defaultValue}"`);
     }
   }
+  
+  // Auto-fill REQUIRED aspects from category definition that are still missing
+  // This ensures eBay API doesn't reject due to missing required specifics
+  for (const specific of cat.itemSpecifics || []) {
+    if (specific.required && (!aspects[specific.name] || aspects[specific.name].length === 0 || !aspects[specific.name][0]?.trim())) {
+      // Provide intelligent defaults based on aspect name
+      let defaultValue = 'Does Not Apply';
+      
+      // Formulation is common for supplements/cosmetics
+      if (specific.name === 'Formulation') {
+        // Try to infer from product name
+        const productLower = (group.product || '').toLowerCase();
+        if (productLower.includes('capsule') || productLower.includes('cap')) {
+          defaultValue = 'Capsule';
+        } else if (productLower.includes('tablet') || productLower.includes('tab')) {
+          defaultValue = 'Tablet';
+        } else if (productLower.includes('powder')) {
+          defaultValue = 'Powder';
+        } else if (productLower.includes('liquid') || productLower.includes('oil')) {
+          defaultValue = 'Liquid';
+        } else if (productLower.includes('cream') || productLower.includes('lotion')) {
+          defaultValue = 'Cream';
+        } else if (productLower.includes('gel')) {
+          defaultValue = 'Gel';
+        } else {
+          defaultValue = 'Other';
+        }
+      }
+      // Main Purpose for supplements
+      else if (specific.name === 'Main Purpose') {
+        defaultValue = 'General Wellness';
+      }
+      // Features
+      else if (specific.name === 'Features') {
+        defaultValue = 'See Description';
+      }
+      // Active Ingredients
+      else if (specific.name === 'Active Ingredients') {
+        defaultValue = 'See Description';
+      }
+      
+      aspects[specific.name] = [defaultValue];
+      console.log(`✓ Required aspect "${specific.name}" auto-filled with: "${defaultValue}"`);
+    }
+  }
 
   return aspects;
 }
