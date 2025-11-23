@@ -243,25 +243,26 @@ export const handler: Handler = async (event) => {
           backDisplayUrl: pair.backUrl,
         }));
 
-        // Trigger draft creation background job (fire-and-forget for now - we'll poll it)
+        // Trigger draft creation background job directly (service-to-service call)
         const baseUrl = process.env.APP_URL || 'https://ebaywebhooks.netlify.app';
-        const draftBgUrl = `${baseUrl}/.netlify/functions/smartdrafts-create-drafts-bg`;
+        const draftBgUrl = `${baseUrl}/.netlify/functions/smartdrafts-create-drafts-background`;
+        
+        // Generate job ID for draft creation
+        const draftJobId = `draft-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         
         const draftResponse = await fetch(draftBgUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ products }),
+          body: JSON.stringify({ 
+            jobId: draftJobId,
+            userId: job.userId,
+            products 
+          }),
         });
 
         if (!draftResponse.ok) {
-          throw new Error(`Failed to start draft creation: ${draftResponse.status}`);
-        }
-
-        const draftJob = await draftResponse.json();
-        const draftJobId = draftJob.jobId;
-
-        if (!draftJobId) {
-          throw new Error('Draft creation job ID not returned');
+          const errorText = await draftResponse.text();
+          throw new Error(`Failed to start draft creation: ${draftResponse.status} - ${errorText}`);
         }
 
         console.log(`[quick-list-processor] Draft creation job started: ${draftJobId}`);
