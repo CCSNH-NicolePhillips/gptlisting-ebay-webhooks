@@ -192,6 +192,7 @@ export const handler: Handler = async (event) => {
           confidence: p.confidence,
           brand: p.brand,
           product: p.product,
+          title: p.title, // Book title (null for products)
         }));
 
         const basenameSingletons = result.unpaired.map(u => ({
