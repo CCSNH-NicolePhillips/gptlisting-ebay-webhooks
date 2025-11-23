@@ -417,6 +417,11 @@ async function createDraftForProduct(product: PairedProduct, retryAttempt: numbe
   const startTime = Date.now();
   const retryLabel = retryAttempt > 0 ? ` (retry ${retryAttempt})` : '';
   console.log(`[Draft] Creating for: ${product.productId}${retryLabel}`);
+  console.log(`[Draft] Product data:`, JSON.stringify({ 
+    brand: product.brand, 
+    product: product.product, 
+    title: product.title 
+  }));
   
   const catListStart = Date.now();
   const relevantCategories = await getRelevantCategories(product);
@@ -429,6 +434,7 @@ async function createDraftForProduct(product: PairedProduct, retryAttempt: numbe
   
   const prompt = buildPrompt(product, categoryHint, relevantCategories);
   console.log(`[Draft] Prompt length: ${prompt.length} chars`);
+  console.log(`[Draft] Prompt preview:`, prompt.slice(0, 500));
   
   const gptStart = Date.now();
   const responseText = await callOpenAI(prompt);
