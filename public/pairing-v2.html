@@ -645,11 +645,15 @@
         const pairs = jobStatusData.result.pairs;
         
         // Transform pairs into products format expected by draft creation
-        const products = pairs.map(pair => {
+        const products = pairs.map((pair, index) => {
           const frontPath = buildDropboxUrl(currentFolder, pair.front);
           const backPath = buildDropboxUrl(currentFolder, pair.back);
           
+          // Generate a unique productId for each pair
+          const productId = `pairing-v2-${Date.now()}-${index}`;
+          
           return {
+            productId,
             images: [frontPath, backPath],
             brand: pair.brand || pair.title || null,  // Use title as fallback for books
             productName: pair.product,
