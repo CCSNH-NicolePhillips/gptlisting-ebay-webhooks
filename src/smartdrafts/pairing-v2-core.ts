@@ -444,26 +444,35 @@ Your job is to VERIFY each pair independently.
 
 For each pair, you must:
 1. Check if the front metadata matches the back metadata
-2. Verify brand names match (case-insensitive)
-3. Verify product names match
+2. Verify brand names match (case-insensitive) - REQUIRED for both sides
+3. Verify product names match OR one side is null (acceptable for books/products where back doesn't show product name)
 4. Verify package types match
 5. Check that front is actually a "front" panel
 6. Check that back is actually a "back" or "side" panel
 7. Verify confidence scores are reasonable (>= 0.5)
 
-VERIFICATION RULES (STRICT):
-- status: "accepted" ONLY if ALL checks pass
-- status: "rejected" if ANY check fails, with specific issues listed
+VERIFICATION RULES:
+- status: "accepted" if brand matches AND (productName matches OR one is null) AND packageType matches AND panels are correct
+- status: "rejected" if ANY critical check fails, with specific issues listed
+
+Critical checks (MUST pass):
+- Brand names must match (case-insensitive)
+- Package types must match (bottle/jar/box/book/etc)
+- Front must be "front" panel
+- Back must be "back" or "side" panel
+- Confidence >= 0.5 on both sides
+
+Flexible checks (one can be null):
+- Product name: Accept if both match OR if one side is null (common for backs/books)
 
 Common reasons to reject:
 - Brand mismatch (different brands)
-- Product name mismatch (different products)
-- Package type mismatch (bottle vs jar vs tub)
+- Package type mismatch (bottle vs jar vs book)
 - Panel type wrong (front paired with front, or back with non-back/side)
 - Low confidence (< 0.5 on either side)
-- Null brand/product on both sides (too uncertain)
+- Null brand on both sides (too uncertain)
 
-Be CONSERVATIVE: When in doubt, reject with clear issues.
+Be REASONABLE: If brand and packageType match, accept even if productName is null on one side.
 
 OUTPUT FORMAT:
 Respond ONLY with valid JSON:
