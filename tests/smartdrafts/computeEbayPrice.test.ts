@@ -19,9 +19,8 @@ describe('computeEbayPrice', () => {
       cappedBase = Math.min(base, 25);
     }
     
-    // Apply formula: 10% off retail + extra $5 off if over $30
-    let price = cappedBase * 0.9;
-    if (cappedBase > 30) price -= 5;
+    // Apply 10% discount for competitive new item pricing
+    const price = cappedBase * 0.9;
     
     return Math.round(price * 100) / 100;
   };
@@ -30,27 +29,27 @@ describe('computeEbayPrice', () => {
     test('should cap books at $35', () => {
       const price = computeEbayPrice(50, 'Books > Fiction');
       
-      // $50 → $35 cap → $31.50 (10% off) → $26.50 ($5 off since >$30)
-      expect(price).toBe(26.50);
+      // $50 → $35 cap → $31.50 (10% off)
+      expect(price).toBe(31.50);
     });
 
     test('should cap books (lowercase) at $35', () => {
       const price = computeEbayPrice(100, 'books');
       
-      expect(price).toBe(26.50);
+      expect(price).toBe(31.50);
     });
 
     test('should not cap books under $35', () => {
       const price = computeEbayPrice(20, 'Books');
       
-      // $20 → $18 (10% off) → $18 (no extra $5 since <$30)
+      // $20 → $18 (10% off)
       expect(price).toBe(18);
     });
 
     test('should cap DVDs at $25', () => {
       const price = computeEbayPrice(40, 'DVDs & Movies');
       
-      // $40 → $25 cap → $22.50 (10% off) → $22.50 (no extra $5 since <$30 after cap)
+      // $40 → $25 cap → $22.50 (10% off)
       expect(price).toBe(22.50);
     });
 
@@ -69,8 +68,8 @@ describe('computeEbayPrice', () => {
     test('should not apply caps to other categories', () => {
       const price = computeEbayPrice(100, 'Health & Beauty');
       
-      // $100 → $90 (10% off) → $85 ($5 off since >$30)
-      expect(price).toBe(85);
+      // $100 → $90 (10% off)
+      expect(price).toBe(90);
     });
   });
 
@@ -82,32 +81,32 @@ describe('computeEbayPrice', () => {
       expect(price).toBe(18);
     });
 
-    test('should apply 10% discount + $5 for prices over $30', () => {
+    test('should apply 10% discount for higher prices', () => {
       const price = computeEbayPrice(50, 'Supplements');
       
-      // $50 * 0.9 = $45, then -$5 = $40
-      expect(price).toBe(40);
+      // $50 * 0.9 = $45
+      expect(price).toBe(45);
     });
 
-    test('should NOT apply extra $5 discount for prices at $30', () => {
+    test('should apply 10% discount at $30', () => {
       const price = computeEbayPrice(30, 'Health');
       
-      // $30 * 0.9 = $27, no -$5 since not >$30
+      // $30 * 0.9 = $27
       expect(price).toBe(27);
     });
 
-    test('should NOT apply extra $5 discount for prices under $30', () => {
+    test('should apply 10% discount for prices under $30', () => {
       const price = computeEbayPrice(25, 'Beauty');
       
       // $25 * 0.9 = $22.50
       expect(price).toBe(22.50);
     });
 
-    test('should apply extra $5 discount for prices just over $30', () => {
-      const price = computeEbayPrice(31, 'Other');
+    test('should apply 10% discount for $39.95 items', () => {
+      const price = computeEbayPrice(39.95, 'Supplements');
       
-      // $31 * 0.9 = $27.90, then -$5 = $22.90
-      expect(price).toBe(22.90);
+      // $39.95 * 0.9 = $35.955 → $35.96
+      expect(price).toBe(35.96);
     });
   });
 
@@ -115,8 +114,8 @@ describe('computeEbayPrice', () => {
     test('should round to 2 decimal places', () => {
       const price = computeEbayPrice(33.33, 'Health');
       
-      // $33.33 * 0.9 = $29.997, then -$5 = $24.997 → $25.00
-      expect(price).toBe(25);
+      // $33.33 * 0.9 = $29.997 → $30.00
+      expect(price).toBe(30);
     });
 
     test('should handle prices that result in .99 cents', () => {
@@ -182,15 +181,15 @@ describe('computeEbayPrice', () => {
       // User has expensive collectible book listed at $150 on Amazon
       const price = computeEbayPrice(150, 'Books > Collectibles');
       
-      // Should cap at $35, then discount: $35 * 0.9 - $5 = $26.50
-      expect(price).toBe(26.50);
+      // Should cap at $35, then discount: $35 * 0.9 = $31.50
+      expect(price).toBe(31.50);
     });
 
     test('supplement with normal price', () => {
       const price = computeEbayPrice(39.99, 'Vitamins & Dietary Supplements');
       
-      // $39.99 * 0.9 = $35.991, then -$5 = $30.991 → $30.99
-      expect(price).toBe(30.99);
+      // $39.99 * 0.9 = $35.991 → $35.99
+      expect(price).toBe(35.99);
     });
 
     test('cheap item under $10', () => {
@@ -210,16 +209,16 @@ describe('computeEbayPrice', () => {
     test('high-end skincare at $200', () => {
       const price = computeEbayPrice(200, 'Health & Beauty > Skin Care');
       
-      // No cap: $200 * 0.9 = $180, then -$5 = $175
-      expect(price).toBe(175);
+      // No cap: $200 * 0.9 = $180
+      expect(price).toBe(180);
     });
   });
 
   describe('Category path variations', () => {
     test('should match "book" in various positions', () => {
-      expect(computeEbayPrice(50, 'Textbooks')).toBe(26.50);
-      expect(computeEbayPrice(50, 'eBooks & Audiobooks')).toBe(26.50);
-      expect(computeEbayPrice(50, 'Comic Books')).toBe(26.50);
+      expect(computeEbayPrice(50, 'Textbooks')).toBe(31.50);
+      expect(computeEbayPrice(50, 'eBooks & Audiobooks')).toBe(31.50);
+      expect(computeEbayPrice(50, 'Comic Books')).toBe(31.50);
     });
 
     test('should match DVD/movie/music case-insensitively', () => {
@@ -235,7 +234,7 @@ describe('computeEbayPrice', () => {
       const price = computeEbayPrice(50, 'Bookmarks & Stationery');
       
       // Will be capped (false positive, but acceptable)
-      expect(price).toBe(26.50);
+      expect(price).toBe(31.50);
     });
   });
 });

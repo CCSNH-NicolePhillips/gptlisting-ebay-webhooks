@@ -86,6 +86,7 @@ function timeoutPromise<T>(promise: Promise<T>, ms: number): Promise<T> {
 
 /**
  * Compute eBay price with category-specific caps and discount formula
+ * Simple 10% discount off retail for competitive new item pricing
  */
 function computeEbayPrice(retailPrice: number, categoryPath: string): number {
   if (!retailPrice || retailPrice <= 0) return 0;
@@ -93,20 +94,15 @@ function computeEbayPrice(retailPrice: number, categoryPath: string): number {
   const lowerCat = categoryPath.toLowerCase();
   let cappedPrice = retailPrice;
   
-  // Apply category-specific caps
+  // Apply category-specific caps for items that tend to have inflated MSRPs
   if (lowerCat.includes('book')) {
     cappedPrice = Math.min(retailPrice, 35);
   } else if (lowerCat.includes('dvd') || lowerCat.includes('media') || lowerCat.includes('cd')) {
     cappedPrice = Math.min(retailPrice, 25);
   }
   
-  // Apply 10% discount
-  let price = cappedPrice * 0.9;
-  
-  // Add $5 if over $30
-  if (price > 30) {
-    price += 5;
-  }
+  // Apply 10% discount for competitive new item pricing
+  const price = cappedPrice * 0.9;
   
   return Math.round(price * 100) / 100;
 }
