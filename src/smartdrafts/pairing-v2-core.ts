@@ -131,8 +131,14 @@ Your ONLY job is to CLASSIFY each image. Do NOT attempt to pair images.
 For each image, provide:
 1. kind: "product" if it's consumer product packaging, "non_product" if not
 2. panel: "front", "back", "side", or "unknown"
-3. brand: the brand name (or null if unreadable)
-4. productName: the product name (or null if unreadable)
+3. brand: 
+   - For packaging: the brand name (e.g., "Root", "Jocko")
+   - For books: the book title (e.g., "Harry Potter and the Sorcerer's Stone")
+   - null if unreadable
+4. productName: 
+   - For packaging: the product name (e.g., "Clean Slate", "Fish Oil")
+   - For books: the author name (e.g., "J.K. Rowling")
+   - null if unreadable
 5. packageType: bottle/jar/tub/pouch/box/sachet/book/unknown
 6. keyText: array of 3-5 short readable text snippets from the label
 7. colorSignature: array of dominant colors (e.g., ["green", "black", "bright green gradient"])
@@ -143,8 +149,12 @@ For each image, provide:
 DEFINITIONS:
 - PRODUCT: Clear consumer product packaging (supplement, cosmetic, food, book, etc.)
 - NON_PRODUCT: Not packaging at all (purse, furniture, room, person, pet, random object)
-- FRONT panel: Shows brand + product name prominently, marketing-facing
-- BACK panel: Shows Supplement/Nutrition Facts, ingredients, barcode, warnings
+- FRONT panel: 
+  - For packaging: Shows brand + product name prominently, marketing-facing
+  - For books: Front cover with title and author
+- BACK panel: 
+  - For packaging: Shows Supplement/Nutrition Facts, ingredients, barcode, warnings
+  - For books: Back cover with description, ISBN, barcode
 - SIDE panel: Additional information, not clearly front or back
 
 CRITICAL CROSS-IMAGE INFERENCE RULE:
