@@ -34,6 +34,12 @@ function generateSku(group: Record<string, any>): string {
 }
 
 function buildTitle(group: Record<string, any>): string {
+  // Prefer GPT-generated title if available (for books and products with custom titles)
+  if (group?.title && typeof group.title === "string" && group.title.trim()) {
+    return group.title.trim().slice(0, MAX_TITLE_LENGTH);
+  }
+  
+  // Fallback: build from brand, product, variant, size
   const parts = [group?.brand, group?.product, group?.variant, group?.size]
     .filter((part) => typeof part === "string" && part.trim())
     .map((part) => part.trim());
