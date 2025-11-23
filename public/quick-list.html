@@ -944,58 +944,61 @@
           throw new Error('Scan timeout after 5 minutes');
         }
 
-        // Step 2: Pair using pairing-v2 system
+        // Step 2 & 3: Pairing + Draft Creation (all-in-one pipeline)
         updateStep(2, 'active');
         $('status2').innerHTML = '<span class="spinner"></span>Starting pairing...';
         
-        // For pairing-v2, we need to pass the scan jobId which contains the image data
-        const pairStartRes = await fetchJSON('/.netlify/functions/smartdrafts-pairing-v2-start-from-scan', {
+        // Start the combined pipeline job
+        const pipelineRes = await fetchJSON('/.netlify/functions/smartdrafts-quick-list-pipeline', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
-            scanJobId: currentJobId, // Pass the scan job ID
-            uploadMethod: uploadMethod // 'local' or 'dropbox'
+            scanJobId: currentJobId
           })
         });
 
-        if (!pairStartRes.ok || !pairStartRes.jobId) {
-          throw new Error(pairStartRes.error || 'Failed to start pairing job');
+        if (!pipelineRes.ok || !pipelineRes.jobId) {
+          throw new Error(pipelineRes.error || 'Failed to start pipeline');
         }
 
-        const pairingJobId = pairStartRes.jobId;
-        console.log('[Quick List] Pairing-v2 job started:', pairingJobId);
+        const pipelineJobId = pipelineRes.jobId;
+        console.log('[Quick List] Pipeline job started:', pipelineJobId);
 
-        // Poll for pairing completion
-        let pairingComplete = false;
-        let pairAttempts = 0;
-        const maxPairAttempts = 240; // 6 minutes max (pairing-v2 has 3 stages: classify, pair, verify)
-        let products = [];
+        // Poll for pipeline completion (max 8 minutes for pairing + draft creation)
+        let pipelineComplete = false;
+        let pipelineAttempts = 0;
+        const maxPipelineAttempts = 320; // 8 minutes max
+        let drafts = [];
         let unpaired = [];
+        let products = [];
 
-        while (!pairingComplete && pairAttempts < maxPairAttempts) {
+        while (!pipelineComplete && pipelineAttempts < maxPipelineAttempts) {
           await new Promise(resolve => setTimeout(resolve, 1500));
-          pairAttempts++;
+          pipelineAttempts++;
 
-          const statusRes = await fetchJSON(`/.netlify/functions/smartdrafts-pairing-v2-status?jobId=${pairingJobId}`);
+          const statusRes = await fetchJSON(`/.netlify/functions/smartdrafts-quick-list-pipeline?jobId=${pipelineJobId}`);
 
           if (statusRes.status === 'completed') {
-            pairingComplete = true;
+            pipelineComplete = true;
             
-            // Extract products from pairing results
-            const pairs = statusRes.result?.pairs || [];
-            unpaired = statusRes.result?.unpaired || [];
+            // Extract results
+            const pairingResult = statusRes.pairingResult || {};
+            const pairs = pairingResult.pairs || [];
+            unpaired = pairingResult.unpaired || [];
+            drafts = statusRes.drafts || [];
             
-            // Convert pairs to products format expected by create-drafts
+            // Build products array from pairs for eBay publishing
             products = pairs.map((pair, index) => ({
               productId: `product-${index + 1}`,
               brand: pair.brand || null,
               title: pair.title || null,
               product: pair.product || null,
-              heroDisplayUrl: pair.frontUrl || '',
-              backDisplayUrl: pair.backUrl || ''
+              heroDisplayUrl: pair.frontUrl,
+              backDisplayUrl: pair.backUrl
             }));
-
-            $('totalPaired').textContent = products.length;
+            
+            $('totalPaired').textContent = pairs.length;
+            $('totalDrafts').textContent = drafts.length;
 
             // Show orphans warning if any images couldn't be paired
             if (unpaired.length > 0) {
@@ -1004,77 +1007,36 @@
               console.log(`[Quick List] ${unpaired.length} unpaired images`);
             }
 
-            console.log('[Quick List] Pairing-v2 complete:', products.length, 'products');
-          } else if (statusRes.status === 'failed') {
-            throw new Error(statusRes.error || 'Pairing failed');
-          } else {
-            const progress = Math.min(95, Math.round((pairAttempts / maxPairAttempts) * 100));
-            $('status2').innerHTML = `<span class="spinner"></span>Pairing images... ${progress}%`;
-          }
-        }
-
-        if (!pairingComplete) {
-          throw new Error('Pairing timeout after 6 minutes');
-        }
-
-        // Allow partial success - only fail if NO products paired AND no drafts can be created
-        if (products.length === 0) {
-          updateStep(2, 'warning');
-          $('status2').innerHTML = '⚠️ No products could be paired automatically';
-          throw new Error(`No products were paired from ${unpaired.length} image(s). Please review the images and try pairing manually.`);
-        }
-
-        updateStep(2, 'complete');
-
-        // Step 3: Create Drafts (using background job)
-        updateStep(3, 'active');
-        $('status3').innerHTML = `<span class="spinner"></span>Starting draft creation...`;
-
-        // Start background job
-        const draftBgRes = await fetchJSON('/.netlify/functions/smartdrafts-create-drafts-bg', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ products })
-        });
-
-        if (!draftBgRes.ok || !draftBgRes.jobId) {
-          throw new Error(draftBgRes.error || 'Failed to start draft creation job');
-        }
-
-        const draftJobId = draftBgRes.jobId;
-        console.log('[Quick List] Draft creation job started:', draftJobId);
-
-        // Poll for completion (max 120 attempts = 3 minutes)
-        let draftAttempts = 0;
-        let drafts = [];
-        while (draftAttempts++ < 120) {
-          await new Promise(resolve => setTimeout(resolve, 1500));
-
-          const statusRes = await fetchJSON(`/.netlify/functions/smartdrafts-create-drafts-status?jobId=${encodeURIComponent(draftJobId)}`);
-
-          if (!statusRes.ok) {
-            throw new Error(statusRes.error || 'Failed to get draft creation status');
-          }
-
-          const job = statusRes.job || {};
-          const processed = job.processedProducts || 0;
-          const total = job.totalProducts || products.length;
-
-          $('status3').innerHTML = `<span class="spinner"></span>Creating drafts (${processed}/${total})...`;
-
-          if (job.state === 'completed') {
-            drafts = job.drafts || [];
+            console.log('[Quick List] Pipeline complete:', pairs.length, 'pairs,', drafts.length, 'drafts');
+            updateStep(2, 'complete');
             updateStep(3, 'complete');
-            $('totalDrafts').textContent = drafts.length;
-            console.log('[Quick List] Draft creation completed:', drafts.length, 'drafts');
-            break;
-          } else if (job.state === 'error') {
-            throw new Error(job.error || 'Draft creation failed');
+          } else if (statusRes.status === 'failed') {
+            throw new Error(statusRes.error || 'Pipeline failed');
+          } else if (statusRes.status === 'pairing') {
+            const progress = Math.min(50, Math.round((pipelineAttempts / maxPipelineAttempts) * 100));
+            $('status2').innerHTML = `<span class="spinner"></span>Pairing images... ${progress}%`;
+          } else if (statusRes.status === 'creating-drafts') {
+            updateStep(2, 'complete');
+            updateStep(3, 'active');
+            const progress = 50 + Math.min(45, Math.round((pipelineAttempts / maxPipelineAttempts) * 50));
+            $('status3').innerHTML = `<span class="spinner"></span>Creating drafts... ${progress}%`;
+          } else {
+            // pending status
+            const progress = Math.min(95, Math.round((pipelineAttempts / maxPipelineAttempts) * 100));
+            $('status2').innerHTML = `<span class="spinner"></span>Starting... ${progress}%`;
           }
         }
 
-        if (draftAttempts >= 120) {
-          throw new Error('Draft creation timed out after 3 minutes');
+        if (!pipelineComplete) {
+          throw new Error('Pipeline timeout after 8 minutes');
+        }
+
+        // Allow partial success - only fail if NO drafts created
+        if (drafts.length === 0) {
+          updateStep(2, 'warning');
+          updateStep(3, 'warning');
+          $('status3').innerHTML = '⚠️ No drafts could be created';
+          throw new Error(`No drafts were created from ${unpaired.length} image(s). Please review the images and try again.`);
         }
 
         console.log('[Quick List] Drafts received:', JSON.stringify(drafts, null, 2));
