@@ -6,7 +6,12 @@ function toNumber(value: unknown): number | null {
   return +num.toFixed(2);
 }
 
-function extractFromJsonLd($: cheerio.CheerioAPI): number | null {
+type ExtractedData = {
+  price: number | null;
+  productType?: string;
+};
+
+function extractFromJsonLd($: cheerio.CheerioAPI): ExtractedData {
   const scripts = $('script[type="application/ld+json"]').toArray();
   for (const node of scripts) {
     try {
@@ -18,6 +23,27 @@ function extractFromJsonLd($: cheerio.CheerioAPI): number | null {
         if (!item || typeof item !== "object") continue;
         const type = String((item as any)["@type"] || "").toLowerCase();
         if (!type.includes("product")) continue;
+        
+        // Extract category/type information
+        let productType: string | undefined;
+        const category = (item as any).category;
+        if (category && typeof category === "string") {
+          productType = category;
+        } else if (Array.isArray(category) && category.length > 0) {
+          productType = String(category[0]);
+        }
+        // Also try breadcrumb for category
+        if (!productType) {
+          const breadcrumb = (item as any).breadcrumb || (item as any)["@graph"]?.find((g: any) => g["@type"] === "BreadcrumbList");
+          if (breadcrumb?.itemListElement) {
+            const items = breadcrumb.itemListElement;
+            const lastCrumb = Array.isArray(items) ? items[items.length - 1] : null;
+            if (lastCrumb?.name) {
+              productType = String(lastCrumb.name);
+            }
+          }
+        }
+        
         const offers = (item as any).offers;
         if (!offers) continue;
         const offer = Array.isArray(offers) ? offers[0] : offers;
@@ -26,13 +52,13 @@ function extractFromJsonLd($: cheerio.CheerioAPI): number | null {
           toNumber((offer as any).price) ??
           toNumber((offer as any).priceSpecification?.price) ??
           toNumber((offer as any).lowPrice);
-        if (priceFromOffer) return priceFromOffer;
+        if (priceFromOffer) return { price: priceFromOffer, productType };
       }
     } catch {
       // ignore invalid JSON blobs
     }
   }
-  return null;
+  return { price: null };
 }
 
 function extractFromOpenGraph($: cheerio.CheerioAPI): number | null {
@@ -56,8 +82,21 @@ function extractFromBody($: cheerio.CheerioAPI): number | null {
 export function extractPriceFromHtml(html: string): number | null {
   try {
     const $ = cheerio.load(html);
-    return extractFromJsonLd($) ?? extractFromOpenGraph($) ?? extractFromBody($);
+    const data = extractFromJsonLd($);
+    return data.price ?? extractFromOpenGraph($) ?? extractFromBody($);
   } catch {
     return null;
+  }
+}
+
+export function extractPriceAndTypeFromHtml(html: string): ExtractedData {
+  try {
+    const $ = cheerio.load(html);
+    const data = extractFromJsonLd($);
+    if (data.price) return data;
+    const price = extractFromOpenGraph($) ?? extractFromBody($);
+    return { price };
+  } catch {
+    return { price: null };
   }
 }

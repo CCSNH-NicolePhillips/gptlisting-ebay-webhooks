@@ -1,4 +1,4 @@
-import { extractPriceFromHtml } from "./html-price.js";
+import { extractPriceFromHtml, extractPriceAndTypeFromHtml } from "./html-price.js";
 import { braveFirstUrl, serpFirstUrl } from "./search.js";
 import { getBrandUrls } from "./brand-map.js";
 import { getCachedPrice, setCachedPrice, makePriceSig } from "./price-cache.js";
@@ -8,6 +8,7 @@ export type MarketPrices = {
   walmart: number | null;
   brand: number | null;
   avg: number;
+  productType?: string; // Product type/category extracted from Amazon/Walmart
 };
 
 async function fetchHtml(url: string | null | undefined, timeoutMs = 10000): Promise<string | null> {
@@ -35,6 +36,12 @@ async function priceFrom(url: string | null | undefined): Promise<number | null>
   const html = await fetchHtml(url);
   if (!html) return null;
   return extractPriceFromHtml(html);
+}
+
+async function priceAndTypeFrom(url: string | null | undefined): Promise<{ price: number | null; productType?: string }> {
+  const html = await fetchHtml(url);
+  if (!html) return { price: null };
+  return extractPriceAndTypeFromHtml(html);
 }
 
 function toMarketPrices(raw: Record<string, any> | null | undefined): MarketPrices | null {
@@ -93,11 +100,18 @@ export async function lookupMarketPrice(
   let amazon: number | null = null;
   let walmart: number | null = null;
   let brandPrice: number | null = null;
+  let productType: string | undefined;
 
   const mapped = await getBrandUrls(signature);
   if (mapped) {
-    amazon = await priceFrom(mapped.amazon);
-    walmart = await priceFrom(mapped.walmart);
+    const amazonData = await priceAndTypeFrom(mapped.amazon);
+    amazon = amazonData.price;
+    if (!productType && amazonData.productType) productType = amazonData.productType;
+    
+    const walmartData = await priceAndTypeFrom(mapped.walmart);
+    walmart = walmartData.price;
+    if (!productType && walmartData.productType) productType = walmartData.productType;
+    
     brandPrice = await priceFrom(mapped.brand);
   }
 
@@ -107,19 +121,29 @@ export async function lookupMarketPrice(
   if (query) {
     if (amazon == null) {
       const braveAmazonUrl = await braveFirstUrl(query, "amazon.com");
-      amazon = await priceFrom(braveAmazonUrl);
+      const amazonData = await priceAndTypeFrom(braveAmazonUrl);
+      amazon = amazonData.price;
+      if (!productType && amazonData.productType) productType = amazonData.productType;
+      
       if (amazon == null) {
         const serpAmazonUrl = await serpFirstUrl(query, "amazon.com");
-        amazon = await priceFrom(serpAmazonUrl);
+        const amazonData2 = await priceAndTypeFrom(serpAmazonUrl);
+        amazon = amazonData2.price;
+        if (!productType && amazonData2.productType) productType = amazonData2.productType;
       }
     }
 
     if (walmart == null) {
       const braveWalmartUrl = await braveFirstUrl(query, "walmart.com");
-      walmart = await priceFrom(braveWalmartUrl);
+      const walmartData = await priceAndTypeFrom(braveWalmartUrl);
+      walmart = walmartData.price;
+      if (!productType && walmartData.productType) productType = walmartData.productType;
+      
       if (walmart == null) {
         const serpWalmartUrl = await serpFirstUrl(query, "walmart.com");
-        walmart = await priceFrom(serpWalmartUrl);
+        const walmartData2 = await priceAndTypeFrom(serpWalmartUrl);
+        walmart = walmartData2.price;
+        if (!productType && walmartData2.productType) productType = walmartData2.productType;
       }
     }
 
@@ -142,6 +166,7 @@ export async function lookupMarketPrice(
     walmart,
     brand: brandPrice,
     avg,
+    productType,
   };
 
   await setCachedPrice(signature, result);

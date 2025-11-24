@@ -148,7 +148,7 @@ async function callOpenAI(prompt: string): Promise<string> {
   throw new Error(message);
 }
 
-async function getRelevantCategories(product: PairedProduct): Promise<string> {
+async function getRelevantCategories(product: PairedProduct, marketplaceProductType?: string): Promise<string> {
   try {
     // Use cached categories to avoid repeated Redis calls (15+ seconds each!)
     // Ensure only ONE concurrent load happens even when multiple products start simultaneously
@@ -182,10 +182,14 @@ async function getRelevantCategories(product: PairedProduct): Promise<string> {
     const productName = (product.product || '').toLowerCase();
     const brandName = (product.brand || '').toLowerCase();
     
-    // Detect product type from keywords in product name AND brand name
-    // Check brand for supplement/skincare brands that don't have descriptive product names
+    // Detect product type - PREFER marketplace type from Amazon/Walmart (most reliable)
+    // Then fallback to keyword detection from product names
     let productType = '';
-    if (isBook) {
+    if (marketplaceProductType) {
+      // Use marketplace-detected type (from Amazon/Walmart JSON-LD)
+      productType = marketplaceProductType.toLowerCase();
+      console.log(`[Category] Using marketplace product type: "${productType}"`);
+    } else if (isBook) {
       productType = 'book';
     } else if (productName.includes('vitamin') || productName.includes('supplement') || productName.includes('capsule') || productName.includes('pill')) {
       productType = 'vitamin supplement';
@@ -528,13 +532,20 @@ async function createDraftForProduct(product: PairedProduct, retryAttempt: numbe
     title: product.title 
   }));
   
-  // Fetch competitor prices BEFORE calling GPT
+  // Fetch competitor prices BEFORE calling GPT - also extracts product type from Amazon/Walmart
   let competitorPrices: { amazon: number | null; walmart: number | null; brand: number | null; avg: number } | undefined;
+  let marketplaceProductType: string | undefined;
   try {
     const priceStart = Date.now();
     console.log(`[Draft] Looking up market prices for: ${product.brand} ${product.product} ${product.variant || ''}`);
     const prices = await lookupMarketPrice(product.brand, product.product, product.variant);
     console.log(`[Draft] Price lookup took ${Date.now() - priceStart}ms:`, JSON.stringify(prices));
+    
+    // Extract product type from marketplace data (most reliable source)
+    if (prices.productType) {
+      marketplaceProductType = prices.productType;
+      console.log(`[Draft] ✓ Detected product type from marketplace: "${marketplaceProductType}"`);
+    }
     
     // Only pass prices to GPT if we found at least one
     if (prices.amazon || prices.walmart || prices.brand) {
@@ -549,7 +560,7 @@ async function createDraftForProduct(product: PairedProduct, retryAttempt: numbe
   }
   
   const catListStart = Date.now();
-  const relevantCategories = await getRelevantCategories(product);
+  const relevantCategories = await getRelevantCategories(product, marketplaceProductType);
   console.log(`[Draft] Category list generation took ${Date.now() - catListStart}ms`);
   console.log(`[Draft] Category list preview:\n${relevantCategories.slice(0, 500)}...`);
   
