@@ -119,7 +119,7 @@ async function callOpenAI(prompt: string): Promise<string> {
                 "- description: 2-4 sentences with SPECIFIC details from the label. Include ingredients, dosages, benefits. NO vague marketing language.\n" +
                 "- bullets: array of 3-5 specific feature/benefit points with numbers and details.\n" +
                 "- aspects: object with Brand, Type, Features, Size, Active Ingredients, Formulation, etc. Be SPECIFIC.\n" +
-                "- price: IMPORTANT - Search Amazon.com and Walmart.com for the CURRENT regular selling price (not sale/clearance prices). For books, use the new hardcover/paperback price from Amazon. Return ONLY the number (e.g. 24.99). If product not found, estimate based on similar items.\n" +
+                "- price: CRITICAL - Search Amazon.com for 'Typical Price' or 'List Price' (NOT Black Friday/sale prices, NOT third-party marketplace sellers). Use Amazon's direct price or manufacturer MSRP only. For books, use new hardcover/paperback publisher price (NOT collectible/rare editions). Match EXACT size/variant in photos (30-day vs 90-day supply, 8oz vs 16oz). If you see prices over $50 for common supplements/books, you're looking at wrong variant or marketplace pricing. Return ONLY the number (e.g. 24.99).\n" +
                 "- condition: one of 'NEW', 'LIKE_NEW', 'USED_EXCELLENT', 'USED_GOOD', 'USED_ACCEPTABLE'. Assume NEW unless description indicates otherwise.\n",
             },
             { role: "user", content: prompt },
