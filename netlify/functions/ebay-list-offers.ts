@@ -131,12 +131,20 @@ export const handler: Handler = async (event) => {
 			const agg: any[] = [];
 			let pageOffset = 0;
 			const pageLimit = Math.min(Math.max(limit, 20), 200);
+			const fallbackStart = Date.now();
+			const HARD_LIMIT_MS = 7000; // 7 seconds - prevent Netlify timeout
+			
 			// Build an allow-list of statuses if provided (supports comma-separated)
 			const allowStatuses = String(status || '')
 				.split(',')
 				.map((s) => s.trim().toUpperCase())
 				.filter(Boolean);
 			for (let pages = 0; pages < 10; pages++) {
+				// Check timeout before each iteration
+				if (Date.now() - fallbackStart > HARD_LIMIT_MS) {
+					console.warn('[ebay-list-offers] Soft timeout at 7s — returning partial results');
+					break;
+				}
 				// cap pages to avoid runaway
 				const invParams = new URLSearchParams({
 					limit: String(pageLimit),
@@ -225,15 +233,17 @@ export const handler: Handler = async (event) => {
 			if (r.status === 400 && code === 25707) {
 				console.log('[ebay-list-offers] Detected error 25707 (invalid SKU), using safe aggregation fallback');
 				const safe = await safeAggregateByInventory();
-				const note = safe.offers.length ? 'safe-aggregate' : 'safe-aggregate-empty';
+				const partial = (Date.now() - startTime) > 6500; // If we got close to timeout
+				const note = safe.offers.length ? (partial ? 'safe-aggregate-partial' : 'safe-aggregate') : 'safe-aggregate-empty';
 				const warning = safe.offers.length
-					? undefined
+					? (partial ? 'Timeout protection: showing partial results. Use manual cleanup to remove invalid SKUs.' : undefined)
 					: 'Upstream offer listing failed due to invalid SKU values. Showing filtered results.';
 				return {
 					statusCode: 200,
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({
 						ok: true,
+						partial,
 						total: safe.offers.length,
 						offers: safe.offers,
 						attempts: [...attempts, ...safe.attempts],
@@ -277,7 +287,13 @@ export const handler: Handler = async (event) => {
 
 	async function aggregateForStatuses(sts: string[], includeMarketplace: boolean) {
 		const agg: any[] = [];
+		const HARD_LIMIT_MS = 7000; // 7 seconds - prevent timeout
 		for (const st of sts) {
+			// Check timeout before each status query
+			if (Date.now() - startTime > HARD_LIMIT_MS) {
+				console.warn('[ebay-list-offers] Soft timeout in aggregation — returning partial results');
+				break;
+			}
 			console.log('[ebay-list-offers] Querying status:', st);
 			const r = await listOnce(true, includeMarketplace, st);
 			attempts.push(r);
