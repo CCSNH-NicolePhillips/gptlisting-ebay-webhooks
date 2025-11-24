@@ -39,8 +39,9 @@ type EbayDraftInput = {
 function generateSku(draft: ChatGptDraft, index: number): string {
   const timestamp = Date.now().toString(36);
   const random = Math.random().toString(36).substring(2, 7);
-  const prefix = draft.brand?.substring(0, 3).toUpperCase() || "ITM";
-  return `${prefix}-${timestamp}-${random}-${index}`;
+  const prefix = (draft.brand?.substring(0, 3) || "ITM").replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  // eBay requires alphanumeric only (no hyphens, spaces, or special chars)
+  return `${prefix}${timestamp}${random}${index}`.substring(0, 50);
 }
 
 function conditionCodeToNumber(conditionStr: string): number {
