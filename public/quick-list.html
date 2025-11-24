@@ -451,16 +451,21 @@
 
       <!-- Orphans warning (shown if images couldn't be paired) -->
       <div id="orphansWarning" style="display: none; margin-top: 1rem; padding: 1rem; background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.5); border-radius: 8px;">
-        <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
           <div style="font-size: 1.5rem;">⚠️</div>
           <div style="flex: 1;">
             <div style="font-weight: 600; color: rgb(251, 191, 36); margin-bottom: 0.25rem;">
               <span id="orphansCount">0</span> image(s) couldn't be paired
             </div>
             <div style="font-size: 0.85rem; color: var(--muted);">
-              These images will be available for manual review. <a href="/smartdrafts-dropbox.html" style="color: rgb(251, 191, 36); text-decoration: underline;">Review unpaired images →</a>
+              These images were rejected during pairing and may need manual review.
             </div>
           </div>
+        </div>
+        
+        <!-- Rejected images grid -->
+        <div id="rejectedImagesGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem;">
+          <!-- Will be populated dynamically -->
         </div>
       </div>
 
@@ -992,6 +997,45 @@
             if (unpaired.length > 0) {
               $('orphansCount').textContent = unpaired.length;
               $('orphansWarning').style.display = 'block';
+              
+              // Populate rejected images grid
+              const grid = $('rejectedImagesGrid');
+              grid.innerHTML = ''; // Clear previous content
+              
+              unpaired.forEach(item => {
+                const card = document.createElement('div');
+                card.style.cssText = 'background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(251, 191, 36, 0.3); border-radius: 8px; padding: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem;';
+                
+                // Image thumbnail
+                const img = document.createElement('img');
+                img.src = item.imageUrl || '';
+                img.alt = item.imagePath || 'Rejected image';
+                img.style.cssText = 'width: 100%; height: 150px; object-fit: cover; border-radius: 4px; background: rgba(0, 0, 0, 0.2);';
+                img.onerror = () => {
+                  img.style.display = 'none';
+                  // Show filename if image fails to load
+                  const filename = document.createElement('div');
+                  filename.textContent = item.imagePath?.split('/').pop() || 'Unknown';
+                  filename.style.cssText = 'font-size: 0.75rem; color: var(--muted); text-align: center; padding: 1rem;';
+                  card.insertBefore(filename, card.firstChild);
+                };
+                
+                // Filename
+                const filename = document.createElement('div');
+                filename.textContent = item.imagePath?.split('/').pop() || 'Unknown';
+                filename.style.cssText = 'font-size: 0.75rem; font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+                filename.title = item.imagePath || '';
+                
+                // Reason
+                const reason = document.createElement('div');
+                reason.textContent = item.reason || 'Unknown reason';
+                reason.style.cssText = 'font-size: 0.7rem; color: rgb(251, 191, 36); line-height: 1.4;';
+                
+                card.appendChild(img);
+                card.appendChild(filename);
+                card.appendChild(reason);
+                grid.appendChild(card);
+              });
             }
 
             console.log('[Quick List] Pairing complete:', products.length, 'products');
