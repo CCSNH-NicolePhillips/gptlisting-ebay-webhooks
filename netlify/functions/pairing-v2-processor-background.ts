@@ -307,76 +307,41 @@ export const handler: Handler = async (event) => {
         }));
 
         // Create URLs for unpaired items (method-specific)
-        console.log(`[pairing-v2-processor] Creating URLs for ${result.unpaired.length} unpaired items (${uploadMethod} mode)...`);
-        const unpairedWithUrls = await Promise.all(result.unpaired.map(async (u) => {
-          let imageUrl: string | undefined;
-          
-          if (uploadMethod === "dropbox") {
-            // Dropbox mode: Create Dropbox shared link
-            const dropboxPath = `${job.folder}/${path.basename(u.imagePath)}`;
-            
-            try {
-              // Try to create a new shared link
-              const createResponse = await fetch('https://api.dropboxapi.com/2/sharing/create_shared_link_with_settings', {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${job.accessToken}`,
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                  path: dropboxPath,
-                  settings: {
-                    requested_visibility: 'public'
-                  }
-                })
-              });
-              
-              if (createResponse.ok) {
-                const data = await createResponse.json();
-                imageUrl = data.url.replace('?dl=0', '?dl=1');
-              } else {
-                // Link might already exist, try to list existing links
-                const listResponse = await fetch('https://api.dropboxapi.com/2/sharing/list_shared_links', {
-                  method: 'POST',
-                  headers: {
-                    'Authorization': `Bearer ${job.accessToken}`,
-                    'Content-Type': 'application/json'
-                  },
-                  body: JSON.stringify({
-                    path: dropboxPath,
-                    direct_only: true
-                  })
-                });
-                
-                if (listResponse.ok) {
-                  const listData = await listResponse.json();
-                  if (listData.links && listData.links.length > 0) {
-                    imageUrl = listData.links[0].url.replace('?dl=0', '?dl=1');
-                  }
-                }
-              }
-            } catch (err) {
-              console.error(`[pairing-v2-processor] Error creating share link for unpaired ${dropboxPath}:`, err);
-            }
-          } else {
-            // Local mode: Use the staged URLs directly
+        // For Dropbox mode, we skip creating shared links for unpaired items to avoid rate limits
+        // They can be accessed via Dropbox directly if needed for review
+        console.log(`[pairing-v2-processor] Processing ${result.unpaired.length} unpaired items (${uploadMethod} mode)...`);
+        
+        let basenameSingletons: any[];
+        
+        if (uploadMethod === "local") {
+          // Local mode: Include staged URLs for unpaired items
+          basenameSingletons = result.unpaired.map(u => {
             const filename = path.basename(u.imagePath);
-            imageUrl = job.stagedUrls.find((url: string) => url.includes(filename));
+            const imageUrl = job.stagedUrls.find((url: string) => url.includes(filename));
             
             if (!imageUrl) {
               console.warn(`[pairing-v2-processor] Could not find staged URL for unpaired ${filename}`);
             }
-          }
-          
-          return {
+            
+            return {
+              imagePath: filename,
+              imageUrl,
+              reason: u.reason,
+              needsReview: u.needsReview,
+            };
+          });
+        } else {
+          // Dropbox mode: Skip creating shared links for unpaired items to avoid rate limits
+          // Just include the basename and reason - UI can handle missing images gracefully
+          basenameSingletons = result.unpaired.map(u => ({
             imagePath: path.basename(u.imagePath),
-            imageUrl,
+            imageUrl: undefined, // Skip Dropbox shared link creation for unpaired items
             reason: u.reason,
             needsReview: u.needsReview,
-          };
-        }));
-
-        const basenameSingletons = unpairedWithUrls;
+          }));
+          
+          console.log(`[pairing-v2-processor] Skipped Dropbox shared link creation for ${result.unpaired.length} unpaired items (rate limit optimization)`);
+        }
 
         const finalResult = {
           pairs: basenamePairs,
