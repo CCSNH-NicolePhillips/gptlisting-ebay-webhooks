@@ -201,7 +201,21 @@ export const handler: Handler = async (event) => {
         console.log(`[pairing-v2-processor] Downloaded ${localPaths.length} images, running pipeline...`);
 
         // Run complete pipeline (handles batching internally for cross-image inference)
-        const result = await runNewTwoStagePipeline(localPaths);
+        let result: PairingResult;
+        try {
+          result = await runNewTwoStagePipeline(localPaths);
+        } catch (pipelineError: any) {
+          // Check if this is a retryable GPT API error
+          if (pipelineError.message?.includes('Classification failed')) {
+            console.error('[pairing-v2-processor] ❌ Pipeline failed due to GPT API errors after retries');
+            throw new Error(
+              'Image classification failed after multiple retry attempts. ' +
+              'This is likely a temporary GPT API issue. Please try running Quick List again in a few minutes.'
+            );
+          }
+          // Re-throw other errors as-is
+          throw pipelineError;
+        }
 
         console.log(`[pairing-v2-processor] Pipeline complete: ${result.pairs.length} pairs, ${result.unpaired.length} unpaired`);
 

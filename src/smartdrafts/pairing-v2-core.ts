@@ -122,8 +122,10 @@ async function encodeImageToBase64(imagePath: string): Promise<string> {
 // ============================================================
 
 const CLASSIFY_BATCH_SIZE = 12; // Max images per API call to avoid payload limits
+const MAX_RETRIES = 2; // Retry failed API calls up to 2 times
+const RETRY_DELAY_MS = 2000; // Wait 2 seconds between retries
 
-export async function classifyImagesBatch(imagePaths: string[]): Promise<ImageClassificationV2[]> {
+export async function classifyImagesBatch(imagePaths: string[], retryAttempt = 0): Promise<ImageClassificationV2[]> {
   try {
     const filenames = imagePaths.map(p => path.basename(p));
     
@@ -264,7 +266,20 @@ ${JSON.stringify(filenames, null, 2)}`;
     });
 
     const result = response.choices[0]?.message?.content?.trim() || '{}';
-    const parsed: { items: ImageClassificationV2[] } = JSON.parse(result);
+    
+    // Validate JSON before parsing
+    if (!result || result === '{}') {
+      throw new Error('GPT returned empty response');
+    }
+    
+    let parsed: { items: ImageClassificationV2[] };
+    try {
+      parsed = JSON.parse(result);
+    } catch (parseError: any) {
+      console.error('[pairing-v2] JSON parse error:', parseError.message);
+      console.error('[pairing-v2] Response preview:', result.substring(0, 500));
+      throw new Error(`Invalid JSON from GPT: ${parseError.message}`);
+    }
     
     // HOTFIX: GPT-4o sometimes ignores the title field for books
     // If packageType is book and title is missing, copy productName to title
@@ -287,10 +302,32 @@ ${JSON.stringify(filenames, null, 2)}`;
     });
     
     return parsed.items || [];
-  } catch (error) {
+  } catch (error: any) {
     console.error('[pairing-v2] Error in classifyImagesBatch:', error);
-    // Return empty array on error
-    return [];
+    
+    // Retry logic for transient GPT API errors
+    if (retryAttempt < MAX_RETRIES) {
+      const isRetryable = 
+        error.message?.includes('JSON') || 
+        error.message?.includes('Unterminated') ||
+        error.message?.includes('empty response') ||
+        error.status === 500 ||
+        error.status === 503;
+      
+      if (isRetryable) {
+        console.warn(`[pairing-v2] ⚠️ Retryable error detected (attempt ${retryAttempt + 1}/${MAX_RETRIES})`);
+        console.warn(`[pairing-v2] Waiting ${RETRY_DELAY_MS}ms before retry...`);
+        
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+        
+        console.log(`[pairing-v2] 🔄 Retrying classification batch (attempt ${retryAttempt + 2}/${MAX_RETRIES + 1})...`);
+        return classifyImagesBatch(imagePaths, retryAttempt + 1);
+      }
+    }
+    
+    // If all retries exhausted or non-retryable error, log and fail gracefully
+    console.error('[pairing-v2] ❌ Classification failed after retries');
+    throw error; // Re-throw to propagate to caller for proper error handling
   }
 }
 
