@@ -49,8 +49,9 @@ export const handler: Handler = async (event) => {
 
 		const validSku = (s?: string) => !!s && /^[A-Za-z0-9]{1,50}$/.test(s);
 
-		async function listOffersAttempt(params: URLSearchParams) {
-			const url = `${apiHost}/sell/inventory/v1/offer?${params.toString()}`;
+		async function listInventory(offset = 0) {
+			const params = new URLSearchParams({ limit: '200', offset: String(offset) });
+			const url = `${apiHost}/sell/inventory/v1/inventory_item?${params.toString()}`;
 			const r = await fetch(url, { headers });
 			const t = await r.text();
 			let j: any;
@@ -60,53 +61,9 @@ export const handler: Handler = async (event) => {
 				j = { raw: t };
 			}
 			results.attempts.push({ status: r.status, url, body: j });
-			return { ok: r.ok, status: r.status, body: j, url };
-		}
-
-		async function tryListOffers(): Promise<any[] | null> {
-			const combos = [
-				{ offer_status: 'UNPUBLISHED', marketplace: true },
-				{ offer_status: undefined, marketplace: true },
-				{ offer_status: undefined, marketplace: false },
-			];
-			for (const c of combos) {
-				let allOffers: any[] = [];
-				let offset = 0;
-				const limit = 200;
-				const maxOffers = 2000; // Safety limit
-				
-				while (allOffers.length < maxOffers) {
-					const p = new URLSearchParams();
-					if (c.offer_status) p.set('offer_status', c.offer_status);
-					if (c.marketplace) p.set('marketplace_id', MARKETPLACE_ID);
-					p.set('limit', String(limit));
-					p.set('offset', String(offset));
-					const res = await listOffersAttempt(p);
-					const code = Number(res.body?.errors?.[0]?.errorId || 0);
-					
-					if (!res.ok) {
-						if (res.status >= 500) break; // try next combo
-						if (res.status === 400 && code === 25707) break; // invalid sku noise
-						return null;
-					}
-					
-					const pageOffers = Array.isArray(res.body?.offers) ? res.body.offers : [];
-					if (pageOffers.length === 0) break; // No more offers
-					
-					allOffers = allOffers.concat(pageOffers);
-					
-					// Check if there are more pages
-					const total = Number(res.body?.total || 0);
-					if (allOffers.length >= total || pageOffers.length < limit) {
-						break; // Got all offers
-					}
-					
-					offset += limit;
-				}
-				
-				if (allOffers.length > 0) return allOffers;
-			}
-			return null;
+			if (!r.ok) throw new Error(`inventory list failed ${r.status}`);
+			const items = Array.isArray(j?.inventoryItems) ? j.inventoryItems : [];
+			return { items, next: j?.href && j?.next ? j.next : null };
 		}
 
 		async function deleteOffer(offerId: string) {
@@ -154,69 +111,26 @@ export const handler: Handler = async (event) => {
 			return false;
 		}
 
-		// Strategy A: try to list offers directly
-		const offers = await tryListOffers();
-		if (offers) {
-			const target = offers.filter((o: any) => {
-				const stat = String(o?.status || '').toUpperCase();
-				const sku = o?.sku;
-				const badSku = !validSku(sku);
-				return (deleteAllUnpublished && stat === 'UNPUBLISHED') || badSku;
-			});
-			
-			console.log(`[clean-broken-drafts] Found ${target.length} offers to delete`);
-			let deleted = 0;
-			
-			for (const o of target) {
-				// Check timeout
-				if (Date.now() - startTime > MAX_EXECUTION_TIME) {
-					console.log(`[clean-broken-drafts] Timeout approaching, stopping after ${deleted} deletions`);
-					break;
-				}
-				await deleteOffer(o.offerId);
-				deleted++;
-			}
-			
-			const hasMore = deleted < target.length;
-			
-			return {
-				statusCode: 200,
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					ok: true,
-					mode: results.mode,
-					summary: { 
-						offersScanned: offers.length, 
-						offersDeleted: results.deletedOffers.length,
-						hasMore,
-						remaining: hasMore ? target.length - deleted : 0
-					},
-					attempts: results.attempts,
-					deletedOffers: results.deletedOffers,
-					errors: results.errors,
-					message: hasMore ? 'Partial deletion - run again to continue' : 'All drafts deleted'
-				}),
-			};
-		}
-
-		// Strategy B: inventory scan fallback
-		async function listInventory(offset = 0) {
-			const params = new URLSearchParams({ limit: '200', offset: String(offset) });
-			const url = `${apiHost}/sell/inventory/v1/inventory_item?${params.toString()}`;
+		async function listOffersForSku(sku: string): Promise<any[]> {
+			if (!validSku(sku)) return [];
+			const params = new URLSearchParams({ sku, limit: '50' });
+			const url = `${apiHost}/sell/inventory/v1/offer?${params.toString()}`;
 			const r = await fetch(url, { headers });
+			if (!r.ok) return [];
 			const t = await r.text();
 			let j: any;
 			try {
 				j = JSON.parse(t);
 			} catch {
-				j = { raw: t };
+				return [];
 			}
 			results.attempts.push({ status: r.status, url, body: j });
-			if (!r.ok) throw new Error(`inventory list failed ${r.status}`);
-			const items = Array.isArray(j?.inventoryItems) ? j.inventoryItems : [];
-			return { items, next: j?.href && j?.next ? j.next : null };
+			return Array.isArray(j?.offers) ? j.offers : [];
 		}
 
+		// Strategy: Scan inventory items directly (offers listing is broken by invalid SKUs)
+		console.log('[clean-broken-drafts] Using inventory scan strategy (offers listing broken by error 25707)');
+		
 		let invOffset = 0;
 		let scanned = 0;
 		const maxScans = 2000;
@@ -233,25 +147,32 @@ export const handler: Handler = async (event) => {
 			const page = await listInventory(invOffset);
 			const items: any[] = page.items;
 			if (!items.length) break;
+			
 			for (const it of items) {
 				const sku: string = it?.sku;
 				scanned++;
 				const bad = !validSku(sku);
-				if (!bad && !deleteAllUnpublished) continue;
-				// try to get offers for this sku
-				let offersForSku: any[] = [];
-				if (validSku(sku)) {
-					const p = new URLSearchParams({ sku, limit: '50' });
-					const res = await listOffersAttempt(p);
-					if (res.ok) offersForSku = Array.isArray(res.body?.offers) ? res.body.offers : [];
-				}
-				// delete UNPUBLISHED offers for this sku
+				
+				// Get offers for this SKU (if valid)
+				const offersForSku = await listOffersForSku(sku);
+				
+				// Delete UNPUBLISHED offers (or all if deleteAllUnpublished flag set)
 				for (const o of offersForSku) {
-					if (String(o?.status || '').toUpperCase() === 'UNPUBLISHED') await deleteOffer(o.offerId);
+					const status = String(o?.status || '').toUpperCase();
+					if (deleteAllUnpublished && status === 'UNPUBLISHED') {
+						await deleteOffer(o.offerId);
+					} else if (bad) {
+						// Delete any offer for bad SKU
+						await deleteOffer(o.offerId);
+					}
 				}
-				// optionally delete inventory item
-				if (bad) await deleteInventoryItem(sku);
+				
+				// Delete inventory item if SKU is invalid
+				if (bad && deleteInventory) {
+					await deleteInventoryItem(sku);
+				}
 			}
+			
 			if (!page.next) break;
 			else invOffset += 200;
 		}
