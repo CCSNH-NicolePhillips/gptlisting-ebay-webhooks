@@ -182,7 +182,8 @@ async function getRelevantCategories(product: PairedProduct): Promise<string> {
     const productName = (product.product || '').toLowerCase();
     const brandName = (product.brand || '').toLowerCase();
     
-    // Detect product type from keywords in product name
+    // Detect product type from keywords in product name AND brand name
+    // Check brand for supplement/skincare brands that don't have descriptive product names
     let productType = '';
     if (isBook) {
       productType = 'book';
@@ -190,7 +191,7 @@ async function getRelevantCategories(product: PairedProduct): Promise<string> {
       productType = 'vitamin supplement';
     } else if (productName.includes('oil') && (productName.includes('fish') || productName.includes('omega'))) {
       productType = 'fish oil supplement';
-    } else if (productName.includes('collagen') || productName.includes('protein') || productName.includes('creatine') || productName.includes('pre workout') || productName.includes('glutathione')) {
+    } else if (productName.includes('collagen') || productName.includes('protein') || productName.includes('creatine') || productName.includes('pre workout') || productName.includes('pre ') || productName.includes(' pre')) {
       productType = 'sports nutrition supplement';
     } else if (productName.includes('serum') || productName.includes('cleanser') || productName.includes('cream') || productName.includes('lotion') || productName.includes('moisturizer')) {
       productType = 'skincare beauty';
@@ -200,6 +201,18 @@ async function getRelevantCategories(product: PairedProduct): Promise<string> {
       productType = 'detox supplement';
     } else if (productName.includes('inositol') || productName.includes('hormonal')) {
       productType = 'vitamin supplement';
+    } else if (brandName === 'root' || brandName === 'jocko' || brandName === 'naked' || brandName === 'rkmd' || brandName === 'vita plynxera') {
+      // Known supplement brands without descriptive product names
+      productType = 'vitamin supplement';
+    } else if (brandName === 'ryse' || productName.includes('loaded')) {
+      // Pre-workout/sports nutrition brands
+      productType = 'sports nutrition supplement';
+    } else if (brandName === 'prequel' || brandName === 'oganacell') {
+      // Skincare brands
+      productType = 'skincare beauty';
+    } else if (brandName === 'maude') {
+      // Bath/body brands
+      productType = 'bath body';
     }
     
     // Use product type + category path instead of brand/product names
