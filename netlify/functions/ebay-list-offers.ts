@@ -66,10 +66,10 @@ export const handler: Handler = async (event) => {
 			'X-EBAY-C-MARKETPLACE-ID': MARKETPLACE_ID,
 		} as Record<string, string>;
 
-		async function listOnce(includeStatus: boolean, includeMarketplace: boolean) {
+		async function listOnce(includeStatus: boolean, includeMarketplace: boolean, specificStatus?: string) {
 			const params = new URLSearchParams();
 			if (sku) params.set('sku', sku);
-			if (includeStatus && status) params.set('offer_status', status);
+			if (includeStatus && (specificStatus || status)) params.set('offer_status', specificStatus || status!);
 			if (includeMarketplace) params.set('marketplace_id', MARKETPLACE_ID);
 			params.set('limit', String(limit));
 			params.set('offset', String(offset));
@@ -256,7 +256,7 @@ export const handler: Handler = async (event) => {
 				}
 				console.log('[ebay-list-offers] Querying status:', st);
 				totalApiCalls++;
-				const r = await listOnce(true, includeMarketplace);
+				const r = await listOnce(true, includeMarketplace, st);
 				attempts.push(r);
 				if (!r.ok) continue;
 				const arr = getOffers(r.body);
