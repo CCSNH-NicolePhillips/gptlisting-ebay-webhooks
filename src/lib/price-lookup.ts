@@ -59,7 +59,8 @@ function toMarketPrices(raw: Record<string, any> | null | undefined): MarketPric
     if (!Number.isFinite(numeric) || numeric <= 0) return 0;
     return +numeric.toFixed(2);
   })();
-  return { amazon, walmart, brand, avg };
+  const productType = typeof raw.productType === "string" ? raw.productType : undefined;
+  return { amazon, walmart, brand, avg, productType };
 }
 
 function average(values: Array<number | null>): number {
