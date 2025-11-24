@@ -14,7 +14,7 @@ export const handler: Handler = async (event) => {
 
 		const tokens = tokensStore();
 		const key = `users/${encodeURIComponent(auth.sub)}/ebay.json`;
-		const data: any = await tokens.getJSON(key);
+		const data: any = await tokens.get(key, { type: 'json' });
 
 		if (!data?.refresh_token) {
 			return {
