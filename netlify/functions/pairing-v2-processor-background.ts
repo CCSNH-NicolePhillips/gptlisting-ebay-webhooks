@@ -201,7 +201,6 @@ export const handler: Handler = async (event) => {
         console.log(`[pairing-v2-processor] Downloaded ${localPaths.length} images, running pipeline...`);
 
         // Run complete pipeline (handles batching internally for cross-image inference)
-        const { runNewTwoStagePipeline } = await import("../../src/smartdrafts/pairing-v2-core.js");
         const result = await runNewTwoStagePipeline(localPaths);
 
         console.log(`[pairing-v2-processor] Pipeline complete: ${result.pairs.length} pairs, ${result.unpaired.length} unpaired`);
