@@ -6,6 +6,7 @@ import { k } from "../../src/lib/user-keys.js";
 import OpenAI from "openai";
 import { pickCategoryForGroup } from "../../src/lib/taxonomy-select.js";
 import { listCategories } from "../../src/lib/taxonomy-store.js";
+import { lookupMarketPrice } from "../../src/lib/price-lookup.js";
 
 const GPT_TIMEOUT_MS = 30_000;
 const GPT_RETRY_ATTEMPTS = 2;
@@ -240,7 +241,12 @@ async function getRelevantCategories(product: PairedProduct): Promise<string> {
   }
 }
 
-function buildPrompt(product: PairedProduct, categoryHint: CategoryHint | null, categories: string): string {
+function buildPrompt(
+  product: PairedProduct, 
+  categoryHint: CategoryHint | null, 
+  categories: string,
+  competitorPrices?: { amazon: number | null; walmart: number | null; brand: number | null; avg: number }
+): string {
   const lines: string[] = [];
   
   // For books: title is the book title, product is the author
@@ -296,13 +302,39 @@ function buildPrompt(product: PairedProduct, categoryHint: CategoryHint | null, 
   }
   
   lines.push("Create a professional eBay listing with accurate, SEO-optimized details.");
-  lines.push("IMPORTANT PRICING RULES:");
-  lines.push("- Search Amazon.com for the product's 'Typical Price' or 'List Price' (NOT sale/deal prices, NOT marketplace seller prices)");
-  lines.push("- IGNORE third-party marketplace sellers with inflated prices - use ONLY Amazon's direct price or manufacturer MSRP");
-  lines.push("- For books: use new hardcover/paperback price from publisher, NOT collectible/used/rare edition pricing");
-  lines.push("- Match the EXACT size/variant shown in photos (30-day supply vs 90-day, 8oz vs 16oz, etc.)");
-  lines.push("- Typical range: supplements $15-45, books $10-35, cosmetics $10-50");
-  lines.push("- If you see prices over $50 for common items, you're likely looking at wrong variant or marketplace pricing");
+  
+  // Add competitor pricing data if available
+  if (competitorPrices && (competitorPrices.amazon || competitorPrices.walmart || competitorPrices.brand)) {
+    lines.push("");
+    lines.push("COMPETITOR PRICING DATA (USE THESE EXACT VALUES):");
+    if (competitorPrices.amazon) {
+      lines.push(`- Amazon current price: $${competitorPrices.amazon.toFixed(2)}`);
+    }
+    if (competitorPrices.walmart) {
+      lines.push(`- Walmart current price: $${competitorPrices.walmart.toFixed(2)}`);
+    }
+    if (competitorPrices.brand) {
+      lines.push(`- Brand direct price: $${competitorPrices.brand.toFixed(2)}`);
+    }
+    if (competitorPrices.avg > 0) {
+      lines.push(`- Market average: $${competitorPrices.avg.toFixed(2)}`);
+    }
+    lines.push("");
+    lines.push("PRICING RULES:");
+    lines.push("- You MUST use the lowest competitor price from above as your 'price' field");
+    lines.push("- DO NOT search for prices - the data above is authoritative and current");
+    lines.push("- DO NOT invent or hallucinate prices");
+    lines.push("- Return ONLY the number in the 'price' field (e.g., 16.00)");
+  } else {
+    lines.push("IMPORTANT PRICING RULES:");
+    lines.push("- Search Amazon.com for the product's 'Typical Price' or 'List Price' (NOT sale/deal prices, NOT marketplace seller prices)");
+    lines.push("- IGNORE third-party marketplace sellers with inflated prices - use ONLY Amazon's direct price or manufacturer MSRP");
+    lines.push("- For books: use new hardcover/paperback price from publisher, NOT collectible/used/rare edition pricing");
+    lines.push("- Match the EXACT size/variant shown in photos (30-day supply vs 90-day, 8oz vs 16oz, etc.)");
+    lines.push("- Typical range: supplements $15-45, books $10-35, cosmetics $10-50");
+    lines.push("- If you see prices over $50 for common items, you're likely looking at wrong variant or marketplace pricing");
+  }
+  
   lines.push("Assess condition based on whether it appears to be new/sealed or used.");
   lines.push("");
   lines.push("FORMULATION DETECTION (CRITICAL):");
@@ -456,6 +488,26 @@ async function createDraftForProduct(product: PairedProduct, retryAttempt: numbe
     title: product.title 
   }));
   
+  // Fetch competitor prices BEFORE calling GPT
+  let competitorPrices: { amazon: number | null; walmart: number | null; brand: number | null; avg: number } | undefined;
+  try {
+    const priceStart = Date.now();
+    console.log(`[Draft] Looking up market prices for: ${product.brand} ${product.product} ${product.variant || ''}`);
+    const prices = await lookupMarketPrice(product.brand, product.product, product.variant);
+    console.log(`[Draft] Price lookup took ${Date.now() - priceStart}ms:`, JSON.stringify(prices));
+    
+    // Only pass prices to GPT if we found at least one
+    if (prices.amazon || prices.walmart || prices.brand) {
+      competitorPrices = prices;
+      console.log(`[Draft] ✓ Using real competitor prices: Amazon $${prices.amazon || 'N/A'}, Walmart $${prices.walmart || 'N/A'}, Avg $${prices.avg}`);
+    } else {
+      console.log(`[Draft] ⚠️ No competitor prices found, GPT will search`);
+    }
+  } catch (err) {
+    console.error(`[Draft] Price lookup failed:`, err);
+    console.log(`[Draft] ⚠️ Falling back to GPT price search`);
+  }
+  
   const catListStart = Date.now();
   const relevantCategories = await getRelevantCategories(product);
   console.log(`[Draft] Category list generation took ${Date.now() - catListStart}ms`);
@@ -465,7 +517,7 @@ async function createDraftForProduct(product: PairedProduct, retryAttempt: numbe
   const categoryHint = await pickCategory(product);
   console.log(`[Draft] Category fallback pick took ${Date.now() - catStart}ms`);
   
-  const prompt = buildPrompt(product, categoryHint, relevantCategories);
+  const prompt = buildPrompt(product, categoryHint, relevantCategories, competitorPrices);
   console.log(`[Draft] Prompt length: ${prompt.length} chars`);
   console.log(`[Draft] Prompt preview:`, prompt.slice(0, 500));
   
