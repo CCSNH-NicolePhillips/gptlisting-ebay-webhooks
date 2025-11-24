@@ -149,6 +149,89 @@ export const handler: Handler = async (event) => {
 			results.attempts.push({ status: r.status, url, body: j });
 			return Array.isArray(j?.offers) ? j.offers : [];
 		}
+		
+		async function listAllOffersDirect(offset = 0): Promise<{ offers: any[]; next: string | null }> {
+			// Direct offers listing - faster than scanning inventory
+			const params = new URLSearchParams({ limit: '100', offset: String(offset) });
+			const url = `${apiHost}/sell/inventory/v1/offer?${params.toString()}`;
+			const r = await fetch(url, { headers });
+			if (!r.ok) {
+				const t = await r.text();
+				let j: any;
+				try { j = JSON.parse(t); } catch { j = { raw: t }; }
+				results.attempts.push({ status: r.status, url, body: j });
+				// Error 25707 means invalid SKU in listing - continue anyway
+				if (r.status === 400 && j?.errors?.[0]?.errorId === 25707) {
+					console.warn('[clean-broken-drafts] Invalid SKU in offers list (25707), stopping direct listing');
+					return { offers: [], next: null };
+				}
+				throw new Error(`offers list failed ${r.status}`);
+			}
+			const t = await r.text();
+			let j: any;
+			try { j = JSON.parse(t); } catch { j = { raw: t }; }
+			results.attempts.push({ status: r.status, url, body: j });
+			const offers = Array.isArray(j?.offers) ? j.offers : [];
+			return { offers, next: j?.href && j?.next ? j.next : null };
+		}
+
+		// FAST PATH: If deleteAllUnpublished=true, use direct offer listing (much faster)
+		if (deleteAllUnpublished) {
+			console.log('[clean-broken-drafts] Fast path: Deleting all unpublished offers via direct listing');
+			let offerOffset = 0;
+			let totalDeleted = 0;
+			const maxOffers = 1000;
+			
+			while (totalDeleted < maxOffers) {
+				// Check timeout
+				if (Date.now() - startTime > INTERNAL_LIMIT) {
+					console.log(`[clean-broken-drafts] Internal timeout at ${totalDeleted} offers deleted (8s limit)`);
+					timedOut = true;
+					break;
+				}
+				
+				try {
+					const page = await listAllOffersDirect(offerOffset);
+					const offers = page.offers;
+					if (!offers.length) break;
+					
+					for (const o of offers) {
+						const status = String(o?.status || '').toUpperCase();
+						if (status === 'UNPUBLISHED') {
+							await deleteOffer(o.offerId);
+							totalDeleted++;
+						}
+					}
+					
+					if (!page.next) break;
+					else offerOffset += 100;
+				} catch (err) {
+					console.error('[clean-broken-drafts] Direct offer listing failed:', err);
+					// Fall back to inventory scan on error
+					break;
+				}
+			}
+			
+			if (totalDeleted > 0) {
+				// Fast path succeeded
+				return {
+					statusCode: 200,
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						ok: true,
+						mode: results.mode,
+						fastPath: true,
+						scanned: totalDeleted,
+						timedOut,
+						deletedOffers: results.deletedOffers,
+						deletedInventory: results.deletedInventory,
+						attempts: results.attempts,
+						errors: results.errors,
+						message: timedOut ? 'Partial deletion - run again to continue' : 'Completed'
+					}),
+				};
+			}
+		}
 
 		// Strategy: Scan inventory items directly (offers listing is broken by invalid SKUs)
 		console.log('[clean-broken-drafts] Using inventory scan strategy (offers listing broken by error 25707)');
