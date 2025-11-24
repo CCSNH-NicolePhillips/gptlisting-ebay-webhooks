@@ -226,10 +226,15 @@ function buildPrompt(product: PairedProduct, categoryHint: CategoryHint | null, 
     lines.push(product.extractedText);
     lines.push("=== END EXTRACTED TEXT ===");
     lines.push("");
-    lines.push("IMPORTANT: Use the extracted text above to create an SEO-rich title that includes:");
+    lines.push("IMPORTANT: Use the extracted text above to create an SEO-rich title and determine formulation:");
     lines.push("- Specific vitamins/ingredients mentioned (e.g., B12, B6, Folate, Niacin)");
     lines.push("- Dosages if visible (e.g., 5000mcg, 2400mcg)");
-    lines.push("- Formulation (Liquid, Sublingual, Drops, etc.)");
+    lines.push("- Formulation detection rules:");
+    lines.push("  * If text mentions 'mix', 'mixing instructions', 'add to water', 'shake', 'stir', 'flavor' (like Berry, Vanilla, etc.) → formulation is 'Powder'");
+    lines.push("  * If text mentions 'capsule', 'capsules', 'caps', 'vcaps' → formulation is 'Capsule'");
+    lines.push("  * If text mentions 'tablet', 'tablets', 'tabs' → formulation is 'Tablet'");
+    lines.push("  * If text mentions 'liquid', 'drops', 'dropper', 'sublingual', 'fl oz' → formulation is 'Liquid'");
+    lines.push("  * If text mentions 'gummy', 'gummies', 'chewable' → formulation is 'Gummy'");
     lines.push("- Key benefits/claims from the label");
     lines.push("");
   }
