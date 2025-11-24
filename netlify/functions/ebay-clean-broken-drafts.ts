@@ -175,6 +175,10 @@ export const handler: Handler = async (event) => {
 			return { offers, next: j?.href && j?.next ? j.next : null };
 		}
 
+		// Declare timeout vars BEFORE fast path to avoid TDZ errors
+		let timedOut = false;
+		const INTERNAL_LIMIT = 8000; // 8-second upper bound to avoid Netlify hard timeout
+
 		// FAST PATH: If deleteAllUnpublished=true, use direct offer listing (much faster)
 		if (deleteAllUnpublished) {
 			console.log('[clean-broken-drafts] Fast path: Deleting all unpublished offers via direct listing');
@@ -239,8 +243,6 @@ export const handler: Handler = async (event) => {
 		let invOffset = 0;
 		let scanned = 0;
 		const maxScans = 2000;
-		let timedOut = false;
-		const INTERNAL_LIMIT = 8000; // 8-second upper bound to avoid Netlify hard timeout
 		
 		while (scanned < maxScans) {
 			// Check timeout (internal 8s limit to prevent hard 502)
