@@ -480,18 +480,13 @@
         const loader = document.createElement('div');
         loader.className = 'loading';
         loader.innerHTML =
-          '<div class="spinner" role="status" aria-label="Loading"></div><div class="label">Cleaning up broken drafts…</div>';
+          '<div class="spinner" role="status" aria-label="Loading"></div><div class="label">Loading drafts…</div>';
         list.appendChild(loader);
         
-        // TEMPORARY: Clean up broken drafts with invalid SKUs on page load
-        try {
-          await fetchJSON('/.netlify/functions/ebay-clean-broken-drafts?deleteAll=true');
-          console.log('[drafts] Cleanup complete');
-        } catch (e) {
-          console.warn('[drafts] Cleanup failed (non-critical):', e);
-        }
-        
-        loader.querySelector('.label').textContent = 'Loading drafts…';
+        // Non-blocking cleanup so UI never waits on slow eBay API calls
+        fetchJSON('/.netlify/functions/ebay-clean-broken-drafts?deleteAll=true')
+          .then(() => console.log('[drafts] Cleanup complete (non-blocking)'))
+          .catch((e) => console.warn('[drafts] Cleanup failed silently:', e));
         
         try {
           // Prefer explicit status queries to ensure UNPUBLISHED/DRAFT/INACTIVE are returned on accounts

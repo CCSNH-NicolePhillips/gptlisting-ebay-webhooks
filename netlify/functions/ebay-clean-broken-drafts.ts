@@ -157,11 +157,12 @@ export const handler: Handler = async (event) => {
 		let scanned = 0;
 		const maxScans = 2000;
 		let timedOut = false;
+		const INTERNAL_LIMIT = 8000; // 8-second upper bound to avoid Netlify hard timeout
 		
 		while (scanned < maxScans) {
-			// Check timeout
-			if (Date.now() - startTime > MAX_EXECUTION_TIME) {
-				console.log(`[clean-broken-drafts] Timeout approaching at ${scanned} items scanned`);
+			// Check timeout (internal 8s limit to prevent hard 502)
+			if (Date.now() - startTime > INTERNAL_LIMIT) {
+				console.log(`[clean-broken-drafts] Internal timeout at ${scanned} items scanned (8s limit)`);
 				timedOut = true;
 				break;
 			}
