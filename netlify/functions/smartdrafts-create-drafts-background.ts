@@ -296,7 +296,13 @@ function buildPrompt(product: PairedProduct, categoryHint: CategoryHint | null, 
   }
   
   lines.push("Create a professional eBay listing with accurate, SEO-optimized details.");
-  lines.push("IMPORTANT: Search Amazon.com and Walmart.com for CURRENT regular selling price (NOT sale/clearance/collectible prices). For books, use new hardcover/paperback price.");
+  lines.push("IMPORTANT PRICING RULES:");
+  lines.push("- Search Amazon.com for the product's 'Typical Price' or 'List Price' (NOT sale/deal prices, NOT marketplace seller prices)");
+  lines.push("- IGNORE third-party marketplace sellers with inflated prices - use ONLY Amazon's direct price or manufacturer MSRP");
+  lines.push("- For books: use new hardcover/paperback price from publisher, NOT collectible/used/rare edition pricing");
+  lines.push("- Match the EXACT size/variant shown in photos (30-day supply vs 90-day, 8oz vs 16oz, etc.)");
+  lines.push("- Typical range: supplements $15-45, books $10-35, cosmetics $10-50");
+  lines.push("- If you see prices over $50 for common items, you're likely looking at wrong variant or marketplace pricing");
   lines.push("Assess condition based on whether it appears to be new/sealed or used.");
   lines.push("");
   lines.push("FORMULATION DETECTION (CRITICAL):");
