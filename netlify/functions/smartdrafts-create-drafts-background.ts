@@ -177,19 +177,43 @@ async function getRelevantCategories(product: PairedProduct): Promise<string> {
     // This prevents "Bobbi Brown" (author) from matching food categories like "Brown Sauce"
     const isBook = !product.brand || product.brand === 'null';
     
+    // Build semantic search terms based on product TYPE, not brand/product names
+    // This prevents "Root" from matching "Lobe Pumps & Root Blowers" or "Fish Oil" matching "Fish Sauce"
+    const productName = (product.product || '').toLowerCase();
+    const brandName = (product.brand || '').toLowerCase();
+    
+    // Detect product type from keywords in product name
+    let productType = '';
+    if (isBook) {
+      productType = 'book';
+    } else if (productName.includes('vitamin') || productName.includes('supplement') || productName.includes('capsule') || productName.includes('pill')) {
+      productType = 'vitamin supplement';
+    } else if (productName.includes('oil') && (productName.includes('fish') || productName.includes('omega'))) {
+      productType = 'fish oil supplement';
+    } else if (productName.includes('collagen') || productName.includes('protein') || productName.includes('creatine') || productName.includes('pre workout') || productName.includes('glutathione')) {
+      productType = 'sports nutrition supplement';
+    } else if (productName.includes('serum') || productName.includes('cleanser') || productName.includes('cream') || productName.includes('lotion') || productName.includes('moisturizer')) {
+      productType = 'skincare beauty';
+    } else if (productName.includes('bath') || productName.includes('soak') || productName.includes('salt')) {
+      productType = 'bath body';
+    } else if (productName.includes('detox') || productName.includes('cleanse') || productName.includes('clean slate')) {
+      productType = 'detox supplement';
+    } else if (productName.includes('inositol') || productName.includes('hormonal')) {
+      productType = 'vitamin supplement';
+    }
+    
+    // Use product type + category path instead of brand/product names
     const searchTerms = [
-      isBook ? 'book' : product.product, // Use "book" keyword for books, product name for others
-      product.brand, // Will be null for books
-      product.variant,
+      productType,
       product.categoryPath
     ].filter(Boolean).join(' ').toLowerCase();
     
     const relevant = allCategories
       .filter(cat => {
         const catText = `${cat.title} ${cat.slug}`.toLowerCase();
-        return searchTerms.split(/\s+/).some(term => 
-          term.length > 3 && catText.includes(term)
-        );
+        // Split search terms and require at least one significant match
+        const terms = searchTerms.split(/\s+/).filter(t => t.length > 2);
+        return terms.some(term => catText.includes(term));
       })
       .slice(0, 20)
       .map(cat => {
@@ -207,16 +231,19 @@ async function getRelevantCategories(product: PairedProduct): Promise<string> {
       .join('\n');
     
     if (relevant) {
+      console.log(`[Category] Found ${relevant.split('\n').length} categories matching type: "${productType}"`);
       return relevant;
     }
     
+    // Fallback to common categories if no match found
+    console.log(`[Category] No type match for "${productType}", using fallback categories`);
     const commonCats = [
       '261186', // Books
-      '31411', // Health & Beauty
+      '180959', // Vitamins & Lifestyle Supplements
+      '181034', // Dietary Supplements & Nutrition
       '11450', // Clothing, Shoes & Accessories  
       '293', // Consumer Electronics
-      '88433', // Vitamins & Dietary Supplements
-      '99', // Everything Else
+      '88433', // Everything Else
     ];
     
     const fallback = allCategories
