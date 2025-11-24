@@ -5,7 +5,16 @@ import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey
 
 export const handler: Handler = async (event) => {
 	const startTime = Date.now();
-	console.log('[ebay-list-offers] Request started:', { status: event.queryStringParameters?.status });
+	console.log('[ebay-list-offers] Request started:', { 
+		status: event.queryStringParameters?.status,
+		limit: event.queryStringParameters?.limit,
+		offset: event.queryStringParameters?.offset
+	});
+	
+	// Add global timeout to prevent hanging
+	const globalTimeout = setTimeout(() => {
+		console.error('[ebay-list-offers] CRITICAL: Function timeout at 25 seconds - aborting');
+	}, 25000); // 25 second global timeout (Netlify free tier has 26s limit)
 	
 	try {
 		const rawSku = event.queryStringParameters?.sku?.trim();
@@ -20,13 +29,21 @@ export const handler: Handler = async (event) => {
 		if (!sub) sub = getJwtSubUnverified(event);
 		if (!bearer || !sub) {
 			console.log('[ebay-list-offers] Unauthorized');
-			return { statusCode: 401, body: 'Unauthorized' };
+			return { 
+				statusCode: 401, 
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ error: 'Unauthorized' })
+			};
 		}
 		const saved = (await store.get(userScopedKey(sub, 'ebay.json'), { type: 'json' })) as any;
 		const refresh = saved?.refresh_token as string | undefined;
 		if (!refresh) {
 			console.log('[ebay-list-offers] No eBay refresh token');
-			return { statusCode: 400, body: JSON.stringify({ error: 'Connect eBay first' }) };
+			return { 
+				statusCode: 400, 
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ error: 'Connect eBay first' }) 
+			};
 		}
 		
 		console.log('[ebay-list-offers] Refreshing access token...');
@@ -153,6 +170,10 @@ export const handler: Handler = async (event) => {
 			return { offers: agg.slice(0, limit), attempts };
 		}
 		const attempts: any[] = [];
+		
+		// Limit total API calls to prevent timeout
+		let totalApiCalls = 0;
+		const MAX_API_CALLS = 5; // Prevent runaway API calls
 
 		// Support comma-separated statuses by aggregating multiple calls
 		const normalizedStatuses = (status || '')
@@ -182,6 +203,7 @@ export const handler: Handler = async (event) => {
 			}
 			(global as any).lastEbayListOffersCall = Date.now();
 			
+			totalApiCalls++;
 			const r = await listOnce(false, true); // Get all offers, filter client-side
 			attempts.push(r);
 			
@@ -221,7 +243,12 @@ export const handler: Handler = async (event) => {
 		async function aggregateForStatuses(sts: string[], includeMarketplace: boolean) {
 			const agg: any[] = [];
 			for (const st of sts) {
+				if (totalApiCalls >= MAX_API_CALLS) {
+					console.warn('[ebay-list-offers] Reached max API calls limit, stopping aggregation');
+					break;
+				}
 				console.log('[ebay-list-offers] Querying status:', st);
+				totalApiCalls++;
 				const r = await listOnce(true, includeMarketplace);
 				attempts.push(r);
 				if (!r.ok) continue;
@@ -261,20 +288,24 @@ export const handler: Handler = async (event) => {
 
 		// Single status or none
 		if (status) {
+			totalApiCalls++;
 			res = await listOnce(true, true);
 			attempts.push(res);
 		} else {
+			totalApiCalls++;
 			res = await listOnce(false, true);
 			attempts.push(res);
 		}
 
 		// If failure with status present, try without status (some accounts/APIs reject offer_status)
-		if (!res.ok && status) {
+		if (!res.ok && status && totalApiCalls < MAX_API_CALLS) {
+			totalApiCalls++;
 			res = await listOnce(false, true);
 			attempts.push(res);
 		}
 		// If still bad, try without marketplace_id
-		if (!res.ok) {
+		if (!res.ok && totalApiCalls < MAX_API_CALLS) {
+			totalApiCalls++;
 			res = await listOnce(Boolean(status), false);
 			attempts.push(res);
 		}
@@ -303,6 +334,7 @@ export const handler: Handler = async (event) => {
 			}
 			return {
 				statusCode: res.status,
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ error: 'list-offers failed', attempt: attempts }),
 			};
 		}
@@ -382,13 +414,24 @@ export const handler: Handler = async (event) => {
 		const elapsed = Date.now() - startTime;
 		console.error('[ebay-list-offers] Error after', elapsed, 'ms:', e);
 		console.error('[ebay-list-offers] Stack:', e?.stack);
+		
+		// Return 503 (Service Unavailable) instead of 500 to indicate temporary issue
 		return {
-			statusCode: 500,
+			statusCode: 503,
+			headers: { 
+				'Content-Type': 'application/json'
+			},
 			body: JSON.stringify({ 
-				error: 'list-offers error', 
+				error: 'list-offers temporarily unavailable', 
 				detail: e?.message || String(e),
-				elapsed
+				elapsed,
+				retry: true,
+				retryAfter: 2 // Suggest retry after 2 seconds (in body instead of header)
 			}),
 		};
+	} finally {
+		clearTimeout(globalTimeout);
+		const totalElapsed = Date.now() - startTime;
+		console.log('[ebay-list-offers] Request completed in', totalElapsed, 'ms');
 	}
 };
