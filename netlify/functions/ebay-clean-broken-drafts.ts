@@ -15,16 +15,38 @@ export const handler: Handler = async (event) => {
 		const deleteAllUnpublished = /^1|true|yes$/i.test(String(qp.deleteAll || qp.all || 'false'));
 		const deleteInventory = /^1|true|yes$/i.test(String(qp.deleteInventory || qp.inv || 'false'));
 
+		// Check for admin token bypass
+		const isAdminAuth = qp.adminToken && qp.adminToken === process.env.ADMIN_API_TOKEN;
+		
 		// Get user-scoped eBay token
 		const store = tokensStore();
-		const bearer = getBearerToken(event);
-		let sub = (await requireAuthVerified(event))?.sub || null;
-		if (!sub) sub = getJwtSubUnverified(event);
-		if (!bearer || !sub) return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) };
+		let sub: string | null = null;
+		let refresh: string | undefined;
+
+		if (isAdminAuth) {
+			// Admin mode: use userSub parameter to specify which user's token
+			const targetUserSub = qp.userSub;
+			if (!targetUserSub) {
+				return { statusCode: 400, body: JSON.stringify({ error: 'Admin mode requires userSub parameter' }) };
+			}
+			const saved = (await store.get(userScopedKey(targetUserSub, 'ebay.json'), { type: 'json' })) as J | null;
+			refresh = saved?.refresh_token as string | undefined;
+			if (!refresh) {
+				return { statusCode: 400, body: JSON.stringify({ error: `No eBay token found for user ${targetUserSub}` }) };
+			}
+			sub = targetUserSub;
+		} else {
+			// Normal user auth mode
+			const bearer = getBearerToken(event);
+			sub = (await requireAuthVerified(event))?.sub || null;
+			if (!sub) sub = getJwtSubUnverified(event);
+			if (!bearer || !sub) return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) };
+			
+			const saved = (await store.get(userScopedKey(sub, 'ebay.json'), { type: 'json' })) as J | null;
+			refresh = saved?.refresh_token as string | undefined;
+			if (!refresh) return { statusCode: 400, body: JSON.stringify({ error: 'Connect eBay first' }) };
+		}
 		
-		const saved = (await store.get(userScopedKey(sub, 'ebay.json'), { type: 'json' })) as J | null;
-		const refresh = saved?.refresh_token as string | undefined;
-		if (!refresh) return { statusCode: 400, body: JSON.stringify({ error: 'Connect eBay first' }) };
 		const { access_token } = await accessTokenFromRefresh(refresh);
 
 		const ENV = process.env.EBAY_ENV || 'PROD';
