@@ -216,14 +216,37 @@ export const handler: Handler = async (event) => {
 			}
 			(global as any).lastEbayListOffersCall = Date.now();
 			
-			const r = await listOnce(false, true); // Get all offers, filter client-side
-			attempts.push(r);
-			
-			if (r.ok) {
-				const allOffers = getOffers(r.body);
-				console.log('[ebay-list-offers] Got', allOffers.length, 'total offers');
-				
-				// Filter client-side for requested statuses
+		const r = await listOnce(false, true); // Get all offers, filter client-side
+		attempts.push(r);
+		
+		// Check for SKU 25707 error early - if we hit it, go straight to safe aggregation
+		if (!r.ok) {
+			const code = Number((r.body?.errors && r.body.errors[0]?.errorId) || 0);
+			if (r.status === 400 && code === 25707) {
+				console.log('[ebay-list-offers] Detected error 25707 (invalid SKU), using safe aggregation fallback');
+				const safe = await safeAggregateByInventory();
+				const note = safe.offers.length ? 'safe-aggregate' : 'safe-aggregate-empty';
+				const warning = safe.offers.length
+					? undefined
+					: 'Upstream offer listing failed due to invalid SKU values. Showing filtered results.';
+				return {
+					statusCode: 200,
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						ok: true,
+						total: safe.offers.length,
+						offers: safe.offers,
+						attempts: [...attempts, ...safe.attempts],
+						note,
+						warning,
+					}),
+				};
+			}
+		}
+		
+		if (r.ok) {
+			const allOffers = getOffers(r.body);
+			console.log('[ebay-list-offers] Got', allOffers.length, 'total offers');				// Filter client-side for requested statuses
 				const allowStatuses = normalizedStatuses.map(s => s.toUpperCase());
 				const filtered = allOffers.filter((o: any) => {
 					const st = String(o?.status || '').toUpperCase();
