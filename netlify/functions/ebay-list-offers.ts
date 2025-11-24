@@ -4,6 +4,13 @@ import { tokensStore } from '../../src/lib/_blobs.js';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
 
 export const handler: Handler = async (event) => {
+	// Log immediately to confirm function is invoked
+	console.log('[ebay-list-offers] ========================================');
+	console.log('[ebay-list-offers] Function invoked at:', new Date().toISOString());
+	console.log('[ebay-list-offers] Method:', event.httpMethod);
+	console.log('[ebay-list-offers] Path:', event.path);
+	console.log('[ebay-list-offers] Query params:', JSON.stringify(event.queryStringParameters));
+	
 	const startTime = Date.now();
 	console.log('[ebay-list-offers] Request started:', { 
 		status: event.queryStringParameters?.status,
