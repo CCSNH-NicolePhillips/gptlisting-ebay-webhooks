@@ -99,6 +99,12 @@ export const handler: Handler = async (event) => {
 				} catch {
 					json = { raw: txt };
 				}
+				
+				// Log error responses for debugging
+				if (!r.ok) {
+					console.error('[ebay-list-offers] eBay API error response:', JSON.stringify(json, null, 2));
+				}
+				
 				return { ok: r.ok, status: r.status, url, body: json };
 			} catch (err: any) {
 				clearTimeout(timeoutId);
@@ -210,7 +216,6 @@ export const handler: Handler = async (event) => {
 			}
 			(global as any).lastEbayListOffersCall = Date.now();
 			
-			totalApiCalls++;
 			const r = await listOnce(false, true); // Get all offers, filter client-side
 			attempts.push(r);
 			
@@ -247,17 +252,12 @@ export const handler: Handler = async (event) => {
 			console.log('[ebay-list-offers] Client-side filtering returned no results, trying individual status queries...');
 		}
 
-		async function aggregateForStatuses(sts: string[], includeMarketplace: boolean) {
-			const agg: any[] = [];
-			for (const st of sts) {
-				if (totalApiCalls >= MAX_API_CALLS) {
-					console.warn('[ebay-list-offers] Reached max API calls limit, stopping aggregation');
-					break;
-				}
-				console.log('[ebay-list-offers] Querying status:', st);
-				totalApiCalls++;
-				const r = await listOnce(true, includeMarketplace, st);
-				attempts.push(r);
+	async function aggregateForStatuses(sts: string[], includeMarketplace: boolean) {
+		const agg: any[] = [];
+		for (const st of sts) {
+			console.log('[ebay-list-offers] Querying status:', st);
+			const r = await listOnce(true, includeMarketplace, st);
+			attempts.push(r);
 				if (!r.ok) continue;
 				const arr = getOffers(r.body);
 				console.log('[ebay-list-offers] Got', arr.length, 'offers for status:', st);
@@ -293,31 +293,25 @@ export const handler: Handler = async (event) => {
 			// Fall through to single-call strategy if still nothing
 		}
 
-		// Single status or none
-		if (status) {
-			totalApiCalls++;
-			res = await listOnce(true, true);
-			attempts.push(res);
-		} else {
-			totalApiCalls++;
-			res = await listOnce(false, true);
-			attempts.push(res);
-		}
+	// Single status or none
+	if (status) {
+		res = await listOnce(true, true);
+		attempts.push(res);
+	} else {
+		res = await listOnce(false, true);
+		attempts.push(res);
+	}
 
-		// If failure with status present, try without status (some accounts/APIs reject offer_status)
-		if (!res.ok && status && totalApiCalls < MAX_API_CALLS) {
-			totalApiCalls++;
-			res = await listOnce(false, true);
-			attempts.push(res);
-		}
-		// If still bad, try without marketplace_id
-		if (!res.ok && totalApiCalls < MAX_API_CALLS) {
-			totalApiCalls++;
-			res = await listOnce(Boolean(status), false);
-			attempts.push(res);
-		}
-
-		if (!res.ok) {
+	// If failure with status present, try without status (some accounts/APIs reject offer_status)
+	if (!res.ok && status) {
+		res = await listOnce(false, true);
+		attempts.push(res);
+	}
+	// If still bad, try without marketplace_id
+	if (!res.ok) {
+		res = await listOnce(Boolean(status), false, status);
+		attempts.push(res);
+	}		if (!res.ok) {
 			// If we hit the SKU 25707 issue, attempt safe aggregation
 			const code = Number((res.body?.errors && res.body.errors[0]?.errorId) || 0);
 			if (res.status === 400 && code === 25707) {
