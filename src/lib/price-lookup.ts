@@ -2,6 +2,7 @@ import { extractPriceFromHtml, extractPriceAndTypeFromHtml } from "./html-price.
 import { braveFirstUrl, braveTopUrls, serpFirstUrl } from "./search.js";
 import { getBrandUrls } from "./brand-map.js";
 import { getCachedPrice, setCachedPrice, makePriceSig } from "./price-cache.js";
+import { searchAmazonProduct, type AmazonProductResult } from "./amazon-product-api.js";
 
 export type MarketPrices = {
   amazon: number | null;
@@ -80,6 +81,47 @@ function isRetailerUrl(url: string | null | undefined): boolean {
   return /amazon\.com|walmart\.com/i.test(url);
 }
 
+async function lookupAmazonWithPaapi(
+  brand?: string,
+  product?: string,
+  variant?: string
+): Promise<{ price: number | null; productType?: string }> {
+  const title = [product, variant].filter(Boolean).join(" ").trim();
+  
+  console.log('[price-lookup] Using Amazon PA-API flow (no Brave/SerpAPI)', {
+    brand,
+    product,
+    variant
+  });
+
+  let result: AmazonProductResult | null = null;
+  try {
+    result = await searchAmazonProduct({
+      title: title || '',
+      brand,
+      upc: undefined // We don't have UPC in current flow, can add later
+    });
+  } catch (err) {
+    console.error('[price-lookup] searchAmazonProduct threw', err);
+    return { price: null };
+  }
+
+  if (!result || result.price == null) {
+    console.warn('[price-lookup] No Amazon price found via PA-API', { brand, product, variant });
+    return { price: null };
+  }
+
+  console.log(`[Price Lookup] ✓ Found Amazon price $${result.price} from PA-API`, {
+    asin: result.asin,
+    categories: result.categories.slice(0, 3)
+  });
+
+  return {
+    price: result.price,
+    productType: result.categories?.[0] ?? undefined
+  };
+}
+
 export async function lookupMarketPrice(
   brand?: string,
   product?: string,
@@ -121,28 +163,10 @@ export async function lookupMarketPrice(
 
   if (query) {
     if (amazon == null) {
-      // Try Brave search first - try top 3 results (cheaper: $0.0025 vs $0.025 per search)
-      const braveAmazonUrls = await braveTopUrls(query, "amazon.com", 3);
-      for (const url of braveAmazonUrls) {
-        const amazonData = await priceAndTypeFrom(url);
-        if (amazonData.price != null) {
-          amazon = amazonData.price;
-          if (!productType && amazonData.productType) productType = amazonData.productType;
-          console.log(`[Price Lookup] ✓ Found Amazon price $${amazon} from Brave result`);
-          break;
-        }
-      }
-      
-      // Fallback to SerpAPI/Google if Brave didn't find anything
-      if (amazon == null) {
-        const serpAmazonUrl = await serpFirstUrl(query, "amazon.com");
-        const amazonData2 = await priceAndTypeFrom(serpAmazonUrl);
-        amazon = amazonData2.price;
-        if (!productType && amazonData2.productType) productType = amazonData2.productType;
-        if (amazon != null) {
-          console.log(`[Price Lookup] ✓ Found Amazon price $${amazon} from SerpAPI fallback`);
-        }
-      }
+      // Use Amazon PA-API for direct, deterministic pricing (no Brave/SerpAPI)
+      const amazonResult = await lookupAmazonWithPaapi(brand, product, variant);
+      amazon = amazonResult.price;
+      if (!productType && amazonResult.productType) productType = amazonResult.productType;
     }
 
     if (walmart == null) {

@@ -39,3 +39,17 @@ export const STRICT_TWO_ONLY = (process.env.STRICT_TWO_ONLY ?? 'true') === 'true
 
 // Phase S1: Hard-disable CLIP embeddings (moving to vision-only + pairing system)
 export const USE_CLIP = (process.env.USE_CLIP ?? 'false') === 'true';
+
+// Amazon Product Advertising API v5 configuration
+export const amazonConfig = {
+  accessKey: process.env.AMAZON_PAAPI_ACCESS_KEY_ID || '',
+  secretKey: process.env.AMAZON_PAAPI_SECRET_KEY || '',
+  partnerTag: process.env.AMAZON_PAAPI_PARTNER_TAG || '',
+  region: process.env.AMAZON_PAAPI_REGION || 'us-east-1'
+};
+
+export function assertAmazonConfig() {
+  if (!amazonConfig.accessKey || !amazonConfig.secretKey || !amazonConfig.partnerTag) {
+    throw new Error('[amazon-config] Missing PA-API credentials. Check environment variables.');
+  }
+}
