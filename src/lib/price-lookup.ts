@@ -1,5 +1,5 @@
 import { extractPriceFromHtml, extractPriceAndTypeFromHtml } from "./html-price.js";
-import { braveFirstUrl, serpFirstUrl } from "./search.js";
+import { braveFirstUrl, braveTopUrls, serpFirstUrl } from "./search.js";
 import { getBrandUrls } from "./brand-map.js";
 import { getCachedPrice, setCachedPrice, makePriceSig } from "./price-cache.js";
 
@@ -121,11 +121,17 @@ export async function lookupMarketPrice(
 
   if (query) {
     if (amazon == null) {
-      // Try Brave search first (cheaper: $0.0025 vs $0.01 per search)
-      const braveAmazonUrl = await braveFirstUrl(query, "amazon.com");
-      const amazonData = await priceAndTypeFrom(braveAmazonUrl);
-      amazon = amazonData.price;
-      if (!productType && amazonData.productType) productType = amazonData.productType;
+      // Try Brave search first - try top 3 results (cheaper: $0.0025 vs $0.025 per search)
+      const braveAmazonUrls = await braveTopUrls(query, "amazon.com", 3);
+      for (const url of braveAmazonUrls) {
+        const amazonData = await priceAndTypeFrom(url);
+        if (amazonData.price != null) {
+          amazon = amazonData.price;
+          if (!productType && amazonData.productType) productType = amazonData.productType;
+          console.log(`[Price Lookup] ✓ Found Amazon price $${amazon} from Brave result`);
+          break;
+        }
+      }
       
       // Fallback to SerpAPI/Google if Brave didn't find anything
       if (amazon == null) {
@@ -133,15 +139,24 @@ export async function lookupMarketPrice(
         const amazonData2 = await priceAndTypeFrom(serpAmazonUrl);
         amazon = amazonData2.price;
         if (!productType && amazonData2.productType) productType = amazonData2.productType;
+        if (amazon != null) {
+          console.log(`[Price Lookup] ✓ Found Amazon price $${amazon} from SerpAPI fallback`);
+        }
       }
     }
 
     if (walmart == null) {
-      // Try Brave search first (cheaper: $0.0025 vs $0.01 per search)
-      const braveWalmartUrl = await braveFirstUrl(query, "walmart.com");
-      const walmartData = await priceAndTypeFrom(braveWalmartUrl);
-      walmart = walmartData.price;
-      if (!productType && walmartData.productType) productType = walmartData.productType;
+      // Try Brave search first - try top 3 results (cheaper: $0.0025 vs $0.025 per search)
+      const braveWalmartUrls = await braveTopUrls(query, "walmart.com", 3);
+      for (const url of braveWalmartUrls) {
+        const walmartData = await priceAndTypeFrom(url);
+        if (walmartData.price != null) {
+          walmart = walmartData.price;
+          if (!productType && walmartData.productType) productType = walmartData.productType;
+          console.log(`[Price Lookup] ✓ Found Walmart price $${walmart} from Brave result`);
+          break;
+        }
+      }
       
       // Fallback to SerpAPI/Google if Brave didn't find anything
       if (walmart == null) {
@@ -149,6 +164,9 @@ export async function lookupMarketPrice(
         const walmartData2 = await priceAndTypeFrom(serpWalmartUrl);
         walmart = walmartData2.price;
         if (!productType && walmartData2.productType) productType = walmartData2.productType;
+        if (walmart != null) {
+          console.log(`[Price Lookup] ✓ Found Walmart price $${walmart} from SerpAPI fallback`);
+        }
       }
     }
 
