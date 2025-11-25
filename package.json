@@ -33,7 +33,6 @@
     "@aws-sdk/s3-request-presigner": "^3.931.0",
     "@google/generative-ai": "^0.7.1",
     "@netlify/blobs": "^6.5.0",
-    "paapi5-nodejs-sdk": "^1.0.0",
     "cheerio": "^1.0.0-rc.12",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",

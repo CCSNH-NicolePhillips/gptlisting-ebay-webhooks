@@ -1,5 +1,5 @@
 import { amazonConfig, assertAmazonConfig } from '../config.js';
-import ProductAdvertisingAPIv1 from 'paapi5-nodejs-sdk';
+import { signAwsRequest } from './aws-sign-v4.js';
 
 export interface AmazonSearchInput {
   title: string;
@@ -36,61 +36,98 @@ export async function searchAmazonProduct(input: AmazonSearchInput): Promise<Ama
 
   const Keywords = keywordsParts.join(' ').trim();
 
-  console.log('[amazon-product-api] searchAmazonProduct', {
+  console.log('[amazon-product-api] searchAmazonProduct (direct HTTP)', {
     Keywords,
     brand,
     hasUpc: !!upc
   });
 
-  const defaultClient = ProductAdvertisingAPIv1.ApiClient.instance;
-  defaultClient.accessKey = amazonConfig.accessKey;
-  defaultClient.secretKey = amazonConfig.secretKey;
-  defaultClient.host = 'webservices.amazon.com';
-  defaultClient.region = amazonConfig.region;
+  // 2. Build PA-API v5 SearchItems request body
+  const bodyObj = {
+    Keywords,
+    SearchIndex: 'All',
+    Resources: [
+      'ItemInfo.Title',
+      'ItemInfo.ByLineInfo',
+      'Offers.Listings.Price',
+      'BrowseNodeInfo.BrowseNodes',
+      'BrowseNodeInfo.BrowseNodes.Ancestor'
+    ],
+    PartnerTag: amazonConfig.partnerTag,
+    PartnerType: 'Associates',
+    Marketplace: 'www.amazon.com'
+  };
 
-  const api = new ProductAdvertisingAPIv1.DefaultApi();
+  const bodyJson = JSON.stringify(bodyObj);
 
-  // 2. Call PA-API SearchItems
-  const searchItemsRequest = new ProductAdvertisingAPIv1.SearchItemsRequest();
-  searchItemsRequest.PartnerTag = amazonConfig.partnerTag;
-  searchItemsRequest.PartnerType = 'Associates';
-  searchItemsRequest.Keywords = Keywords;
-  searchItemsRequest.SearchIndex = 'All';
-  searchItemsRequest.ItemCount = 1;
-  searchItemsRequest.Resources = [
-    'ItemInfo.Title',
-    'ItemInfo.ByLineInfo',
-    'Offers.Listings.Price',
-    'BrowseNodeInfo.BrowseNodes',
-    'BrowseNodeInfo.BrowseNodes.Ancestor'
-  ];
+  // 3. Sign the request using AWS Signature Version 4
+  const signed = signAwsRequest(
+    {
+      accessKeyId: amazonConfig.accessKey,
+      secretAccessKey: amazonConfig.secretKey,
+      region: amazonConfig.region,
+      service: 'ProductAdvertisingAPI',
+      host: 'webservices.amazon.com'
+    },
+    {
+      method: 'POST',
+      path: '/paapi5/searchitems',
+      body: bodyJson
+    }
+  );
 
-  let response;
+  // 4. Make the HTTP request
+  let resp;
   try {
-    response = await api.searchItems(searchItemsRequest);
+    resp = await fetch(signed.url, {
+      method: 'POST',
+      headers: signed.headers,
+      body: signed.body
+    });
   } catch (err) {
-    console.error('[amazon-product-api] SearchItems failed', err);
+    console.error('[amazon-product-api] HTTP fetch failed', err);
     return null;
   }
 
-  const items = response?.SearchResult?.Items || [];
+  const text = await resp.text();
+  console.log('[amazon-product-api] searchitems status', resp.status, 'len', text.length);
+
+  if (!resp.ok) {
+    console.error('[amazon-product-api] Non-200 response', { status: resp.status, body: text.slice(0, 500) });
+    return null;
+  }
+
+  // 5. Parse response
+  let json: any;
+  try {
+    json = JSON.parse(text);
+  } catch (err) {
+    console.error('[amazon-product-api] Failed to parse JSON', err);
+    return null;
+  }
+
+  const items = json?.SearchResult?.Items || [];
   if (!items.length) {
-    console.warn('[amazon-product-api] No items found for Keywords', Keywords);
+    console.warn('[amazon-product-api] No items returned for keywords', Keywords);
     return null;
   }
 
   const item = items[0]; // we will refine ranking later if needed
 
   const asin = item.ASIN || '';
-  const titleText = item.ItemInfo?.Title?.DisplayValue || title;
+  const titleText =
+    item.ItemInfo?.Title?.DisplayValue ||
+    item.ItemInfo?.Title?.Display ||
+    title;
 
   const listing = item.Offers?.Listings?.[0];
   const priceInfo = listing?.Price || listing?.SavingBasis;
 
-  const amount = priceInfo?.Amount != null ? priceInfo.Amount : null;
+  const amount = typeof priceInfo?.Amount === 'number' ? priceInfo.Amount : null;
   const currency = priceInfo?.Currency || null;
   const detailUrl = item.DetailPageURL || null;
 
+  // 6. Extract categories from BrowseNodeInfo
   const categories: string[] = [];
   const browseNodes = item.BrowseNodeInfo?.BrowseNodes || [];
   for (const node of browseNodes) {
@@ -105,7 +142,7 @@ export async function searchAmazonProduct(input: AmazonSearchInput): Promise<Ama
 
   return {
     asin,
-    title: titleText,
+    title: titleText || title,
     price: amount,
     currency,
     url: detailUrl,
