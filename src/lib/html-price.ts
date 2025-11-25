@@ -15,6 +15,27 @@ function extractFromJsonLd($: cheerio.CheerioAPI): ExtractedData {
   const scripts = $('script[type="application/ld+json"]').toArray();
   console.log(`[HTML Parser] Found ${scripts.length} JSON-LD scripts`);
   
+  // First pass: collect all JSON-LD objects by type
+  const allJsonLd: any[] = [];
+  for (const node of scripts) {
+    try {
+      const raw = $(node).text().trim();
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      const items = Array.isArray(parsed) ? parsed : [parsed];
+      allJsonLd.push(...items);
+    } catch {}
+  }
+  
+  // Log what types we found
+  const types = allJsonLd.map(item => (item as any)["@type"]).filter(Boolean);
+  console.log(`[HTML Parser] JSON-LD types found: ${types.join(", ")}`);
+  
+  // Find BreadcrumbList if it exists
+  let breadcrumbList = allJsonLd.find(item => 
+    String((item as any)["@type"] || "").toLowerCase().includes("breadcrumb")
+  );
+  
   for (const node of scripts) {
     try {
       const raw = $(node).text().trim();
@@ -31,23 +52,37 @@ function extractFromJsonLd($: cheerio.CheerioAPI): ExtractedData {
         // Extract category/type information
         let productType: string | undefined;
         const category = (item as any).category;
-        console.log(`[HTML Parser] category field:`, category);
+        console.log(`[HTML Parser] Product.category field:`, category);
         
         if (category && typeof category === "string") {
           productType = category;
         } else if (Array.isArray(category) && category.length > 0) {
           productType = String(category[0]);
         }
-        // Also try breadcrumb for category
+        
+        // Try the Product's own breadcrumb property
         if (!productType) {
-          const breadcrumb = (item as any).breadcrumb || (item as any)["@graph"]?.find((g: any) => g["@type"] === "BreadcrumbList");
-          console.log(`[HTML Parser] breadcrumb:`, breadcrumb);
+          const breadcrumb = (item as any).breadcrumb;
+          console.log(`[HTML Parser] Product.breadcrumb field:`, breadcrumb);
           
           if (breadcrumb?.itemListElement) {
             const items = breadcrumb.itemListElement;
             const lastCrumb = Array.isArray(items) ? items[items.length - 1] : null;
             if (lastCrumb?.name) {
               productType = String(lastCrumb.name);
+            }
+          }
+        }
+        
+        // Try the separate BreadcrumbList from another JSON-LD script
+        if (!productType && breadcrumbList) {
+          console.log(`[HTML Parser] Checking separate BreadcrumbList script...`);
+          const items = breadcrumbList.itemListElement;
+          if (Array.isArray(items) && items.length > 0) {
+            const lastCrumb = items[items.length - 1];
+            if (lastCrumb?.name) {
+              productType = String(lastCrumb.name);
+              console.log(`[HTML Parser] Found category from BreadcrumbList: "${productType}"`);
             }
           }
         }
