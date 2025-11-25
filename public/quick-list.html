@@ -1163,8 +1163,16 @@
         }
 
         updateStep(4, 'complete');
-        const published = pubRes.created || 0;
-        console.log('[Quick List] Published', published, 'drafts to eBay');
+        
+        // Handle both dry-run and real publish responses
+        const isDryRun = pubRes.dryRun === true;
+        const published = isDryRun ? (pubRes.count || 0) : (pubRes.created || 0);
+        
+        if (isDryRun) {
+          console.log('[Quick List] DRY RUN - Previewed', published, 'drafts (not actually published)');
+        } else {
+          console.log('[Quick List] Published', published, 'drafts to eBay');
+        }
 
         // Show results
         $('progressBar').style.width = '100%';
