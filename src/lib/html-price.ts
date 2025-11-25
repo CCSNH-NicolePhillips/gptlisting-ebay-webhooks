@@ -13,6 +13,8 @@ type ExtractedData = {
 
 function extractFromJsonLd($: cheerio.CheerioAPI): ExtractedData {
   const scripts = $('script[type="application/ld+json"]').toArray();
+  console.log(`[HTML Parser] Found ${scripts.length} JSON-LD scripts`);
+  
   for (const node of scripts) {
     try {
       const raw = $(node).text().trim();
@@ -24,9 +26,13 @@ function extractFromJsonLd($: cheerio.CheerioAPI): ExtractedData {
         const type = String((item as any)["@type"] || "").toLowerCase();
         if (!type.includes("product")) continue;
         
+        console.log(`[HTML Parser] Found Product JSON-LD, checking for category...`);
+        
         // Extract category/type information
         let productType: string | undefined;
         const category = (item as any).category;
+        console.log(`[HTML Parser] category field:`, category);
+        
         if (category && typeof category === "string") {
           productType = category;
         } else if (Array.isArray(category) && category.length > 0) {
@@ -35,6 +41,8 @@ function extractFromJsonLd($: cheerio.CheerioAPI): ExtractedData {
         // Also try breadcrumb for category
         if (!productType) {
           const breadcrumb = (item as any).breadcrumb || (item as any)["@graph"]?.find((g: any) => g["@type"] === "BreadcrumbList");
+          console.log(`[HTML Parser] breadcrumb:`, breadcrumb);
+          
           if (breadcrumb?.itemListElement) {
             const items = breadcrumb.itemListElement;
             const lastCrumb = Array.isArray(items) ? items[items.length - 1] : null;
@@ -42,6 +50,12 @@ function extractFromJsonLd($: cheerio.CheerioAPI): ExtractedData {
               productType = String(lastCrumb.name);
             }
           }
+        }
+        
+        if (productType) {
+          console.log(`[HTML Parser] ✓ Extracted productType: "${productType}"`);
+        } else {
+          console.log(`[HTML Parser] ⚠️ No category found in JSON-LD Product`);
         }
         
         const offers = (item as any).offers;
