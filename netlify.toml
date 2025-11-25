@@ -3,6 +3,7 @@
   command = "npm run build"
   publish = "public"
   functions = "netlify/functions"
+  # Redeploy to pick up new API keys
 
 [functions]
   node_bundler = "esbuild"
