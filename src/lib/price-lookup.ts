@@ -121,32 +121,32 @@ export async function lookupMarketPrice(
 
   if (query) {
     if (amazon == null) {
-      // Try Google search first (more reliable)
-      const serpAmazonUrl = await serpFirstUrl(query, "amazon.com");
-      const amazonData = await priceAndTypeFrom(serpAmazonUrl);
+      // Try Brave search first (cheaper: $0.0025 vs $0.01 per search)
+      const braveAmazonUrl = await braveFirstUrl(query, "amazon.com");
+      const amazonData = await priceAndTypeFrom(braveAmazonUrl);
       amazon = amazonData.price;
       if (!productType && amazonData.productType) productType = amazonData.productType;
       
-      // Fallback to Brave if Google didn't find anything
+      // Fallback to SerpAPI/Google if Brave didn't find anything
       if (amazon == null) {
-        const braveAmazonUrl = await braveFirstUrl(query, "amazon.com");
-        const amazonData2 = await priceAndTypeFrom(braveAmazonUrl);
+        const serpAmazonUrl = await serpFirstUrl(query, "amazon.com");
+        const amazonData2 = await priceAndTypeFrom(serpAmazonUrl);
         amazon = amazonData2.price;
         if (!productType && amazonData2.productType) productType = amazonData2.productType;
       }
     }
 
     if (walmart == null) {
-      // Try Google search first (more reliable)
-      const serpWalmartUrl = await serpFirstUrl(query, "walmart.com");
-      const walmartData = await priceAndTypeFrom(serpWalmartUrl);
+      // Try Brave search first (cheaper: $0.0025 vs $0.01 per search)
+      const braveWalmartUrl = await braveFirstUrl(query, "walmart.com");
+      const walmartData = await priceAndTypeFrom(braveWalmartUrl);
       walmart = walmartData.price;
       if (!productType && walmartData.productType) productType = walmartData.productType;
       
-      // Fallback to Brave if Google didn't find anything
+      // Fallback to SerpAPI/Google if Brave didn't find anything
       if (walmart == null) {
-        const braveWalmartUrl = await braveFirstUrl(query, "walmart.com");
-        const walmartData2 = await priceAndTypeFrom(braveWalmartUrl);
+        const serpWalmartUrl = await serpFirstUrl(query, "walmart.com");
+        const walmartData2 = await priceAndTypeFrom(serpWalmartUrl);
         walmart = walmartData2.price;
         if (!productType && walmartData2.productType) productType = walmartData2.productType;
       }
