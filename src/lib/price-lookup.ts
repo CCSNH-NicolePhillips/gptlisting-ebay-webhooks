@@ -1,5 +1,5 @@
 import { extractPriceFromHtml, extractPriceAndTypeFromHtml } from "./html-price.js";
-import { braveFirstUrl, braveTopUrls, serpFirstUrl } from "./search.js";
+import { braveFirstUrl, braveTopUrls } from "./search.js";
 import { getBrandUrls } from "./brand-map.js";
 import { getCachedPrice, setCachedPrice, makePriceSig } from "./price-cache.js";
 import { searchAmazonProduct, type AmazonProductResult } from "./amazon-product-api.js";
@@ -170,40 +170,32 @@ export async function lookupMarketPrice(
     }
 
     if (walmart == null) {
-      // Try Brave search first - try top 3 results (cheaper: $0.0025 vs $0.025 per search)
+      // Try Brave search - try top 3 results
       const braveWalmartUrls = await braveTopUrls(query, "walmart.com", 3);
       for (const url of braveWalmartUrls) {
         const walmartData = await priceAndTypeFrom(url);
         if (walmartData.price != null) {
           walmart = walmartData.price;
           if (!productType && walmartData.productType) productType = walmartData.productType;
-          console.log(`[Price Lookup] ✓ Found Walmart price $${walmart} from Brave result`);
+          console.log(`[Price Lookup] ✓ Found Walmart price $${walmart} from Brave`);
           break;
         }
       }
       
-      // Fallback to SerpAPI/Google if Brave didn't find anything
       if (walmart == null) {
-        const serpWalmartUrl = await serpFirstUrl(query, "walmart.com");
-        const walmartData2 = await priceAndTypeFrom(serpWalmartUrl);
-        walmart = walmartData2.price;
-        if (!productType && walmartData2.productType) productType = walmartData2.productType;
-        if (walmart != null) {
-          console.log(`[Price Lookup] ✓ Found Walmart price $${walmart} from SerpAPI fallback`);
-        }
+        console.log('[Price Lookup] No Walmart price found via Brave');
       }
     }
 
     if (brandPrice == null) {
       const braveGeneric = await braveFirstUrl(query);
-      let brandUrl = braveGeneric && !isRetailerUrl(braveGeneric) ? braveGeneric : null;
-      if (!brandUrl) {
-        const serpGeneric = await serpFirstUrl(query);
-        if (serpGeneric && !isRetailerUrl(serpGeneric)) {
-          brandUrl = serpGeneric;
-        }
-      }
+      const brandUrl = braveGeneric && !isRetailerUrl(braveGeneric) ? braveGeneric : null;
       brandPrice = await priceFrom(brandUrl);
+      if (brandPrice != null) {
+        console.log(`[Price Lookup] ✓ Found brand price $${brandPrice} from Brave`);
+      } else {
+        console.log('[Price Lookup] No brand price found via Brave');
+      }
     }
   }
 
