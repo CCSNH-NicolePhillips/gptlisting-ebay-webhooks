@@ -121,28 +121,32 @@ export async function lookupMarketPrice(
 
   if (query) {
     if (amazon == null) {
-      const braveAmazonUrl = await braveFirstUrl(query, "amazon.com");
-      const amazonData = await priceAndTypeFrom(braveAmazonUrl);
+      // Try Google search first (more reliable)
+      const serpAmazonUrl = await serpFirstUrl(query, "amazon.com");
+      const amazonData = await priceAndTypeFrom(serpAmazonUrl);
       amazon = amazonData.price;
       if (!productType && amazonData.productType) productType = amazonData.productType;
       
+      // Fallback to Brave if Google didn't find anything
       if (amazon == null) {
-        const serpAmazonUrl = await serpFirstUrl(query, "amazon.com");
-        const amazonData2 = await priceAndTypeFrom(serpAmazonUrl);
+        const braveAmazonUrl = await braveFirstUrl(query, "amazon.com");
+        const amazonData2 = await priceAndTypeFrom(braveAmazonUrl);
         amazon = amazonData2.price;
         if (!productType && amazonData2.productType) productType = amazonData2.productType;
       }
     }
 
     if (walmart == null) {
-      const braveWalmartUrl = await braveFirstUrl(query, "walmart.com");
-      const walmartData = await priceAndTypeFrom(braveWalmartUrl);
+      // Try Google search first (more reliable)
+      const serpWalmartUrl = await serpFirstUrl(query, "walmart.com");
+      const walmartData = await priceAndTypeFrom(serpWalmartUrl);
       walmart = walmartData.price;
       if (!productType && walmartData.productType) productType = walmartData.productType;
       
+      // Fallback to Brave if Google didn't find anything
       if (walmart == null) {
-        const serpWalmartUrl = await serpFirstUrl(query, "walmart.com");
-        const walmartData2 = await priceAndTypeFrom(serpWalmartUrl);
+        const braveWalmartUrl = await braveFirstUrl(query, "walmart.com");
+        const walmartData2 = await priceAndTypeFrom(braveWalmartUrl);
         walmart = walmartData2.price;
         if (!productType && walmartData2.productType) productType = walmartData2.productType;
       }
