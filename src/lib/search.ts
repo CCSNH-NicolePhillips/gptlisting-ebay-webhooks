@@ -62,8 +62,31 @@ export async function braveFirstUrl(query: string, site?: string): Promise<strin
       
       // Handle 429 rate limit with retry
       if (res.status === 429 && attempt < maxRetries) {
-        const delay = 1000 + Math.random() * 1000; // 1-2 seconds
-        console.warn(`[Brave] Rate limited (429), retrying in ${Math.round(delay)}ms (attempt ${attempt}/${maxRetries})`);
+        // Check for Retry-After header (recommended by API specs)
+        const retryAfter = res.headers.get('Retry-After');
+        let delay: number;
+        
+        if (retryAfter) {
+          // Retry-After can be either seconds or HTTP date
+          const retrySeconds = parseInt(retryAfter, 10);
+          if (!isNaN(retrySeconds)) {
+            delay = retrySeconds * 1000; // Convert to milliseconds
+            console.warn(`[Brave] Rate limited (429), Retry-After: ${retrySeconds}s (attempt ${attempt}/${maxRetries})`);
+          } else {
+            // If it's a date, calculate delay
+            const retryDate = new Date(retryAfter);
+            delay = Math.max(0, retryDate.getTime() - Date.now());
+            console.warn(`[Brave] Rate limited (429), Retry-After: ${retryAfter} (attempt ${attempt}/${maxRetries})`);
+          }
+        } else {
+          // Fallback: use exponential backoff with jitter if no Retry-After header
+          delay = 1000 + Math.random() * 1000; // 1-2 seconds
+          console.warn(`[Brave] Rate limited (429), no Retry-After header, using ${Math.round(delay)}ms delay (attempt ${attempt}/${maxRetries})`);
+        }
+        
+        // Cap delay at 10 seconds to avoid excessive waits
+        delay = Math.min(delay, 10000);
+        
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
@@ -127,8 +150,31 @@ export async function braveFirstUrlForBrandSite(
       
       // Handle 429 rate limit with retry
       if (res.status === 429 && attempt < maxRetries) {
-        const delay = 1000 + Math.random() * 1000; // 1-2 seconds
-        console.warn(`[Brave] Rate limited (429), retrying in ${Math.round(delay)}ms (attempt ${attempt}/${maxRetries})`);
+        // Check for Retry-After header (recommended by API specs)
+        const retryAfter = res.headers.get('Retry-After');
+        let delay: number;
+        
+        if (retryAfter) {
+          // Retry-After can be either seconds or HTTP date
+          const retrySeconds = parseInt(retryAfter, 10);
+          if (!isNaN(retrySeconds)) {
+            delay = retrySeconds * 1000; // Convert to milliseconds
+            console.warn(`[Brave] Rate limited (429), Retry-After: ${retrySeconds}s (attempt ${attempt}/${maxRetries})`);
+          } else {
+            // If it's a date, calculate delay
+            const retryDate = new Date(retryAfter);
+            delay = Math.max(0, retryDate.getTime() - Date.now());
+            console.warn(`[Brave] Rate limited (429), Retry-After: ${retryAfter} (attempt ${attempt}/${maxRetries})`);
+          }
+        } else {
+          // Fallback: use exponential backoff with jitter if no Retry-After header
+          delay = 1000 + Math.random() * 1000; // 1-2 seconds
+          console.warn(`[Brave] Rate limited (429), no Retry-After header, using ${Math.round(delay)}ms delay (attempt ${attempt}/${maxRetries})`);
+        }
+        
+        // Cap delay at 10 seconds to avoid excessive waits
+        delay = Math.min(delay, 10000);
+        
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
