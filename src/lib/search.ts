@@ -52,23 +52,44 @@ export async function braveFirstUrl(query: string, site?: string): Promise<strin
   url.searchParams.set("q", targetQuery);
   url.searchParams.set("count", "5");
 
-  try {
-    const res = await fetch(url.toString(), {
-      headers: { "X-Subscription-Token": apiKey },
-    });
-    if (!res.ok) {
-      console.warn(`[Brave] API returned ${res.status}`);
-      return null;
+  // Retry logic for rate limiting (429 errors)
+  const maxRetries = 3;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(url.toString(), {
+        headers: { "X-Subscription-Token": apiKey },
+      });
+      
+      // Handle 429 rate limit with retry
+      if (res.status === 429 && attempt < maxRetries) {
+        const delay = 1000 + Math.random() * 1000; // 1-2 seconds
+        console.warn(`[Brave] Rate limited (429), retrying in ${Math.round(delay)}ms (attempt ${attempt}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      
+      if (!res.ok) {
+        console.warn(`[Brave] API returned ${res.status}`);
+        return null;
+      }
+      await incBrave();
+      const data: any = await res.json();
+      const found = pickFirstUrl(data?.web?.results);
+      console.log(`[Brave] Query: "${targetQuery}" → ${found || "(no results)"}`);
+      return found ?? null;
+    } catch (err) {
+      if (attempt === maxRetries) {
+        console.warn("[Brave] Search failed:", err);
+        return null;
+      }
+      // Retry on network errors too
+      const delay = 1000 + Math.random() * 1000;
+      console.warn(`[Brave] Request failed, retrying in ${Math.round(delay)}ms (attempt ${attempt}/${maxRetries})`);
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
-    await incBrave();
-    const data: any = await res.json();
-    const found = pickFirstUrl(data?.web?.results);
-    console.log(`[Brave] Query: "${targetQuery}" → ${found || "(no results)"}`);
-    return found ?? null;
-  } catch (err) {
-    console.warn("[Brave] Search failed:", err);
-    return null;
   }
+  
+  return null;
 }
 
 /**
@@ -96,40 +117,61 @@ export async function braveFirstUrlForBrandSite(
   url.searchParams.set("q", query);
   url.searchParams.set("count", "5");
 
-  try {
-    const res = await fetch(url.toString(), {
-      headers: { "X-Subscription-Token": apiKey },
-    });
-    if (!res.ok) {
-      console.warn(`[Brave] API returned ${res.status}`);
+  // Retry logic for rate limiting (429 errors)
+  const maxRetries = 3;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(url.toString(), {
+        headers: { "X-Subscription-Token": apiKey },
+      });
+      
+      // Handle 429 rate limit with retry
+      if (res.status === 429 && attempt < maxRetries) {
+        const delay = 1000 + Math.random() * 1000; // 1-2 seconds
+        console.warn(`[Brave] Rate limited (429), retrying in ${Math.round(delay)}ms (attempt ${attempt}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      
+      if (!res.ok) {
+        console.warn(`[Brave] API returned ${res.status}`);
+        return null;
+      }
+      await incBrave();
+      const data: any = await res.json();
+      const results = data?.web?.results || [];
+
+      // Filter out major retailers
+      const retailerDomains = [
+        'amazon.com', 'walmart.com', 'ebay.com', 'target.com',
+        'bestbuy.com', 'homedepot.com', 'lowes.com', 'costco.com'
+      ];
+
+      for (const entry of results) {
+        const foundUrl = entry?.url;
+        if (!foundUrl || typeof foundUrl !== 'string') continue;
+
+        // Skip retailers
+        const isRetailer = retailerDomains.some(domain => foundUrl.includes(domain));
+        if (isRetailer) continue;
+
+        console.log(`[Brave] Brand site for "${brandName}": ${foundUrl}`);
+        return foundUrl;
+      }
+
+      console.log(`[Brave] No brand site found for "${brandName}" (only retailers)`);
       return null;
+    } catch (err) {
+      if (attempt === maxRetries) {
+        console.warn("[Brave] Brand search failed:", err);
+        return null;
+      }
+      // Retry on network errors too
+      const delay = 1000 + Math.random() * 1000;
+      console.warn(`[Brave] Request failed, retrying in ${Math.round(delay)}ms (attempt ${attempt}/${maxRetries})`);
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
-    await incBrave();
-    const data: any = await res.json();
-    const results = data?.web?.results || [];
-
-    // Filter out major retailers
-    const retailerDomains = [
-      'amazon.com', 'walmart.com', 'ebay.com', 'target.com',
-      'bestbuy.com', 'homedepot.com', 'lowes.com', 'costco.com'
-    ];
-
-    for (const entry of results) {
-      const foundUrl = entry?.url;
-      if (!foundUrl || typeof foundUrl !== 'string') continue;
-
-      // Skip retailers
-      const isRetailer = retailerDomains.some(domain => foundUrl.includes(domain));
-      if (isRetailer) continue;
-
-      console.log(`[Brave] Brand site for "${brandName}": ${foundUrl}`);
-      return foundUrl;
-    }
-
-    console.log(`[Brave] No brand site found for "${brandName}" (only retailers)`);
-    return null;
-  } catch (err) {
-    console.warn("[Brave] Brand search failed:", err);
-    return null;
   }
+  
+  return null;
 }
