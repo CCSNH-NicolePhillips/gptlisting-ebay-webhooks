@@ -8,6 +8,29 @@ import { canUseBrave, incBrave } from "./price-quota.js";
 // ============================================================================
 
 /**
+ * Known brand domain mappings to improve search accuracy
+ * Maps brand name variations to their official domain
+ */
+const BRAND_DOMAINS: Record<string, string> = {
+  'prequel': 'prequelskin.com',
+  'maude': 'getmaude.com',
+  'naked': 'nakednutrition.com',
+  'jocko': 'jockofuel.com',
+  'root': 'therootbrands.com',
+  'ryse': 'rysesupps.com',
+  'barbie': 'ever-eden.com', // Barbie x Evereden collaboration
+  // Add more brands as discovered
+};
+
+/**
+ * Get the known domain for a brand, if available
+ */
+function getBrandDomain(brandName: string): string | undefined {
+  const normalized = brandName.toLowerCase().trim();
+  return BRAND_DOMAINS[normalized];
+}
+
+/**
  * Simple local rate limiting: wait 500ms between calls within this invocation
  * Since Brave is rarely used now, we don't need cross-instance coordination
  */
@@ -131,10 +154,13 @@ export async function braveFirstUrlForBrandSite(
 
   await simpleRateLimit();
 
+  // Auto-detect brand domain from known mappings if not provided
+  const knownDomain = brandDomain || getBrandDomain(brandName);
+
   // Prefer site-specific search if brand domain known
-  const query = brandDomain
-    ? `${productTitle} site:${brandDomain}`
-    : `${brandName} ${productTitle}`;
+  const query = knownDomain
+    ? `${productTitle} site:${knownDomain}`
+    : `${brandName} ${productTitle} official site`;
 
   const url = new URL("https://api.search.brave.com/res/v1/web/search");
   url.searchParams.set("q", query);
@@ -187,25 +213,36 @@ export async function braveFirstUrlForBrandSite(
       const data: any = await res.json();
       const results = data?.web?.results || [];
 
-      // Filter out major retailers
+      // Filter out major retailers and non-brand sites
       const retailerDomains = [
         'amazon.com', 'walmart.com', 'ebay.com', 'target.com',
         'bestbuy.com', 'homedepot.com', 'lowes.com', 'costco.com'
+      ];
+      
+      const excludedDomains = [
+        'incidecoder.com',  // Ingredient database
+        'skincarisma.com',  // Ingredient analyzer
+        'beautypedia.com',  // Reviews
+        'makeupalley.com',  // Reviews
+        'ulta.com',         // Retailer
+        'sephora.com',      // Retailer
       ];
 
       for (const entry of results) {
         const foundUrl = entry?.url;
         if (!foundUrl || typeof foundUrl !== 'string') continue;
 
-        // Skip retailers
-        const isRetailer = retailerDomains.some(domain => foundUrl.includes(domain));
-        if (isRetailer) continue;
+        // Skip retailers and excluded sites
+        const shouldSkip = [...retailerDomains, ...excludedDomains].some(
+          domain => foundUrl.includes(domain)
+        );
+        if (shouldSkip) continue;
 
         console.log(`[Brave] Brand site for "${brandName}": ${foundUrl}`);
         return foundUrl;
       }
 
-      console.log(`[Brave] No brand site found for "${brandName}" (only retailers)`);
+      console.log(`[Brave] No brand site found for "${brandName}" (only retailers/excluded sites)`);
       return null;
     } catch (err) {
       if (attempt === maxRetries) {
