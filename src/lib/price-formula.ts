@@ -9,21 +9,26 @@ export type PricingResult = {
 };
 
 /**
- * Apply markdown and auto-reduction logic to a market average.
+ * Apply 10% discount to market average with $0.99 minimum.
+ * TODO: Make discount percentage user-configurable.
  */
 export function applyPricingFormula(avg: number | null | undefined): PricingResult | null {
   if (!avg || avg <= 0) {
     return null;
   }
 
-  // Step 1 — Base markdown
-  let ebay = avg > 30 ? avg - 5 : avg * 0.9;
+  // Step 1 — Apply 10% discount
+  let ebay = avg * 0.9;
 
-  // Step 2 — Round to .45 or .95 for clean display
-  const cents = ebay % 1;
-  ebay = cents < 0.5 ? Math.floor(ebay) + 0.45 : Math.floor(ebay) + 0.95;
+  // Step 2 — Enforce minimum price of $0.99
+  if (ebay < 0.99) {
+    ebay = 0.99;
+  }
 
-  // Step 3 — Auto-reduction metadata
+  // Step 3 — Round to 2 decimal places
+  ebay = +ebay.toFixed(2);
+
+  // Step 4 — Auto-reduction metadata
   const auto = {
     reduceBy: 1,
     everyDays: 3,
@@ -32,7 +37,7 @@ export function applyPricingFormula(avg: number | null | undefined): PricingResu
 
   return {
     base: +avg.toFixed(2),
-    ebay: +ebay.toFixed(2),
+    ebay,
     auto,
   };
 }
