@@ -25,6 +25,8 @@ function extractFromJsonLd($: cheerio.CheerioAPI): ExtractedData {
   
   console.log(`[HTML Parser] Found ${scripts.length} JSON-LD script(s), attempting extraction...`);
   
+  const allPrices: number[] = [];
+  
   for (const node of scripts) {
     try {
       const raw = $(node).text().trim();
@@ -40,17 +42,20 @@ function extractFromJsonLd($: cheerio.CheerioAPI): ExtractedData {
         // Found a Product schema - try to extract price from offers
         const offers = (item as any).offers;
         if (!offers) continue;
-        const offer = Array.isArray(offers) ? offers[0] : offers;
-        if (!offer || typeof offer !== "object") continue;
+        const offerList = Array.isArray(offers) ? offers : [offers];
         
-        const priceFromOffer =
-          toNumber((offer as any).price) ??
-          toNumber((offer as any).priceSpecification?.price) ??
-          toNumber((offer as any).lowPrice);
-        
-        if (priceFromOffer) {
-          console.log(`[HTML Parser] ✓ Extracted price $${priceFromOffer} from JSON-LD Product`);
-          return { price: priceFromOffer };
+        // Collect all prices from all offers
+        for (const offer of offerList) {
+          if (!offer || typeof offer !== "object") continue;
+          
+          const priceFromOffer =
+            toNumber((offer as any).price) ??
+            toNumber((offer as any).priceSpecification?.price) ??
+            toNumber((offer as any).lowPrice);
+          
+          if (priceFromOffer) {
+            allPrices.push(priceFromOffer);
+          }
         }
       }
     } catch (err) {
@@ -59,8 +64,15 @@ function extractFromJsonLd($: cheerio.CheerioAPI): ExtractedData {
     }
   }
   
-  console.log(`[HTML Parser] No price found in JSON-LD`);
-  return { price: null };
+  if (allPrices.length === 0) {
+    console.log(`[HTML Parser] No price found in JSON-LD`);
+    return { price: null };
+  }
+  
+  // Return the highest price found (likely the one-time purchase price vs subscription)
+  const maxPrice = Math.max(...allPrices);
+  console.log(`[HTML Parser] ✓ Extracted price $${maxPrice} from JSON-LD Product (found ${allPrices.length} price(s): ${allPrices.join(', ')})`);
+  return { price: maxPrice };
 }
 
 function extractFromOpenGraph($: cheerio.CheerioAPI): number | null {
