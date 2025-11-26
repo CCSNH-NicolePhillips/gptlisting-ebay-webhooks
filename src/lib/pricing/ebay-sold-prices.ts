@@ -1,4 +1,4 @@
-import { getEbayAccessToken } from "../ebay-auth.js";
+import { appAccessToken, tokenHosts } from "../_common.js";
 
 export interface SoldPriceSample {
   price: number;
@@ -107,16 +107,18 @@ export async function fetchSoldPriceStats(
   };
 
   try {
-    const { token } = await getEbayAccessToken();
-    if (!token) {
-      console.error('[ebay-sold] Failed to get eBay token');
+    // Use client_credentials grant for public Browse API (no user auth needed)
+    const { access_token } = await appAccessToken([
+      'https://api.ebay.com/oauth/api_scope'
+    ]);
+    
+    if (!access_token) {
+      console.error('[ebay-sold] Failed to get eBay app token');
       return empty;
     }
 
-    const env = process.env.EBAY_ENV || 'SANDBOX';
-    const baseUrl = env === 'PROD'
-      ? 'https://api.ebay.com'
-      : 'https://api.sandbox.ebay.com';
+    const { apiHost } = tokenHosts(process.env.EBAY_ENV);
+    const baseUrl = apiHost;
 
     let searchUrl: URL;
     let searchType: 'upc' | 'keywords';
@@ -155,7 +157,7 @@ export async function fetchSoldPriceStats(
 
     const response = await fetch(searchUrl.toString(), {
       headers: {
-        'Authorization': `Bearer ${token}`,
+        'Authorization': `Bearer ${access_token}`,
         'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US',
         'Accept': 'application/json',
       },
