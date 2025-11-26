@@ -13,6 +13,20 @@ export type MarketPrices = {
   productType?: string; // Product type/category extracted from Amazon/Walmart
 };
 
+// Rate limiting: delay between Brave API calls to avoid throttling
+const BRAVE_API_DELAY_MS = 500; // 500ms between calls
+let lastBraveCallTime = 0;
+
+async function rateLimitBrave(): Promise<void> {
+  const now = Date.now();
+  const timeSinceLastCall = now - lastBraveCallTime;
+  if (timeSinceLastCall < BRAVE_API_DELAY_MS) {
+    const delayNeeded = BRAVE_API_DELAY_MS - timeSinceLastCall;
+    await new Promise(resolve => setTimeout(resolve, delayNeeded));
+  }
+  lastBraveCallTime = Date.now();
+}
+
 async function fetchHtml(url: string | null | undefined, timeoutMs = 10000): Promise<string | null> {
   if (!url) return null;
   try {
@@ -191,7 +205,8 @@ export async function lookupMarketPrice(
     }
 
     if (walmart == null) {
-      // Try Brave search - try top 3 results
+      // Try Brave search - try top 3 results (with rate limiting)
+      await rateLimitBrave();
       const braveWalmartUrls = await braveTopUrls(query, "walmart.com", 3);
       for (const url of braveWalmartUrls) {
         const walmartData = await priceAndTypeFrom(url);
@@ -209,6 +224,8 @@ export async function lookupMarketPrice(
     }
 
     if (brandPrice == null) {
+      // Try Brave search for brand site (with rate limiting)
+      await rateLimitBrave();
       const braveGeneric = await braveFirstUrl(query);
       const brandUrl = braveGeneric && !isRetailerUrl(braveGeneric) ? braveGeneric : null;
       brandPrice = await priceFrom(brandUrl);
