@@ -336,9 +336,11 @@ async function classifyAllImagesStage1(imagePaths: string[]): Promise<ImageClass
   // Process all images in a single call (background function has 10min timeout)
   console.log(`[pairing-v2] Classifying all ${imagePaths.length} images in single batch for cross-image inference...`);
   
+  const batchStart = Date.now();
   const all = await classifyImagesBatch(imagePaths);
+  const batchDuration = ((Date.now() - batchStart) / 1000).toFixed(1);
   
-  console.log(`[pairing-v2] Classification complete: ${all.length} total classifications`);
+  console.log(`[pairing-v2] Classification complete: ${all.length} total classifications (${batchDuration}s, ${(imagePaths.length / parseFloat(batchDuration)).toFixed(1)} img/s)`);
   
   return all;
 }
@@ -636,16 +638,26 @@ ${JSON.stringify(payload, null, 2)}`;
  * @returns PairingResult with pairs, unpaired items, and metrics
  */
 export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<PairingResult> {
+  const startTime = Date.now();
   console.log(`[pairing-v2] Starting pipeline on ${imagePaths.length} images`);
   
   // Stage 1: Classify all images (batched for scalability)
+  const stage1Start = Date.now();
   const classifications = await classifyAllImagesStage1(imagePaths);
+  const stage1Duration = ((Date.now() - stage1Start) / 1000).toFixed(1);
+  console.log(`[pairing-v2] ⏱️ Stage 1 (Vision Classification): ${stage1Duration}s for ${imagePaths.length} images`);
   
   // Stage 2: Pair from metadata only (no images sent)
+  const stage2Start = Date.now();
   const pairing = await pairFromClassifications(classifications);
+  const stage2Duration = ((Date.now() - stage2Start) / 1000).toFixed(1);
+  console.log(`[pairing-v2] ⏱️ Stage 2 (Pairing Logic): ${stage2Duration}s`);
   
   // Stage 3: Verify pairs (independent validation)
+  const stage3Start = Date.now();
   const verification = await verifyPairs(classifications, pairing);
+  const stage3Duration = ((Date.now() - stage3Start) / 1000).toFixed(1);
+  console.log(`[pairing-v2] ⏱️ Stage 3 (Verification): ${stage3Duration}s`);
   
   const acceptedPairs = verification.verifiedPairs.filter(p => p.status === 'accepted');
   const rejectedPairs = verification.verifiedPairs.filter(p => p.status === 'rejected');
@@ -740,7 +752,8 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
     reasons,
   };
   
-  console.log(`[pairing-v2] Pipeline complete: ${pairs.length} pairs, ${unpaired.length} unpaired`);
+  const totalDuration = ((Date.now() - startTime) / 1000).toFixed(1);
+  console.log(`[pairing-v2] ✅ Pipeline complete: ${pairs.length} pairs, ${unpaired.length} unpaired (total: ${totalDuration}s)`);
   
   return {
     pairs,
