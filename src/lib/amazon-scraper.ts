@@ -71,12 +71,16 @@ export async function scrapeAmazonPrice(
     // Try to extract price from search results
     // Amazon uses various price formats, try multiple patterns
     const pricePatterns = [
-      // Whole price pattern: $19.99 or $19
-      /\$(\d+)\.(\d{2})/g,
-      // Alternative: <span class="a-price-whole">19</span><span class="a-price-fraction">99</span>
-      /<span class="a-price-whole">(\d+)<\/span>.*?<span class="a-price-fraction">(\d+)<\/span>/g,
-      // Just whole dollars
-      /\$(\d+)/g
+      // Pattern 1: a-price-whole + a-price-fraction spans
+      /<span class="a-price-whole">(\d+)<\/span><span class="a-offscreen">\$\d+\.\d+<\/span><span class="a-price-fraction">(\d+)<\/span>/,
+      // Pattern 2: Simple $19.99 format
+      /\$(\d+)\.(\d{2})/,
+      // Pattern 3: a-price-whole only (whole dollars)
+      /<span class="a-price-whole">(\d+)<\/span>/,
+      // Pattern 4: JSON price data
+      /"priceAmount":(\d+\.?\d*)/,
+      // Pattern 5: Offscreen price (accessibility text)
+      /<span class="a-offscreen">\$(\d+)\.(\d{2})<\/span>/,
     ];
 
     let price: number | null = null;
@@ -88,34 +92,49 @@ export async function scrapeAmazonPrice(
       return { price: null, asin };
     }
 
-    // Get a reasonable chunk of HTML after the ASIN (next 2000 chars should contain price)
-    const asinSection = html.substring(asinSectionStart, asinSectionStart + 2000);
+    // Get a larger chunk of HTML (4000 chars should definitely contain price)
+    const asinSection = html.substring(asinSectionStart, asinSectionStart + 4000);
 
     // Try each pattern
-    for (const pattern of pricePatterns) {
-      pattern.lastIndex = 0; // Reset regex
-      const matches = [...asinSection.matchAll(pattern)];
+    for (let i = 0; i < pricePatterns.length; i++) {
+      const pattern = pricePatterns[i];
+      const match = asinSection.match(pattern);
       
-      if (matches.length > 0) {
-        const match = matches[0];
+      if (match) {
         if (match[2]) {
           // Has cents: $19.99
           price = parseFloat(`${match[1]}.${match[2]}`);
         } else {
-          // Just dollars: $19
+          // Just dollars: $19 or "priceAmount":29.99
           price = parseFloat(match[1]);
         }
 
         if (price && price > 0 && price < 10000) {
           // Sanity check: reasonable price range
-          console.log('[amazon-scraper] ✓ Found price:', `$${price}`);
+          console.log(`[amazon-scraper] ✓ Found price: $${price} (pattern ${i + 1})`);
           break;
+        } else {
+          price = null; // Reset if invalid
+        }
+      }
+    }
+
+    if (!price) {
+      // Last resort: try to find ANY price-like pattern in the section
+      const anyPriceMatch = asinSection.match(/\$(\d+)\.(\d{2})/);
+      if (anyPriceMatch) {
+        price = parseFloat(`${anyPriceMatch[1]}.${anyPriceMatch[2]}`);
+        if (price > 0 && price < 10000) {
+          console.log(`[amazon-scraper] ✓ Found price: $${price} (fallback pattern)`);
+        } else {
+          price = null;
         }
       }
     }
 
     if (!price) {
       console.warn('[amazon-scraper] Could not extract price from product section');
+      console.warn('[amazon-scraper] Section preview:', asinSection.substring(0, 500));
       return { price: null, asin };
     }
 
