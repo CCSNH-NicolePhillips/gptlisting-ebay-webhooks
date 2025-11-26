@@ -3,6 +3,7 @@ import { braveFirstUrl, braveTopUrls } from "./search.js";
 import { getBrandUrls } from "./brand-map.js";
 import { getCachedPrice, setCachedPrice, makePriceSig } from "./price-cache.js";
 import { searchAmazonProduct, type AmazonProductResult } from "./amazon-product-api.js";
+import { scrapeAmazonPrice } from "./amazon-scraper.js";
 
 export type MarketPrices = {
   amazon: number | null;
@@ -88,12 +89,13 @@ async function lookupAmazonWithPaapi(
 ): Promise<{ price: number | null; productType?: string }> {
   const title = [product, variant].filter(Boolean).join(" ").trim();
   
-  console.log('[price-lookup] Using Amazon PA-API flow (no Brave/SerpAPI)', {
+  console.log('[price-lookup] Using Amazon PA-API flow (with scraper fallback)', {
     brand,
     product,
     variant
   });
 
+  // Try PA-API first
   let result: AmazonProductResult | null = null;
   try {
     result = await searchAmazonProduct({
@@ -103,23 +105,42 @@ async function lookupAmazonWithPaapi(
     });
   } catch (err) {
     console.error('[price-lookup] searchAmazonProduct threw', err);
-    return { price: null };
   }
 
-  if (!result || result.price == null) {
-    console.warn('[price-lookup] No Amazon price found via PA-API', { brand, product, variant });
-    return { price: null };
+  if (result && result.price != null) {
+    console.log(`[Price Lookup] ✓ Found Amazon price $${result.price} from PA-API`, {
+      asin: result.asin,
+      categories: result.categories.slice(0, 3)
+    });
+
+    return {
+      price: result.price,
+      productType: result.categories?.[0] ?? undefined
+    };
   }
 
-  console.log(`[Price Lookup] ✓ Found Amazon price $${result.price} from PA-API`, {
-    asin: result.asin,
-    categories: result.categories.slice(0, 3)
-  });
+  // PA-API failed, fall back to scraper
+  console.log('[price-lookup] PA-API failed, trying Amazon scraper...');
+  
+  try {
+    const scraperResult = await scrapeAmazonPrice(brand, product);
+    
+    if (scraperResult.price) {
+      console.log(`[Price Lookup] ✓ Found Amazon price $${scraperResult.price} from scraper`, {
+        asin: scraperResult.asin,
+        url: scraperResult.url
+      });
 
-  return {
-    price: result.price,
-    productType: result.categories?.[0] ?? undefined
-  };
+      return {
+        price: scraperResult.price
+      };
+    }
+  } catch (err) {
+    console.error('[price-lookup] Amazon scraper threw', err);
+  }
+
+  console.warn('[price-lookup] No Amazon price found (PA-API and scraper both failed)', { brand, product, variant });
+  return { price: null };
 }
 
 export async function lookupMarketPrice(
