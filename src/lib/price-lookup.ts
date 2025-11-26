@@ -14,7 +14,7 @@ export type MarketPrices = {
 };
 
 // Rate limiting: delay between Brave API calls to avoid throttling
-const BRAVE_API_DELAY_MS = 500; // 500ms between calls
+const BRAVE_API_DELAY_MS = 1500; // 1.5s between calls (increased from 500ms)
 let lastBraveCallTime = 0;
 
 async function rateLimitBrave(): Promise<void> {
