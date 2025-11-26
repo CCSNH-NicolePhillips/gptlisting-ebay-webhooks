@@ -1,32 +1,58 @@
-import { extractPriceFromHtml, extractPriceAndTypeFromHtml } from "./html-price.js";
-import { braveFirstUrl, braveTopUrls } from "./search.js";
+import { extractPriceFromHtml } from "./html-price.js";
+import { braveFirstUrlForBrandSite } from "./search.js";
 import { getBrandUrls } from "./brand-map.js";
-import { getCachedPrice, setCachedPrice, makePriceSig } from "./price-cache.js";
-import { searchAmazonProduct, type AmazonProductResult } from "./amazon-product-api.js";
-import { scrapeAmazonPrice } from "./amazon-scraper.js";
+import { fetchSoldPriceStats, type SoldPriceStats } from "./pricing/ebay-sold-prices.js";
+import { openai } from "./openai.js";
+
+// ============================================================================
+// NEW TIERED PRICING ENGINE
+// ============================================================================
+
+export interface PriceLookupInput {
+  title: string;
+  brand?: string;
+  upc?: string;
+  condition?: 'NEW' | 'USED' | 'OTHER';
+  quantity?: number;
+}
+
+export type PriceSource = 'ebay-sold' | 'brand-msrp' | 'brave-fallback';
+
+export interface PriceSourceDetail {
+  source: PriceSource;
+  price: number;
+  currency: string;
+  url?: string;
+  notes?: string;
+}
+
+export interface PriceDecision {
+  ok: boolean;
+  chosen?: PriceSourceDetail;
+  candidates: PriceSourceDetail[];
+  recommendedListingPrice?: number;
+  reason?: string;
+}
+
+// ============================================================================
+// LEGACY SUPPORT (keep for backward compatibility)
+// ============================================================================
 
 export type MarketPrices = {
   amazon: number | null;
   walmart: number | null;
   brand: number | null;
   avg: number;
-  productType?: string; // Product type/category extracted from Amazon/Walmart
+  productType?: string;
 };
 
-// Rate limiting: delay between Brave API calls to avoid throttling
-const BRAVE_API_DELAY_MS = 1500; // 1.5s between calls (increased from 500ms)
-let lastBraveCallTime = 0;
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
 
-async function rateLimitBrave(): Promise<void> {
-  const now = Date.now();
-  const timeSinceLastCall = now - lastBraveCallTime;
-  if (timeSinceLastCall < BRAVE_API_DELAY_MS) {
-    const delayNeeded = BRAVE_API_DELAY_MS - timeSinceLastCall;
-    await new Promise(resolve => setTimeout(resolve, delayNeeded));
-  }
-  lastBraveCallTime = Date.now();
-}
-
+/**
+ * Helper: Fetch HTML with timeout
+ */
 async function fetchHtml(url: string | null | undefined, timeoutMs = 10000): Promise<string | null> {
   if (!url) return null;
   try {
@@ -48,205 +74,314 @@ async function fetchHtml(url: string | null | undefined, timeoutMs = 10000): Pro
   }
 }
 
+/**
+ * Helper: Extract price from URL
+ */
 async function priceFrom(url: string | null | undefined): Promise<number | null> {
   const html = await fetchHtml(url);
   if (!html) return null;
   return extractPriceFromHtml(html);
 }
 
-async function priceAndTypeFrom(url: string | null | undefined): Promise<{ price: number | null; productType?: string }> {
-  const html = await fetchHtml(url);
-  if (!html) return { price: null };
-  return extractPriceAndTypeFromHtml(html);
-}
-
-function toMarketPrices(raw: Record<string, any> | null | undefined): MarketPrices | null {
-  if (!raw) return null;
-  const coerce = (value: any): number | null => {
-    const numeric = typeof value === "number" ? value : Number(value);
-    if (!Number.isFinite(numeric) || numeric <= 0) return null;
-    return +numeric.toFixed(2);
-  };
-  const amazon = coerce(raw.amazon);
-  const walmart = coerce(raw.walmart);
-  const brand = coerce(raw.brand);
-  const avg = (() => {
-    const numeric = typeof raw.avg === "number" ? raw.avg : Number(raw.avg);
-    if (!Number.isFinite(numeric) || numeric <= 0) return 0;
-    return +numeric.toFixed(2);
-  })();
-  const productType = typeof raw.productType === "string" ? raw.productType : undefined;
-  return { amazon, walmart, brand, avg, productType };
-}
-
-function average(values: Array<number | null>): number {
-  const present = values.filter((value): value is number => typeof value === "number" && Number.isFinite(value));
-  if (!present.length) return 0;
-  const total = present.reduce((acc, value) => acc + value, 0);
-  return +(total / present.length).toFixed(2);
-}
-
-function cleanQueryPart(value: string | undefined | null): string {
-  if (typeof value !== "string") return "";
-  return value.trim();
-}
-
+/**
+ * Helper: Check if URL is a retailer
+ */
 function isRetailerUrl(url: string | null | undefined): boolean {
   if (!url) return false;
   return /amazon\.com|walmart\.com/i.test(url);
 }
 
-async function lookupAmazonWithPaapi(
-  brand?: string,
-  product?: string,
-  variant?: string
-): Promise<{ price: number | null; productType?: string }> {
-  const title = [product, variant].filter(Boolean).join(" ").trim();
-  
-  console.log('[price-lookup] Using Amazon PA-API flow (with scraper fallback)', {
-    brand,
-    product,
-    variant
-  });
+// ============================================================================
+// TIERED PRICING ENGINE - MAIN ENTRY POINT
+// ============================================================================
 
-  // Try PA-API first
-  let result: AmazonProductResult | null = null;
-  try {
-    result = await searchAmazonProduct({
-      title: title || '',
-      brand,
-      upc: undefined // We don't have UPC in current flow, can add later
-    });
-  } catch (err) {
-    console.error('[price-lookup] searchAmazonProduct threw', err);
-  }
-
-  if (result && result.price != null) {
-    console.log(`[Price Lookup] ✓ Found Amazon price $${result.price} from PA-API`, {
-      asin: result.asin,
-      categories: result.categories.slice(0, 3)
-    });
-
+/**
+ * AI-powered price arbitration
+ * Takes multiple price candidates and uses GPT-4o-mini to decide optimal listing price
+ */
+async function decideFinalPrice(
+  input: PriceLookupInput,
+  candidates: PriceSourceDetail[],
+  soldStats?: SoldPriceStats
+): Promise<PriceDecision> {
+  if (candidates.length === 0) {
     return {
-      price: result.price,
-      productType: result.categories?.[0] ?? undefined
+      ok: false,
+      candidates: [],
+      reason: 'no-price-signals'
     };
   }
 
-  // PA-API failed, fall back to scraper
-  console.log('[price-lookup] PA-API failed, trying Amazon scraper...');
-  
+  // Build structured prompt for AI
+  const prompt = `You are a pricing expert for eBay listings. Analyze the following price data and recommend the optimal listing price.
+
+PRODUCT INFORMATION:
+- Title: ${input.title}
+${input.brand ? `- Brand: ${input.brand}` : ''}
+${input.upc ? `- UPC: ${input.upc}` : ''}
+${input.condition ? `- Condition: ${input.condition}` : ''}
+${input.quantity ? `- Quantity: ${input.quantity}` : ''}
+
+AVAILABLE PRICE DATA:
+${candidates.map((c, i) => `${i + 1}. ${c.source}: $${c.price.toFixed(2)} (${c.notes || 'no notes'})`).join('\n')}
+
+${soldStats && soldStats.ok ? `
+RECENT SOLD PRICES (last 30 days):
+- Median: $${soldStats.median?.toFixed(2) || 'N/A'}
+- 35th percentile: $${soldStats.p35?.toFixed(2) || 'N/A'}
+- 10th percentile: $${soldStats.p10?.toFixed(2) || 'N/A'}
+- 90th percentile: $${soldStats.p90?.toFixed(2) || 'N/A'}
+- Sample count: ${soldStats.samples.length}
+` : ''}
+
+PRICING RULES:
+1. Try to undercut typical sold price by 5-15% to be competitive
+2. Never exceed brand MSRP (if available)
+3. Avoid being unrealistically low (below 50% of median sold price)
+4. Prefer eBay sold price data (p35) as it reflects actual market demand
+5. If no sold data, use brand MSRP or other sources with conservative discount
+
+RESPONSE FORMAT (JSON only):
+{
+  "chosenSource": "ebay-sold" | "brand-msrp" | "brave-fallback",
+  "basePrice": <number>,
+  "recommendedListingPrice": <number>,
+  "reasoning": "<brief explanation of pricing decision>"
+}`;
+
   try {
-    const scraperResult = await scrapeAmazonPrice(brand, product);
-    
-    if (scraperResult.price) {
-      console.log(`[Price Lookup] ✓ Found Amazon price $${scraperResult.price} from scraper`, {
-        asin: scraperResult.asin,
-        url: scraperResult.url
-      });
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      temperature: 0.2,
+      max_tokens: 500,
+      response_format: { type: "json_object" },
+      messages: [
+        { 
+          role: "system", 
+          content: "You are a pricing expert. Always respond with valid JSON matching the specified format." 
+        },
+        { 
+          role: "user", 
+          content: prompt 
+        },
+      ],
+    });
 
-      return {
-        price: scraperResult.price
-      };
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      console.error('[price] AI returned empty response');
+      return fallbackDecision(candidates);
     }
-  } catch (err) {
-    console.error('[price-lookup] Amazon scraper threw', err);
-  }
 
-  console.warn('[price-lookup] No Amazon price found (PA-API and scraper both failed)', { brand, product, variant });
-  return { price: null };
+    const parsed = JSON.parse(content);
+    const chosenSource = parsed.chosenSource as PriceSource;
+    const basePrice = parseFloat(parsed.basePrice);
+    const recommendedListingPrice = parseFloat(parsed.recommendedListingPrice);
+    const reasoning = parsed.reasoning || 'AI decision';
+
+    // Find the chosen candidate
+    const chosen = candidates.find(c => c.source === chosenSource) || candidates[0];
+
+    console.log(`[price] AI decision: source=${chosen.source} base=$${basePrice.toFixed(2)} final=$${recommendedListingPrice.toFixed(2)} | ${reasoning}`);
+
+    return {
+      ok: true,
+      chosen,
+      candidates,
+      recommendedListingPrice,
+      reason: reasoning
+    };
+
+  } catch (error) {
+    console.error('[price] AI arbitration failed:', error);
+    return fallbackDecision(candidates);
+  }
 }
 
+/**
+ * Fallback decision when AI fails: prefer ebay-sold p35, then brand MSRP with 10% discount
+ */
+function fallbackDecision(candidates: PriceSourceDetail[]): PriceDecision {
+  // Prefer ebay-sold first
+  const ebaySold = candidates.find(c => c.source === 'ebay-sold');
+  if (ebaySold) {
+    console.log(`[price] Fallback decision: using ebay-sold $${ebaySold.price.toFixed(2)}`);
+    return {
+      ok: true,
+      chosen: ebaySold,
+      candidates,
+      recommendedListingPrice: ebaySold.price,
+      reason: 'fallback-to-ebay-sold'
+    };
+  }
+
+  // Then try brand MSRP with 10% discount
+  const brandMsrp = candidates.find(c => c.source === 'brand-msrp');
+  if (brandMsrp) {
+    const discountedPrice = Math.round(brandMsrp.price * 0.90 * 100) / 100;
+    console.log(`[price] Fallback decision: using brand-msrp $${brandMsrp.price.toFixed(2)} with 10% discount = $${discountedPrice.toFixed(2)}`);
+    return {
+      ok: true,
+      chosen: brandMsrp,
+      candidates,
+      recommendedListingPrice: discountedPrice,
+      reason: 'fallback-to-brand-msrp-with-discount'
+    };
+  }
+
+  // Last resort: use any available price
+  const fallback = candidates[0];
+  console.log(`[price] Fallback decision: using ${fallback.source} $${fallback.price.toFixed(2)}`);
+  return {
+    ok: true,
+    chosen: fallback,
+    candidates,
+    recommendedListingPrice: fallback.price,
+    reason: 'fallback-to-first-available'
+  };
+}
+
+/**
+ * MAIN ENTRY POINT: Tiered price lookup with AI arbitration
+ * 
+ * Tier 1: eBay sold/completed prices (most reliable)
+ * Tier 2: Brand MSRP from official sites
+ * Tier 3: AI arbitration to decide final listing price
+ */
+export async function lookupPrice(
+  input: PriceLookupInput
+): Promise<PriceDecision> {
+  console.log(`[price] Starting lookup for: "${input.title}"${input.brand ? ` (${input.brand})` : ''}${input.upc ? ` [${input.upc}]` : ''}`);
+
+  const candidates: PriceSourceDetail[] = [];
+
+  // ========================================
+  // TIER 1: eBay Sold/Completed Prices
+  // ========================================
+  console.log('[price] Tier 1: Checking eBay sold prices...');
+  
+  const soldStats = await fetchSoldPriceStats({
+    title: input.title,
+    brand: input.brand,
+    upc: input.upc,
+    condition: input.condition,
+    quantity: input.quantity,
+  });
+
+  if (soldStats.ok && soldStats.p35) {
+    candidates.push({
+      source: 'ebay-sold',
+      price: soldStats.p35,
+      currency: 'USD',
+      notes: `35th percentile of ${soldStats.samples.length} recent sold items`,
+    });
+    console.log(`[price] ✓ eBay sold price: $${soldStats.p35.toFixed(2)} (median: $${soldStats.median?.toFixed(2)})`);
+  } else {
+    console.log('[price] ✗ No eBay sold price data available');
+  }
+
+  // ========================================
+  // TIER 2: Brand MSRP (Official Sites)
+  // ========================================
+  console.log('[price] Tier 2: Checking brand MSRP...');
+  
+  let brandPrice: number | null = null;
+  let brandUrl: string | undefined;
+
+  // Try brand-map first (curated brand URLs)
+  const signature = [input.brand, input.title].filter(Boolean).join(' ').trim();
+  if (signature) {
+    const mapped = await getBrandUrls(signature);
+    if (mapped?.brand) {
+      brandPrice = await priceFrom(mapped.brand);
+      if (brandPrice) {
+        brandUrl = mapped.brand;
+        console.log(`[price] ✓ Brand MSRP from curated URL: $${brandPrice.toFixed(2)}`);
+      }
+    }
+  }
+
+  // Fall back to Brave search for official brand site
+  if (!brandPrice && input.brand) {
+    const braveUrl = await braveFirstUrlForBrandSite(
+      input.brand,
+      input.title,
+      undefined // Could pass brand domain from brand-map if available
+    );
+    
+    if (braveUrl) {
+      brandPrice = await priceFrom(braveUrl);
+      if (brandPrice) {
+        brandUrl = braveUrl;
+        console.log(`[price] ✓ Brand MSRP from Brave search: $${brandPrice.toFixed(2)}`);
+      }
+    }
+  }
+
+  if (brandPrice) {
+    candidates.push({
+      source: 'brand-msrp',
+      price: brandPrice,
+      currency: 'USD',
+      url: brandUrl,
+      notes: 'Official brand site MSRP',
+    });
+  } else {
+    console.log('[price] ✗ No brand MSRP found');
+  }
+
+  // ========================================
+  // TIER 3: AI Arbitration
+  // ========================================
+  if (candidates.length === 0) {
+    console.warn('[price] No price signals available');
+    return {
+      ok: false,
+      candidates: [],
+      reason: 'no-price-signals'
+    };
+  }
+
+  console.log(`[price] Tier 3: AI arbitration with ${candidates.length} candidate(s)...`);
+  const decision = await decideFinalPrice(input, candidates, soldStats);
+
+  if (decision.ok && decision.chosen && decision.recommendedListingPrice) {
+    console.log(`[price] ✓ Final decision: source=${decision.chosen.source} base=$${decision.chosen.price.toFixed(2)} final=$${decision.recommendedListingPrice.toFixed(2)}`);
+  }
+
+  return decision;
+}
+
+// ============================================================================
+// LEGACY FUNCTION (deprecated, kept for backward compatibility)
+// ============================================================================
+
+/**
+ * @deprecated Use lookupPrice() instead for AI-powered tiered pricing
+ */
 export async function lookupMarketPrice(
   brand?: string,
   product?: string,
   variant?: string
 ): Promise<MarketPrices> {
-  const signature = makePriceSig(brand, product, variant);
-  const empty: MarketPrices = { amazon: null, walmart: null, brand: null, avg: 0 };
-
-  if (!signature) {
-    return empty;
-  }
-
-  const cached = await getCachedPrice(signature);
-  const cachedPrices = toMarketPrices(cached);
-  if (cachedPrices) {
-    return cachedPrices;
-  }
-
-  let amazon: number | null = null;
-  let walmart: number | null = null;
-  let brandPrice: number | null = null;
-  let productType: string | undefined;
-
-  const mapped = await getBrandUrls(signature);
-  if (mapped) {
-    const amazonData = await priceAndTypeFrom(mapped.amazon);
-    amazon = amazonData.price;
-    if (!productType && amazonData.productType) productType = amazonData.productType;
-    
-    const walmartData = await priceAndTypeFrom(mapped.walmart);
-    walmart = walmartData.price;
-    if (!productType && walmartData.productType) productType = walmartData.productType;
-    
-    brandPrice = await priceFrom(mapped.brand);
-  }
-
-  const queryParts = [cleanQueryPart(brand), cleanQueryPart(product), cleanQueryPart(variant)].filter(Boolean);
-  const query = queryParts.join(" ").trim();
-
-  if (query) {
-    if (amazon == null) {
-      // Use Amazon PA-API for direct, deterministic pricing (no Brave/SerpAPI)
-      const amazonResult = await lookupAmazonWithPaapi(brand, product, variant);
-      amazon = amazonResult.price;
-      if (!productType && amazonResult.productType) productType = amazonResult.productType;
-    }
-
-    if (walmart == null) {
-      // Try Brave search - try top 3 results (with rate limiting)
-      await rateLimitBrave();
-      const braveWalmartUrls = await braveTopUrls(query, "walmart.com", 3);
-      for (const url of braveWalmartUrls) {
-        const walmartData = await priceAndTypeFrom(url);
-        if (walmartData.price != null) {
-          walmart = walmartData.price;
-          if (!productType && walmartData.productType) productType = walmartData.productType;
-          console.log(`[Price Lookup] ✓ Found Walmart price $${walmart} from Brave`);
-          break;
-        }
-      }
-      
-      if (walmart == null) {
-        console.log('[Price Lookup] No Walmart price found via Brave');
-      }
-    }
-
-    if (brandPrice == null) {
-      // Try Brave search for brand site (with rate limiting)
-      await rateLimitBrave();
-      const braveGeneric = await braveFirstUrl(query);
-      const brandUrl = braveGeneric && !isRetailerUrl(braveGeneric) ? braveGeneric : null;
-      brandPrice = await priceFrom(brandUrl);
-      if (brandPrice != null) {
-        console.log(`[Price Lookup] ✓ Found brand price $${brandPrice} from Brave`);
-      } else {
-        console.log('[Price Lookup] No brand price found via Brave');
-      }
-    }
-  }
-
-  const avg = average([amazon, walmart, brandPrice]);
-  const result: MarketPrices = {
-    amazon,
-    walmart,
-    brand: brandPrice,
-    avg,
-    productType,
+  console.warn('[price-lookup] lookupMarketPrice is deprecated. Use lookupPrice() instead.');
+  
+  // Map to new system
+  const input: PriceLookupInput = {
+    title: [product, variant].filter(Boolean).join(' ').trim() || 'Unknown Product',
+    brand: brand || undefined,
+    condition: 'NEW',
   };
 
-  await setCachedPrice(signature, result);
+  const decision = await lookupPrice(input);
 
-  return result;
+  // Map back to legacy format
+  const legacy: MarketPrices = {
+    amazon: null,
+    walmart: null,
+    brand: decision.chosen?.source === 'brand-msrp' ? decision.chosen.price : null,
+    avg: decision.recommendedListingPrice || 0,
+  };
+
+  return legacy;
 }

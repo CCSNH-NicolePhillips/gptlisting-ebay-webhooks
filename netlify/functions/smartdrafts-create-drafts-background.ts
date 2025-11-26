@@ -6,7 +6,7 @@ import { k } from "../../src/lib/user-keys.js";
 import OpenAI from "openai";
 import { pickCategoryForGroup } from "../../src/lib/taxonomy-select.js";
 import { listCategories } from "../../src/lib/taxonomy-store.js";
-import { lookupMarketPrice } from "../../src/lib/price-lookup.js";
+import { lookupPrice, type PriceLookupInput, type PriceDecision } from "../../src/lib/price-lookup.js";
 
 const GPT_TIMEOUT_MS = 30_000;
 const GPT_RETRY_ATTEMPTS = 2;
@@ -55,8 +55,14 @@ type Draft = {
   aspects: Record<string, string[]>;
   category: CategoryHint;
   images: string[];
-  price: number;
+  price: number | null;
   condition: string;
+  pricingStatus?: 'OK' | 'NEEDS_REVIEW';
+  priceMeta?: {
+    chosenSource?: string;
+    basePrice?: number;
+    candidates?: any[];
+  };
 };
 
 function parsePayload(raw: string | null | undefined): BackgroundPayload {
@@ -532,35 +538,66 @@ async function createDraftForProduct(product: PairedProduct, retryAttempt: numbe
     title: product.title 
   }));
   
-  // Fetch competitor prices BEFORE calling GPT - also extracts product type from Amazon/Walmart
-  let competitorPrices: { amazon: number | null; walmart: number | null; brand: number | null; avg: number } | undefined;
-  let marketplaceProductType: string | undefined;
+  // ========================================
+  // TIERED PRICING ENGINE (Phase 4)
+  // ========================================
+  // 1. eBay sold prices (primary)
+  // 2. Brand MSRP (secondary)
+  // 3. AI arbitration (decision)
+  // ========================================
+  
+  let pricingDecision: PriceDecision | null = null;
+  let finalPrice: number | null = null;
+  let pricingStatus: 'OK' | 'NEEDS_REVIEW' = 'NEEDS_REVIEW';
+  let priceMeta: any = undefined;
+
   try {
     const priceStart = Date.now();
-    console.log(`[Draft] Looking up market prices for: ${product.brand} ${product.product} ${product.variant || ''}`);
-    const prices = await lookupMarketPrice(product.brand, product.product, product.variant);
-    console.log(`[Draft] Price lookup took ${Date.now() - priceStart}ms:`, JSON.stringify(prices));
+    console.log(`[smartdrafts-price] Looking up price for: ${product.brand || '(no brand)'} ${product.product}`);
     
-    // Extract product type from marketplace data (most reliable source)
-    if (prices.productType) {
-      marketplaceProductType = prices.productType;
-      console.log(`[Draft] ✓ Detected product type from marketplace: "${marketplaceProductType}"`);
-    }
-    
-    // Only pass prices to GPT if we found at least one
-    if (prices.amazon || prices.walmart || prices.brand) {
-      competitorPrices = prices;
-      console.log(`[Draft] ✓ Using real competitor prices: Amazon $${prices.amazon || 'N/A'}, Walmart $${prices.walmart || 'N/A'}, Avg $${prices.avg}`);
+    const priceInput: PriceLookupInput = {
+      title: [product.product, product.variant].filter(Boolean).join(' ').trim(),
+      brand: product.brand || undefined,
+      upc: undefined, // TODO: Add UPC to PairedProduct type if available from pairing
+      condition: 'NEW', // TODO: Detect condition from product data if available
+      quantity: undefined, // TODO: Add quantity to PairedProduct type if available
+    };
+
+    pricingDecision = await lookupPrice(priceInput);
+    console.log(`[smartdrafts-price] Price lookup took ${Date.now() - priceStart}ms`);
+
+    if (!pricingDecision.ok || !pricingDecision.recommendedListingPrice) {
+      console.warn(`[smartdrafts-price] ⚠️ No price found for "${priceInput.title}"`);
+      pricingStatus = 'NEEDS_REVIEW';
+      finalPrice = null;
     } else {
-      console.log(`[Draft] ⚠️ No competitor prices found, GPT will search`);
+      finalPrice = pricingDecision.recommendedListingPrice;
+      pricingStatus = 'OK';
+      priceMeta = {
+        chosenSource: pricingDecision.chosen?.source,
+        basePrice: pricingDecision.chosen?.price,
+        candidates: pricingDecision.candidates.map(c => ({
+          source: c.source,
+          price: c.price,
+          notes: c.notes,
+        })),
+      };
+      
+      console.log(
+        `[smartdrafts-price] ✓ title="${priceInput.title}" ` +
+        `final=$${finalPrice.toFixed(2)} ` +
+        `source=${pricingDecision.chosen?.source} ` +
+        `base=$${pricingDecision.chosen?.price.toFixed(2)}`
+      );
     }
   } catch (err) {
-    console.error(`[Draft] Price lookup failed:`, err);
-    console.log(`[Draft] ⚠️ Falling back to GPT price search`);
+    console.error(`[smartdrafts-price] Price lookup failed:`, err);
+    pricingStatus = 'NEEDS_REVIEW';
+    finalPrice = null;
   }
   
   const catListStart = Date.now();
-  const relevantCategories = await getRelevantCategories(product, marketplaceProductType);
+  const relevantCategories = await getRelevantCategories(product, undefined);
   console.log(`[Draft] Category list generation took ${Date.now() - catListStart}ms`);
   console.log(`[Draft] Category list preview:\n${relevantCategories.slice(0, 500)}...`);
   
@@ -568,7 +605,7 @@ async function createDraftForProduct(product: PairedProduct, retryAttempt: numbe
   const categoryHint = await pickCategory(product);
   console.log(`[Draft] Category fallback pick took ${Date.now() - catStart}ms`);
   
-  const prompt = buildPrompt(product, categoryHint, relevantCategories, competitorPrices);
+  const prompt = buildPrompt(product, categoryHint, relevantCategories, undefined);
   console.log(`[Draft] Prompt length: ${prompt.length} chars`);
   console.log(`[Draft] Prompt preview:`, prompt.slice(0, 500));
   
@@ -604,10 +641,7 @@ async function createDraftForProduct(product: PairedProduct, retryAttempt: numbe
   const aspects = normalizeAspects(parsed.aspects, product);
   const images = [product.heroDisplayUrl, product.backDisplayUrl, ...(product.extras || [])].filter((x): x is string => Boolean(x));
   
-  const retailPrice = typeof parsed.price === 'number' && parsed.price > 0 ? parsed.price : 0;
-  const categoryPath = finalCategory?.title || product.categoryPath || '';
-  const ebayPrice = computeEbayPrice(retailPrice, categoryPath);
-  
+  // Use AI-powered pricing decision (already computed above)
   const draft: Draft = {
     productId: product.productId,
     groupId: product.productId, // Add groupId for eBay publishing
@@ -619,8 +653,10 @@ async function createDraftForProduct(product: PairedProduct, retryAttempt: numbe
     aspects,
     category: finalCategory || { id: '', title: product.categoryPath || 'Uncategorized', aspects: {} },
     images,
-    price: ebayPrice,
+    price: finalPrice,
     condition: parsed.condition,
+    pricingStatus,
+    priceMeta,
   };
   
   console.log(`[Draft] ✓ Created for ${product.productId} in ${Date.now() - startTime}ms: "${draft.title}"`);

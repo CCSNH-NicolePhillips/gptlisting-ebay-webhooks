@@ -11,30 +11,19 @@ type ExtractedData = {
   productType?: string;
 };
 
+/**
+ * Best-effort JSON-LD extraction for brand sites
+ * No retailer-specific logic - just try to find Product schema and extract price
+ */
 function extractFromJsonLd($: cheerio.CheerioAPI): ExtractedData {
   const scripts = $('script[type="application/ld+json"]').toArray();
-  console.log(`[HTML Parser] Found ${scripts.length} JSON-LD scripts`);
   
-  // First pass: collect all JSON-LD objects by type
-  const allJsonLd: any[] = [];
-  for (const node of scripts) {
-    try {
-      const raw = $(node).text().trim();
-      if (!raw) continue;
-      const parsed = JSON.parse(raw);
-      const items = Array.isArray(parsed) ? parsed : [parsed];
-      allJsonLd.push(...items);
-    } catch {}
+  if (scripts.length === 0) {
+    console.log(`[HTML Parser] No JSON-LD scripts found`);
+    return { price: null };
   }
   
-  // Log what types we found
-  const types = allJsonLd.map(item => (item as any)["@type"]).filter(Boolean);
-  console.log(`[HTML Parser] JSON-LD types found: ${types.join(", ")}`);
-  
-  // Find BreadcrumbList if it exists
-  let breadcrumbList = allJsonLd.find(item => 
-    String((item as any)["@type"] || "").toLowerCase().includes("breadcrumb")
-  );
+  console.log(`[HTML Parser] Found ${scripts.length} JSON-LD script(s), attempting extraction...`);
   
   for (const node of scripts) {
     try {
@@ -42,71 +31,35 @@ function extractFromJsonLd($: cheerio.CheerioAPI): ExtractedData {
       if (!raw) continue;
       const parsed = JSON.parse(raw);
       const items = Array.isArray(parsed) ? parsed : [parsed];
+      
       for (const item of items) {
         if (!item || typeof item !== "object") continue;
         const type = String((item as any)["@type"] || "").toLowerCase();
         if (!type.includes("product")) continue;
         
-        console.log(`[HTML Parser] Found Product JSON-LD, checking for category...`);
-        
-        // Extract category/type information
-        let productType: string | undefined;
-        const category = (item as any).category;
-        console.log(`[HTML Parser] Product.category field:`, category);
-        
-        if (category && typeof category === "string") {
-          productType = category;
-        } else if (Array.isArray(category) && category.length > 0) {
-          productType = String(category[0]);
-        }
-        
-        // Try the Product's own breadcrumb property
-        if (!productType) {
-          const breadcrumb = (item as any).breadcrumb;
-          console.log(`[HTML Parser] Product.breadcrumb field:`, breadcrumb);
-          
-          if (breadcrumb?.itemListElement) {
-            const items = breadcrumb.itemListElement;
-            const lastCrumb = Array.isArray(items) ? items[items.length - 1] : null;
-            if (lastCrumb?.name) {
-              productType = String(lastCrumb.name);
-            }
-          }
-        }
-        
-        // Try the separate BreadcrumbList from another JSON-LD script
-        if (!productType && breadcrumbList) {
-          console.log(`[HTML Parser] Checking separate BreadcrumbList script...`);
-          const items = breadcrumbList.itemListElement;
-          if (Array.isArray(items) && items.length > 0) {
-            const lastCrumb = items[items.length - 1];
-            if (lastCrumb?.name) {
-              productType = String(lastCrumb.name);
-              console.log(`[HTML Parser] Found category from BreadcrumbList: "${productType}"`);
-            }
-          }
-        }
-        
-        if (productType) {
-          console.log(`[HTML Parser] ✓ Extracted productType: "${productType}"`);
-        } else {
-          console.log(`[HTML Parser] ⚠️ No category found in JSON-LD Product`);
-        }
-        
+        // Found a Product schema - try to extract price from offers
         const offers = (item as any).offers;
         if (!offers) continue;
         const offer = Array.isArray(offers) ? offers[0] : offers;
         if (!offer || typeof offer !== "object") continue;
+        
         const priceFromOffer =
           toNumber((offer as any).price) ??
           toNumber((offer as any).priceSpecification?.price) ??
           toNumber((offer as any).lowPrice);
-        if (priceFromOffer) return { price: priceFromOffer, productType };
+        
+        if (priceFromOffer) {
+          console.log(`[HTML Parser] ✓ Extracted price $${priceFromOffer} from JSON-LD Product`);
+          return { price: priceFromOffer };
+        }
       }
-    } catch {
-      // ignore invalid JSON blobs
+    } catch (err) {
+      // Invalid JSON - skip this script
+      continue;
     }
   }
+  
+  console.log(`[HTML Parser] No price found in JSON-LD`);
   return { price: null };
 }
 
@@ -138,7 +91,11 @@ export function extractPriceFromHtml(html: string): number | null {
   }
 }
 
+/**
+ * @deprecated Use extractPriceFromHtml instead - productType extraction removed
+ */
 export function extractPriceAndTypeFromHtml(html: string): ExtractedData {
+  console.warn('[HTML Parser] extractPriceAndTypeFromHtml is deprecated, use extractPriceFromHtml');
   try {
     const $ = cheerio.load(html);
     const data = extractFromJsonLd($);
