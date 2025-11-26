@@ -48,15 +48,9 @@ function extractFromJsonLd($: cheerio.CheerioAPI): ExtractedData {
         for (const offer of offerList) {
           if (!offer || typeof offer !== "object") continue;
           
-          // Handle priceSpecification as array OR object (Root Brands uses array)
-          const priceSpec = (offer as any).priceSpecification;
-          const priceFromSpec = Array.isArray(priceSpec)
-            ? toNumber(priceSpec[0]?.price)
-            : toNumber(priceSpec?.price);
-          
           const priceFromOffer =
             toNumber((offer as any).price) ??
-            priceFromSpec ??
+            toNumber((offer as any).priceSpecification?.price) ??
             toNumber((offer as any).lowPrice);
           
           if (priceFromOffer) {
