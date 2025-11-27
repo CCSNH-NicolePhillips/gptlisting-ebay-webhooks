@@ -129,11 +129,12 @@ export const handler: Handler = async (event) => {
           },
         }));
         
-        // Generate signed URL for the uploaded file (valid for 24 hours)
+        // Generate signed URL for the uploaded file (valid for 7 days)
+        // This allows users to publish drafts within a week of uploading images
         const signedUrl = await getSignedUrl(
           client,
           new GetObjectCommand({ Bucket: bucket, Key: key }),
-          { expiresIn: 86400 } // 24 hours
+          { expiresIn: 604800 } // 7 days (604800 seconds)
         );
         
         uploadedFiles.push({

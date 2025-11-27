@@ -52,7 +52,20 @@ export function proxyImageUrls(urls: string[], appBase?: string): string[] {
     const direct = toDirectDropbox(source);
     if (isProxy(direct)) return addBust(absolutizeProxy(direct));
     
-    // Always proxy all images to handle EXIF rotation
+    // Check if this is an S3 signed URL - these are already publicly accessible
+    // and don't need proxying. Send them directly to eBay.
+    try {
+      const url = new URL(direct);
+      const isS3 = url.hostname.includes('.s3.') || url.hostname.includes('.amazonaws.com');
+      if (isS3) {
+        console.log('[proxyImageUrls] S3 URL detected, skipping proxy:', direct.substring(0, 80));
+        return direct; // Return S3 URL directly without proxy
+      }
+    } catch {
+      // Not a valid URL, continue with proxy logic
+    }
+    
+    // Proxy all other images to handle EXIF rotation
     try {
       const url = new URL(direct);
       const prox = base
