@@ -237,6 +237,7 @@ export const handler: Handler = async (event) => {
         const products = pairsWithUrls.map((pair, index) => ({
           productId: `product-${index + 1}`,
           brand: pair.brand || null,
+          brandWebsite: pair.brandWebsite || null,
           title: pair.title || null,
           product: pair.product || null,
           heroDisplayUrl: pair.frontUrl,

@@ -23,6 +23,7 @@ export interface PairingResult {
     back: string;
     confidence: number;
     brand?: string | null;
+    brandWebsite?: string | null;
     title?: string | null;
     product?: string | null;
   }>;
@@ -684,6 +685,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
       back: p.back,
       confidence: p.confidence,
       brand: frontClass?.brand || null,
+      brandWebsite: frontClass?.brandWebsite || null,
       title: frontClass?.title || null,
       product: frontClass?.productName || null,
     };

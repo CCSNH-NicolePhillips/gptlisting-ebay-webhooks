@@ -29,6 +29,7 @@ type PairedProduct = {
   brand: string;
   product: string;
   title?: string; // For books: the actual book title (brand will be null, product is author)
+  brandWebsite?: string; // Official brand website URL from Vision API
   variant?: string;
   size?: string;
   categoryPath?: string;
@@ -558,6 +559,7 @@ async function createDraftForProduct(product: PairedProduct, retryAttempt: numbe
     const priceInput: PriceLookupInput = {
       title: [product.product, product.variant].filter(Boolean).join(' ').trim(),
       brand: product.brand || undefined,
+      brandWebsite: product.brandWebsite || undefined, // Pass Vision API brand website
       upc: undefined, // TODO: Add UPC to PairedProduct type if available from pairing
       condition: 'NEW', // TODO: Detect condition from product data if available
       quantity: undefined, // TODO: Add quantity to PairedProduct type if available
