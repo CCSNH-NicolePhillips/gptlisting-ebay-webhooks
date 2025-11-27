@@ -345,17 +345,42 @@ ${JSON.stringify(filenames, null, 2)}`;
 }
 
 async function classifyAllImagesStage1(imagePaths: string[]): Promise<ImageClassificationV2[]> {
-  // For cross-image inference to work, ALL related images must be in the same batch
-  // Process all images in a single call (background function has 10min timeout)
-  console.log(`[pairing-v2] Classifying all ${imagePaths.length} images in single batch for cross-image inference...`);
+  // Split into smaller batches to avoid hitting Vision API output token limits
+  // Large batches (>12 images) can cause truncated JSON responses
+  const totalImages = imagePaths.length;
   
-  const batchStart = Date.now();
-  const all = await classifyImagesBatch(imagePaths);
-  const batchDuration = ((Date.now() - batchStart) / 1000).toFixed(1);
+  if (totalImages <= CLASSIFY_BATCH_SIZE) {
+    console.log(`[pairing-v2] Classifying all ${totalImages} images in single batch...`);
+    const batchStart = Date.now();
+    const all = await classifyImagesBatch(imagePaths);
+    const batchDuration = ((Date.now() - batchStart) / 1000).toFixed(1);
+    console.log(`[pairing-v2] Classification complete: ${all.length} total classifications (${batchDuration}s, ${(imagePaths.length / parseFloat(batchDuration)).toFixed(1)} img/s)`);
+    return all;
+  }
   
-  console.log(`[pairing-v2] Classification complete: ${all.length} total classifications (${batchDuration}s, ${(imagePaths.length / parseFloat(batchDuration)).toFixed(1)} img/s)`);
+  // Process in batches to prevent token limit truncation
+  console.log(`[pairing-v2] Classifying ${totalImages} images in batches of ${CLASSIFY_BATCH_SIZE}...`);
+  const allClassifications: ImageClassificationV2[] = [];
+  const overallStart = Date.now();
   
-  return all;
+  for (let i = 0; i < imagePaths.length; i += CLASSIFY_BATCH_SIZE) {
+    const batch = imagePaths.slice(i, i + CLASSIFY_BATCH_SIZE);
+    const batchNum = Math.floor(i / CLASSIFY_BATCH_SIZE) + 1;
+    const totalBatches = Math.ceil(imagePaths.length / CLASSIFY_BATCH_SIZE);
+    
+    console.log(`[pairing-v2] Processing batch ${batchNum}/${totalBatches} (${batch.length} images)...`);
+    const batchStart = Date.now();
+    const results = await classifyImagesBatch(batch);
+    const batchDuration = ((Date.now() - batchStart) / 1000).toFixed(1);
+    console.log(`[pairing-v2] Batch ${batchNum}/${totalBatches} complete: ${results.length} classifications (${batchDuration}s)`);
+    
+    allClassifications.push(...results);
+  }
+  
+  const overallDuration = ((Date.now() - overallStart) / 1000).toFixed(1);
+  console.log(`[pairing-v2] Classification complete: ${allClassifications.length} total classifications (${overallDuration}s, ${(totalImages / parseFloat(overallDuration)).toFixed(1)} img/s)`);
+  
+  return allClassifications;
 }
 
 // ============================================================
