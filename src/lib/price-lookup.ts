@@ -183,11 +183,11 @@ RECENT SOLD PRICES (last 30 days):
 ` : ''}
 
 PRICING RULES:
-1. Try to undercut typical sold price by 5-15% to be competitive
-2. Never exceed brand MSRP (if available)
-3. Avoid being unrealistically low (below 50% of median sold price)
-4. Prefer eBay sold price data (p35) as it reflects actual market demand
-5. If no sold data, use brand MSRP or other sources with conservative discount
+1. **ALWAYS prefer brand MSRP if available** - apply 10% discount to compete with retail
+2. Only use eBay sold prices if NO brand MSRP is available
+3. If using eBay sold price, use it as-is (p35 already represents competitive pricing)
+4. Never price below 50% of brand MSRP (prevents undervaluing new products)
+5. For used items, eBay sold data is more reliable than MSRP
 
 RESPONSE FORMAT (JSON only):
 {
