@@ -976,8 +976,10 @@
         let products = [];
         let unpaired = [];
 
-        while (!pairingComplete && pairAttempts++ < 60) {
-          await new Promise(resolve => setTimeout(resolve, 10000));
+        while (!pairingComplete && pairAttempts++ < 120) {
+          // Adaptive polling: 3s for first 20 checks (1min), 5s for next 24 (2min), 10s after that
+          const pollDelay = pairAttempts <= 20 ? 3000 : pairAttempts <= 44 ? 5000 : 10000;
+          await new Promise(resolve => setTimeout(resolve, pollDelay));
 
           const statusRes = await fetchJSON(`/.netlify/functions/smartdrafts-pairing-v2-status?jobId=${pairingJobId}`);
 
@@ -1046,7 +1048,7 @@
           } else if (statusRes.status === 'failed') {
             throw new Error(statusRes.error || 'Pairing failed');
           } else {
-            const progress = Math.min(95, Math.round((pairAttempts / 60) * 100));
+            const progress = Math.min(95, Math.round((pairAttempts / 120) * 100));
             $('status2').innerHTML = `<span class="spinner"></span>Pairing images... ${progress}%`;
           }
         }
@@ -1082,8 +1084,10 @@
         let draftAttempts = 0;
         let drafts = [];
 
-        while (draftAttempts++ < 60) {
-          await new Promise(resolve => setTimeout(resolve, 10000));
+        while (draftAttempts++ < 120) {
+          // Adaptive polling: 3s for first 20 checks (1min), 5s for next 24 (2min), 10s after that
+          const pollDelay = draftAttempts <= 20 ? 3000 : draftAttempts <= 44 ? 5000 : 10000;
+          await new Promise(resolve => setTimeout(resolve, pollDelay));
 
           const statusRes = await fetchJSON(`/.netlify/functions/smartdrafts-create-drafts-status?jobId=${encodeURIComponent(draftJobId)}`);
 
