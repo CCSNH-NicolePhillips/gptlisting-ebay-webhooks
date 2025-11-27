@@ -377,7 +377,18 @@
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ offerId: offer.offerId }),
             });
-            const data = await r.json();
+            
+            // Safe JSON parsing
+            let data;
+            try {
+              const text = await r.text();
+              data = text ? JSON.parse(text) : {};
+            } catch (parseErr) {
+              console.error('[Publish] JSON parse error:', parseErr);
+              flash.textContent = 'Publish error: Invalid response from server';
+              pub.disabled = del.disabled = false;
+              return;
+            }
             
             // Store response for debugging
             lastPublishAttempt.response = data;
@@ -434,7 +445,18 @@
             const r = await exec(
               '/.netlify/functions/ebay-delete-offer?offerId=' + encodeURIComponent(offer.offerId)
             );
-            const data = await r.json();
+            
+            // Safe JSON parsing
+            let data;
+            try {
+              const text = await r.text();
+              data = text ? JSON.parse(text) : {};
+            } catch (parseErr) {
+              console.error('[Delete] JSON parse error:', parseErr);
+              flash.textContent = 'Delete error: Invalid response from server';
+              pub.disabled = del.disabled = false;
+              return;
+            }
             if (r.ok && data.ok) {
               el.remove();
               flash.textContent = `Deleted draft ${offer.offerId}`;
@@ -689,7 +711,17 @@
           while (attempts < maxAttempts) {
             attempts++;
             const res = await fetch('/.netlify/functions/ebay-clean-broken-drafts' + q);
-            const j = await res.json();
+            
+            // Handle empty or non-JSON responses
+            let j;
+            try {
+              const text = await res.text();
+              j = text ? JSON.parse(text) : {};
+            } catch (parseErr) {
+              console.error('[Delete All] JSON parse error:', parseErr);
+              flash.textContent = 'Delete error: Invalid response from server';
+              break;
+            }
             
             if (!res.ok) {
               const errorMsg = j.error || j.detail || 'Unknown error';
