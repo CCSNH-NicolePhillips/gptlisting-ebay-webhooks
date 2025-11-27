@@ -59,7 +59,7 @@ export interface PriceLookupInput {
   quantity?: number;
 }
 
-export type PriceSource = 'ebay-sold' | 'brand-msrp' | 'brave-fallback';
+export type PriceSource = 'ebay-sold' | 'brand-msrp' | 'brave-fallback' | 'estimate';
 
 export interface PriceSourceDetail {
   source: PriceSource;
@@ -394,7 +394,7 @@ export async function lookupPrice(
     
     if (braveUrl) {
       const { price: bravePrice } = await priceFrom(braveUrl);
-      if (bravePrice) {
+      if (bravePrice && bravePrice > 0) { // Check for valid price (not -1 rejection)
         brandPrice = bravePrice;
         brandUrl = braveUrl;
         console.log(`[price] ✓ Brand MSRP from Brave search: $${brandPrice.toFixed(2)}`);
@@ -402,7 +402,7 @@ export async function lookupPrice(
     }
   }
 
-  // AMAZON FALLBACK: Try Amazon if brand site didn't work
+  // AMAZON FALLBACK: Try Amazon if brand site didn't work or returned invalid price
   if (!brandPrice && input.brand) {
     console.log('[price] Trying Amazon as fallback...');
     const { braveFirstUrl } = await import('./search.js');
@@ -414,7 +414,7 @@ export async function lookupPrice(
     if (amazonUrl) {
       console.log(`[price] Amazon URL found: ${amazonUrl}`);
       const { price: amazonPrice } = await priceFrom(amazonUrl);
-      if (amazonPrice) {
+      if (amazonPrice && amazonPrice > 0) {
         brandPrice = amazonPrice;
         brandUrl = amazonUrl;
         console.log(`[price] ✓ Brand MSRP from Amazon: $${brandPrice.toFixed(2)}`);
