@@ -95,9 +95,10 @@ export type MarketPrices = {
 
 /**
  * Helper: Fetch HTML with timeout
+ * Returns { html, isDnsFailure } where isDnsFailure indicates the domain doesn't exist
  */
-async function fetchHtml(url: string | null | undefined, timeoutMs = 10000): Promise<string | null> {
-  if (!url) return null;
+async function fetchHtml(url: string | null | undefined, timeoutMs = 10000): Promise<{ html: string | null; isDnsFailure: boolean }> {
+  if (!url) return { html: null, isDnsFailure: false };
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -109,21 +110,25 @@ async function fetchHtml(url: string | null | undefined, timeoutMs = 10000): Pro
       },
     });
     clearTimeout(timer);
-    if (!res.ok) return null;
-    return await res.text();
-  } catch (err) {
+    if (!res.ok) return { html: null, isDnsFailure: false };
+    const html = await res.text();
+    return { html, isDnsFailure: false };
+  } catch (err: any) {
+    const isDnsFailure = err?.cause?.code === 'ENOTFOUND';
     console.warn("fetchHtml failed", { url, err });
-    return null;
+    return { html: null, isDnsFailure };
   }
 }
 
 /**
  * Helper: Extract price from URL
+ * Returns { price, isDnsFailure } where isDnsFailure indicates the domain doesn't exist
  */
-async function priceFrom(url: string | null | undefined): Promise<number | null> {
-  const html = await fetchHtml(url);
-  if (!html) return null;
-  return extractPriceFromHtml(html);
+async function priceFrom(url: string | null | undefined): Promise<{ price: number | null; isDnsFailure: boolean }> {
+  const { html, isDnsFailure } = await fetchHtml(url);
+  if (!html) return { price: null, isDnsFailure };
+  const price = extractPriceFromHtml(html);
+  return { price, isDnsFailure };
 }
 
 /**
@@ -332,19 +337,27 @@ export async function lookupPrice(
   let brandUrl: string | undefined;
 
   // FIRST: Try Vision API-provided brand website (most accurate!)
+  let domainReachable = true;
   if (input.brandWebsite) {
     console.log(`[price] Trying Vision API brand website: ${input.brandWebsite}`);
-    brandPrice = await priceFrom(input.brandWebsite);
+    const { price, isDnsFailure } = await priceFrom(input.brandWebsite);
+    brandPrice = price;
+    
     if (brandPrice) {
       brandUrl = input.brandWebsite;
       console.log(`[price] ✓ Brand MSRP from Vision API website: $${brandPrice.toFixed(2)}`);
+    } else if (isDnsFailure) {
+      // Domain doesn't exist - skip URL variations and go straight to Brave
+      console.warn(`[price] Vision domain unreachable (DNS lookup failed), skipping URL variations`);
+      domainReachable = false;
     } else if (input.brandWebsite.includes('/')) {
-      // Vision URL didn't work - try common variations before falling back to Brave
+      // Vision URL didn't work but domain exists - try common variations before falling back to Brave
       const variations = generateUrlVariations(input.brandWebsite);
       for (const variant of variations) {
         console.log(`[price] Trying URL variation: ${variant}`);
-        brandPrice = await priceFrom(variant);
-        if (brandPrice) {
+        const { price: variantPrice } = await priceFrom(variant);
+        if (variantPrice) {
+          brandPrice = variantPrice;
           brandUrl = variant;
           console.log(`[price] ✓ Brand MSRP from URL variation: $${brandPrice.toFixed(2)}`);
           break;
@@ -354,13 +367,14 @@ export async function lookupPrice(
   }
 
   // SECOND: Try brand-map (curated brand URLs)
-  if (!brandPrice) {
+  if (!brandPrice && domainReachable) {
     const signature = [input.brand, input.title].filter(Boolean).join(' ').trim();
     if (signature) {
       const mapped = await getBrandUrls(signature);
       if (mapped?.brand) {
-        brandPrice = await priceFrom(mapped.brand);
-        if (brandPrice) {
+        const { price: mappedPrice } = await priceFrom(mapped.brand);
+        if (mappedPrice) {
+          brandPrice = mappedPrice;
           brandUrl = mapped.brand;
           console.log(`[price] ✓ Brand MSRP from curated URL: $${brandPrice.toFixed(2)}`);
         }
@@ -377,8 +391,9 @@ export async function lookupPrice(
     );
     
     if (braveUrl) {
-      brandPrice = await priceFrom(braveUrl);
-      if (brandPrice) {
+      const { price: bravePrice } = await priceFrom(braveUrl);
+      if (bravePrice) {
+        brandPrice = bravePrice;
         brandUrl = braveUrl;
         console.log(`[price] ✓ Brand MSRP from Brave search: $${brandPrice.toFixed(2)}`);
       }
