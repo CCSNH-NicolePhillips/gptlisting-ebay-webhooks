@@ -6,16 +6,27 @@ import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey
 export const handler: Handler = async (event) => {
 	try {
 		const offerId = event.queryStringParameters?.offerId || event.queryStringParameters?.id;
-		if (!offerId) return { statusCode: 400, body: 'Missing offerId' };
+		if (!offerId) {
+			console.warn('[offer-thumb] Missing offerId');
+			return { statusCode: 400, body: 'Missing offerId' };
+		}
+
+		console.log(`[offer-thumb] Fetching thumbnail for offer: ${offerId}`);
 
 		const store = tokensStore();
 		const bearer = getBearerToken(event);
 		let sub = (await requireAuthVerified(event))?.sub || null;
 		if (!sub) sub = getJwtSubUnverified(event);
-		if (!bearer || !sub) return { statusCode: 401, body: 'Unauthorized' };
+		if (!bearer || !sub) {
+			console.warn(`[offer-thumb] Unauthorized request for offer ${offerId}`);
+			return { statusCode: 401, body: 'Unauthorized' };
+		}
 		const saved = (await store.get(userScopedKey(sub, 'ebay.json'), { type: 'json' })) as any;
 		const refresh = saved?.refresh_token as string | undefined;
-		if (!refresh) return { statusCode: 401, body: 'Connect eBay first' };
+		if (!refresh) {
+			console.warn(`[offer-thumb] No refresh token for offer ${offerId}`);
+			return { statusCode: 401, body: 'Connect eBay first' };
+		}
 		const { access_token } = await accessTokenFromRefresh(refresh);
 
 		const { apiHost } = tokenHosts(process.env.EBAY_ENV);
@@ -46,7 +57,10 @@ export const handler: Handler = async (event) => {
 		// 1) Get offer - prioritize listing.photoUrls which are already published/validated
 		const offerUrl = `${apiHost}/sell/inventory/v1/offer/${encodeURIComponent(offerId)}`;
 		let r = await fetchWithTimeout(offerUrl, { headers }, 5000);
-		if (!r.ok) return { statusCode: r.status, body: `offer fetch failed: ${r.status}` };
+		if (!r.ok) {
+			console.error(`[offer-thumb] Offer fetch failed: ${r.status} for ${offerId}`);
+			return { statusCode: r.status, body: `offer fetch failed: ${r.status}` };
+		}
 		const offer = await r.json();
 		
 		// Try listing photos first (already validated by eBay)
@@ -55,33 +69,53 @@ export const handler: Handler = async (event) => {
 		
 		let imageUrl: string | undefined = listingPhotoArr[0];
 		
+		if (imageUrl) {
+			console.log(`[offer-thumb] Found listing photo for ${offerId}: ${imageUrl}`);
+		}
+		
 		// Fallback: try inventory if no listing photos
 		if (!imageUrl) {
+			console.log(`[offer-thumb] No listing photo, trying inventory for ${offerId}`);
 			const skuRaw: string | undefined = offer?.sku;
-			if (!skuRaw) return { statusCode: 204 };
+			if (!skuRaw) {
+				console.warn(`[offer-thumb] No SKU found for offer ${offerId}`);
+				return { statusCode: 204 };
+			}
 
 			const trySkus = [skuRaw];
 			const san = skuRaw.replace(/[^A-Za-z0-9]/g, '').slice(0, 50);
 			if (san && san !== skuRaw) trySkus.push(san);
 
+			console.log(`[offer-thumb] Trying SKUs for ${offerId}: ${trySkus.join(', ')}`);
+
 			for (const s of trySkus) {
 				try {
 					const invUrl = `${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(s)}`;
 					const ir = await fetchWithTimeout(invUrl, { headers }, 4000);
-					if (!ir.ok) continue;
+					if (!ir.ok) {
+						console.warn(`[offer-thumb] Inventory fetch failed for SKU ${s}: ${ir.status}`);
+						continue;
+					}
 					const item = await ir.json();
 					const imgs = item?.product?.imageUrls || item?.product?.images || item?.product?.image || [];
 					const arr = Array.isArray(imgs) ? imgs : imgs ? [imgs] : [];
 					if (arr.length) {
 						imageUrl = arr[0];
+						console.log(`[offer-thumb] Found inventory photo for ${offerId} (SKU ${s}): ${imageUrl}`);
 						break;
+					} else {
+						console.warn(`[offer-thumb] No images in inventory for SKU ${s}`);
 					}
-				} catch {
+				} catch (err: any) {
+					console.warn(`[offer-thumb] Inventory fetch error for SKU ${s}: ${err?.message}`);
 					continue; // Skip failed inventory fetches
 				}
 			}
 		}
-		if (!imageUrl) return { statusCode: 204 };
+		if (!imageUrl) {
+			console.warn(`[offer-thumb] No image URL found for offer ${offerId}`);
+			return { statusCode: 204 };
+		}
 
 		// normalize dropbox viewer links
 		const toDirectDropbox = (u: string) => {
@@ -110,17 +144,36 @@ export const handler: Handler = async (event) => {
 		};
 		
 		let direct = toDirectDropbox(imageUrl);
-		let upstream = await tryFetchImage(direct);
-		if (!upstream.ok && direct !== imageUrl) {
-			// Retry original if normalized failed
-			try {
-				upstream = await tryFetchImage(imageUrl);
-			} catch {
-				// If both fail, return 204 instead of 502
-				return { statusCode: 204 };
-			}
+		if (direct !== imageUrl) {
+			console.log(`[offer-thumb] Normalized Dropbox URL for ${offerId}: ${imageUrl} -> ${direct}`);
 		}
+		
+		let upstream = await tryFetchImage(direct);
 		if (!upstream.ok) {
+			console.warn(`[offer-thumb] Image fetch failed for ${offerId}: ${direct} (status: ${upstream.resp.status}, type: ${upstream.type})`);
+			
+			if (direct !== imageUrl) {
+				// Retry original if normalized failed
+				console.log(`[offer-thumb] Retrying with original URL for ${offerId}: ${imageUrl}`);
+				try {
+					upstream = await tryFetchImage(imageUrl);
+					if (upstream.ok) {
+						console.log(`[offer-thumb] Original URL succeeded for ${offerId}`);
+					} else {
+						console.warn(`[offer-thumb] Original URL also failed for ${offerId} (status: ${upstream.resp.status})`);
+					}
+				} catch (err: any) {
+					console.error(`[offer-thumb] Both URLs failed for ${offerId}: ${err?.message}`);
+					// If both fail, return 204 instead of 502
+					return { statusCode: 204 };
+				}
+			}
+		} else {
+			console.log(`[offer-thumb] ✓ Successfully fetched image for ${offerId} (${upstream.type}, ${upstream.buf?.length} bytes)`);
+		}
+		
+		if (!upstream.ok) {
+			console.warn(`[offer-thumb] Returning 204 (no content) for ${offerId} - image unavailable`);
 			// Return 204 (no content) instead of error to avoid 502s in UI
 			return { statusCode: 204 };
 		}
@@ -135,6 +188,7 @@ export const handler: Handler = async (event) => {
 			isBase64Encoded: true,
 		};
 	} catch (e: any) {
+		console.error(`[offer-thumb] Unexpected error: ${e?.message}`, e);
 		return { statusCode: 500, body: `offer-thumb error: ${e?.message || String(e)}` };
 	}
 };
