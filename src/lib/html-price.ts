@@ -75,10 +75,18 @@ function extractFromJsonLd($: cheerio.CheerioAPI): ExtractedData {
     return { price: null };
   }
   
-  // Return the highest price found (likely the one-time purchase price vs subscription)
-  const maxPrice = Math.max(...allPrices);
-  console.log(`[HTML Parser] ✓ Extracted price $${maxPrice} from JSON-LD Product (found ${allPrices.length} price(s): ${allPrices.join(', ')})`);
-  return { price: maxPrice };
+  // Filter out unrealistic bulk/wholesale prices (>$500 for supplements/beauty)
+  const retailPrices = allPrices.filter(p => p <= 500);
+  
+  if (retailPrices.length === 0) {
+    console.log(`[HTML Parser] All prices rejected as bulk/wholesale (>${500}): ${allPrices.join(', ')}`);
+    return { price: null };
+  }
+  
+  // Return the lowest retail price (excludes subscriptions which are often discounted)
+  const minRetailPrice = Math.min(...retailPrices);
+  console.log(`[HTML Parser] ✓ Extracted price $${minRetailPrice} from JSON-LD Product (found ${allPrices.length} price(s): ${allPrices.join(', ')}, using lowest retail)`);
+  return { price: minRetailPrice };
 }
 
 function extractFromOpenGraph($: cheerio.CheerioAPI): number | null {

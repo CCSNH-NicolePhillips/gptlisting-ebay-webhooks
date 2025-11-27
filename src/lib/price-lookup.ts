@@ -312,16 +312,8 @@ export async function lookupPrice(
     if (braveUrl) {
       brandPrice = await priceFrom(braveUrl);
       if (brandPrice) {
-        // Sanity check: reject prices that are clearly wrong (e.g., bulk/wholesale prices)
-        // Most consumer supplements/beauty products are $5-$200
-        if (brandPrice > 500) {
-          console.warn(`[price] ⚠️ Rejecting suspicious brand MSRP: $${brandPrice.toFixed(2)} from ${braveUrl}`);
-          console.warn(`[price] This is likely a bulk/wholesale price or wrong product variant`);
-          brandPrice = null;
-        } else {
-          brandUrl = braveUrl;
-          console.log(`[price] ✓ Brand MSRP from Brave search: $${brandPrice.toFixed(2)}`);
-        }
+        brandUrl = braveUrl;
+        console.log(`[price] ✓ Brand MSRP from Brave search: $${brandPrice.toFixed(2)}`);
       }
     }
   }
