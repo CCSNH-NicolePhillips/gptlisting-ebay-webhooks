@@ -267,7 +267,15 @@
         </div>
       </div>
       
-      <div id="list" class="grid" aria-live="polite"></div>
+      <div id="needsAttention" style="margin-bottom: 2rem;">
+        <h2 style="font-size: 1.25rem; margin: 1.5rem 0 1rem; color: var(--warning);">⚠️ Needs Attention <span id="needsCount" style="font-size: 0.875rem; color: var(--muted);"></span></h2>
+        <div id="needsList" class="grid" aria-live="polite"></div>
+      </div>
+      
+      <div id="readySection">
+        <h2 style="font-size: 1.25rem; margin: 1.5rem 0 1rem; color: var(--accent);">✓ Ready to Publish <span id="readyCount" style="font-size: 0.875rem; color: var(--muted);"></span></h2>
+        <div id="readyList" class="grid" aria-live="polite"></div>
+      </div>
     </div>
 
     <script>
@@ -290,7 +298,8 @@
         return j;
       }
       const $ = (id) => document.getElementById(id);
-      const list = $('list');
+      const readyList = $('readyList');
+      const needsList = $('needsList');
       const flash = $('flash');
 
       const fmtPrice = (v, c) =>
@@ -325,11 +334,16 @@
           offer?.pricingSummary?.price?.value,
           offer?.pricingSummary?.price?.currency
         );
+        
+        // Check for pricing status from custom merchant data
+        const pricingStatus = offer?.merchantData?.pricingStatus;
+        const needsReview = pricingStatus === 'NEEDS_REVIEW';
+        
         meta.textContent = [
           offer.sku ? `SKU: ${offer.sku}` : null,
           offer.categoryId ? `Cat: ${offer.categoryId}` : null,
           offer.availableQuantity != null ? `Qty: ${offer.availableQuantity}` : null,
-          priceStr ? `Price: ${priceStr}` : null,
+          priceStr ? `Price: ${priceStr}` : (needsReview ? 'Price: ⚠️ Needs Review' : null),
         ]
           .filter(Boolean)
           .join(' • ');
@@ -339,9 +353,15 @@
   badge.innerHTML = `<span class="dot"></span> ${st}`;
         const row = document.createElement('div');
         row.className = 'row';
+        
+        // Only show publish button if pricing status is OK
+        const pricingStatus = offer?.merchantData?.pricingStatus;
+        const needsReview = pricingStatus === 'NEEDS_REVIEW';
+        
         const pub = document.createElement('button');
         pub.className = 'btn';
         pub.textContent = 'Publish';
+        
         const edit = document.createElement('button');
         edit.className = 'btn secondary';
         edit.textContent = 'Edit';
@@ -470,7 +490,10 @@
           }
         };
 
-        row.appendChild(pub);
+        // Only add publish button if pricing is OK
+        if (!needsReview) {
+          row.appendChild(pub);
+        }
         row.appendChild(edit);
         row.appendChild(del);
         body.appendChild(title);
@@ -498,12 +521,14 @@
       }
 
       async function load() {
-        list.innerHTML = '';
+        readyList.innerHTML = '';
+        needsList.innerHTML = '';
         const loader = document.createElement('div');
         loader.className = 'loading';
         loader.innerHTML =
           '<div class="spinner" role="status" aria-label="Loading"></div><div class="label">Loading drafts…</div>';
-        list.appendChild(loader);
+        readyList.appendChild(loader.cloneNode(true));
+        needsList.appendChild(loader);
         
         try {
           // Prefer explicit status queries to ensure UNPUBLISHED/DRAFT/INACTIVE are returned on accounts
@@ -526,13 +551,35 @@
             offers = all.filter((o) => allowed.has(String(o?.status || '').toUpperCase()));
           }
           if (!offers.length) {
-            list.innerHTML =
+            readyList.innerHTML =
               '<div class="empty">No drafts found (UNPUBLISHED/DRAFT/INACTIVE). Create your first listing draft from the wizard.</div>';
+            needsList.innerHTML = '';
             return;
           }
-          list.innerHTML = '';
-          try { if (flash) flash.textContent = `Found ${offers.length} drafts`; } catch {}
-          offers.forEach((o) => list.appendChild(card(o)));
+          
+          // Separate drafts by pricing status
+          const needsAttention = offers.filter(o => o?.merchantData?.pricingStatus === 'NEEDS_REVIEW');
+          const ready = offers.filter(o => o?.merchantData?.pricingStatus !== 'NEEDS_REVIEW');
+          
+          readyList.innerHTML = '';
+          needsList.innerHTML = '';
+          
+          // Update counts
+          $('needsCount').textContent = needsAttention.length ? `(${needsAttention.length})` : '';
+          $('readyCount').textContent = ready.length ? `(${ready.length})` : '';
+          
+          // Hide sections if empty
+          $('needsAttention').style.display = needsAttention.length ? 'block' : 'none';
+          $('readySection').style.display = ready.length ? 'block' : 'none';
+          
+          try { 
+            if (flash) {
+              flash.textContent = `Found ${offers.length} drafts (${ready.length} ready, ${needsAttention.length} need attention)`; 
+            }
+          } catch {}
+          
+          needsAttention.forEach((o) => needsList.appendChild(card(o)));
+          ready.forEach((o) => readyList.appendChild(card(o)));
           // lazy-load thumbnails with small concurrency to stay snappy and enrich titles
           lazyLoadThumbs();
           enrichTitles();
@@ -543,8 +590,9 @@
             ? JSON.stringify(e.response).slice(0, 500)
             : e?.message || String(e);
           wrap.innerHTML = `Failed to load drafts.<br/><small class="muted">${escapeHtml(msg)}</small> <div style="margin-top:.75rem"><button class="btn secondary" id="retryBtn">Retry</button></div>`;
-          list.innerHTML = '';
-          list.appendChild(wrap);
+          readyList.innerHTML = '';
+          needsList.innerHTML = '';
+          readyList.appendChild(wrap);
           document.getElementById('retryBtn')?.addEventListener('click', load);
         }
       }

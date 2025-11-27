@@ -314,6 +314,10 @@ export const handler: Handler = async (event) => {
         returnPolicyId: mapped.offer.returnPolicyId ?? userPolicyDefaults.return ?? null,
         merchantLocationKey,
         description: mapped.offer.description,
+        merchantData: group.pricingStatus || group.priceMeta ? {
+          pricingStatus: group.pricingStatus,
+          priceMeta: group.priceMeta,
+        } : undefined,
         });
         console.log(`[create-ebay-draft-user] ✓ Offer created successfully for SKU: ${mapped.sku}, offerId: ${offerResult.offerId}`);
       } catch (e: any) {

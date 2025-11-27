@@ -199,6 +199,7 @@ export type OfferCreationPayload = {
   returnPolicyId: string | null;
   merchantLocationKey: string | null;
   description: string;
+  merchantData?: Record<string, any>;
 };
 
 export type OfferCreationResult = {
@@ -248,6 +249,11 @@ export async function createOffer(
 
   if (typeof input.condition === "number" && Number.isFinite(input.condition) && input.condition > 0) {
     payload.condition = input.condition;
+  }
+  
+  // Add merchant data if provided (stores pricing status and metadata)
+  if (input.merchantData) {
+    payload.merchantData = input.merchantData;
   }
 
   const url = `${apiHost}/sell/inventory/v1/offer`;
