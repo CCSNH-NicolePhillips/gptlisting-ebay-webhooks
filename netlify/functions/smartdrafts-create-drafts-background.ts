@@ -33,6 +33,7 @@ type PairedProduct = {
   variant?: string;
   size?: string;
   categoryPath?: string;
+  keyText?: string[]; // Key text snippets from product packaging (from Vision API)
   heroDisplayUrl?: string;
   backDisplayUrl?: string;
   extras?: string[];
@@ -309,6 +310,12 @@ function buildPrompt(
     if (product.brand && product.brand !== "Unknown") {
       lines.push(`Brand: ${product.brand}`);
     }
+    
+    // Include key text from product packaging (Vision API extraction)
+    if (product.keyText && product.keyText.length > 0) {
+      lines.push(`Product Label Text (visible on packaging): ${product.keyText.join(', ')}`);
+      lines.push('👉 Use this label text to determine the correct formulation, size, and quantity.');
+    }
   }
   
   if (product.variant) {
@@ -381,7 +388,9 @@ function buildPrompt(
     lines.push("- Search Amazon.com for the product's 'Typical Price' or 'List Price' (NOT sale/deal prices, NOT marketplace seller prices)");
     lines.push("- IGNORE third-party marketplace sellers with inflated prices - use ONLY Amazon's direct price or manufacturer MSRP");
     lines.push("- For books: use new hardcover/paperback price from publisher, NOT collectible/used/rare edition pricing");
+    lines.push("⚠️ CRITICAL: Match the EXACT quantity shown in photos - if photos show 1 bottle, use SINGLE bottle price, NOT 2-pack/3-pack/bundle pricing!");
     lines.push("- Match the EXACT size/variant shown in photos (30-day supply vs 90-day, 8oz vs 16oz, etc.)");
+    lines.push("- Common mistake: Using '2 Pack' or 'Twin Pack' prices when photos show only 1 unit");
     lines.push("- Typical range: supplements $15-45, books $10-35, cosmetics $10-50");
     lines.push("- If you see prices over $50 for common items, you're likely looking at wrong variant or marketplace pricing");
   }
@@ -389,13 +398,15 @@ function buildPrompt(
   lines.push("Assess condition based on whether it appears to be new/sealed or used.");
   lines.push("");
   lines.push("FORMULATION DETECTION (CRITICAL):");
+  lines.push("⚠️ ALWAYS use 'Product Label Text' provided above - do NOT guess or make assumptions!");
   lines.push("Look at the extracted text from product photos to determine formulation:");
-  lines.push("- If text mentions 'mix', 'mixing instructions', 'add to water', 'shake', 'stir', 'scoop', 'flavor' (Berry, Vanilla, etc.) → formulation is 'Powder'");
-  lines.push("- If text mentions 'capsule', 'capsules', 'caps', 'vcaps', '60 count', '90 count' → formulation is 'Capsule'");
-  lines.push("- If text mentions 'tablet', 'tablets', 'tabs' → formulation is 'Tablet'");
-  lines.push("- If text mentions 'liquid', 'drops', 'dropper', 'sublingual', 'fl oz' → formulation is 'Liquid'");
-  lines.push("- If text mentions 'gummy', 'gummies', 'chewable' → formulation is 'Gummy'");
+  lines.push("- If label text mentions 'mix', 'mixing instructions', 'add to water', 'shake', 'stir', 'scoop', 'flavor' (Berry, Vanilla, etc.) → formulation is 'Powder'");
+  lines.push("- If label text mentions 'capsule', 'capsules', 'caps', 'vcaps', '60 count', '90 count' → formulation is 'Capsule'");
+  lines.push("- If label text mentions 'tablet', 'tablets', 'tabs' → formulation is 'Tablet'");
+  lines.push("- If label text mentions 'liquid', 'drops', 'dropper', 'sublingual', 'fl oz', 'ml' → formulation is 'Liquid'");
+  lines.push("- If label text mentions 'gummy', 'gummies', 'chewable' → formulation is 'Gummy'");
   lines.push("Common mistake: Products with flavors (Natural Berry, Vanilla) are usually POWDER drinks, NOT capsules!");
+  lines.push("Common mistake: If label says 'Liquid Drops', do NOT output 'Capsule' - use the actual label text!");
   lines.push("");
   lines.push("TITLE REQUIREMENTS (SEO-CRITICAL):");
   lines.push("- Must be 60-80 characters (use ALL available space for SEO)");
