@@ -217,6 +217,7 @@ export const handler: Handler = async (event) => {
           frontUrl: urlMap.get(pair.front) || '',
           backUrl: urlMap.get(pair.back) || '',
           brand: pair.brand,
+          brandWebsite: pair.brandWebsite,
           title: pair.title,
           product: pair.product,
         }));
