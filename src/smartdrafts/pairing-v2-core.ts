@@ -61,6 +61,7 @@ interface ImageClassificationV2 {
   brand: string | null;
   productName: string | null;
   title: string | null; // For books: the book title. For products: null
+  brandWebsite: string | null; // Official brand website URL (e.g., "https://myrkmd.com", "https://rootbrands.com")
   packageType: 'bottle' | 'jar' | 'tub' | 'pouch' | 'box' | 'sachet' | 'book' | 'unknown';
   keyText: string[];
   colorSignature: string[];
@@ -75,6 +76,7 @@ interface PairingInputItem {
   brand: string | null;
   productName: string | null;
   title: string | null;
+  brandWebsite: string | null;
   packageType: string;
   colorSignature: string[];
   layoutSignature: string;
@@ -148,12 +150,18 @@ For each image, provide:
    - For books ONLY: the book title (e.g., "Still Bobbi", "Harry Potter and the Sorcerer's Stone")
    - For supplements/cosmetics/food packaging: MUST be null
    - null if unreadable
-6. packageType: bottle/jar/tub/pouch/box/sachet/book/unknown
-6. keyText: array of 3-5 short readable text snippets from the label
-7. colorSignature: array of dominant colors (e.g., ["green", "black", "bright green gradient"])
-8. layoutSignature: brief description of label layout (e.g., "pouch vertical label center", "bottle wraparound")
-9. confidence: 0.0-1.0 representing your confidence in the classification
-10. rationale: brief explanation of your classification choices
+6. brandWebsite:
+   - The official brand website URL if you can infer it from the brand name or visible text
+   - Format: "https://domainname.com" (NO paths, just domain)
+   - Examples: "https://myrkmd.com", "https://rootbrands.com", "https://jockofuel.com"
+   - null if brand is unknown or you cannot confidently infer the URL
+   - Use common patterns: brand name + .com, remove spaces/special chars
+7. packageType: bottle/jar/tub/pouch/box/sachet/book/unknown
+8. keyText: array of 3-5 short readable text snippets from the label
+9. colorSignature: array of dominant colors (e.g., ["green", "black", "bright green gradient"])
+10. layoutSignature: brief description of label layout (e.g., "pouch vertical label center", "bottle wraparound")
+11. confidence: 0.0-1.0 representing your confidence in the classification
+12. rationale: brief explanation of your classification choices
 
 DEFINITIONS:
 - PRODUCT: Clear consumer product packaging (supplement, cosmetic, food, book, etc.)
@@ -197,6 +205,7 @@ Respond ONLY with valid JSON:
       "brand": "Brand Name" or null,
       "productName": "Product Name or Author Name" or null,
       "title": "Book Title (only for books)" or null,
+      "brandWebsite": "https://brandname.com" or null,
       "packageType": "bottle | jar | tub | pouch | box | sachet | book | unknown",
       "keyText": ["text1", "text2", "text3"],
       "colorSignature": ["color1", "color2", "pattern"],
@@ -358,6 +367,7 @@ export async function pairFromClassifications(items: ImageClassificationV2[]): P
       brand: x.brand,
       productName: x.productName,
       title: x.title,
+      brandWebsite: x.brandWebsite,
       packageType: x.packageType,
       colorSignature: x.colorSignature,
       layoutSignature: x.layoutSignature,

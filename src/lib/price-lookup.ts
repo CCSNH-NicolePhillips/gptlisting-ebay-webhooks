@@ -11,6 +11,7 @@ import { openai } from "./openai.js";
 export interface PriceLookupInput {
   title: string;
   brand?: string;
+  brandWebsite?: string; // Official brand website URL from Vision API
   upc?: string;
   condition?: 'NEW' | 'USED' | 'OTHER';
   quantity?: number;
@@ -288,20 +289,32 @@ export async function lookupPrice(
   let brandPrice: number | null = null;
   let brandUrl: string | undefined;
 
-  // Try brand-map first (curated brand URLs)
-  const signature = [input.brand, input.title].filter(Boolean).join(' ').trim();
-  if (signature) {
-    const mapped = await getBrandUrls(signature);
-    if (mapped?.brand) {
-      brandPrice = await priceFrom(mapped.brand);
-      if (brandPrice) {
-        brandUrl = mapped.brand;
-        console.log(`[price] ✓ Brand MSRP from curated URL: $${brandPrice.toFixed(2)}`);
+  // FIRST: Try Vision API-provided brand website (most accurate!)
+  if (input.brandWebsite) {
+    console.log(`[price] Trying Vision API brand website: ${input.brandWebsite}`);
+    brandPrice = await priceFrom(input.brandWebsite);
+    if (brandPrice) {
+      brandUrl = input.brandWebsite;
+      console.log(`[price] ✓ Brand MSRP from Vision API website: $${brandPrice.toFixed(2)}`);
+    }
+  }
+
+  // SECOND: Try brand-map (curated brand URLs)
+  if (!brandPrice) {
+    const signature = [input.brand, input.title].filter(Boolean).join(' ').trim();
+    if (signature) {
+      const mapped = await getBrandUrls(signature);
+      if (mapped?.brand) {
+        brandPrice = await priceFrom(mapped.brand);
+        if (brandPrice) {
+          brandUrl = mapped.brand;
+          console.log(`[price] ✓ Brand MSRP from curated URL: $${brandPrice.toFixed(2)}`);
+        }
       }
     }
   }
 
-  // Fall back to Brave search for official brand site
+  // LAST: Fall back to Brave search for official brand site
   if (!brandPrice && input.brand) {
     const braveUrl = await braveFirstUrlForBrandSite(
       input.brand,
