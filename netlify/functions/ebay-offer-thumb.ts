@@ -28,30 +28,57 @@ export const handler: Handler = async (event) => {
 			'X-EBAY-C-MARKETPLACE-ID': MARKETPLACE_ID,
 		} as Record<string, string>;
 
-		// 1) Get offer
+		// Helper: fetch with timeout to prevent 502s
+		const fetchWithTimeout = async (url: string, options: any, timeoutMs = 8000) => {
+			const controller = new AbortController();
+			const timeout = setTimeout(() => controller.abort(), timeoutMs);
+			try {
+				const response = await fetch(url, { ...options, signal: controller.signal });
+				clearTimeout(timeout);
+				return response;
+			} catch (e: any) {
+				clearTimeout(timeout);
+				if (e?.name === 'AbortError') throw new Error('Request timeout');
+				throw e;
+			}
+		};
+
+		// 1) Get offer - prioritize listing.photoUrls which are already published/validated
 		const offerUrl = `${apiHost}/sell/inventory/v1/offer/${encodeURIComponent(offerId)}`;
-		let r = await fetch(offerUrl, { headers });
+		let r = await fetchWithTimeout(offerUrl, { headers }, 5000);
 		if (!r.ok) return { statusCode: r.status, body: `offer fetch failed: ${r.status}` };
 		const offer = await r.json();
-		const skuRaw: string | undefined = offer?.sku;
-		if (!skuRaw) return { statusCode: 204 };
+		
+		// Try listing photos first (already validated by eBay)
+		const listingPhotos = offer?.listing?.photoUrls || offer?.listing?.imageUrls || [];
+		const listingPhotoArr = Array.isArray(listingPhotos) ? listingPhotos : listingPhotos ? [listingPhotos] : [];
+		
+		let imageUrl: string | undefined = listingPhotoArr[0];
+		
+		// Fallback: try inventory if no listing photos
+		if (!imageUrl) {
+			const skuRaw: string | undefined = offer?.sku;
+			if (!skuRaw) return { statusCode: 204 };
 
-		// 2) Try inventory item by sku and sanitized sku
-		const trySkus = [skuRaw];
-		const san = skuRaw.replace(/[^A-Za-z0-9]/g, '').slice(0, 50);
-		if (san && san !== skuRaw) trySkus.push(san);
+			const trySkus = [skuRaw];
+			const san = skuRaw.replace(/[^A-Za-z0-9]/g, '').slice(0, 50);
+			if (san && san !== skuRaw) trySkus.push(san);
 
-		let imageUrl: string | undefined;
-		for (const s of trySkus) {
-			const invUrl = `${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(s)}`;
-			const ir = await fetch(invUrl, { headers });
-			if (!ir.ok) continue;
-			const item = await ir.json();
-			const imgs = item?.product?.imageUrls || item?.product?.images || item?.product?.image || [];
-			const arr = Array.isArray(imgs) ? imgs : imgs ? [imgs] : [];
-			if (arr.length) {
-				imageUrl = arr[0];
-				break;
+			for (const s of trySkus) {
+				try {
+					const invUrl = `${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(s)}`;
+					const ir = await fetchWithTimeout(invUrl, { headers }, 4000);
+					if (!ir.ok) continue;
+					const item = await ir.json();
+					const imgs = item?.product?.imageUrls || item?.product?.images || item?.product?.image || [];
+					const arr = Array.isArray(imgs) ? imgs : imgs ? [imgs] : [];
+					if (arr.length) {
+						imageUrl = arr[0];
+						break;
+					}
+				} catch {
+					continue; // Skip failed inventory fetches
+				}
 			}
 		}
 		if (!imageUrl) return { statusCode: 204 };
@@ -73,24 +100,30 @@ export const handler: Handler = async (event) => {
 				return u;
 			}
 		};
+		
 		const tryFetchImage = async (u: string) => {
-			const resp = await fetch(u, { redirect: 'follow' });
+			const resp = await fetchWithTimeout(u, { redirect: 'follow' }, 7000);
 			const type = (resp.headers.get('content-type') || '').toLowerCase();
 			const ok = resp.ok && type.startsWith('image/');
 			const buf = ok ? Buffer.from(await resp.arrayBuffer()) : undefined;
 			return { ok, resp, type, buf } as const;
 		};
+		
 		let direct = toDirectDropbox(imageUrl);
 		let upstream = await tryFetchImage(direct);
 		if (!upstream.ok && direct !== imageUrl) {
 			// Retry original if normalized failed
-			upstream = await tryFetchImage(imageUrl);
+			try {
+				upstream = await tryFetchImage(imageUrl);
+			} catch {
+				// If both fail, return 204 instead of 502
+				return { statusCode: 204 };
+			}
 		}
-		if (!upstream.ok)
-			return {
-				statusCode: upstream.resp.status || 415,
-				body: `image fetch failed or not image (type=${upstream.type || 'unknown'})`,
-			};
+		if (!upstream.ok) {
+			// Return 204 (no content) instead of error to avoid 502s in UI
+			return { statusCode: 204 };
+		}
 		return {
 			statusCode: 200,
 			headers: {
