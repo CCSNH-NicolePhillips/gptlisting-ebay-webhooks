@@ -316,6 +316,7 @@ export const handler: Handler = async (event) => {
           brandWebsite: p.brandWebsite,
           product: p.product,
           title: p.title, // Book title (null for products)
+          keyText: p.keyText || [], // Key text from product packaging
           frontUrl: p.frontUrl,  // Dropbox shareable link for front image
           backUrl: p.backUrl,    // Dropbox shareable link for back image
         }));

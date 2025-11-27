@@ -26,6 +26,7 @@ export interface PairingResult {
     brandWebsite?: string | null;
     title?: string | null;
     product?: string | null;
+    keyText?: string[];
   }>;
   unpaired: Array<{
     imagePath: string;
@@ -717,6 +718,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
       brandWebsite: frontClass?.brandWebsite || null,
       title: frontClass?.title || null,
       product: frontClass?.productName || null,
+      keyText: frontClass?.keyText || [],
     };
   });
   
