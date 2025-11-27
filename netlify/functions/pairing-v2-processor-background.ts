@@ -313,6 +313,7 @@ export const handler: Handler = async (event) => {
           back: path.basename(p.back),
           confidence: p.confidence,
           brand: p.brand,
+          brandWebsite: p.brandWebsite,
           product: p.product,
           title: p.title, // Book title (null for products)
           frontUrl: p.frontUrl,  // Dropbox shareable link for front image
