@@ -438,12 +438,30 @@ export async function lookupPrice(
   // TIER 3: AI Arbitration
   // ========================================
   if (candidates.length === 0) {
-    console.warn('[price] No price signals available');
-    return {
-      ok: false,
-      candidates: [],
-      reason: 'no-price-signals'
-    };
+    console.warn('[price] No price signals available - using category-based estimate');
+    
+    // Last resort: reasonable estimate based on product type
+    let estimatedPrice = 29.99; // Default for supplements/beauty
+    
+    const titleLower = input.title.toLowerCase();
+    if (titleLower.includes('serum') || titleLower.includes('cream') || titleLower.includes('moisturizer')) {
+      estimatedPrice = 24.99; // Skincare
+    } else if (titleLower.includes('supplement') || titleLower.includes('vitamin') || titleLower.includes('capsule')) {
+      estimatedPrice = 29.99; // Supplements
+    } else if (titleLower.includes('protein') || titleLower.includes('pre-workout') || titleLower.includes('collagen')) {
+      estimatedPrice = 39.99; // Sports nutrition
+    } else if (titleLower.includes('oil') && titleLower.includes('fish')) {
+      estimatedPrice = 24.99; // Fish oil
+    }
+    
+    console.log(`[price] Using category estimate: $${estimatedPrice.toFixed(2)}`);
+    
+    candidates.push({
+      source: 'estimate',
+      price: estimatedPrice,
+      currency: 'USD',
+      notes: 'Category-based estimate (no market data available)',
+    });
   }
 
   console.log(`[price] Tier 3: AI arbitration with ${candidates.length} candidate(s)...`);
