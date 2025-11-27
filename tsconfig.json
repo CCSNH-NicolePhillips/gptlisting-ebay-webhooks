@@ -18,5 +18,10 @@
     "functions/**/*.ts",
     "functions/**/*.d.ts",
     "netlify/functions/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "chatgpt-handoff"
   ]
 }
