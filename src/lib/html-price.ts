@@ -104,20 +104,32 @@ function extractFromBody($: cheerio.CheerioAPI): number | null {
   const targeted = bodyText.match(/(?:price|buy|order)[^$]{0,60}\$\s?(\d{1,4}(?:\.\d{2})?)/i);
   if (targeted) {
     const price = toNumber(targeted[1]);
-    if (price && price >= 10) return price; // Ignore small amounts (<$10 likely discounts)
+    if (price && price >= 15) return price; // Ignore small amounts (<$15 likely discounts/fees)
   }
   
   // Second try: Extract all dollar amounts and filter
   const allMatches = bodyText.match(/\$\s?(\d{1,4}(?:\.\d{2})?)/g);
   if (allMatches) {
-    const prices = allMatches
+    const allPrices = allMatches
       .map(m => m.replace(/\$/g, '').trim())
       .map(m => toNumber(m))
-      .filter((p): p is number => p !== null && p >= 10 && p <= 500); // Realistic product price range
+      .filter((p): p is number => p !== null && p >= 15 && p <= 500); // Filter out discounts/fees (<$15)
     
-    if (prices.length > 0) {
-      // Return the lowest realistic price (often the single-purchase price)
-      return Math.min(...prices);
+    if (allPrices.length > 0) {
+      // Prefer retail-formatted prices (.95 or .99) over round numbers
+      const retailPrices = allPrices.filter(p => {
+        const cents = Math.round((p % 1) * 100);
+        return cents === 95 || cents === 99;
+      });
+      
+      if (retailPrices.length > 0) {
+        console.log(`[HTML Parser] Found ${allPrices.length} prices (>=$15), using lowest retail-formatted (.95/.99): $${Math.min(...retailPrices)}`);
+        return Math.min(...retailPrices);
+      }
+      
+      // Fallback: Return lowest price if no retail formatting found
+      console.log(`[HTML Parser] Found ${allPrices.length} prices (>=$15), no retail formatting found, using lowest: $${Math.min(...allPrices)}`);
+      return Math.min(...allPrices);
     }
   }
   
