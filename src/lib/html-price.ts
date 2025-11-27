@@ -99,12 +99,29 @@ function extractFromOpenGraph($: cheerio.CheerioAPI): number | null {
 
 function extractFromBody($: cheerio.CheerioAPI): number | null {
   const bodyText = $.root().text().replace(/\s+/g, " ");
-  const targeted = bodyText.match(/(?:price|buy|order|sale)[^$]{0,60}\$\s?(\d{1,4}(?:\.\d{2})?)/i);
+  
+  // First try: Look for price in context of common keywords
+  const targeted = bodyText.match(/(?:price|buy|order)[^$]{0,60}\$\s?(\d{1,4}(?:\.\d{2})?)/i);
   if (targeted) {
-    return toNumber(targeted[1]);
+    const price = toNumber(targeted[1]);
+    if (price && price >= 10) return price; // Ignore small amounts (<$10 likely discounts)
   }
-  const match = bodyText.match(/\$\s?(\d{1,4}(?:\.\d{2})?)/);
-  return match ? toNumber(match[1]) : null;
+  
+  // Second try: Extract all dollar amounts and filter
+  const allMatches = bodyText.match(/\$\s?(\d{1,4}(?:\.\d{2})?)/g);
+  if (allMatches) {
+    const prices = allMatches
+      .map(m => m.replace(/\$/g, '').trim())
+      .map(m => toNumber(m))
+      .filter((p): p is number => p !== null && p >= 10 && p <= 500); // Realistic product price range
+    
+    if (prices.length > 0) {
+      // Return the lowest realistic price (often the single-purchase price)
+      return Math.min(...prices);
+    }
+  }
+  
+  return null;
 }
 
 export function extractPriceFromHtml(html: string): number | null {
