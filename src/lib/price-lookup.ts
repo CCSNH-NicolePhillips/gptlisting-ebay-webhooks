@@ -5,6 +5,48 @@ import { fetchSoldPriceStats, type SoldPriceStats } from "./pricing/ebay-sold-pr
 import { openai } from "./openai.js";
 
 // ============================================================================
+// URL VARIATION HELPERS
+// ============================================================================
+
+/**
+ * Generate common URL variations for a product page
+ * Example: /glutathione-rapid-boost.html → [/glutathione-rapid-boost-supplement.html, /glutathione-rapid-boost-sports-drink.html, ...]
+ */
+function generateUrlVariations(url: string): string[] {
+  try {
+    const urlObj = new URL(url);
+    const path = urlObj.pathname;
+    
+    // Extract base path and extension
+    const lastSlash = path.lastIndexOf('/');
+    const basePath = path.substring(0, lastSlash + 1);
+    const filename = path.substring(lastSlash + 1);
+    const dotIndex = filename.lastIndexOf('.');
+    const ext = dotIndex > 0 ? filename.substring(dotIndex) : '';
+    const base = dotIndex > 0 ? filename.substring(0, dotIndex) : filename;
+    
+    // Common suffixes to try
+    const suffixes = [
+      '-supplement',
+      '-sports-drink', 
+      '-product',
+      '-capsules',
+      '-formula'
+    ];
+    
+    const variations: string[] = [];
+    for (const suffix of suffixes) {
+      const newPath = `${basePath}${base}${suffix}${ext}`;
+      variations.push(`${urlObj.origin}${newPath}`);
+    }
+    
+    return variations;
+  } catch {
+    return [];
+  }
+}
+
+// ============================================================================
 // NEW TIERED PRICING ENGINE
 // ============================================================================
 
@@ -296,6 +338,18 @@ export async function lookupPrice(
     if (brandPrice) {
       brandUrl = input.brandWebsite;
       console.log(`[price] ✓ Brand MSRP from Vision API website: $${brandPrice.toFixed(2)}`);
+    } else if (input.brandWebsite.includes('/')) {
+      // Vision URL didn't work - try common variations before falling back to Brave
+      const variations = generateUrlVariations(input.brandWebsite);
+      for (const variant of variations) {
+        console.log(`[price] Trying URL variation: ${variant}`);
+        brandPrice = await priceFrom(variant);
+        if (brandPrice) {
+          brandUrl = variant;
+          console.log(`[price] ✓ Brand MSRP from URL variation: $${brandPrice.toFixed(2)}`);
+          break;
+        }
+      }
     }
   }
 
