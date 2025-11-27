@@ -152,12 +152,14 @@ For each image, provide:
    - For supplements/cosmetics/food packaging: MUST be null
    - null if unreadable
 6. brandWebsite:
-   - The official brand website URL if you can infer it from the brand name or visible text
-   - If a SPECIFIC product URL is visible on packaging (e.g., QR code destination, printed URL), return the full URL including path
-   - Otherwise, return just the domain: "https://domainname.com"
-   - Examples: "https://robkellermd.com/original-glutathione-supplement.html" (if visible), "https://rootbrands.com" (domain only)
-   - null if brand is unknown or you cannot confidently infer the URL
-   - Use common patterns for domains: brand name + .com, remove spaces/special chars
+   - The official brand website URL - try to infer the SPECIFIC PRODUCT PAGE if possible
+   - If you can see the product name and brand, construct the likely product URL using common patterns:
+     * Brand domain + slugified product name: "https://brandname.com/product-name.html"
+     * Example: "RKMD Glutathione Rapid Boost" → "https://robkellermd.com/glutathione-rapid-boost.html"
+   - If a specific product URL is visible on packaging (QR code, printed URL), use that exact URL
+   - If you cannot confidently construct a product URL, return just the domain: "https://domainname.com"
+   - Common URL patterns: lowercase, hyphens for spaces, .html extension (but also try without)
+   - null if brand is unknown or you cannot confidently infer any URL
 7. packageType: bottle/jar/tub/pouch/box/sachet/book/unknown
 8. keyText: array of 3-5 short readable text snippets from the label
 9. colorSignature: array of dominant colors (e.g., ["green", "black", "bright green gradient"])
