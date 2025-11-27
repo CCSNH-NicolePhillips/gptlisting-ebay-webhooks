@@ -415,11 +415,15 @@
             lastPublishAttempt.status = r.status;
             
             if (r.ok && data.ok && !data.deleted) {
+              sessionStorage.removeItem('drafts-cache');
+              sessionStorage.removeItem('drafts-cache-time');
               el.remove();
               flash.textContent = `Published ${offer.offerId}`;
               return;
             }
             if (r.ok && data.ok && data.deleted) {
+              sessionStorage.removeItem('drafts-cache');
+              sessionStorage.removeItem('drafts-cache-time');
               el.remove();
               flash.textContent = `Draft ${offer.offerId} had errors and was deleted.`;
               return;
@@ -478,8 +482,10 @@
               return;
             }
             if (r.ok && data.ok) {
+              sessionStorage.removeItem('drafts-cache');
+              sessionStorage.removeItem('drafts-cache-time');
               el.remove();
-              flash.textContent = `Deleted draft ${offer.offerId}`;
+              flash.textContent = `Deleted ${offer.offerId}`;
             } else {
               flash.textContent = `Delete error: ${data.error || ''}`;
               pub.disabled = del.disabled = false;
@@ -531,17 +537,49 @@
         needsList.appendChild(loader);
         
         try {
-          // Prefer explicit status queries to ensure UNPUBLISHED/DRAFT/INACTIVE are returned on accounts
-          // where the upstream API does not include them by default without offer_status.
-          const rawSku = new URL(location.href).searchParams.get('sku') || '';
-          const skuOk = /^[A-Za-z0-9]{1,50}$/.test(rawSku);
-          const base =
-            '/.netlify/functions/ebay-list-offers?limit=100' +
-            (skuOk ? '&sku=' + encodeURIComponent(rawSku) : '');
+          const cacheKey = 'drafts-cache';
+          const cacheTimeKey = 'drafts-cache-time';
+          const cacheMaxAge = 30000; // 30 seconds
+          
+          // Try cache first for faster initial load
+          let offers = null;
+          try {
+            const cached = sessionStorage.getItem(cacheKey);
+            const cacheTime = sessionStorage.getItem(cacheTimeKey);
+            if (cached && cacheTime && (Date.now() - Number(cacheTime)) < cacheMaxAge) {
+              offers = JSON.parse(cached);
+              console.log('[Drafts] Using cached data');
+            }
+          } catch {}
+          
+          // Fetch fresh data if no cache
+          if (!offers) {
+            // Prefer explicit status queries to ensure UNPUBLISHED/DRAFT/INACTIVE are returned on accounts
+            // where the upstream API does not include them by default without offer_status.
+            const rawSku = new URL(location.href).searchParams.get('sku') || '';
+            const skuOk = /^[A-Za-z0-9]{1,50}$/.test(rawSku);
+            const base =
+              '/.netlify/functions/ebay-list-offers?limit=100' +
+              (skuOk ? '&sku=' + encodeURIComponent(rawSku) : '');
 
-          // Single aggregated query to rely on server-side multi-status handling and safe-aggregate fallback
-          const agg = await fetchJSON(base + '&status=' + encodeURIComponent('UNPUBLISHED,DRAFT,INACTIVE'));
-          let offers = Array.isArray(agg?.offers) ? agg.offers : [];
+            // Single aggregated query to rely on server-side multi-status handling and safe-aggregate fallback
+            const agg = await fetchJSON(base + '&status=' + encodeURIComponent('UNPUBLISHED,DRAFT,INACTIVE'));
+            offers = Array.isArray(agg?.offers) ? agg.offers : [];
+
+            // Fallback: if explicit queries yielded nothing, do a broad fetch and client-filter
+            if (!offers.length) {
+              const j = await fetchJSON(base);
+              const all = Array.isArray(j.offers) ? j.offers : [];
+              const allowed = new Set(['UNPUBLISHED', 'DRAFT', 'INACTIVE']);
+              offers = all.filter((o) => allowed.has(String(o?.status || '').toUpperCase()));
+            }
+            
+            // Cache the results
+            try {
+              sessionStorage.setItem(cacheKey, JSON.stringify(offers));
+              sessionStorage.setItem(cacheTimeKey, String(Date.now()));
+            } catch {}
+          }
 
           // Fallback: if explicit queries yielded nothing, do a broad fetch and client-filter
           if (!offers.length) {
@@ -574,15 +612,22 @@
           
           try { 
             if (flash) {
-              flash.textContent = `Found ${offers.length} drafts (${ready.length} ready, ${needsAttention.length} need attention)`; 
+              flash.textContent = `Loaded ${offers.length} drafts (${ready.length} ready, ${needsAttention.length} need attention) - Loading images...`; 
             }
           } catch {}
           
+          // Render cards immediately for fast initial display
           needsAttention.forEach((o) => needsList.appendChild(card(o)));
           ready.forEach((o) => readyList.appendChild(card(o)));
-          // lazy-load thumbnails with small concurrency to stay snappy and enrich titles
-          lazyLoadThumbs();
-          enrichTitles();
+          
+          // Load images and titles in parallel in the background
+          Promise.all([lazyLoadThumbs(), enrichTitles()]).then(() => {
+            try {
+              if (flash) {
+                flash.textContent = `${offers.length} drafts loaded (${ready.length} ready, ${needsAttention.length} need attention)`;
+              }
+            } catch {}
+          }).catch(() => {});
         } catch (e) {
           const wrap = document.createElement('div');
           wrap.className = 'empty';
@@ -634,7 +679,10 @@
       }
 
       function lazyLoadThumbs() {
-        const nodes = Array.from(list.querySelectorAll('.card'));
+        const nodes = [
+          ...Array.from(readyList.querySelectorAll('.card')),
+          ...Array.from(needsList.querySelectorAll('.card'))
+        ];
         const q = [];
         const exec = authClient && typeof authClient.authFetch === 'function' ? authClient.authFetch : fetch;
         for (const n of nodes) {
@@ -684,7 +732,7 @@
           });
         }
         // run with limited concurrency
-        const concurrency = 6;
+        const concurrency = 12;
         let i = 0;
         async function next() {
           const fn = q[i++];
@@ -693,12 +741,15 @@
           return next();
         }
         const workers = Array.from({ length: Math.min(concurrency, q.length) }, next);
-        Promise.all(workers).catch(() => {});
+        return Promise.all(workers);
       }
 
       // Fetch inventory item titles for each card by SKU and update the title element
       function enrichTitles() {
-        const nodes = Array.from(list.querySelectorAll('.card'));
+        const nodes = [
+          ...Array.from(readyList.querySelectorAll('.card')),
+          ...Array.from(needsList.querySelectorAll('.card'))
+        ];
         const cache = new Map();
         const q = [];
         for (const n of nodes) {
@@ -726,7 +777,7 @@
             } catch {}
           });
         }
-        const concurrency = 6;
+        const concurrency = 12;
         let i = 0;
         async function next() {
           const fn = q[i++];
@@ -735,7 +786,7 @@
           return next();
         }
         const workers = Array.from({ length: Math.min(concurrency, q.length) }, next);
-        Promise.all(workers).catch(() => {});
+        return Promise.all(workers);
       }
 
       const params = new URLSearchParams(location.search);
@@ -862,7 +913,14 @@
         }
         load();
       }
-      document.getElementById('btnRefresh')?.addEventListener('click', () => { try { load(); } catch {} });
+      document.getElementById('btnRefresh')?.addEventListener('click', () => { 
+        try {
+          // Clear cache to force fresh data
+          sessionStorage.removeItem('drafts-cache');
+          sessionStorage.removeItem('drafts-cache-time');
+          load(); 
+        } catch {} 
+      });
       bootstrap();
     </script>
   </body>
