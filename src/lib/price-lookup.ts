@@ -400,6 +400,26 @@ export async function lookupPrice(
     }
   }
 
+  // AMAZON FALLBACK: Try Amazon if brand site didn't work
+  if (!brandPrice && input.brand) {
+    console.log('[price] Trying Amazon as fallback...');
+    const { braveFirstUrl } = await import('./search.js');
+    const amazonUrl = await braveFirstUrl(
+      `${input.brand} ${input.title}`,
+      'amazon.com'
+    );
+    
+    if (amazonUrl) {
+      console.log(`[price] Amazon URL found: ${amazonUrl}`);
+      const { price: amazonPrice } = await priceFrom(amazonUrl);
+      if (amazonPrice) {
+        brandPrice = amazonPrice;
+        brandUrl = amazonUrl;
+        console.log(`[price] ✓ Brand MSRP from Amazon: $${brandPrice.toFixed(2)}`);
+      }
+    }
+  }
+
   if (brandPrice) {
     candidates.push({
       source: 'brand-msrp',
