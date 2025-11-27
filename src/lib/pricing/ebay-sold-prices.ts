@@ -96,7 +96,7 @@ function isQuantityMatch(itemQuantity: number | undefined, queryQuantity: number
 }
 
 /**
- * Fetch sold price statistics from eBay completed listings
+ * Fetch sold price statistics from eBay completed listings using Finding API
  */
 export async function fetchSoldPriceStats(
   query: SoldPriceQuery
@@ -107,58 +107,67 @@ export async function fetchSoldPriceStats(
   };
 
   try {
-    // Use client_credentials grant for public Browse API (no user auth needed)
-    const { access_token } = await appAccessToken([
-      'https://api.ebay.com/oauth/api_scope'
-    ]);
-    
-    if (!access_token) {
-      console.error('[ebay-sold] Failed to get eBay app token');
+    // Finding API requires app ID (not OAuth token)
+    const appId = process.env.EBAY_APP_ID || process.env.EBAY_CLIENT_ID;
+    if (!appId) {
+      console.error('[ebay-sold] Missing EBAY_APP_ID or EBAY_CLIENT_ID');
       return empty;
     }
 
-    const { apiHost } = tokenHosts(process.env.EBAY_ENV);
-    const baseUrl = apiHost;
+    const isSandbox = process.env.EBAY_ENV === 'sandbox';
+    const baseUrl = isSandbox 
+      ? 'https://svcs.sandbox.ebay.com/services/search/FindingService/v1'
+      : 'https://svcs.ebay.com/services/search/FindingService/v1';
 
-    let searchUrl: URL;
-    let searchType: 'upc' | 'keywords';
+    // Build keywords
+    const keywords = [query.brand, query.title].filter(Boolean).join(' ');
+    console.log(`[ebay-sold] Searching completed items for: "${keywords}"`);
 
-    // Build search query
-    if (query.upc) {
-      // Search by GTIN/UPC
-      searchUrl = new URL(`${baseUrl}/buy/browse/v1/item_summary/search`);
-      searchUrl.searchParams.set('gtin', query.upc);
-      searchType = 'upc';
-      console.log(`[ebay-sold] Searching by UPC: ${query.upc}`);
-    } else {
-      // Search by keywords (brand + title)
-      searchUrl = new URL(`${baseUrl}/buy/browse/v1/item_summary/search`);
-      const keywords = [query.brand, query.title].filter(Boolean).join(' ');
-      searchUrl.searchParams.set('q', keywords);
-      searchType = 'keywords';
-      console.log(`[ebay-sold] Searching by keywords: "${keywords}"`);
+    const searchUrl = new URL(baseUrl);
+    searchUrl.searchParams.set('OPERATION-NAME', 'findCompletedItems');
+    searchUrl.searchParams.set('SERVICE-VERSION', '1.0.0');
+    searchUrl.searchParams.set('SECURITY-APPNAME', appId);
+    searchUrl.searchParams.set('RESPONSE-DATA-FORMAT', 'JSON');
+    searchUrl.searchParams.set('REST-PAYLOAD', '');
+    searchUrl.searchParams.set('keywords', keywords);
+    searchUrl.searchParams.set('paginationInput.entriesPerPage', '100');
+    searchUrl.searchParams.set('sortOrder', 'EndTimeSoonest');
+
+    // Add item filters
+    let filterIndex = 0;
+
+    // Filter: Sold items only
+    searchUrl.searchParams.set(`itemFilter(${filterIndex}).name`, 'SoldItemsOnly');
+    searchUrl.searchParams.set(`itemFilter(${filterIndex}).value`, 'true');
+    filterIndex++;
+
+    // Filter: Buy It Now listings
+    searchUrl.searchParams.set(`itemFilter(${filterIndex}).name`, 'ListingType');
+    searchUrl.searchParams.set(`itemFilter(${filterIndex}).value`, 'FixedPrice');
+    filterIndex++;
+
+    // Filter: US location
+    searchUrl.searchParams.set(`itemFilter(${filterIndex}).name`, 'LocatedIn');
+    searchUrl.searchParams.set(`itemFilter(${filterIndex}).value`, 'US');
+    filterIndex++;
+
+    // Filter: Condition if specified
+    if (query.condition) {
+      const conditionIds = getConditionFilter(query.condition);
+      if (conditionIds.length > 0) {
+        searchUrl.searchParams.set(`itemFilter(${filterIndex}).name`, 'Condition');
+        conditionIds.forEach((condId, idx) => {
+          searchUrl.searchParams.set(`itemFilter(${filterIndex}).value(${idx})`, condId);
+        });
+        console.log(`[ebay-sold] Filtering by condition: ${query.condition} (IDs: ${conditionIds.join(', ')})`);
+        filterIndex++;
+      }
     }
 
-    // Add filters
-    searchUrl.searchParams.set('filter', 'buyingOptions:{FIXED_PRICE},itemLocationCountry:US');
-    searchUrl.searchParams.set('sort', 'endDate'); // Most recent first
-    searchUrl.searchParams.set('limit', '50'); // Get up to 50 results
-
-    // Add condition filter if specified
-    const conditionIds = getConditionFilter(query.condition);
-    if (conditionIds.length > 0) {
-      const currentFilter = searchUrl.searchParams.get('filter') || '';
-      const conditionFilter = `conditions:{${conditionIds.join('|')}}`;
-      searchUrl.searchParams.set('filter', `${currentFilter},${conditionFilter}`);
-      console.log(`[ebay-sold] Filtering by condition: ${query.condition} (IDs: ${conditionIds.join(', ')})`);
-    }
-
-    console.log(`[ebay-sold] API URL: ${searchUrl.toString()}`);
+    console.log(`[ebay-sold] API URL: ${searchUrl.toString().substring(0, 200)}...`);
 
     const response = await fetch(searchUrl.toString(), {
       headers: {
-        'Authorization': `Bearer ${access_token}`,
-        'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US',
         'Accept': 'application/json',
       },
     });
@@ -172,35 +181,47 @@ export async function fetchSoldPriceStats(
     }
 
     const data = await response.json();
-    const items = data?.itemSummaries || [];
+    
+    // Finding API response structure
+    const searchResult = data?.findCompletedItemsResponse?.[0]?.searchResult?.[0];
+    const items = searchResult?.item || [];
+    const count = parseInt(searchResult?.['@count'] || '0', 10);
 
-    console.log(`[ebay-sold] Found ${items.length} total items from API`);
+    console.log(`[ebay-sold] Found ${count} completed items from API`);
+
+    if (count === 0 || items.length === 0) {
+      console.warn(`[ebay-sold] No sold items found for query:`, {
+        title: query.title,
+        brand: query.brand,
+        condition: query.condition,
+      });
+      return empty;
+    }
 
     // Extract and filter samples
     const samples: SoldPriceSample[] = [];
 
     for (const item of items) {
-      // Skip if no price data
-      if (!item.price?.value) continue;
+      // Finding API structure: item.sellingStatus[0].currentPrice[0]
+      const sellingStatus = item.sellingStatus?.[0];
+      const currentPrice = sellingStatus?.currentPrice?.[0];
+      
+      if (!currentPrice?.__value__) continue;
+
+      const price = parseFloat(currentPrice.__value__);
+      if (!price || price <= 0) continue;
 
       // Check quantity match if specified
-      if (!isQuantityMatch(item.quantity, query.quantity)) {
+      const itemQuantity = parseInt(item.quantity?.[0] || '1', 10);
+      if (!isQuantityMatch(itemQuantity, query.quantity)) {
         continue;
       }
 
-      // Check if item is sold (has ended)
-      const itemEndDate = item.itemEndDate;
-      if (!itemEndDate) continue; // Skip active listings
-
-      // Extract price
-      const price = parseFloat(item.price.value);
-      if (!price || price <= 0) continue;
-
       samples.push({
-        price: Math.round(price * 100) / 100, // Round to 2 decimals
-        currency: item.price.currency || 'USD',
-        url: item.itemWebUrl,
-        endedAt: itemEndDate,
+        price: Math.round(price * 100) / 100,
+        currency: currentPrice['@currencyId'] || 'USD',
+        url: item.viewItemURL?.[0],
+        endedAt: item.listingInfo?.[0]?.endTime?.[0],
       });
     }
 
@@ -208,11 +229,9 @@ export async function fetchSoldPriceStats(
 
     // Compute statistics if we have enough samples
     if (samples.length === 0) {
-      console.warn(`[ebay-sold] No sold items found for query:`, {
-        searchType,
+      console.warn(`[ebay-sold] No sold items matched filters for query:`, {
         title: query.title,
         brand: query.brand,
-        upc: query.upc,
         condition: query.condition,
       });
       return empty;
@@ -228,10 +247,8 @@ export async function fetchSoldPriceStats(
     };
 
     console.log(`[ebay-sold] Statistics computed:`, {
-      searchType,
       title: query.title,
       brand: query.brand,
-      upc: query.upc,
       condition: query.condition,
       samplesCount: samples.length,
       median: stats.median?.toFixed(2),
