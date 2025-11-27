@@ -355,10 +355,6 @@
         const row = document.createElement('div');
         row.className = 'row';
         
-        // Only show publish button if pricing status is OK
-        const pricingStatus = offer?.merchantData?.pricingStatus;
-        const needsReview = pricingStatus === 'NEEDS_REVIEW';
-        
         const pub = document.createElement('button');
         pub.className = 'btn';
         pub.textContent = 'Publish';

@@ -434,7 +434,8 @@ PAIRING RULES (STRICT):
 7. NEVER pair "unknown" panels - they go to unpaired
 8. ONLY pair "front" with "back" OR "side" of the SAME product (side panels can act as backs)
 9. A "side" panel can be paired with a "front" if they share the same brand/product/package
-10. Use colorSignature and layoutSignature as strong signals when productName is missing
+10. When no "front" panel exists, you MAY pair a "side" panel with a "back" panel if they share the same brand/product/package
+11. Use colorSignature and layoutSignature as strong signals when productName is missing
 
 OUTPUT FORMAT:
 Respond ONLY with valid JSON:
@@ -588,7 +589,7 @@ Critical checks (MUST pass):
   * NEVER reject a book pair just because brand is null - books don't have brands in our system
   * ONLY reject if the identifying field (brand for products, title for books) is null on BOTH sides
 - Package types must match (bottle/jar/box/book/etc)
-- Front must be "front" panel
+- Front must be "front" OR "side" panel (side can substitute when no front exists)
 - Back must be "back" or "side" panel
 - Confidence >= 0.5 on both sides
 
@@ -598,7 +599,7 @@ Flexible checks (one can be null):
 Common reasons to reject:
 - Identity mismatch: For products, brands don't match; for books, titles don't match
 - Package type mismatch (bottle vs jar vs book)
-- Panel type wrong (front paired with front, or back with non-back/side)
+- Panel type wrong (front paired with front, or side paired with side without one being back, or back with non-back/side)
 - Low confidence (< 0.5 on either side)
 - Complete uncertainty: The identifying field (brand for products, title for books) is null on BOTH sides
 
