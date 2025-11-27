@@ -536,7 +536,8 @@ async function createDraftForProduct(product: PairedProduct, retryAttempt: numbe
   console.log(`[Draft] Product data:`, JSON.stringify({ 
     brand: product.brand, 
     product: product.product, 
-    title: product.title 
+    title: product.title,
+    brandWebsite: product.brandWebsite
   }));
   
   // ========================================
