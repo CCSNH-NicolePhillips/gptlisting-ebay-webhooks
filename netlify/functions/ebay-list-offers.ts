@@ -427,6 +427,50 @@ export const handler: Handler = async (event) => {
 					(o: any) => String(o?.status || '').toUpperCase() === String(status).toUpperCase()
 				)
 			: offers;
+		
+		// Enrich offers with inventory item titles for faster frontend display
+		// Fetch titles in parallel with limited concurrency to avoid timeout
+		const enrichWithTitles = async (offerList: any[]) => {
+			const concurrency = 10;
+			const queue = offerList.map((offer, index) => async () => {
+				const sku = offer?.sku;
+				if (!sku) return;
+				
+				try {
+					const invUrl = `${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
+					const invRes = await fetch(invUrl, { headers });
+					if (invRes.ok) {
+						const invTxt = await invRes.text();
+						const invJson = JSON.parse(invTxt);
+						const title = invJson?.product?.title || invJson?.title;
+						if (title) {
+							offerList[index]._enrichedTitle = title;
+						}
+					}
+				} catch {
+					// Skip on error, title will show as SKU
+				}
+			});
+			
+			let i = 0;
+			const next = async (): Promise<void> => {
+				const fn = queue[i++];
+				if (!fn) return;
+				await fn();
+				return next();
+			};
+			
+			const workers = Array.from({ length: Math.min(concurrency, queue.length) }, next);
+			await Promise.all(workers);
+		};
+		
+		// Only enrich if we have a reasonable number of offers (prevent timeout)
+		if (final.length > 0 && final.length <= 50) {
+			const enrichStart = Date.now();
+			await enrichWithTitles(final);
+			console.log('[ebay-list-offers] Title enrichment took', Date.now() - enrichStart, 'ms');
+		}
+		
 		if (String(status || '') && res?.url?.includes('offer_status=')) {
 			// Already filtered by server; return upstream shape
 			return {

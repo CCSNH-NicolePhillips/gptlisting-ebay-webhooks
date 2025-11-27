@@ -323,7 +323,8 @@
         body.className = 'body';
         const title = document.createElement('div');
         title.className = 'title';
-  title.textContent = offer?.title || offer?.sku || '(loading title…)';
+  // Use enriched title from backend if available, otherwise show SKU temporarily
+  title.textContent = offer?._enrichedTitle || offer?.title || offer?.sku || '(loading title…)';
   const desc = document.createElement('div');
   desc.className = 'desc';
   const descSrc = (offer.listingDescription || '').replace(/\s+/g, ' ').trim();
@@ -757,6 +758,14 @@
           const sku = n.dataset?.sku;
           // @ts-ignore
           if (!sku || !n._title) continue;
+          
+          // Skip if title is already set (enriched from backend)
+          // @ts-ignore
+          const currentTitle = n._title.textContent || '';
+          if (currentTitle && currentTitle !== sku && !currentTitle.includes('loading')) {
+            continue; // Already has a real title
+          }
+          
           q.push(async () => {
             if (cache.has(sku)) {
               const t = cache.get(sku);
