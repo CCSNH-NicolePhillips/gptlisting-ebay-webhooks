@@ -252,6 +252,8 @@ export const handler: Handler = async (event) => {
         // Generate job ID for draft creation
         const draftJobId = `draft-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         
+        console.log(`[quick-list-processor] Products being sent to draft creation:`, JSON.stringify(products, null, 2));
+        
         const draftResponse = await fetch(draftBgUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
