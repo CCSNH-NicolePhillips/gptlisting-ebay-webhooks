@@ -710,7 +710,11 @@
             console.error('[API] 502 Error:', errorMsg, 'URL:', url);
             throw new Error(`Service Error: ${errorMsg}`);
           }
-          throw new Error(data.error || `HTTP ${r.status}`);
+          // Include detail field for better debugging
+          const errorMsg = data.error || `HTTP ${r.status}`;
+          const fullError = data.detail ? `${errorMsg}: ${data.detail}` : errorMsg;
+          console.error('[API] Error response:', { status: r.status, error: data.error, detail: data.detail, groupId: data.groupId });
+          throw new Error(fullError);
         }
         return data;
       } catch (err) {
@@ -1120,8 +1124,17 @@
             const product = products[idx];
             if (!product) return null;
 
-            // Build images array from draft data
+            // Skip drafts with missing price or images
+            if (!draft.price || draft.price <= 0) {
+              console.warn(`[Quick List] Skipping ${draft.productId} - no price available`);
+              return null;
+            }
+
             const images = draft.images || [];
+            if (images.length === 0) {
+              console.warn(`[Quick List] Skipping ${draft.productId} - no images available`);
+              return null;
+            }
 
             return {
               groupId: draft.productId || product.productId || product.groupId,
