@@ -578,13 +578,6 @@
             } catch {}
           }
 
-          // Fallback: if explicit queries yielded nothing, do a broad fetch and client-filter
-          if (!offers.length) {
-            const j = await fetchJSON(base);
-            const all = Array.isArray(j.offers) ? j.offers : [];
-            const allowed = new Set(['UNPUBLISHED', 'DRAFT', 'INACTIVE']);
-            offers = all.filter((o) => allowed.has(String(o?.status || '').toUpperCase()));
-          }
           if (!offers.length) {
             readyList.innerHTML =
               '<div class="empty">No drafts found (UNPUBLISHED/DRAFT/INACTIVE). Create your first listing draft from the wizard.</div>';
