@@ -117,6 +117,19 @@ export const handler: Handler = async (event) => {
 			return { statusCode: 204 };
 		}
 
+		// For local/staged uploads, return the URL directly without fetching
+		// (staged URLs may be temporary and browsers can access them directly)
+		if (imageUrl.includes('/.netlify/blobs/') || imageUrl.includes('/staged-images/')) {
+			console.log(`[offer-thumb] Returning staged/blob URL directly for ${offerId}: ${imageUrl}`);
+			return {
+				statusCode: 302,
+				headers: {
+					'Location': imageUrl,
+					'Cache-Control': 'public, max-age=3600',
+				},
+			};
+		}
+
 		// normalize dropbox viewer links
 		const toDirectDropbox = (u: string) => {
 			try {
