@@ -80,7 +80,7 @@ function extractFromJsonLd($: cheerio.CheerioAPI): ExtractedData {
   
   if (retailPrices.length === 0) {
     console.log(`[HTML Parser] All prices rejected as bulk/wholesale (>${500}): ${allPrices.join(', ')}`);
-    return { price: null };
+    return { price: -1 }; // -1 signals rejection (don't fallback to other parsers)
   }
   
   // Return the lowest retail price (excludes subscriptions which are often discounted)
@@ -140,6 +140,10 @@ export function extractPriceFromHtml(html: string): number | null {
   try {
     const $ = cheerio.load(html);
     const data = extractFromJsonLd($);
+    
+    // If JSON-LD explicitly rejected prices (returned -1), don't fallback
+    if (data.price === -1) return null;
+    
     return data.price ?? extractFromOpenGraph($) ?? extractFromBody($);
   } catch {
     return null;

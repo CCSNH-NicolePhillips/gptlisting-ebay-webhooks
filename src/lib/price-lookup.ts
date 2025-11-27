@@ -316,7 +316,9 @@ export async function lookupPrice(
     quantity: input.quantity,
   });
 
-  if (soldStats.ok && soldStats.p35) {
+  if (soldStats.rateLimited) {
+    console.warn('[price] ⚠️  eBay sold prices rate limited - skipping to brand MSRP');
+  } else if (soldStats.ok && soldStats.p35) {
     candidates.push({
       source: 'ebay-sold',
       price: soldStats.p35,

@@ -14,6 +14,7 @@ export interface SoldPriceStats {
   p35?: number;
   p10?: number;
   p90?: number;
+  rateLimited?: boolean; // True if API rate limit was hit
 }
 
 export interface SoldPriceQuery {
@@ -174,6 +175,13 @@ export async function fetchSoldPriceStats(
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => '');
+      
+      // Check for rate limit error
+      if (response.status === 500 && errorText.includes('exceeded the number of times')) {
+        console.warn(`[ebay-sold] Rate limit exceeded - daily quota reached`);
+        return { ...empty, rateLimited: true };
+      }
+      
       console.error(`[ebay-sold] API error: ${response.status} ${response.statusText}`, {
         preview: errorText.slice(0, 500),
       });
