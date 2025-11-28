@@ -100,9 +100,12 @@ export const handler: Handler = async (event) => {
 					json = { raw: txt };
 				}
 				
-				// Log error responses for debugging
+				// Log error responses for debugging (but suppress 25707 - we handle it with safe aggregation)
 				if (!r.ok) {
-					console.error('[ebay-list-offers] eBay API error response:', JSON.stringify(json, null, 2));
+					const code = Number((json?.errors && json.errors[0]?.errorId) || 0);
+					if (code !== 25707) {
+						console.error('[ebay-list-offers] eBay API error response:', JSON.stringify(json, null, 2));
+					}
 				}
 				
 				return { ok: r.ok, status: r.status, url, body: json };
@@ -231,7 +234,7 @@ export const handler: Handler = async (event) => {
 		if (!r.ok) {
 			const code = Number((r.body?.errors && r.body.errors[0]?.errorId) || 0);
 			if (r.status === 400 && code === 25707) {
-				console.log('[ebay-list-offers] Detected error 25707 (invalid SKU), using safe aggregation fallback');
+				// Silently use safe aggregation - this is expected when inventory has invalid SKUs
 				const safe = await safeAggregateByInventory();
 				const partial = (Date.now() - startTime) > 6500; // If we got close to timeout
 				const note = safe.offers.length ? (partial ? 'safe-aggregate-partial' : 'safe-aggregate') : 'safe-aggregate-empty';
