@@ -59,6 +59,7 @@ type Draft = {
   images: string[];
   price: number | null;
   condition: string;
+  keyText?: string[]; // Key text from Vision API - helps determine formulation
   pricingStatus?: 'OK' | 'NEEDS_REVIEW';
   priceMeta?: {
     chosenSource?: string;
@@ -669,6 +670,7 @@ async function createDraftForProduct(product: PairedProduct, retryAttempt: numbe
     images,
     price: finalPrice,
     condition: parsed.condition,
+    keyText: product.keyText, // Pass through Vision API key text for formulation detection
     pricingStatus,
     priceMeta,
   };

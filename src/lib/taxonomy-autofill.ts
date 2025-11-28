@@ -145,23 +145,33 @@ export function buildItemSpecifics(cat: CategoryDef, group: GroupRecord): Record
       
       // Formulation is common for supplements/cosmetics
       if (specific.name === 'Formulation') {
-        // Try to infer from product name
+        // PRIORITY 1: Check keyText from Vision API (most reliable - actual product label)
+        const keyText = Array.isArray(group.keyText) ? group.keyText.join(' ').toLowerCase() : '';
+        
+        // PRIORITY 2: Fall back to product name if no keyText available
         const productLower = (group.product || '').toLowerCase();
-        if (productLower.includes('capsule') || productLower.includes('cap')) {
-          defaultValue = 'Capsule';
-        } else if (productLower.includes('tablet') || productLower.includes('tab')) {
-          defaultValue = 'Tablet';
-        } else if (productLower.includes('powder')) {
-          defaultValue = 'Powder';
-        } else if (productLower.includes('liquid') || productLower.includes('oil')) {
+        const searchText = keyText || productLower;
+        
+        // Detect formulation from actual label text or title
+        if (searchText.includes('liquid') || searchText.includes('drops') || searchText.includes('oil') || searchText.includes('dropper')) {
           defaultValue = 'Liquid';
-        } else if (productLower.includes('cream') || productLower.includes('lotion')) {
+        } else if (searchText.includes('capsule') || searchText.includes('cap') || searchText.includes('softgel')) {
+          defaultValue = 'Capsule';
+        } else if (searchText.includes('tablet') || searchText.includes('tab')) {
+          defaultValue = 'Tablet';
+        } else if (searchText.includes('powder') || searchText.includes('mix')) {
+          defaultValue = 'Powder';
+        } else if (searchText.includes('gummies') || searchText.includes('gummy')) {
+          defaultValue = 'Gummy';
+        } else if (searchText.includes('cream') || searchText.includes('lotion')) {
           defaultValue = 'Cream';
-        } else if (productLower.includes('gel')) {
+        } else if (searchText.includes('gel')) {
           defaultValue = 'Gel';
         } else {
           defaultValue = 'Other';
         }
+        
+        console.log(`[buildItemSpecifics] Formulation inference: "${defaultValue}" (from ${keyText ? 'keyText' : 'product name'}: "${searchText.substring(0, 100)}")`);
       }
       // Main Purpose for supplements
       else if (specific.name === 'Main Purpose') {
