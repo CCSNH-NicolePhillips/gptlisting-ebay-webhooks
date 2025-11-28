@@ -115,5 +115,27 @@ Once fixed, should handle:
 - ✅ Regular brands with bundle pages (e.g., "Buy 3, Get 1 Free" promotions)
 
 ## Current Status
+**✅ PHASE 1 COMPLETE (Commit 14e0556)**: Generic bundle/subscription page detection implemented
+**⚠️ TEMPORARY**: Root brand hardcoded checks remain (with TODO comments) until better MLM detection
+
+### What Was Implemented (Phase 1)
+Added `isProbablyBundlePage()` function in `html-price.ts` that:
+- Detects bundle/subscription pages by looking for strong signals: "3-month supply", "starter pack", "value pack", etc.
+- Whitelists major retailers (Amazon, eBay, Walmart) that offer subscriptions as OPTIONS
+- Skips any URL matching bundle patterns BEFORE extracting price
+- Returns `null` from `extractPriceFromHtml()` when bundle detected
+
+### What Works Now
+✅ Pages with "3-month supply" language are automatically rejected (no brand-specific code needed)
+✅ Amazon/eBay pages with "Subscribe & Save" still work (whitelisted)
+✅ Root brand still works via hardcoded checks (therootbrands.com detection)
+✅ Bundle detection is brand-agnostic for brands using clear multi-month language
+
+### What Doesn't Work Yet (Needs Phase 2+)
+❌ Root brand requires hardcoded check because their pages only say "subscription", not "3-month supply"
+❌ Other MLM brands without clear bundle language will slip through
+❌ Need smarter detection of MLM/direct-sales business models
+
+## Current Status
 **TEMPORARY FIX DEPLOYED**: Hardcoded Root brand skip is live and working.
 **NEEDS REFACTOR**: Should be replaced with pattern-based detection before shipping to production for other brands.
