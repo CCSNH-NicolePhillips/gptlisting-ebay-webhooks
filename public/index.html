@@ -647,12 +647,29 @@
         } catch {}
         dbxStatus.textContent = s.dropbox?.connected ? 'Connected' : 'Not connected';
         ebayStatus.textContent = s.ebay?.connected ? 'Connected' : 'Not connected';
+        
+        // Update checklist items without nuking their structure
+        function updateChecklistItem(container, connected, baseLabel) {
+          if (!container) return;
+          const input = container.querySelector('.dp-check-input');
+          const text = container.querySelector('.dp-check-text');
+
+          if (input) {
+            input.checked = !!connected;
+          }
+
+          if (text) {
+            // Keep a friendly label, not raw debug text
+            text.textContent = connected ? `${baseLabel} (Connected)` : baseLabel;
+          }
+        }
+
         const chkDropbox = document.getElementById('chkDropbox');
         const chkEbay = document.getElementById('chkEbay');
-        chkDropbox.innerHTML = s.dropbox?.connected
-          ? 'Dropbox: ✅ Connected'
-          : 'Dropbox: ❌ Not connected';
-        chkEbay.innerHTML = s.ebay?.connected ? 'eBay: ✅ Connected' : 'eBay: ❌ Not connected';
+
+        updateChecklistItem(chkEbay, !!s.ebay?.connected, 'Connect eBay');
+        updateChecklistItem(chkDropbox, !!s.dropbox?.connected, 'Connect Dropbox for auto-import');
+        
         const connected = !!s.ebay?.connected;
         const processBtn = document.getElementById('process');
         if (processBtn) processBtn.disabled = !connected;
