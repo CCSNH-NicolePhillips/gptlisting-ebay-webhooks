@@ -809,6 +809,14 @@
             attempts++;
             const res = await fetch('/.netlify/functions/ebay-clean-broken-drafts' + q);
             
+            // Handle 502 Gateway Timeout - deletions likely succeeded
+            if (res.status === 502) {
+              console.log('[Delete All] 502 timeout - waiting and retrying to check remaining drafts...');
+              flash.textContent = `Processing... (batch ${attempts})`;
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              continue; // Try again to see if there are more drafts
+            }
+            
             // Handle empty or non-JSON responses
             let j;
             try {
@@ -816,8 +824,10 @@
               j = text ? JSON.parse(text) : {};
             } catch (parseErr) {
               console.error('[Delete All] JSON parse error:', parseErr);
-              flash.textContent = 'Delete error: Invalid response from server';
-              break;
+              flash.textContent = 'Checking results...';
+              // Wait and continue to next iteration to verify deletions
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              continue;
             }
             
             if (!res.ok) {
