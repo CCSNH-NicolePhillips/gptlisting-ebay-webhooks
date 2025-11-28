@@ -416,11 +416,18 @@ export async function lookupPrice(
     );
     
     if (braveUrl) {
-      const { price: bravePrice } = await priceFrom(braveUrl);
-      if (bravePrice && bravePrice > 0) { // Check for valid price (not -1 rejection)
-        brandPrice = bravePrice;
-        brandUrl = braveUrl;
-        console.log(`[price] ✓ Brand MSRP from Brave search: $${brandPrice.toFixed(2)}`);
+      // Skip Root brand websites from Brave search too
+      const isRootBrand = braveUrl.includes('therootbrands.com');
+      
+      if (isRootBrand) {
+        console.log(`[price] ⚠️ Root brand website from Brave (${braveUrl}), skipping (shows bundle prices)`);
+      } else {
+        const { price: bravePrice } = await priceFrom(braveUrl);
+        if (bravePrice && bravePrice > 0) { // Check for valid price (not -1 rejection)
+          brandPrice = bravePrice;
+          brandUrl = braveUrl;
+          console.log(`[price] ✓ Brand MSRP from Brave search: $${brandPrice.toFixed(2)}`);
+        }
       }
     }
   }
