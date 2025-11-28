@@ -95,6 +95,20 @@ export type MarketPrices = {
 // ============================================================================
 
 /**
+ * Detect if a brand price is suspiciously high compared to marketplace price
+ * This catches bundle pricing that slips past HTML text detection
+ */
+function isProbablyBundlePrice(brandPrice: number, comparisonPrice: number): boolean {
+  if (!Number.isFinite(brandPrice) || !Number.isFinite(comparisonPrice)) return false;
+  if (comparisonPrice <= 0) return false;
+
+  const ratio = brandPrice / comparisonPrice;
+
+  // Tunable: > 3x seems very likely to be a bundle or multi-pack
+  return ratio > 3.0;
+}
+
+/**
  * Helper: Fetch HTML with timeout
  * Returns { html, isDnsFailure } where isDnsFailure indicates the domain doesn't exist
  */
@@ -465,6 +479,43 @@ export async function lookupPrice(
     });
   } else {
     console.log('[price] ✗ No brand MSRP found');
+  }
+
+  // ========================================
+  // PRICE SANITY CHECK: Filter out bundle prices
+  // ========================================
+  // Before AI arbitration, check if brand prices look like bundles compared to marketplace prices
+  const brandCandidates = candidates.filter(c => c.source === 'brand-msrp');
+  const marketCandidates = candidates.filter(c => 
+    c.source === 'ebay-sold' || 
+    c.url?.includes('amazon.com') || 
+    c.url?.includes('walmart.com')
+  );
+
+  if (brandCandidates.length > 0 && marketCandidates.length > 0) {
+    // Find the lowest marketplace price for comparison
+    const bestMarket = marketCandidates.reduce((best, c) =>
+      c.price < best.price ? c : best,
+      marketCandidates[0]
+    );
+
+    // Check each brand candidate
+    for (const brand of brandCandidates) {
+      if (isProbablyBundlePrice(brand.price, bestMarket.price)) {
+        console.log(`[price] ⚠️ Brand price looks like bundle (>3x market). Dropping brand candidate`, {
+          brandPrice: brand.price,
+          comparisonPrice: bestMarket.price,
+          ratio: (brand.price / bestMarket.price).toFixed(2) + 'x',
+          brandUrl: brand.url,
+        });
+
+        // Remove it from candidates
+        const idx = candidates.indexOf(brand);
+        if (idx >= 0) {
+          candidates.splice(idx, 1);
+        }
+      }
+    }
   }
 
   // ========================================
