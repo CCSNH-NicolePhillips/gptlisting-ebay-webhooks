@@ -433,9 +433,13 @@ PAIRING RULES (STRICT):
 5. NEVER pair if either image has confidence < 0.5
 6. NEVER pair "non_product" items with anything
 7. NEVER pair "unknown" panels - they go to unpaired
-8. ONLY pair "front" with "back" OR "side" of the SAME product (side panels can act as backs)
-9. A "side" panel can be paired with a "front" if they share the same brand/product/package
-10. When no "front" panel exists, you MAY pair a "side" panel with a "back" panel if they share the same brand/product/package
+8. PAIRING PRIORITY (in order):
+   a) "front" + "back" (ideal case)
+   b) "front" + "side" (side acts as back when no back exists)
+   c) "side" + "back" (side acts as front when no front exists)
+   d) "side" + "side" (ONLY if they are different sides of same product - one shows brand, one shows supplement facts)
+9. A "side" panel can substitute for "front" OR "back" if they share the same brand/product/package
+10. When pairing side panels, look for DIFFERENT information (e.g., one shows brand/product name, the other shows supplement facts/ingredients)
 11. Use colorSignature and layoutSignature as strong signals when productName is missing
 
 OUTPUT FORMAT:
