@@ -3,6 +3,7 @@ import { braveFirstUrlForBrandSite } from "./search.js";
 import { getBrandUrls } from "./brand-map.js";
 import { fetchSoldPriceStats, type SoldPriceStats } from "./pricing/ebay-sold-prices.js";
 import { openai } from "./openai.js";
+import { getCachedPrice, setCachedPrice, makePriceSig } from "./price-cache.js";
 
 // ============================================================================
 // URL VARIATION HELPERS
@@ -301,6 +302,15 @@ export async function lookupPrice(
 ): Promise<PriceDecision> {
   console.log(`[price] Starting lookup for: "${input.title}"${input.brand ? ` (${input.brand})` : ''}${input.upc ? ` [${input.upc}]` : ''}`);
 
+  // Check cache first
+  const cacheKey = makePriceSig(input.brand, input.title);
+  const cached = await getCachedPrice(cacheKey);
+  
+  if (cached?.recommendedListingPrice) {
+    console.log(`[price] ✓ Using cached price: $${cached.recommendedListingPrice.toFixed(2)} (source: ${cached.chosen?.source || 'unknown'})`);
+    return cached as PriceDecision;
+  }
+
   const candidates: PriceSourceDetail[] = [];
 
   // ========================================
@@ -342,7 +352,8 @@ export async function lookupPrice(
   let domainReachable = true;
   if (input.brandWebsite) {
     // Skip homepage URLs - they often show bundle/subscription prices, not individual products
-    const isHomepage = input.brandWebsite.match(/^https?:\/\/[^\/]+\/?$/);
+    // Match: http://example.com, https://example.com, https://example.com/, http://example.com/
+    const isHomepage = /^https?:\/\/[^\/]+\/?$/.test(input.brandWebsite);
     
     if (isHomepage) {
       console.log(`[price] ⚠️ Vision website is homepage (${input.brandWebsite}), skipping direct price extraction`);
@@ -476,6 +487,10 @@ export async function lookupPrice(
 
   if (decision.ok && decision.chosen && decision.recommendedListingPrice) {
     console.log(`[price] ✓ Final decision: source=${decision.chosen.source} base=$${decision.chosen.price.toFixed(2)} final=$${decision.recommendedListingPrice.toFixed(2)}`);
+    
+    // Cache the successful result
+    await setCachedPrice(cacheKey, decision);
+    console.log(`[price] ✓ Cached result for future lookups (30-day TTL)`);
   }
 
   return decision;
