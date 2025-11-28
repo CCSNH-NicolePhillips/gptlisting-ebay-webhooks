@@ -116,25 +116,49 @@ Once fixed, should handle:
 
 ## Current Status
 **✅ PHASE 1 COMPLETE (Commit 14e0556)**: Generic bundle/subscription page detection implemented
+**✅ PHASE 2 COMPLETE (Commit ad259af)**: Price sanity guardrail (3.0x ratio check) implemented
 **⚠️ TEMPORARY**: Root brand hardcoded checks remain (with TODO comments) until better MLM detection
 
-### What Was Implemented (Phase 1)
-Added `isProbablyBundlePage()` function in `html-price.ts` that:
-- Detects bundle/subscription pages by looking for strong signals: "3-month supply", "starter pack", "value pack", etc.
+### What Was Implemented
+
+**Phase 1 - Bundle Page Detection (html-price.ts)**
+- `isProbablyBundlePage()` detects bundle/subscription pages by looking for strong signals
+- Searches for: "3-month supply", "starter pack", "value pack", "refill program"
 - Whitelists major retailers (Amazon, eBay, Walmart) that offer subscriptions as OPTIONS
-- Skips any URL matching bundle patterns BEFORE extracting price
 - Returns `null` from `extractPriceFromHtml()` when bundle detected
 
-### What Works Now
-✅ Pages with "3-month supply" language are automatically rejected (no brand-specific code needed)
-✅ Amazon/eBay pages with "Subscribe & Save" still work (whitelisted)
-✅ Root brand still works via hardcoded checks (therootbrands.com detection)
-✅ Bundle detection is brand-agnostic for brands using clear multi-month language
+**Phase 2 - Price Sanity Guardrail (price-lookup.ts)**
+- `isProbablyBundlePrice()` compares brand prices against marketplace prices
+- Filters out brand candidates with ratio > 3.0x marketplace price
+- Applies BEFORE AI arbitration as safety net
+- Catches bundle pricing even when HTML text detection fails
 
-### What Doesn't Work Yet (Needs Phase 2+)
-❌ Root brand requires hardcoded check because their pages only say "subscription", not "3-month supply"
+### What Works Now
+✅ Pages with "3-month supply" language automatically rejected (Phase 1)
+✅ Amazon/eBay pages with "Subscribe & Save" still work (whitelisted in Phase 1)
+✅ Bundle prices >3x marketplace automatically filtered (Phase 2)
+✅ Normal brands with close prices NOT filtered (1.0x-2.5x kept)
+✅ Root brand still works via hardcoded checks (therootbrands.com detection)
+✅ Two-layer defense: HTML text + price ratio
+
+### What Doesn't Work Yet (Needs Phase 3+)
+❌ Root brand still requires hardcoded check (2.90x ratio just under 3.0x threshold)
 ❌ Other MLM brands without clear bundle language will slip through
 ❌ Need smarter detection of MLM/direct-sales business models
+❌ Could lower threshold to 2.5x to catch Root, but risks false positives
+
+### Test Results
+**Phase 1 Tests:**
+- Bundle pages with "3-month supply": ✅ Rejected
+- Amazon with "Subscribe & Save": ✅ Kept (whitelisted)
+- Root pages: ❌ No strong signals found (only "subscription")
+
+**Phase 2 Tests:**
+- Normal brand (1.02x ratio): ✅ Kept
+- Premium brand (2.0x ratio): ✅ Kept
+- Root current (2.90x ratio): ✅ Kept (below threshold, caught by hardcoded check)
+- Higher bundle (3.09x ratio): ✅ Filtered
+- Threshold sweet spot: 3.0x balances false positives vs catching bundles
 
 ## Current Status
 **TEMPORARY FIX DEPLOYED**: Hardcoded Root brand skip is live and working.
