@@ -355,13 +355,16 @@ export async function lookupPrice(
     // Match: http://example.com, https://example.com, https://example.com/, http://example.com/
     const isHomepage = /^https?:\/\/[^\/]+\/?$/.test(input.brandWebsite);
     
-    // Skip Root brand websites entirely - they show bundle/subscription prices ($225) instead of individual product prices
+    // TODO: Replace with generic MLM/direct-sales brand detection
+    // Root brand websites show bundle/subscription pricing instead of individual product prices
+    // Generic bundle detection (isProbablyBundlePage) doesn't catch them because they don't use
+    // "3-month supply" language - just "subscription" which Amazon also has
     const isRootBrand = input.brandWebsite.includes('therootbrands.com');
     
     if (isHomepage) {
       console.log(`[price] ⚠️ Vision website is homepage (${input.brandWebsite}), skipping direct price extraction`);
     } else if (isRootBrand) {
-      console.log(`[price] ⚠️ Root brand website detected (${input.brandWebsite}), skipping (shows bundle prices, not individual product pricing)`);
+      console.log(`[price] ⚠️ Root brand website detected (${input.brandWebsite}), skipping (MLM brand with bundle pricing)`);
     } else {
       console.log(`[price] Trying Vision API brand website: ${input.brandWebsite}`);
       const { price, isDnsFailure } = await priceFrom(input.brandWebsite);
@@ -416,11 +419,11 @@ export async function lookupPrice(
     );
     
     if (braveUrl) {
-      // Skip Root brand websites from Brave search too
+      // TODO: Replace with generic MLM/direct-sales brand detection
       const isRootBrand = braveUrl.includes('therootbrands.com');
       
       if (isRootBrand) {
-        console.log(`[price] ⚠️ Root brand website from Brave (${braveUrl}), skipping (shows bundle prices)`);
+        console.log(`[price] ⚠️ Root brand website from Brave (${braveUrl}), skipping (MLM brand with bundle pricing)`);
       } else {
         const { price: bravePrice } = await priceFrom(braveUrl);
         if (bravePrice && bravePrice > 0) { // Check for valid price (not -1 rejection)
