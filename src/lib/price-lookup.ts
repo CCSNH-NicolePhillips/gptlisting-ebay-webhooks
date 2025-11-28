@@ -355,8 +355,13 @@ export async function lookupPrice(
     // Match: http://example.com, https://example.com, https://example.com/, http://example.com/
     const isHomepage = /^https?:\/\/[^\/]+\/?$/.test(input.brandWebsite);
     
+    // Skip Root brand websites entirely - they show bundle/subscription prices ($225) instead of individual product prices
+    const isRootBrand = input.brandWebsite.includes('therootbrands.com');
+    
     if (isHomepage) {
       console.log(`[price] ⚠️ Vision website is homepage (${input.brandWebsite}), skipping direct price extraction`);
+    } else if (isRootBrand) {
+      console.log(`[price] ⚠️ Root brand website detected (${input.brandWebsite}), skipping (shows bundle prices, not individual product pricing)`);
     } else {
       console.log(`[price] Trying Vision API brand website: ${input.brandWebsite}`);
       const { price, isDnsFailure } = await priceFrom(input.brandWebsite);
