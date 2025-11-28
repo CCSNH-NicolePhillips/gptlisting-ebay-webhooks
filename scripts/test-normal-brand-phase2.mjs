@@ -33,9 +33,9 @@ if (marketCandidates.length > 0) {
   const ratio = candidates[0].price / bestMarket.price;
   
   console.log(`\nRatio: ${ratio.toFixed(2)}x`);
-  console.log(`Threshold: 3.0x`);
+  console.log(`Threshold: 2.5x`);
   
-  if (ratio > 3.0) {
+  if (ratio > 2.5) {
     console.log('❌ FAIL: Would incorrectly filter normal brand price');
   } else {
     console.log('✅ PASS: Normal brand price kept (not flagged as bundle)');
@@ -48,15 +48,15 @@ console.log('\n\n=== Edge case tests ===');
 const testCases = [
   { brand: 30, market: 29, expected: 'keep', name: 'Slightly higher brand price' },
   { brand: 60, market: 30, expected: 'keep', name: '2x price (premium brand)' },
-  { brand: 90, market: 30, expected: 'keep', name: '3.0x exactly (at threshold)' },
-  { brand: 91, market: 30, expected: 'filter', name: '3.03x (just over threshold)' },
-  { brand: 225, market: 77.60, expected: 'keep', name: 'Root scenario (2.90x)' },
+  { brand: 75, market: 30, expected: 'filter', name: '2.5x exactly (at threshold)' },
+  { brand: 76, market: 30, expected: 'filter', name: '2.53x (just over threshold)' },
+  { brand: 225, market: 77.60, expected: 'filter', name: 'Root scenario (2.90x)' },
   { brand: 240, market: 77.60, expected: 'filter', name: 'Higher Root bundle (3.09x)' },
 ];
 
 testCases.forEach(test => {
   const ratio = test.brand / test.market;
-  const wouldFilter = ratio > 3.0;
+  const wouldFilter = ratio > 2.5;
   const correct = (wouldFilter && test.expected === 'filter') || (!wouldFilter && test.expected === 'keep');
   
   console.log(`\n${test.name}:`);

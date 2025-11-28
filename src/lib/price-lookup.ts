@@ -104,8 +104,9 @@ function isProbablyBundlePrice(brandPrice: number, comparisonPrice: number): boo
 
   const ratio = brandPrice / comparisonPrice;
 
-  // Tunable: > 3x seems very likely to be a bundle or multi-pack
-  return ratio > 3.0;
+  // Tunable: > 2.5x seems very likely to be a bundle or multi-pack
+  // Lowered from 3.0x to catch MLM brands like Root (2.90x ratio)
+  return ratio > 2.5;
 }
 
 /**
@@ -369,16 +370,8 @@ export async function lookupPrice(
     // Match: http://example.com, https://example.com, https://example.com/, http://example.com/
     const isHomepage = /^https?:\/\/[^\/]+\/?$/.test(input.brandWebsite);
     
-    // TODO: Replace with generic MLM/direct-sales brand detection
-    // Root brand websites show bundle/subscription pricing instead of individual product prices
-    // Generic bundle detection (isProbablyBundlePage) doesn't catch them because they don't use
-    // "3-month supply" language - just "subscription" which Amazon also has
-    const isRootBrand = input.brandWebsite.includes('therootbrands.com');
-    
     if (isHomepage) {
       console.log(`[price] ⚠️ Vision website is homepage (${input.brandWebsite}), skipping direct price extraction`);
-    } else if (isRootBrand) {
-      console.log(`[price] ⚠️ Root brand website detected (${input.brandWebsite}), skipping (MLM brand with bundle pricing)`);
     } else {
       console.log(`[price] Trying Vision API brand website: ${input.brandWebsite}`);
       const { price, isDnsFailure } = await priceFrom(input.brandWebsite);
@@ -433,43 +426,50 @@ export async function lookupPrice(
     );
     
     if (braveUrl) {
-      // TODO: Replace with generic MLM/direct-sales brand detection
-      const isRootBrand = braveUrl.includes('therootbrands.com');
-      
-      if (isRootBrand) {
-        console.log(`[price] ⚠️ Root brand website from Brave (${braveUrl}), skipping (MLM brand with bundle pricing)`);
-      } else {
-        const { price: bravePrice } = await priceFrom(braveUrl);
-        if (bravePrice && bravePrice > 0) { // Check for valid price (not -1 rejection)
-          brandPrice = bravePrice;
-          brandUrl = braveUrl;
-          console.log(`[price] ✓ Brand MSRP from Brave search: $${brandPrice.toFixed(2)}`);
-        }
+      const { price: bravePrice } = await priceFrom(braveUrl);
+      if (bravePrice && bravePrice > 0) { // Check for valid price (not -1 rejection)
+        brandPrice = bravePrice;
+        brandUrl = braveUrl;
+        console.log(`[price] ✓ Brand MSRP from Brave search: $${bravePrice.toFixed(2)}`);
       }
     }
   }
 
-  // AMAZON FALLBACK: Try Amazon if brand site didn't work or returned invalid price
-  if (!brandPrice && input.brand) {
-    console.log('[price] Trying Amazon as fallback...');
+  // AMAZON: Always try Amazon to provide marketplace pricing for comparison
+  // This enables Phase 2 bundle price detection even when brand site works
+  let amazonPrice: number | null = null;
+  let amazonUrl: string | undefined;
+  
+  if (input.brand) {
+    console.log('[price] Checking Amazon for marketplace pricing...');
     const { braveFirstUrl } = await import('./search.js');
-    const amazonUrl = await braveFirstUrl(
+    const amazonUrlFound = await braveFirstUrl(
       `${input.brand} ${input.title}`,
       'amazon.com'
     );
     
-    if (amazonUrl) {
-      console.log(`[price] Amazon URL found: ${amazonUrl}`);
-      const { price: amazonPrice } = await priceFrom(amazonUrl);
-      if (amazonPrice && amazonPrice > 0) {
-        brandPrice = amazonPrice;
-        brandUrl = amazonUrl;
-        console.log(`[price] ✓ Brand MSRP from Amazon: $${brandPrice.toFixed(2)}`);
+    if (amazonUrlFound) {
+      console.log(`[price] Amazon URL found: ${amazonUrlFound}`);
+      const { price } = await priceFrom(amazonUrlFound);
+      if (price && price > 0) {
+        amazonPrice = price;
+        amazonUrl = amazonUrlFound;
+        console.log(`[price] ✓ Amazon marketplace price: $${amazonPrice.toFixed(2)}`);
+        
+        // Add Amazon as a separate candidate for Phase 2 comparison
+        candidates.push({
+          source: 'brand-msrp',
+          price: amazonPrice,
+          currency: 'USD',
+          url: amazonUrl,
+          notes: 'Amazon marketplace price',
+        });
       }
     }
   }
 
-  if (brandPrice) {
+  // Add brand website price if we found one AND it's different from Amazon
+  if (brandPrice && (!amazonPrice || Math.abs(brandPrice - amazonPrice) > 0.01)) {
     candidates.push({
       source: 'brand-msrp',
       price: brandPrice,
@@ -548,6 +548,18 @@ export async function lookupPrice(
     });
   }
 
+  // Debug log for troubleshooting pricing issues without brand-specific hardcoding
+  console.log('[price] DEBUG: Price selection summary', {
+    productTitle: input.title,
+    productBrand: input.brand,
+    candidatesCount: candidates.length,
+    candidates: candidates.map(c => ({
+      source: c.source,
+      price: c.price,
+      url: c.url?.substring(0, 50) + (c.url && c.url.length > 50 ? '...' : '')
+    }))
+  });
+  
   console.log(`[price] Tier 3: AI arbitration with ${candidates.length} candidate(s)...`);
   const decision = await decideFinalPrice(input, candidates, soldStats);
 

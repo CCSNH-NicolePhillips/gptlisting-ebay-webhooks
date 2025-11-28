@@ -6,6 +6,34 @@ function toNumber(value: unknown): number | null {
   return +num.toFixed(2);
 }
 
+/**
+ * Detect if the page is likely a bundle/subscription/multi-month pack page
+ * These pages show bundled pricing (e.g., $225 for 3-month supply) instead of single-product prices
+ * 
+ * Note: This should NOT flag Amazon/eBay pages that offer "Subscribe & Save" as an OPTION.
+ * Only flag pages that are PRIMARILY about bundles/multi-month kits.
+ */
+function isProbablyBundlePage(html: string): boolean {
+  if (!html) return false;
+  
+  // Don't flag major retailers - they offer subscriptions as options, not as bundle pages
+  if (html.includes('amazon.com') || html.includes('ebay.com') || html.includes('walmart.com')) {
+    return false;
+  }
+  
+  // STRONG signals: These almost always indicate bundle/multi-month pages
+  const strongBundleIndicators: RegExp[] = [
+    /\b\d+\s*-\s*month\s*(supply|pack|kit)\b/i,      // "3-month supply"
+    /\b\d+\s*(month|mo)\s*(supply|pack|kit)\b/i,      // "3 month kit"
+    /starter\s*(pack|kit|bundle)/i,                    // "Starter Pack"
+    /\bvalue\s*pack\b/i,                               // "Value Pack"
+    /\brefill\s*program\b/i,                           // "Refill Program"
+  ];
+  
+  // Return true if ANY strong signal is found
+  return strongBundleIndicators.some(pattern => pattern.test(html));
+}
+
 type ExtractedData = {
   price: number | null;
   productType?: string;
@@ -299,6 +327,12 @@ function detectMultiPack($: cheerio.CheerioAPI): { isMultiPack: boolean; packSiz
 
 export function extractPriceFromHtml(html: string): number | null {
   try {
+    // Check for bundle/subscription page FIRST before parsing
+    if (isProbablyBundlePage(html)) {
+      console.log('[HTML Parser] ⚠️ Bundle/subscription indicators found, skipping this URL as price source');
+      return null;
+    }
+    
     const $ = cheerio.load(html);
     
     // Check for multi-pack products

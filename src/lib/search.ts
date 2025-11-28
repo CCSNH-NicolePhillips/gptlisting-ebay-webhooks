@@ -16,10 +16,10 @@ const BRAND_DOMAINS: Record<string, string> = {
   'maude': 'getmaude.com',
   'naked': 'nakednutrition.com',
   'jocko': 'jockofuel.com',
-  'root': 'therootbrands.com',
   'ryse': 'rysesupps.com',
   'barbie': 'ever-eden.com', // Barbie x Evereden collaboration
   // Add more brands as discovered
+  // Note: Removed brand-specific hardcoding (Root, etc.) - relying on generic bundle detection instead
 };
 
 /**

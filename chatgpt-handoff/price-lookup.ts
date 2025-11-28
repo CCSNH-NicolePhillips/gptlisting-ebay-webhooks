@@ -95,6 +95,20 @@ export type MarketPrices = {
 // ============================================================================
 
 /**
+ * Detect if a brand price is suspiciously high compared to marketplace price
+ * This catches bundle pricing that slips past HTML text detection
+ */
+function isProbablyBundlePrice(brandPrice: number, comparisonPrice: number): boolean {
+  if (!Number.isFinite(brandPrice) || !Number.isFinite(comparisonPrice)) return false;
+  if (comparisonPrice <= 0) return false;
+
+  const ratio = brandPrice / comparisonPrice;
+
+  // Tunable: > 3x seems very likely to be a bundle or multi-pack
+  return ratio > 3.0;
+}
+
+/**
  * Helper: Fetch HTML with timeout
  * Returns { html, isDnsFailure } where isDnsFailure indicates the domain doesn't exist
  */
@@ -355,13 +369,8 @@ export async function lookupPrice(
     // Match: http://example.com, https://example.com, https://example.com/, http://example.com/
     const isHomepage = /^https?:\/\/[^\/]+\/?$/.test(input.brandWebsite);
     
-    // Skip Root brand websites entirely - they show bundle/subscription prices ($225) instead of individual product prices
-    const isRootBrand = input.brandWebsite.includes('therootbrands.com');
-    
     if (isHomepage) {
       console.log(`[price] ⚠️ Vision website is homepage (${input.brandWebsite}), skipping direct price extraction`);
-    } else if (isRootBrand) {
-      console.log(`[price] ⚠️ Root brand website detected (${input.brandWebsite}), skipping (shows bundle prices, not individual product pricing)`);
     } else {
       console.log(`[price] Trying Vision API brand website: ${input.brandWebsite}`);
       const { price, isDnsFailure } = await priceFrom(input.brandWebsite);
@@ -416,18 +425,11 @@ export async function lookupPrice(
     );
     
     if (braveUrl) {
-      // Skip Root brand websites from Brave search too
-      const isRootBrand = braveUrl.includes('therootbrands.com');
-      
-      if (isRootBrand) {
-        console.log(`[price] ⚠️ Root brand website from Brave (${braveUrl}), skipping (shows bundle prices)`);
-      } else {
-        const { price: bravePrice } = await priceFrom(braveUrl);
-        if (bravePrice && bravePrice > 0) { // Check for valid price (not -1 rejection)
-          brandPrice = bravePrice;
-          brandUrl = braveUrl;
-          console.log(`[price] ✓ Brand MSRP from Brave search: $${brandPrice.toFixed(2)}`);
-        }
+      const { price: bravePrice } = await priceFrom(braveUrl);
+      if (bravePrice && bravePrice > 0) { // Check for valid price (not -1 rejection)
+        brandPrice = bravePrice;
+        brandUrl = braveUrl;
+        console.log(`[price] ✓ Brand MSRP from Brave search: $${bravePrice.toFixed(2)}`);
       }
     }
   }
@@ -465,6 +467,43 @@ export async function lookupPrice(
   }
 
   // ========================================
+  // PRICE SANITY CHECK: Filter out bundle prices
+  // ========================================
+  // Before AI arbitration, check if brand prices look like bundles compared to marketplace prices
+  const brandCandidates = candidates.filter(c => c.source === 'brand-msrp');
+  const marketCandidates = candidates.filter(c => 
+    c.source === 'ebay-sold' || 
+    c.url?.includes('amazon.com') || 
+    c.url?.includes('walmart.com')
+  );
+
+  if (brandCandidates.length > 0 && marketCandidates.length > 0) {
+    // Find the lowest marketplace price for comparison
+    const bestMarket = marketCandidates.reduce((best, c) =>
+      c.price < best.price ? c : best,
+      marketCandidates[0]
+    );
+
+    // Check each brand candidate
+    for (const brand of brandCandidates) {
+      if (isProbablyBundlePrice(brand.price, bestMarket.price)) {
+        console.log(`[price] ⚠️ Brand price looks like bundle (>3x market). Dropping brand candidate`, {
+          brandPrice: brand.price,
+          comparisonPrice: bestMarket.price,
+          ratio: (brand.price / bestMarket.price).toFixed(2) + 'x',
+          brandUrl: brand.url,
+        });
+
+        // Remove it from candidates
+        const idx = candidates.indexOf(brand);
+        if (idx >= 0) {
+          candidates.splice(idx, 1);
+        }
+      }
+    }
+  }
+
+  // ========================================
   // TIER 3: AI Arbitration
   // ========================================
   if (candidates.length === 0) {
@@ -494,6 +533,18 @@ export async function lookupPrice(
     });
   }
 
+  // Debug log for troubleshooting pricing issues without brand-specific hardcoding
+  console.log('[price] DEBUG: Price selection summary', {
+    productTitle: input.title,
+    productBrand: input.brand,
+    candidatesCount: candidates.length,
+    candidates: candidates.map(c => ({
+      source: c.source,
+      price: c.price,
+      url: c.url?.substring(0, 50) + (c.url && c.url.length > 50 ? '...' : '')
+    }))
+  });
+  
   console.log(`[price] Tier 3: AI arbitration with ${candidates.length} candidate(s)...`);
   const decision = await decideFinalPrice(input, candidates, soldStats);
 
