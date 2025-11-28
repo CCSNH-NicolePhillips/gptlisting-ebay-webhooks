@@ -21,3 +21,8 @@ logs.txt
 # Sensitive analysis files
 PATENT-*.md
 *-ANALYSIS-*.md
+
+# Test output HTML files
+*.html
+!public/**/*.html
+!netlify/**/*.html

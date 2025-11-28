@@ -194,14 +194,30 @@ function extractFromOpenGraph($: cheerio.CheerioAPI): number | null {
   return og ? toNumber(og) : null;
 }
 
-function extractFromBody($: cheerio.CheerioAPI): number | null {
+function extractFromBody($: cheerio.CheerioAPI, packInfo?: { isMultiPack: boolean; packSize?: number }): number | null {
   const bodyText = $.root().text().replace(/\s+/g, " ");
+  
+  // Use passed pack info or detect locally if not provided
+  const multiPackInfo = packInfo || detectMultiPack($);
+  const packSize = multiPackInfo.packSize || 1;
+  
+  if (multiPackInfo.isMultiPack) {
+    console.log(`[HTML Parser] ⚠️ Multi-pack detected (${packSize}-pack). Will divide extracted price by pack quantity.`);
+  }
   
   // First try: Look for price in context of common keywords
   const targeted = bodyText.match(/(?:price|buy|order)[^$]{0,60}\$\s?(\d{1,4}(?:\.\d{2})?)/i);
   if (targeted) {
-    const price = toNumber(targeted[1]);
-    if (price && price >= 15) return price; // Ignore small amounts (<$15 likely discounts/fees)
+    let price = toNumber(targeted[1]);
+    if (price && price >= 15) {
+      // Divide by pack size if multi-pack
+      if (multiPackInfo.isMultiPack && packSize > 1) {
+        const originalPrice = price;
+        price = price / packSize;
+        console.log(`[HTML Parser] Adjusted multi-pack price: $${originalPrice} / ${packSize} = $${price.toFixed(2)} per unit`);
+      }
+      return price;
+    }
   }
   
   // Second try: Extract all dollar amounts and filter
@@ -219,14 +235,24 @@ function extractFromBody($: cheerio.CheerioAPI): number | null {
         return cents === 95 || cents === 99;
       });
       
+      let extractedPrice: number;
       if (retailPrices.length > 0) {
         console.log(`[HTML Parser] Found ${allPrices.length} prices (>=$15), using lowest retail-formatted (.95/.99): $${Math.min(...retailPrices)}`);
-        return Math.min(...retailPrices);
+        extractedPrice = Math.min(...retailPrices);
+      } else {
+        // Fallback: Return lowest price if no retail formatting found
+        console.log(`[HTML Parser] Found ${allPrices.length} prices (>=$15), no retail formatting found, using lowest: $${Math.min(...allPrices)}`);
+        extractedPrice = Math.min(...allPrices);
       }
       
-      // Fallback: Return lowest price if no retail formatting found
-      console.log(`[HTML Parser] Found ${allPrices.length} prices (>=$15), no retail formatting found, using lowest: $${Math.min(...allPrices)}`);
-      return Math.min(...allPrices);
+      // Divide by pack size if multi-pack
+      if (multiPackInfo.isMultiPack && packSize > 1) {
+        const originalPrice = extractedPrice;
+        extractedPrice = extractedPrice / packSize;
+        console.log(`[HTML Parser] Adjusted multi-pack price: $${originalPrice} / ${packSize} = $${extractedPrice.toFixed(2)} per unit`);
+      }
+      
+      return extractedPrice;
     }
   }
   
@@ -289,7 +315,8 @@ export function extractPriceFromHtml(html: string): number | null {
     // If JSON-LD explicitly rejected prices (returned -1), don't fallback
     if (data.price === -1) return null;
     
-    return data.price ?? extractFromOpenGraph($) ?? extractFromBody($);
+    // Pass pack info to body extraction
+    return data.price ?? extractFromOpenGraph($) ?? extractFromBody($, packInfo);
   } catch {
     return null;
   }

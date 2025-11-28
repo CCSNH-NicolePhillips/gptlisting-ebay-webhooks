@@ -341,28 +341,35 @@ export async function lookupPrice(
   // FIRST: Try Vision API-provided brand website (most accurate!)
   let domainReachable = true;
   if (input.brandWebsite) {
-    console.log(`[price] Trying Vision API brand website: ${input.brandWebsite}`);
-    const { price, isDnsFailure } = await priceFrom(input.brandWebsite);
-    brandPrice = price;
+    // Skip homepage URLs - they often show bundle/subscription prices, not individual products
+    const isHomepage = input.brandWebsite.match(/^https?:\/\/[^\/]+\/?$/);
     
-    if (brandPrice) {
-      brandUrl = input.brandWebsite;
-      console.log(`[price] ✓ Brand MSRP from Vision API website: $${brandPrice.toFixed(2)}`);
-    } else if (isDnsFailure) {
-      // Domain doesn't exist - skip URL variations and go straight to Brave
-      console.warn(`[price] Vision domain unreachable (DNS lookup failed), skipping URL variations`);
-      domainReachable = false;
-    } else if (input.brandWebsite.includes('/')) {
-      // Vision URL didn't work but domain exists - try common variations before falling back to Brave
-      const variations = generateUrlVariations(input.brandWebsite);
-      for (const variant of variations) {
-        console.log(`[price] Trying URL variation: ${variant}`);
-        const { price: variantPrice } = await priceFrom(variant);
-        if (variantPrice) {
-          brandPrice = variantPrice;
-          brandUrl = variant;
-          console.log(`[price] ✓ Brand MSRP from URL variation: $${brandPrice.toFixed(2)}`);
-          break;
+    if (isHomepage) {
+      console.log(`[price] ⚠️ Vision website is homepage (${input.brandWebsite}), skipping direct price extraction`);
+    } else {
+      console.log(`[price] Trying Vision API brand website: ${input.brandWebsite}`);
+      const { price, isDnsFailure } = await priceFrom(input.brandWebsite);
+      brandPrice = price;
+      
+      if (brandPrice) {
+        brandUrl = input.brandWebsite;
+        console.log(`[price] ✓ Brand MSRP from Vision API website: $${brandPrice.toFixed(2)}`);
+      } else if (isDnsFailure) {
+        // Domain doesn't exist - skip URL variations and go straight to Brave
+        console.warn(`[price] Vision domain unreachable (DNS lookup failed), skipping URL variations`);
+        domainReachable = false;
+      } else if (input.brandWebsite.includes('/')) {
+        // Vision URL didn't work but domain exists - try common variations before falling back to Brave
+        const variations = generateUrlVariations(input.brandWebsite);
+        for (const variant of variations) {
+          console.log(`[price] Trying URL variation: ${variant}`);
+          const { price: variantPrice } = await priceFrom(variant);
+          if (variantPrice) {
+            brandPrice = variantPrice;
+            brandUrl = variant;
+            console.log(`[price] ✓ Brand MSRP from URL variation: $${brandPrice.toFixed(2)}`);
+            break;
+          }
         }
       }
     }
