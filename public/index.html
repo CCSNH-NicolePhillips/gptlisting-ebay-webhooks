@@ -615,9 +615,9 @@
           ? 'Dropbox: ✅ Connected'
           : 'Dropbox: ❌ Not connected';
         chkEbay.innerHTML = s.ebay?.connected ? 'eBay: ✅ Connected' : 'eBay: ❌ Not connected';
-  const connected = !!(s.dropbox?.connected && s.ebay?.connected);
-  const processBtn = document.getElementById('process');
-  if (processBtn) processBtn.disabled = !connected;
+        const connected = !!s.ebay?.connected;
+        const processBtn = document.getElementById('process');
+        if (processBtn) processBtn.disabled = !connected;
         // Load folders when Dropbox is connected
         try {
           await loadDropboxFolders(!!s.dropbox?.connected);
