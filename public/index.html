@@ -605,6 +605,42 @@
   const banner = document.getElementById('authBanner');
   if (banner) banner.style.display = 'none';
         lastStatus = s;
+        
+        // Populate metrics and user heading from status response
+        try {
+          const stats = s.stats || {};
+          const user = s.user || {};
+
+          const draftsWeekEl = document.getElementById('metricDraftsWeek');
+          if (draftsWeekEl) {
+            draftsWeekEl.textContent = stats.draftsWeek != null ? stats.draftsWeek : 0;
+          }
+
+          const timeSavedEl = document.getElementById('metricTimeSaved');
+          if (timeSavedEl) {
+            const mins = stats.timeSavedMinutes != null ? stats.timeSavedMinutes : 0;
+            if (mins >= 60) {
+              const hours = Math.round(mins / 60);
+              timeSavedEl.textContent = `${hours}h`;
+            } else {
+              timeSavedEl.textContent = `${mins}m`;
+            }
+          }
+
+          const headingName = document.getElementById('dpUserNameHeading');
+          if (headingName) {
+            const displayName =
+              user.name ||
+              user.given_name ||
+              user.preferred_username ||
+              user.email ||
+              'Seller';
+            headingName.textContent = displayName;
+          }
+        } catch (e) {
+          console.warn('[Dashboard] Failed to apply stats/user placeholders', e);
+        }
+        
         // Signed-in user (Auth0)
         try {
           const user = (await (window.auth0 && authClient.ensureAuth ? authClient.ensureAuth() && (authClient && authClient.user) : null)) || null;
