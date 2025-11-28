@@ -1208,25 +1208,43 @@
             row.className = 'dp-drafts-table__row';
             row.onclick = () => window.location.href = `/edit-draft.html?offerId=${draft.offerId}`;
             
+            // Build title column
+            const titleCol = document.createElement('div');
+            titleCol.className = 'dp-drafts-table__col dp-drafts-table__col--title';
             const titleSpan = document.createElement('span');
             titleSpan.className = 'dp-draft-title';
             titleSpan.textContent = title;
+            titleCol.appendChild(titleSpan);
             
-            row.innerHTML = `
-              <div class="dp-drafts-table__col dp-drafts-table__col--title"></div>
-              <div class="dp-drafts-table__col dp-drafts-table__col--status">
-                <span class="dp-status-pill ${statusClass}">${statusLabel}</span>
-              </div>
-              <div class="dp-drafts-table__col dp-drafts-table__col--source">
-                <span class="dp-source-chip">${source}</span>
-              </div>
-              <div class="dp-drafts-table__col dp-drafts-table__col--updated">
-                <span class="dp-time-ago">${timeAgo}</span>
-              </div>
-            `;
+            // Build status column
+            const statusCol = document.createElement('div');
+            statusCol.className = 'dp-drafts-table__col dp-drafts-table__col--status';
+            const statusPill = document.createElement('span');
+            statusPill.className = `dp-status-pill ${statusClass}`;
+            statusPill.textContent = statusLabel;
+            statusCol.appendChild(statusPill);
             
-            // Insert title span into first column
-            row.querySelector('.dp-drafts-table__col--title').appendChild(titleSpan);
+            // Build source column
+            const sourceCol = document.createElement('div');
+            sourceCol.className = 'dp-drafts-table__col dp-drafts-table__col--source';
+            const sourceChip = document.createElement('span');
+            sourceChip.className = 'dp-source-chip';
+            sourceChip.textContent = source;
+            sourceCol.appendChild(sourceChip);
+            
+            // Build updated column
+            const updatedCol = document.createElement('div');
+            updatedCol.className = 'dp-drafts-table__col dp-drafts-table__col--updated';
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'dp-time-ago';
+            timeSpan.textContent = timeAgo;
+            updatedCol.appendChild(timeSpan);
+            
+            // Append all columns to row
+            row.appendChild(titleCol);
+            row.appendChild(statusCol);
+            row.appendChild(sourceCol);
+            row.appendChild(updatedCol);
             
             // Store SKU and title element for enrichment
             row.dataset.sku = draft.sku;
