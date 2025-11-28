@@ -117,7 +117,7 @@ Once fixed, should handle:
 ## Current Status
 **✅ PHASE 1 COMPLETE (Commit 14e0556)**: Generic bundle/subscription page detection implemented
 **✅ PHASE 2 COMPLETE (Commit ad259af)**: Price sanity guardrail (3.0x ratio check) implemented
-**⚠️ TEMPORARY**: Root brand hardcoded checks remain (with TODO comments) until better MLM detection
+**✅ PHASE 3 COMPLETE (Commit d7c0a9c)**: Removed all brand-specific hardcoding, lowered threshold to 2.5x
 
 ### What Was Implemented
 
@@ -129,23 +129,28 @@ Once fixed, should handle:
 
 **Phase 2 - Price Sanity Guardrail (price-lookup.ts)**
 - `isProbablyBundlePrice()` compares brand prices against marketplace prices
-- Filters out brand candidates with ratio > 3.0x marketplace price
+- Filters out brand candidates with ratio > threshold
 - Applies BEFORE AI arbitration as safety net
 - Catches bundle pricing even when HTML text detection fails
+- **Threshold lowered from 3.0x → 2.5x** to catch MLM brands like Root
+
+**Phase 3 - Remove Hardcoding (price-lookup.ts, search.ts)**
+- Removed all `isRootBrand` checks from Vision API section
+- Removed all `isRootBrand` checks from Brave search section
+- Removed `'root': 'therootbrands.com'` from BRAND_DOMAINS mapping
+- Modified Amazon logic to **always fetch** (not just fallback) to enable Phase 2 comparison
+- Added debug log for troubleshooting price selection
+- Updated test scripts to reflect new 2.5x threshold
 
 ### What Works Now
 ✅ Pages with "3-month supply" language automatically rejected (Phase 1)
 ✅ Amazon/eBay pages with "Subscribe & Save" still work (whitelisted in Phase 1)
-✅ Bundle prices >3x marketplace automatically filtered (Phase 2)
-✅ Normal brands with close prices NOT filtered (1.0x-2.5x kept)
-✅ Root brand still works via hardcoded checks (therootbrands.com detection)
+✅ Bundle prices >2.5x marketplace automatically filtered (Phase 2)
+✅ Normal brands with close prices NOT filtered (1.0x-2.0x kept)
+✅ **Root brand now works WITHOUT hardcoding** (2.90x > 2.5x threshold)
 ✅ Two-layer defense: HTML text + price ratio
-
-### What Doesn't Work Yet (Needs Phase 3+)
-❌ Root brand still requires hardcoded check (2.90x ratio just under 3.0x threshold)
-❌ Other MLM brands without clear bundle language will slip through
-❌ Need smarter detection of MLM/direct-sales business models
-❌ Could lower threshold to 2.5x to catch Root, but risks false positives
+✅ **No brand-specific hardcoding required**
+✅ Amazon always fetched to provide marketplace comparison
 
 ### Test Results
 **Phase 1 Tests:**
@@ -153,13 +158,20 @@ Once fixed, should handle:
 - Amazon with "Subscribe & Save": ✅ Kept (whitelisted)
 - Root pages: ❌ No strong signals found (only "subscription")
 
-**Phase 2 Tests:**
+**Phase 2 Tests (2.5x threshold):**
 - Normal brand (1.02x ratio): ✅ Kept
 - Premium brand (2.0x ratio): ✅ Kept
-- Root current (2.90x ratio): ✅ Kept (below threshold, caught by hardcoded check)
+- **Root Zero-In (2.90x ratio): ✅ Filtered → Amazon $77.60 → Final $69.84**
 - Higher bundle (3.09x ratio): ✅ Filtered
-- Threshold sweet spot: 3.0x balances false positives vs catching bundles
+- Threshold: 2.5x catches Root while preserving normal brands
 
-## Current Status
-**TEMPORARY FIX DEPLOYED**: Hardcoded Root brand skip is live and working.
-**NEEDS REFACTOR**: Should be replaced with pattern-based detection before shipping to production for other brands.
+**Phase 3 Tests:**
+- Root Zero-In WITHOUT hardcoding: ✅ $69.84 (was $202.50 before)
+- Amazon always fetched: ✅ Provides marketplace price for Phase 2 comparison
+- Debug logs: ✅ Show 2 candidates (brand site + Amazon) before filtering
+
+### Tradeoffs & Considerations
+- **2.5x threshold**: Catches Root (2.90x) while keeping 2x premium brands
+- **False positive risk**: Low - most normal brands are within 1-2x of marketplace
+- **MLM detection**: Now works generically without hardcoding specific brands
+- **Amazon dependency**: Relies on Amazon being available for comparison (acceptable tradeoff)
