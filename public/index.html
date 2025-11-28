@@ -632,17 +632,18 @@
           const userEmail = document.getElementById('userEmail');
           const userAvatar = document.getElementById('userAvatar');
           const topbarAvatar = document.getElementById('topbarAvatar');
-          if (cj?.user) {
-            const name = cj.user?.name || '';
-            const email = cj.user?.email || '';
-            const initial = (email || name || 'U').charAt(0).toUpperCase();
-            
-            // Show email as name until we have structured signup
-            if (userName) userName.textContent = email || name || 'User';
-            if (userEmail) userEmail.textContent = 'Signed in';
-            if (userAvatar) userAvatar.textContent = initial;
-            if (topbarAvatar) topbarAvatar.textContent = initial;
-          }
+          
+          // Get user info from connections API or fall back to authClient
+          const user = cj?.user || authClient.getUser?.() || {};
+          const name = user?.name || user?.given_name || '';
+          const email = user?.email || '';
+          const displayName = name || email || 'User';
+          const initial = displayName.charAt(0).toUpperCase();
+          
+          if (userName) userName.textContent = displayName;
+          if (userEmail) userEmail.textContent = email || 'Signed in';
+          if (userAvatar) userAvatar.textContent = initial;
+          if (topbarAvatar) topbarAvatar.textContent = initial;
           
           const dbxWho = document.getElementById('dbxWho');
           if (dbxWho) {

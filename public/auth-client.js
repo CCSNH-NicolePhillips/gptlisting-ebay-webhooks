@@ -545,7 +545,11 @@
     return state.mode;
   }
 
-  window.authClient = { requireAuth, login, logout, getToken, ensureAuth, authFetch, getMode };
+  function getUser() {
+    return state.user;
+  }
+
+  window.authClient = { requireAuth, login, logout, getToken, ensureAuth, authFetch, getMode, getUser };
   // Minimal, non-invasive auth badge injected in the top-right for login/logout
   async function renderBadge() {
     try {
