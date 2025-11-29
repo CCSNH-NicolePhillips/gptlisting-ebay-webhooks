@@ -179,65 +179,73 @@ export const handler: Handler = async (event) => {
 		let timedOut = false;
 		const INTERNAL_LIMIT = 8000; // 8-second upper bound to avoid Netlify hard timeout
 
-		// FAST PATH: If deleteAllUnpublished=true, use direct offer listing (much faster)
-		if (deleteAllUnpublished) {
-			console.log('[clean-broken-drafts] Fast path: Deleting all unpublished offers via direct listing');
-			let offerOffset = 0;
-			let totalDeleted = 0;
-			const maxOffers = 1000;
+	// FAST PATH: If deleteAllUnpublished=true, use direct offer listing (much faster)
+	if (deleteAllUnpublished) {
+		console.log('[clean-broken-drafts] Fast path: Deleting all unpublished offers via direct listing');
+		let offerOffset = 0;
+		let totalDeleted = 0;
+		const maxOffers = 1000;
+		let hit25707 = false;
+		
+		while (totalDeleted < maxOffers) {
+			// Check timeout
+			if (Date.now() - startTime > INTERNAL_LIMIT) {
+				console.log(`[clean-broken-drafts] Internal timeout at ${totalDeleted} offers deleted (8s limit)`);
+				timedOut = true;
+				break;
+			}
 			
-			while (totalDeleted < maxOffers) {
-				// Check timeout
-				if (Date.now() - startTime > INTERNAL_LIMIT) {
-					console.log(`[clean-broken-drafts] Internal timeout at ${totalDeleted} offers deleted (8s limit)`);
-					timedOut = true;
-					break;
+			try {
+				const page = await listAllOffersDirect(offerOffset);
+				const offers = page.offers;
+				if (!offers.length) break;
+				
+				for (const o of offers) {
+					const status = String(o?.status || '').toUpperCase();
+					if (status === 'UNPUBLISHED') {
+						await deleteOffer(o.offerId);
+						totalDeleted++;
+					}
 				}
 				
-				try {
-					const page = await listAllOffersDirect(offerOffset);
-					const offers = page.offers;
-					if (!offers.length) break;
-					
-					for (const o of offers) {
-						const status = String(o?.status || '').toUpperCase();
-						if (status === 'UNPUBLISHED') {
-							await deleteOffer(o.offerId);
-							totalDeleted++;
-						}
-					}
-					
-					if (!page.next) break;
-					else offerOffset += 100;
-				} catch (err) {
-					console.error('[clean-broken-drafts] Direct offer listing failed:', err);
-					// Fall back to inventory scan on error
-					break;
+				if (!page.next) break;
+				else offerOffset += 100;
+			} catch (err) {
+				console.error('[clean-broken-drafts] Direct offer listing failed:', err);
+				// Check if it's a 25707 error (invalid SKU)
+				const errMsg = String(err);
+				if (errMsg.includes('25707')) {
+					hit25707 = true;
 				}
-			}
-			
-			if (totalDeleted > 0) {
-				// Fast path succeeded
-				return {
-					statusCode: 200,
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						ok: true,
-						mode: results.mode,
-						fastPath: true,
-						scanned: totalDeleted,
-						timedOut,
-						deletedOffers: results.deletedOffers,
-						deletedInventory: results.deletedInventory,
-						attempts: results.attempts,
-						errors: results.errors,
-						message: timedOut ? 'Partial deletion - run again to continue' : 'Completed'
-					}),
-				};
+				// Fall back to inventory scan on error
+				break;
 			}
 		}
-
-		// Strategy: Scan inventory items directly (offers listing is broken by invalid SKUs)
+		
+		// If we hit 25707, we MUST scan inventory to find and delete invalid SKUs
+		if (hit25707) {
+			console.log('[clean-broken-drafts] 25707 detected - scanning inventory to find and delete invalid SKUs');
+			// Continue to inventory scan below (don't return early)
+		} else if (totalDeleted > 0) {
+			// Fast path succeeded without errors
+			return {
+				statusCode: 200,
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					ok: true,
+					mode: results.mode,
+					fastPath: true,
+					scanned: totalDeleted,
+					timedOut,
+					deletedOffers: results.deletedOffers,
+					deletedInventory: results.deletedInventory,
+					attempts: results.attempts,
+					errors: results.errors,
+					message: timedOut ? 'Partial deletion - run again to continue' : 'Completed'
+				}),
+			};
+		}
+	}		// Strategy: Scan inventory items directly (offers listing is broken by invalid SKUs)
 		console.log('[clean-broken-drafts] Using inventory scan strategy (offers listing broken by error 25707)');
 		
 		let invOffset = 0;
@@ -256,15 +264,17 @@ export const handler: Handler = async (event) => {
 			const items: any[] = page.items;
 			if (!items.length) break;
 			
-			for (const it of items) {
-				const sku: string = it?.sku;
-				scanned++;
-				const bad = !validSku(sku);
-				
-				// Get offers for this SKU (if valid)
-				const offersForSku = await listOffersForSku(sku);
-				
-			// Delete UNPUBLISHED offers (or all if deleteAllUnpublished flag set)
+		for (const it of items) {
+			const sku: string = it?.sku;
+			scanned++;
+			const bad = !validSku(sku);
+			
+			if (bad) {
+				console.log(`🚫 Found invalid SKU: ${sku}`);
+			}
+			
+			// Get offers for this SKU (if valid)
+			const offersForSku = await listOffersForSku(sku);			// Delete UNPUBLISHED offers (or all if deleteAllUnpublished flag set)
 			let hasUnpublishedOffer = false;
 			for (const o of offersForSku) {
 				const status = String(o?.status || '').toUpperCase();
@@ -282,6 +292,9 @@ export const handler: Handler = async (event) => {
 			// 2. We deleted an unpublished offer and deleteInventory flag is set
 			if (deleteInventory && (bad || (deleteAllUnpublished && hasUnpublishedOffer))) {
 				await deleteInventoryItem(sku);
+				if (bad) {
+					console.log(`✅ Deleted invalid SKU: ${sku}`);
+				}
 			}
 		}			if (!page.next) break;
 			else invOffset += 200;
