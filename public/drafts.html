@@ -795,7 +795,7 @@
       document.getElementById('btnClean')?.addEventListener('click', async () => {
         const sure = confirm('Delete ALL UNPUBLISHED drafts? This cannot be undone.');
         if (!sure) return;
-        const q = '?deleteAll=true';
+        const q = '?deleteAll=true&deleteInventory=true';
         
         let totalDeleted = 0;
         let attempts = 0;
