@@ -422,6 +422,10 @@ body {
   color: #e5e7eb;
 }
 
+.dp-topbar-icon--menu {
+  display: none; /* Hidden on desktop, shown on mobile */
+}
+
 .dp-topbar-avatar {
   width: 32px;
   height: 32px;
@@ -1151,19 +1155,56 @@ body {
 
 /* ===== MOBILE LAYOUT (≤767px) ===== */
 @media (max-width: 767px) {
-  /* ===== SIDEBAR: Stack above main content ===== */
+  /* ===== MOBILE NAVIGATION ===== */
+  /* Show hamburger */
+  .dp-topbar-icon--menu {
+    display: flex;
+  }
+
+  /* Sidebar becomes a slide-in drawer */
+  .dp-sidebar {
+    width: 260px;
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    z-index: 200;
+    overflow-y: auto;
+    border-right: none;
+    box-shadow: var(--shadow-sidebar);
+  }
+
+  /* When shell has nav-open class, slide it in */
+  .dp-shell.dp-shell--nav-open .dp-sidebar {
+    transform: translateX(0);
+  }
+
+  /* Backdrop behind sidebar */
+  .dp-mobile-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.65);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+    z-index: 150;
+  }
+
+  .dp-shell.dp-shell--nav-open .dp-mobile-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* Main shell becomes vertical layout */
   .dp-shell {
     flex-direction: column;
   }
-  
-  .dp-sidebar {
-    width: 100%;
-    max-width: none;
-    position: static;
-    height: auto;
-    border-right: none;
-    border-bottom: 1px solid rgba(148, 163, 184, 0.25);
-    box-shadow: 0 1px 8px rgba(0, 0, 0, 0.3);
+
+  /* Prevent content from being pushed down */
+  .dp-main-wrapper {
+    margin-left: 0;
   }
   
   .dp-sidebar__brand {
@@ -1190,11 +1231,6 @@ body {
   
   .dp-sidebar__footer {
     padding: 12px 16px;
-  }
-  
-  /* Main wrapper no left margin */
-  .dp-main-wrapper {
-    margin-left: 0;
   }
   
   /* ===== TOP BAR: Stack vertically ===== */
