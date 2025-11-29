@@ -226,17 +226,19 @@ export const handler: Handler = async (event) => {
 		// FAST SCAN: Just find and delete invalid SKUs (no offer processing)
 		let fastScanOffset = 0;
 		let fastScanned = 0;
+		let foundInvalidSku = false;
 		while (fastScanned < 1000 && Date.now() - startTime < INTERNAL_LIMIT) {
 			const page = await listInventory(fastScanOffset);
 			const items = page.items;
 			if (!items.length) break;
 			
-			for (const it of items) {
-				const sku = it?.sku;
-				fastScanned++;
-				const bad = !validSku(sku);
-				if (bad) {
-					console.log(`🚫 FAST SCAN found invalid SKU: ${sku}`);
+		for (const it of items) {
+			const sku = it?.sku;
+			fastScanned++;
+			const bad = !validSku(sku);
+			if (bad) {
+				foundInvalidSku = true;
+				console.log(`🚫 FAST SCAN found invalid SKU: ${sku}`);
 					// Get and delete offers
 					const badOffers = await listOffersForSku(sku);
 					for (const o of badOffers) {
@@ -253,21 +255,28 @@ export const handler: Handler = async (event) => {
 			if (!page.next) break;
 			fastScanOffset += 200;
 		}
-		console.log(`[clean-broken-drafts] Fast scan complete: ${fastScanned} items scanned`);
-		// After deleting invalid SKUs, return so next retry can use fast path
-		return {
-			statusCode: 200,
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				ok: true,
-				mode: results.mode,
-				invalidSkuCleanup: true,
-				scanned: fastScanned,
-				deletedOffers: results.deletedOffers,
-				deletedInventory: results.deletedInventory,
-				message: 'Deleted invalid SKUs - click Delete All again to continue'
-			}),
-		};
+		console.log(`[clean-broken-drafts] Fast scan complete: ${fastScanned} items scanned, foundInvalid=${foundInvalidSku}`);
+		
+		// If we found invalid SKUs, return and let user retry
+		if (foundInvalidSku) {
+			return {
+				statusCode: 200,
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					ok: true,
+					mode: results.mode,
+					invalidSkuCleanup: true,
+					scanned: fastScanned,
+					deletedOffers: results.deletedOffers,
+					deletedInventory: results.deletedInventory,
+					message: 'Deleted invalid SKUs - click Delete All again to continue'
+				}),
+			};
+		}
+		
+		// No invalid SKUs found - 25707 is a false positive or eBay cache issue
+		// Fall through to inventory-based deletion below
+		console.log('[clean-broken-drafts] No invalid SKUs found - using inventory-based deletion (offers API broken)');
 	} else if (totalDeleted > 0) {
 			// Fast path succeeded without errors
 			return {
