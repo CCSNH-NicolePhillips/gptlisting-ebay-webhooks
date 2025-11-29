@@ -117,7 +117,16 @@ function extractFromJsonLd($: cheerio.CheerioAPI): ExtractedData {
       const raw = $(node).text().trim();
       if (!raw) continue;
       const parsed = JSON.parse(raw);
-      const items = Array.isArray(parsed) ? parsed : [parsed];
+      
+      // Handle both arrays and @graph wrappers
+      let items: any[] = [];
+      if (Array.isArray(parsed)) {
+        items = parsed;
+      } else if (parsed["@graph"] && Array.isArray(parsed["@graph"])) {
+        items = parsed["@graph"];
+      } else {
+        items = [parsed];
+      }
       
       for (const item of items) {
         if (!item || typeof item !== "object") continue;
