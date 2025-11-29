@@ -1456,24 +1456,32 @@ body {
   /* Mobile layout: hamburger left, title centered */
   .dp-topbar-left {
     display: flex;
-    justify-content: center; /* centers the title */
     align-items: center;
+    gap: 12px;
     width: 100%;
-    position: relative; /* allow hamburger to sit left */
   }
 
   /* Keep hamburger on the left side */
   .dp-topbar-icon--menu {
-    position: absolute;
-    left: 12px;
-    top: 50%;
-    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 36px;
+    width: 36px;
   }
 
   /* Center the heading block */
   .dp-topbar-heading {
-    text-align: center;
-    width: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+    flex: 1;
+  }
+
+  /* Slight margin fix for subtitle so it hugs tighter under Dashboard */
+  .dp-topbar__subtitle {
+    margin-top: -2px;
   }
 
   /* Push the page content down so it isn't hidden under header */
