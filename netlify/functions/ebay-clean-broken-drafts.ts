@@ -264,24 +264,26 @@ export const handler: Handler = async (event) => {
 				// Get offers for this SKU (if valid)
 				const offersForSku = await listOffersForSku(sku);
 				
-				// Delete UNPUBLISHED offers (or all if deleteAllUnpublished flag set)
-				for (const o of offersForSku) {
-					const status = String(o?.status || '').toUpperCase();
-					if (deleteAllUnpublished && status === 'UNPUBLISHED') {
-						await deleteOffer(o.offerId);
-					} else if (bad) {
-						// Delete any offer for bad SKU
-						await deleteOffer(o.offerId);
-					}
-				}
-				
-				// Delete inventory item if SKU is invalid
-				if (bad && deleteInventory) {
-					await deleteInventoryItem(sku);
+			// Delete UNPUBLISHED offers (or all if deleteAllUnpublished flag set)
+			let hasUnpublishedOffer = false;
+			for (const o of offersForSku) {
+				const status = String(o?.status || '').toUpperCase();
+				if (deleteAllUnpublished && status === 'UNPUBLISHED') {
+					await deleteOffer(o.offerId);
+					hasUnpublishedOffer = true;
+				} else if (bad) {
+					// Delete any offer for bad SKU
+					await deleteOffer(o.offerId);
 				}
 			}
 			
-			if (!page.next) break;
+			// Delete inventory item if:
+			// 1. SKU is invalid, OR
+			// 2. We deleted an unpublished offer and deleteInventory flag is set
+			if (deleteInventory && (bad || (deleteAllUnpublished && hasUnpublishedOffer))) {
+				await deleteInventoryItem(sku);
+			}
+		}			if (!page.next) break;
 			else invOffset += 200;
 		}
 
