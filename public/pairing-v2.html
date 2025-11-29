@@ -770,7 +770,7 @@
                   draftStatus.innerHTML = `
                     <p style="color: #f57c00; font-weight: 600;">⚠️ DRY RUN MODE</p>
                     <p style="margin-top: 8px; font-size: 14px;">Created ${drafts.length} draft${drafts.length !== 1 ? 's' : ''} but not published (dry run enabled).</p>
-                    <p style="margin-top: 8px;"><a href="/new-smartdrafts/create-draft.html?jobId=${encodeURIComponent(draftJobId)}" style="color: #1976d2;">View Draft Details →</a></p>
+                    <p style="margin-top: 8px;"><a href="/quick-list.html?draftJobId=${encodeURIComponent(draftJobId)}" style="color: #1976d2;">View Draft Details →</a></p>
                   `;
                 } else {
                   draftStatus.innerHTML = `
@@ -790,7 +790,7 @@
                     Error: ${publishError.message}
                   </p>
                   <p style="margin-top: 8px;">
-                    <a href="/new-smartdrafts/create-draft.html?jobId=${encodeURIComponent(draftJobId)}" style="color: #1976d2;">View & Publish Manually →</a>
+                    <a href="/quick-list.html?draftJobId=${encodeURIComponent(draftJobId)}" style="color: #1976d2;">View & Publish Manually →</a>
                   </p>
                 `;
                 btn.textContent = `⚠️ ${drafts.length} Draft${drafts.length !== 1 ? 's' : ''} Need Publishing`;
