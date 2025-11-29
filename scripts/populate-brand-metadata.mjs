@@ -3,35 +3,53 @@ import { setBrandMetadata } from '../dist/src/lib/brand-map.js';
 
 /**
  * Populate initial brand metadata database
- * Add brands as you discover them - no more hardcoding!
+ * Supports brands with multiple product types using pattern matching
  */
 
 const brandMetadata = [
-  // Supplements
-  { brand: 'root', productType: 'vitamin supplement' },
-  { brand: 'jocko', productType: 'vitamin supplement' },
-  { brand: 'naked', productType: 'vitamin supplement' },
-  { brand: 'rkmd', productType: 'vitamin supplement' },
-  { brand: 'vita plynxera', productType: 'vitamin supplement' },
+  // Single product type brands
+  { brand: 'root', defaultProductType: 'vitamin supplement' },
+  { brand: 'jocko', defaultProductType: 'vitamin supplement' },
+  { brand: 'naked', defaultProductType: 'vitamin supplement' },
+  { brand: 'rkmd', defaultProductType: 'vitamin supplement' },
+  { brand: 'vita plynxera', defaultProductType: 'vitamin supplement' },
+  { brand: 'ryse', defaultProductType: 'sports nutrition supplement' },
+  { brand: 'prequel', defaultProductType: 'skincare beauty' },
+  { brand: 'oganacell', defaultProductType: 'skincare beauty' },
+  { brand: 'evereden', defaultProductType: 'skincare beauty' },
+  { brand: 'maude', defaultProductType: 'bath body' },
   
-  // Sports Nutrition
-  { brand: 'ryse', productType: 'sports nutrition supplement' },
-  
-  // Skincare
-  { brand: 'prequel', productType: 'skincare beauty' },
-  { brand: 'oganacell', productType: 'skincare beauty' },
-  { brand: 'evereden', productType: 'skincare beauty' },
-  
-  // Bath & Body
-  { brand: 'maude', productType: 'bath body' },
+  // Example: Multi-category brand (if a brand sells both supplements AND skincare)
+  // {
+  //   brand: 'example-brand',
+  //   defaultProductType: 'vitamin supplement', // Default if no pattern matches
+  //   productPatterns: [
+  //     { keywords: ['serum', 'cream', 'lotion'], productType: 'skincare beauty' },
+  //     { keywords: ['vitamin', 'capsule', 'supplement'], productType: 'vitamin supplement' },
+  //     { keywords: ['protein', 'pre workout'], productType: 'sports nutrition supplement' }
+  //   ]
+  // }
 ];
 
 async function main() {
   console.log('Populating brand metadata database...\n');
   
-  for (const { brand, productType, category, notes } of brandMetadata) {
-    console.log(`Setting: ${brand} → ${productType}`);
-    await setBrandMetadata(brand, { productType, category, notes });
+  for (const metadata of brandMetadata) {
+    const { brand, defaultProductType, productPatterns } = metadata;
+    
+    if (productPatterns) {
+      console.log(`Setting: ${brand} (multi-type with ${productPatterns.length} patterns)`);
+      productPatterns.forEach(p => {
+        console.log(`  - ${p.keywords.join(', ')} → ${p.productType}`);
+      });
+      if (defaultProductType) {
+        console.log(`  - default → ${defaultProductType}`);
+      }
+    } else {
+      console.log(`Setting: ${brand} → ${defaultProductType}`);
+    }
+    
+    await setBrandMetadata(brand, metadata);
   }
   
   console.log(`\n✓ Successfully populated ${brandMetadata.length} brand metadata entries`);

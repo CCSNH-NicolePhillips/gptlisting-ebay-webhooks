@@ -33,7 +33,11 @@ export type BrandUrls = {
 };
 
 export type BrandMetadata = {
-  productType?: string; // e.g., "skincare beauty", "vitamin supplement", "sports nutrition supplement"
+  defaultProductType?: string; // Default type if product name doesn't match specific patterns
+  productPatterns?: Array<{
+    keywords: string[]; // Keywords to match in product name (e.g., ["serum", "cream"])
+    productType: string; // Type to assign (e.g., "skincare beauty")
+  }>;
   category?: string; // Optional: specific eBay category hint
   notes?: string; // Optional: any additional metadata
 };

@@ -205,9 +205,26 @@ async function getRelevantCategories(product: PairedProduct, marketplaceProductT
       // Check brand metadata database first
       if (brandName) {
         const brandMeta = await getBrandMetadata(brandName);
-        if (brandMeta?.productType) {
-          productType = brandMeta.productType;
-          console.log(`[Category] Using database product type for brand "${brandName}": "${productType}"`);
+        if (brandMeta) {
+          // Check if product name matches any specific patterns
+          if (brandMeta.productPatterns) {
+            for (const pattern of brandMeta.productPatterns) {
+              const matches = pattern.keywords.some(keyword => 
+                productName.includes(keyword.toLowerCase())
+              );
+              if (matches) {
+                productType = pattern.productType;
+                console.log(`[Category] Brand "${brandName}" product matched pattern "${pattern.keywords.join(', ')}" → "${productType}"`);
+                break;
+              }
+            }
+          }
+          
+          // Fall back to default product type if no pattern matched
+          if (!productType && brandMeta.defaultProductType) {
+            productType = brandMeta.defaultProductType;
+            console.log(`[Category] Using default product type for brand "${brandName}": "${productType}"`);
+          }
         }
       }
       
