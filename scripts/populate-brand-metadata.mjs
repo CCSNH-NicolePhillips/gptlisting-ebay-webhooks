@@ -8,7 +8,12 @@ import { setBrandMetadata } from '../dist/src/lib/brand-map.js';
 
 const brandMetadata = [
   // Single product type brands
-  { brand: 'root', defaultProductType: 'vitamin supplement' },
+  { 
+    brand: 'root', 
+    defaultProductType: 'vitamin supplement',
+    brandWebsite: 'https://therootbrands.com',
+    ebayCategory: '180959' // Vitamins & Dietary Supplements
+  },
   { brand: 'jocko', defaultProductType: 'vitamin supplement' },
   { brand: 'naked', defaultProductType: 'vitamin supplement' },
   { brand: 'rkmd', defaultProductType: 'vitamin supplement' },

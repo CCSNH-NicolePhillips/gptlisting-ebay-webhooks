@@ -147,16 +147,26 @@ function extractFromJsonLd($: cheerio.CheerioAPI): ExtractedData {
           
           // Handle priceSpecification as array OR object (Root Brands uses array)
           const priceSpec = (offer as any).priceSpecification;
-          const priceFromSpec = Array.isArray(priceSpec)
-            ? toNumber(priceSpec[0]?.price)
-            : toNumber(priceSpec?.price);
           
-          const priceValue =
-            toNumber((offer as any).price) ??
-            priceFromSpec ??
-            toNumber((offer as any).lowPrice);
+          // If priceSpec is an array, extract ALL prices (not just first)
+          // Root Brands lists bulk/wholesale first, retail prices after
+          const pricesFromSpec: number[] = [];
+          if (Array.isArray(priceSpec)) {
+            for (const spec of priceSpec) {
+              const p = toNumber(spec?.price);
+              if (p) pricesFromSpec.push(p);
+            }
+          } else if (priceSpec) {
+            const p = toNumber(priceSpec?.price);
+            if (p) pricesFromSpec.push(p);
+          }
           
-          if (priceValue) {
+          // Also check top-level price fields
+          const topPrice = toNumber((offer as any).price) ?? toNumber((offer as any).lowPrice);
+          if (topPrice) pricesFromSpec.push(topPrice);
+          
+          // Create a candidate for EACH price found
+          for (const priceValue of pricesFromSpec) {
             const nameText = String((offer as any).name || productName);
             const descText = String((offer as any).description || productDescription);
             const currency = String((offer as any).priceCurrency || 'USD');
