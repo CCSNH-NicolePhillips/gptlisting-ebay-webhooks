@@ -7,7 +7,7 @@ import { dirname, join } from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-config({ path: join(__dirname, '..', 'prod.env') });
+config({ path: join(__dirname, '..', '.env') });
 
 const SKU_OK = (s) => /^[A-Za-z0-9]{1,50}$/.test(s || '');
 

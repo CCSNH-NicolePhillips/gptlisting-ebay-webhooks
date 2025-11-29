@@ -237,13 +237,70 @@ export const handler: Handler = async (event) => {
 		if (!r.ok) {
 			const code = Number((r.body?.errors && r.body.errors[0]?.errorId) || 0);
 			if (r.status === 400 && code === 25707) {
-				// Silently use safe aggregation - this is expected when inventory has invalid SKUs
+				console.warn('[ebay-list-offers] ⚠️ Error 25707 detected: Invalid SKU in inventory');
+				console.log('[ebay-list-offers] Scanning inventory to find and delete broken SKUs...');
+				
+				// Find and delete inventory items with invalid SKUs
+				let deletedCount = 0;
+				let scannedCount = 0;
+				let scanOffset = 0;
+				const scanLimit = 100;
+				const maxScanPages = 10;
+				
+				for (let page = 0; page < maxScanPages; page++) {
+					const scanUrl = `${apiHost}/sell/inventory/v1/inventory_item?limit=${scanLimit}&offset=${scanOffset}`;
+					const scanRes = await fetch(scanUrl, { headers });
+					
+					if (!scanRes.ok) {
+						console.error('[ebay-list-offers] Failed to scan inventory:', scanRes.status);
+						break;
+					}
+					
+					const scanData = await scanRes.json();
+					const items = Array.isArray(scanData?.inventoryItems) ? scanData.inventoryItems : [];
+					
+					if (!items.length) break;
+					
+					for (const item of items) {
+						scannedCount++;
+						const sku = item.sku;
+						
+						if (!SKU_OK(sku)) {
+							console.log(`[ebay-list-offers] 🗑️ Deleting invalid SKU: "${sku}" (${item.product?.title || 'no title'})`);
+							
+							// Delete the inventory item
+							const deleteUrl = `${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
+							const deleteRes = await fetch(deleteUrl, {
+								method: 'DELETE',
+								headers
+							});
+							
+							if (deleteRes.ok || deleteRes.status === 204) {
+								deletedCount++;
+								console.log(`[ebay-list-offers] ✓ Deleted invalid SKU: "${sku}"`);
+							} else {
+								const deleteErr = await deleteRes.text();
+								console.error(`[ebay-list-offers] ✗ Failed to delete SKU "${sku}":`, deleteRes.status, deleteErr);
+							}
+						}
+					}
+					
+					if (items.length < scanLimit) break;
+					scanOffset += scanLimit;
+				}
+				
+				console.log(`[ebay-list-offers] Scan complete: ${scannedCount} items scanned, ${deletedCount} invalid SKUs deleted`);
+				
+				// Now use safe aggregation to return valid offers
 				const safe = await safeAggregateByInventory();
-				const partial = (Date.now() - startTime) > 6500; // If we got close to timeout
+				const partial = (Date.now() - startTime) > 6500;
 				const note = safe.offers.length ? (partial ? 'safe-aggregate-partial' : 'safe-aggregate') : 'safe-aggregate-empty';
-				const warning = safe.offers.length
-					? (partial ? 'Timeout protection: showing partial results. Use manual cleanup to remove invalid SKUs.' : undefined)
-					: 'Upstream offer listing failed due to invalid SKU values. Showing filtered results.';
+				const warning = deletedCount > 0
+					? `Automatically cleaned up ${deletedCount} invalid SKU(s). ${safe.offers.length} valid draft(s) found.`
+					: (safe.offers.length 
+						? (partial ? 'Timeout protection: showing partial results.' : undefined)
+						: 'No valid drafts found after SKU cleanup.');
+				
 				return {
 					statusCode: 200,
 					headers: { 'Content-Type': 'application/json' },
@@ -255,6 +312,7 @@ export const handler: Handler = async (event) => {
 						attempts: [...attempts, ...safe.attempts],
 						note,
 						warning,
+						cleaned: deletedCount > 0 ? { scanned: scannedCount, deleted: deletedCount } : undefined
 					}),
 				};
 			}
