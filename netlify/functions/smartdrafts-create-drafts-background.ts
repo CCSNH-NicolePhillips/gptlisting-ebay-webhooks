@@ -220,7 +220,7 @@ async function getRelevantCategories(product: PairedProduct, marketplaceProductT
     } else if (brandName === 'ryse' || productName.includes('loaded')) {
       // Pre-workout/sports nutrition brands
       productType = 'sports nutrition supplement';
-    } else if (brandName === 'prequel' || brandName === 'oganacell') {
+    } else if (brandName === 'prequel' || brandName === 'oganacell' || brandName === 'evereden') {
       // Skincare brands
       productType = 'skincare beauty';
     } else if (brandName === 'maude') {
