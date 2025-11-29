@@ -1571,6 +1571,9 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 450px;
+  color: var(--text-primary);
+  font-weight: 500;
 }
 
 /* Status Pills */
@@ -1749,6 +1752,26 @@ body {
   font-size: 0.8125rem;
   color: var(--text-muted);
   line-height: 1.6;
+}
+
+/* ================================================================
+   LEGACY CLEANUP - Hide all unused legacy elements causing visual artifacts
+   ================================================================ */
+.card,
+.row,
+.col,
+.status,
+.small,
+.muted,
+.footer,
+details,
+details summary,
+button:not(.dp-btn):not(.dp-topbar-icon):not([class^="dp-"]),
+.btn:not([class^="dp-"]) {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 
 /* ================================================================
