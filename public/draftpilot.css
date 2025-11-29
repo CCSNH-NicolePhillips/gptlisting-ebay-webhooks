@@ -897,6 +897,25 @@ table {
   margin: 0;
 }
 
+/* Fixed height for connections card to match drafts */
+.dp-card--connections {
+  display: flex;
+  flex-direction: column;
+  height: 600px;
+  min-height: 600px;
+  max-height: 600px;
+}
+
+.dp-card--connections .dp-connections-grid {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.dp-card--connections .dp-card-footer {
+  flex-shrink: 0;
+}
+
 .dp-connections-grid {
   display: grid;
   gap: 16px;
@@ -1609,6 +1628,8 @@ table {
 .dp-drafts-table__col--title {
   color: var(--text-primary);
   font-weight: 500;
+  max-width: 350px;
+  overflow: hidden;
 }
 
 .dp-drafts-table__col--status,
@@ -1621,7 +1642,8 @@ table {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 450px;
+  max-width: 100%;
+  display: block;
   color: var(--text-primary);
   font-weight: 500;
 }
