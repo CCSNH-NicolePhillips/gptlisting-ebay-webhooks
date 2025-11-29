@@ -58,6 +58,8 @@ export interface PriceLookupInput {
   upc?: string;
   condition?: 'NEW' | 'USED' | 'OTHER';
   quantity?: number;
+  keyText?: string[]; // Text extracted from packaging (helps refine searches)
+  categoryPath?: string; // Category from Vision API (e.g., "Dietary Supplement")
 }
 
 export type PriceSource = 'ebay-sold' | 'brand-msrp' | 'brave-fallback' | 'estimate';
@@ -527,8 +529,28 @@ export async function lookupPrice(
   if (input.brand) {
     console.log('[price] Checking Amazon for marketplace pricing...');
     const { braveFirstUrl } = await import('./search.js');
+    
+    // Build search query with category context from keyText to avoid wrong products
+    // e.g., "Root Sculpt" + "dietary supplement" prevents finding "arm cream"
+    let searchQuery = `${input.brand} ${input.title}`;
+    if (input.categoryPath) {
+      searchQuery += ` ${input.categoryPath}`;
+    } else if (input.keyText && input.keyText.length > 0) {
+      // Use first key text item as category hint (usually product type)
+      const categoryHint = input.keyText.find(text => 
+        text.toLowerCase().includes('supplement') ||
+        text.toLowerCase().includes('vitamin') ||
+        text.toLowerCase().includes('capsule') ||
+        text.toLowerCase().includes('serum') ||
+        text.toLowerCase().includes('cream')
+      );
+      if (categoryHint) {
+        searchQuery += ` ${categoryHint}`;
+      }
+    }
+    
     const amazonUrlFound = await braveFirstUrl(
-      `${input.brand} ${input.title}`,
+      searchQuery,
       'amazon.com'
     );
     

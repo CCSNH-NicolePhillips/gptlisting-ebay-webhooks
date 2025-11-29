@@ -596,6 +596,8 @@ async function createDraftForProduct(product: PairedProduct, retryAttempt: numbe
       upc: undefined, // TODO: Add UPC to PairedProduct type if available from pairing
       condition: 'NEW', // TODO: Detect condition from product data if available
       quantity: undefined, // TODO: Add quantity to PairedProduct type if available
+      keyText: product.keyText, // Pass extracted text from packaging (e.g., "DIETARY SUPPLEMENT")
+      categoryPath: product.categoryPath, // Pass Vision API category
     };
 
     pricingDecision = await lookupPrice(priceInput);
