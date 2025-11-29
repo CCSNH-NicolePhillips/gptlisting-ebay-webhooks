@@ -175,11 +175,9 @@ export const handler: Handler = async (event) => {
 			return { offers, next: j?.href && j?.next ? j.next : null };
 		}
 
-		// Declare timeout vars BEFORE fast path to avoid TDZ errors
-		let timedOut = false;
-		const INTERNAL_LIMIT = 8000; // 8-second upper bound to avoid Netlify hard timeout
-
-	// FAST PATH: If deleteAllUnpublished=true, use direct offer listing (much faster)
+	// Declare timeout vars BEFORE fast path to avoid TDZ errors
+	let timedOut = false;
+	const INTERNAL_LIMIT = 20000; // 20-second upper bound to avoid Netlify hard timeout	// FAST PATH: If deleteAllUnpublished=true, use direct offer listing (much faster)
 	if (deleteAllUnpublished) {
 		console.log('[clean-broken-drafts] Fast path: Deleting all unpublished offers via direct listing');
 		let offerOffset = 0;
@@ -190,7 +188,7 @@ export const handler: Handler = async (event) => {
 		while (totalDeleted < maxOffers) {
 			// Check timeout
 			if (Date.now() - startTime > INTERNAL_LIMIT) {
-				console.log(`[clean-broken-drafts] Internal timeout at ${totalDeleted} offers deleted (8s limit)`);
+				console.log(`[clean-broken-drafts] Internal timeout at ${totalDeleted} offers deleted (20s limit)`);
 				timedOut = true;
 				break;
 			}
@@ -253,9 +251,9 @@ export const handler: Handler = async (event) => {
 		const maxScans = 2000;
 		
 		while (scanned < maxScans) {
-			// Check timeout (internal 8s limit to prevent hard 502)
+			// Check timeout (internal 20s limit to prevent hard 502)
 			if (Date.now() - startTime > INTERNAL_LIMIT) {
-				console.log(`[clean-broken-drafts] Internal timeout at ${scanned} items scanned (8s limit)`);
+				console.log(`[clean-broken-drafts] Internal timeout at ${scanned} items scanned (20s limit)`);
 				timedOut = true;
 				break;
 			}
@@ -271,30 +269,37 @@ export const handler: Handler = async (event) => {
 			
 			if (bad) {
 				console.log(`🚫 Found invalid SKU: ${sku}`);
+				// Delete invalid SKU immediately (with its offers)
+				const badOffers = await listOffersForSku(sku);
+				for (const o of badOffers) {
+					await deleteOffer(o.offerId);
+				}
+				if (deleteInventory) {
+					await deleteInventoryItem(sku);
+					console.log(`✅ Deleted invalid SKU: ${sku}`);
+				}
+				continue; // Skip to next item
 			}
 			
-			// Get offers for this SKU (if valid)
-			const offersForSku = await listOffersForSku(sku);			// Delete UNPUBLISHED offers (or all if deleteAllUnpublished flag set)
+			// Only process valid SKUs if deleteAllUnpublished is true
+			if (!deleteAllUnpublished) continue;
+			
+			// Get offers for this SKU
+			const offersForSku = await listOffersForSku(sku);
+			
+			// Delete UNPUBLISHED offers
 			let hasUnpublishedOffer = false;
 			for (const o of offersForSku) {
 				const status = String(o?.status || '').toUpperCase();
-				if (deleteAllUnpublished && status === 'UNPUBLISHED') {
+				if (status === 'UNPUBLISHED') {
 					await deleteOffer(o.offerId);
 					hasUnpublishedOffer = true;
-				} else if (bad) {
-					// Delete any offer for bad SKU
-					await deleteOffer(o.offerId);
 				}
 			}
 			
-			// Delete inventory item if:
-			// 1. SKU is invalid, OR
-			// 2. We deleted an unpublished offer and deleteInventory flag is set
-			if (deleteInventory && (bad || (deleteAllUnpublished && hasUnpublishedOffer))) {
+			// Delete inventory item if we deleted an unpublished offer
+			if (deleteInventory && hasUnpublishedOffer) {
 				await deleteInventoryItem(sku);
-				if (bad) {
-					console.log(`✅ Deleted invalid SKU: ${sku}`);
-				}
 			}
 		}			if (!page.next) break;
 			else invOffset += 200;
