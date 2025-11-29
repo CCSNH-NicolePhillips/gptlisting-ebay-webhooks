@@ -15,6 +15,8 @@ const envPath = path.join(__dirname, '..', 'prod.env');
 const envContent = fs.readFileSync(envPath, 'utf-8');
 const env = {};
 envContent.split('\n').forEach(line => {
+  line = line.trim();
+  if (!line || line.startsWith('#')) return;
   const match = line.match(/^([^=]+)=(.*)$/);
   if (match) {
     env[match[1].trim()] = match[2].trim();
@@ -51,7 +53,9 @@ async function httpsRequest(options, body) {
 async function callCleanupFunction() {
   const url = new URL('https://draftpilot.app/.netlify/functions/ebay-clean-broken-drafts');
   url.searchParams.set('deleteAll', 'true');
+  url.searchParams.set('deleteInventory', 'true');
   url.searchParams.set('adminToken', ADMIN_API_TOKEN);
+  url.searchParams.set('userSub', env.USER_SUB || 'auth0|6756b51bde4eccdb8ae98de7');
   
   const options = {
     hostname: url.hostname,

@@ -14,7 +14,8 @@ export const handler: Handler = async (event) => {
 	const dryRun = /^1|true|yes$/i.test(String(qp.dryRun || qp.dry || 'false'));
 	const deleteAllUnpublished = /^1|true|yes$/i.test(String(qp.deleteAll || qp.all || 'false'));
 	const deleteInventory = /^1|true|yes$/i.test(String(qp.deleteInventory || qp.inv || 'false'));
-	const skipFastScan = /^1|true|yes$/i.test(String(qp.skipFastScan || 'false'));		// Check for admin token bypass
+	const skipFastScan = /^1|true|yes$/i.test(String(qp.skipFastScan || 'false'));
+	const nuclearMode = /^1|true|yes$/i.test(String(qp.nuclear || 'false')); // FAST: Just delete inventory, no offer checking		// Check for admin token bypass
 		const isAdminAuth = qp.adminToken && qp.adminToken === process.env.ADMIN_API_TOKEN;
 		
 		// Get user-scoped eBay token
@@ -176,7 +177,61 @@ export const handler: Handler = async (event) => {
 
 	// Declare timeout vars BEFORE fast path to avoid TDZ errors
 	let timedOut = false;
-	const INTERNAL_LIMIT = 20000; // 20-second upper bound to avoid Netlify hard timeout	// FAST PATH: If deleteAllUnpublished=true, use direct offer listing (much faster)
+	const INTERNAL_LIMIT = 20000; // 20-second upper bound to avoid Netlify hard timeout
+	
+	// NUCLEAR MODE: Just delete all inventory items directly (fastest, no offer checking)
+	if (nuclearMode && deleteInventory) {
+		console.log('[clean-broken-drafts] NUCLEAR MODE: Deleting all inventory items directly (no offer checks)');
+		let invOffset = 0;
+		let scanned = 0;
+		
+		while (scanned < 2000) {
+			if (Date.now() - startTime > INTERNAL_LIMIT) {
+				console.log(`[clean-broken-drafts] Nuclear mode timeout at ${scanned} items (20s limit)`);
+				timedOut = true;
+				break;
+			}
+			
+			const page = await listInventory(invOffset);
+			const items = page.items;
+			if (!items.length) break;
+			
+			console.log(`[clean-broken-drafts] Nuclear batch: offset=${invOffset}, count=${items.length}`);
+			
+			for (const it of items) {
+				const sku = it?.sku;
+				if (!sku) continue;
+				
+				scanned++;
+				try {
+					await deleteInventoryItem(sku);
+					results.deletedInventory.push({ sku });
+				} catch (err) {
+					results.errors.push({ sku, error: String(err) });
+				}
+			}
+			
+			if (!page.next) break;
+			invOffset += 200;
+		}
+		
+		return {
+			statusCode: 200,
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				ok: true,
+				mode: { ...results.mode, nuclear: true },
+				nuclearMode: true,
+				scanned,
+				timedOut,
+				deletedInventory: results.deletedInventory,
+				errors: results.errors,
+				message: timedOut ? 'Partial deletion - run again' : `Deleted ${results.deletedInventory.length} items`
+			}),
+		};
+	}
+	
+	// FAST PATH: If deleteAllUnpublished=true, use direct offer listing (much faster)
 	if (deleteAllUnpublished) {
 		console.log('[clean-broken-drafts] Fast path: Deleting all unpublished offers via direct listing');
 		let offerOffset = 0;
