@@ -532,9 +532,14 @@ export async function lookupPrice(
     
     // Build search query with category context from keyText to avoid wrong products
     // e.g., "Root Sculpt" + "dietary supplement" prevents finding "arm cream"
+    console.log('[price-debug] Building Amazon search query...');
+    console.log(`[price-debug] input.keyText =`, input.keyText);
+    console.log(`[price-debug] input.categoryPath =`, input.categoryPath);
+    
     let searchQuery = `${input.brand} ${input.title}`;
     if (input.categoryPath) {
       searchQuery += ` ${input.categoryPath}`;
+      console.log(`[price-debug] Added categoryPath to query: "${input.categoryPath}"`);
     } else if (input.keyText && input.keyText.length > 0) {
       // Use first key text item as category hint (usually product type)
       const categoryHint = input.keyText.find(text => 
@@ -546,9 +551,15 @@ export async function lookupPrice(
       );
       if (categoryHint) {
         searchQuery += ` ${categoryHint}`;
+        console.log(`[price-debug] Added keyText hint to query: "${categoryHint}"`);
+      } else {
+        console.log(`[price-debug] No matching keyText hint found in:`, input.keyText);
       }
+    } else {
+      console.log(`[price-debug] No keyText or categoryPath available`);
     }
     
+    console.log(`[price-debug] Final search query: "${searchQuery}"`);
     const amazonUrlFound = await braveFirstUrl(
       searchQuery,
       'amazon.com'
