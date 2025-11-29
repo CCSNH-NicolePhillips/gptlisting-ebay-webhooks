@@ -41,6 +41,10 @@
   --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.4);
   --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.6);
   --shadow-sidebar: inset -1px 0 0 rgba(255, 255, 255, 0.05), 2px 0 20px rgba(0, 0, 0, 0.4);
+
+  --bg-secondary: rgba(15, 23, 42, 0.75);
+  --border-color: rgba(148, 163, 184, 0.18);
+  --text-secondary: #cbd5e1;
 }
 
 /* ===== BASE RESET ===== */
@@ -497,6 +501,24 @@ body {
   border-color: var(--border-medium);
   box-shadow: var(--shadow-elevated);
 }
+
+/* ===== DRAFTS CARD ===== */
+/* Recent Drafts card: prevent layout jank when data loads */
+.dp-card--recent-drafts {
+  display: flex;
+  flex-direction: column;
+  align-self: flex-start;   /* don’t stretch to match neighbor */
+  min-height: 320px;        /* enough height so it doesn’t “jump” when rows render */
+}
+
+.dp-card--recent-drafts .dp-card__content {
+  flex: 1;                  /* table/empty state fills card body */
+}
+
+.dp-card--recent-drafts .dp-card__footer {
+  justify-content: center;
+}
+
 
 /* ===== HERO CARD ===== */
 .dp-card--hero {

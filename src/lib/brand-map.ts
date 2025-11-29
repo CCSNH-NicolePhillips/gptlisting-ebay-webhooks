@@ -28,6 +28,8 @@ export type BrandUrls = {
   brand?: string;
   amazon?: string;
   walmart?: string;
+  requiresJs?: boolean; // True if brand website prices are JavaScript-rendered
+  lastChecked?: number; // Timestamp of last price check
 };
 
 export async function setBrandUrls(sig: string, urls: BrandUrls): Promise<void> {

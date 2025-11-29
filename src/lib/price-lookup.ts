@@ -1,6 +1,6 @@
 import { extractPriceFromHtml } from "./html-price.js";
 import { braveFirstUrlForBrandSite } from "./search.js";
-import { getBrandUrls } from "./brand-map.js";
+import { getBrandUrls, setBrandUrls } from "./brand-map.js";
 import { fetchSoldPriceStats, type SoldPriceStats } from "./pricing/ebay-sold-prices.js";
 import { openai } from "./openai.js";
 import { getCachedPrice, setCachedPrice, makePriceSig } from "./price-cache.js";
@@ -145,6 +145,86 @@ async function priceFrom(url: string | null | undefined): Promise<{ price: numbe
   if (!html) return { price: null, isDnsFailure };
   const price = extractPriceFromHtml(html);
   return { price, isDnsFailure };
+}
+
+/**
+ * Detect if a webpage likely has JavaScript-rendered prices by checking for common JS frameworks
+ * and price-related JS patterns while the HTML extraction failed
+ */
+function detectJsRenderedPrices(html: string): boolean {
+  const htmlLower = html.toLowerCase();
+  
+  // Check for JS frameworks commonly used for dynamic pricing
+  const jsFrameworks = [
+    'react',
+    'vue.js',
+    'angular',
+    'shopify',
+    'woocommerce',
+    'magento'
+  ];
+  
+  // Check for price-related JS variables/functions
+  const jsPricePatterns = [
+    'price:',
+    '"price"',
+    'productprice',
+    'itemprice',
+    'window.price',
+    'data-price'
+  ];
+  
+  const hasJsFramework = jsFrameworks.some(fw => htmlLower.includes(fw));
+  const hasJsPriceCode = jsPricePatterns.some(pattern => htmlLower.includes(pattern));
+  
+  return hasJsFramework && hasJsPriceCode;
+}
+
+/**
+ * Extract price from brand URL with JS detection and metadata storage
+ * If HTML extraction fails but page shows JS indicators, mark brand as requiresJs=true
+ */
+async function extractPriceFromBrand(
+  url: string,
+  brandName?: string,
+  productTitle?: string
+): Promise<number | null> {
+  const { html, isDnsFailure } = await fetchHtml(url);
+  
+  if (!html) {
+    if (isDnsFailure) {
+      console.log(`[price] DNS lookup failed for ${url}`);
+    }
+    return null;
+  }
+  
+  const price = extractPriceFromHtml(html);
+  
+  // If extraction failed, check if prices are likely JS-rendered
+  if (!price && detectJsRenderedPrices(html)) {
+    console.log(`[price] ⚠️ Price extraction failed but detected JS-rendered prices on ${url}`);
+    
+    // Store this brand as requiring JS extraction in future
+    if (brandName) {
+      const signature = [brandName, productTitle].filter(Boolean).join(' ').trim();
+      const existingUrls = await getBrandUrls(signature);
+      
+      await setBrandUrls(signature, {
+        ...existingUrls,
+        brand: url,
+        requiresJs: true,
+        lastChecked: Date.now()
+      });
+      
+      console.log(`[price] ✓ Stored brand metadata: ${brandName} requires JS extraction`);
+    }
+    
+    // TODO: Implement GPT-4 Vision or Playwright extraction for JS pages
+    // For now, return null and let tiered system handle it
+    return null;
+  }
+  
+  return price;
 }
 
 /**
@@ -374,27 +454,31 @@ export async function lookupPrice(
       console.log(`[price] ⚠️ Vision website is homepage (${input.brandWebsite}), skipping direct price extraction`);
     } else {
       console.log(`[price] Trying Vision API brand website: ${input.brandWebsite}`);
-      const { price, isDnsFailure } = await priceFrom(input.brandWebsite);
-      brandPrice = price;
+      
+      // Use extractPriceFromBrand which handles JS detection
+      brandPrice = await extractPriceFromBrand(input.brandWebsite, input.brand, input.title);
       
       if (brandPrice) {
         brandUrl = input.brandWebsite;
         console.log(`[price] ✓ Brand MSRP from Vision API website: $${brandPrice.toFixed(2)}`);
-      } else if (isDnsFailure) {
-        // Domain doesn't exist - skip URL variations and go straight to Brave
-        console.warn(`[price] Vision domain unreachable (DNS lookup failed), skipping URL variations`);
-        domainReachable = false;
-      } else if (input.brandWebsite.includes('/')) {
-        // Vision URL didn't work but domain exists - try common variations before falling back to Brave
-        const variations = generateUrlVariations(input.brandWebsite);
-        for (const variant of variations) {
-          console.log(`[price] Trying URL variation: ${variant}`);
-          const { price: variantPrice } = await priceFrom(variant);
-          if (variantPrice) {
-            brandPrice = variantPrice;
-            brandUrl = variant;
-            console.log(`[price] ✓ Brand MSRP from URL variation: $${brandPrice.toFixed(2)}`);
-            break;
+      } else {
+        // Check if domain is reachable
+        const { isDnsFailure } = await fetchHtml(input.brandWebsite);
+        if (isDnsFailure) {
+          console.warn(`[price] Vision domain unreachable (DNS lookup failed), skipping URL variations`);
+          domainReachable = false;
+        } else if (input.brandWebsite.includes('/')) {
+          // Vision URL didn't work but domain exists - try common variations before falling back to Brave
+          const variations = generateUrlVariations(input.brandWebsite);
+          for (const variant of variations) {
+            console.log(`[price] Trying URL variation: ${variant}`);
+            const variantPrice = await extractPriceFromBrand(variant, input.brand, input.title);
+            if (variantPrice) {
+              brandPrice = variantPrice;
+              brandUrl = variant;
+              console.log(`[price] ✓ Brand MSRP from URL variation: $${brandPrice.toFixed(2)}`);
+              break;
+            }
           }
         }
       }
@@ -407,7 +491,7 @@ export async function lookupPrice(
     if (signature) {
       const mapped = await getBrandUrls(signature);
       if (mapped?.brand) {
-        const { price: mappedPrice } = await priceFrom(mapped.brand);
+        const mappedPrice = await extractPriceFromBrand(mapped.brand, input.brand, input.title);
         if (mappedPrice) {
           brandPrice = mappedPrice;
           brandUrl = mapped.brand;
@@ -426,7 +510,7 @@ export async function lookupPrice(
     );
     
     if (braveUrl) {
-      const { price: bravePrice } = await priceFrom(braveUrl);
+      const bravePrice = await extractPriceFromBrand(braveUrl, input.brand, input.title);
       if (bravePrice && bravePrice > 0) { // Check for valid price (not -1 rejection)
         brandPrice = bravePrice;
         brandUrl = braveUrl;
