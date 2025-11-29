@@ -581,36 +581,39 @@ For each pair, you must:
 
 VERIFICATION RULES:
 - status: "accepted" if the following conditions are met:
-  * EITHER brand matches (for products) OR title matches (for books)
+  * EITHER brand matches (for products) OR title matches (for books) OR productName matches (when brand is missing on one side)
   * AND packageType matches
-  * AND panels are correct (front with back/side)
+  * AND panels are correct (front with back/side/other)
   * AND (productName matches OR one is null)
 - status: "rejected" if ANY critical check fails, with specific issues listed
 
 Critical checks (MUST pass):
-- Identity match:
+- Identity match (flexible - any ONE of these is sufficient):
   * If packageType == 'book': Check if titles match (brand will be null - IGNORE IT)
-  * If packageType != 'book': Check if brands match (title will be null - IGNORE IT)
+  * If packageType != 'book' AND both have brand: Check if brands match
+  * If brand is missing/empty on ONE side: Check if productName matches (back panels often don't show brand)
   * NEVER reject a book pair just because brand is null - books don't have brands in our system
-  * ONLY reject if the identifying field (brand for products, title for books) is null on BOTH sides
+  * ONLY reject if BOTH brand AND productName are null/empty on BOTH sides
 - Package types must match (bottle/jar/box/book/etc)
-- Front must be "front" OR "side" panel (side can substitute when no front exists)
-- Back must be "back" or "side" panel
+- Front must be "front" panel (or "side" in rare cases)
+- Back can be "back", "side", OR "other" panel (ingredient/info panels are often classified as "other")
 - Confidence >= 0.5 on both sides
 
 Flexible checks (one can be null):
 - Product name: Accept if both match OR if one side is null (common for backs/books)
+- Brand: Accept if both match OR if one side is null/empty (common for back panels that only show ingredients)
 
 Common reasons to reject:
-- Identity mismatch: For products, brands don't match; for books, titles don't match
+- Identity mismatch: For products where BOTH have brand, brands don't match; for books, titles don't match; for products where productName exists on both, they don't match
 - Package type mismatch (bottle vs jar vs book)
-- Panel type wrong (front paired with front, or side paired with side without one being back, or back with non-back/side)
+- Panel type wrong (both are front, or both are back, or invalid combination)
 - Low confidence (< 0.5 on either side)
-- Complete uncertainty: The identifying field (brand for products, title for books) is null on BOTH sides
+- Complete uncertainty: brand, productName, AND title are ALL null/empty on BOTH sides
 
 EXAMPLES:
 - Book with packageType='book', brand=null, title='Harry Potter' on both sides: ACCEPT (title matches)
 - Product with packageType='bottle', brand='Jocko', title=null on both sides: ACCEPT (brand matches)
+- Product with packageType='box', brand='Prequel' on front, brand='' on back, productName='Vitamin C Serum' on both: ACCEPT (productName matches, brand missing on back is OK)
 - Product with packageType='bottle', brand=null, title=null on both sides: REJECT (no identity)
 - Book with packageType='book', brand=null, title=null on both sides: REJECT (no identity)
 
