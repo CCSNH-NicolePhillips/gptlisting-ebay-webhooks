@@ -853,8 +853,11 @@
             if (!j.summary?.hasMore && !j.timedOut) {
               // All done - show no drafts message without reloading
               flash.textContent = `✓ Deleted ${totalDeleted} drafts total`;
-              list.innerHTML =
+              const readyList = document.getElementById('readyList');
+              const needsList = document.getElementById('needsList');
+              if (readyList) readyList.innerHTML =
                 '<div class="empty">No drafts found (UNPUBLISHED/DRAFT/INACTIVE). Create your first listing draft from the wizard.</div>';
+              if (needsList) needsList.innerHTML = '';
               break;
             }
             
@@ -865,8 +868,11 @@
           if (attempts >= maxAttempts) {
             flash.textContent = `Deleted ${totalDeleted} drafts (stopped after ${maxAttempts} batches)`;
             // Show no drafts message without reloading
-            list.innerHTML =
+            const readyList = document.getElementById('readyList');
+            const needsList = document.getElementById('needsList');
+            if (readyList) readyList.innerHTML =
               '<div class="empty">No drafts found (UNPUBLISHED/DRAFT/INACTIVE). Create your first listing draft from the wizard.</div>';
+            if (needsList) needsList.innerHTML = '';
           }
           
         } catch (e) {
