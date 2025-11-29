@@ -58,6 +58,7 @@ html, body {
   height: 100%;
   margin: 0;
   padding: 0;
+  overflow-x: hidden;
 }
 
 body {
@@ -67,6 +68,55 @@ body {
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Kill all default browser outline/focus rings that create boxes */
+*:focus {
+  outline: none;
+}
+
+/* Remove default link underlines and colors */
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+/* Remove list styling */
+ul, ol {
+  list-style: none;
+}
+
+/* Remove default button styles */
+button {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+/* Remove default input styles */
+input, textarea, select {
+  font-family: inherit;
+  border: none;
+  background: none;
+}
+
+/* Remove default fieldset/legend styling */
+fieldset {
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+legend {
+  padding: 0;
+}
+
+/* Remove default table spacing */
+table {
+  border-collapse: collapse;
+  border-spacing: 0;
 }
 
 /* ===== LAYOUT SHELL ===== */
@@ -1766,12 +1816,31 @@ body {
 .footer,
 details,
 details summary,
-button:not(.dp-btn):not(.dp-topbar-icon):not([class^="dp-"]),
+button:not(.dp-btn):not(.dp-topbar-icon):not([class^="dp-"]):not([id^="dbx"]):not([id^="ebay"]):not([id^="banner"]):not([id*="Login"]):not([id*="process"]):not([id*="claim"]),
 .btn:not([class^="dp-"]) {
   display: none !important;
   opacity: 0 !important;
   visibility: hidden !important;
   pointer-events: none !important;
+}
+
+/* Aggressively hide any orphaned elements that might create ghost boxes */
+div:not([class]):not([id]):empty,
+span:not([class]):not([id]):empty,
+p:not([class]):not([id]):empty {
+  display: none !important;
+}
+
+/* Remove any stray borders, outlines, shadows from non-dp elements */
+*:not([class^="dp-"]):not([id^="dp"]):not(svg):not(path):not(circle):not(line):not(polyline):not(polygon):not(rect) {
+  box-shadow: none !important;
+  border: none !important;
+  outline: none !important;
+}
+
+/* Ensure only dp-card elements get shadows */
+*:not(.dp-card):not(.dp-hero-cta):not(.dp-connection):not(.dp-btn-primary) {
+  box-shadow: none !important;
 }
 
 /* ================================================================
