@@ -220,11 +220,55 @@ export const handler: Handler = async (event) => {
 			}
 		}
 		
-		// If we hit 25707, we MUST scan inventory to find and delete invalid SKUs
-		if (hit25707) {
-			console.log('[clean-broken-drafts] 25707 detected - scanning inventory to find and delete invalid SKUs');
-			// Continue to inventory scan below (don't return early)
-		} else if (totalDeleted > 0) {
+	// If we hit 25707, we MUST scan inventory to find and delete invalid SKUs
+	if (hit25707) {
+		console.log('[clean-broken-drafts] 25707 detected - FAST SCAN for invalid SKUs only');
+		// FAST SCAN: Just find and delete invalid SKUs (no offer processing)
+		let fastScanOffset = 0;
+		let fastScanned = 0;
+		while (fastScanned < 1000 && Date.now() - startTime < INTERNAL_LIMIT) {
+			const page = await listInventory(fastScanOffset);
+			const items = page.items;
+			if (!items.length) break;
+			
+			for (const it of items) {
+				const sku = it?.sku;
+				fastScanned++;
+				const bad = !validSku(sku);
+				if (bad) {
+					console.log(`🚫 FAST SCAN found invalid SKU: ${sku}`);
+					// Get and delete offers
+					const badOffers = await listOffersForSku(sku);
+					for (const o of badOffers) {
+						await deleteOffer(o.offerId);
+					}
+					// Delete inventory
+					if (deleteInventory) {
+						await deleteInventoryItem(sku);
+						console.log(`✅ FAST SCAN deleted invalid SKU: ${sku}`);
+					}
+				}
+			}
+			
+			if (!page.next) break;
+			fastScanOffset += 200;
+		}
+		console.log(`[clean-broken-drafts] Fast scan complete: ${fastScanned} items scanned`);
+		// After deleting invalid SKUs, return so next retry can use fast path
+		return {
+			statusCode: 200,
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				ok: true,
+				mode: results.mode,
+				invalidSkuCleanup: true,
+				scanned: fastScanned,
+				deletedOffers: results.deletedOffers,
+				deletedInventory: results.deletedInventory,
+				message: 'Deleted invalid SKUs - click Delete All again to continue'
+			}),
+		};
+	} else if (totalDeleted > 0) {
 			// Fast path succeeded without errors
 			return {
 				statusCode: 200,
@@ -258,11 +302,11 @@ export const handler: Handler = async (event) => {
 				break;
 			}
 			
-			const page = await listInventory(invOffset);
-			const items: any[] = page.items;
-			if (!items.length) break;
-			
-		for (const it of items) {
+		const page = await listInventory(invOffset);
+		const items: any[] = page.items;
+		if (!items.length) break;
+		
+		console.log(`[clean-broken-drafts] Processing batch: offset=${invOffset}, count=${items.length}, total scanned so far=${scanned}`);		for (const it of items) {
 			const sku: string = it?.sku;
 			scanned++;
 			const bad = !validSku(sku);
