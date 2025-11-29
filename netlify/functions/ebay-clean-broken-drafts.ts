@@ -159,13 +159,13 @@ export const handler: Handler = async (event) => {
 				const t = await r.text();
 				let j: any;
 				try { j = JSON.parse(t); } catch { j = { raw: t }; }
-				results.attempts.push({ status: r.status, url, body: j });
-				// Error 25707 means invalid SKU in listing - continue anyway
-				if (r.status === 400 && j?.errors?.[0]?.errorId === 25707) {
-					console.warn('[clean-broken-drafts] Invalid SKU in offers list (25707), stopping direct listing');
-					return { offers: [], next: null };
-				}
-				throw new Error(`offers list failed ${r.status}`);
+			results.attempts.push({ status: r.status, url, body: j });
+			// Error 25707 means invalid SKU in listing - throw to trigger fast scan
+			if (r.status === 400 && j?.errors?.[0]?.errorId === 25707) {
+				console.warn('[clean-broken-drafts] Invalid SKU in offers list (25707), stopping direct listing');
+				throw new Error('Error 25707: Invalid SKU in offers');
+			}
+			throw new Error(`offers list failed ${r.status}`);
 			}
 			const t = await r.text();
 			let j: any;
