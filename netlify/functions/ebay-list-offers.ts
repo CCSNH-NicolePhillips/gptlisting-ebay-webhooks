@@ -100,11 +100,14 @@ export const handler: Handler = async (event) => {
 					json = { raw: txt };
 				}
 				
-				// Log error responses for debugging (but suppress 25707 - we handle it with safe aggregation)
+				// Log error responses for debugging
 				if (!r.ok) {
 					const code = Number((json?.errors && json.errors[0]?.errorId) || 0);
+					const errorMsg = json?.errors && json.errors[0]?.message;
+					console.error('[ebay-list-offers] eBay API error - Status:', r.status, 'Code:', code, 'Message:', errorMsg);
+					// Log full response for non-25707 errors
 					if (code !== 25707) {
-						console.error('[ebay-list-offers] eBay API error response:', JSON.stringify(json, null, 2));
+						console.error('[ebay-list-offers] Full error response:', JSON.stringify(json, null, 2));
 					}
 				}
 				
