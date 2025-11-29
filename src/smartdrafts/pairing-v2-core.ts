@@ -27,6 +27,7 @@ export interface PairingResult {
     title?: string | null;
     product?: string | null;
     keyText?: string[];
+    categoryPath?: string | null;
   }>;
   unpaired: Array<{
     imagePath: string;
@@ -66,6 +67,7 @@ interface ImageClassificationV2 {
   brandWebsite: string | null; // Official brand website URL (e.g., "https://myrkmd.com", "https://rootbrands.com")
   packageType: 'bottle' | 'jar' | 'tub' | 'pouch' | 'box' | 'sachet' | 'book' | 'unknown';
   keyText: string[];
+  categoryPath: string | null; // Vision API category path (e.g., "Health & Personal Care > Vitamins & Dietary Supplements")
   colorSignature: string[];
   layoutSignature: string;
   confidence: number;
@@ -163,10 +165,16 @@ For each image, provide:
    - null if brand is unknown or you cannot confidently infer any URL
 7. packageType: bottle/jar/tub/pouch/box/sachet/book/unknown
 8. keyText: array of 3-5 short readable text snippets from the label
-9. colorSignature: array of dominant colors (e.g., ["green", "black", "bright green gradient"])
-10. layoutSignature: brief description of label layout (e.g., "pouch vertical label center", "bottle wraparound")
-11. confidence: 0.0-1.0 representing your confidence in the classification
-12. rationale: brief explanation of your classification choices
+9. categoryPath: hierarchical product category (e.g., "Health & Personal Care > Vitamins & Dietary Supplements", "Beauty > Skin Care > Face Moisturizers")
+   - Infer from the product type, claims, and visible text
+   - For supplements: "Health & Personal Care > Vitamins & Dietary Supplements"
+   - For cosmetics: "Beauty > [specific category]"
+   - For books: "Books > [genre/topic]"
+   - null if cannot determine
+10. colorSignature: array of dominant colors (e.g., ["green", "black", "bright green gradient"])
+11. layoutSignature: brief description of label layout (e.g., "pouch vertical label center", "bottle wraparound")
+12. confidence: 0.0-1.0 representing your confidence in the classification
+13. rationale: brief explanation of your classification choices
 
 DEFINITIONS:
 - PRODUCT: Clear consumer product packaging (supplement, cosmetic, food, book, etc.)
@@ -213,6 +221,7 @@ Respond ONLY with valid JSON:
       "brandWebsite": "https://brandname.com" or null,
       "packageType": "bottle | jar | tub | pouch | box | sachet | book | unknown",
       "keyText": ["text1", "text2", "text3"],
+      "categoryPath": "Category > Subcategory" or null,
       "colorSignature": ["color1", "color2", "pattern"],
       "layoutSignature": "layout description",
       "confidence": 0.95,
@@ -726,6 +735,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
       title: frontClass?.title || null,
       product: frontClass?.productName || null,
       keyText: frontClass?.keyText || [],
+      categoryPath: frontClass?.categoryPath || null,
     };
   });
   

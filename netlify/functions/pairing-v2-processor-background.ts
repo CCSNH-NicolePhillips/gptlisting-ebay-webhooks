@@ -317,6 +317,7 @@ export const handler: Handler = async (event) => {
           product: p.product,
           title: p.title, // Book title (null for products)
           keyText: p.keyText || [], // Key text from product packaging
+          categoryPath: p.categoryPath || null, // Vision category path (e.g., "Health & Personal Care > Vitamins & Dietary Supplements")
           frontUrl: p.frontUrl,  // Dropbox shareable link for front image
           backUrl: p.backUrl,    // Dropbox shareable link for back image
         }));
