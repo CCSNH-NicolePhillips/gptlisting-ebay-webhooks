@@ -571,6 +571,9 @@ async function createDraftForProduct(product: PairedProduct, retryAttempt: numbe
     title: product.title,
     brandWebsite: product.brandWebsite
   }));
+  console.log(`[Draft-debug] keyText:`, product.keyText);
+  console.log(`[Draft-debug] categoryPath:`, product.categoryPath);
+  console.log(`[Draft-debug] Full product keys:`, Object.keys(product));
   
   // ========================================
   // TIERED PRICING ENGINE (Phase 4)
