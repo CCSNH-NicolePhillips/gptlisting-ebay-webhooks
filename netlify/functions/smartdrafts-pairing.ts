@@ -357,10 +357,26 @@ export const handler: Handler = async (event) => {
     }
     debugSummary.push(`All categories: ${JSON.stringify(catMap)}`);
 
+    // Enrich products with keyText and categoryPath from Vision API
+    // The old runPairing system doesn't include these, but we need them for price lookup and GPT prompts
+    const enrichedProducts = (result.products || []).map((p: any) => {
+      // Find the front image in analysis to get keyText and categoryPath
+      const frontKey = urlKey(p.frontUrl || p.heroDisplayUrl);
+      const frontGroup = normalizedAnalysis.groups?.find((g: any) => 
+        g.images?.some((img: string) => urlKey(img) === frontKey)
+      );
+      
+      return {
+        ...p,
+        keyText: frontGroup?.keyText || [],
+        categoryPath: frontGroup?.categoryPath || frontGroup?.category || undefined,
+      };
+    });
+
     return jsonResponse(200, {
       ok: true,
       pairs,
-      products: result.products || [],
+      products: enrichedProducts,
       singletons,
       debugSummary,
       pairingMode, // Phase 4a: include mode in response for debugging
