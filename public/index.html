@@ -1202,9 +1202,39 @@
         return div.innerHTML;
       }
 
+      // ===== MOBILE NAV (HAMBURGER + BACKDROP) =====
+      function initMobileNav() {
+        const shell = document.querySelector('.dp-shell');
+        const toggle = document.getElementById('mobileMenuButton');
+        const backdrop = document.getElementById('mobileBackdrop');
+        if (!shell || !toggle || !backdrop) return;
+
+        const closeNav = () => {
+          shell.classList.remove('dp-shell--nav-open');
+          toggle.setAttribute('aria-expanded', 'false');
+        };
+
+        const toggleNav = () => {
+          const willOpen = !shell.classList.contains('dp-shell--nav-open');
+          shell.classList.toggle('dp-shell--nav-open', willOpen);
+          toggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+        };
+
+        toggle.addEventListener('click', toggleNav);
+        backdrop.addEventListener('click', closeNav);
+
+        const navLinks = document.querySelectorAll('.dp-sidebar a');
+        navLinks.forEach((link) => {
+          link.addEventListener('click', () => {
+            if (window.innerWidth <= 767) closeNav();
+          });
+        });
+      }
+
       // Single boot: load auth/status first, then reveal main UI to avoid flashes
       async function boot() {
         try { await evaluatePrereqs(); } catch {}
+        initMobileNav();
         const lc = document.getElementById('loadingCard');
         const mc = document.getElementById('mainCard');
         if (lc) lc.style.display = 'none';
