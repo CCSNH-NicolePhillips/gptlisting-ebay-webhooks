@@ -10,12 +10,11 @@ export const handler: Handler = async (event) => {
 	const MAX_EXECUTION_TIME = 20000; // 20 seconds (leave buffer before Netlify timeout)
 	
 	try {
-		const qp = event.queryStringParameters || ({} as any);
-		const dryRun = /^1|true|yes$/i.test(String(qp.dryRun || qp.dry || 'false'));
-		const deleteAllUnpublished = /^1|true|yes$/i.test(String(qp.deleteAll || qp.all || 'false'));
-		const deleteInventory = /^1|true|yes$/i.test(String(qp.deleteInventory || qp.inv || 'false'));
-
-		// Check for admin token bypass
+	const qp = event.queryStringParameters || ({} as any);
+	const dryRun = /^1|true|yes$/i.test(String(qp.dryRun || qp.dry || 'false'));
+	const deleteAllUnpublished = /^1|true|yes$/i.test(String(qp.deleteAll || qp.all || 'false'));
+	const deleteInventory = /^1|true|yes$/i.test(String(qp.deleteInventory || qp.inv || 'false'));
+	const skipFastScan = /^1|true|yes$/i.test(String(qp.skipFastScan || 'false'));		// Check for admin token bypass
 		const isAdminAuth = qp.adminToken && qp.adminToken === process.env.ADMIN_API_TOKEN;
 		
 		// Get user-scoped eBay token
@@ -221,7 +220,7 @@ export const handler: Handler = async (event) => {
 		}
 		
 	// If we hit 25707, we MUST scan inventory to find and delete invalid SKUs
-	if (hit25707) {
+	if (hit25707 && !skipFastScan) {
 		console.log('[clean-broken-drafts] 25707 detected - FAST SCAN for invalid SKUs only');
 		// FAST SCAN: Just find and delete invalid SKUs (no offer processing)
 		let fastScanOffset = 0;
@@ -366,6 +365,7 @@ export const handler: Handler = async (event) => {
 				mode: results.mode,
 				scanned,
 				timedOut,
+				skipFastScan: true, // Tell client to skip fast scan on next retry
 				deletedOffers: results.deletedOffers,
 				deletedInventory: results.deletedInventory,
 				attempts: results.attempts,

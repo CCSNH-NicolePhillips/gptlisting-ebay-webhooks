@@ -795,7 +795,7 @@
       document.getElementById('btnClean')?.addEventListener('click', async () => {
         const sure = confirm('Delete ALL UNPUBLISHED drafts? This cannot be undone.');
         if (!sure) return;
-        const q = '?deleteAll=true&deleteInventory=true';
+        let queryParams = '?deleteAll=true&deleteInventory=true';
         
         let totalDeleted = 0;
         let attempts = 0;
@@ -807,7 +807,7 @@
           // Loop until no more deletions (handles partial batches due to timeout)
           while (attempts < maxAttempts) {
             attempts++;
-            const res = await fetch('/.netlify/functions/ebay-clean-broken-drafts' + q);
+            const res = await fetch('/.netlify/functions/ebay-clean-broken-drafts' + queryParams);
             
             // Handle 502 Gateway Timeout - deletions likely succeeded
             if (res.status === 502) {
@@ -846,6 +846,11 @@
             
             const deleted = j.deletedOffers?.length || 0;
             totalDeleted += deleted;
+            
+            // If server says to skip fast scan on next retry, add the flag
+            if (j.skipFastScan) {
+              queryParams = '?deleteAll=true&deleteInventory=true&skipFastScan=true';
+            }
             
             flash.textContent = `Deleted ${totalDeleted} drafts so far…`;
             
