@@ -165,12 +165,29 @@
       <div class="dp-main-wrapper">
         <!-- Top Bar -->
         <header class="dp-topbar">
-          <!-- Left: Page Title & Subtitle -->
+          <!-- Left: Mobile menu + Page Title & Subtitle -->
           <div class="dp-topbar-left">
-            <h1 class="dp-topbar__title">Dashboard</h1>
-            <p class="dp-topbar__subtitle">
-              Welcome back, <span id="dpUserNameHeading">Seller</span>. Connect sources and generate eBay drafts with AI.
-            </p>
+            <!-- Mobile-only hamburger -->
+            <button
+              class="dp-topbar-icon dp-topbar-icon--menu"
+              id="mobileMenuButton"
+              aria-label="Open navigation"
+              aria-expanded="false"
+              type="button"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="4" y1="6" x2="20" y2="6"></line>
+                <line x1="4" y1="12" x2="20" y2="12"></line>
+                <line x1="4" y1="18" x2="20" y2="18"></line>
+              </svg>
+            </button>
+
+            <div class="dp-topbar-heading">
+              <h1 class="dp-topbar__title">Dashboard</h1>
+              <p class="dp-topbar__subtitle">
+                Welcome back, <span id="dpUserNameHeading">Seller</span>. Connect sources and generate eBay drafts with AI.
+              </p>
+            </div>
           </div>
           
           <!-- Center: Search -->
