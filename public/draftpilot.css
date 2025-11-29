@@ -1440,6 +1440,46 @@ body {
   .dp-card__actions .dp-btn {
     width: 100%;
   }
+
+  /* ===== MOBILE FIXED HEADER ===== */
+  .dp-topbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 300;
+    background: var(--bg-base);
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  /* Mobile layout: hamburger left, title centered */
+  .dp-topbar-left {
+    display: flex;
+    justify-content: center; /* centers the title */
+    align-items: center;
+    width: 100%;
+    position: relative; /* allow hamburger to sit left */
+  }
+
+  /* Keep hamburger on the left side */
+  .dp-topbar-icon--menu {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  /* Center the heading block */
+  .dp-topbar-heading {
+    text-align: center;
+    width: 100%;
+  }
+
+  /* Push the page content down so it isn't hidden under header */
+  .dp-main-wrapper {
+    padding-top: 72px; /* height of fixed topbar */
+  }
 }
 
 /* ===== EXTRA SMALL MOBILE (≤480px) ===== */
