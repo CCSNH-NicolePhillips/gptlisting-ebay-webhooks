@@ -32,6 +32,12 @@ export type BrandUrls = {
   lastChecked?: number; // Timestamp of last price check
 };
 
+export type BrandMetadata = {
+  productType?: string; // e.g., "skincare beauty", "vitamin supplement", "sports nutrition supplement"
+  category?: string; // Optional: specific eBay category hint
+  notes?: string; // Optional: any additional metadata
+};
+
 export async function setBrandUrls(sig: string, urls: BrandUrls): Promise<void> {
   if (!sig) return;
   try {
@@ -55,6 +61,41 @@ export async function getBrandUrls(sig: string): Promise<BrandUrls | null> {
     }
   } catch (err) {
     console.warn("brand-map read failed", err);
+    return null;
+  }
+}
+
+/**
+ * Store brand metadata (product type, category hints, etc.)
+ */
+export async function setBrandMetadata(brandName: string, metadata: BrandMetadata): Promise<void> {
+  if (!brandName) return;
+  try {
+    const key = `brandmeta:${brandName.toLowerCase().trim()}`;
+    await redisCall("SET", key, JSON.stringify(metadata));
+  } catch (err) {
+    console.warn("brand-metadata write failed", err);
+  }
+}
+
+/**
+ * Retrieve brand metadata
+ */
+export async function getBrandMetadata(brandName: string): Promise<BrandMetadata | null> {
+  if (!brandName) return null;
+  try {
+    const key = `brandmeta:${brandName.toLowerCase().trim()}`;
+    const resp = await redisCall("GET", key);
+    const raw = resp?.result;
+    if (typeof raw !== "string" || !raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch (err) {
+      console.warn("brand-metadata parse failed", err);
+      return null;
+    }
+  } catch (err) {
+    console.warn("brand-metadata read failed", err);
     return null;
   }
 }

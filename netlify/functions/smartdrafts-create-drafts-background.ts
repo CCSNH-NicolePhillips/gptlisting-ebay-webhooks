@@ -7,6 +7,7 @@ import OpenAI from "openai";
 import { pickCategoryForGroup } from "../../src/lib/taxonomy-select.js";
 import { listCategories } from "../../src/lib/taxonomy-store.js";
 import { lookupPrice, type PriceLookupInput, type PriceDecision } from "../../src/lib/price-lookup.js";
+import { getBrandMetadata } from "../../src/lib/brand-map.js";
 
 const GPT_TIMEOUT_MS = 30_000;
 const GPT_RETRY_ATTEMPTS = 2;
@@ -192,7 +193,7 @@ async function getRelevantCategories(product: PairedProduct, marketplaceProductT
     const brandName = (product.brand || '').toLowerCase();
     
     // Detect product type - PREFER marketplace type from Amazon/Walmart (most reliable)
-    // Then fallback to keyword detection from product names
+    // Then check brand metadata database, then fallback to keyword detection
     let productType = '';
     if (marketplaceProductType) {
       // Use marketplace-detected type (from Amazon/Walmart JSON-LD)
@@ -200,32 +201,34 @@ async function getRelevantCategories(product: PairedProduct, marketplaceProductT
       console.log(`[Category] Using marketplace product type: "${productType}"`);
     } else if (isBook) {
       productType = 'book';
-    } else if (productName.includes('vitamin') || productName.includes('supplement') || productName.includes('capsule') || productName.includes('pill')) {
-      productType = 'vitamin supplement';
-    } else if (productName.includes('oil') && (productName.includes('fish') || productName.includes('omega'))) {
-      productType = 'fish oil supplement';
-    } else if (productName.includes('collagen') || productName.includes('protein') || productName.includes('creatine') || productName.includes('pre workout') || productName.includes('pre ') || productName.includes(' pre')) {
-      productType = 'sports nutrition supplement';
-    } else if (productName.includes('serum') || productName.includes('cleanser') || productName.includes('cream') || productName.includes('lotion') || productName.includes('moisturizer')) {
-      productType = 'skincare beauty';
-    } else if (productName.includes('bath') || productName.includes('soak') || productName.includes('salt')) {
-      productType = 'bath body';
-    } else if (productName.includes('detox') || productName.includes('cleanse') || productName.includes('clean slate')) {
-      productType = 'detox supplement';
-    } else if (productName.includes('inositol') || productName.includes('hormonal')) {
-      productType = 'vitamin supplement';
-    } else if (brandName === 'root' || brandName === 'jocko' || brandName === 'naked' || brandName === 'rkmd' || brandName === 'vita plynxera') {
-      // Known supplement brands without descriptive product names
-      productType = 'vitamin supplement';
-    } else if (brandName === 'ryse' || productName.includes('loaded')) {
-      // Pre-workout/sports nutrition brands
-      productType = 'sports nutrition supplement';
-    } else if (brandName === 'prequel' || brandName === 'oganacell' || brandName === 'evereden') {
-      // Skincare brands
-      productType = 'skincare beauty';
-    } else if (brandName === 'maude') {
-      // Bath/body brands
-      productType = 'bath body';
+    } else {
+      // Check brand metadata database first
+      if (brandName) {
+        const brandMeta = await getBrandMetadata(brandName);
+        if (brandMeta?.productType) {
+          productType = brandMeta.productType;
+          console.log(`[Category] Using database product type for brand "${brandName}": "${productType}"`);
+        }
+      }
+      
+      // Fallback to keyword detection if no database entry
+      if (!productType) {
+        if (productName.includes('vitamin') || productName.includes('supplement') || productName.includes('capsule') || productName.includes('pill')) {
+          productType = 'vitamin supplement';
+        } else if (productName.includes('oil') && (productName.includes('fish') || productName.includes('omega'))) {
+          productType = 'fish oil supplement';
+        } else if (productName.includes('collagen') || productName.includes('protein') || productName.includes('creatine') || productName.includes('pre workout') || productName.includes('pre ') || productName.includes(' pre')) {
+          productType = 'sports nutrition supplement';
+        } else if (productName.includes('serum') || productName.includes('cleanser') || productName.includes('cream') || productName.includes('lotion') || productName.includes('moisturizer')) {
+          productType = 'skincare beauty';
+        } else if (productName.includes('bath') || productName.includes('soak') || productName.includes('salt')) {
+          productType = 'bath body';
+        } else if (productName.includes('detox') || productName.includes('cleanse') || productName.includes('clean slate')) {
+          productType = 'detox supplement';
+        } else if (productName.includes('inositol') || productName.includes('hormonal')) {
+          productType = 'vitamin supplement';
+        }
+      }
     }
     
     // Use product type + category path instead of brand/product names
