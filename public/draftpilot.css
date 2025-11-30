@@ -1527,6 +1527,35 @@ body {
     flex-wrap: wrap;
     row-gap: 8px;
   }
+
+  /* Compact dashboard header on mobile */
+  .dp-topbar {
+    gap: 8px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+    margin-bottom: 0;
+  }
+
+  /* Reduce spacing in search area */
+  .dp-topbar-center {
+    margin-top: 6px;
+    margin-bottom: 6px;
+  }
+
+  .dp-search {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  /* Pull main content area closer to header */
+  .dp-main {
+    padding-top: 12px;
+  }
+
+  /* Pull the hero section closer to the top */
+  .dp-card--hero {
+    margin-top: 0;
+  }
 }
 
 /* ===== EXTRA SMALL MOBILE (≤480px) ===== */
