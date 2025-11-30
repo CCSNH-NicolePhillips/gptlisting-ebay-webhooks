@@ -1449,15 +1449,14 @@ body {
     right: 0;
     z-index: 300;
     background: var(--bg-base);
-    padding-top: 12px;
+    padding-top: 8px;
     padding-bottom: 12px;
   }
 
-  /* Mobile layout: hamburger left, title centered */
+  /* Ensure hamburger stays left and heading doesn't push it off-screen */
   .dp-topbar-left {
     display: flex;
     align-items: center;
-    gap: 12px;
     width: 100%;
   }
 
@@ -1470,18 +1469,29 @@ body {
     width: 36px;
   }
 
-  /* Center the heading block */
+  /* Center the heading area on mobile */
   .dp-topbar-heading {
+    flex: 1;
+    text-align: center;
     display: flex;
     flex-direction: column;
+    align-items: center;
     justify-content: center;
-    min-width: 0;
-    flex: 1;
   }
 
-  /* Slight margin fix for subtitle so it hugs tighter under Dashboard */
+  /* Dashboard title centered */
+  .dp-topbar__title {
+    text-align: center;
+    width: 100%;
+  }
+
+  /* Subtitle smaller + centered */
   .dp-topbar__subtitle {
-    margin-top: -2px;
+    text-align: center;
+    width: 100%;
+    font-size: 0.8rem;
+    opacity: 0.85;
+    margin-top: 2px;
   }
 
   /* Push the page content down so it isn't hidden under header */
