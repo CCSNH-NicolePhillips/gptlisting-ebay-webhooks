@@ -1640,9 +1640,39 @@ body {
     padding-bottom: 32px;
   }
 
-  /* Tighten vertical gaps between dashboard rows */
+  /* 3-row desktop grid layout */
   .dp-grid {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1.5fr);
+    grid-template-rows: auto auto auto;
+    grid-template-areas:
+      "hero hero"
+      "connections drafts"
+      "checklist checklist";
     gap: 20px;
+  }
+
+  /* Grid area assignments */
+  .dp-card--hero {
+    grid-area: hero;
+  }
+
+  #connectionsSection {
+    grid-area: connections;
+  }
+
+  .dp-card--recent-drafts {
+    grid-area: drafts;
+  }
+
+  .dp-card--checklist {
+    grid-area: checklist;
+  }
+
+  /* Remove fixed heights - let cards size to content */
+  .dp-card--recent-drafts {
+    height: auto;
+    min-height: 0;
+    max-height: none;
   }
 
   /* Slightly reduce vertical padding inside dashboard cards */
