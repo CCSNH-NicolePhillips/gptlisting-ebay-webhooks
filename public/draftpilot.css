@@ -1632,6 +1632,32 @@ body {
   }
 }
 
+/* ===== DESKTOP COMPACT SPACING (≥1024px) ===== */
+@media (min-width: 1024px) {
+  /* Reduce top/bottom padding around the main dashboard content */
+  .dp-main {
+    padding-top: 24px;
+    padding-bottom: 32px;
+  }
+
+  /* Tighten vertical gaps between dashboard rows */
+  .dp-grid {
+    gap: 20px;
+  }
+
+  /* Slightly reduce vertical padding inside dashboard cards */
+  .dp-card {
+    padding-top: 20px;
+    padding-bottom: 20px;
+  }
+
+  /* Tighter padding for hero card */
+  .dp-card--hero {
+    padding-top: 24px;
+    padding-bottom: 24px;
+  }
+}
+
 /* ===== UTILITY CLASSES ===== */
 .text-muted {
   color: var(--text-muted);
