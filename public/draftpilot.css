@@ -1646,8 +1646,8 @@ body {
     grid-template-rows: auto auto auto;
     grid-template-areas:
       "hero hero"
-      "connections drafts"
-      "checklist checklist";
+      "drafts drafts"
+      "connections checklist";
     gap: 20px;
   }
 
@@ -1669,9 +1669,14 @@ body {
   }
 
   /* Remove fixed heights - let cards size to content */
-  .dp-card--recent-drafts {
+  #connectionsSection,
+  .dp-card--recent-drafts,
+  .dp-card--checklist {
     height: auto;
     min-height: 0;
+  }
+
+  .dp-card--recent-drafts {
     max-height: none;
   }
 
