@@ -305,6 +305,15 @@ body {
 }
 
 /* ===== TOP BAR ===== */
+/* Temporarily hide unused header controls app-wide */
+.dp-topbar-actions,  /* sun + bell container */
+.dp-topbar-right,    /* right side icon cluster */
+.dp-topbar-center,   /* search bar container */
+.dp-search-row,      /* search bar row wrapper */
+.dp-search {         /* search input container */
+  display: none !important;
+}
+
 .dp-topbar {
   min-height: 72px;
   background: rgba(15, 23, 42, 0.65);
