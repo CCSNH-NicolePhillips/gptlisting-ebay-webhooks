@@ -1188,6 +1188,7 @@ body {
     overflow-y: auto;
     border-right: none;
     box-shadow: var(--shadow-sidebar);
+    padding-top: 1.25rem;
   }
 
   /* When shell has nav-open class, slide it in */
