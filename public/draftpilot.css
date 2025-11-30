@@ -1498,6 +1498,35 @@ body {
   .dp-main-wrapper {
     padding-top: 72px; /* height of fixed topbar */
   }
+
+  /* Mobile: dashboard cards should size to content, not fixed heights */
+  .dp-dashboard-grid {
+    grid-template-columns: 1fr;
+    row-gap: 16px;
+  }
+
+  /* Generic card auto-height on mobile */
+  .dp-card,
+  .dp-card--hero,
+  .dp-card--stat,
+  .dp-dashboard-card {
+    height: auto;
+    min-height: 0;
+  }
+
+  /* If any card previously relied on a large min-height, relax it */
+  .dp-card[data-role="hero"],
+  .dp-card[data-role="stats"],
+  .dp-card[data-role="connections"] {
+    min-height: 0;
+  }
+
+  /* Let stat rows wrap instead of forcing tall cards */
+  .dp-stat-row,
+  .dp-dashboard-stats {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
 }
 
 /* ===== EXTRA SMALL MOBILE (≤480px) ===== */
