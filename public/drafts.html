@@ -85,23 +85,45 @@
       }
       .grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-        gap: 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 1.5rem;
+        align-items: flex-start;
+        margin-top: 1.5rem;
+      }
+
+      /* Slightly denser grid on big monitors */
+      @media (min-width: 1280px) {
+        .grid {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
       }
       .card {
-        background: linear-gradient(180deg, var(--panel), var(--panel-2));
-        border: 1px solid var(--line);
-        border-radius: 14px;
-        overflow: hidden;
         display: flex;
         flex-direction: column;
+        background: var(--dp-surface-elevated, #020617);
+        border-radius: 18px;
+        padding: 0.9rem;
+        border: 1px solid rgba(148, 163, 184, 0.15);
+        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.45);
+        transition: transform 0.15s ease-out, box-shadow 0.15s ease-out,
+          border-color 0.15s ease-out;
+        max-width: 340px;
+        margin: 0 auto;
+      }
+
+      .card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 22px 55px rgba(15, 23, 42, 0.6);
+        border-color: rgba(94, 234, 212, 0.5);
       }
       .thumb {
         position: relative;
         width: 100%;
-        padding-top: 56%;
+        height: 220px;   /* fixed height instead of padding-top percentage */
         background: #0d1430;
-        border-bottom: 1px solid var(--line);
+        border-radius: 14px;
+        overflow: hidden;
+        margin-bottom: 0.75rem;
       }
       .thumb img {
         position: absolute;
@@ -111,6 +133,13 @@
         object-fit: cover;
         opacity: 0;
         transition: opacity 0.25s ease;
+        border-radius: 14px;
+      }
+
+      @media (max-width: 640px) {
+        .thumb {
+          height: 190px;
+        }
       }
       .thumb img.loaded {
         opacity: 1;
@@ -158,14 +187,14 @@
         }
       }
       .body {
-        padding: 0.9rem 0.9rem 1rem;
         display: flex;
         flex-direction: column;
-        gap: 0.5rem;
-        flex: 1; /* take remaining height under thumbnail */
+        gap: 0.45rem;
+        flex: 1;
       }
       .title {
-        font-weight: 700;
+        font-size: 0.95rem;
+        font-weight: 600;
         line-height: 1.3;
         display: -webkit-box;
         -webkit-line-clamp: 3; /* clamp long titles */
@@ -175,7 +204,7 @@
       }
       .desc {
         color: var(--muted);
-        font-size: 0.92rem;
+        font-size: 0.8rem;
         line-height: 1.35;
         display: -webkit-box;
         -webkit-line-clamp: 2;
@@ -185,20 +214,25 @@
       }
       .meta {
         color: var(--muted);
-        font-size: 0.9rem;
+        font-size: 0.8rem;
         display: flex;
         flex-wrap: wrap;
         gap: 0.5rem;
       }
       .row {
         display: flex;
-        gap: 0.5rem;
+        gap: 0.4rem;
         flex-wrap: wrap;
-        margin-top: 0.5rem;
+        margin-top: 0.7rem;
       }
       /* push actions to the bottom of the card body */
       .body .row {
         margin-top: auto;
+      }
+      .row .btn {
+        flex: 1;
+        font-size: 0.78rem;
+        padding: 0.4rem 0.5rem;
       }
       .badge {
         display: inline-flex;
