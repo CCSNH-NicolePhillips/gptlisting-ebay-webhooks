@@ -1,578 +1,1256 @@
-<style>
-  :root {
-    --bg: #020617;
-    --bg-elevated: radial-gradient(circle at top, #1e293b 0, #020617 55%);
-    --panel: #0b1120;
-    --panel-soft: #0f172a;
-    --line: #1e293b;
-    --border: #1f2937;
-    --text: #f9fafb;
-    --muted: #9ca3af;
-    --primary: #38bdf8;
-    --primary-600: #0ea5e9;
-    --primary-soft: rgba(56, 189, 248, 0.16);
-    --success: #22c55e;
-    --warning: #f59e0b;
-  }
-
-  * {
-    box-sizing: border-box;
-  }
-
-  body {
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
-      "Segoe UI", Roboto, sans-serif;
-    margin: 0;
-    min-height: 100vh;
-    background:
-      radial-gradient(circle at top left, rgba(56, 189, 248, 0.12), transparent 55%),
-      radial-gradient(circle at bottom right, rgba(59, 130, 246, 0.16), transparent 55%),
-      var(--bg-elevated);
-    color: var(--text);
-    padding: 2.5rem 1.25rem 3.5rem;
-  }
-
-  .container {
-    max-width: 1120px;
-    margin: 0 auto;
-  }
-
-  /* Page header ----------------------------------------------------------- */
-
-  .container > div:first-of-type {
-    display: flex;
-    align-items: center;
-    gap: 1.25rem;
-    margin-bottom: 1.75rem;
-  }
-
-  h1 {
-    font-size: 2.35rem;
-    letter-spacing: 0.01em;
-    margin: 0 0 0.35rem;
-  }
-
-  .subtitle {
-    color: var(--muted);
-    margin-bottom: 0;
-    font-size: 0.95rem;
-  }
-
-  .container > div:first-of-type .btn.secondary {
-    width: auto;
-    padding: 0.55rem 1.05rem;
-    font-size: 0.85rem;
-    border-radius: 999px;
-  }
-
-  @media (max-width: 640px) {
-    .container > div:first-of-type {
-      flex-direction: column-reverse;
-      align-items: flex-start;
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Quick List</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #141a33;
+      --line: #2a335c;
+      --text: #f4f6fb;
+      --muted: #a2a9c8;
+      --primary: #4f7cff;
+      --primary-600: #3e66d6;
+      --success: #22c55e;
+      --warning: #f59e0b;
     }
-
+    * { box-sizing: border-box; }
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      padding: 2rem 1rem;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
     h1 {
-      font-size: 1.9rem;
+      font-size: 2rem;
+      margin: 0 0 0.5rem;
     }
-  }
-
-  /* Cards ----------------------------------------------------------------- */
-
-  .card {
-    background: radial-gradient(circle at top left, rgba(15, 23, 42, 0.9), var(--panel-soft));
-    border: 1px solid rgba(15, 23, 42, 0.9);
-    border-radius: 18px;
-    padding: 1.75rem 1.75rem 1.6rem;
-    margin-bottom: 1.5rem;
-    box-shadow:
-      0 24px 60px rgba(15, 23, 42, 0.82),
-      0 0 0 1px rgba(15, 23, 42, 0.9);
-  }
-
-  /* Feature highlight card */
-
-  .card:first-of-type {
-    background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.18), rgba(15, 23, 42, 0.98));
-    border-color: rgba(56, 189, 248, 0.45);
-  }
-
-  .card:first-of-type > div {
-    display: grid !important;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)) !important;
-    gap: 1.1rem 1.75rem !important;
-    align-items: stretch;
-  }
-
-  .card:first-of-type > div > div {
-    padding: 0.6rem 0.9rem;
-    border-radius: 999px;
-    background: rgba(15, 23, 42, 0.7);
-    border: 1px solid rgba(148, 163, 184, 0.35);
-    display: flex;
-    align-items: center;
-    gap: 0.55rem;
-  }
-
-  .card:first-of-type div div > div:first-of-type {
-    font-size: 1.45rem;
-  }
-
-  .card:first-of-type div div > div:last-of-type div:first-of-type {
-    font-weight: 600;
-    font-size: 0.87rem;
-  }
-
-  .card:first-of-type div div > div:last-of-type div:last-of-type {
-    font-size: 0.78rem;
-    color: var(--muted);
-  }
-
-  /* Headings inside cards */
-
-  h3 {
-    color: var(--text);
-    margin: 0 0 0.85rem;
-    font-size: 1.05rem;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
-  }
-
-  /* Buttons --------------------------------------------------------------- */
-
-  .btn {
-    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-600) 100%);
-    color: #f9fafb;
-    border: none;
-    border-radius: 999px;
-    padding: 0.78rem 1.5rem;
-    font-size: 0.98rem;
-    font-weight: 600;
-    cursor: pointer;
-    width: 100%;
-    transition:
-      background 0.18s ease,
-      transform 0.12s ease,
-      box-shadow 0.18s ease,
-      opacity 0.12s ease;
-    box-shadow: 0 14px 35px rgba(8, 47, 73, 0.8);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.45rem;
-  }
-
-  .btn:hover:not(:disabled) {
-    background: linear-gradient(135deg, var(--primary-600) 0%, #0284c7 100%);
-    transform: translateY(-1px);
-    box-shadow: 0 16px 45px rgba(8, 47, 73, 0.95);
-  }
-
-  .btn:active:not(:disabled) {
-    transform: translateY(0);
-    box-shadow: 0 10px 25px rgba(8, 47, 73, 0.8);
-  }
-
-  .btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    box-shadow: none;
-  }
-
-  .btn.secondary {
-    background: rgba(15, 23, 42, 0.85);
-    border: 1px solid var(--line);
-    color: var(--text);
-    box-shadow: none;
-  }
-
-  .btn.secondary:hover:not(:disabled) {
-    background: rgba(30, 41, 59, 0.9);
-    border-color: #334155;
-  }
-
-  /* Upload UI ------------------------------------------------------------- */
-
-  .upload-tab {
-    padding: 0.75rem 1.4rem;
-    background: transparent;
-    border: none;
-    border-bottom: 2px solid transparent;
-    color: var(--muted);
-    cursor: pointer;
-    font-size: 0.93rem;
-    font-weight: 600;
-    transition:
-      color 0.18s ease,
-      border-color 0.18s ease,
-      background 0.18s ease;
-  }
-
-  .upload-tab:hover {
-    color: var(--text);
-    background: rgba(15, 23, 42, 0.6);
-  }
-
-  .upload-tab.active {
-    color: var(--primary);
-    border-bottom-color: var(--primary);
-  }
-
-  .upload-panel {
-    animation: fadeIn 0.25s ease-out;
-  }
-
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(6px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-
-  .upload-area {
-    border: 2px dashed var(--line);
-    border-radius: 14px;
-    padding: 3rem 2.25rem;
-    text-align: center;
-    cursor: pointer;
-    transition:
-      border-color 0.18s ease,
-      background 0.18s ease,
-      transform 0.12s ease,
-      box-shadow 0.18s ease;
-    background: radial-gradient(circle at top, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.85));
-  }
-
-  .upload-area:hover {
-    border-color: var(--primary);
-    background: radial-gradient(circle at top, var(--primary-soft), rgba(15, 23, 42, 0.95));
-    box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.9);
-  }
-
-  .upload-area.drag-over {
-    border-color: var(--primary-600);
-    background: radial-gradient(circle at top, rgba(56, 189, 248, 0.26), rgba(15, 23, 42, 0.96));
-    border-style: solid;
-    transform: translateY(-1px);
-  }
-
-  .upload-icon {
-    font-size: 3rem;
-    margin-bottom: 0.75rem;
-  }
-
-  .upload-text {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    font-size: 1.05rem;
-    margin-bottom: 0.4rem;
-  }
-
-  .upload-text span {
-    font-size: 0.9rem;
-    color: var(--muted);
-  }
-
-  .upload-hint {
-    font-size: 0.82rem;
-    color: var(--muted);
-  }
-
-  /* File list ------------------------------------------------------------- */
-
-  .file-list {
-    display: grid;
-    gap: 0.55rem;
-    max-height: 320px;
-    overflow-y: auto;
-  }
-
-  .file-item {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.75rem;
-    background: rgba(15, 23, 42, 0.95);
-    border: 1px solid rgba(31, 41, 55, 0.9);
-    border-radius: 10px;
-  }
-
-  .file-thumbnail {
-    width: 52px;
-    height: 52px;
-    border-radius: 8px;
-    object-fit: cover;
-    flex-shrink: 0;
-    background: #020617;
-  }
-
-  .file-info {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .file-name {
-    font-size: 0.9rem;
-    font-weight: 500;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .file-size {
-    font-size: 0.8rem;
-    color: var(--muted);
-  }
-
-  .file-remove {
-    background: rgba(248, 113, 113, 0.1);
-    border: 1px solid rgba(248, 113, 113, 0.6);
-    color: rgb(248, 113, 113);
-    padding: 0.4rem 0.9rem;
-    border-radius: 999px;
-    cursor: pointer;
-    font-size: 0.8rem;
-    transition:
-      background 0.15s ease,
-      border-color 0.15s ease,
-      transform 0.1s ease;
-  }
-
-  .file-remove:hover {
-    background: rgba(248, 113, 113, 0.22);
-    border-color: rgba(248, 113, 113, 0.9);
-    transform: translateY(-0.5px);
-  }
-
-  /* Steps / pipeline ------------------------------------------------------ */
-
-  .step {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 0.95rem 0.95rem;
-    background: rgba(15, 23, 42, 0.9);
-    border-radius: 10px;
-    margin-bottom: 0.8rem;
-    border: 1px solid transparent;
-    transition:
-      border-color 0.18s ease,
-      background 0.18s ease,
-      transform 0.12s ease;
-  }
-
-  .step:hover {
-    transform: translateY(-0.5px);
-    border-color: rgba(51, 65, 85, 0.9);
-  }
-
-  .step-num {
-    width: 32px;
-    height: 32px;
-    border-radius: 999px;
-    background: #020617;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
-    flex-shrink: 0;
-    font-size: 0.9rem;
-    border: 1px solid #1f2937;
-  }
-
-  .step-content {
-    flex: 1;
-  }
-
-  .step-title {
-    font-weight: 600;
-    margin-bottom: 0.15rem;
-    font-size: 0.95rem;
-  }
-
-  .step-desc {
-    font-size: 0.86rem;
-    color: var(--muted);
-  }
-
-  .step-status {
-    font-size: 0.83rem;
-    color: var(--muted);
-  }
-
-  .step.active {
-    border-color: var(--primary);
-    background: radial-gradient(circle at left, var(--primary-soft), rgba(15, 23, 42, 0.98));
-  }
-
-  .step.active .step-num {
-    background: var(--primary);
-    border-color: transparent;
-    color: #0b1120;
-  }
-
-  .step.complete {
-    border-color: rgba(34, 197, 94, 0.9);
-    background: radial-gradient(circle at left, rgba(22, 163, 74, 0.24), rgba(15, 23, 42, 0.98));
-  }
-
-  .step.complete .step-num {
-    background: var(--success);
-    color: #022c22;
-    border-color: transparent;
-  }
-
-  .step.complete .step-status {
-    color: var(--success);
-  }
-
-  .step.warning {
-    border-color: rgba(245, 158, 11, 0.9);
-    background: radial-gradient(circle at left, rgba(245, 158, 11, 0.28), rgba(15, 23, 42, 0.98));
-  }
-
-  .step.warning .step-num {
-    background: var(--warning);
-    color: #451a03;
-    border-color: transparent;
-  }
-
-  /* Spinner & progress ---------------------------------------------------- */
-
-  .spinner {
-    display: inline-block;
-    width: 16px;
-    height: 16px;
-    border: 2px solid rgba(248, 250, 252, 0.28);
-    border-top-color: #e5e7eb;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    margin-right: 0.45rem;
-  }
-
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
-
-  .progress {
-    background: rgba(15, 23, 42, 0.9);
-    border-radius: 999px;
-    height: 7px;
-    overflow: hidden;
-    margin-top: 1rem;
-    border: 1px solid #020617;
-  }
-
-  .progress-bar {
-    height: 100%;
-    background: linear-gradient(90deg, var(--primary) 0%, #4ade80 100%);
-    transition: width 0.25s ease-out;
-  }
-
-  /* Results --------------------------------------------------------------- */
-
-  .results {
-    display: none;
-    margin-top: 1.5rem;
-  }
-
-  .results.show {
-    display: block;
-  }
-
-  .result-summary {
-    display: flex;
-    justify-content: space-between;
-    gap: 1.5rem;
-    padding: 1rem 1.1rem;
-    background: rgba(22, 163, 74, 0.16);
-    border: 1px solid var(--success);
-    border-radius: 12px;
-    margin-bottom: 1rem;
-  }
-
-  .result-stat {
-    text-align: center;
-    flex: 1;
-  }
-
-  .result-num {
-    font-size: 1.85rem;
-    font-weight: 700;
-    color: var(--success);
-  }
-
-  .result-label {
-    font-size: 0.8rem;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-  }
-
-  .actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-    margin-top: 1rem;
-  }
-
-  .actions .btn {
-    flex: 1 1 180px;
-  }
-
-  /* Select ---------------------------------------------------------------- */
-
-  select {
-    width: 100%;
-    padding: 0.75rem 0.8rem;
-    background: #020617;
-    color: var(--text);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    font-size: 0.95rem;
-  }
-
-  select:focus-visible {
-    outline: 2px solid var(--primary);
-    outline-offset: 1px;
-  }
-
-  /* Orphans grid ---------------------------------------------------------- */
-
-  #orphansWarning {
-    border-radius: 12px;
-  }
-
-  #rejectedImagesGrid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-    gap: 0.85rem;
-  }
-
-  /* Responsiveness -------------------------------------------------------- */
-
-  @media (min-width: 960px) {
-    /* Put upload + pipeline cards side-by-side visually */
-    .card:nth-of-type(3),
-    .card:nth-of-type(4) {
-      margin-bottom: 0;
+    .subtitle {
+      color: var(--muted);
+      margin-bottom: 2rem;
     }
-
-    .card:nth-of-type(3) + .card:nth-of-type(4) {
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .step {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem;
+      background: rgba(255,255,255,0.02);
+      border-radius: 8px;
+      margin-bottom: 0.75rem;
+      border: 1px solid transparent;
+    }
+    .step.active {
+      border-color: var(--primary);
+      background: rgba(79, 124, 255, 0.1);
+    }
+    .step.complete {
+      border-color: var(--success);
+      background: rgba(34, 197, 94, 0.1);
+    }
+    .step.warning {
+      border-color: rgb(251, 191, 36);
+      background: rgba(251, 191, 36, 0.1);
+    }
+    .step-num {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .step.active .step-num {
+      background: var(--primary);
+    }
+    .step.complete .step-num {
+      background: var(--success);
+    }
+    .step.warning .step-num {
+      background: rgb(251, 191, 36);
+    }
+    .step-content {
+      flex: 1;
+    }
+    .step-title {
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+    .step-desc {
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+    .step-status {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .step.complete .step-status {
+      color: var(--success);
+    }
+    .btn {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      transition: background 0.2s;
+    }
+    .btn:hover:not(:disabled) {
+      background: var(--primary-600);
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn.secondary {
+      background: transparent;
+      border: 1px solid var(--line);
+      color: var(--text);
+    }
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-right: 0.5rem;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .progress {
+      background: rgba(255,255,255,0.05);
+      border-radius: 4px;
+      height: 8px;
+      overflow: hidden;
+      margin-top: 1rem;
+    }
+    .progress-bar {
+      height: 100%;
+      background: var(--primary);
+      transition: width 0.3s;
+    }
+    .results {
+      display: none;
       margin-top: 1.5rem;
     }
-  }
-
-  @media (max-width: 768px) {
-    body {
-      padding: 1.75rem 1rem 3rem;
+    .results.show {
+      display: block;
     }
-
-    .card {
-      padding: 1.4rem 1.25rem 1.25rem;
-      border-radius: 14px;
-    }
-
     .result-summary {
-      flex-direction: column;
+      display: flex;
+      justify-content: space-between;
+      padding: 1rem;
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid var(--success);
+      border-radius: 8px;
+      margin-bottom: 1rem;
     }
-  }
-</style>
+    .result-stat {
+      text-align: center;
+    }
+    .result-num {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--success);
+    }
+    .result-label {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .actions {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+    select {
+      width: 100%;
+      padding: 0.75rem;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      font-size: 1rem;
+    }
+
+    /* Upload UI styles */
+    .upload-tab {
+      padding: 0.75rem 1.5rem;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 0.95rem;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .upload-tab:hover {
+      color: var(--text);
+    }
+    .upload-tab.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+    .upload-panel {
+      animation: fadeIn 0.3s;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .upload-area {
+      border: 2px dashed var(--line);
+      border-radius: 12px;
+      padding: 3rem 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .upload-area:hover {
+      border-color: var(--primary);
+      background: rgba(79, 124, 255, 0.05);
+    }
+    .upload-area.drag-over {
+      border-color: var(--primary);
+      background: rgba(79, 124, 255, 0.1);
+      border-style: solid;
+    }
+    .upload-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+    .upload-text {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      font-size: 1.05rem;
+      margin-bottom: 0.5rem;
+    }
+    .upload-text span {
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+    .upload-hint {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .file-list {
+      display: grid;
+      gap: 0.5rem;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .file-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+    .file-thumbnail {
+      width: 50px;
+      height: 50px;
+      border-radius: 6px;
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+    .file-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .file-name {
+      font-size: 0.9rem;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .file-size {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .file-remove {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: rgb(239, 68, 68);
+      padding: 0.4rem 0.8rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: all 0.2s;
+    }
+    .file-remove:hover {
+      background: rgba(239, 68, 68, 0.2);
+    }
+    h3 {
+      color: var(--text);
+      margin-bottom: 0.75rem;
+    }
+  </style>
+</head>
+<body>
+  <script src="/auth-client.js"></script>
+
+  <div class="container">
+    <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem;">
+      <div style="flex: 1;">
+        <h1 style="margin-bottom: 0.25rem;">⚡ SmartDrafts Quick List</h1>
+        <p class="subtitle" style="margin-bottom: 0;">AI-powered listing creation from your product photos</p>
+      </div>
+      <a href="/index.html" class="btn secondary" style="width: auto; padding: 0.6rem 1rem; font-size: 0.9rem;">← Back</a>
+    </div>
+
+    <!-- Feature highlights -->
+    <div class="card" style="background: linear-gradient(135deg, rgba(79, 124, 255, 0.1) 0%, rgba(79, 124, 255, 0.05) 100%); border-color: rgba(79, 124, 255, 0.3); margin-bottom: 1.5rem;">
+      <div style="display: flex; gap: 2rem; flex-wrap: wrap; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <div style="font-size: 1.5rem;">🤖</div>
+          <div>
+            <div style="font-weight: 600; font-size: 0.9rem;">GPT-4 Vision</div>
+            <div style="font-size: 0.75rem; color: var(--muted);">Image analysis</div>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <div style="font-size: 1.5rem;">💰</div>
+          <div>
+            <div style="font-weight: 600; font-size: 0.9rem;">Smart Pricing</div>
+            <div style="font-size: 0.75rem; color: var(--muted);">Amazon/Walmart research</div>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <div style="font-size: 1.5rem;">🎯</div>
+          <div>
+            <div style="font-weight: 600; font-size: 0.9rem;">Auto Categories</div>
+            <div style="font-size: 0.75rem; color: var(--muted);">eBay taxonomy matching</div>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <div style="font-size: 1.5rem;">✨</div>
+          <div>
+            <div style="font-weight: 600; font-size: 0.9rem;">Full Automation</div>
+            <div style="font-size: 0.75rem; color: var(--muted);">Zero manual input</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top: 0; margin-bottom: 1rem;">📸 Upload Your Product Photos</h3>
+
+      <!-- Upload method tabs -->
+      <div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--line);">
+        <button id="tabLocal" class="upload-tab active" onclick="switchUploadMethod('local')">
+          � Upload Files
+        </button>
+        <button id="tabDropbox" class="upload-tab" onclick="switchUploadMethod('dropbox')">
+          �📁 Dropbox Folder
+        </button>
+      </div>
+
+      <!-- Local upload panel -->
+      <div id="uploadLocal" class="upload-panel">
+        <!-- Upload mode toggle -->
+        <div style="display: inline-flex; gap: 0.5rem; border-radius: 0.5rem; border: 1px solid var(--border); padding: 0.25rem; background: #f8f9fa; margin-bottom: 1rem;">
+          <button id="btnModeFiles" class="btn secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem; border-radius: 0.375rem; margin: 0; background: var(--primary); color: white; border: none;" onclick="setUploadMode('files')">
+            📄 Upload Files
+          </button>
+          <button id="btnModeFolder" class="btn secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem; border-radius: 0.375rem; margin: 0; background: transparent; color: #666; border: none;" onclick="setUploadMode('folder')">
+            📁 Upload Folder
+          </button>
+        </div>
+        <div id="folderModeHint" style="display: none; font-size: 0.85rem; color: #856404; margin-bottom: 0.75rem; padding: 0.5rem; background: #fff3cd; border-radius: 0.375rem; border: 1px solid #ffc107;">
+          💡 <strong>Desktop only:</strong> Select an entire folder of images. Mobile users should use "Upload Files".
+        </div>
+        
+        <div class="upload-area" id="uploadArea">
+          <div class="upload-icon">📁</div>
+          <div class="upload-text">
+            <strong id="uploadTitle">Drag & drop photos here</strong>
+            <span id="uploadSubtitle">or click to browse</span>
+          </div>
+          <div class="upload-hint">
+            Supports JPG, PNG, WebP (max 10MB each)<br>
+            <strong>Tip:</strong> On mobile, tap and hold to select multiple photos at once
+          </div>
+        </div>
+        <input type="file" id="fileInput" accept="image/*" multiple style="display: none;">
+
+        <!-- Selected files preview -->
+        <div id="selectedFiles" style="display: none; margin-top: 1rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+            <strong><span id="fileCount">0</span> files selected</strong>
+            <button class="btn secondary" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;" onclick="clearFiles()">Clear All</button>
+          </div>
+          <div id="fileList" class="file-list"></div>
+        </div>
+      </div>
+
+      <!-- Dropbox panel -->
+      <div id="uploadDropbox" class="upload-panel" style="display: none;">
+        <select id="folderSelect" class="btn secondary" style="margin-bottom: 0; width: 100%;">
+          <option value="">Loading folders...</option>
+        </select>
+        <p style="font-size: 0.85rem; color: var(--muted); margin-top: 0.5rem; margin-bottom: 0;">
+          Select a Dropbox folder containing your product photos
+        </p>
+      </div>
+
+      <button id="btnStart" class="btn primary" onclick="startPipeline()" style="margin-top: 1.5rem; width: 100%;" disabled>
+        🚀 Start Quick List
+      </button>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top: 0; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+        <span>🔄 Automated Pipeline</span>
+        <span style="font-size: 0.75rem; font-weight: normal; color: var(--muted);">All steps run automatically</span>
+      </h3>
+
+      <div class="step" id="step1">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <div class="step-title">🔍 Scan & Analyze Images</div>
+          <div class="step-desc">Vision AI examines each photo, extracts product details, text, and visual features</div>
+        </div>
+        <div class="step-status" id="status1">Pending</div>
+      </div>
+
+      <div class="step" id="step2">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <div class="step-title">🧩 Smart Product Matching</div>
+          <div class="step-desc">AI pairs front/back images and identifies unique products using CLIP embeddings</div>
+        </div>
+        <div class="step-status" id="status2">Pending</div>
+      </div>
+
+      <!-- Orphans warning (shown if images couldn't be paired) -->
+      <div id="orphansWarning" style="display: none; margin-top: 1rem; padding: 1rem; background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.5); border-radius: 8px;">
+        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+          <div style="font-size: 1.5rem;">⚠️</div>
+          <div style="flex: 1;">
+            <div style="font-weight: 600; color: rgb(251, 191, 36); margin-bottom: 0.25rem;">
+              <span id="orphansCount">0</span> image(s) couldn't be paired
+            </div>
+            <div style="font-size: 0.85rem; color: var(--muted);">
+              These images were rejected during pairing and may need manual review.
+            </div>
+          </div>
+        </div>
+        
+        <!-- Rejected images grid -->
+        <div id="rejectedImagesGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem;">
+          <!-- Will be populated dynamically -->
+        </div>
+      </div>
+
+      <div class="step" id="step3">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <div class="step-title">✍️ Generate Professional Listings</div>
+          <div class="step-desc">GPT-4 creates titles, descriptions, bullet points, researches pricing, and selects optimal categories</div>
+        </div>
+        <div class="step-status" id="status3">Pending</div>
+      </div>
+
+      <div class="step" id="step4">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <div class="step-title">📤 Publish to eBay Drafts</div>
+          <div class="step-desc">Creates unpublished eBay offers ready for your final review and publishing</div>
+        </div>
+        <div class="step-status" id="status4">Pending</div>
+      </div>
+
+      <div class="progress">
+        <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+      </div>
+    </div>
+
+    <div class="results" id="results">
+      <div class="card" style="background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(34, 197, 94, 0.05) 100%); border-color: var(--success);">
+        <h3 style="margin-top: 0; color: var(--success); display: flex; align-items: center; gap: 0.5rem;">
+          <span style="font-size: 1.5rem;">🎉</span>
+          <span>Success! Drafts Created</span>
+        </h3>
+
+        <div class="result-summary">
+          <div class="result-stat">
+            <div class="result-num" id="totalDrafts">0</div>
+            <div class="result-label">📋 eBay Drafts</div>
+          </div>
+          <div class="result-stat">
+            <div class="result-num" id="totalPaired">0</div>
+            <div class="result-label">🧩 Products Matched</div>
+          </div>
+          <div class="result-stat">
+            <div class="result-num" id="totalImages">0</div>
+            <div class="result-label">📸 Images Analyzed</div>
+          </div>
+        </div>
+
+        <div class="actions">
+          <a href="/drafts.html" class="btn" style="background: var(--success); font-weight: 700;">✓ View & Publish Drafts</a>
+          <button class="btn secondary" onclick="resetPipeline()">🔄 Run Again</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const exec = window.authClient?.authFetch || fetch;
+
+    let currentJobId = null;
+    let selectedFolder = null;
+    let selectedFiles = [];
+    let uploadMethod = 'local'; // 'local' or 'dropbox'
+    let uploadMode = 'files'; // 'files' or 'folder' (for local uploads)
+
+    // Upload method switching
+    function switchUploadMethod(method) {
+      uploadMethod = method;
+
+      // Update tabs
+      $('tabLocal').classList.toggle('active', method === 'local');
+      $('tabDropbox').classList.toggle('active', method === 'dropbox');
+
+      // Update panels
+      $('uploadLocal').style.display = method === 'local' ? 'block' : 'none';
+      $('uploadDropbox').style.display = method === 'dropbox' ? 'block' : 'none';
+
+      // Update button state
+      updateStartButton();
+    }
+
+    // Upload mode switching (files vs folder)
+    function setUploadMode(mode) {
+      uploadMode = mode;
+      const fileInput = $('fileInput');
+      
+      // Update button styles
+      if (mode === 'files') {
+        $('btnModeFiles').style.background = 'var(--primary)';
+        $('btnModeFiles').style.color = 'white';
+        $('btnModeFolder').style.background = 'transparent';
+        $('btnModeFolder').style.color = '#666';
+      } else {
+        $('btnModeFiles').style.background = 'transparent';
+        $('btnModeFiles').style.color = '#666';
+        $('btnModeFolder').style.background = 'var(--primary)';
+        $('btnModeFolder').style.color = 'white';
+      }
+      
+      // Show/hide folder mode hint
+      $('folderModeHint').style.display = mode === 'folder' ? 'block' : 'none';
+      
+      // Update UI text
+      $('uploadTitle').textContent = mode === 'folder' ? 'Drag & drop a folder here' : 'Drag & drop photos here';
+      $('uploadSubtitle').textContent = mode === 'folder' ? 'or click to select folder' : 'or click to browse';
+      
+      // Update file input attributes
+      if (mode === 'folder') {
+        fileInput.setAttribute('webkitdirectory', '');
+        fileInput.setAttribute('directory', '');
+      } else {
+        fileInput.removeAttribute('webkitdirectory');
+        fileInput.removeAttribute('directory');
+      }
+      
+      // Clear selected files when switching modes
+      clearFiles();
+    }
+
+    function updateStartButton() {
+      const btn = $('btnStart');
+      if (uploadMethod === 'local') {
+        btn.disabled = selectedFiles.length === 0;
+        btn.innerHTML = selectedFiles.length > 0
+          ? `🚀 Start Quick List (${selectedFiles.length} files)`
+          : '🚀 Start Quick List';
+      } else {
+        btn.disabled = !selectedFolder;
+        btn.innerHTML = '🚀 Start Quick List';
+      }
+    }
+
+    // Local file upload handling
+    const uploadArea = $('uploadArea');
+    const fileInput = $('fileInput');
+
+    uploadArea.addEventListener('click', () => fileInput.click());
+
+    uploadArea.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadArea.classList.add('drag-over');
+    });
+
+    uploadArea.addEventListener('dragleave', () => {
+      uploadArea.classList.remove('drag-over');
+    });
+
+    uploadArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadArea.classList.remove('drag-over');
+      const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+      addFiles(files);
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      addFiles(Array.from(e.target.files));
+      fileInput.value = ''; // Reset input
+    });
+
+    function addFiles(files) {
+      selectedFiles.push(...files);
+      renderFileList();
+      updateStartButton();
+    }
+
+    function removeFile(index) {
+      selectedFiles.splice(index, 1);
+      renderFileList();
+      updateStartButton();
+    }
+
+    function clearFiles() {
+      selectedFiles = [];
+      renderFileList();
+      updateStartButton();
+    }
+
+    function renderFileList() {
+      const container = $('selectedFiles');
+      const list = $('fileList');
+      const count = $('fileCount');
+
+      if (selectedFiles.length === 0) {
+        container.style.display = 'none';
+        return;
+      }
+
+      container.style.display = 'block';
+      count.textContent = selectedFiles.length;
+
+      list.innerHTML = selectedFiles.map((file, idx) => {
+        const url = URL.createObjectURL(file);
+        const sizeMB = (file.size / 1024 / 1024).toFixed(2);
+        
+        // Show folder path if available (from folder upload)
+        const relativePath = file.webkitRelativePath || file.name;
+        const displayName = relativePath.includes('/') 
+          ? `<span style="color: #666; font-size: 0.85em;">${relativePath.split('/').slice(0, -1).join('/')}/</span>${file.name}`
+          : file.name;
+        
+        return `
+          <div class="file-item">
+            <img src="${url}" class="file-thumbnail" alt="">
+            <div class="file-info">
+              <div class="file-name">${displayName}</div>
+              <div class="file-size">${sizeMB} MB</div>
+            </div>
+            <button class="file-remove" onclick="removeFile(${idx})">Remove</button>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Make functions global
+    window.switchUploadMethod = switchUploadMethod;
+    window.setUploadMode = setUploadMode;
+    window.removeFile = removeFile;
+    window.clearFiles = clearFiles;
+
+    async function fetchJSON(url, opts = {}) {
+      try {
+        const r = await exec(url, opts);
+
+        // Check if response is valid
+        if (!r) {
+          throw new Error('No response received from server');
+        }
+
+        const data = await r.json();
+        if (!r.ok) {
+          // Check for auth errors
+          if (r.status === 401 || r.status === 403) {
+            console.error('[Auth] Unauthorized request, redirecting to login...');
+            sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
+            window.location.replace('/login.html');
+            throw new Error('Authentication required');
+          }
+          // More descriptive error for 502
+          if (r.status === 502) {
+            const errorMsg = data.error || 'Backend service unavailable';
+            console.error('[API] 502 Error:', errorMsg, 'URL:', url);
+            throw new Error(`Service Error: ${errorMsg}`);
+          }
+          // Include detail field for better debugging
+          const errorMsg = data.error || `HTTP ${r.status}`;
+          const fullError = data.detail ? `${errorMsg}: ${data.detail}` : errorMsg;
+          console.error('[API] Error response:', { status: r.status, error: data.error, detail: data.detail, groupId: data.groupId });
+          throw new Error(fullError);
+        }
+        return data;
+      } catch (err) {
+        // Check if it's an auth-related error
+        if (err.message?.includes('Authentication expired') ||
+            err.message?.includes('AUTH_EXPIRED')) {
+          console.error('[Auth] Token expired, redirecting to login...');
+          sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
+          window.location.replace('/login.html');
+        }
+        throw err;
+      }
+    }
+
+    async function loadFolders() {
+      try {
+        const data = await fetchJSON('/.netlify/functions/dropbox-list-folders');
+        const select = $('folderSelect');
+
+        if (!data.folders || data.folders.length === 0) {
+          select.innerHTML = '<option value="">No folders found</option>';
+          return;
+        }
+
+        select.innerHTML = '<option value="">-- Select a folder --</option>';
+        data.folders.forEach(folder => {
+          const opt = document.createElement('option');
+          opt.value = folder.path_lower;
+          opt.textContent = folder.name;
+          select.appendChild(opt);
+        });
+
+        select.addEventListener('change', (e) => {
+          selectedFolder = e.target.value;
+          $('btnStart').disabled = !selectedFolder;
+        });
+
+      } catch (err) {
+        console.error('Failed to load folders:', err);
+        $('folderSelect').innerHTML = '<option value="">Error loading folders</option>';
+      }
+    }
+
+    function updateStep(num, status) {
+      const step = $(`step${num}`);
+      const statusEl = $(`status${num}`);
+
+      step.classList.remove('active', 'complete', 'warning');
+      if (status === 'active') {
+        step.classList.add('active');
+        statusEl.innerHTML = '<span class="spinner"></span>Running...';
+      } else if (status === 'complete') {
+        step.classList.add('complete');
+        statusEl.textContent = '✓ Complete';
+      } else if (status === 'warning') {
+        step.classList.add('warning');
+        // Status text set by caller
+      }
+
+      // Update progress bar
+      const progress = (num / 4) * 100;
+      $('progressBar').style.width = `${progress}%`;
+    }
+
+    // Upload files in batches to avoid payload limits
+    async function uploadFilesInBatches(files) {
+      const MAX_BATCH_SIZE_BYTES = 5 * 1024 * 1024; // 5MB per batch (Netlify limit is 6MB)
+      const allUploadedFiles = [];
+
+      // Prepare file data with base64 encoding
+      const fileData = await Promise.all(files.map(async (file) => {
+        const base64 = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result.split(',')[1]);
+          reader.readAsDataURL(file);
+        });
+
+        return {
+          name: file.name,
+          mime: file.type,
+          data: base64,
+          base64Size: base64.length,
+        };
+      }));
+
+      // Smart batching by size
+      const batches = [];
+      let currentBatch = [];
+      let currentBatchSize = 0;
+
+      for (const file of fileData) {
+        if (file.base64Size > MAX_BATCH_SIZE_BYTES) {
+          // Large file goes alone
+          if (currentBatch.length > 0) {
+            batches.push(currentBatch);
+            currentBatch = [];
+            currentBatchSize = 0;
+          }
+          batches.push([file]);
+        } else if (currentBatchSize + file.base64Size > MAX_BATCH_SIZE_BYTES) {
+          // Start new batch
+          batches.push(currentBatch);
+          currentBatch = [file];
+          currentBatchSize = file.base64Size;
+        } else {
+          // Add to current batch
+          currentBatch.push(file);
+          currentBatchSize += file.base64Size;
+        }
+      }
+
+      if (currentBatch.length > 0) {
+        batches.push(currentBatch);
+      }
+
+      // Upload batches
+      for (let i = 0; i < batches.length; i++) {
+        const batch = batches[i];
+        $('status1').innerHTML = `<span class="spinner"></span>Uploading batch ${i + 1}/${batches.length}...`;
+
+        const uploadRes = await fetchJSON('/.netlify/functions/ingest-local-upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ files: batch }),
+        });
+
+        allUploadedFiles.push(...uploadRes.files);
+      }
+
+      return allUploadedFiles;
+    }
+
+    async function startPipeline() {
+      const btn = $('btnStart');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Processing...';
+      $('results').classList.remove('show');
+
+      // Reset all steps to clear previous run state
+      for (let i = 1; i <= 4; i++) {
+        const step = $(`step${i}`);
+        const status = $(`status${i}`);
+        step.classList.remove('active', 'complete', 'warning');
+        status.textContent = 'Pending';
+      }
+      $('progressBar').style.width = '0%';
+
+      // Hide orphans warning from previous run
+      $('orphansWarning').style.display = 'none';
+
+      try {
+        let scanJobId;
+
+        if (uploadMethod === 'local') {
+          // LOCAL UPLOAD FLOW
+          if (selectedFiles.length === 0) {
+            alert('Please select files to upload');
+            return;
+          }
+
+          // Step 1a: Upload files
+          updateStep(1, 'active');
+          $('status1').innerHTML = '<span class="spinner"></span>Uploading files...';
+
+          const uploadedFiles = await uploadFilesInBatches(selectedFiles);
+          const stagedUrls = uploadedFiles.map(f => f.stagedUrl);
+
+          // Step 1b: Start scan with stagedUrls
+          $('status1').innerHTML = '<span class="spinner"></span>Starting analysis...';
+
+          const scanRes = await fetchJSON('/.netlify/functions/smartdrafts-scan-bg', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ stagedUrls })
+          });
+
+          if (!scanRes.ok || !scanRes.jobId) {
+            throw new Error(scanRes.error || 'Scan failed to start');
+          }
+
+          scanJobId = scanRes.jobId;
+
+        } else {
+          // DROPBOX FLOW
+          if (!selectedFolder) {
+            alert('Please select a Dropbox folder first');
+            return;
+          }
+
+          // Step 1: Scan/Analyze (enqueue background job)
+          updateStep(1, 'active');
+          const scanRes = await fetchJSON('/.netlify/functions/smartdrafts-scan-bg', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              path: selectedFolder,
+              force: false
+            })
+          });
+
+          if (!scanRes.ok || !scanRes.jobId) {
+            throw new Error(scanRes.error || 'Scan failed to start');
+          }
+
+          scanJobId = scanRes.jobId;
+        }
+
+        currentJobId = scanJobId;
+        console.log('[Quick List] Scan job started:', currentJobId);
+
+        // Poll for scan completion
+        let scanComplete = false;
+        let attempts = 0;
+        const maxAttempts = 200; // 5 minutes max (1.5s intervals) - increased for large batches
+
+        while (!scanComplete && attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          attempts++;
+
+          const statusRes = await fetchJSON(`/.netlify/functions/smartdrafts-scan-status?jobId=${currentJobId}`);
+
+          if (statusRes.state === 'complete') {
+            scanComplete = true;
+            updateStep(1, 'complete');
+            $('totalImages').textContent = (statusRes.groups || []).length || 0;
+            console.log('[Quick List] Scan complete:', statusRes.groups?.length, 'groups');
+          } else if (statusRes.state === 'error') {
+            throw new Error(statusRes.error || 'Scan failed');
+          } else {
+            const progress = Math.min(95, Math.round((attempts / maxAttempts) * 100));
+            $('status1').innerHTML = `<span class="spinner"></span>Analyzing... ${progress}%`;
+          }
+        }
+
+        if (!scanComplete) {
+          throw new Error('Scan timeout after 5 minutes');
+        }
+
+        // Step 2: Pair using pairing-v2 (existing working endpoint)
+        updateStep(2, 'active');
+        $('status2').innerHTML = '<span class="spinner"></span>Starting pairing...';
+        
+        const pairStartRes = await fetchJSON('/.netlify/functions/smartdrafts-pairing-v2-start-from-scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scanJobId: currentJobId })
+        });
+
+        if (!pairStartRes.ok || !pairStartRes.jobId) {
+          throw new Error(pairStartRes.error || 'Failed to start pairing');
+        }
+
+        const pairingJobId = pairStartRes.jobId;
+        console.log('[Quick List] Pairing job started:', pairingJobId);
+
+        // Poll for pairing completion (max 10 minutes, check every 10 seconds)
+        let pairingComplete = false;
+        let pairAttempts = 0;
+        let products = [];
+        let unpaired = [];
+
+        while (!pairingComplete && pairAttempts++ < 120) {
+          // Adaptive polling: 3s for first 20 checks (1min), 5s for next 24 (2min), 10s after that
+          const pollDelay = pairAttempts <= 20 ? 3000 : pairAttempts <= 44 ? 5000 : 10000;
+          await new Promise(resolve => setTimeout(resolve, pollDelay));
+
+          const statusRes = await fetchJSON(`/.netlify/functions/smartdrafts-pairing-v2-status?jobId=${pairingJobId}`);
+
+          if (statusRes.status === 'completed') {
+            pairingComplete = true;
+            
+            const pairs = statusRes.result?.pairs || [];
+            unpaired = statusRes.result?.unpaired || [];
+            
+            products = pairs.map((pair, index) => ({
+              productId: `product-${index + 1}`,
+              brand: pair.brand || null,
+              brandWebsite: pair.brandWebsite || null,
+              title: pair.title || null,
+              product: pair.product || null,
+              keyText: pair.keyText || [],
+              categoryPath: pair.categoryPath || undefined,
+              heroDisplayUrl: pair.frontUrl || '',
+              backDisplayUrl: pair.backUrl || ''
+            }));
+
+            $('totalPaired').textContent = products.length;
+
+            if (unpaired.length > 0) {
+              $('orphansCount').textContent = unpaired.length;
+              $('orphansWarning').style.display = 'block';
+              
+              // Populate rejected images grid
+              const grid = $('rejectedImagesGrid');
+              grid.innerHTML = ''; // Clear previous content
+              
+              unpaired.forEach(item => {
+                const card = document.createElement('div');
+                card.style.cssText = 'background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(251, 191, 36, 0.3); border-radius: 8px; padding: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem;';
+                
+                // Image thumbnail
+                const img = document.createElement('img');
+                img.src = item.imageUrl || '';
+                img.alt = item.imagePath || 'Rejected image';
+                img.style.cssText = 'width: 100%; height: 150px; object-fit: cover; border-radius: 4px; background: rgba(0, 0, 0, 0.2);';
+                img.onerror = () => {
+                  img.style.display = 'none';
+                  // Show filename if image fails to load
+                  const filename = document.createElement('div');
+                  filename.textContent = item.imagePath?.split('/').pop() || 'Unknown';
+                  filename.style.cssText = 'font-size: 0.75rem; color: var(--muted); text-align: center; padding: 1rem;';
+                  card.insertBefore(filename, card.firstChild);
+                };
+                
+                // Filename
+                const filename = document.createElement('div');
+                filename.textContent = item.imagePath?.split('/').pop() || 'Unknown';
+                filename.style.cssText = 'font-size: 0.75rem; font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+                filename.title = item.imagePath || '';
+                
+                // Reason
+                const reason = document.createElement('div');
+                reason.textContent = item.reason || 'Unknown reason';
+                reason.style.cssText = 'font-size: 0.7rem; color: rgb(251, 191, 36); line-height: 1.4;';
+                
+                card.appendChild(img);
+                card.appendChild(filename);
+                card.appendChild(reason);
+                grid.appendChild(card);
+              });
+            }
+
+            console.log('[Quick List] Pairing complete:', products.length, 'products');
+          } else if (statusRes.status === 'failed') {
+            throw new Error(statusRes.error || 'Pairing failed');
+          } else {
+            const progress = Math.min(95, Math.round((pairAttempts / 120) * 100));
+            $('status2').innerHTML = `<span class="spinner"></span>Pairing images... ${progress}%`;
+          }
+        }
+
+        if (!pairingComplete) {
+          throw new Error('Pairing timeout');
+        }
+
+        if (products.length === 0) {
+          throw new Error('No products were paired');
+        }
+
+        updateStep(2, 'complete');
+
+        // Step 3: Create Drafts (existing working endpoint)
+        updateStep(3, 'active');
+        $('status3').innerHTML = '<span class="spinner"></span>Starting draft creation...';
+
+        const draftBgRes = await fetchJSON('/.netlify/functions/smartdrafts-create-drafts-bg', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ products })
+        });
+
+        if (!draftBgRes.ok || !draftBgRes.jobId) {
+          throw new Error(draftBgRes.error || 'Failed to start draft creation');
+        }
+
+        const draftJobId = draftBgRes.jobId;
+        console.log('[Quick List] Draft job started:', draftJobId);
+
+        // Poll for draft completion (max 10 minutes, check every 10 seconds)
+        let draftAttempts = 0;
+        let drafts = [];
+
+        while (draftAttempts++ < 120) {
+          // Adaptive polling: 3s for first 20 checks (1min), 5s for next 24 (2min), 10s after that
+          const pollDelay = draftAttempts <= 20 ? 3000 : draftAttempts <= 44 ? 5000 : 10000;
+          await new Promise(resolve => setTimeout(resolve, pollDelay));
+
+          const statusRes = await fetchJSON(`/.netlify/functions/smartdrafts-create-drafts-status?jobId=${encodeURIComponent(draftJobId)}`);
+
+          if (!statusRes.ok) continue;
+
+          const job = statusRes.job || {};
+          const processed = job.processedProducts || 0;
+          const total = job.totalProducts || products.length;
+
+          $('status3').innerHTML = `<span class="spinner"></span>Creating drafts (${processed}/${total})...`;
+
+          if (job.state === 'completed') {
+            drafts = job.drafts || [];
+            $('totalDrafts').textContent = drafts.length;
+            console.log('[Quick List] Drafts complete:', drafts.length);
+            break;
+          } else if (job.state === 'error') {
+            throw new Error(job.error || 'Draft creation failed');
+          }
+        }
+
+        if (drafts.length === 0) {
+          throw new Error('Draft creation timed out or failed');
+        }
+
+        updateStep(3, 'complete');
+        console.log('[Quick List] Drafts received:', JSON.stringify(drafts, null, 2));
+
+        // Step 4: Publish to eBay Drafts
+        updateStep(4, 'active');
+
+        // Build groups with proper structure for create-ebay-draft-user
+        // Match drafts to products by index
+        const groupsWithDrafts = drafts
+          .map((draft, idx) => {
+            if (!draft) return null; // Skip failed drafts
+
+            const product = products[idx];
+            if (!product) return null;
+
+            // Skip drafts with missing price or images
+            if (!draft.price || draft.price <= 0) {
+              console.warn(`[Quick List] Skipping ${draft.productId} - no price available`);
+              return null;
+            }
+
+            const images = draft.images || [];
+            if (images.length === 0) {
+              console.warn(`[Quick List] Skipping ${draft.productId} - no images available`);
+              return null;
+            }
+
+            return {
+              groupId: draft.productId || product.productId || product.groupId,
+              brand: draft.brand || 'Unknown',
+              product: draft.product || 'Product',
+              variant: product.variant,
+              size: product.size,
+              images: images,
+              title: draft.title,
+              description: draft.description,
+              aspects: draft.aspects,
+              price: draft.price,
+              pricing: { ebay: draft.price },
+              quantity: 1,
+              condition: draft.condition,
+              category: draft.category,
+              categoryPath: draft.category?.title || product.categoryPath
+            };
+          })
+          .filter(g => g !== null); // Remove nulls
+
+        if (groupsWithDrafts.length === 0) {
+          throw new Error('No valid drafts to publish to eBay');
+        }
+
+        console.log('[Quick List] Publishing', groupsWithDrafts.length, 'drafts to eBay');
+
+        const pubRes = await fetchJSON('/.netlify/functions/create-ebay-draft-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jobId: currentJobId,
+            groups: groupsWithDrafts
+          })
+        });
+
+        if (!pubRes.ok) {
+          throw new Error(pubRes.error || 'Publishing to eBay failed');
+        }
+
+        updateStep(4, 'complete');
+        
+        // Handle both dry-run and real publish responses
+        const isDryRun = pubRes.dryRun === true;
+        const published = isDryRun ? (pubRes.count || 0) : (pubRes.created || 0);
+        
+        if (isDryRun) {
+          console.log('[Quick List] DRY RUN - Previewed', published, 'drafts (not actually published)');
+        } else {
+          console.log('[Quick List] Published', published, 'drafts to eBay');
+        }
+
+        // Show results
+        $('progressBar').style.width = '100%';
+        $('results').classList.add('show');
+        btn.textContent = '✓ Complete!';
+        btn.style.background = 'var(--success)';
+
+      } catch (err) {
+        console.error('Pipeline error:', err);
+
+        // Check if it's an auth error - user will be redirected, so don't show alert
+        if (err.message?.includes('Authentication') ||
+            err.message?.includes('AUTH_EXPIRED') ||
+            err.message?.includes('Unauthorized')) {
+          // Auth error - redirect is already happening in fetchJSON
+          return;
+        }
+
+        alert(`Error: ${err.message}`);
+        btn.disabled = false;
+        btn.textContent = '🔄 Retry Quick List';
+        btn.style.background = 'linear-gradient(135deg, var(--primary) 0%, var(--primary-600) 100%)';
+      }
+    }
+
+    function resetPipeline() {
+      // Reset all steps
+      for (let i = 1; i <= 4; i++) {
+        const step = $(`step${i}`);
+        const status = $(`status${i}`);
+        step.classList.remove('active', 'complete', 'warning');
+        status.textContent = 'Pending';
+      }
+
+      // Hide orphans warning
+      $('orphansWarning').style.display = 'none';
+
+      $('progressBar').style.width = '0%';
+      $('results').classList.remove('show');
+      $('btnStart').disabled = false;
+      $('btnStart').textContent = '🚀 Start Quick List';
+      $('btnStart').style.background = 'linear-gradient(135deg, var(--primary) 0%, var(--primary-600) 100%)';
+      currentJobId = null;
+    }
+
+    async function bootstrap() {
+      try {
+        const ok = await authClient.requireAuth();
+        if (!ok) return;
+
+        // Load Dropbox folders
+        await loadFolders();
+      } catch (e) {
+        console.error('Auth check failed', e);
+      }
+    }
+
+    bootstrap();
+  </script>
+</body>
+</html>
