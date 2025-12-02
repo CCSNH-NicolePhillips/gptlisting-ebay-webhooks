@@ -746,6 +746,25 @@ export const handler: Handler = async (event) => {
   const products = Array.isArray(body.products) ? body.products : [];
 
   console.log(`[PERF] Handler started for jobId: ${jobId}, products: ${products.length}`);
+  
+  // Hard limit to prevent timeouts
+  const MAX_PRODUCTS_PER_JOB = 50;
+  if (products.length > MAX_PRODUCTS_PER_JOB) {
+    console.error(`[smartdrafts] Job rejected: ${products.length} products exceeds limit of ${MAX_PRODUCTS_PER_JOB}`);
+    if (jobId && userId) {
+      await writeJob(jobId, userId, {
+        state: "error",
+        error: `Too many products (${products.length}). Maximum is ${MAX_PRODUCTS_PER_JOB} per batch. Please process in smaller chunks.`,
+        finishedAt: Date.now(),
+      }).catch(() => {});
+    }
+    return { 
+      statusCode: 400,
+      body: JSON.stringify({
+        error: `Too many products. Maximum is ${MAX_PRODUCTS_PER_JOB} per batch. Please select fewer products or process in smaller chunks.`
+      })
+    };
+  }
 
   if (!jobId || !userId) {
     if (jobId) {
