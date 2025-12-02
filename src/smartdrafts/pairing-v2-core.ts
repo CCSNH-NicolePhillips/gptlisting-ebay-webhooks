@@ -147,7 +147,8 @@ For each image, provide:
    - For books: MUST be null (books don't have brands in our system)
    - null if unreadable
 4. productName: 
-   - For supplements/cosmetics/food packaging: the product name (e.g., "Clean Slate", "Fish Oil", "Dopamine Brain Food")
+   - For supplements/cosmetics/food packaging: the FULL product name INCLUDING SIZE/UNIT (e.g., "Clean Slate 2oz", "Fish Oil 60 softgels", "Dopamine Brain Food 720g")
+   - CRITICAL: Always include the size/unit/count if visible on the label (oz, g, ml, fl oz, capsules, tablets, softgels, etc.)
    - For books: the author name (e.g., "Bobbi Brown", "J.K. Rowling")
    - null if unreadable
 5. title:
