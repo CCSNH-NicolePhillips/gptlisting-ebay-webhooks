@@ -200,7 +200,7 @@ async function extractPriceFromBrand(
     return null;
   }
   
-  const price = extractPriceFromHtml(html);
+  const price = extractPriceFromHtml(html, productTitle);
   
   // If extraction failed, check if prices are likely JS-rendered
   if (!price && detectJsRenderedPrices(html)) {

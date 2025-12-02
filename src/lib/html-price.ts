@@ -47,6 +47,7 @@ interface OfferCandidate {
   rawOffer: any;
   packQty: number;      // detected pack quantity, default 1
   unitPrice: number;    // price / packQty
+  size?: string | null; // detected size (e.g., "8oz", "226.8g")
 }
 
 /**
@@ -81,10 +82,66 @@ function detectPackQty(text: string | undefined): number {
 }
 
 /**
- * Pick best offer: prefer single-unit, else lowest unit price
+ * Extract size/volume from text (e.g., "8 oz", "226.8 g", "60 capsules")
+ * Returns normalized string for matching (e.g., "8oz", "226.8g", "60cap")
  */
-function pickBestOffer(candidates: OfferCandidate[]): OfferCandidate | null {
+function detectSize(text: string | undefined): string | null {
+  if (!text) return null;
+  const t = text.toLowerCase();
+
+  // Match: "8 oz", "8oz", "8 fl oz", "226.8 g", "60 capsules", "2 fl oz", etc.
+  const sizePatterns = [
+    /\b(\d+\.?\d*)\s*fl\s*oz\b/,           // "8 fl oz"
+    /\b(\d+\.?\d*)\s*oz\b/,                // "8 oz"
+    /\b(\d+\.?\d*)\s*g\b/,                 // "226.8 g"
+    /\b(\d+\.?\d*)\s*mg\b/,                // "500 mg"
+    /\b(\d+\.?\d*)\s*ml\b/,                // "30 ml"
+    /\b(\d+)\s*capsules?\b/,                // "60 capsules"
+    /\b(\d+)\s*softgels?\b/,                // "120 softgels"
+    /\b(\d+)\s*tablets?\b/,                 // "90 tablets"
+    /\b(\d+)\s*ct\b/,                       // "30 ct"
+  ];
+
+  for (const pattern of sizePatterns) {
+    const match = t.match(pattern);
+    if (match) {
+      // Return normalized format: "8oz", "226.8g", "60cap"
+      const value = match[1];
+      if (pattern.source.includes('fl\\s*oz')) return `${value}floz`;
+      if (pattern.source.includes('oz')) return `${value}oz`;
+      if (pattern.source.includes('\\s*g')) return `${value}g`;
+      if (pattern.source.includes('mg')) return `${value}mg`;
+      if (pattern.source.includes('ml')) return `${value}ml`;
+      if (pattern.source.includes('capsule')) return `${value}cap`;
+      if (pattern.source.includes('softgel')) return `${value}cap`;
+      if (pattern.source.includes('tablet')) return `${value}cap`;
+      if (pattern.source.includes('ct')) return `${value}ct`;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Pick best offer: prefer size match, then single-unit, else lowest unit price
+ */
+function pickBestOffer(candidates: OfferCandidate[], requestedSize?: string | null): OfferCandidate | null {
   if (!candidates.length) return null;
+
+  // If we have a requested size, strongly prefer offers that match it
+  if (requestedSize) {
+    const sizeMatches = candidates.filter(c => c.size === requestedSize);
+    if (sizeMatches.length) {
+      console.log(`[HTML Parser] Found ${sizeMatches.length} offer(s) matching size "${requestedSize}"`);
+      // Among size matches, prefer single-unit, then lowest price
+      const singleSizeMatches = sizeMatches.filter(c => c.packQty === 1);
+      if (singleSizeMatches.length) {
+        return singleSizeMatches.reduce((best, c) => (c.price < best.price ? c : best), singleSizeMatches[0]);
+      }
+      return sizeMatches.reduce((best, c) => (c.unitPrice < best.unitPrice ? c : best), sizeMatches[0]);
+    }
+    console.log(`[HTML Parser] ⚠️  No offers match requested size "${requestedSize}", falling back to best available`);
+  }
 
   const singles = candidates.filter(c => c.packQty === 1);
   if (singles.length) {
@@ -100,7 +157,7 @@ function pickBestOffer(candidates: OfferCandidate[]): OfferCandidate | null {
  * Best-effort JSON-LD extraction for brand sites
  * No retailer-specific logic - just try to find Product schema and extract price
  */
-function extractFromJsonLd($: cheerio.CheerioAPI): ExtractedData {
+function extractFromJsonLd($: cheerio.CheerioAPI, requestedSize?: string | null): ExtractedData {
   const scripts = $('script[type="application/ld+json"]').toArray();
   
   if (scripts.length === 0) {
@@ -131,6 +188,49 @@ function extractFromJsonLd($: cheerio.CheerioAPI): ExtractedData {
       for (const item of items) {
         if (!item || typeof item !== "object") continue;
         const type = String((item as any)["@type"] || "").toLowerCase();
+        
+        console.log(`[HTML Parser] Processing @type: ${type}`);
+        
+        // Handle ProductGroup with hasVariant (e.g., Shopify multi-variant products)
+        if (type.includes("productgroup")) {
+          const productName = String((item as any).name || '');
+          const variants = (item as any).hasVariant;
+          
+          if (Array.isArray(variants)) {
+            console.log(`[HTML Parser] Found ProductGroup with ${variants.length} variants`);
+            
+            for (const variant of variants) {
+              if (!variant || typeof variant !== "object") continue;
+              const variantName = String(variant.name || productName);
+              const offers = variant.offers;
+              const offerList = Array.isArray(offers) ? offers : [offers];
+              
+              for (const offer of offerList) {
+                if (!offer || typeof offer !== "object") continue;
+                const priceValue = toNumber((offer as any).price);
+                if (!priceValue) continue;
+                
+                const currency = String((offer as any).priceCurrency || 'USD');
+                const packQty = detectPackQty(variantName) || 1;
+                const size = detectSize(variantName);
+                const unitPrice = priceValue / packQty;
+                
+                allCandidates.push({
+                  price: priceValue,
+                  currency,
+                  nameText: variantName,
+                  descriptionText: undefined,
+                  rawOffer: offer,
+                  packQty,
+                  unitPrice,
+                  size
+                });
+              }
+            }
+            continue; // Skip standard Product parsing for this item
+          }
+        }
+        
         if (!type.includes("product")) continue;
         
         const productName = String((item as any).name || '');
@@ -172,6 +272,7 @@ function extractFromJsonLd($: cheerio.CheerioAPI): ExtractedData {
             const currency = String((offer as any).priceCurrency || 'USD');
             
             const packQty = detectPackQty(nameText) || detectPackQty(descText) || 1;
+            const size = detectSize(nameText) || detectSize(descText) || detectSize(productName);
             const unitPrice = priceValue / packQty;
             
             allCandidates.push({
@@ -181,7 +282,8 @@ function extractFromJsonLd($: cheerio.CheerioAPI): ExtractedData {
               descriptionText: descText,
               rawOffer: offer,
               packQty,
-              unitPrice
+              unitPrice,
+              size
             });
           }
         }
@@ -214,8 +316,8 @@ function extractFromJsonLd($: cheerio.CheerioAPI): ExtractedData {
     return { price: -1 }; // -1 signals rejection (don't fallback to other parsers)
   }
   
-  // Pick the best offer (prefer single-unit, else lowest unit price)
-  const best = pickBestOffer(retailCandidates);
+  // Pick the best offer (prefer size match, then single-unit, else lowest unit price)
+  const best = pickBestOffer(retailCandidates, requestedSize);
   
   if (!best) {
     return { price: null };
@@ -225,10 +327,12 @@ function extractFromJsonLd($: cheerio.CheerioAPI): ExtractedData {
     price: best.price,
     packQty: best.packQty,
     unitPrice: best.unitPrice,
+    size: best.size,
     name: best.nameText?.slice(0, 80)
   });
   
-  console.log(`[HTML Parser] ✓ Extracted price $${best.price} from JSON-LD Product (${best.packQty}-pack, unit price: $${best.unitPrice.toFixed(2)})`);
+  const sizeMsg = best.size ? ` size: ${best.size},` : '';
+  console.log(`[HTML Parser] ✓ Extracted price $${best.price} from JSON-LD Product (${best.packQty}-pack,${sizeMsg} unit price: $${best.unitPrice.toFixed(2)})`);
   
   return { price: best.price };
 }
@@ -344,7 +448,7 @@ function detectMultiPack($: cheerio.CheerioAPI): { isMultiPack: boolean; packSiz
   return { isMultiPack: false };
 }
 
-export function extractPriceFromHtml(html: string): number | null {
+export function extractPriceFromHtml(html: string, productTitle?: string): number | null {
   try {
     // Check for bundle/subscription page FIRST before parsing
     if (isProbablyBundlePage(html)) {
@@ -353,6 +457,12 @@ export function extractPriceFromHtml(html: string): number | null {
     }
     
     const $ = cheerio.load(html);
+    
+    // Extract requested size from product title if provided
+    const requestedSize = productTitle ? detectSize(productTitle) : null;
+    if (requestedSize) {
+      console.log(`[HTML Parser] Looking for variant with size: ${requestedSize}`);
+    }
     
     // Check for multi-pack products
     const packInfo = detectMultiPack($);
@@ -363,7 +473,7 @@ export function extractPriceFromHtml(html: string): number | null {
       console.log(`[HTML Parser] ⚠️ WARNING: Detected ${packMsg} product - price may not be for single unit!`);
     }
     
-    const data = extractFromJsonLd($);
+    const data = extractFromJsonLd($, requestedSize);
     
     // If JSON-LD explicitly rejected prices (returned -1), don't fallback
     if (data.price === -1) return null;

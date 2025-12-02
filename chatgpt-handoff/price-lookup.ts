@@ -1,9 +1,9 @@
 import { extractPriceFromHtml } from "./html-price.js";
-import { braveFirstUrlForBrandSite } from "./search.js";
-import { getBrandUrls } from "./brand-map.js";
-import { fetchSoldPriceStats, type SoldPriceStats } from "./pricing/ebay-sold-prices.js";
-import { openai } from "./openai.js";
-import { getCachedPrice, setCachedPrice, makePriceSig } from "./price-cache.js";
+import { braveFirstUrlForBrandSite } from "../src/lib/search.js";
+import { getBrandUrls } from "../src/lib/brand-map.js";
+import { fetchSoldPriceStats, type SoldPriceStats } from "../src/lib/pricing/ebay-sold-prices.js";
+import { openai } from "../src/lib/openai.js";
+import { getCachedPrice, setCachedPrice, makePriceSig } from "../src/lib/price-cache.js";
 
 // ============================================================================
 // URL VARIATION HELPERS

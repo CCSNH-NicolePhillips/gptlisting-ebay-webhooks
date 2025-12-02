@@ -37,19 +37,17 @@ async function main() {
   
   console.log(`\n📸 Found ${allFiles.length} images in testDropbox/newStuff`);
   
-  // Select test images - Root Sculpt (front + back)
-  const rootSculptFront = "20251115_143348.jpg"; // Front panel
-  const rootSculptBack = "20251115_143353.jpg";   // Back panel
-  const vitaFront = "20251115_143446.jpg";        // Vita PLynxera front
-  const vitaBack = "20251115_143458.jpg";         // Vita PLynxera back
+  // Select test images - Maude (front + back)
+  const maudeFront = "20251115_143002.jpg"; // Maude front panel
+  const maudeBack = "20251115_143030.jpg";   // Maude back panel
   
-  const testImages = [rootSculptFront, rootSculptBack, vitaFront, vitaBack];
+  const testImages = [maudeFront, maudeBack];
   const imagePaths = testImages
     .filter(f => allFiles.includes(f))
     .map(f => join(photoDir, f));
   
-  if (imagePaths.length !== 4) {
-    console.error(`❌ Expected 4 test images, found ${imagePaths.length}`);
+  if (imagePaths.length !== 2) {
+    console.error(`❌ Expected 2 test images, found ${imagePaths.length}`);
     console.error(`Missing: ${testImages.filter(f => !allFiles.includes(f)).join(', ')}`);
     process.exit(1);
   }
