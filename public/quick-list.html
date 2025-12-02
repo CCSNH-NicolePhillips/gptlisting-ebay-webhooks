@@ -3,46 +3,46 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Quick List</title>
+  <title>Quick List – DraftPilot</title>
+  <link rel="stylesheet" href="/draftpilot.css">
   <style>
-    :root {
-      --bg: #0b1020;
-      --panel: #141a33;
-      --line: #2a335c;
-      --text: #f4f6fb;
-      --muted: #a2a9c8;
-      --primary: #4f7cff;
-      --primary-600: #3e66d6;
-      --success: #22c55e;
-      --warning: #f59e0b;
+    /* Quick List specific styles */
+    
+    /* Responsive feature highlights */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 2rem;
+      align-items: center;
     }
-    * { box-sizing: border-box; }
-    body {
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      margin: 0;
-      background: var(--bg);
-      color: var(--text);
-      padding: 2rem 1rem;
+    
+    @media (max-width: 1024px) {
+      .feature-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1.5rem;
+      }
     }
-    .container {
-      max-width: 800px;
-      margin: 0 auto;
+    
+    @media (max-width: 640px) {
+      .feature-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+      }
     }
-    h1 {
-      font-size: 2rem;
-      margin: 0 0 0.5rem;
+    
+    /* Make upload area text visible */
+    .upload-area strong,
+    .upload-area span,
+    .upload-hint {
+      color: var(--text-primary) !important;
     }
-    .subtitle {
-      color: var(--muted);
-      margin-bottom: 2rem;
+    
+    .upload-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      opacity: 0.8;
     }
-    .card {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 1.5rem;
-      margin-bottom: 1.5rem;
-    }
+    
     .step {
       display: flex;
       align-items: center;
@@ -103,6 +103,7 @@
     .step.complete .step-status {
       color: var(--success);
     }
+    
     .btn {
       background: var(--primary);
       color: #fff;
@@ -127,6 +128,7 @@
       border: 1px solid var(--line);
       color: var(--text);
     }
+    
     .spinner {
       display: inline-block;
       width: 16px;
@@ -140,6 +142,7 @@
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
+    
     .progress {
       background: rgba(255,255,255,0.05);
       border-radius: 4px;
@@ -152,6 +155,7 @@
       background: var(--primary);
       transition: width 0.3s;
     }
+    
     .results {
       display: none;
       margin-top: 1.5rem;
@@ -185,6 +189,7 @@
       gap: 0.75rem;
       margin-top: 1rem;
     }
+    
     select {
       width: 100%;
       padding: 0.75rem;
@@ -194,25 +199,24 @@
       border-radius: 8px;
       font-size: 1rem;
     }
-
-    /* Upload UI styles */
+    
     .upload-tab {
       padding: 0.75rem 1.5rem;
       background: transparent;
       border: none;
       border-bottom: 2px solid transparent;
-      color: var(--muted);
+      color: var(--text-muted);
       cursor: pointer;
       font-size: 0.95rem;
       font-weight: 600;
       transition: all 0.2s;
     }
     .upload-tab:hover {
-      color: var(--text);
+      color: var(--text-primary);
     }
     .upload-tab.active {
-      color: var(--primary);
-      border-bottom-color: var(--primary);
+      color: var(--accent);
+      border-bottom-color: var(--accent);
     }
     .upload-panel {
       animation: fadeIn 0.3s;
@@ -222,20 +226,21 @@
       to { opacity: 1; transform: translateY(0); }
     }
     .upload-area {
-      border: 2px dashed var(--line);
+      border: 2px dashed var(--border-medium);
       border-radius: 12px;
       padding: 3rem 2rem;
       text-align: center;
       cursor: pointer;
       transition: all 0.2s;
+      background: rgba(255,255,255,0.02);
     }
     .upload-area:hover {
-      border-color: var(--primary);
-      background: rgba(79, 124, 255, 0.05);
+      border-color: var(--accent);
+      background: var(--accent-soft);
     }
     .upload-area.drag-over {
-      border-color: var(--primary);
-      background: rgba(79, 124, 255, 0.1);
+      border-color: var(--accent);
+      background: var(--accent-soft);
       border-style: solid;
     }
     .upload-icon {
@@ -248,14 +253,19 @@
       gap: 0.25rem;
       font-size: 1.05rem;
       margin-bottom: 0.5rem;
+      color: var(--text-primary);
+    }
+    .upload-text strong {
+      font-weight: 600;
+      color: var(--text-primary);
     }
     .upload-text span {
       font-size: 0.9rem;
-      color: var(--muted);
+      color: var(--text-secondary);
     }
     .upload-hint {
       font-size: 0.85rem;
-      color: var(--muted);
+      color: var(--text-muted);
     }
     .file-list {
       display: grid;
@@ -315,67 +325,208 @@
 </head>
 <body>
   <script src="/auth-client.js"></script>
-
-  <div class="container">
-    <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem;">
-      <div style="flex: 1;">
-        <h1 style="margin-bottom: 0.25rem;">⚡ SmartDrafts Quick List</h1>
-        <p class="subtitle" style="margin-bottom: 0;">AI-powered listing creation from your product photos</p>
+  
+  <div class="dp-shell">
+    <!-- Sidebar -->
+    <aside class="dp-sidebar">
+      <!-- Brand Area -->
+      <div class="dp-sidebar__brand">
+        <img src="logo/LogoWhiteText_NoBg.png" alt="DraftPilot - AI Listing Studio" class="dp-brand-logo" />
       </div>
-      <a href="/index.html" class="btn secondary" style="width: auto; padding: 0.6rem 1rem; font-size: 0.9rem;">← Back</a>
-    </div>
+      
+      <!-- Navigation -->
+      <nav class="dp-sidebar__nav">
+        <!-- Primary Navigation Group -->
+        <div class="dp-nav-group">
+          <div class="dp-nav-group__label">APP</div>
+          <div class="dp-nav-group__items">
+            <a href="/index.html" class="dp-nav-item">
+              <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+              </svg>
+              <span class="dp-nav-item__label">Overview</span>
+            </a>
+            <a href="/quick-list.html" class="dp-nav-item dp-nav-item--active">
+              <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+              </svg>
+              <span class="dp-nav-item__label">Create Listings</span>
+            </a>
+            <a href="/drafts.html" class="dp-nav-item">
+              <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+              </svg>
+              <span class="dp-nav-item__label">Drafts</span>
+            </a>
+          </div>
+        </div>
+        
+        <!-- Account Navigation Group -->
+        <div class="dp-nav-group">
+          <div class="dp-nav-group__label">ACCOUNT</div>
+          <div class="dp-nav-group__items">
+            <a href="/policies-manage.html" class="dp-nav-item">
+              <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+                <polyline points="10 9 9 9 8 9"></polyline>
+              </svg>
+              <span class="dp-nav-item__label">eBay Policies</span>
+            </a>
+            <a href="/location.html" class="dp-nav-item">
+              <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                <circle cx="12" cy="10" r="3"></circle>
+              </svg>
+              <span class="dp-nav-item__label">Inventory Locations</span>
+            </a>
+            <a href="/settings.html" class="dp-nav-item">
+              <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M12 1v6m0 6v6m5.196-15.196l-4.243 4.243m0 5.656l-4.242 4.243m15.195-5.196l-4.242-4.243m-5.657 0l-4.243-4.243"></path>
+              </svg>
+              <span class="dp-nav-item__label">Settings</span>
+            </a>
+            <a href="/faq.html" class="dp-nav-item">
+              <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+              </svg>
+              <span class="dp-nav-item__label">FAQ</span>
+            </a>
+            <a href="/support.html" class="dp-nav-item">
+              <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+              </svg>
+              <span class="dp-nav-item__label">Support</span>
+            </a>
+          </div>
+        </div>
+      </nav>
+      
+      <!-- Spacer -->
+      <div class="dp-sidebar__spacer"></div>
+      
+      <!-- User Footer -->
+      <div class="dp-sidebar__footer">
+        <div class="dp-user-card">
+          <div class="dp-user-card__avatar" id="userAvatar">U</div>
+          <div class="dp-user-card__info">
+            <div class="dp-user-card__name" id="userName">Loading...</div>
+            <div class="dp-user-card__status" id="userEmail">Signed in</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+    
+    <div class="dp-mobile-backdrop" id="mobileBackdrop"></div>
+    
+    <!-- Main Content Wrapper -->
+    <div class="dp-main-wrapper">
+      <!-- Top Bar -->
+      <header class="dp-topbar">
+        <!-- Left: Mobile menu + Page Title & Subtitle -->
+        <div class="dp-topbar-left">
+          <!-- Mobile-only hamburger -->
+          <button
+            class="dp-topbar-icon dp-topbar-icon--menu"
+            id="mobileMenuButton"
+            aria-label="Open navigation"
+            aria-expanded="false"
+            type="button"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="4" y1="6" x2="20" y2="6"></line>
+              <line x1="4" y1="12" x2="20" y2="12"></line>
+              <line x1="4" y1="18" x2="20" y2="18"></line>
+            </svg>
+          </button>
 
+          <div class="dp-topbar-heading">
+            <h1 class="dp-topbar__title">⚡ Quick List</h1>
+            <p class="dp-topbar__subtitle">
+              AI-powered listing creation from your product photos
+            </p>
+          </div>
+        </div>
+        
+        <!-- Center: Search -->
+        <div class="dp-topbar-center">
+          <div class="dp-search">
+            <svg class="dp-search__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <path d="m21 21-4.35-4.35"></path>
+            </svg>
+            <input type="text" class="dp-search__input" placeholder="Search drafts, SKUs, or notes…" />
+          </div>
+        </div>
+        
+        <!-- Right: Icon Cluster -->
+        <div class="dp-topbar-right" style="display: flex !important; gap: 0.75rem;">
+          <a href="/index.html" class="dp-btn dp-btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem;">← Back to Dashboard</a>
+        </div>
+      </header>
+      
+      <!-- Main Content Area -->
+      <main class="dp-main">
     <!-- Feature highlights -->
-    <div class="card" style="background: linear-gradient(135deg, rgba(79, 124, 255, 0.1) 0%, rgba(79, 124, 255, 0.05) 100%); border-color: rgba(79, 124, 255, 0.3); margin-bottom: 1.5rem;">
-      <div style="display: flex; gap: 2rem; flex-wrap: wrap; align-items: center;">
-        <div style="display: flex; align-items: center; gap: 0.5rem;">
+    <div class="dp-card dp-card--full" style="background: linear-gradient(135deg, rgba(56, 189, 248, 0.15) 0%, rgba(56, 189, 248, 0.05) 100%); border-color: rgba(56, 189, 248, 0.3);">
+      <div class="feature-grid">
+        <div style="display: flex; align-items: center; gap: 0.75rem; justify-content: center;">
           <div style="font-size: 1.5rem;">🤖</div>
           <div>
-            <div style="font-weight: 600; font-size: 0.9rem;">GPT-4 Vision</div>
-            <div style="font-size: 0.75rem; color: var(--muted);">Image analysis</div>
+            <div style="font-weight: 600; font-size: 0.95rem; color: var(--text-primary);">GPT-4 Vision</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">Image analysis</div>
           </div>
         </div>
-        <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem; justify-content: center;">
           <div style="font-size: 1.5rem;">💰</div>
           <div>
-            <div style="font-weight: 600; font-size: 0.9rem;">Smart Pricing</div>
-            <div style="font-size: 0.75rem; color: var(--muted);">Amazon/Walmart research</div>
+            <div style="font-weight: 600; font-size: 0.95rem; color: var(--text-primary);">Smart Pricing</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">Amazon/Walmart research</div>
           </div>
         </div>
-        <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem; justify-content: center;">
           <div style="font-size: 1.5rem;">🎯</div>
           <div>
-            <div style="font-weight: 600; font-size: 0.9rem;">Auto Categories</div>
-            <div style="font-size: 0.75rem; color: var(--muted);">eBay taxonomy matching</div>
+            <div style="font-weight: 600; font-size: 0.95rem; color: var(--text-primary);">Auto Categories</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">eBay taxonomy matching</div>
           </div>
         </div>
-        <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem; justify-content: center;">
           <div style="font-size: 1.5rem;">✨</div>
           <div>
-            <div style="font-weight: 600; font-size: 0.9rem;">Full Automation</div>
-            <div style="font-size: 0.75rem; color: var(--muted);">Zero manual input</div>
+            <div style="font-weight: 600; font-size: 0.95rem; color: var(--text-primary);">Full Automation</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">Zero manual input</div>
           </div>
         </div>
       </div>
     </div>
 
-    <div class="card">
-      <h3 style="margin-top: 0; margin-bottom: 1rem;">📸 Upload Your Product Photos</h3>
+    <div class="dp-card dp-card--full">
+      <h3 style="margin-top: 0; margin-bottom: 1rem; color: var(--text-primary);">📸 Upload Your Product Photos</h3>
 
       <!-- Upload method tabs -->
-      <div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--line);">
+      <div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border-subtle);">
         <button id="tabLocal" class="upload-tab active" onclick="switchUploadMethod('local')">
-          � Upload Files
+          📤 Upload Files
         </button>
         <button id="tabDropbox" class="upload-tab" onclick="switchUploadMethod('dropbox')">
-          �📁 Dropbox Folder
+          📁 Dropbox Folder
         </button>
       </div>
 
       <!-- Local upload panel -->
       <div id="uploadLocal" class="upload-panel">
-        <!-- Upload mode toggle -->
-        <div style="display: inline-flex; gap: 0.5rem; border-radius: 0.5rem; border: 1px solid var(--border); padding: 0.25rem; background: #f8f9fa; margin-bottom: 1rem;">
+        <!-- Upload mode toggle - HIDDEN, files mode is default -->
+        <div style="display: none; gap: 0.5rem; border-radius: 0.5rem; border: 1px solid var(--border); padding: 0.25rem; background: #f8f9fa; margin-bottom: 1rem;">
           <button id="btnModeFiles" class="btn secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem; border-radius: 0.375rem; margin: 0; background: var(--primary); color: white; border: none;" onclick="setUploadMode('files')">
             📄 Upload Files
           </button>
@@ -425,10 +576,10 @@
       </button>
     </div>
 
-    <div class="card">
-      <h3 style="margin-top: 0; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+    <div class="dp-card dp-card--full">
+      <h3 style="margin-top: 0; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; color: var(--text-primary);">
         <span>🔄 Automated Pipeline</span>
-        <span style="font-size: 0.75rem; font-weight: normal; color: var(--muted);">All steps run automatically</span>
+        <span style="font-size: 0.75rem; font-weight: normal; color: var(--text-muted);">All steps run automatically</span>
       </h3>
 
       <div class="step" id="step1">
@@ -493,7 +644,7 @@
     </div>
 
     <div class="results" id="results">
-      <div class="card" style="background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(34, 197, 94, 0.05) 100%); border-color: var(--success);">
+      <div class="dp-card" style="background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(34, 197, 94, 0.05) 100%); border-color: var(--success);">
         <h3 style="margin-top: 0; color: var(--success); display: flex; align-items: center; gap: 0.5rem;">
           <span style="font-size: 1.5rem;">🎉</span>
           <span>Success! Drafts Created</span>
@@ -1251,6 +1402,41 @@
     }
 
     bootstrap();
+  </script>
+  
+  </main>
+  </div>
+  </div>
+  
+  <!-- Mobile Menu Script -->
+  <script>
+    (function() {
+      const menuButton = document.getElementById('mobileMenuButton');
+      const backdrop = document.getElementById('mobileBackdrop');
+      const shell = document.querySelector('.dp-shell');
+      
+      if (menuButton && backdrop && shell) {
+        // Close menu when clicking backdrop
+        backdrop.addEventListener('click', () => {
+          shell.classList.remove('dp-shell--nav-open');
+        });
+        
+        // Toggle menu when clicking hamburger
+        menuButton.addEventListener('click', () => {
+          const willOpen = !shell.classList.contains('dp-shell--nav-open');
+          shell.classList.toggle('dp-shell--nav-open', willOpen);
+          menuButton.setAttribute('aria-expanded', willOpen);
+        });
+        
+        // Close menu when clicking nav link
+        const navLinks = document.querySelectorAll('.dp-sidebar a');
+        navLinks.forEach(link => {
+          link.addEventListener('click', () => {
+            shell.classList.remove('dp-shell--nav-open');
+          });
+        });
+      }
+    })();
   </script>
 </body>
 </html>

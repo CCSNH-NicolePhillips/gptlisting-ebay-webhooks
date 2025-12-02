@@ -12,8 +12,8 @@
     "packageJson": {
       "dependencies": [
         "npm:@anthropic-ai/sdk@~0.21.1",
-        "npm:@aws-sdk/client-s3@^3.930.0",
-        "npm:@aws-sdk/s3-request-presigner@^3.930.0",
+        "npm:@aws-sdk/client-s3@^3.931.0",
+        "npm:@aws-sdk/s3-request-presigner@^3.931.0",
         "npm:@eslint/js@^9.11.1",
         "npm:@google/generative-ai@~0.7.1",
         "npm:@netlify/blobs@^6.5.0",
@@ -34,6 +34,7 @@
         "npm:node-fetch@^3.3.2",
         "npm:openai@^4.59.0",
         "npm:prettier@^3.6.2",
+        "npm:redis@^5.9.0",
         "npm:sharp@~0.33.5",
         "npm:ts-jest@^29.2.5",
         "npm:tsx@^4.16.2",

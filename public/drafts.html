@@ -3,52 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Drafts</title>
+  <title>Drafts – DraftPilot</title>
+    <link rel="stylesheet" href="/draftpilot.css">
     <style>
-      :root {
-        --bg: #0b1020;
-        --panel: #141a33;
-        --panel-2: #0f1530;
-        --line: #2a335c;
-        --text: #f4f6fb;
-        --muted: #a2a9c8;
-        --primary: #4f7cff;
-        --primary-600: #3e66d6;
-        --accent: #22c55e;
-        --danger: #ef4444;
-        --warning: #f59e0b;
-      }
-      * {
-        box-sizing: border-box;
-      }
-      body {
-        font-family:
-          ui-sans-serif,
-          system-ui,
-          -apple-system,
-          Segoe UI,
-          Roboto,
-          Arial,
-          sans-serif;
-        margin: 0;
-        background: var(--bg);
-        color: var(--text);
-      }
-      .wrap {
-        max-width: 1140px;
-        margin: 0 auto;
-        padding: 2rem 1.25rem;
-      }
-      header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 1rem;
-        margin-bottom: 1rem;
-      }
-      h1 {
-        font-size: 1.5rem;
-        margin: 0;
+      /* Drafts page specific styles */
       }
       .flash {
         color: var(--muted);
@@ -283,33 +241,166 @@
   </head>
   <body>
     <script src="/auth-client.js"></script>
-    <script src="/auth-client.js"></script>
-    <div class="wrap">
-      <header>
-  <h1>Drafts</h1>
-        <div class="toolbar">
-          <button id="btnClean" class="btn danger" title="Delete ALL UNPUBLISHED drafts">
-            Delete all drafts
-          </button>
-          <a class="btn secondary" href="/draft-wizard.html">Create Draft</a>
+    
+    <div class="dp-shell">
+      <!-- Sidebar -->
+      <aside class="dp-sidebar">
+        <!-- Brand Area -->
+        <div class="dp-sidebar__brand">
+          <img src="logo/LogoWhiteText_NoBg.png" alt="DraftPilot - AI Listing Studio" class="dp-brand-logo" />
         </div>
-      </header>
-      <div class="topbar">
+        
+        <!-- Navigation -->
+        <nav class="dp-sidebar__nav">
+          <!-- Primary Navigation Group -->
+          <div class="dp-nav-group">
+            <div class="dp-nav-group__label">APP</div>
+            <div class="dp-nav-group__items">
+              <a href="/index.html" class="dp-nav-item">
+                <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                  <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                </svg>
+                <span class="dp-nav-item__label">Overview</span>
+              </a>
+              <a href="/quick-list.html" class="dp-nav-item">
+                <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                </svg>
+                <span class="dp-nav-item__label">Create Listings</span>
+              </a>
+              <a href="/drafts.html" class="dp-nav-item dp-nav-item--active">
+                <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                </svg>
+                <span class="dp-nav-item__label">Drafts</span>
+              </a>
+            </div>
+          </div>
+          
+          <!-- Account Navigation Group -->
+          <div class="dp-nav-group">
+            <div class="dp-nav-group__label">ACCOUNT</div>
+            <div class="dp-nav-group__items">
+              <a href="/policies-manage.html" class="dp-nav-item">
+                <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="16" y1="13" x2="8" y2="13"></line>
+                  <line x1="16" y1="17" x2="8" y2="17"></line>
+                  <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+                <span class="dp-nav-item__label">eBay Policies</span>
+              </a>
+              <a href="/location.html" class="dp-nav-item">
+                <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                  <circle cx="12" cy="10" r="3"></circle>
+                </svg>
+                <span class="dp-nav-item__label">Inventory Locations</span>
+              </a>
+              <a href="/settings.html" class="dp-nav-item">
+                <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <path d="M12 1v6m0 6v6m5.196-15.196l-4.243 4.243m0 5.656l-4.242 4.243m15.195-5.196l-4.242-4.243m-5.657 0l-4.243-4.243"></path>
+                </svg>
+                <span class="dp-nav-item__label">Settings</span>
+              </a>
+              <a href="/faq.html" class="dp-nav-item">
+                <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                  <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+                <span class="dp-nav-item__label">FAQ</span>
+              </a>
+              <a href="/support.html" class="dp-nav-item">
+                <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                  <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+                <span class="dp-nav-item__label">Support</span>
+              </a>
+            </div>
+          </div>
+        </nav>
+        
+        <!-- Spacer -->
+        <div class="dp-sidebar__spacer"></div>
+        
+        <!-- User Footer -->
+        <div class="dp-sidebar__footer">
+          <div class="dp-user-card">
+            <div class="dp-user-card__avatar" id="userAvatar">U</div>
+            <div class="dp-user-card__info">
+              <div class="dp-user-card__name" id="userName">Loading...</div>
+              <div class="dp-user-card__status" id="userEmail">Signed in</div>
+            </div>
+          </div>
+        </div>
+      </aside>
+      
+      <div class="dp-mobile-backdrop" id="mobileBackdrop"></div>
+      
+      <!-- Main Content Wrapper -->
+      <div class="dp-main-wrapper">
+        <!-- Top Bar -->
+        <header class="dp-topbar">
+          <!-- Left: Mobile menu + Page Title & Subtitle -->
+          <div class="dp-topbar-left">
+            <!-- Mobile-only hamburger -->
+            <button
+              class="dp-topbar-icon dp-topbar-icon--menu"
+              id="mobileMenuButton"
+              aria-label="Open navigation"
+              aria-expanded="false"
+              type="button"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="4" y1="6" x2="20" y2="6"></line>
+                <line x1="4" y1="12" x2="20" y2="12"></line>
+                <line x1="4" y1="18" x2="20" y2="18"></line>
+              </svg>
+            </button>
+
+            <div class="dp-topbar-heading">
+              <h1 class="dp-topbar__title">Drafts</h1>
+              <p class="dp-topbar__subtitle">
+                Manage your eBay listing drafts
+              </p>
+            </div>
+          </div>
+          
+          <!-- Right: Actions -->
+          <div class="dp-topbar-right" style="display: flex !important; gap: 0.75rem;">
+            <a href="/index.html" class="dp-btn dp-btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem;">← Back to Dashboard</a>
+            <button id="btnClean" class="dp-btn dp-btn-danger" title="Delete ALL UNPUBLISHED drafts" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
+              Delete all drafts
+            </button>
+            <a class="dp-btn dp-btn-secondary" href="/draft-wizard.html" style="padding: 0.5rem 1rem; font-size: 0.875rem;">Create Draft</a>
+          </div>
+        </header>
+        
+        <!-- Main Content Area -->
+        <main class="dp-main">
+      <div style="margin-bottom: 1.5rem;">
         <div id="flash" class="flash"></div>
-        <div>
-          <button id="btnRefresh" class="btn secondary" title="Reload drafts">Refresh</button>
-        </div>
+        <button id="btnRefresh" class="dp-btn dp-btn-secondary" title="Reload drafts">Refresh</button>
       </div>
       
-      <div id="needsAttention" style="margin-bottom: 2rem;">
-        <h2 style="font-size: 1.25rem; margin: 1.5rem 0 1rem; color: var(--warning);">⚠️ Needs Attention <span id="needsCount" style="font-size: 0.875rem; color: var(--muted);"></span></h2>
+      <div id="needsAttention" style="display: none; margin-bottom: 2rem;">
+        <h2 style="font-size: 1.25rem; margin: 1.5rem 0 1rem; color: var(--warning);">⚠️ Needs Attention <span id="needsCount" style="font-size: 0.875rem; color: var(--text-muted);"></span></h2>
         <div id="needsList" class="grid" aria-live="polite"></div>
       </div>
       
-      <div id="readySection">
-        <h2 style="font-size: 1.25rem; margin: 1.5rem 0 1rem; color: var(--accent);">✓ Ready to Publish <span id="readyCount" style="font-size: 0.875rem; color: var(--muted);"></span></h2>
+      <div id="readySection" style="display: none;">
+        <h2 style="font-size: 1.25rem; margin: 1.5rem 0 1rem; color: var(--success);">✓ Ready to Publish <span id="readyCount" style="font-size: 0.875rem; color: var(--text-muted);"></span></h2>
         <div id="readyList" class="grid" aria-live="polite"></div>
       </div>
+    </main>
+    </div>
     </div>
 
     <script>
@@ -654,11 +745,17 @@
           }).catch(() => {});
         } catch (e) {
           const wrap = document.createElement('div');
-          wrap.className = 'empty';
+          wrap.className = 'dp-card';
+          wrap.style.cssText = 'text-align: center; padding: 3rem 2rem;';
           const msg = e?.response
             ? JSON.stringify(e.response).slice(0, 500)
             : e?.message || String(e);
-          wrap.innerHTML = `Failed to load drafts.<br/><small class="muted">${escapeHtml(msg)}</small> <div style="margin-top:.75rem"><button class="btn secondary" id="retryBtn">Retry</button></div>`;
+          wrap.innerHTML = `
+            <div style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;">⚠️</div>
+            <div style="font-size: 1.25rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;">Failed to load drafts</div>
+            <div style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1.5rem;">${escapeHtml(msg)}</div>
+            <button class="dp-btn dp-btn-secondary" id="retryBtn">Retry</button>
+          `;
           readyList.innerHTML = '';
           needsList.innerHTML = '';
           readyList.appendChild(wrap);
@@ -975,6 +1072,38 @@
         } catch {} 
       });
       bootstrap();
+    </script>
+    
+    </main>
+    </div>
+    </div>
+    
+    <!-- Mobile Menu Script -->
+    <script>
+      (function() {
+        const menuButton = document.getElementById('mobileMenuButton');
+        const backdrop = document.getElementById('mobileBackdrop');
+        const shell = document.querySelector('.dp-shell');
+        
+        if (menuButton && backdrop && shell) {
+          backdrop.addEventListener('click', () => {
+            shell.classList.remove('dp-shell--nav-open');
+          });
+          
+          menuButton.addEventListener('click', () => {
+            const willOpen = !shell.classList.contains('dp-shell--nav-open');
+            shell.classList.toggle('dp-shell--nav-open', willOpen);
+            menuButton.setAttribute('aria-expanded', willOpen);
+          });
+          
+          const navLinks = document.querySelectorAll('.dp-sidebar a');
+          navLinks.forEach(link => {
+            link.addEventListener('click', () => {
+              shell.classList.remove('dp-shell--nav-open');
+            });
+          });
+        }
+      })();
     </script>
   </body>
 </html>

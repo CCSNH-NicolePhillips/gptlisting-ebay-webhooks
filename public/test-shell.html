@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Shell Test – DraftPilot</title>
+  <link rel="stylesheet" href="/draftpilot.css">
+</head>
+<body>
+  <script src="/auth-client.js"></script>
+  
+  <div id="pageContent">
+    <!-- Your page content goes here -->
+    <div class="dp-card">
+      <h2>Test Page Content</h2>
+      <p>This is a test to verify the sidebar shell works correctly.</p>
+      <p>If you see the sidebar on the left and this content looks exactly like index.html, it's working!</p>
+    </div>
+    
+    <div class="dp-grid" style="margin-top: 2rem;">
+      <div class="dp-card">
+        <h3>Feature 1</h3>
+        <p>Some content here</p>
+      </div>
+      <div class="dp-card">
+        <h3>Feature 2</h3>
+        <p>More content here</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="/sidebar-shell.js"></script>
+  <script>
+    // Initialize the shell
+    DraftPilotShell.init({
+      title: 'Test Page',
+      subtitle: 'Testing the reusable sidebar component',
+      activePage: 'overview',
+      showSearch: false
+    });
+  </script>
+</body>
+</html>

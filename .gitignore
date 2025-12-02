@@ -9,6 +9,7 @@ dist
 prod.env
 netlify-env.json
 netlify-env-temp.json
+backups/
 
 # Local Netlify folder
 .netlify
@@ -40,4 +41,5 @@ TODO.md
 HANDOFF-*.md
 PATENT-*.md
 *-ANALYSIS-*.md
-chatgpt-handoff
+chatgpt-temp/
+chatgpt/

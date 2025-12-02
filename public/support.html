@@ -3,46 +3,54 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>DraftPilot – Support</title>
+    <title>Support – DraftPilot</title>
     <link rel="stylesheet" href="/draftpilot.css">
     <style>
-      body {
-        font-family:
-          system-ui,
-          -apple-system,
-          Segoe UI,
-          Roboto,
-          Arial,
-          sans-serif;
-        margin: 0;
-        padding: 2rem;
-        background: #0b1020;
-        color: #f4f6fb;
-      }
-      .card {
-        max-width: 760px;
-        margin: 0 auto;
-        background: #141a33;
-        border: 1px solid #2a335c;
+      /* Support page specific styles */
+      .support-category {
+        display: flex;
+        align-items: flex-start;
+        gap: 16px;
+        padding: 20px;
+        background: var(--bg-card);
+        border: 2px solid var(--border-subtle);
         border-radius: 12px;
-        padding: 1.5rem;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+        cursor: pointer;
+        transition: all 0.2s ease;
+        text-align: left;
       }
-      h1 {
-        margin-top: 0;
-        font-weight: 700;
-        letter-spacing: 0.2px;
+      
+      .support-category:hover {
+        border-color: var(--accent);
+        background: var(--bg-base);
+        transform: translateY(-2px);
       }
-      a {
-        color: #a8c1ff;
+      
+      .support-category__icon {
+        width: 40px;
+        height: 40px;
+        min-width: 40px;
+        color: var(--accent);
+        stroke-width: 2;
       }
-      .small {
-        font-size: 0.85rem;
-        opacity: 0.8;
+      
+      .support-category__content {
+        flex: 1;
       }
-      .muted {
-        color: #a2a9c8;
+      
+      .support-category__title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin: 0 0 4px 0;
       }
+      
+      .support-category__desc {
+        font-size: 0.875rem;
+        color: var(--text-muted);
+        margin: 0;
+      }
+      
       .dp-form-label {
         display: block;
         font-size: 0.875rem;
@@ -84,6 +92,46 @@
       }
       .dp-muted strong {
         color: #a8c1ff;
+      }
+      
+      /* Mobile Optimization */
+      @media (max-width: 767px) {
+        /* Stack grid vertically on mobile */
+        .dp-grid {
+          grid-template-columns: 1fr !important;
+        }
+        
+        /* Make category cards more compact */
+        .support-category {
+          padding: 16px;
+          gap: 12px;
+        }
+        
+        .support-category__icon {
+          width: 32px;
+          height: 32px;
+          min-width: 32px;
+        }
+        
+        .support-category__title {
+          font-size: 0.9375rem;
+        }
+        
+        .support-category__desc {
+          font-size: 0.8125rem;
+        }
+        
+        /* Keep form below categories on mobile */
+        #supportForm {
+          order: 1;
+        }
+        
+        /* Ensure back button is visible on mobile */
+        .dp-topbar-right .dp-btn {
+          font-size: 0.8125rem;
+          padding: 8px 12px;
+          white-space: nowrap;
+        }
       }
     </style>
   </head>
@@ -128,14 +176,9 @@
         } catch {}
       })();
     </script>
-    <!-- Lightweight loading state to avoid flashes while auth/status loads -->
-    <div class="card" id="loadingCard" style="display:block; text-align:center;">
-      <h1>Loading…</h1>
-      <p class="muted">Preparing your workspace</p>
-    </div>
     
     <!-- Main Support Shell -->
-    <div class="dp-shell" id="mainCard" style="display:none;">
+    <div class="dp-shell" id="mainCard">
       <!-- Sidebar -->
       <aside class="dp-sidebar">
         <!-- Brand Area -->
@@ -235,49 +278,35 @@
         </div>
       </aside>
       
+      <!-- Mobile Backdrop -->
+      <div class="dp-mobile-backdrop"></div>
+      
       <!-- Main Content Wrapper -->
       <div class="dp-main-wrapper">
         <!-- Top Bar -->
         <header class="dp-topbar">
-          <!-- Left: Page Title & Subtitle -->
+          <!-- Left: Mobile Menu + Page Title -->
           <div class="dp-topbar-left">
+            <button
+              class="dp-topbar-icon dp-topbar-icon--menu"
+              id="mobileMenuButton"
+              aria-label="Open navigation"
+              aria-expanded="false"
+              type="button"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="4" y1="6" x2="20" y2="6"></line>
+                <line x1="4" y1="12" x2="20" y2="12"></line>
+                <line x1="4" y1="18" x2="20" y2="18"></line>
+              </svg>
+            </button>
             <h1 class="dp-topbar__title">Support</h1>
-            <p class="dp-topbar__subtitle">Get help with SmartDrafts, connections, and eBay drafts.</p>
+            <p class="dp-topbar__subtitle">Get help with your account, billing, or technical issues</p>
           </div>
           
-          <!-- Center: Search -->
-          <div class="dp-topbar-center">
-            <div class="dp-search">
-              <svg class="dp-search__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="11" cy="11" r="8"></circle>
-                <path d="m21 21-4.35-4.35"></path>
-              </svg>
-              <input type="text" class="dp-search__input" placeholder="Search drafts, SKUs, or notes…" />
-            </div>
-          </div>
-          
-          <!-- Right: Icon Cluster -->
+          <!-- Right: Back Button -->
           <div class="dp-topbar-right">
-            <button class="dp-topbar-icon" title="Theme Toggle" aria-label="Toggle theme">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="5"></circle>
-                <line x1="12" y1="1" x2="12" y2="3"></line>
-                <line x1="12" y1="21" x2="12" y2="23"></line>
-                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-                <line x1="1" y1="12" x2="3" y2="12"></line>
-                <line x1="21" y1="12" x2="23" y2="12"></line>
-                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-              </svg>
-            </button>
-            <button class="dp-topbar-icon" title="Notifications" aria-label="View notifications">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-              </svg>
-            </button>
-            <div class="dp-topbar-avatar" id="topbarAvatar" title="User menu">U</div>
+            <a href="/index.html" class="dp-btn dp-btn-secondary">← Back to Dashboard</a>
           </div>
         </header>
         
@@ -286,35 +315,137 @@
           <!-- Auth Banner -->
           <div id="authBanner" class="dp-card" style="display:none;">
             <div class="dp-card__content">
-              <p style="margin-bottom: 16px;">You need to sign in to access DraftPilot.</p>
+              <p style="margin-bottom: 16px;">You need to sign in to access DraftPilot</p>
               <button id="bannerLogin" class="dp-btn dp-btn-primary">Sign in</button>
             </div>
           </div>
           
           <!-- Support Form -->
-          <div class="dp-grid">
+          <div class="dp-grid" style="grid-template-columns: 1fr 400px; gap: 24px; align-items: start;">
+            <!-- Support Categories -->
             <section class="dp-card">
               <div class="dp-card__header">
-                <h2 class="dp-card__title">Contact Support</h2>
+                <h2 class="dp-card__title">How can we help?</h2>
                 <p class="dp-card__subtitle">
-                  We're here to help with SmartDrafts, connections, and listing automation.
+                  Select a category to get started with your support request
                 </p>
               </div>
               
               <div class="dp-card__content">
-                <label class="dp-form-label">Your Email</label>
-                <input id="supportEmail" class="dp-input" type="email" placeholder="you@example.com" />
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+                  <!-- Billing Category -->
+                  <button class="support-category" data-category="billing">
+                    <svg class="support-category__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+                      <line x1="1" y1="10" x2="23" y2="10"></line>
+                    </svg>
+                    <div class="support-category__content">
+                      <h3 class="support-category__title">Billing & Payments</h3>
+                      <p class="support-category__desc">Invoices, subscriptions, refunds</p>
+                    </div>
+                  </button>
+                  
+                  <!-- Technical Category -->
+                  <button class="support-category" data-category="technical">
+                    <svg class="support-category__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="3"></circle>
+                      <path d="M12 1v6m0 6v6m5.196-15.196l-4.243 4.243m0 5.656l-4.242 4.243m15.195-5.196l-4.242-4.243m-5.657 0l-4.243-4.243"></path>
+                    </svg>
+                    <div class="support-category__content">
+                      <h3 class="support-category__title">Technical Issues</h3>
+                      <p class="support-category__desc">Bugs, errors, performance problems</p>
+                    </div>
+                  </button>
+                  
+                  <!-- eBay Integration -->
+                  <button class="support-category" data-category="ebay">
+                    <svg class="support-category__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                      <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                      <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                    </svg>
+                    <div class="support-category__content">
+                      <h3 class="support-category__title">eBay Integration</h3>
+                      <p class="support-category__desc">Connection, sync, listing issues</p>
+                    </div>
+                  </button>
+                  
+                  <!-- Account & Settings -->
+                  <button class="support-category" data-category="account">
+                    <svg class="support-category__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                    <div class="support-category__content">
+                      <h3 class="support-category__title">Account & Settings</h3>
+                      <p class="support-category__desc">Login, profile, preferences</p>
+                    </div>
+                  </button>
+                  
+                  <!-- SmartDrafts -->
+                  <button class="support-category" data-category="smartdrafts">
+                    <svg class="support-category__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                    </svg>
+                    <div class="support-category__content">
+                      <h3 class="support-category__title">SmartDrafts AI</h3>
+                      <p class="support-category__desc">AI features, quality, suggestions</p>
+                    </div>
+                  </button>
+                  
+                  <!-- General -->
+                  <button class="support-category" data-category="general">
+                    <svg class="support-category__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                      <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                    <div class="support-category__content">
+                      <h3 class="support-category__title">General Question</h3>
+                      <p class="support-category__desc">Other inquiries and feedback</p>
+                    </div>
+                  </button>
+                </div>
+                
+                <p class="dp-muted" style="margin-top: 24px; text-align: center;">
+                  Need urgent help? Email us directly at <strong>support@draftpilot.app</strong>
+                </p>
+              </div>
+            </section>
+            
+            <!-- Support Form (Always Visible on Right) -->
+            <section class="dp-card" id="supportForm">
+              <div class="dp-card__header">
+                <h2 class="dp-card__title" id="formTitle">Contact Support</h2>
+                <p class="dp-card__subtitle" id="formSubtitle">
+                  Select a category to begin
+                </p>
+              </div>
+              
+              <div class="dp-card__content">
+                <label class="dp-form-label">Category</label>
+                <div style="margin-bottom: 24px; padding: 12px; background: var(--bg-base); border-radius: 8px; border: 1px solid var(--border-subtle); display: flex; align-items: center; gap: 12px;">
+                  <svg id="categoryIcon" style="width: 24px; height: 24px; min-width: 24px; color: var(--accent);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                  </svg>
+                  <div style="flex: 1; min-width: 0;">
+                    <div style="font-weight: 500; color: var(--text-primary); font-size: 0.875rem;" id="selectedCategory">Select a category</div>
+                  </div>
+                </div>
+                
+                <label class="dp-form-label">Issue Type</label>
+                <select id="supportSubcategory" class="dp-input" style="margin-bottom: 16px;" disabled>
+                  <option value="">Select a category first</option>
+                </select>
                 
                 <label class="dp-form-label">Message</label>
-                <textarea id="supportMessage" class="dp-textarea" placeholder="Describe the issue you're having"></textarea>
+                <textarea id="supportMessage" class="dp-textarea" placeholder="Provide details about your issue or question" rows="8"></textarea>
                 
-                <button id="supportSubmit" class="dp-btn dp-btn-primary" style="margin-top: 1.5rem;">
+                <button id="supportSubmit" class="dp-btn dp-btn-primary" style="width: 100%; margin-top: 24px;" disabled>
                   Send message
                 </button>
-                
-                <p class="dp-muted">
-                  Or email us directly at <strong>support@draftpilot.app</strong>.
-                </p>
               </div>
             </section>
           </div>
@@ -355,13 +486,9 @@
           if (userName) userName.textContent = displayName;
           if (userEmail) userEmail.textContent = email || 'Signed in';
           if (userAvatar) userAvatar.textContent = initial;
-          if (topbarAvatar) topbarAvatar.textContent = initial;
           
-          // Pre-fill support email if available
-          const supportEmailInput = document.getElementById('supportEmail');
-          if (supportEmailInput && email) {
-            supportEmailInput.value = email;
-          }
+          // Store user info for support form
+          window.userInfo = { name: displayName, email: email };
         } catch {}
       }
       
@@ -371,35 +498,185 @@
         location.href = '/login.html';
       };
 
-      // Single boot: load auth/status first, then reveal main UI to avoid flashes
-      async function boot() {
-        try { await refreshStatus(); } catch {}
-        const lc = document.getElementById('loadingCard');
-        const mc = document.getElementById('mainCard');
-        if (lc) lc.style.display = 'none';
-        if (mc) mc.style.display = 'block';
-      }
-      
+      // Load user status on page load
       if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', boot);
+        document.addEventListener('DOMContentLoaded', () => refreshStatus());
       } else {
-        boot();
+        refreshStatus();
       }
       
       // Support form handler
+      let currentCategory = null;
+      
+      const categoryData = {
+        billing: {
+          title: 'Billing & Payments',
+          subtitle: 'Questions about invoices, subscriptions, or refunds',
+          icon: '<rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line>',
+          subcategories: [
+            'Invoice or receipt request',
+            'Subscription billing issue',
+            'Refund request',
+            'Payment method problem',
+            'Pricing question',
+            'Upgrade or downgrade plan'
+          ]
+        },
+        technical: {
+          title: 'Technical Issues',
+          subtitle: 'Report bugs, errors, or performance problems',
+          icon: '<circle cx="12" cy="12" r="3"></circle><path d="M12 1v6m0 6v6m5.196-15.196l-4.243 4.243m0 5.656l-4.242 4.243m15.195-5.196l-4.242-4.243m-5.657 0l-4.243-4.243"></path>',
+          subcategories: [
+            'Page not loading or error message',
+            'Performance or speed issues',
+            'Feature not working as expected',
+            'Data not syncing',
+            'Browser compatibility issue',
+            'Other technical problem'
+          ]
+        },
+        ebay: {
+          title: 'eBay Integration',
+          subtitle: 'Issues with eBay connection, sync, or listings',
+          icon: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line>',
+          subcategories: [
+            'Cannot connect eBay account',
+            'Listings not syncing',
+            'Draft not publishing to eBay',
+            'Inventory quantity mismatch',
+            'Category mapping issue',
+            'eBay API error'
+          ]
+        },
+        account: {
+          title: 'Account & Settings',
+          subtitle: 'Login, profile, or preference questions',
+          icon: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle>',
+          subcategories: [
+            'Cannot sign in',
+            'Password reset needed',
+            'Update profile information',
+            'Email notification settings',
+            'Delete my account',
+            'Two-factor authentication'
+          ]
+        },
+        smartdrafts: {
+          title: 'SmartDrafts AI',
+          subtitle: 'Questions about AI features and quality',
+          icon: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>',
+          subcategories: [
+            'AI-generated content quality',
+            'Title optimization not working',
+            'Description not accurate',
+            'Image analysis issues',
+            'Category suggestions incorrect',
+            'Feature request or feedback'
+          ]
+        },
+        general: {
+          title: 'General Question',
+          subtitle: 'Other inquiries and feedback',
+          icon: '<circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line>',
+          subcategories: [
+            'How to use DraftPilot',
+            'Feature availability',
+            'Product feedback',
+            'Partnership inquiry',
+            'Media or press inquiry',
+            'Other question'
+          ]
+        }
+      };
+      
+      // Category selection
+      document.querySelectorAll('.support-category').forEach(button => {
+        button.addEventListener('click', function() {
+          const category = this.dataset.category;
+          currentCategory = category;
+          const data = categoryData[category];
+          
+          // Update form display
+          document.getElementById('formTitle').textContent = data.title;
+          document.getElementById('formSubtitle').textContent = data.subtitle;
+          document.getElementById('selectedCategory').textContent = data.title;
+          document.getElementById('categoryIcon').innerHTML = data.icon;
+          
+          // Populate subcategories
+          const subcategorySelect = document.getElementById('supportSubcategory');
+          subcategorySelect.innerHTML = '<option value="">Select an issue type</option>';
+          data.subcategories.forEach(sub => {
+            const option = document.createElement('option');
+            option.value = sub;
+            option.textContent = sub;
+            subcategorySelect.appendChild(option);
+          });
+          subcategorySelect.disabled = false;
+          
+          // Highlight selected category
+          document.querySelectorAll('.support-category').forEach(cat => {
+            cat.style.borderColor = 'var(--border-subtle)';
+            cat.style.background = 'var(--bg-card)';
+          });
+          this.style.borderColor = 'var(--accent)';
+          this.style.background = 'var(--bg-base)';
+        });
+      });
+      
+      // Enable submit button when subcategory is selected
+      document.getElementById('supportSubcategory').addEventListener('change', function() {
+        const submitBtn = document.getElementById('supportSubmit');
+        submitBtn.disabled = !this.value;
+      });
+      
       document.getElementById('supportSubmit').addEventListener('click', async () => {
-        const email = document.getElementById('supportEmail').value.trim();
+        const subcategory = document.getElementById('supportSubcategory').value;
         const message = document.getElementById('supportMessage').value.trim();
         
-        if (!email || !message) {
-          alert('Please enter both an email and a message.');
+        if (!subcategory || !message) {
+          alert('Please select an issue type and enter a message.');
           return;
         }
 
-        // TODO: Replace with real Netlify function endpoint.
-        console.log('Support request:', { email, message });
-        alert('Your message has been sent to support@draftpilot.app.');
+        const userInfo = window.userInfo || {};
+        const supportData = {
+          category: currentCategory,
+          categoryTitle: categoryData[currentCategory]?.title || 'General',
+          subcategory: subcategory,
+          message: message,
+          userEmail: userInfo.email || 'unknown',
+          userName: userInfo.name || 'Unknown User',
+          timestamp: new Date().toISOString()
+        };
+
+        // TODO: Replace with real Netlify function endpoint
+        console.log('Support request:', supportData);
+        alert(`Your ${categoryData[currentCategory]?.title || 'support'} request has been sent. We'll get back to you soon!`);
+        
+        // Reset form
+        document.getElementById('supportMessage').value = '';
+        document.getElementById('supportSubcategory').value = '';
+        document.getElementById('supportSubmit').disabled = true;
       });
+      
+      // Mobile menu toggle
+      const hamburger = document.getElementById('mobileMenuButton');
+      const shell = document.querySelector('.dp-shell');
+      const backdrop = document.querySelector('.dp-mobile-backdrop');
+
+      if (hamburger && shell && backdrop) {
+        hamburger.addEventListener('click', () => {
+          shell.classList.toggle('dp-shell--nav-open');
+          const isOpen = shell.classList.contains('dp-shell--nav-open');
+          hamburger.setAttribute('aria-expanded', isOpen);
+        });
+
+        backdrop.addEventListener('click', () => {
+          shell.classList.remove('dp-shell--nav-open');
+          hamburger.setAttribute('aria-expanded', 'false');
+        });
+      }
     </script>
   </body>
 </html>
+
