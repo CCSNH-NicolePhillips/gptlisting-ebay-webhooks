@@ -430,27 +430,31 @@ You will receive a list of classified images with metadata about each:
 
 Your ONLY job is to PAIR fronts and backs that belong to the SAME physical product.
 
-PAIRING RULES (STRICT):
-1. For products: NEVER pair images from different brands (case-insensitive comparison)
-   For books: NEVER pair images from different titles (case-insensitive comparison)
-2. STRICT MATCH: If BOTH images have productName, they MUST match
-3. SOFT MATCH: If productName is null/missing on ONE side but brand matches AND:
-   - Same packageType
-   - Similar colorSignature (overlapping colors)
-   - Similar layoutSignature
-   Then you MAY pair them (they're likely the same product family)
-4. NEVER pair images from different package types
-5. NEVER pair if either image has confidence < 0.5
+PAIRING RULES (BE AGGRESSIVE - PAIR MORE, REJECT LESS):
+1. CONFLICTING identity: NEVER pair if brands are DIFFERENT non-null values (e.g., "Nike" vs "Adidas")
+   For books: NEVER pair if titles are DIFFERENT non-null values
+2. STRICT MATCH: If BOTH images have productName with actual values, they MUST match
+3. SOFT MATCH (PREFERRED): If productName OR brand is null/missing on ONE or BOTH sides:
+   - Same or similar packageType (bottle/jar are similar, pouch/sachet are similar)
+   - Overlapping colorSignature (at least 1 color in common)
+   - Similar layoutSignature patterns
+   Then PAIR THEM - they're very likely the same product (backs often have no brand/product visible)
+4. Package types: Accept if exact match OR similar types (bottle≈jar, pouch≈sachet, box≈unknown)
+5. Confidence: Accept if >= 0.4 (lowered to be more lenient - classification isn't perfect)
 6. NEVER pair "non_product" items with anything
-7. NEVER pair "unknown" panels - they go to unpaired
+7. Unknown panels: CAN be paired if visual signatures match (don't auto-reject unknowns)
 8. VALID PANEL COMBINATIONS (all acceptable):
    a) "front" + "back" (ideal case)
-   b) "front" + "side" (ALWAYS valid if they match - side panels often show additional product info)
-   c) "side" + "back" (valid if no front exists for this product)
-   d) "side" + "side" (ONLY if they are different sides of same product)
-9. CRITICAL: If a "front" and "side" have matching brand/product/package, PAIR THEM - do not leave them unpaired
-10. When pairing side panels, look for DIFFERENT information (e.g., one shows brand/product name, the other shows supplement facts/ingredients)
-11. Use colorSignature and layoutSignature as strong signals when productName is missing
+   b) "front" + "side" (ALWAYS valid - side panels show additional info)
+   c) "side" + "back" (valid)
+   d) "side" + "side" (valid if different information)
+   e) "front" + "unknown" (valid if visual match)
+   f) "unknown" + "back" (valid if visual match)
+9. CRITICAL: Prioritize visual matching (colors, layout, package type) over text matching
+   - Many backs have NO visible brand/product text
+   - Visual signatures are MORE reliable than text for matching
+10. When in doubt, PAIR IT - verification stage will catch serious mistakes
+11. Goal: Maximize pairing rate - unpaired images require manual work
 
 OUTPUT FORMAT:
 Respond ONLY with valid JSON:
@@ -478,10 +482,21 @@ For unpaired items, set needsReview: true if:
 - Confidence is moderate (0.5-0.7) and might need human review
 - Brand/product names are null but it looks like a valid product
 
+EXAMPLES:
+✅ PAIR: Front shows "Root Clean Slate" bottle, back shows supplement facts with no brand → Same colors, same bottle shape → PAIR
+✅ PAIR: Front shows orange "Jocko" box, back shows ingredients on orange box → Same package type and colors → PAIR  
+✅ PAIR: Both images show blue bottles with similar label → Brand visible on one, not on other → PAIR based on visual match
+✅ PAIR: productName="Fish Oil 60ct" on front, productName=null on back, same bottle → PAIR (backs often have no product name)
+✅ PAIR: Book with title="Harry Potter" on both sides, brand=null on both → PAIR (books don't have brands)
+❌ REJECT: Front has brand="Nike", back has brand="Adidas" → CONFLICTING brands → DON'T PAIR
+❌ REJECT: Front shows red box, back shows blue bottle → Different package types and colors → DON'T PAIR
+❌ REJECT: productName="Vitamin C" on front, productName="Fish Oil" on back → CONFLICTING products → DON'T PAIR
+
 Pairing strategy:
-- PREFER strict productName matches when available
-- USE soft matching (visual signatures) when productName is missing
-- Be conservative: when in doubt, leave unpaired rather than creating incorrect pairs.`;
+- PRIORITIZE visual matching (colors + layout + package) when text is missing
+- ACCEPT null/missing brand or product on back panels (VERY common)
+- Be AGGRESSIVE about pairing - aim for 80%+ pair rate
+- Only reject when there's clear evidence of a mismatch`;
 
     const userMessage = `Here is the classification data for all images. Pair the fronts and backs that match.
 
@@ -569,8 +584,15 @@ export async function verifyPairs(
       };
     });
     
-    console.log('[pairing-v2] Verifying', pairing.pairs.length, 'pairs');
-    console.log('[pairing-v2] Verification payload:', JSON.stringify(payload, null, 2));
+    console.log('[pairing-v2] 🔍 Verifying', pairing.pairs.length, 'pairs');
+    
+    // Log each pair being verified with key details
+    payload.forEach((p, idx) => {
+      console.log(`[pairing-v2] Pair ${idx + 1}: ${p.pair.front} + ${p.pair.back}`);
+      console.log(`  Front: panel=${p.frontMetadata?.panel}, brand="${p.frontMetadata?.brand}", product="${p.frontMetadata?.productName}", pkg=${p.frontMetadata?.packageType}`);
+      console.log(`  Back:  panel=${p.backMetadata?.panel}, brand="${p.backMetadata?.brand}", product="${p.backMetadata?.productName}", pkg=${p.backMetadata?.packageType}`);
+      console.log(`  Reasoning: ${p.pair.reasoning}`);
+    });
     
     const systemMessage = `You are an expert verification system for product image pairs.
 
@@ -597,28 +619,42 @@ VERIFICATION RULES:
   * AND (productName matches OR one is null)
 - status: "rejected" if ANY critical check fails, with specific issues listed
 
+CRITICAL VERIFICATION PHILOSOPHY:
+Be LENIENT and TRUST the pairing stage. Only reject pairs with OBVIOUS problems.
+The pairing stage already did the hard work - verification is just a sanity check.
+
 Critical checks (MUST pass):
-- Identity match (flexible - any ONE of these is sufficient):
-  * If packageType == 'book': Check if titles match (brand will be null - IGNORE IT)
-  * If packageType != 'book' AND both have brand: Check if brands match
-  * If brand is missing/empty on ONE side: Check if productName matches (back panels often don't show brand)
-  * NEVER reject a book pair just because brand is null - books don't have brands in our system
-  * ONLY reject if BOTH brand AND productName are null/empty on BOTH sides
-- Package types must match (bottle/jar/box/book/etc)
-- Front must be "front" panel (or "side" in rare cases)
-- Back can be "back", "side", OR "other" panel (ingredient/info panels are often classified as "other")
-- Confidence >= 0.5 on both sides
+- Identity match (VERY FLEXIBLE - accept if ANY of these is true):
+  * For books (packageType == 'book'): Accept if title matches on EITHER side OR both sides
+  * For products (packageType != 'book'): Accept if ANY of:
+    - brand matches (case-insensitive) on both sides
+    - brand matches on ONE side and other side is null/empty (COMMON for backs)
+    - productName matches (case-insensitive) on both sides
+    - productName matches on ONE side and other side is null/empty (COMMON for backs)
+  * IMPORTANT: Many back panels ONLY show supplement facts - they have NO brand/product visible
+  * ONLY reject if there's a CLEAR MISMATCH (e.g., brand="Nike" on one, brand="Adidas" on other)
+  * NEVER reject just because back panel has null brand/product - that's NORMAL
+- Package types: Accept if they match OR if one is 'unknown' OR if similar (bottle/jar are similar, pouch/sachet are similar)
+- Panel types: Accept as long as it's not both front or both back
+- Confidence: Accept if >= 0.4 on both sides (lowered from 0.5 to be more lenient)
 
-Flexible checks (one can be null):
-- Product name: Accept if both match OR if one side is null (common for backs/books)
-- Brand: Accept if both match OR if one side is null/empty (common for back panels that only show ingredients)
+Flexible checks (one can be null - THIS IS NORMAL):
+- Product name: Accept if both match OR if one side is null (VERY common for backs)
+- Brand: Accept if both match OR if one side is null/empty (VERY common for backs)
+- Package type: Accept if match OR if one is 'unknown' OR if similar types
 
-Common reasons to reject:
-- Identity mismatch: For products where BOTH have brand, brands don't match; for books, titles don't match; for products where productName exists on both, they don't match
-- Package type mismatch (bottle vs jar vs book)
-- Panel type wrong (both are front, or both are back, or invalid combination)
-- Low confidence (< 0.5 on either side)
-- Complete uncertainty: brand, productName, AND title are ALL null/empty on BOTH sides
+ONLY reject for these SERIOUS issues:
+- CONFLICTING identity: brand="Nike" on one side, brand="Adidas" on other (different non-null values)
+- CONFLICTING product: productName="Vitamin C" on one, productName="Fish Oil" on other (different non-null values)
+- COMPLETELY UNKNOWN: ALL of brand, productName, and title are null on BOTH sides
+- VERY low confidence: < 0.4 on either side
+- Panel logic error: both are front, both are back, or other impossible combination
+
+DO NOT REJECT FOR:
+- Null/missing brand on back panel (NORMAL - backs often only show ingredients)
+- Null/missing productName on back panel (NORMAL)
+- Package type slightly different (bottle vs jar) - visual classification is imperfect
+- One side has data, other is null (EXPECTED for backs)
 
 EXAMPLES:
 - Book with packageType='book', brand=null, title='Harry Potter' on both sides: ACCEPT (title matches)
@@ -671,6 +707,19 @@ ${JSON.stringify(payload, null, 2)}`;
 
     const result = response.choices[0]?.message?.content?.trim() || '{}';
     const parsed: VerificationOutput = JSON.parse(result);
+    
+    // Log verification results
+    const accepted = parsed.verifiedPairs.filter(p => p.status === 'accepted');
+    const rejected = parsed.verifiedPairs.filter(p => p.status === 'rejected');
+    
+    console.log(`[pairing-v2] ✅ Verification complete: ${accepted.length} accepted, ${rejected.length} rejected`);
+    
+    if (rejected.length > 0) {
+      console.log('[pairing-v2] ❌ Rejected pairs:');
+      rejected.forEach(p => {
+        console.log(`  ${p.front} + ${p.back}: ${p.issues?.join(', ')}`);
+      });
+    }
     
     return parsed;
   } catch (error) {
