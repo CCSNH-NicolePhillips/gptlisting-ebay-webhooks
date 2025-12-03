@@ -1194,16 +1194,13 @@
             }));
             
             // Add high-quality unpaired fronts as single-image products
-            // Filter: only front panels, high confidence, has brand or product name
+            // After two-pass pairing, any unpaired front is definitely a solo product
             const unpairedFronts = unpaired.filter(item => {
-              // Need the classification data to check panel type and confidence
-              // For now, check if reason suggests it's a valid front
-              const isFront = item.reason?.toLowerCase().includes('no matching back');
-              return isFront && item.imageUrl; // Has image URL means we can use it
+              return item.panel === 'front' && item.imageUrl; // Must be front panel with valid URL
             });
             
             if (unpairedFronts.length > 0) {
-              console.log(`[Quick List] Creating ${unpairedFronts.length} single-image products from unpaired fronts`);
+              console.log(`[Quick List] Creating ${unpairedFronts.length} single-image products from unpaired fronts (survived two-pass pairing)`);
               
               unpairedFronts.forEach((item, index) => {
                 products.push({
@@ -1219,8 +1216,8 @@
                 });
               });
               
-              // Remove the unpaired fronts from the unpaired list since we're using them
-              unpaired = unpaired.filter(item => !unpairedFronts.includes(item));
+              // Remove the unpaired fronts from the unpaired list since we're using them as products
+              unpaired = unpaired.filter(item => item.panel !== 'front');
             }
 
             $('totalPaired').textContent = products.length;

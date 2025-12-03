@@ -344,6 +344,7 @@ export const handler: Handler = async (event) => {
               imageUrl,
               reason: u.reason,
               needsReview: u.needsReview,
+              panel: u.panel || 'unknown', // Include panel type for frontend filtering
             };
           });
         } else {

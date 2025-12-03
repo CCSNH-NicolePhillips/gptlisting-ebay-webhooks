@@ -895,39 +895,52 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
   });
   
   // Build unpaired list from pairing output + rejected pairs
-  const unpaired = [
-    ...pairing.unpaired.map(u => ({
-      imagePath: u.filename,
-      reason: u.reason,
-      needsReview: u.needsReview,
-    })),
-    ...rejectedPairs.flatMap(p => [
-      {
-        imagePath: p.front,
-        reason: `Pair rejected: ${p.issues?.join(', ') || 'verification failed'}`,
-        needsReview: true,
-      },
-      {
-        imagePath: p.back,
-        reason: `Pair rejected: ${p.issues?.join(', ') || 'verification failed'}`,
-        needsReview: true,
-      },
-    ]),
-  ];
-  
-  // Calculate metrics
   const pairedFilenames = new Set<string>();
   pairs.forEach(p => {
     pairedFilenames.add(p.front);
     pairedFilenames.add(p.back);
   });
   
+  // Build classification map for panel type lookup
+  const classMap = new Map<string, ImageClassificationV2>();
+  classifications.forEach(c => classMap.set(c.filename, c));
+  
+  const unpaired = [
+    ...pairing.unpaired.map(u => {
+      const classification = classMap.get(u.filename);
+      return {
+        imagePath: u.filename,
+        reason: u.reason,
+        needsReview: u.needsReview,
+        panel: classification?.panel || 'unknown', // Include panel type for frontend filtering
+      };
+    }),
+    ...rejectedPairs.flatMap(p => {
+      const frontClass = classMap.get(p.front);
+      const backClass = classMap.get(p.back);
+      return [
+        {
+          imagePath: p.front,
+          reason: `Pair rejected: ${p.issues?.join(', ') || 'verification failed'}`,
+          needsReview: true,
+          panel: frontClass?.panel || 'unknown',
+        },
+        {
+          imagePath: p.back,
+          reason: `Pair rejected: ${p.issues?.join(', ') || 'verification failed'}`,
+          needsReview: true,
+          panel: backClass?.panel || 'unknown',
+        },
+      ];
+    }),
+  ];
+  
+  // Calculate metrics
   const fronts = classifications.filter(c => c.panel === 'front').length;
   const backs = classifications.filter(c => c.panel === 'back' || c.panel === 'side').length;
   
   // Build brand metrics
   const byBrand: Record<string, { fronts: number; paired: number; pairRate: number }> = {};
-  classifications.forEach(c => {
     if (c.kind === 'product' && c.panel === 'front' && c.brand) {
       const brandKey = c.brand.toLowerCase();
       if (!byBrand[brandKey]) {
