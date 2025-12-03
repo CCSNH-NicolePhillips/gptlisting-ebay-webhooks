@@ -59,7 +59,10 @@ async function fetchInventoryLocationKeys(accessToken: string, apiHost: string, 
 
 const METHODS = "POST, OPTIONS";
 const DRY_RUN_DEFAULT = (process.env.EBAY_DRY_RUN || "true").toLowerCase() !== "false";
-const DEFAULT_LOCATION_KEY = "default-loc"; // Fallback location key when env not set
+// Note: This constant is deprecated and should not be used.
+// Users must configure their merchant location via /location.html
+// Environment variable EBAY_MERCHANT_LOCATION_KEY is only for single-user deployments
+const DEFAULT_LOCATION_KEY = ""; // No global fallback - users must set their location
 
 type HeadersMap = Record<string, string | undefined>;
 
@@ -232,25 +235,32 @@ export const handler: Handler = async (event) => {
         (mapped.offer.merchantLocationKey && String(mapped.offer.merchantLocationKey)) || null;
 
       console.log(`[DEBUG] Initial merchantLocationKey from mapped: ${merchantLocationKey}`);
-      console.log(`[DEBUG] ENV EBAY_MERCHANT_LOCATION_KEY: ${process.env.EBAY_MERCHANT_LOCATION_KEY}`);
 
-      // Prefer env variable over mapped value to avoid stale saved bindings
-      if (process.env.EBAY_MERCHANT_LOCATION_KEY) {
-        merchantLocationKey = process.env.EBAY_MERCHANT_LOCATION_KEY;
-        console.log(`[DEBUG] Using env variable: ${merchantLocationKey}`);
-      }
+      // Priority order (correct for multi-user SaaS):
+      // 1. User's explicit choice from the request
+      // 2. User's saved default location preference
+      // 3. Environment variable fallback (should rarely be used)
 
-      // Per-user default merchant location fallback (only if still not set)
+      // If no explicit choice in the request, try user's saved default
       if (!merchantLocationKey) {
         try {
           const store = tokensStore();
           const saved = (await store.get(userScopedKey(user.userId, "ebay-location.json"), { type: "json" })) as any;
           const candidate = typeof saved?.merchantLocationKey === "string" ? saved.merchantLocationKey.trim() : "";
-          if (candidate) merchantLocationKey = candidate;
-          console.log(`[DEBUG] Using saved user default: ${merchantLocationKey}`);
+          if (candidate) {
+            merchantLocationKey = candidate;
+            console.log(`[DEBUG] Using user's saved default location: ${merchantLocationKey}`);
+          }
         } catch {
           // ignore
         }
+      }
+
+      // Last resort: environment variable fallback (admin-configured default)
+      // Note: This should only be used if user has no saved preference
+      if (!merchantLocationKey && process.env.EBAY_MERCHANT_LOCATION_KEY) {
+        merchantLocationKey = process.env.EBAY_MERCHANT_LOCATION_KEY;
+        console.log(`[DEBUG] Using env variable as fallback: ${merchantLocationKey}`);
       }
 
       console.log(`[DEBUG] Final merchantLocationKey before validation: ${merchantLocationKey}`);

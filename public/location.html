@@ -400,8 +400,12 @@
         }
 
         async function handleCreate() {
+          // Generate a better default key if user didn't provide one
+          const providedKey = (fields.key?.value || '').trim();
+          const defaultKey = providedKey || `warehouse-${Date.now().toString(36)}`;
+          
           const values = {
-            key: (fields.key?.value || '').trim() || 'default-loc',
+            key: defaultKey,
             name: (fields.name?.value || '').trim() || 'Main Warehouse',
             address1: (fields.address1?.value || '').trim(),
             city: (fields.city?.value || '').trim(),
