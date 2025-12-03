@@ -1140,6 +1140,7 @@
             const pairs = statusRes.result?.pairs || [];
             unpaired = statusRes.result?.unpaired || [];
             
+            // Convert pairs to products
             products = pairs.map((pair, index) => ({
               productId: `product-${index + 1}`,
               brand: pair.brand || null,
@@ -1151,6 +1152,36 @@
               heroDisplayUrl: pair.frontUrl || '',
               backDisplayUrl: pair.backUrl || ''
             }));
+            
+            // Add high-quality unpaired fronts as single-image products
+            // Filter: only front panels, high confidence, has brand or product name
+            const unpairedFronts = unpaired.filter(item => {
+              // Need the classification data to check panel type and confidence
+              // For now, check if reason suggests it's a valid front
+              const isFront = item.reason?.toLowerCase().includes('no matching back');
+              return isFront && item.imageUrl; // Has image URL means we can use it
+            });
+            
+            if (unpairedFronts.length > 0) {
+              console.log(`[Quick List] Creating ${unpairedFronts.length} single-image products from unpaired fronts`);
+              
+              unpairedFronts.forEach((item, index) => {
+                products.push({
+                  productId: `product-single-${index + 1}`,
+                  brand: null, // Will be extracted by GPT during draft creation
+                  brandWebsite: null,
+                  title: null,
+                  product: null,
+                  keyText: [],
+                  categoryPath: undefined,
+                  heroDisplayUrl: item.imageUrl,
+                  backDisplayUrl: '' // No back image
+                });
+              });
+              
+              // Remove the unpaired fronts from the unpaired list since we're using them
+              unpaired = unpaired.filter(item => !unpairedFronts.includes(item));
+            }
 
             $('totalPaired').textContent = products.length;
             
