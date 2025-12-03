@@ -65,8 +65,6 @@
         box-shadow: 0 18px 40px rgba(15, 23, 42, 0.45);
         transition: transform 0.15s ease-out, box-shadow 0.15s ease-out,
           border-color 0.15s ease-out;
-        max-width: 340px;
-        margin: 0 auto;
       }
 
       .card:hover {
@@ -375,6 +373,14 @@
           
           <!-- Right: Actions -->
           <div class="dp-topbar-right" style="display: flex !important; gap: 0.75rem;">
+            <button id="btnRefresh" class="dp-btn dp-btn-secondary" title="Reload drafts" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 0.35rem;">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <polyline points="1 20 1 14 7 14"></polyline>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+              </svg>
+              Refresh
+            </button>
             <a href="/index.html" class="dp-btn dp-btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem;">← Back to Dashboard</a>
             <button id="btnClean" class="dp-btn dp-btn-danger" title="Delete ALL UNPUBLISHED drafts" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
               Delete all drafts
@@ -387,7 +393,6 @@
         <main class="dp-main">
       <div style="margin-bottom: 1.5rem;">
         <div id="flash" class="flash"></div>
-        <button id="btnRefresh" class="dp-btn dp-btn-secondary" title="Reload drafts">Refresh</button>
       </div>
       
       <div id="needsAttention" style="display: none; margin-bottom: 2rem;">
