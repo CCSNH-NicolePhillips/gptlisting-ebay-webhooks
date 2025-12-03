@@ -1153,6 +1153,27 @@
             }));
 
             $('totalPaired').textContent = products.length;
+            
+            // Show pairing details in console for debugging
+            console.log('[Quick List] Pairing Results:');
+            console.log(`  ✅ Paired: ${pairs.length} products`);
+            console.log(`  ⚠️ Unpaired: ${unpaired.length} images`);
+            
+            pairs.forEach((pair, idx) => {
+              console.log(`\nPair ${idx + 1}:`);
+              console.log(`  Front: ${pair.front}`);
+              console.log(`  Back: ${pair.back}`);
+              console.log(`  Brand: ${pair.brand || 'null'}`);
+              console.log(`  Product: ${pair.product || 'null'}`);
+              console.log(`  Confidence: ${pair.confidence || 'N/A'}`);
+            });
+            
+            if (unpaired.length > 0) {
+              console.log('\n❌ Unpaired Images:');
+              unpaired.forEach(item => {
+                console.log(`  ${item.imagePath}: ${item.reason}`);
+              });
+            }
 
             if (unpaired.length > 0) {
               $('orphansCount').textContent = unpaired.length;
