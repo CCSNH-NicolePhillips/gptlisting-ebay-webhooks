@@ -998,7 +998,47 @@
       return allUploadedFiles;
     }
 
+    async function checkEbaySetup() {
+      // Check if user has required eBay policies and location
+      try {
+        const [policiesRes, locationRes] = await Promise.all([
+          fetchJSON('/.netlify/functions/ebay-get-policy-ids'),
+          fetchJSON('/.netlify/functions/ebay-get-location-user')
+        ]);
+        
+        const missingItems = [];
+        
+        if (!policiesRes?.fulfillment) missingItems.push('Fulfillment Policy');
+        if (!policiesRes?.payment) missingItems.push('Payment Policy');
+        if (!policiesRes?.return) missingItems.push('Return Policy');
+        if (!locationRes?.merchantLocationKey) missingItems.push('Inventory Location');
+        
+        if (missingItems.length > 0) {
+          const msg = `❌ Missing required eBay setup:\n\n${missingItems.map(item => '• ' + item).join('\n')}\n\nPlease complete setup before using Quick List.`;
+          alert(msg);
+          
+          // Redirect to setup page
+          if (confirm('Go to Setup page now?')) {
+            window.location.href = '/setup.html';
+          }
+          return false;
+        }
+        
+        return true;
+      } catch (err) {
+        console.error('[Quick List] Setup check failed:', err);
+        // Allow to proceed if check fails (might be network issue)
+        return true;
+      }
+    }
+
     async function startPipeline() {
+      // Pre-flight check: Verify user has required eBay setup
+      const setupOk = await checkEbaySetup();
+      if (!setupOk) {
+        return;
+      }
+      
       const btn = $('btnStart');
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner"></span>Processing...';

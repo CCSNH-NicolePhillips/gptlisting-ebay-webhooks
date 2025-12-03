@@ -291,7 +291,7 @@
             const keyLine = document.createElement('div');
             keyLine.className = 'muted small';
             const isDefault = !!(state.defaultKey && loc.merchantLocationKey && state.defaultKey === loc.merchantLocationKey);
-            keyLine.textContent = (loc.merchantLocationKey || '') + (isDefault ? '  • Default' : '');
+            keyLine.innerHTML = (loc.merchantLocationKey || '') + (isDefault ? ' <span style="color:#4ade80; font-weight:600;">✓ DEFAULT</span>' : '');
             const addressLine = document.createElement('div');
             addressLine.className = 'muted small';
             addressLine.textContent = formatAddress(loc);
