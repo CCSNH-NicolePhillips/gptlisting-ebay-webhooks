@@ -9,20 +9,49 @@ This guide explains how to run the app locally with full eBay integration for te
    npm install -g netlify-cli
    ```
 
-2. **eBay Developer Account** with separate Sandbox credentials
+2. **ngrok** - For HTTPS tunnel to localhost (eBay requires HTTPS)
+   ```bash
+   npm install -g ngrok
+   # or download from https://ngrok.com/download
+   ```
 
-## Step 1: Create eBay Sandbox RUName
+3. **eBay Developer Account** with separate Sandbox credentials
+
+## Step 1: Start Local Server with HTTPS Tunnel
+
+eBay requires HTTPS for OAuth callbacks, so we use ngrok to create a secure tunnel to localhost.
+
+```bash
+# Terminal 1: Start Netlify Dev
+netlify dev
+
+# Terminal 2: Start ngrok tunnel
+ngrok http 8888
+```
+
+ngrok will display output like:
+```
+Forwarding  https://abc123.ngrok.io -> http://localhost:8888
+```
+
+**Copy the HTTPS URL** (e.g., `https://abc123.ngrok.io`) - you'll need this for the next step.
+
+> **Note**: The ngrok URL changes every time you restart it (unless you have a paid account with a fixed subdomain). You'll need to update the eBay RUName each time, or use a paid ngrok account for a permanent URL.
+
+## Step 2: Create eBay Sandbox RUName
 
 1. Go to [eBay Developer Portal](https://developer.ebay.com/)
 2. Switch to **Sandbox** environment
 3. Navigate to **User Tokens** → **Auth'n'Auth**
 4. Create a new **OAuth Redirect URL** (RUName):
-   - **Name**: `localhost-dev` (or whatever you prefer)
+   - **Name**: `ngrok-dev` (or whatever you prefer)
    - **Production/Sandbox**: SANDBOX
-   - **Redirect URL**: `http://localhost:8888/.netlify/functions/ebay-oauth-callback`
-   - **Privacy Policy URL**: `http://localhost:8888/privacy.html`
+   - **Redirect URL**: `https://YOUR-NGROK-URL/.netlify/functions/ebay-oauth-callback`
+     - Example: `https://abc123.ngrok.io/.netlify/functions/ebay-oauth-callback`
+   - **Privacy Policy URL**: `https://YOUR-NGROK-URL/privacy.html`
+     - Example: `https://abc123.ngrok.io/privacy.html`
    
-5. Note the generated RUName (e.g., `Your_Name-YourApp-local-wxyz`)
+5. Note the generated RUName (e.g., `Your_Name-YourApp-ngrok-wxyz`)
 
 ## Step 2: Get Sandbox App Credentials
 
@@ -41,7 +70,7 @@ Create `.env` file in project root:
 EBAY_ENV=SANDBOX
 EBAY_CLIENT_ID=your-sandbox-app-id
 EBAY_CLIENT_SECRET=your-sandbox-cert-id
-EBAY_RUNAME=Your_Name-YourApp-local-wxyz
+EBAY_RUNAME=Your_Name-YourApp-ngrok-wxyz
 
 # Marketplace (use EBAY_US for testing)
 DEFAULT_MARKETPLACE_ID=EBAY_US
@@ -78,28 +107,33 @@ REDIS_URL=redis://localhost:6379
 ## Step 4: Run Locally
 
 ```bash
-# Install dependencies
+# Terminal 1: Install dependencies and build
 npm install
-
-# Build TypeScript
 npm run build
 
 # Start Netlify Dev server
 netlify dev
+
+# Terminal 2: Start ngrok tunnel (in a separate terminal)
+ngrok http 8888
 ```
 
-This starts:
-- Local dev server at `http://localhost:8888`
-- Functions at `http://localhost:8888/.netlify/functions/...`
+Your app is now accessible at:
+- **Public URL** (for eBay OAuth): `https://YOUR-NGROK-URL` (e.g., `https://abc123.ngrok.io`)
+- **Local URL** (for direct testing): `http://localhost:8888`
+
+> **Important**: Use the ngrok HTTPS URL when testing eBay OAuth. Use localhost for general development without OAuth.
 
 ## Step 5: Test eBay OAuth Flow
 
-1. Open `http://localhost:8888`
+1. Open the **ngrok HTTPS URL** in your browser (e.g., `https://abc123.ngrok.io`)
 2. Login with Auth0
 3. Go to **Settings** → **Connect eBay**
 4. Should redirect to eBay Sandbox login
-5. After authorization, redirects back to `localhost:8888`
+5. After authorization, redirects back to your ngrok URL
 6. Check that token is saved (Settings page shows "Connected")
+
+> **Note**: If you restart ngrok, you'll get a new URL and need to update the RUName in eBay Developer Portal.
 
 ## Testing Workflow
 
@@ -122,9 +156,18 @@ This starts:
 
 ### "RUName mismatch" or "redirect_uri" errors
 
-- eBay RUName must **exactly** match `http://localhost:8888/.netlify/functions/ebay-oauth-callback`
-- Check eBay Developer Portal → Auth'n'Auth settings
-- No trailing slash, must be `http` not `https` for localhost
+- eBay RUName must **exactly** match your ngrok URL
+- Format: `https://YOUR-NGROK-URL/.netlify/functions/ebay-oauth-callback`
+- No trailing slash
+- Must be HTTPS (not HTTP)
+- If you restart ngrok, update the RUName in eBay Developer Portal
+
+### ngrok URL changes every restart
+
+- **Free ngrok**: URL changes each time (`https://random123.ngrok.io`)
+- **Solution 1**: Update eBay RUName each time you restart ngrok
+- **Solution 2**: Get ngrok paid account for fixed subdomain (`https://yourname.ngrok.io`)
+- **Solution 3**: Use Netlify Deploy Preview instead (see below)
 
 ### "Invalid grant" errors
 
@@ -145,13 +188,25 @@ This starts:
 
 ## Production vs Local Differences
 
-| Feature | Production | Local Dev |
-|---------|-----------|-----------|
+| Feature | Production | Local Dev (ngrok) |
+|---------|-----------|-------------------|
 | eBay Env | PROD | SANDBOX |
-| RUName | Production RUName | Localhost RUName |
-| URL | `https://gptlisting.netlify.app` | `http://localhost:8888` |
+| RUName | Production RUName | ngrok HTTPS URL |
+| URL | `https://gptlisting.netlify.app` | `https://abc123.ngrok.io` |
 | Storage | Netlify Blobs + R2 | Redis + R2 |
 | Background Jobs | Netlify Background Functions | Simulated (runs inline) |
+
+## Alternative: Use Netlify Deploy Preview (No ngrok needed)
+
+If you don't want to deal with changing ngrok URLs:
+
+1. Create a `dev` branch for testing
+2. Push changes: `git push origin dev`
+3. Netlify automatically creates deploy preview: `https://dev--yoursite.netlify.app`
+4. Create eBay RUName pointing to: `https://dev--yoursite.netlify.app/.netlify/functions/ebay-oauth-callback`
+5. Set `EBAY_ENV=SANDBOX` in Netlify environment variables for the `dev` branch
+
+This gives you a stable HTTPS URL for development without needing ngrok.
 
 ## Best Practices
 
@@ -164,19 +219,20 @@ This starts:
 ## Quick Commands
 
 ```bash
-# Build and run
+# Terminal 1: Build and run Netlify Dev
 npm run build && netlify dev
 
-# Watch TypeScript changes
+# Terminal 2: Start ngrok tunnel
+ngrok http 8888
+
+# Watch TypeScript changes (optional)
 npm run build -- --watch
-# In another terminal:
-netlify dev
 
 # Clear local cache
 rm -rf .netlify/cache
 
-# View function logs
-netlify functions:log <function-name>
+# View ngrok requests (helpful for debugging OAuth)
+# Open http://localhost:4040 in browser (ngrok inspector)
 ```
 
 ## Environment Variables Reference
