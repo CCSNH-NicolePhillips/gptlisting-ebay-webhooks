@@ -1067,6 +1067,19 @@
 function updateUIFromCache(data) {
   const { connected, policiesReady, locationReady, ready, setupHints } = data;
   
+  // Update connection status UI
+  lastStatus = connected;
+  const connectionsSection = document.getElementById('connectionsSection');
+  const ebayStatusDiv = document.getElementById('ebayStatus');
+  const ebayConnectBtn = document.getElementById('ebayConnect');
+  const ebayDisconnectBtn = document.getElementById('ebayDisconnect');
+  const policyWarning = document.getElementById('policyWarning');
+
+  if (connectionsSection) connectionsSection.style.display = 'block';
+  if (ebayStatusDiv) ebayStatusDiv.textContent = connected ? 'Connected ✅' : 'Not connected';
+  if (ebayConnectBtn) ebayConnectBtn.style.display = connected ? 'none' : 'inline-block';
+  if (ebayDisconnectBtn) ebayDisconnectBtn.style.display = connected ? 'inline-block' : 'none';
+  
   const chkPolicies = document.getElementById('chkPolicies');
   const policiesLink = document.getElementById('policiesLink');
   if (chkPolicies) {
