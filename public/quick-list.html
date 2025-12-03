@@ -1002,15 +1002,16 @@
       // Check if user has required eBay policies and location
       try {
         const [policiesRes, locationRes] = await Promise.all([
-          fetchJSON('/.netlify/functions/ebay-get-policy-ids'),
+          fetchJSON('/.netlify/functions/ebay-get-policy-defaults'),
           fetchJSON('/.netlify/functions/ebay-get-location-user')
         ]);
         
         const missingItems = [];
+        const policies = policiesRes?.defaults || {};
         
-        if (!policiesRes?.fulfillment) missingItems.push('Fulfillment Policy');
-        if (!policiesRes?.payment) missingItems.push('Payment Policy');
-        if (!policiesRes?.return) missingItems.push('Return Policy');
+        if (!policies.fulfillment) missingItems.push('Fulfillment Policy');
+        if (!policies.payment) missingItems.push('Payment Policy');
+        if (!policies.return) missingItems.push('Return Policy');
         if (!locationRes?.merchantLocationKey) missingItems.push('Inventory Location');
         
         if (missingItems.length > 0) {
