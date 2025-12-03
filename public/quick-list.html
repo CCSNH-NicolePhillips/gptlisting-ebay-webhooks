@@ -1329,6 +1329,26 @@
           })
         });
 
+        // Handle merchant location key error with helpful message
+        if (!pubRes.ok && pubRes.error === 'Invalid merchantLocationKey') {
+          const invalidKey = pubRes.invalidKey || 'unknown';
+          const availableKeys = Array.isArray(pubRes.availableKeys) ? pubRes.availableKeys.join(', ') : 'none';
+          const errorMsg = `❌ Inventory Location Error\n\n` +
+            `The location "${invalidKey}" was not found in your eBay account.\n\n` +
+            `Available locations: ${availableKeys}\n\n` +
+            `To fix this:\n` +
+            `1. Go to Settings → Inventory Locations\n` +
+            `2. Create a location or set an existing one as default\n` +
+            `3. Return here and try again\n\n` +
+            `Would you like to go to Inventory Locations now?`;
+          
+          if (confirm(errorMsg)) {
+            window.location.href = '/location.html';
+            return;
+          }
+          throw new Error(`Invalid inventory location: ${invalidKey}`);
+        }
+
         if (!pubRes.ok) {
           throw new Error(pubRes.error || 'Publishing to eBay failed');
         }
@@ -1362,7 +1382,24 @@
           return;
         }
 
-        alert(`Error: ${err.message}`);
+        // Mark the current active step as warning state
+        for (let i = 1; i <= 4; i++) {
+          const step = $(`step${i}`);
+          if (step.classList.contains('active')) {
+            step.classList.remove('active');
+            step.classList.add('warning');
+            $(`status${i}`).textContent = 'Failed';
+            break;
+          }
+        }
+
+        // Show friendly error message for common issues
+        let errorMessage = err.message;
+        if (err.message?.includes('Invalid inventory location')) {
+          errorMessage = `⚠️ ${err.message}\n\nPlease set up your inventory location in Settings before creating listings.`;
+        }
+
+        alert(`Error: ${errorMessage}`);
         btn.disabled = false;
         btn.textContent = '🔄 Retry Quick List';
         btn.style.background = 'linear-gradient(135deg, var(--primary) 0%, var(--primary-600) 100%)';

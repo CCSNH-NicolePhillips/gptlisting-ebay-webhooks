@@ -443,19 +443,30 @@
           const targetOv = gId ? document.querySelector(`[data-ovrbox="${gId}"]`) : null;
           const card = targetOv ? targetOv.closest('.card') : null;
           const defaultMlk = (window._defaultMerchantLocationKey || '').trim();
+          const invalidKey = data.detail?.match(/Key '([^']+)'/)?.[1] || 'unknown';
+          
           if (card) {
             const sel = card.querySelector('select[data-offer-mlk-select]');
             if (sel) {
               sel.innerHTML = '';
               keys.forEach((k) => { const o = document.createElement('option'); o.value = k; o.textContent = k; sel.appendChild(o); });
-              if (defaultMlk) {
-                const found = keys.find((k) => k === defaultMlk) || keys.find((k) => k.toLowerCase() === defaultMlk.toLowerCase());
-                if (found) sel.value = found;
+              // Auto-select first available key if current default is invalid
+              if (keys.length > 0) {
+                sel.value = keys[0];
               }
             }
             try { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); card.style.outline = '2px solid #f90'; setTimeout(() => { card.style.outline = ''; }, 2000);} catch {}
           }
-          status.textContent = 'Invalid merchantLocationKey. Please pick one of your inventory locations from the dropdown, click Save Overrides, then retry Create Drafts.';
+          
+          const keysStr = keys.length > 0 ? keys.join(', ') : 'none';
+          status.innerHTML = `<strong>⚠️ Invalid Inventory Location</strong><br>
+            Location key "${invalidKey}" not found in your eBay account.<br>
+            Available locations: <strong>${keysStr}</strong><br><br>
+            <strong>To fix:</strong><br>
+            1. Select a valid location from the dropdown above<br>
+            2. Click "Save Overrides"<br>
+            3. Click "Create Drafts" again<br><br>
+            Or <a href="/location.html" style="color: #a8c1ff; text-decoration: underline;">manage your inventory locations here</a>.`;
           return;
         }
         if (data.dryRun) {

@@ -268,13 +268,16 @@ export const handler: Handler = async (event) => {
       };
       const resolvedKey = findKey(merchantLocationKey);
       if (!resolvedKey) {
+        console.error(`[create-ebay-draft-user] Invalid merchantLocationKey: "${merchantLocationKey}" not found. Available: ${keys.join(', ')}`);
         return json(
           400,
           {
             error: "Invalid merchantLocationKey",
-            detail: `Key '${merchantLocationKey || "(none)"}' not found in ${process.env.EBAY_ENV || "production"}.`,
+            detail: `Key '${merchantLocationKey || "(none)"}' not found in ${process.env.EBAY_ENV || "production"}. Please select from available locations or create a new one.`,
+            invalidKey: merchantLocationKey,
             availableKeys: keys,
             groupId,
+            helpUrl: "/location.html"
           },
           originHdr,
           METHODS
