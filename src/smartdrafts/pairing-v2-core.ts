@@ -33,6 +33,7 @@ export interface PairingResult {
     imagePath: string;
     reason: string;
     needsReview: boolean;
+    panel?: string; // 'front' | 'back' | 'side' | 'unknown'
   }>;
   metrics: {
     totals: {
@@ -901,10 +902,6 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
     pairedFilenames.add(p.back);
   });
   
-  // Build classification map for panel type lookup
-  const classMap = new Map<string, ImageClassificationV2>();
-  classifications.forEach(c => classMap.set(c.filename, c));
-  
   const unpaired = [
     ...pairing.unpaired.map(u => {
       const classification = classMap.get(u.filename);
@@ -941,6 +938,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
   
   // Build brand metrics
   const byBrand: Record<string, { fronts: number; paired: number; pairRate: number }> = {};
+  classifications.forEach(c => {
     if (c.kind === 'product' && c.panel === 'front' && c.brand) {
       const brandKey = c.brand.toLowerCase();
       if (!byBrand[brandKey]) {

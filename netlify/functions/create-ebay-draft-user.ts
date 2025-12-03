@@ -249,8 +249,15 @@ export const handler: Handler = async (event) => {
           const saved = (await store.get(userScopedKey(user.userId, "ebay-location.json"), { type: "json" })) as any;
           const candidate = typeof saved?.merchantLocationKey === "string" ? saved.merchantLocationKey.trim() : "";
           if (candidate) {
-            merchantLocationKey = candidate;
-            console.log(`[DEBUG] Using user's saved default location: ${merchantLocationKey}`);
+            // Validate that the saved location still exists
+            if (availableLocationKeys.includes(candidate)) {
+              merchantLocationKey = candidate;
+              console.log(`[DEBUG] Using user's saved default location: ${merchantLocationKey}`);
+            } else {
+              console.log(`[DEBUG] Saved location '${candidate}' no longer exists. Clearing and will auto-select.`);
+              // Clear the invalid saved location
+              await store.setJSON(userScopedKey(user.userId, "ebay-location.json"), null);
+            }
           }
         } catch {
           // ignore
@@ -275,9 +282,30 @@ export const handler: Handler = async (event) => {
           console.warn(`[DEBUG] Failed to save auto-selected location:`, saveErr);
         }
       }
+      
+      // Auto-select first location if multiple exist (better than failing)
+      if (!merchantLocationKey && availableLocationKeys.length > 1) {
+        merchantLocationKey = availableLocationKeys[0];
+        console.log(`[DEBUG] Auto-selected first of ${availableLocationKeys.length} available locations: ${merchantLocationKey}`);
+        console.log(`[DEBUG] User should set their preferred location in Settings > eBay Location`);
+        
+        // Save this as the user's default for future use
+        try {
+          const store = tokensStore();
+          await store.setJSON(userScopedKey(user.userId, "ebay-location.json"), {
+            merchantLocationKey,
+            savedAt: new Date().toISOString(),
+            autoSelected: true,
+            note: "Auto-selected first location. Please update if you prefer a different one."
+          });
+          console.log(`[DEBUG] Saved first location as user default`);
+        } catch (saveErr) {
+          console.warn(`[DEBUG] Failed to save auto-selected location:`, saveErr);
+        }
+      }
 
       // Last resort: environment variable fallback (admin-configured default)
-      // Note: This should only be used if user has no saved preference
+      // Note: This should rarely be used now that we auto-select from user's actual locations
       if (!merchantLocationKey && process.env.EBAY_MERCHANT_LOCATION_KEY) {
         merchantLocationKey = process.env.EBAY_MERCHANT_LOCATION_KEY;
         console.log(`[DEBUG] Using env variable as fallback: ${merchantLocationKey}`);
