@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>View User Images - Admin</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #e0e0e0;
+      padding: 2rem;
+      min-height: 100vh;
+    }
+    
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+      color: #38bdf8;
+    }
+    
+    .subtitle {
+      color: #94a3b8;
+      margin-bottom: 2rem;
+    }
+    
+    .search-box {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    
+    .input-group {
+      display: flex;
+      gap: 1rem;
+      align-items: flex-end;
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-size: 0.875rem;
+      color: #94a3b8;
+    }
+    
+    input {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+      color: #e0e0e0;
+      font-size: 1rem;
+      flex: 1;
+    }
+    
+    input:focus {
+      outline: none;
+      border-color: rgba(56, 189, 248, 0.5);
+    }
+    
+    button {
+      background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%);
+      border: none;
+      border-radius: 6px;
+      padding: 0.75rem 2rem;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 1rem;
+      transition: transform 0.2s;
+    }
+    
+    button:hover {
+      transform: translateY(-1px);
+    }
+    
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .status {
+      margin: 1rem 0;
+      padding: 1rem;
+      border-radius: 6px;
+      display: none;
+    }
+    
+    .status.success {
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      color: #4ade80;
+    }
+    
+    .status.error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #f87171;
+    }
+    
+    .status.info {
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: #38bdf8;
+    }
+    
+    .metadata {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 2rem;
+      display: none;
+    }
+    
+    .metadata-row {
+      display: flex;
+      gap: 2rem;
+      flex-wrap: wrap;
+    }
+    
+    .metadata-item {
+      flex: 1;
+      min-width: 200px;
+    }
+    
+    .metadata-label {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.25rem;
+    }
+    
+    .metadata-value {
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: #38bdf8;
+    }
+    
+    .images-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 1.5rem;
+      margin-top: 2rem;
+    }
+    
+    .image-card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      overflow: hidden;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .image-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      border-color: rgba(56, 189, 248, 0.5);
+    }
+    
+    .image-wrapper {
+      width: 100%;
+      height: 300px;
+      background: rgba(0, 0, 0, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    
+    .image-wrapper img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    
+    .image-info {
+      padding: 1rem;
+    }
+    
+    .image-filename {
+      font-size: 0.875rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      word-break: break-all;
+      color: #e0e0e0;
+    }
+    
+    .image-meta {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      margin-bottom: 0.25rem;
+    }
+    
+    .image-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+    }
+    
+    .btn-small {
+      padding: 0.375rem 0.75rem;
+      font-size: 0.75rem;
+      background: rgba(56, 189, 248, 0.2);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: #38bdf8;
+      border-radius: 4px;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      transition: background 0.2s;
+    }
+    
+    .btn-small:hover {
+      background: rgba(56, 189, 248, 0.3);
+    }
+    
+    .spinner {
+      display: inline-block;
+      width: 1rem;
+      height: 1rem;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      margin-right: 0.5rem;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🖼️ View User Images</h1>
+    <p class="subtitle">Admin tool to view all staged images for a user</p>
+    
+    <div class="search-box">
+      <div class="input-group">
+        <div style="flex: 1;">
+          <label for="userIdInput">User ID</label>
+          <input type="text" id="userIdInput" placeholder="e.g., user_2orPq5sGOK7qTTOv6k4NCgwCpDD">
+        </div>
+        <button id="loadBtn" onclick="loadImages()">Load Images</button>
+      </div>
+    </div>
+    
+    <div id="status" class="status"></div>
+    
+    <div id="metadata" class="metadata">
+      <div class="metadata-row">
+        <div class="metadata-item">
+          <div class="metadata-label">User ID</div>
+          <div class="metadata-value" id="metaUserId">-</div>
+        </div>
+        <div class="metadata-item">
+          <div class="metadata-label">Bucket</div>
+          <div class="metadata-value" id="metaBucket">-</div>
+        </div>
+        <div class="metadata-item">
+          <div class="metadata-label">Total Images</div>
+          <div class="metadata-value" id="metaCount">-</div>
+        </div>
+        <div class="metadata-item">
+          <div class="metadata-label">Storage Path</div>
+          <div class="metadata-value" id="metaPrefix">-</div>
+        </div>
+      </div>
+    </div>
+    
+    <div id="imagesGrid" class="images-grid"></div>
+  </div>
+  
+  <script>
+    function showStatus(message, type = 'info') {
+      const status = document.getElementById('status');
+      status.textContent = message;
+      status.className = `status ${type}`;
+      status.style.display = 'block';
+    }
+    
+    function hideStatus() {
+      document.getElementById('status').style.display = 'none';
+    }
+    
+    async function loadImages() {
+      const userId = document.getElementById('userIdInput').value.trim();
+      
+      if (!userId) {
+        showStatus('Please enter a User ID', 'error');
+        return;
+      }
+      
+      const loadBtn = document.getElementById('loadBtn');
+      loadBtn.disabled = true;
+      loadBtn.innerHTML = '<span class="spinner"></span>Loading...';
+      
+      hideStatus();
+      document.getElementById('metadata').style.display = 'none';
+      document.getElementById('imagesGrid').innerHTML = '';
+      
+      try {
+        const response = await fetch(`/.netlify/functions/admin-list-user-images?userId=${encodeURIComponent(userId)}`);
+        const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(data.error || data.message || 'Failed to load images');
+        }
+        
+        if (data.count === 0) {
+          showStatus(`No images found for user ${userId}`, 'info');
+          return;
+        }
+        
+        // Show metadata
+        document.getElementById('metaUserId').textContent = data.userId;
+        document.getElementById('metaBucket').textContent = data.bucket;
+        document.getElementById('metaCount').textContent = data.count;
+        document.getElementById('metaPrefix').textContent = data.prefix;
+        document.getElementById('metadata').style.display = 'block';
+        
+        // Render images
+        const grid = document.getElementById('imagesGrid');
+        
+        data.images.forEach(image => {
+          const card = document.createElement('div');
+          card.className = 'image-card';
+          
+          const sizeMB = (image.size / 1024 / 1024).toFixed(2);
+          const date = new Date(image.lastModified).toLocaleString();
+          
+          card.innerHTML = `
+            <div class="image-wrapper">
+              <img src="${image.url}" alt="${image.filename}" loading="lazy">
+            </div>
+            <div class="image-info">
+              <div class="image-filename">${image.filename}</div>
+              <div class="image-meta">📦 ${sizeMB} MB</div>
+              <div class="image-meta">🕐 ${date}</div>
+              <div class="image-meta" style="font-size: 0.7rem; color: #64748b; margin-top: 0.5rem; word-break: break-all;">${image.key}</div>
+              <div class="image-actions">
+                <a href="${image.url}" target="_blank" class="btn-small">Open Full Size</a>
+                <button class="btn-small" onclick="copyUrl('${image.url}')">Copy URL</button>
+              </div>
+            </div>
+          `;
+          
+          grid.appendChild(card);
+        });
+        
+        showStatus(`Loaded ${data.count} image(s) for ${userId}`, 'success');
+        
+      } catch (error) {
+        console.error('Error loading images:', error);
+        showStatus(`Error: ${error.message}`, 'error');
+      } finally {
+        loadBtn.disabled = false;
+        loadBtn.textContent = 'Load Images';
+      }
+    }
+    
+    function copyUrl(url) {
+      navigator.clipboard.writeText(url).then(() => {
+        showStatus('URL copied to clipboard!', 'success');
+        setTimeout(hideStatus, 2000);
+      });
+    }
+    
+    // Allow Enter key to trigger load
+    document.getElementById('userIdInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        loadImages();
+      }
+    });
+    
+    // Pre-fill from URL parameter if provided
+    const urlParams = new URLSearchParams(window.location.search);
+    const userIdParam = urlParams.get('userId');
+    if (userIdParam) {
+      document.getElementById('userIdInput').value = userIdParam;
+      loadImages();
+    }
+  </script>
+</body>
+</html>
