@@ -82,7 +82,17 @@
     <!-- Edit modal removed (we now create new policies instead). -->
 
     <script>
-      (async () => { try { await authClient.requireAuth(); } catch {} })();
+      // Wait for authClient to be available
+      window.addEventListener('DOMContentLoaded', async () => {
+        // Give auth-client.js time to load
+        while (typeof authClient === 'undefined') {
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        
+        try { await authClient.requireAuth(); } catch {}
+        
+        await init();
+      });
 
       const defaults = { fulfillment: null, payment: null, return: null };
 
@@ -243,18 +253,25 @@
         showMsg('');
         try {
           await loadDefaults();
+          console.log('[Policies] Fetching policy list...');
           const r = await authClient.authFetch('/.netlify/functions/ebay-list-policies');
+          console.log('[Policies] Response status:', r.status);
           const j = await r.json();
+          console.log('[Policies] Response data:', j);
           const f = (j?.fulfillment?.json?.fulfillmentPolicies) || [];
           const p = (j?.payment?.json?.paymentPolicies) || [];
           const rr = (j?.returns?.json?.returnPolicies) || [];
+          console.log('[Policies] Counts - Fulfillment:', f.length, 'Payment:', p.length, 'Return:', rr.length);
           renderTable('fTable', f, 'fulfillment');
           renderTable('pTable', p, 'payment');
           renderTable('rTable', rr, 'return');
           document.getElementById('fStatus').textContent = f.length? `${f.length} policy(ies)` : 'No policies';
           document.getElementById('pStatus').textContent = p.length? `${p.length} policy(ies)` : 'No policies';
           document.getElementById('rStatus').textContent = rr.length? `${rr.length} policy(ies)` : 'No policies';
-        } catch (e) { showMsg('Error loading policies: ' + (e?.message || e)); }
+        } catch (e) { 
+          console.error('[Policies] Error:', e);
+          showMsg('Error loading policies: ' + (e?.message || e)); 
+        }
       }
 
       // If redirected back after creation, show a short status message
@@ -262,7 +279,10 @@
         try { const usp = new URLSearchParams(location.search); const c = usp.get('created'); if (c) { showMsg('Created new ' + c + ' policy. Refreshing…'); setTimeout(()=>{ showMsg(''); history.replaceState({}, document.title, '/policies-manage.html'); }, 1500); } } catch {}
       })();
 
-      populate();
+      // Initialize after authClient is ready
+      async function init() {
+        populate();
+      }
 
       // Edit modal JS removed.
     </script>
