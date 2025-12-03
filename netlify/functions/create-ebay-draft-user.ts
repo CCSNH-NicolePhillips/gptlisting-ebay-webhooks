@@ -26,7 +26,7 @@ async function fetchOfferById(token: string, apiHost: string, offerId: string, m
   return json;
 }
 
-async function fetchInventoryLocationKeys(accessToken: string, apiHost: string, marketplaceId: string): Promise<string[]> {
+async function fetchInventoryLocations(accessToken: string, apiHost: string, marketplaceId: string): Promise<{ key: string; isDefault: boolean }[]> {
   const url = `${apiHost}/sell/inventory/v1/location?limit=200`;
   const r = await fetch(url, {
     headers: {
@@ -46,15 +46,27 @@ async function fetchInventoryLocationKeys(accessToken: string, apiHost: string, 
       : Array.isArray(json?.locationResponses)
       ? json.locationResponses
       : [];
-    const keys: string[] = [];
+    const locations: { key: string; isDefault: boolean }[] = [];
     for (const loc of list) {
       const k = typeof loc?.merchantLocationKey === "string" ? loc.merchantLocationKey : null;
-      if (k) keys.push(k);
+      if (k) {
+        // Check if this location is marked as default by eBay
+        // eBay uses locationTypes array - if it contains "WAREHOUSE" it's often the primary/default
+        const types = Array.isArray(loc.locationTypes) ? loc.locationTypes : [];
+        const isDefault = types.includes("WAREHOUSE") || types.includes("DEFAULT") || false;
+        locations.push({ key: k, isDefault });
+      }
     }
-    return keys;
+    return locations;
   } catch {
     return [];
   }
+}
+
+// Helper to extract just the keys from locations
+async function fetchInventoryLocationKeys(accessToken: string, apiHost: string, marketplaceId: string): Promise<string[]> {
+  const locations = await fetchInventoryLocations(accessToken, apiHost, marketplaceId);
+  return locations.map(loc => loc.key);
 }
 
 const METHODS = "POST, OPTIONS";
@@ -217,9 +229,11 @@ export const handler: Handler = async (event) => {
 
   // Fetch available inventory location keys once and reuse for all groups
   const marketplaceForLocations = process.env.DEFAULT_MARKETPLACE_ID || process.env.EBAY_MARKETPLACE_ID || "EBAY_US";
+  let availableLocations: { key: string; isDefault: boolean }[] = [];
   let availableLocationKeys: string[] = [];
   try {
-    availableLocationKeys = await fetchInventoryLocationKeys(access.token, access.apiHost, marketplaceForLocations);
+    availableLocations = await fetchInventoryLocations(access.token, access.apiHost, marketplaceForLocations);
+    availableLocationKeys = availableLocations.map(loc => loc.key);
   } catch (e: any) {
     // If fetching locations fails, continue; eBay will still error later, but we won't block here
     console.warn("[create-ebay-draft-user] failed to list locations:", e?.message || e);
@@ -283,11 +297,17 @@ export const handler: Handler = async (event) => {
         }
       }
       
-      // Auto-select first location if multiple exist (better than failing)
-      if (!merchantLocationKey && availableLocationKeys.length > 1) {
-        merchantLocationKey = availableLocationKeys[0];
-        console.log(`[DEBUG] Auto-selected first of ${availableLocationKeys.length} available locations: ${merchantLocationKey}`);
-        console.log(`[DEBUG] User should set their preferred location in Settings > eBay Location`);
+      // Auto-select eBay's default location if multiple exist
+      if (!merchantLocationKey && availableLocations.length > 1) {
+        // Find the location marked as default by eBay (WAREHOUSE type)
+        const defaultLoc = availableLocations.find(loc => loc.isDefault);
+        merchantLocationKey = defaultLoc ? defaultLoc.key : availableLocations[0].key;
+        
+        if (defaultLoc) {
+          console.log(`[DEBUG] Auto-selected eBay's default location: ${merchantLocationKey}`);
+        } else {
+          console.log(`[DEBUG] No eBay default found, auto-selected first of ${availableLocations.length} locations: ${merchantLocationKey}`);
+        }
         
         // Save this as the user's default for future use
         try {
@@ -296,9 +316,9 @@ export const handler: Handler = async (event) => {
             merchantLocationKey,
             savedAt: new Date().toISOString(),
             autoSelected: true,
-            note: "Auto-selected first location. Please update if you prefer a different one."
+            source: defaultLoc ? "ebay-default" : "first-available"
           });
-          console.log(`[DEBUG] Saved first location as user default`);
+          console.log(`[DEBUG] Saved auto-selected location as user default`);
         } catch (saveErr) {
           console.warn(`[DEBUG] Failed to save auto-selected location:`, saveErr);
         }
