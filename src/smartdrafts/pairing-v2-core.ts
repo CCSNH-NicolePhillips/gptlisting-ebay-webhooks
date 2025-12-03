@@ -523,7 +523,29 @@ ${JSON.stringify(payload, null, 2)}`;
     const result = response.choices[0]?.message?.content?.trim() || '{}';
     const parsed: PairingOutput = JSON.parse(result);
     
-    console.log('[pairing-v2] Pairing results:', JSON.stringify(parsed, null, 2));
+    console.log('[pairing-v2] Pass 1 (strict) results:', JSON.stringify(parsed, null, 2));
+    
+    // PASS 2: Lenient visual matching for leftovers
+    // If we still have unpaired items, try aggressive visual matching
+    if (parsed.unpaired.length > 0) {
+      console.log(`[pairing-v2] Running Pass 2 (lenient visual matching) on ${parsed.unpaired.length} unpaired items...`);
+      
+      const unpairedItems = items.filter(item => 
+        parsed.unpaired.some(u => u.filename === item.filename)
+      );
+      
+      if (unpairedItems.length >= 2) {
+        const pass2Result = await pairVisuallyAggressive(unpairedItems);
+        
+        // Merge pass 2 results into pass 1
+        parsed.pairs.push(...pass2Result.pairs);
+        parsed.unpaired = pass2Result.unpaired;
+        
+        console.log(`[pairing-v2] Pass 2 created ${pass2Result.pairs.length} additional pairs`);
+      }
+    }
+    
+    console.log('[pairing-v2] Final pairing results:', JSON.stringify(parsed, null, 2));
     
     return parsed;
   } catch (error) {
@@ -534,6 +556,89 @@ ${JSON.stringify(payload, null, 2)}`;
       unpaired: items.map(item => ({
         filename: item.filename,
         reason: 'Pairing failed due to error',
+        needsReview: true,
+      })),
+    };
+  }
+}
+
+// Pass 2: Aggressive visual matching for items that didn't pair in Pass 1
+async function pairVisuallyAggressive(items: ImageClassificationV2[]): Promise<PairingOutput> {
+  try {
+    const payload: PairingInputItem[] = items.map(x => ({
+      filename: x.filename,
+      kind: x.kind,
+      panel: x.panel,
+      brand: x.brand,
+      productName: x.productName,
+      title: x.title,
+      brandWebsite: x.brandWebsite,
+      packageType: x.packageType,
+      colorSignature: x.colorSignature,
+      layoutSignature: x.layoutSignature,
+      confidence: x.confidence,
+    }));
+    
+    const systemMessage = `You are doing AGGRESSIVE VISUAL MATCHING for product images that failed strict pairing.
+
+These items didn't pair because text info (brand/product) is missing or unclear.
+Your job: Pair them PURELY by VISUAL SIMILARITY - ignore missing text.
+
+CRITICAL RULES:
+1. Same bottle/jar/box shape + same colors = PAIR (even if brand/product are null)
+2. If you see TWO images that look like the SAME physical product, PAIR THEM
+3. Focus on: packageType match, color overlap, similar layout
+4. Ignore missing brand/productName - back panels often have NO readable text
+5. Only reject if colors/package are CLEARLY different
+
+Example: 
+- Teal bottle front + teal bottle back with supplement facts = PAIR (same bottle, same color)
+- Orange box + orange box = PAIR (same package, same color)
+
+OUTPUT FORMAT (same as before):
+{
+  "pairs": [
+    {
+      "front": "filename.jpg",
+      "back": "filename.jpg", 
+      "reasoning": "Same teal bottle, same supplement facts layout - visual match",
+      "confidence": 0.85
+    }
+  ],
+  "unpaired": [
+    {
+      "filename": "filename.jpg",
+      "reason": "No visual match found",
+      "needsReview": true
+    }
+  ]
+}`;
+
+    const userMessage = `Pair these leftover images using VISUAL MATCHING ONLY:
+
+${JSON.stringify(payload, null, 2)}`;
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemMessage },
+        { role: 'user', content: userMessage },
+      ],
+      max_tokens: 2000,
+      response_format: { type: 'json_object' },
+      temperature: 0,
+    });
+
+    const result = response.choices[0]?.message?.content?.trim() || '{}';
+    return JSON.parse(result);
+    
+  } catch (error) {
+    console.error('[pairing-v2] Error in pairVisuallyAggressive:', error);
+    return {
+      pairs: [],
+      unpaired: items.map(item => ({
+        filename: item.filename,
+        reason: 'Visual matching failed',
         needsReview: true,
       })),
     };
