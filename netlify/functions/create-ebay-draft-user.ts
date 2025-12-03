@@ -239,7 +239,8 @@ export const handler: Handler = async (event) => {
       // Priority order (correct for multi-user SaaS):
       // 1. User's explicit choice from the request
       // 2. User's saved default location preference
-      // 3. Environment variable fallback (should rarely be used)
+      // 3. Auto-select if only one location exists
+      // 4. Environment variable fallback (should rarely be used)
 
       // If no explicit choice in the request, try user's saved default
       if (!merchantLocationKey) {
@@ -253,6 +254,25 @@ export const handler: Handler = async (event) => {
           }
         } catch {
           // ignore
+        }
+      }
+      
+      // Auto-select if only one location exists
+      if (!merchantLocationKey && availableLocationKeys.length === 1) {
+        merchantLocationKey = availableLocationKeys[0];
+        console.log(`[DEBUG] Auto-selected only available location: ${merchantLocationKey}`);
+        
+        // Save this as the user's default for future use
+        try {
+          const store = tokensStore();
+          await store.setJSON(userScopedKey(user.userId, "ebay-location.json"), {
+            merchantLocationKey,
+            savedAt: new Date().toISOString(),
+            autoSelected: true
+          });
+          console.log(`[DEBUG] Saved auto-selected location as user default`);
+        } catch (saveErr) {
+          console.warn(`[DEBUG] Failed to save auto-selected location:`, saveErr);
         }
       }
 
