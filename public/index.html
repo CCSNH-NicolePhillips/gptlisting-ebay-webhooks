@@ -472,7 +472,7 @@
       const SETUP_STORAGE_KEY = 'draftpilotVisitedSetup';
       const SETUP_REDIRECT_GUARD = 'draftpilotSuppressSetupRedirect';
       const STATUS_CACHE_KEY = 'draftpilot.ebay.status';
-      const STATUS_CACHE_TTL = 5 * 60 * 1000; // Cache for 5 minutes
+      const STATUS_CACHE_TTL = 2 * 60 * 1000; // Cache for 2 minutes (reduced to prevent stale data)
       let lastStatus = null;
 
       async function refreshStatus() {
@@ -927,16 +927,26 @@
         });
 
       async function evaluatePrereqs(forceRefresh = false) {
+        // Get current user to create user-specific cache key
+        let currentUser = null;
+        try {
+          currentUser = authClient.getUser?.();
+        } catch {}
+        const userCacheKey = currentUser?.sub || currentUser?.email || 'anonymous';
+        const cacheKey = `${STATUS_CACHE_KEY}.${userCacheKey}`;
+        
         // Try to use cached status first
         if (!forceRefresh) {
           try {
-            const cached = sessionStorage.getItem(STATUS_CACHE_KEY);
+            const cached = sessionStorage.getItem(cacheKey);
             if (cached) {
               const { data, timestamp } = JSON.parse(cached);
               if (Date.now() - timestamp < STATUS_CACHE_TTL) {
-                console.log('[Dashboard] Using cached eBay status');
+                console.log('[Dashboard] Using cached eBay status for user:', userCacheKey);
                 updateUIFromCache(data);
                 return;
+              } else {
+                console.log('[Dashboard] Cache expired, fetching fresh status');
               }
             }
           } catch (e) {
@@ -1066,6 +1076,10 @@
 
   // Cache the status for next page load
   try {
+    const currentUser = authClient.getUser?.();
+    const userCacheKey = currentUser?.sub || currentUser?.email || 'anonymous';
+    const cacheKey = `${STATUS_CACHE_KEY}.${userCacheKey}`;
+    
     const cacheData = {
       connected,
       policiesReady,
@@ -1074,10 +1088,11 @@
       ready,
       setupHints
     };
-    sessionStorage.setItem(STATUS_CACHE_KEY, JSON.stringify({
+    sessionStorage.setItem(cacheKey, JSON.stringify({
       data: cacheData,
       timestamp: Date.now()
     }));
+    console.log('[Dashboard] Cached status for user:', userCacheKey, cacheData);
   } catch {}
 }
 
