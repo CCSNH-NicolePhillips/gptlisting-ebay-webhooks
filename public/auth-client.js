@@ -549,7 +549,40 @@
     return state.user;
   }
 
-  window.authClient = { requireAuth, login, logout, getToken, ensureAuth, authFetch, getMode, getUser };
+  // Helper to update user card UI elements with user info
+  async function updateUserCard() {
+    try {
+      // Fetch user info from connections endpoint
+      const response = await authFetch('/.netlify/functions/connections');
+      const data = await response.json().catch(() => ({}));
+      
+      const user = data?.user || getUser() || {};
+      
+      const name = user?.name || user?.given_name || '';
+      const email = user?.email || '';
+      const displayName = name || email || 'User';
+      const firstName = user?.given_name || name?.split(' ')[0] || email?.split('@')[0] || 'User';
+      const initial = displayName.charAt(0).toUpperCase();
+      
+      // Update sidebar user card
+      const userName = document.getElementById('userName');
+      const userEmail = document.getElementById('userEmail');
+      const userAvatar = document.getElementById('userAvatar');
+      const topbarAvatar = document.getElementById('topbarAvatar');
+      
+      if (userName) userName.textContent = displayName;
+      if (userEmail) userEmail.textContent = email || 'Signed in';
+      if (userAvatar) userAvatar.textContent = initial;
+      if (topbarAvatar) topbarAvatar.textContent = initial;
+      
+      return { user, displayName, firstName, email, initial };
+    } catch (err) {
+      console.error('[authClient] Failed to update user card:', err);
+      return null;
+    }
+  }
+
+  window.authClient = { requireAuth, login, logout, getToken, ensureAuth, authFetch, getMode, getUser, updateUserCard };
   // Minimal, non-invasive auth badge injected in the top-right for login/logout
   async function renderBadge() {
     try {

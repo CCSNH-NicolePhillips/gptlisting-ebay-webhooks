@@ -1092,6 +1092,7 @@
         try {
           const ok = await authClient.requireAuth();
           if (!ok) return;
+          await authClient.updateUserCard().catch(() => {});
         } catch (e) {
           console.error('Auth check failed', e);
           return;

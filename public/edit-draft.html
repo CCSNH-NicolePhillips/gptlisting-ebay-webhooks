@@ -753,13 +753,7 @@
         }
         
         // Populate sidebar user info
-        const user = window.authClient.user;
-        if (user) {
-          const userName = document.getElementById('userName');
-          const avatar = document.querySelector('.dp-user-card__avatar');
-          if (userName) userName.textContent = user.name || user.email || 'User';
-          if (avatar) avatar.textContent = (user.name || user.email || 'U')[0].toUpperCase();
-        }
+        await window.authClient.updateUserCard().catch(() => {});
         
         await loadDraft();
       } catch (e) {

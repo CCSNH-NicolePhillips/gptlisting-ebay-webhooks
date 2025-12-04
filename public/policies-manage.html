@@ -90,6 +90,7 @@
         }
         
         try { await authClient.requireAuth(); } catch {}
+        await authClient.updateUserCard().catch(() => {});
         
         await init();
       });

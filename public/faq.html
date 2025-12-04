@@ -479,13 +479,15 @@
 
       // Load user status on page load
       if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
           refreshStatus();
           initUserMenu();
+          await authClient.updateUserCard().catch(() => {});
         });
       } else {
         refreshStatus();
         initUserMenu();
+        authClient.updateUserCard().catch(() => {});
       }
       
       // FAQ Accordion functionality

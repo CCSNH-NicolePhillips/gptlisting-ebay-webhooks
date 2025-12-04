@@ -1550,6 +1550,7 @@
       try {
         const ok = await authClient.requireAuth();
         if (!ok) return;
+        await authClient.updateUserCard().catch(() => {});
 
         // Load Dropbox folders
         await loadFolders();

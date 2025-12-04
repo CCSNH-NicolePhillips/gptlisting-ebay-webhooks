@@ -510,9 +510,13 @@
 
       // Load user status on page load
       if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => refreshStatus());
+        document.addEventListener('DOMContentLoaded', async () => {
+          refreshStatus();
+          await authClient.updateUserCard().catch(() => {});
+        });
       } else {
         refreshStatus();
+        authClient.updateUserCard().catch(() => {});
       }
       
       // Support form handler

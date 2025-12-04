@@ -505,6 +505,7 @@
       async function boot() {
         try { await refreshStatus(); } catch {}
         initUserMenu();
+        await authClient.updateUserCard().catch(() => {});
         const lc = document.getElementById('loadingCard');
         const mc = document.getElementById('mainCard');
         if (lc) lc.style.display = 'none';
