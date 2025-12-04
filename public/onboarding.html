@@ -637,8 +637,8 @@
       
       async function checkEbayConnection() {
         try {
-          const data = await fetchJSON('/.netlify/functions/ebay-check-connection');
-          if (data.connected) {
+          const data = await fetchJSON('/.netlify/functions/status');
+          if (data?.ebay?.connected) {
             showStatus('ebayStatus', '✓ eBay account connected successfully!', 'success');
             // Auto-advance after connection
             setTimeout(() => nextStep(), 1500);
@@ -652,8 +652,8 @@
       
       async function checkDropboxConnection() {
         try {
-          const data = await fetchJSON('/.netlify/functions/dropbox-check-connection');
-          if (data.connected) {
+          const data = await fetchJSON('/.netlify/functions/status');
+          if (data?.dropbox?.connected) {
             showStatus('dropboxStatus', '✓ Dropbox connected successfully!', 'success');
           } else {
             showStatus('dropboxStatus', 'Dropbox is not connected. You can skip this step and upload photos manually.', 'warning');
@@ -665,8 +665,9 @@
       
       async function checkLocation() {
         try {
-          const data = await fetchJSON('/.netlify/functions/ebay-check-location');
-          if (data.hasLocation) {
+          const data = await fetchJSON('/.netlify/functions/ebay-list-locations');
+          const locations = data?.locations || [];
+          if (locations.length > 0) {
             showStatus('locationStatus', '✓ Shipping location already configured!', 'success');
             // Auto-advance if already set up
             setTimeout(() => nextStep(), 1500);
@@ -712,8 +713,9 @@
       
       async function checkPaymentPolicy() {
         try {
-          const data = await fetchJSON('/.netlify/functions/ebay-check-policies');
-          if (data.hasPaymentPolicy) {
+          const data = await fetchJSON('/.netlify/functions/ebay-list-policies');
+          const pay = data?.payment?.json?.paymentPolicies || [];
+          if (pay.length > 0) {
             showStatus('paymentStatus', '✓ Payment policy already configured!', 'success');
             setTimeout(() => nextStep(), 1500);
           }
@@ -728,7 +730,7 @@
         btn.textContent = 'Creating...';
         
         try {
-          await fetchJSON('/.netlify/functions/ebay-create-payment-policy', {
+          await fetchJSON('/.netlify/functions/ebay-provision-policies', {
             method: 'POST'
           });
           
@@ -743,8 +745,9 @@
       
       async function checkReturnPolicy() {
         try {
-          const data = await fetchJSON('/.netlify/functions/ebay-check-policies');
-          if (data.hasReturnPolicy) {
+          const data = await fetchJSON('/.netlify/functions/ebay-list-policies');
+          const ret = data?.returns?.json?.returnPolicies || [];
+          if (ret.length > 0) {
             showStatus('returnStatus', '✓ Return policy already configured!', 'success');
             setTimeout(() => nextStep(), 1500);
           }
@@ -754,28 +757,16 @@
       }
       
       async function createReturnPolicy() {
-        const btn = event.target;
-        btn.disabled = true;
-        btn.textContent = 'Creating...';
-        
-        try {
-          await fetchJSON('/.netlify/functions/ebay-create-return-policy', {
-            method: 'POST'
-          });
-          
-          showStatus('returnStatus', '✓ Return policy created successfully!', 'success');
-          setTimeout(() => nextStep(), 1000);
-        } catch (err) {
-          showStatus('returnStatus', `Error: ${err.message}`, 'error');
-          btn.disabled = false;
-          btn.textContent = 'Create Policy →';
-        }
+        // Skip - provision-policies creates all at once
+        showStatus('returnStatus', '✓ Using existing policies!', 'success');
+        setTimeout(() => nextStep(), 1000);
       }
       
       async function checkShippingPolicy() {
         try {
-          const data = await fetchJSON('/.netlify/functions/ebay-check-policies');
-          if (data.hasShippingPolicy) {
+          const data = await fetchJSON('/.netlify/functions/ebay-list-policies');
+          const fp = data?.fulfillment?.json?.fulfillmentPolicies || [];
+          if (fp.length > 0) {
             showStatus('shippingStatus', '✓ Shipping policy already configured!', 'success');
             setTimeout(() => nextStep(), 1500);
           }
@@ -785,22 +776,9 @@
       }
       
       async function createShippingPolicy() {
-        const btn = event.target;
-        btn.disabled = true;
-        btn.textContent = 'Creating...';
-        
-        try {
-          await fetchJSON('/.netlify/functions/ebay-create-shipping-policy', {
-            method: 'POST'
-          });
-          
-          showStatus('shippingStatus', '✓ Shipping policy created successfully!', 'success');
-          setTimeout(() => nextStep(), 1000);
-        } catch (err) {
-          showStatus('shippingStatus', `Error: ${err.message}`, 'error');
-          btn.disabled = false;
-          btn.textContent = 'Create Policy →';
-        }
+        // Skip - provision-policies creates all at once
+        showStatus('shippingStatus', '✓ Using existing policies!', 'success');
+        setTimeout(() => nextStep(), 1000);
       }
       
       function completeOnboarding() {
