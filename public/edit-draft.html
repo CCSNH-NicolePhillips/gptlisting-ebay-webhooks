@@ -7,10 +7,6 @@
   <link rel="stylesheet" href="/draftpilot.css?v=2">
   <style>
     /* Edit draft specific styles */
-    .edit-form {
-      max-width: 920px;
-      margin: 0 auto;
-    }
     .form-row {
       display: flex;
       flex-wrap: wrap;
@@ -64,7 +60,8 @@
       margin-bottom: 0.65rem;
       align-items: center;
     }
-    .aspect-item input {
+    .aspect-item input,
+    .aspect-item select {
       flex: 1;
     }
     .aspect-item button {
@@ -115,156 +112,212 @@
       font-size: 0.75rem;
       font-weight: 600;
     }
-    .action-bar {
-      display: flex;
-      gap: 0.75rem;
-      margin-top: 1.5rem;
-      padding-top: 1.5rem;
-      border-top: 1px solid var(--border-subtle);
-    }
   </style>
 </head>
 <body>
   <script src="/auth-client.js"></script>
   
-  <!-- Dashboard Shell -->
   <div class="dp-shell">
-    <!-- Sidebar Navigation -->
+    <!-- Sidebar -->
     <aside class="dp-sidebar">
+      <!-- Brand Area -->
       <div class="dp-sidebar__brand">
-        <a href="/" class="dp-brand-logo">
-          <span class="dp-brand-logo__icon">✦</span>
-          <span class="dp-brand-logo__text">DraftPilot</span>
-        </a>
+        <img src="logo/LogoWhiteText_NoBg.png" alt="DraftPilot - AI Listing Studio" class="dp-brand-logo" />
       </div>
-
+      
+      <!-- Navigation -->
       <nav class="dp-sidebar__nav">
-        <a href="/index.html" class="dp-nav-item">
-          <span class="dp-nav-item__icon">📊</span>
-          <span class="dp-nav-item__label">Dashboard</span>
-        </a>
-        <a href="/drafts.html" class="dp-nav-item dp-nav-item--active">
-          <span class="dp-nav-item__icon">📝</span>
-          <span class="dp-nav-item__label">Drafts</span>
-        </a>
-        <a href="/quick-list.html" class="dp-nav-item">
-          <span class="dp-nav-item__icon">⚡</span>
-          <span class="dp-nav-item__label">Quick List</span>
-        </a>
-        <a href="/policies-manage.html" class="dp-nav-item">
-          <span class="dp-nav-item__icon">📋</span>
-          <span class="dp-nav-item__label">Policies</span>
-        </a>
-        <a href="/settings.html" class="dp-nav-item">
-          <span class="dp-nav-item__icon">⚙️</span>
-          <span class="dp-nav-item__label">Settings</span>
-        </a>
+        <!-- Primary Navigation Group -->
+        <div class="dp-nav-group">
+          <div class="dp-nav-group__label">APP</div>
+          <div class="dp-nav-group__items">
+            <a href="/index.html" class="dp-nav-item">
+              <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+              </svg>
+              <span class="dp-nav-item__label">Overview</span>
+            </a>
+            <a href="/quick-list.html" class="dp-nav-item">
+              <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+              </svg>
+              <span class="dp-nav-item__label">Create Listings</span>
+            </a>
+            <a href="/drafts.html" class="dp-nav-item dp-nav-item--active">
+              <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+              </svg>
+              <span class="dp-nav-item__label">Drafts</span>
+            </a>
+          </div>
+        </div>
+        
+        <!-- Account Navigation Group -->
+        <div class="dp-nav-group">
+          <div class="dp-nav-group__label">ACCOUNT</div>
+          <div class="dp-nav-group__items">
+            <a href="/policies-manage.html" class="dp-nav-item">
+              <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+                <polyline points="10 9 9 9 8 9"></polyline>
+              </svg>
+              <span class="dp-nav-item__label">eBay Policies</span>
+            </a>
+            <a href="/location.html" class="dp-nav-item">
+              <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                <circle cx="12" cy="10" r="3"></circle>
+              </svg>
+              <span class="dp-nav-item__label">Inventory Locations</span>
+            </a>
+            <a href="/settings.html" class="dp-nav-item">
+              <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M12 1v6m0 6v6m5.196-15.196l-4.243 4.243m0 5.656l-4.242 4.243m15.195-5.196l-4.242-4.243m-5.657 0l-4.243-4.243"></path>
+              </svg>
+              <span class="dp-nav-item__label">Settings</span>
+            </a>
+            <a href="/faq.html" class="dp-nav-item">
+              <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+              </svg>
+              <span class="dp-nav-item__label">FAQ</span>
+            </a>
+            <a href="/support.html" class="dp-nav-item">
+              <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+              </svg>
+              <span class="dp-nav-item__label">Support</span>
+            </a>
+          </div>
+        </div>
       </nav>
-
+      
+      <!-- Spacer -->
+      <div class="dp-sidebar__spacer"></div>
+      
+      <!-- User Footer -->
       <div class="dp-sidebar__footer">
-        <div class="dp-user-card" id="userCard">
-          <div class="dp-user-card__avatar">?</div>
+        <div class="dp-user-card">
+          <div class="dp-user-card__avatar" id="userAvatar">U</div>
           <div class="dp-user-card__info">
             <div class="dp-user-card__name" id="userName">Loading...</div>
-            <a href="/logout.html" class="dp-user-card__action">Sign out</a>
+            <div class="dp-user-card__status" id="userEmail">Signed in</div>
           </div>
         </div>
       </div>
     </aside>
-
-    <!-- Main Content -->
+    
+    <div class="dp-mobile-backdrop" id="mobileBackdrop"></div>
+    
+    <!-- Main Content Wrapper -->
     <div class="dp-main-wrapper">
-      <div class="dp-page">
-        <!-- Header -->
-        <header class="dp-header">
-          <div class="dp-header__title">
-            <h1>Edit Draft</h1>
-            <p class="dp-header__subtitle">Update listing details and item specifics</p>
+      <!-- Top Bar -->
+      <header class="dp-topbar">
+        <!-- Left: Mobile menu + Page Title & Subtitle -->
+        <div class="dp-topbar-left">
+          <!-- Mobile-only hamburger -->
+          <button
+            class="dp-topbar-icon dp-topbar-icon--menu"
+            id="mobileMenuButton"
+            aria-label="Open navigation"
+            aria-expanded="false"
+            type="button"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="4" y1="6" x2="20" y2="6"></line>
+              <line x1="4" y1="12" x2="20" y2="12"></line>
+              <line x1="4" y1="18" x2="20" y2="18"></line>
+            </svg>
+          </button>
+
+          <div class="dp-topbar-heading">
+            <h1 class="dp-topbar__title">✏️ Edit Draft</h1>
+            <p class="dp-topbar__subtitle">
+              Update listing details and item specifics
+            </p>
           </div>
-          <div class="dp-header__actions">
-            <a href="/drafts.html" class="dp-btn dp-btn-secondary">← Back to Drafts</a>
-          </div>
-        </header>
+        </div>
         
-        <!-- Main Content Area -->
-        <main class="dp-main">
-          <div class="edit-form">
-            <div id="flash" class="dp-flash" style="display: none;"></div>
-            
-            <!-- Basic Information -->
-            <div class="dp-card">
-              <div class="dp-card__header">
-                <h2 class="dp-card__title">Basic Information</h2>
-              </div>
-              <div class="dp-card__content">
-                <div class="form-row">
-                  <div class="form-field" style="flex: 2;">
-                    <label for="title">Title <small class="muted-hint">(max 80 characters)</small></label>
-                    <input type="text" id="title" maxlength="80" />
-                    <small class="muted-hint" id="titleCount">0 / 80</small>
-                  </div>
-                </div>
-                
-                <div class="form-row">
-                  <div class="form-field" style="flex: 2;">
-                    <label for="description">Description</label>
-                    <textarea id="description"></textarea>
-                  </div>
-                </div>
-                
-                <div class="form-row">
-                  <div class="form-field">
-                    <label for="price">Price USD</label>
-                    <input type="number" id="price" step="0.01" min="0" />
-                  </div>
-                  
-                  <div class="form-field">
-                    <label for="condition">Condition</label>
-                    <select id="condition">
-                      <option value="NEW">New</option>
-                      <option value="LIKE_NEW">Like New</option>
-                      <option value="USED_EXCELLENT">Used - Excellent</option>
-                      <option value="USED_GOOD">Used - Good</option>
-                      <option value="USED_ACCEPTABLE">Used - Acceptable</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <!-- Item Specifics -->
-            <div class="dp-card">
-              <div class="dp-card__header">
-                <h2 class="dp-card__title">Item Specifics (Aspects)</h2>
-              </div>
-              <div class="dp-card__content">
-                <div id="aspectsList"></div>
-                <button class="dp-btn dp-btn-secondary" style="margin-top: 0.5rem;" onclick="addAspect()">+ Add Aspect</button>
-              </div>
-            </div>
-            
-            <!-- Images -->
-            <div class="dp-card">
-              <div class="dp-card__header">
-                <h2 class="dp-card__title">Images</h2>
-              </div>
-              <div class="dp-card__content">
-                <div class="images-preview" id="imagesPreview"></div>
-              </div>
-            </div>
-            
-            <!-- Actions -->
-            <div class="dp-card">
-              <div class="dp-card__content">
-                <div class="action-bar">
-                  <button class="dp-btn" id="btnSave" onclick="saveDraft()">💾 Update Draft</button>
-                  <a href="/drafts.html" class="dp-btn dp-btn-secondary">Cancel</a>
-                </div>
-              </div>
+        <!-- Right: Actions -->
+        <div class="dp-topbar-right" style="display: flex !important; gap: 0.75rem;">
+          <a href="/drafts.html" class="dp-btn dp-btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem;">← Back to Drafts</a>
+        </div>
+      </header>
+      
+      <!-- Main Content Area -->
+      <main class="dp-main">
+        <div id="flash" style="margin-bottom: 1rem;"></div>
+        
+        <!-- Basic Information -->
+        <div class="dp-card dp-card--full">
+          <h3 style="margin-top: 0; margin-bottom: 1rem; color: var(--text-primary);">Basic Information</h3>
+          <h3 style="margin-top: 0; margin-bottom: 1rem; color: var(--text-primary);">Basic Information</h3>
+          
+          <div class="form-row">
+            <div class="form-field" style="flex: 2;">
+              <label for="title">Title <small class="muted-hint">(max 80 characters)</small></label>
+              <input type="text" id="title" maxlength="80" />
+              <small class="muted-hint" id="titleCount">0 / 80</small>
             </div>
           </div>
-        </main>
-      </div>
+          
+          <div class="form-row">
+            <div class="form-field" style="flex: 2;">
+              <label for="description">Description</label>
+              <textarea id="description"></textarea>
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-field">
+              <label for="price">Price USD</label>
+              <input type="number" id="price" step="0.01" min="0" />
+            </div>
+            
+            <div class="form-field">
+              <label for="condition">Condition</label>
+              <select id="condition">
+                <option value="NEW">New</option>
+                <option value="LIKE_NEW">Like New</option>
+                <option value="USED_EXCELLENT">Used - Excellent</option>
+                <option value="USED_GOOD">Used - Good</option>
+                <option value="USED_ACCEPTABLE">Used - Acceptable</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Item Specifics -->
+        <div class="dp-card dp-card--full">
+          <h3 style="margin-top: 0; margin-bottom: 1rem; color: var(--text-primary);">Item Specifics (Aspects)</h3>
+          <div id="aspectsList"></div>
+          <button class="dp-btn dp-btn-secondary" style="margin-top: 0.5rem;" onclick="addAspect()">+ Add Aspect</button>
+        </div>
+        
+        <!-- Images -->
+        <div class="dp-card dp-card--full">
+          <h3 style="margin-top: 0; margin-bottom: 1rem; color: var(--text-primary);">📸 Images</h3>
+          <div class="images-preview" id="imagesPreview"></div>
+        </div>
+        
+        <!-- Actions -->
+        <div class="dp-card dp-card--full">
+          <div style="display: flex; gap: 0.75rem;">
+            <button class="dp-btn dp-btn-primary" id="btnSave" onclick="saveDraft()">💾 Update Draft</button>
+            <a href="/drafts.html" class="dp-btn dp-btn-secondary">Cancel</a>
+          </div>
+        </div>
+      </main>
     </div>
   </div>
   
