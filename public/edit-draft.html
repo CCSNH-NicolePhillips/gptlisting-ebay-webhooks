@@ -3,203 +3,248 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Edit Draft</title>
+  <title>Edit Draft – DraftPilot</title>
+  <link rel="stylesheet" href="/draftpilot.css">
   <style>
-    body {
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      margin: 0;
-      padding: 2rem;
-      background: #0b1020;
-      color: #f4f6fb;
-    }
-    .card {
+    /* Edit draft specific styles */
+    .edit-form {
       max-width: 920px;
-      margin: 0 auto 1rem;
-      background: #141a33;
-      border: 1px solid #2a335c;
-      border-radius: 12px;
-      padding: 1.25rem 1.5rem;
-    }
-    .section-title {
-      font-size: 1.1rem;
-      font-weight: 700;
-      margin-bottom: 1rem;
-      color: #4f7cff;
-    }
-    h2 {
-      margin: 0 0 1rem 0;
-      font-size: 1.4rem;
+      margin: 0 auto;
     }
     .form-row {
       display: flex;
       flex-wrap: wrap;
       gap: 1rem;
-      margin-bottom: 0.85rem;
+      margin-bottom: 1.25rem;
     }
     .form-field {
       flex: 1 1 250px;
       min-width: 220px;
     }
-    label {
+    .form-field label {
       display: block;
       font-weight: 600;
       margin-bottom: 0.5rem;
       font-size: 0.9rem;
+      color: var(--text-secondary);
     }
-    input, textarea, select {
+    .form-field input, 
+    .form-field textarea, 
+    .form-field select {
       width: 100%;
-      background: #0f1530;
-      border: 1px solid #2a335c;
-      border-radius: 6px;
-      padding: 0.65rem 0.85rem;
-      color: #f4f6fb;
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 0.7rem 0.9rem;
+      color: var(--text-primary);
       font-family: inherit;
       font-size: 0.95rem;
+      transition: border-color 0.2s, background 0.2s;
     }
-    input:focus, textarea:focus, select:focus {
+    .form-field input:focus, 
+    .form-field textarea:focus, 
+    .form-field select:focus {
       outline: none;
-      border-color: #4f7cff;
+      border-color: var(--accent);
+      background: rgba(15, 23, 42, 0.8);
     }
-    textarea {
+    .form-field textarea {
       resize: vertical;
-      min-height: 120px;
+      min-height: 140px;
+      line-height: 1.6;
     }
-    button {
-      background: #4f7cff;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      padding: 0.7rem 1.5rem;
-      font-size: 0.95rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-    button:hover:not(:disabled) {
-      background: #3e66d6;
-    }
-    button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-    button.secondary {
-      background: #2a335c;
-      color: #f4f6fb;
-    }
-    button.secondary:hover:not(:disabled) {
-      background: #3d4770;
+    .muted-hint {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-top: 0.3rem;
     }
     .aspect-item {
       display: flex;
       gap: 0.5rem;
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.65rem;
       align-items: center;
     }
     .aspect-item input {
       flex: 1;
     }
-    .flash {
-      padding: 0.75rem 1rem;
-      border-radius: 8px;
-      margin-bottom: 1rem;
-      display: none;
-    }
-    .flash.show {
-      display: block;
-    }
-    .flash.success {
-      background: rgba(34, 197, 94, 0.1);
-      border: 1px solid #22c55e;
-      color: #22c55e;
-    }
-    .flash.error {
-      background: rgba(239, 68, 68, 0.1);
-      border: 1px solid #ef4444;
-      color: #ef4444;
-    }
-    .muted {
+    .aspect-item button {
+      padding: 0.4rem 0.8rem;
       font-size: 0.85rem;
-      color: #94a3b8;
-      margin-top: 0.25rem;
     }
     .images-preview {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-      gap: 0.75rem;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
     }
     .image-thumb {
       position: relative;
       aspect-ratio: 1;
-      border-radius: 8px;
+      border-radius: var(--radius-md);
       overflow: hidden;
-      border: 1px solid #2a335c;
+      border: 1px solid var(--border-subtle);
+      background: rgba(15, 23, 42, 0.5);
+      transition: border-color 0.2s;
+    }
+    .image-thumb:hover {
+      border-color: var(--accent-hover);
     }
     .image-thumb img {
       width: 100%;
       height: 100%;
       object-fit: cover;
     }
+    .action-bar {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1.5rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border-subtle);
+    }
   </style>
 </head>
 <body>
   <script src="/auth-client.js"></script>
   
-  <div class="card">
-    <h2>Edit Draft</h2>
-    <div class="flash" id="flash"></div>
-  </div>
-    
-  <div class="card">
-    <div class="section-title">Basic Information</div>
-    
-    <div class="form-row">
-      <div class="form-field" style="flex: 2;">
-        <label for="title">Title <small class="muted">(max 80 characters)</small></label>
-        <input type="text" id="title" maxlength="80" />
-        <small class="muted" id="titleCount">0 / 80</small>
+  <!-- Dashboard Shell -->
+  <div class="dp-shell">
+    <!-- Sidebar Navigation -->
+    <aside class="dp-sidebar">
+      <div class="dp-sidebar__brand">
+        <a href="/" class="dp-brand-logo">
+          <span class="dp-brand-logo__icon">✦</span>
+          <span class="dp-brand-logo__text">DraftPilot</span>
+        </a>
+      </div>
+
+      <nav class="dp-sidebar__nav">
+        <a href="/index.html" class="dp-nav-item">
+          <span class="dp-nav-item__icon">📊</span>
+          <span class="dp-nav-item__label">Dashboard</span>
+        </a>
+        <a href="/drafts.html" class="dp-nav-item dp-nav-item--active">
+          <span class="dp-nav-item__icon">📝</span>
+          <span class="dp-nav-item__label">Drafts</span>
+        </a>
+        <a href="/quick-list.html" class="dp-nav-item">
+          <span class="dp-nav-item__icon">⚡</span>
+          <span class="dp-nav-item__label">Quick List</span>
+        </a>
+        <a href="/policies-manage.html" class="dp-nav-item">
+          <span class="dp-nav-item__icon">📋</span>
+          <span class="dp-nav-item__label">Policies</span>
+        </a>
+        <a href="/settings.html" class="dp-nav-item">
+          <span class="dp-nav-item__icon">⚙️</span>
+          <span class="dp-nav-item__label">Settings</span>
+        </a>
+      </nav>
+
+      <div class="dp-sidebar__footer">
+        <div class="dp-user-card" id="userCard">
+          <div class="dp-user-card__avatar">?</div>
+          <div class="dp-user-card__info">
+            <div class="dp-user-card__name" id="userName">Loading...</div>
+            <a href="/logout.html" class="dp-user-card__action">Sign out</a>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <div class="dp-content">
+      <div class="dp-page">
+        <!-- Header -->
+        <header class="dp-header">
+          <div class="dp-header__title">
+            <h1>Edit Draft</h1>
+            <p class="dp-header__subtitle">Update listing details and item specifics</p>
+          </div>
+          <div class="dp-header__actions">
+            <a href="/drafts.html" class="dp-btn dp-btn-secondary">← Back to Drafts</a>
+          </div>
+        </header>
+        
+        <!-- Main Content Area -->
+        <main class="dp-main">
+          <div class="edit-form">
+            <div id="flash" class="dp-flash" style="display: none;"></div>
+            
+            <!-- Basic Information -->
+            <div class="dp-card">
+              <div class="dp-card__header">
+                <h2 class="dp-card__title">Basic Information</h2>
+              </div>
+              <div class="dp-card__content">
+                <div class="form-row">
+                  <div class="form-field" style="flex: 2;">
+                    <label for="title">Title <small class="muted-hint">(max 80 characters)</small></label>
+                    <input type="text" id="title" maxlength="80" />
+                    <small class="muted-hint" id="titleCount">0 / 80</small>
+                  </div>
+                </div>
+                
+                <div class="form-row">
+                  <div class="form-field" style="flex: 2;">
+                    <label for="description">Description</label>
+                    <textarea id="description"></textarea>
+                  </div>
+                </div>
+                
+                <div class="form-row">
+                  <div class="form-field">
+                    <label for="price">Price USD</label>
+                    <input type="number" id="price" step="0.01" min="0" />
+                  </div>
+                  
+                  <div class="form-field">
+                    <label for="condition">Condition</label>
+                    <select id="condition">
+                      <option value="NEW">New</option>
+                      <option value="LIKE_NEW">Like New</option>
+                      <option value="USED_EXCELLENT">Used - Excellent</option>
+                      <option value="USED_GOOD">Used - Good</option>
+                      <option value="USED_ACCEPTABLE">Used - Acceptable</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Item Specifics -->
+            <div class="dp-card">
+              <div class="dp-card__header">
+                <h2 class="dp-card__title">Item Specifics (Aspects)</h2>
+              </div>
+              <div class="dp-card__content">
+                <div id="aspectsList"></div>
+                <button class="dp-btn dp-btn-secondary" style="margin-top: 0.5rem;" onclick="addAspect()">+ Add Aspect</button>
+              </div>
+            </div>
+            
+            <!-- Images -->
+            <div class="dp-card">
+              <div class="dp-card__header">
+                <h2 class="dp-card__title">Images</h2>
+              </div>
+              <div class="dp-card__content">
+                <div class="images-preview" id="imagesPreview"></div>
+              </div>
+            </div>
+            
+            <!-- Actions -->
+            <div class="dp-card">
+              <div class="dp-card__content">
+                <div class="action-bar">
+                  <button class="dp-btn" id="btnSave" onclick="saveDraft()">💾 Update Draft</button>
+                  <a href="/drafts.html" class="dp-btn dp-btn-secondary">Cancel</a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
       </div>
     </div>
-    
-    <div class="form-row">
-      <div class="form-field" style="flex: 2;">
-        <label for="description">Description</label>
-        <textarea id="description"></textarea>
-      </div>
-    </div>
-    
-    <div class="form-row">
-      <div class="form-field">
-        <label for="price">Price USD</label>
-        <input type="number" id="price" step="0.01" min="0" />
-      </div>
-      
-      <div class="form-field">
-        <label for="condition">Condition</label>
-        <select id="condition">
-          <option value="NEW">New</option>
-          <option value="LIKE_NEW">Like New</option>
-          <option value="USED_EXCELLENT">Used - Excellent</option>
-          <option value="USED_GOOD">Used - Good</option>
-          <option value="USED_ACCEPTABLE">Used - Acceptable</option>
-        </select>
-      </div>
-    </div>
-  </div>
-    
-  <div class="card">
-    <div class="section-title">Item Specifics (Aspects)</div>
-    <div id="aspectsList"></div>
-    <button class="secondary" style="margin-top: 0.5rem;" onclick="addAspect()">+ Add Aspect</button>
-  </div>
-    
-  <div class="card">
-    <div class="section-title">Images</div>
-    <div class="images-preview" id="imagesPreview"></div>
-  </div>
-    
-  <div class="card">
-    <button id="btnSave" onclick="saveDraft()">Update Draft</button>
-    <button class="secondary" onclick="window.location.href='/drafts.html'" style="margin-left: 0.5rem;">Cancel</button>
   </div>
   
   <script>
@@ -223,8 +268,9 @@
     function showFlash(message, type = 'success') {
       const flash = $('flash');
       flash.textContent = message;
-      flash.className = `flash show ${type}`;
-      setTimeout(() => flash.classList.remove('show'), 5000);
+      flash.className = type === 'error' ? 'dp-flash dp-flash--error' : 'dp-flash dp-flash--success';
+      flash.style.display = 'block';
+      setTimeout(() => { flash.style.display = 'none'; }, 5000);
     }
     
     function updateTitleCount() {
@@ -241,7 +287,7 @@
       div.innerHTML = `
         <input type="text" placeholder="Name (e.g. Brand)" value="${key}" class="aspect-key" ${keyReadonly} />
         <input type="text" placeholder="Value${requiredMark}" value="${value}" class="aspect-value" ${isRequired ? 'required' : ''} />
-        <button class="secondary" onclick="this.parentElement.remove()" ${isRequired ? 'disabled title="Required field"' : ''} style="padding: 0.25rem 0.5rem; margin-left: 0.5rem;">✕</button>
+        <button class="dp-btn dp-btn-secondary" onclick="this.parentElement.remove()" ${isRequired ? 'disabled title="Required field"' : ''}>×</button>
       `;
       container.appendChild(div);
     }
@@ -389,6 +435,15 @@
         if (!ok) {
           showFlash('Authentication required. Redirecting to login...', 'error');
           return;
+        }
+        
+        // Populate sidebar user info
+        const user = window.authClient.user;
+        if (user) {
+          const userName = document.getElementById('userName');
+          const avatar = document.querySelector('.dp-user-card__avatar');
+          if (userName) userName.textContent = user.name || user.email || 'User';
+          if (avatar) avatar.textContent = (user.name || user.email || 'U')[0].toUpperCase();
         }
         
         await loadDraft();
