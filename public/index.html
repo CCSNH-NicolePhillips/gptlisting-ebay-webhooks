@@ -548,6 +548,10 @@
         dbxStatus.textContent = s.dropbox?.connected ? 'Connected' : 'Not connected';
         ebayStatus.textContent = s.ebay?.connected ? 'Connected' : 'Not connected';
         
+        // Ensure connections section is visible
+        const connectionsSection = document.getElementById('connectionsSection');
+        if (connectionsSection) connectionsSection.style.display = 'block';
+        
         // Update checklist items without nuking their structure
         function updateChecklistItem(container, connected, baseLabel) {
           if (!container) return;
@@ -1077,7 +1081,18 @@
 }
 
 function updateUIFromCache(data) {
-  const { connected, policiesReady, locationReady, ready, setupHints } = data;
+  const { connected, policiesReady, locationReady, optedIn, ready, setupHints } = data;
+  
+  // Check if we need to redirect to onboarding
+  try {
+    const suppressed = sessionStorage.getItem(SETUP_REDIRECT_GUARD) === '1';
+    if (!ready && !suppressed) {
+      sessionStorage.setItem(SETUP_REDIRECT_GUARD, '1');
+      location.replace('/onboarding.html');
+      return;
+    }
+    if (ready) sessionStorage.removeItem(SETUP_REDIRECT_GUARD);
+  } catch {}
   
   // Update connection status UI
   lastStatus = connected;
