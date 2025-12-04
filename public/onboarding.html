@@ -681,8 +681,16 @@
           data = { error: text || `HTTP ${r.status}` };
         }
         if (!r.ok) {
-          console.error('[Onboarding] API Error:', { url, status: r.status, data });
-          throw new Error(data.error || data.message || `HTTP ${r.status}`);
+          console.error('[Onboarding] API Error:', { 
+            url, 
+            status: r.status, 
+            statusText: r.statusText,
+            error: data.error || data.message,
+            fullResponse: data,
+            responseText: text
+          });
+          const errorMsg = data.error || data.message || text || `HTTP ${r.status}`;
+          throw new Error(errorMsg);
         }
         return data;
       }
