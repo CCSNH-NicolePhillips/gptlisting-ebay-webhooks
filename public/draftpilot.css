@@ -2012,11 +2012,14 @@ body {
    LEGACY CLEANUP - Minimal targeted hiding only
    ================================================================ */
 /* Hide only specific unused legacy elements - no wildcards */
+/* NOTE: Disabled - conflicting with drafts.html .card elements */
+/*
 .card,
 .row,
 .col {
   display: none !important;
 }
+*/
 
 /* ================================================================
    PHASE 8: RESPONSIVE LAYOUT POLISH (CSS-ONLY)
