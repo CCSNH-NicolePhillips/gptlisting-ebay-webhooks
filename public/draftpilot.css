@@ -300,6 +300,41 @@ body {
   margin-top: 1px;
 }
 
+.dp-user-menu {
+  position: absolute;
+  bottom: 60px;
+  left: 12px;
+  right: 12px;
+  background: #1a1f3a;
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  z-index: 1000;
+}
+
+.dp-user-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  color: #e5e7eb;
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: background 0.15s ease;
+}
+
+.dp-user-menu__item:hover {
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.dp-user-menu__icon {
+  width: 18px;
+  height: 18px;
+  color: #94a3b8;
+}
+
 /* ===== MAIN CONTENT AREA ===== */
 .dp-main-wrapper {
   margin-left: 260px;
