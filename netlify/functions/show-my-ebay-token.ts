@@ -21,7 +21,7 @@ export const handler: Handler = async (event) => {
       return {
         statusCode: 200,
         headers: { 'Content-Type': 'text/html' },
-        body: '<h1>No eBay Token</h1><p>You need to connect eBay first at <a href="/setup.html">setup page</a></p>',
+        body: '<h1>No eBay Token</h1><p>You need to connect eBay first at <a href="/onboarding.html">onboarding page</a></p>',
       };
     }
 

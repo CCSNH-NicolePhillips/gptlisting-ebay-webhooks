@@ -1,0 +1,825 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Welcome to DraftPilot</title>
+    <link rel="stylesheet" href="/draftpilot.css">
+    <style>
+      .onboarding-container {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        background: var(--bg-base);
+      }
+      
+      .onboarding-card {
+        max-width: 600px;
+        width: 100%;
+        background: var(--bg-card);
+        border: 1px solid var(--border-subtle);
+        border-radius: 16px;
+        padding: 3rem;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      }
+      
+      .step-indicator {
+        display: flex;
+        justify-content: center;
+        gap: 0.5rem;
+        margin-bottom: 2rem;
+      }
+      
+      .step-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--border-subtle);
+        transition: all 0.3s;
+      }
+      
+      .step-dot.active {
+        background: var(--accent);
+        width: 24px;
+        border-radius: 5px;
+      }
+      
+      .step-content {
+        display: none;
+      }
+      
+      .step-content.active {
+        display: block;
+        animation: fadeIn 0.3s ease-in;
+      }
+      
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      
+      .step-header {
+        text-align: center;
+        margin-bottom: 2rem;
+      }
+      
+      .step-icon {
+        width: 64px;
+        height: 64px;
+        margin: 0 auto 1rem;
+        background: rgba(56, 189, 248, 0.1);
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--accent);
+      }
+      
+      .step-icon svg {
+        width: 32px;
+        height: 32px;
+      }
+      
+      .step-title {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin: 0 0 0.5rem;
+      }
+      
+      .step-description {
+        font-size: 1rem;
+        color: var(--text-muted);
+        line-height: 1.6;
+      }
+      
+      .step-body {
+        margin: 2rem 0;
+      }
+      
+      .info-box {
+        background: rgba(56, 189, 248, 0.05);
+        border: 1px solid rgba(56, 189, 248, 0.2);
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+      }
+      
+      .info-box-title {
+        font-weight: 600;
+        color: var(--accent);
+        margin-bottom: 0.5rem;
+      }
+      
+      .info-box-text {
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+        line-height: 1.5;
+      }
+      
+      .status-message {
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        font-size: 0.875rem;
+      }
+      
+      .status-message.success {
+        background: rgba(34, 197, 94, 0.1);
+        border: 1px solid rgba(34, 197, 94, 0.3);
+        color: #86efac;
+      }
+      
+      .status-message.error {
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        color: #fca5a5;
+      }
+      
+      .status-message.warning {
+        background: rgba(251, 191, 36, 0.1);
+        border: 1px solid rgba(251, 191, 36, 0.3);
+        color: #fde047;
+      }
+      
+      .form-group {
+        margin-bottom: 1.5rem;
+      }
+      
+      .form-label {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #cbd5ff;
+        margin-bottom: 0.5rem;
+      }
+      
+      .form-input {
+        width: 100%;
+        padding: 0.75rem;
+        font-size: 0.9375rem;
+        background: #0f1529;
+        border: 1px solid #2a335c;
+        border-radius: 6px;
+        color: #f4f6fb;
+        font-family: inherit;
+        box-sizing: border-box;
+      }
+      
+      .form-input:focus {
+        outline: none;
+        border-color: #5b7cff;
+        box-shadow: 0 0 0 3px rgba(91, 124, 255, 0.1);
+      }
+      
+      .step-actions {
+        display: flex;
+        gap: 0.75rem;
+        margin-top: 2rem;
+      }
+      
+      .step-actions button {
+        flex: 1;
+      }
+      
+      .skip-link {
+        text-align: center;
+        margin-top: 1rem;
+      }
+      
+      .skip-link a {
+        color: var(--text-muted);
+        font-size: 0.875rem;
+        text-decoration: none;
+      }
+      
+      .skip-link a:hover {
+        color: var(--accent);
+      }
+      
+      .policy-preview {
+        background: rgba(15, 23, 42, 0.5);
+        border: 1px solid var(--border-subtle);
+        border-radius: 8px;
+        padding: 1rem;
+        margin-top: 1rem;
+      }
+      
+      .policy-preview-title {
+        font-weight: 600;
+        color: var(--text-secondary);
+        margin-bottom: 0.75rem;
+        font-size: 0.875rem;
+      }
+      
+      .policy-preview-item {
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+        margin: 0.5rem 0;
+        padding-left: 1.25rem;
+        position: relative;
+      }
+      
+      .policy-preview-item:before {
+        content: "✓";
+        position: absolute;
+        left: 0;
+        color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <script src="/auth-client.js"></script>
+    
+    <div class="onboarding-container">
+      <div class="onboarding-card">
+        <!-- Step Indicator -->
+        <div class="step-indicator" id="stepIndicator">
+          <div class="step-dot active"></div>
+          <div class="step-dot"></div>
+          <div class="step-dot"></div>
+          <div class="step-dot"></div>
+          <div class="step-dot"></div>
+          <div class="step-dot"></div>
+        </div>
+        
+        <!-- Step 1: Welcome -->
+        <div class="step-content active" data-step="1">
+          <div class="step-header">
+            <div class="step-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                <path d="M2 17l10 5 10-5M2 12l10 5 10-5"></path>
+              </svg>
+            </div>
+            <h1 class="step-title">Welcome to DraftPilot!</h1>
+            <p class="step-description">
+              Let's get your account set up in just a few simple steps. This will only take a few minutes.
+            </p>
+          </div>
+          
+          <div class="step-body">
+            <div class="info-box">
+              <div class="info-box-title">What we'll set up:</div>
+              <div class="info-box-text">
+                1. Connect your eBay account<br>
+                2. Set up your shipping location<br>
+                3. Create payment policy<br>
+                4. Create return policy<br>
+                5. Create shipping policy<br>
+                6. (Optional) Connect Dropbox for photos
+              </div>
+            </div>
+          </div>
+          
+          <div class="step-actions">
+            <button class="dp-btn dp-btn-primary" onclick="nextStep()">Let's Get Started →</button>
+          </div>
+        </div>
+        
+        <!-- Step 2: Connect eBay -->
+        <div class="step-content" data-step="2">
+          <div class="step-header">
+            <div class="step-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+              </svg>
+            </div>
+            <h1 class="step-title">Connect eBay</h1>
+            <p class="step-description">
+              Connect your eBay account so DraftPilot can create and manage listings for you.
+            </p>
+          </div>
+          
+          <div class="step-body">
+            <div class="info-box">
+              <div class="info-box-title">Why do we need this?</div>
+              <div class="info-box-text">
+                DraftPilot needs permission to create draft listings, manage inventory, and set up business policies on your behalf. We'll never list items without your approval.
+              </div>
+            </div>
+            
+            <div id="ebayStatus" class="status-message warning">
+              Please connect your eBay account to continue.
+            </div>
+          </div>
+          
+          <div class="step-actions">
+            <button class="dp-btn dp-btn-secondary" onclick="prevStep()">← Back</button>
+            <a class="dp-btn dp-btn-primary" id="ebayConnectBtn" href="/.netlify/functions/ebay-oauth-start">Connect eBay →</a>
+          </div>
+        </div>
+        
+        <!-- Step 3: Shipping Location -->
+        <div class="step-content" data-step="3">
+          <div class="step-header">
+            <div class="step-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                <circle cx="12" cy="10" r="3"></circle>
+              </svg>
+            </div>
+            <h1 class="step-title">Shipping Location</h1>
+            <p class="step-description">
+              Tell us where you'll be shipping items from. This is usually your home address.
+            </p>
+          </div>
+          
+          <div class="step-body">
+            <div class="info-box">
+              <div class="info-box-title">What is a "warehouse"?</div>
+              <div class="info-box-text">
+                Don't worry - your home is your warehouse! This is simply where you'll pack and ship items from. eBay calls it a "merchant location" or "warehouse" but for most sellers, this is just your home address.
+              </div>
+            </div>
+            
+            <div id="locationStatus"></div>
+            
+            <div class="form-group">
+              <label class="form-label" for="locationName">Location Name</label>
+              <input type="text" id="locationName" class="form-input" placeholder="My Home" value="Primary Location">
+            </div>
+            
+            <div class="form-group">
+              <label class="form-label" for="locationAddress">Address</label>
+              <input type="text" id="locationAddress" class="form-input" placeholder="123 Main Street">
+            </div>
+            
+            <div class="form-group">
+              <label class="form-label" for="locationCity">City</label>
+              <input type="text" id="locationCity" class="form-input" placeholder="Portland">
+            </div>
+            
+            <div class="form-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+              <div>
+                <label class="form-label" for="locationState">State</label>
+                <input type="text" id="locationState" class="form-input" placeholder="OR" maxlength="2">
+              </div>
+              <div>
+                <label class="form-label" for="locationZip">ZIP Code</label>
+                <input type="text" id="locationZip" class="form-input" placeholder="97201">
+              </div>
+            </div>
+          </div>
+          
+          <div class="step-actions">
+            <button class="dp-btn dp-btn-secondary" onclick="prevStep()">← Back</button>
+            <button class="dp-btn dp-btn-primary" onclick="createLocation()">Save & Continue →</button>
+          </div>
+        </div>
+        
+        <!-- Step 4: Payment Policy -->
+        <div class="step-content" data-step="4">
+          <div class="step-header">
+            <div class="step-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+                <line x1="1" y1="10" x2="23" y2="10"></line>
+              </svg>
+            </div>
+            <h1 class="step-title">Payment Policy</h1>
+            <p class="step-description">
+              Set up how you'll receive payments from buyers.
+            </p>
+          </div>
+          
+          <div class="step-body">
+            <div class="info-box">
+              <div class="info-box-title">What is this?</div>
+              <div class="info-box-text">
+                Your payment policy tells buyers how they can pay you. We'll use eBay's recommended settings that require immediate payment for a smooth transaction.
+              </div>
+            </div>
+            
+            <div id="paymentStatus"></div>
+            
+            <div class="policy-preview">
+              <div class="policy-preview-title">We'll create this policy for you:</div>
+              <div class="policy-preview-item">Immediate payment required</div>
+              <div class="policy-preview-item">PayPal and credit/debit cards accepted</div>
+              <div class="policy-preview-item">Applies to all categories except motor vehicles</div>
+            </div>
+          </div>
+          
+          <div class="step-actions">
+            <button class="dp-btn dp-btn-secondary" onclick="prevStep()">← Back</button>
+            <button class="dp-btn dp-btn-primary" onclick="createPaymentPolicy()">Create Policy →</button>
+          </div>
+        </div>
+        
+        <!-- Step 5: Return Policy -->
+        <div class="step-content" data-step="5">
+          <div class="step-header">
+            <div class="step-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="1 4 1 10 7 10"></polyline>
+                <polyline points="23 20 23 14 17 14"></polyline>
+                <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"></path>
+              </svg>
+            </div>
+            <h1 class="step-title">Return Policy</h1>
+            <p class="step-description">
+              Define your return and refund policy for buyers.
+            </p>
+          </div>
+          
+          <div class="step-body">
+            <div class="info-box">
+              <div class="info-box-title">What is this?</div>
+              <div class="info-box-text">
+                Your return policy tells buyers if they can return items and how. A generous return policy can increase buyer confidence and sales.
+              </div>
+            </div>
+            
+            <div id="returnStatus"></div>
+            
+            <div class="policy-preview">
+              <div class="policy-preview-title">We'll create this policy for you:</div>
+              <div class="policy-preview-item">30-day returns accepted</div>
+              <div class="policy-preview-item">Buyer pays return shipping</div>
+              <div class="policy-preview-item">Money back refund</div>
+              <div class="policy-preview-item">Item must be in original condition</div>
+            </div>
+          </div>
+          
+          <div class="step-actions">
+            <button class="dp-btn dp-btn-secondary" onclick="prevStep()">← Back</button>
+            <button class="dp-btn dp-btn-primary" onclick="createReturnPolicy()">Create Policy →</button>
+          </div>
+        </div>
+        
+        <!-- Step 6: Shipping Policy -->
+        <div class="step-content" data-step="6">
+          <div class="step-header">
+            <div class="step-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="1" y="3" width="15" height="13"></rect>
+                <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+                <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                <circle cx="18.5" cy="18.5" r="2.5"></circle>
+              </svg>
+            </div>
+            <h1 class="step-title">Shipping Policy</h1>
+            <p class="step-description">
+              Set up how you'll ship items to buyers.
+            </p>
+          </div>
+          
+          <div class="step-body">
+            <div class="info-box">
+              <div class="info-box-title">What is this?</div>
+              <div class="info-box-text">
+                Your shipping policy tells buyers how long it will take to ship and how much it costs. We'll use standard USPS shipping for most items.
+              </div>
+            </div>
+            
+            <div id="shippingStatus"></div>
+            
+            <div class="policy-preview">
+              <div class="policy-preview-title">We'll create this policy for you:</div>
+              <div class="policy-preview-item">USPS Ground Advantage (1-5 business days)</div>
+              <div class="policy-preview-item">Calculated shipping based on buyer's location</div>
+              <div class="policy-preview-item">1-business-day handling time</div>
+              <div class="policy-preview-item">Ships from your location</div>
+            </div>
+          </div>
+          
+          <div class="step-actions">
+            <button class="dp-btn dp-btn-secondary" onclick="prevStep()">← Back</button>
+            <button class="dp-btn dp-btn-primary" onclick="createShippingPolicy()">Create Policy →</button>
+          </div>
+        </div>
+        
+        <!-- Step 7: Dropbox (Optional) -->
+        <div class="step-content" data-step="7">
+          <div class="step-header">
+            <div class="step-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+            </div>
+            <h1 class="step-title">Connect Dropbox (Optional)</h1>
+            <p class="step-description">
+              Connect Dropbox to automatically import product photos from a shared folder.
+            </p>
+          </div>
+          
+          <div class="step-body">
+            <div class="info-box">
+              <div class="info-box-title">Why connect Dropbox?</div>
+              <div class="info-box-text">
+                If you store product photos in Dropbox, DraftPilot can automatically import them. You can also upload photos manually later, so this step is completely optional.
+              </div>
+            </div>
+            
+            <div id="dropboxStatus"></div>
+          </div>
+          
+          <div class="step-actions">
+            <button class="dp-btn dp-btn-secondary" onclick="prevStep()">← Back</button>
+            <a class="dp-btn dp-btn-primary" id="dropboxConnectBtn" href="/.netlify/functions/dropbox-oauth-start">Connect Dropbox →</a>
+          </div>
+          
+          <div class="skip-link">
+            <a href="#" onclick="completeOnboarding(); return false;">Skip this step →</a>
+          </div>
+        </div>
+        
+        <!-- Step 8: Complete -->
+        <div class="step-content" data-step="8">
+          <div class="step-header">
+            <div class="step-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+              </svg>
+            </div>
+            <h1 class="step-title">All Set!</h1>
+            <p class="step-description">
+              Your account is ready. You can now start creating eBay listings with DraftPilot.
+            </p>
+          </div>
+          
+          <div class="step-body">
+            <div class="status-message success">
+              ✓ Setup complete! All your policies and settings are configured.
+            </div>
+            
+            <div class="info-box">
+              <div class="info-box-title">What's next?</div>
+              <div class="info-box-text">
+                • Upload product photos to create your first listing<br>
+                • Review and customize your business policies anytime<br>
+                • Start selling on eBay with AI-powered listings
+              </div>
+            </div>
+          </div>
+          
+          <div class="step-actions">
+            <a class="dp-btn dp-btn-primary" href="/quick-list.html" style="flex: 1; text-align: center;">Start Creating Listings →</a>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <script>
+      let currentStep = 1;
+      const totalSteps = 7;
+      
+      function updateStepIndicator() {
+        const dots = document.querySelectorAll('.step-dot');
+        dots.forEach((dot, index) => {
+          if (index + 1 === currentStep) {
+            dot.classList.add('active');
+          } else {
+            dot.classList.remove('active');
+          }
+        });
+      }
+      
+      function showStep(step) {
+        document.querySelectorAll('.step-content').forEach(content => {
+          content.classList.remove('active');
+        });
+        
+        const stepContent = document.querySelector(`[data-step="${step}"]`);
+        if (stepContent) {
+          stepContent.classList.add('active');
+        }
+        
+        currentStep = step;
+        updateStepIndicator();
+        
+        // Check connection status when showing relevant steps
+        if (step === 2) checkEbayConnection();
+        if (step === 3) checkLocation();
+        if (step === 4) checkPaymentPolicy();
+        if (step === 5) checkReturnPolicy();
+        if (step === 6) checkShippingPolicy();
+        if (step === 7) checkDropboxConnection();
+      }
+      
+      function nextStep() {
+        if (currentStep < 8) {
+          showStep(currentStep + 1);
+        }
+      }
+      
+      function prevStep() {
+        if (currentStep > 1) {
+          showStep(currentStep - 1);
+        }
+      }
+      
+      async function fetchJSON(url, opts = {}) {
+        const exec = window.authClient?.authFetch || fetch;
+        const r = await exec(url, opts);
+        const data = await r.json();
+        if (!r.ok) {
+          throw new Error(data.error || `HTTP ${r.status}`);
+        }
+        return data;
+      }
+      
+      function showStatus(elementId, message, type = 'warning') {
+        const el = document.getElementById(elementId);
+        if (el) {
+          el.className = `status-message ${type}`;
+          el.textContent = message;
+          el.style.display = 'block';
+        }
+      }
+      
+      async function checkEbayConnection() {
+        try {
+          const data = await fetchJSON('/.netlify/functions/ebay-check-connection');
+          if (data.connected) {
+            showStatus('ebayStatus', '✓ eBay account connected successfully!', 'success');
+            // Auto-advance after connection
+            setTimeout(() => nextStep(), 1500);
+          } else {
+            showStatus('ebayStatus', 'Please connect your eBay account to continue.', 'warning');
+          }
+        } catch (err) {
+          showStatus('ebayStatus', 'Unable to check eBay connection status.', 'error');
+        }
+      }
+      
+      async function checkDropboxConnection() {
+        try {
+          const data = await fetchJSON('/.netlify/functions/dropbox-check-connection');
+          if (data.connected) {
+            showStatus('dropboxStatus', '✓ Dropbox connected successfully!', 'success');
+          } else {
+            showStatus('dropboxStatus', 'Dropbox is not connected. You can skip this step and upload photos manually.', 'warning');
+          }
+        } catch (err) {
+          showStatus('dropboxStatus', 'Optional: Connect Dropbox to auto-import photos.', 'warning');
+        }
+      }
+      
+      async function checkLocation() {
+        try {
+          const data = await fetchJSON('/.netlify/functions/ebay-check-location');
+          if (data.hasLocation) {
+            showStatus('locationStatus', '✓ Shipping location already configured!', 'success');
+            // Auto-advance if already set up
+            setTimeout(() => nextStep(), 1500);
+          }
+        } catch (err) {
+          console.log('No location set yet');
+        }
+      }
+      
+      async function createLocation() {
+        const btn = event.target;
+        btn.disabled = true;
+        btn.textContent = 'Creating...';
+        
+        try {
+          const data = {
+            name: document.getElementById('locationName').value || 'Primary Location',
+            address: document.getElementById('locationAddress').value,
+            city: document.getElementById('locationCity').value,
+            state: document.getElementById('locationState').value.toUpperCase(),
+            postalCode: document.getElementById('locationZip').value,
+            country: 'US'
+          };
+          
+          if (!data.address || !data.city || !data.state || !data.postalCode) {
+            throw new Error('Please fill in all address fields');
+          }
+          
+          await fetchJSON('/.netlify/functions/ebay-create-location', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+          });
+          
+          showStatus('locationStatus', '✓ Shipping location created successfully!', 'success');
+          setTimeout(() => nextStep(), 1000);
+        } catch (err) {
+          showStatus('locationStatus', `Error: ${err.message}`, 'error');
+          btn.disabled = false;
+          btn.textContent = 'Save & Continue →';
+        }
+      }
+      
+      async function checkPaymentPolicy() {
+        try {
+          const data = await fetchJSON('/.netlify/functions/ebay-check-policies');
+          if (data.hasPaymentPolicy) {
+            showStatus('paymentStatus', '✓ Payment policy already configured!', 'success');
+            setTimeout(() => nextStep(), 1500);
+          }
+        } catch (err) {
+          console.log('No payment policy yet');
+        }
+      }
+      
+      async function createPaymentPolicy() {
+        const btn = event.target;
+        btn.disabled = true;
+        btn.textContent = 'Creating...';
+        
+        try {
+          await fetchJSON('/.netlify/functions/ebay-create-payment-policy', {
+            method: 'POST'
+          });
+          
+          showStatus('paymentStatus', '✓ Payment policy created successfully!', 'success');
+          setTimeout(() => nextStep(), 1000);
+        } catch (err) {
+          showStatus('paymentStatus', `Error: ${err.message}`, 'error');
+          btn.disabled = false;
+          btn.textContent = 'Create Policy →';
+        }
+      }
+      
+      async function checkReturnPolicy() {
+        try {
+          const data = await fetchJSON('/.netlify/functions/ebay-check-policies');
+          if (data.hasReturnPolicy) {
+            showStatus('returnStatus', '✓ Return policy already configured!', 'success');
+            setTimeout(() => nextStep(), 1500);
+          }
+        } catch (err) {
+          console.log('No return policy yet');
+        }
+      }
+      
+      async function createReturnPolicy() {
+        const btn = event.target;
+        btn.disabled = true;
+        btn.textContent = 'Creating...';
+        
+        try {
+          await fetchJSON('/.netlify/functions/ebay-create-return-policy', {
+            method: 'POST'
+          });
+          
+          showStatus('returnStatus', '✓ Return policy created successfully!', 'success');
+          setTimeout(() => nextStep(), 1000);
+        } catch (err) {
+          showStatus('returnStatus', `Error: ${err.message}`, 'error');
+          btn.disabled = false;
+          btn.textContent = 'Create Policy →';
+        }
+      }
+      
+      async function checkShippingPolicy() {
+        try {
+          const data = await fetchJSON('/.netlify/functions/ebay-check-policies');
+          if (data.hasShippingPolicy) {
+            showStatus('shippingStatus', '✓ Shipping policy already configured!', 'success');
+            setTimeout(() => nextStep(), 1500);
+          }
+        } catch (err) {
+          console.log('No shipping policy yet');
+        }
+      }
+      
+      async function createShippingPolicy() {
+        const btn = event.target;
+        btn.disabled = true;
+        btn.textContent = 'Creating...';
+        
+        try {
+          await fetchJSON('/.netlify/functions/ebay-create-shipping-policy', {
+            method: 'POST'
+          });
+          
+          showStatus('shippingStatus', '✓ Shipping policy created successfully!', 'success');
+          setTimeout(() => nextStep(), 1000);
+        } catch (err) {
+          showStatus('shippingStatus', `Error: ${err.message}`, 'error');
+          btn.disabled = false;
+          btn.textContent = 'Create Policy →';
+        }
+      }
+      
+      function completeOnboarding() {
+        showStep(8);
+      }
+      
+      // Handle OAuth redirects
+      window.addEventListener('load', () => {
+        const params = new URLSearchParams(window.location.search);
+        
+        if (params.get('ebay_connected') === 'true') {
+          showStep(2);
+          checkEbayConnection();
+        } else if (params.get('dropbox_connected') === 'true') {
+          showStep(7);
+          checkDropboxConnection();
+          setTimeout(() => completeOnboarding(), 2000);
+        }
+      });
+    </script>
+  </body>
+</html>

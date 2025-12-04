@@ -303,7 +303,7 @@
               </div>
 
               <div class="dp-card__footer">
-                <a href="/setup.html" style="display: block; text-align: center; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 6px; color: inherit; text-decoration: none; font-size: 14px; font-weight: 500;">Manage connections</a>
+                <a href="/onboarding.html" style="display: block; text-align: center; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 6px; color: inherit; text-decoration: none; font-size: 14px; font-weight: 500;">Complete Setup</a>
               </div>
 
               <!-- Hidden elements for JS compatibility -->
@@ -975,7 +975,7 @@
           const suppressed = sessionStorage.getItem(SETUP_REDIRECT_GUARD) === '1';
           if (!visitedSetup && !ready && !suppressed) {
             sessionStorage.setItem(SETUP_REDIRECT_GUARD, '1');
-            location.replace('/setup.html');
+            location.replace('/onboarding.html');
             return;
           }
           if (ready) sessionStorage.removeItem(SETUP_REDIRECT_GUARD);
@@ -990,7 +990,7 @@
         if (policiesLink) {
           policiesLink.style.display = 'inline';
           policiesLink.textContent = policiesReady ? 'View' : 'Set up';
-          policiesLink.href = policiesReady ? '/policies-manage.html' : '/setup.html';
+          policiesLink.href = policiesReady ? '/policies-manage.html' : '/onboarding.html';
         }
 
         const chkLocation = document.getElementById('chkLocation');
@@ -1002,7 +1002,7 @@
         if (locationLink) {
           locationLink.style.display = 'inline';
           locationLink.textContent = locationReady ? 'View' : 'Set up';
-          locationLink.href = locationReady ? '/location.html' : '/setup.html#inventory';
+          locationLink.href = locationReady ? '/location.html' : '/onboarding.html';
         }
 
         const setupMsg = document.getElementById('setupMsg');
@@ -1089,7 +1089,7 @@ function updateUIFromCache(data) {
   if (policiesLink) {
     policiesLink.style.display = 'inline';
     policiesLink.textContent = policiesReady ? 'View' : 'Set up';
-    policiesLink.href = policiesReady ? '/policies-manage.html' : '/setup.html';
+    policiesLink.href = policiesReady ? '/policies-manage.html' : '/onboarding.html';
   }
 
   const chkLocation = document.getElementById('chkLocation');
@@ -1101,7 +1101,7 @@ function updateUIFromCache(data) {
   if (locationLink) {
     locationLink.style.display = 'inline';
     locationLink.textContent = locationReady ? 'View' : 'Set up';
-    locationLink.href = locationReady ? '/location.html' : '/setup.html#inventory';
+    locationLink.href = locationReady ? '/location.html' : '/onboarding.html';
   }
 
   const setupMsg = document.getElementById('setupMsg');
