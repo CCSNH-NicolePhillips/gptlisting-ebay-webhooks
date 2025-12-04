@@ -19,30 +19,31 @@
     }
     .form-field label {
       display: block;
-      font-weight: 600;
+      font-weight: 500;
       margin-bottom: 0.5rem;
-      font-size: 0.9rem;
-      color: var(--text-secondary);
+      font-size: 0.875rem;
+      color: #cbd5ff;
     }
     .form-field input, 
     .form-field textarea, 
     .form-field select {
       width: 100%;
-      background: rgba(15, 23, 42, 0.5);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-md);
-      padding: 0.7rem 0.9rem;
-      color: var(--text-primary);
+      background: #0f1529;
+      border: 1px solid #2a335c;
+      border-radius: 6px;
+      padding: 0.75rem;
+      color: #f4f6fb;
       font-family: inherit;
-      font-size: 0.95rem;
-      transition: border-color 0.2s, background 0.2s;
+      font-size: 0.9375rem;
+      box-sizing: border-box;
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
     .form-field input:focus, 
     .form-field textarea:focus, 
     .form-field select:focus {
       outline: none;
-      border-color: var(--accent);
-      background: rgba(15, 23, 42, 0.8);
+      border-color: #5b7cff;
+      box-shadow: 0 0 0 3px rgba(91, 124, 255, 0.1);
     }
     .form-field textarea {
       resize: vertical;
@@ -63,6 +64,18 @@
     .aspect-item input,
     .aspect-item select {
       flex: 1;
+      background: #0f1529;
+      border: 1px solid #2a335c;
+      border-radius: 6px;
+      padding: 0.75rem;
+      color: #f4f6fb;
+      font-size: 0.9375rem;
+    }
+    .aspect-item input:focus,
+    .aspect-item select:focus {
+      outline: none;
+      border-color: #5b7cff;
+      box-shadow: 0 0 0 3px rgba(91, 124, 255, 0.1);
     }
     .aspect-item button {
       padding: 0.4rem 0.8rem;
