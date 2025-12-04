@@ -474,6 +474,16 @@
       const STATUS_CACHE_KEY = 'draftpilot.ebay.status';
       const STATUS_CACHE_TTL = 2 * 60 * 1000; // Cache for 2 minutes (reduced to prevent stale data)
       let lastStatus = null;
+      
+      // Clear redirect guard if coming from onboarding or if forced
+      (() => {
+        try {
+          const params = new URLSearchParams(window.location.search);
+          if (params.get('from') === 'onboarding' || params.get('checkSetup') === 'true') {
+            sessionStorage.removeItem(SETUP_REDIRECT_GUARD);
+          }
+        } catch {}
+      })();
 
       async function refreshStatus() {
         let s = null;
@@ -999,13 +1009,17 @@
         const ready = connected && policiesReady && locationReady && optedIn;
         try {
           const suppressed = sessionStorage.getItem(SETUP_REDIRECT_GUARD) === '1';
-          // Redirect to onboarding if not ready, regardless of whether they visited setup before
+          // Redirect to onboarding if not ready
           if (!ready && !suppressed) {
+            console.log('[Dashboard] User not ready, redirecting to onboarding. Ready status:', { connected, policiesReady, locationReady, optedIn });
             sessionStorage.setItem(SETUP_REDIRECT_GUARD, '1');
             location.replace('/onboarding.html');
             return;
           }
-          if (ready) sessionStorage.removeItem(SETUP_REDIRECT_GUARD);
+          if (ready) {
+            // Clear guard when user is ready
+            sessionStorage.removeItem(SETUP_REDIRECT_GUARD);
+          }
         } catch {}
         const chkPolicies = document.getElementById('chkPolicies');
         const policiesLink = document.getElementById('policiesLink');
