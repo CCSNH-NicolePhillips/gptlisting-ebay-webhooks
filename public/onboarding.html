@@ -683,23 +683,29 @@
         btn.textContent = 'Creating...';
         
         try {
-          const data = {
-            name: document.getElementById('locationName').value || 'Primary Location',
-            address: document.getElementById('locationAddress').value,
-            city: document.getElementById('locationCity').value,
-            state: document.getElementById('locationState').value.toUpperCase(),
-            postalCode: document.getElementById('locationZip').value,
-            country: 'US'
-          };
+          const name = document.getElementById('locationName').value || 'Primary Location';
+          const address1 = document.getElementById('locationAddress').value;
+          const city = document.getElementById('locationCity').value;
+          const state = document.getElementById('locationState').value.toUpperCase();
+          const postal = document.getElementById('locationZip').value;
+          const country = 'US';
           
-          if (!data.address || !data.city || !data.state || !data.postalCode) {
+          if (!address1 || !city || !state || !postal) {
             throw new Error('Please fill in all address fields');
           }
           
-          await fetchJSON('/.netlify/functions/ebay-create-location', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
+          // Build query string for ebay-create-location
+          const params = new URLSearchParams({
+            name,
+            address1,
+            city,
+            state,
+            postal,
+            country
+          });
+          
+          await fetchJSON(`/.netlify/functions/ebay-create-location?${params.toString()}`, {
+            method: 'POST'
           });
           
           showStatus('locationStatus', '✓ Shipping location created successfully!', 'success');
