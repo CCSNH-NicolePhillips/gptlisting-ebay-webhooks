@@ -683,30 +683,34 @@
         btn.textContent = 'Creating...';
         
         try {
-          const name = document.getElementById('locationName').value || 'Primary Location';
-          const address1 = document.getElementById('locationAddress').value;
-          const city = document.getElementById('locationCity').value;
-          const state = document.getElementById('locationState').value.toUpperCase();
-          const postal = document.getElementById('locationZip').value;
+          const providedKey = document.getElementById('locationName').value?.trim() || '';
+          const defaultKey = providedKey ? providedKey.toLowerCase().replace(/\s+/g, '-') : `warehouse-${Date.now().toString(36)}`;
+          
+          const address1 = document.getElementById('locationAddress').value?.trim();
+          const city = document.getElementById('locationCity').value?.trim();
+          const state = document.getElementById('locationState').value?.trim().toUpperCase();
+          const postal = document.getElementById('locationZip').value?.trim();
           const country = 'US';
+          const name = providedKey || 'Primary Location';
           
           if (!address1 || !city || !state || !postal) {
             throw new Error('Please fill in all address fields');
           }
           
-          // Build query string for ebay-create-location
-          const params = new URLSearchParams({
+          // Build query string like location.html does
+          const qs = new URLSearchParams({
+            key: defaultKey,
             name,
             address1,
             city,
             state,
             postal,
-            country
+            country,
+            minimal: 'true'
           });
           
-          await fetchJSON(`/.netlify/functions/ebay-create-location?${params.toString()}`, {
-            method: 'POST'
-          });
+          const url = `/.netlify/functions/ebay-create-location?${qs.toString()}`;
+          await authClient.authFetch(url);
           
           showStatus('locationStatus', '✓ Shipping location created successfully!', 'success');
           setTimeout(() => nextStep(), 1000);
@@ -736,16 +740,38 @@
         btn.textContent = 'Creating...';
         
         try {
+          // Provision all policies
           await fetchJSON('/.netlify/functions/ebay-provision-policies', {
             method: 'POST'
           });
           
-          showStatus('paymentStatus', '✓ Payment policy created successfully!', 'success');
-          setTimeout(() => nextStep(), 1000);
+          // Get the newly created policies
+          const policiesData = await fetchJSON('/.netlify/functions/ebay-list-policies');
+          const paymentPolicies = policiesData?.payment?.json?.paymentPolicies || [];
+          const returnPolicies = policiesData?.returns?.json?.returnPolicies || [];
+          const fulfillmentPolicies = policiesData?.fulfillment?.json?.fulfillmentPolicies || [];
+          
+          // Set the first of each as default
+          if (paymentPolicies.length > 0 || returnPolicies.length > 0 || fulfillmentPolicies.length > 0) {
+            await fetchJSON('/.netlify/functions/ebay-set-policy-defaults', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                payment: paymentPolicies[0]?.paymentPolicyId,
+                return: returnPolicies[0]?.returnPolicyId,
+                fulfillment: fulfillmentPolicies[0]?.fulfillmentPolicyId
+              })
+            });
+          }
+          
+          showStatus('paymentStatus', '✓ Policies created and set as defaults!', 'success');
+          // Skip the next policy steps since we created all at once
+          currentStep = 6; // Jump to Dropbox step
+          setTimeout(() => showStep(6), 1000);
         } catch (err) {
           showStatus('paymentStatus', `Error: ${err.message}`, 'error');
           btn.disabled = false;
-          btn.textContent = 'Create Policy →';
+          btn.textContent = 'Create Policies →';
         }
       }
       
