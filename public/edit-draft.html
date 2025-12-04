@@ -97,6 +97,31 @@
       transition: border-color 0.2s, transform 0.2s;
       cursor: move;
     }
+    .image-upload-box {
+      position: relative;
+      aspect-ratio: 1;
+      border-radius: var(--radius-md);
+      border: 2px dashed var(--border-subtle);
+      background: rgba(15, 23, 42, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .image-upload-box:hover {
+      border-color: var(--accent);
+      background: rgba(56, 189, 248, 0.1);
+    }
+    .image-upload-box svg {
+      width: 48px;
+      height: 48px;
+      color: var(--text-muted);
+      transition: color 0.2s;
+    }
+    .image-upload-box:hover svg {
+      color: var(--accent);
+    }
     .image-thumb:hover {
       border-color: var(--accent-hover);
       transform: scale(1.02);
@@ -320,6 +345,7 @@
         <!-- Images -->
         <div class="dp-card dp-card--full">
           <h3 style="margin-top: 0; margin-bottom: 1rem; color: var(--text-primary);">📸 Images</h3>
+          <input type="file" id="imageUploadInput" accept="image/*" multiple style="display: none;" />
           <div class="images-preview" id="imagesPreview"></div>
         </div>
         
@@ -480,6 +506,9 @@
             
             preview.appendChild(div);
           });
+          
+          // Add upload box at the end
+          addUploadBox();
         }
         
         showFlash('Draft loaded successfully!', 'success');
@@ -542,6 +571,77 @@
         if (orderLabel) orderLabel.textContent = index + 1;
       });
     }
+    
+    function addUploadBox() {
+      const preview = $('imagesPreview');
+      const uploadBox = document.createElement('div');
+      uploadBox.className = 'image-upload-box';
+      uploadBox.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+      `;
+      uploadBox.onclick = () => $('imageUploadInput').click();
+      preview.appendChild(uploadBox);
+    }
+    
+    async function handleImageUpload(event) {
+      const files = event.target.files;
+      if (!files || files.length === 0) return;
+      
+      try {
+        showFlash('Uploading images...', 'success');
+        
+        // Convert files to base64 data URLs
+        const newImages = [];
+        for (const file of files) {
+          const reader = new FileReader();
+          const dataUrl = await new Promise((resolve, reject) => {
+            reader.onload = (e) => resolve(e.target.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+          newImages.push(dataUrl);
+        }
+        
+        // Add new images to the preview (before the upload box)
+        const preview = $('imagesPreview');
+        const uploadBox = preview.querySelector('.image-upload-box');
+        
+        newImages.forEach((dataUrl, index) => {
+          const currentImageCount = document.querySelectorAll('.image-thumb').length;
+          const div = document.createElement('div');
+          div.className = 'image-thumb';
+          div.draggable = true;
+          div.dataset.url = dataUrl;
+          div.innerHTML = `
+            <div class="image-order">${currentImageCount + index + 1}</div>
+            <img src="${dataUrl}" alt="Product image" />
+          `;
+          
+          // Drag and drop event handlers
+          div.addEventListener('dragstart', handleDragStart);
+          div.addEventListener('dragend', handleDragEnd);
+          div.addEventListener('dragover', handleDragOver);
+          div.addEventListener('drop', handleDrop);
+          div.addEventListener('dragleave', handleDragLeave);
+          
+          preview.insertBefore(div, uploadBox);
+        });
+        
+        showFlash(`Added ${newImages.length} image(s)`, 'success');
+        
+        // Clear the file input
+        event.target.value = '';
+      } catch (err) {
+        console.error('Image upload failed:', err);
+        showFlash(`Error uploading images: ${err.message}`, 'error');
+      }
+    }
+    
+    // Attach upload handler
+    $('imageUploadInput').addEventListener('change', handleImageUpload);
     
     async function saveDraft() {
       try {
