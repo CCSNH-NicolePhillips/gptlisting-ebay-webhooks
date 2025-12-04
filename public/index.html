@@ -939,8 +939,6 @@
 
         console.log('[Dashboard] Fetching fresh eBay status...');
         const connected = await refreshStatus();
-        let visitedSetup = false;
-        try { visitedSetup = localStorage.getItem(SETUP_STORAGE_KEY) === '1'; } catch {}
         let policiesReady = false;
         let locationReady = false;
         let optedIn = true;
@@ -983,7 +981,8 @@
         const ready = connected && policiesReady && locationReady && optedIn;
         try {
           const suppressed = sessionStorage.getItem(SETUP_REDIRECT_GUARD) === '1';
-          if (!visitedSetup && !ready && !suppressed) {
+          // Redirect to onboarding if not ready, regardless of whether they visited setup before
+          if (!ready && !suppressed) {
             sessionStorage.setItem(SETUP_REDIRECT_GUARD, '1');
             location.replace('/onboarding.html');
             return;
