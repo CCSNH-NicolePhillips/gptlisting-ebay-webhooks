@@ -151,10 +151,13 @@ For each image, provide:
    - For supplements/cosmetics/food packaging: the FULL product name INCLUDING SIZE/UNIT (e.g., "Clean Slate 2oz", "Fish Oil 60 softgels", "Dopamine Brain Food 720g")
    - CRITICAL: Always include the size/unit/count if visible on the label (oz, g, ml, fl oz, capsules, tablets, softgels, etc.)
    - For books: the author name (e.g., "Bobbi Brown", "J.K. Rowling")
+   - DO NOT put literary titles or book names here for supplements (e.g., if a supplement is called "Clarity", productName is "Clarity", NOT a book title)
    - null if unreadable
 5. title:
    - For books ONLY: the book title (e.g., "Still Bobbi", "Harry Potter and the Sorcerer's Stone")
-   - For supplements/cosmetics/food packaging: MUST be null
+   - For supplements/cosmetics/food packaging: MUST ALWAYS be null
+   - NEVER put supplement product names in the title field
+   - If packageType is NOT "book", title MUST be null
    - null if unreadable
 6. brandWebsite:
    - The official brand website URL - try to infer the SPECIFIC PRODUCT PAGE if possible
@@ -188,6 +191,39 @@ DEFINITIONS:
   - For packaging: Shows Supplement/Nutrition Facts, ingredients, barcode, warnings
   - For books: Back cover with description, ISBN, barcode
 - SIDE panel: Additional information, not clearly front or back
+
+CRITICAL PACKAGE TYPE IDENTIFICATION:
+You MUST use visual cues to determine packageType FIRST, before reading text:
+
+1. PHYSICAL SHAPE DETERMINES PACKAGE TYPE:
+   - Bottle = cylindrical container with cap/lid (vitamins, supplements, lotions)
+   - Pouch = flexible bag/packet (powders, supplements, snacks)
+   - Box = rectangular rigid container
+   - Book = rectangular flat object with spine, pages visible on edge
+   
+2. DO NOT classify as "book" unless:
+   - You can see a SPINE with binding
+   - You can see PAGE EDGES (not just printed cardstock)
+   - The object is FLAT and RECTANGULAR like a book
+   - It has typical book features: ISBN on back, publisher info, copyright page
+   
+3. SUPPLEMENTS/HEALTH PRODUCTS are NEVER books even if they have:
+   - Product names that sound literary
+   - Taglines or marketing copy
+   - Printed cardstock boxes
+   - Barcodes (books have ISBN, supplements have UPC)
+   
+4. VISUAL INDICATORS FOR SUPPLEMENTS:
+   - Bottle shapes (cylindrical, oval, rectangular bottles)
+   - Pouch shapes (flexible bags with resealable tops)
+   - "Supplement Facts" panel on back (NOT "Nutrition Facts")
+   - Dosage instructions ("Take 2 capsules daily")
+   - Health claims ("Supports cognitive function", "Promotes clarity")
+   - Capsule/tablet count ("60 capsules", "30 servings")
+
+If you see a BOTTLE, POUCH, or JAR shape → packageType CANNOT be "book"
+If you see "Supplement Facts" label → packageType CANNOT be "book"
+If you see capsule/tablet count → packageType CANNOT be "book"
 
 CRITICAL CROSS-IMAGE INFERENCE RULE:
 You receive ALL images in this batch at once. Use this to your advantage.
@@ -313,6 +349,73 @@ ${JSON.stringify(filenames, null, 2)}`;
         console.log(`[pairing-v2] HOTFIX: Moving productName "${item.productName}" to title for book ${item.filename}`);
         item.title = item.productName;
         // Keep productName as author name (it's usually correct)
+      }
+    });
+    
+    // VALIDATION: Prevent book misclassification on supplements/health products
+    parsed.items?.forEach((item: any) => {
+      // If classified as book but has supplement indicators, correct it
+      if (item.packageType === 'book') {
+        const keyTextLower = (item.keyText || []).join(' ').toLowerCase();
+        const categoryLower = (item.categoryPath || '').toLowerCase();
+        const productNameLower = (item.productName || '').toLowerCase();
+        
+        const supplementIndicators = [
+          'supplement facts',
+          'capsules',
+          'tablets',
+          'softgels',
+          'servings',
+          'dietary supplement',
+          'health & personal care',
+          'vitamins',
+          'supports',
+          'promotes',
+          'cognitive',
+          'brain',
+          'clarity',
+          'focus',
+          'energy',
+          'wellness'
+        ];
+        
+        const hasSupplementIndicators = supplementIndicators.some(indicator => 
+          keyTextLower.includes(indicator) || 
+          categoryLower.includes(indicator) ||
+          productNameLower.includes(indicator)
+        );
+        
+        if (hasSupplementIndicators) {
+          console.warn(`[pairing-v2] ⚠️ CORRECTION: ${item.filename} classified as book but has supplement indicators`);
+          console.warn(`[pairing-v2] KeyText: ${item.keyText?.join(', ')}`);
+          console.warn(`[pairing-v2] Category: ${item.categoryPath}`);
+          console.warn(`[pairing-v2] Correcting packageType from 'book' to 'bottle'`);
+          
+          // Move title to productName (it's the product name, not a book title)
+          if (item.title && !item.productName) {
+            item.productName = item.title;
+          }
+          
+          // Clear title (supplements don't have titles)
+          item.title = null;
+          
+          // Correct packageType - default to bottle for supplements
+          item.packageType = 'bottle';
+          
+          // Set brand if it was null (books have null brand)
+          if (!item.brand && item.productName) {
+            // Try to extract brand from productName or keyText
+            const firstKeyText = item.keyText?.[0];
+            if (firstKeyText && firstKeyText.length < 30) {
+              item.brand = firstKeyText;
+            }
+          }
+          
+          // Fix categoryPath
+          if (categoryLower.includes('book')) {
+            item.categoryPath = 'Health & Personal Care > Vitamins & Dietary Supplements';
+          }
+        }
       }
     });
     

@@ -322,10 +322,44 @@ function buildPrompt(
 ): string {
   const lines: string[] = [];
   
-  // For books: title is the book title, product is the author
+  // VALIDATION: If product has title but also has supplement/health product indicators, it's NOT a book
+  // This is a safety check in case vision classification was wrong
   if (product.title) {
-    lines.push(`Book Title: ${product.title}`);
-    lines.push(`Author: ${product.product}`);
+    const categoryLower = (product.categoryPath || '').toLowerCase();
+    const productLower = (product.product || '').toLowerCase();
+    const keyTextLower = (product.keyText || []).join(' ').toLowerCase();
+    
+    const isActuallySupplementNotBook = 
+      categoryLower.includes('health') ||
+      categoryLower.includes('vitamin') ||
+      categoryLower.includes('supplement') ||
+      categoryLower.includes('dietary') ||
+      keyTextLower.includes('capsule') ||
+      keyTextLower.includes('tablet') ||
+      keyTextLower.includes('supplement facts') ||
+      productLower.includes('capsule') ||
+      productLower.includes('tablet');
+    
+    if (isActuallySupplementNotBook) {
+      console.warn(`[buildPrompt] ⚠️ Product has title="${product.title}" but appears to be supplement, not book`);
+      console.warn(`[buildPrompt] Category: ${product.categoryPath}, Product: ${product.product}`);
+      console.warn(`[buildPrompt] Treating as supplement, ignoring book title field`);
+      // Don't use the title - treat as regular product
+      lines.push(`Product: ${product.product}`);
+      if (product.brand && product.brand !== "Unknown") {
+        lines.push(`Brand: ${product.brand}`);
+      }
+      
+      // Include key text from product packaging (Vision API extraction)
+      if (product.keyText && product.keyText.length > 0) {
+        lines.push(`Product Label Text (visible on packaging): ${product.keyText.join(', ')}`);
+        lines.push('👉 Use this label text to determine the correct formulation, size, and quantity.');
+      }
+    } else {
+      // Actually a book
+      lines.push(`Book Title: ${product.title}`);
+      lines.push(`Author: ${product.product}`);
+    }
   } else {
     lines.push(`Product: ${product.product}`);
     if (product.brand && product.brand !== "Unknown") {
