@@ -686,10 +686,11 @@
             status: r.status, 
             statusText: r.statusText,
             error: data.error || data.message,
+            detail: data.detail,
             fullResponse: data,
             responseText: text
           });
-          const errorMsg = data.error || data.message || text || `HTTP ${r.status}`;
+          const errorMsg = data.detail || data.error || data.message || text || `HTTP ${r.status}`;
           throw new Error(errorMsg);
         }
         return data;
