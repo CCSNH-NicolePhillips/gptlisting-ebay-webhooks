@@ -946,6 +946,7 @@
 
         console.log('[Dashboard] Fetching fresh eBay status...');
         const connected = await refreshStatus();
+        console.log('[Dashboard] eBay connected status:', connected);
         let policiesReady = false;
         let locationReady = false;
         let optedIn = true;
@@ -1083,6 +1084,8 @@
 function updateUIFromCache(data) {
   const { connected, policiesReady, locationReady, optedIn, ready, setupHints } = data;
   
+  console.log('[Dashboard] Using cached status:', { connected, policiesReady, locationReady, optedIn, ready });
+  
   // Check if we need to redirect to onboarding
   try {
     const suppressed = sessionStorage.getItem(SETUP_REDIRECT_GUARD) === '1';
@@ -1098,12 +1101,14 @@ function updateUIFromCache(data) {
   lastStatus = connected;
   const connectionsSection = document.getElementById('connectionsSection');
   const ebayStatusDiv = document.getElementById('ebayStatus');
+  const dbxStatusDiv = document.getElementById('dbxStatus');
   const ebayConnectBtn = document.getElementById('ebayConnect');
   const ebayDisconnectBtn = document.getElementById('ebayDisconnect');
   const policyWarning = document.getElementById('policyWarning');
 
   if (connectionsSection) connectionsSection.style.display = 'block';
   if (ebayStatusDiv) ebayStatusDiv.textContent = connected ? 'Connected ✅' : 'Not connected';
+  if (dbxStatusDiv) dbxStatusDiv.textContent = 'Loading…'; // Will be updated by full refresh
   if (ebayConnectBtn) ebayConnectBtn.style.display = connected ? 'none' : 'inline-block';
   if (ebayDisconnectBtn) ebayDisconnectBtn.style.display = connected ? 'inline-block' : 'none';
   
