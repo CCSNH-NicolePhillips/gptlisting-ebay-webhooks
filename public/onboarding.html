@@ -619,9 +619,16 @@
       async function fetchJSON(url, opts = {}) {
         const exec = window.authClient?.authFetch || fetch;
         const r = await exec(url, opts);
-        const data = await r.json();
+        const text = await r.text();
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = { error: text || `HTTP ${r.status}` };
+        }
         if (!r.ok) {
-          throw new Error(data.error || `HTTP ${r.status}`);
+          console.error('[Onboarding] API Error:', { url, status: r.status, data });
+          throw new Error(data.error || data.message || `HTTP ${r.status}`);
         }
         return data;
       }
