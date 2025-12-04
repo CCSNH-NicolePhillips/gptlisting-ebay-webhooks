@@ -570,6 +570,60 @@
     <script>
       let currentStep = 1;
       const totalSteps = 7;
+      let setupStatus = {
+        ebayConnected: false,
+        hasLocation: false,
+        hasPolicies: false,
+        hasDefaults: false,
+        dropboxConnected: false
+      };
+      
+      async function checkAllRequirements() {
+        try {
+          // Check eBay connection
+          const status = await fetchJSON('/.netlify/functions/status');
+          setupStatus.ebayConnected = !!status?.ebay?.connected;
+          setupStatus.dropboxConnected = !!status?.dropbox?.connected;
+          
+          if (setupStatus.ebayConnected) {
+            // Check location
+            const locations = await fetchJSON('/.netlify/functions/ebay-list-locations');
+            setupStatus.hasLocation = (locations?.locations || []).length > 0;
+            
+            // Check policies
+            const policies = await fetchJSON('/.netlify/functions/ebay-list-policies');
+            const hasFulfillment = (policies?.fulfillment?.json?.fulfillmentPolicies || []).length > 0;
+            const hasPayment = (policies?.payment?.json?.paymentPolicies || []).length > 0;
+            const hasReturn = (policies?.returns?.json?.returnPolicies || []).length > 0;
+            setupStatus.hasPolicies = hasFulfillment && hasPayment && hasReturn;
+            
+            // Check if defaults are set
+            try {
+              const defaults = await fetchJSON('/.netlify/functions/ebay-get-policy-defaults');
+              setupStatus.hasDefaults = !!(defaults?.defaults?.fulfillment && defaults?.defaults?.payment && defaults?.defaults?.return);
+            } catch {
+              setupStatus.hasDefaults = false;
+            }
+          }
+          
+          // Determine which step to start on
+          if (!setupStatus.ebayConnected) {
+            showStep(2); // eBay connection
+          } else if (!setupStatus.hasLocation) {
+            showStep(3); // Location
+          } else if (!setupStatus.hasPolicies || !setupStatus.hasDefaults) {
+            showStep(4); // Policies
+          } else if (!setupStatus.dropboxConnected) {
+            showStep(7); // Dropbox (optional)
+          } else {
+            showStep(8); // All done
+          }
+        } catch (err) {
+          console.error('[Onboarding] Failed to check requirements:', err);
+          // Start from beginning if check fails
+          showStep(1);
+        }
+      }
       
       function updateStepIndicator() {
         const dots = document.querySelectorAll('.step-dot');
@@ -646,9 +700,18 @@
         try {
           const data = await fetchJSON('/.netlify/functions/status');
           if (data?.ebay?.connected) {
-            showStatus('ebayStatus', '✓ eBay account connected successfully!', 'success');
-            // Auto-advance after connection
-            setTimeout(() => nextStep(), 1500);
+            showStatus('ebayStatus', '✓ eBay account already connected!', 'success');
+            setupStatus.ebayConnected = true;
+            // Auto-advance to next incomplete step
+            setTimeout(() => {
+              if (!setupStatus.hasLocation) {
+                showStep(3);
+              } else if (!setupStatus.hasPolicies || !setupStatus.hasDefaults) {
+                showStep(4);
+              } else {
+                showStep(7);
+              }
+            }, 1500);
           } else {
             showStatus('ebayStatus', 'Please connect your eBay account to continue.', 'warning');
           }
@@ -835,6 +898,9 @@
           showStep(7);
           checkDropboxConnection();
           setTimeout(() => completeOnboarding(), 2000);
+        } else {
+          // Check requirements on initial load
+          checkAllRequirements();
         }
       });
     </script>
