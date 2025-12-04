@@ -1206,12 +1206,12 @@
               unpairedFronts.forEach((item, index) => {
                 products.push({
                   productId: `product-single-${index + 1}`,
-                  brand: null, // Will be extracted by GPT during draft creation
-                  brandWebsite: null,
-                  title: null,
-                  product: null,
-                  keyText: [],
-                  categoryPath: undefined,
+                  brand: item.brand || null,
+                  brandWebsite: item.brandWebsite || null,
+                  title: item.title || null,
+                  product: item.product || null,
+                  keyText: item.keyText || [],
+                  categoryPath: item.categoryPath || undefined,
                   heroDisplayUrl: item.imageUrl,
                   backDisplayUrl: '' // No back image
                 });

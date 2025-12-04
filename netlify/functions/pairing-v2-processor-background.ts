@@ -344,7 +344,13 @@ export const handler: Handler = async (event) => {
               imageUrl,
               reason: u.reason,
               needsReview: u.needsReview,
-              panel: u.panel || 'unknown', // Include panel type for frontend filtering
+              panel: u.panel || 'unknown',
+              brand: u.brand || null,
+              product: u.product || null,
+              title: u.title || null,
+              brandWebsite: u.brandWebsite || null,
+              keyText: u.keyText || [],
+              categoryPath: u.categoryPath || null,
             };
           });
         } else {

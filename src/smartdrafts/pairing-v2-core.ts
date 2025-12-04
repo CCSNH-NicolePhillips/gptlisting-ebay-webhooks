@@ -34,6 +34,12 @@ export interface PairingResult {
     reason: string;
     needsReview: boolean;
     panel?: string; // 'front' | 'back' | 'side' | 'unknown'
+    brand?: string | null;
+    product?: string | null;
+    title?: string | null;
+    brandWebsite?: string | null;
+    keyText?: string[];
+    categoryPath?: string | null;
   }>;
   metrics: {
     totals: {
@@ -1012,7 +1018,13 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
         imagePath: u.filename,
         reason: u.reason,
         needsReview: u.needsReview,
-        panel: classification?.panel || 'unknown', // Include panel type for frontend filtering
+        panel: classification?.panel || 'unknown',
+        brand: classification?.brand || null,
+        product: classification?.productName || null,
+        title: classification?.title || null,
+        brandWebsite: classification?.brandWebsite || null,
+        keyText: classification?.keyText || [],
+        categoryPath: classification?.categoryPath || null,
       };
     }),
     ...rejectedPairs.flatMap(p => {
@@ -1024,12 +1036,24 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
           reason: `Pair rejected: ${p.issues?.join(', ') || 'verification failed'}`,
           needsReview: true,
           panel: frontClass?.panel || 'unknown',
+          brand: frontClass?.brand || null,
+          product: frontClass?.productName || null,
+          title: frontClass?.title || null,
+          brandWebsite: frontClass?.brandWebsite || null,
+          keyText: frontClass?.keyText || [],
+          categoryPath: frontClass?.categoryPath || null,
         },
         {
           imagePath: p.back,
           reason: `Pair rejected: ${p.issues?.join(', ') || 'verification failed'}`,
           needsReview: true,
           panel: backClass?.panel || 'unknown',
+          brand: backClass?.brand || null,
+          product: backClass?.productName || null,
+          title: backClass?.title || null,
+          brandWebsite: backClass?.brandWebsite || null,
+          keyText: backClass?.keyText || [],
+          categoryPath: backClass?.categoryPath || null,
         },
       ];
     }),
