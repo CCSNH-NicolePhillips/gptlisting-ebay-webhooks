@@ -5,134 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>DraftPilot – Settings</title>
     <link rel="stylesheet" href="/draftpilot.css">
-    <style>
-      body {
-        font-family:
-          system-ui,
-          -apple-system,
-          Segoe UI,
-          Roboto,
-          Arial,
-          sans-serif;
-        margin: 0;
-        padding: 2rem;
-        background: #0b1020;
-        color: #f4f6fb;
-      }
-      .card {
-        max-width: 760px;
-        margin: 0 auto;
-        background: #141a33;
-        border: 1px solid #2a335c;
-        border-radius: 12px;
-        padding: 1.5rem;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
-      }
-      h1 {
-        margin-top: 0;
-        font-weight: 700;
-        letter-spacing: 0.2px;
-      }
-      .form-group {
-        margin-bottom: 1.5rem;
-      }
-      .form-label {
-        display: block;
-        margin-bottom: 0.5rem;
-        font-weight: 500;
-        color: #cbd5ff;
-      }
-      .form-input {
-        width: 100%;
-        padding: 0.7rem 1rem;
-        background: #0f1530;
-        border: 1px solid #26305a;
-        border-radius: 8px;
-        color: #f4f6fb;
-        font-size: 0.95rem;
-      }
-      .form-input:focus {
-        outline: none;
-        border-color: #4f7cff;
-      }
-      .form-checkbox {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-      }
-      .form-checkbox input {
-        width: 20px;
-        height: 20px;
-        cursor: pointer;
-      }
-      button {
-        background: #4f7cff;
-        color: white;
-        border: none;
-        border-radius: 8px;
-        padding: 0.7rem 1.1rem;
-        cursor: pointer;
-        font-weight: 600;
-      }
-      .btn {
-        background: #4f7cff;
-        color: white;
-        border-radius: 8px;
-        padding: 0.7rem 1.1rem;
-        cursor: pointer;
-        font-weight: 600;
-        text-decoration: none;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-      }
-      button.secondary,
-      .btn.secondary {
-        background: transparent;
-        color: #cbd5ff;
-        border: 1px solid #3d4a86;
-      }
-      button:disabled,
-      .btn.disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-        pointer-events: none;
-      }
-      a {
-        color: #a8c1ff;
-      }
-      .small {
-        font-size: 0.85rem;
-        opacity: 0.8;
-      }
-      .muted {
-        color: #a2a9c8;
-      }
-      .connection-summary {
-        padding: 1rem;
-        background: #0f1530;
-        border: 1px solid #26305a;
-        border-radius: 8px;
-        margin-bottom: 1rem;
-      }
-      .connection-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 0.5rem 0;
-      }
-      .connection-label {
-        font-weight: 500;
-        color: #cbd5ff;
-      }
-      .connection-status {
-        font-size: 0.9rem;
-        color: #a2a9c8;
-      }
-      .connection-status.connected {
-        color: #4ade80;
-      }
-    </style>
   </head>
   <body>
     <script src="/auth-client.js"></script>
@@ -247,7 +119,15 @@
                 </svg>
                 <span class="dp-nav-item__label">Settings</span>
               </a>
-              <a href="/privacy.html" class="dp-nav-item">
+              <a href="/faq.html" class="dp-nav-item">
+                <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                  <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+                <span class="dp-nav-item__label">FAQ</span>
+              </a>
+              <a href="/support.html" class="dp-nav-item">
                 <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="12" cy="12" r="10"></circle>
                   <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
