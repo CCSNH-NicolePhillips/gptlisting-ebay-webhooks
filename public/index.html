@@ -996,13 +996,24 @@
             const ret = p?.returns?.json?.returnPolicies || [];
             const hasPolicies = fp.length > 0 && pay.length > 0 && ret.length > 0;
             
-            // Also check if defaults are set
+            // Also check if defaults are set AND valid
             let hasDefaults = false;
             if (hasPolicies) {
               try {
                 const def = await (await authClient.authFetch('/.netlify/functions/ebay-get-policy-defaults')).json();
                 console.log('[Dashboard] Defaults response:', def);
-                hasDefaults = !!(def?.defaults?.fulfillment && def?.defaults?.payment && def?.defaults?.return);
+                
+                // Check if defaults exist AND point to actual existing policies
+                const paymentDefault = def?.defaults?.payment;
+                const returnDefault = def?.defaults?.return;
+                const fulfillmentDefault = def?.defaults?.fulfillment;
+                
+                const paymentValid = paymentDefault && pay.some(pol => pol.paymentPolicyId === paymentDefault);
+                const returnValid = returnDefault && ret.some(pol => pol.returnPolicyId === returnDefault);
+                const fulfillmentValid = fulfillmentDefault && fp.some(pol => pol.fulfillmentPolicyId === fulfillmentDefault);
+                
+                hasDefaults = paymentValid && returnValid && fulfillmentValid;
+                console.log('[Dashboard] Defaults validity:', { paymentValid, returnValid, fulfillmentValid });
               } catch {}
             }
             
