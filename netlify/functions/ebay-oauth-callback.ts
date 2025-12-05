@@ -109,6 +109,24 @@ export const handler: Handler = async (event) => {
 	const tokens = tokensStore();
 	const key = `users/${encodeURIComponent(stateInfo.sub)}/ebay.json`;
 	await tokens.setJSON(key, { refresh_token: data.refresh_token });
+		
+		// Auto opt-in to Business Policies after connecting
+		try {
+			const apiHost = env === 'SANDBOX' ? 'https://api.sandbox.ebay.com' : 'https://api.ebay.com';
+			const optinUrl = `${apiHost}/sell/account/v1/program/opt_in`;
+			await fetch(optinUrl, {
+				method: 'POST',
+				headers: {
+					Authorization: `Bearer ${data.access_token}`,
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({ programType: 'SELLING_POLICY_MANAGEMENT' })
+			});
+			// Ignore errors - user can opt-in manually if needed
+		} catch (e) {
+			console.log('Auto opt-in failed (non-critical):', e);
+		}
+		
 		const redirectPath = sanitizeReturnTo(stateInfo.returnTo) || '/index.html';
 		const redirectHeaders = { Location: redirectPath } as Record<string, string>;
 		return { statusCode: 302, headers: redirectHeaders };
