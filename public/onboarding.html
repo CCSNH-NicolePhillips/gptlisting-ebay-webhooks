@@ -834,9 +834,30 @@
           const res = await authClient.authFetch('/.netlify/functions/ebay-list-policies');
           const data = await res.json();
           const pay = (res.ok && data?.payment?.json?.paymentPolicies) || [];
-          if (pay.length > 0) {
-            showStatus('paymentStatus', '✓ Payment policy already configured!', 'success');
-            setTimeout(() => nextStep(), 1500);
+          const ret = (res.ok && data?.returns?.json?.returnPolicies) || [];
+          const ful = (res.ok && data?.fulfillment?.json?.fulfillmentPolicies) || [];
+          
+          if (pay.length > 0 && ret.length > 0 && ful.length > 0) {
+            // Check if defaults are set
+            try {
+              const defRes = await authClient.authFetch('/.netlify/functions/ebay-get-policy-defaults');
+              const defaults = await defRes.json();
+              const hasDefaults = !!(defaults?.defaults?.fulfillment && defaults?.defaults?.payment && defaults?.defaults?.return);
+              
+              if (hasDefaults) {
+                showStatus('paymentStatus', '✓ All policies configured with defaults!', 'success');
+                setTimeout(() => showStep(7), 1000);
+              } else {
+                showStatus('paymentStatus', '⚠️ Policies exist but no defaults set. Click below to set defaults.', 'warning');
+                // Change button text to reflect we're setting defaults, not creating policies
+                const btn = document.querySelector('[onclick="createPaymentPolicy()"]');
+                if (btn) btn.textContent = 'Set Defaults →';
+              }
+            } catch {
+              showStatus('paymentStatus', '⚠️ Policies exist but no defaults set. Click below to set defaults.', 'warning');
+              const btn = document.querySelector('[onclick="createPaymentPolicy()"]');
+              if (btn) btn.textContent = 'Set Defaults →';
+            }
           }
         } catch (err) {
           console.log('No payment policy yet');
@@ -846,31 +867,44 @@
       async function createPaymentPolicy() {
         const btn = event.target;
         btn.disabled = true;
-        btn.textContent = 'Creating...';
+        const originalText = btn.textContent;
+        btn.textContent = 'Working...';
         
         try {
-          // Provision all policies (GET request like policies.html does)
-          const provisionRes = await authClient.authFetch('/.netlify/functions/ebay-provision-policies');
-          const provisionData = await provisionRes.json();
+          // First check if policies already exist
+          const checkRes = await authClient.authFetch('/.netlify/functions/ebay-list-policies');
+          const checkData = await checkRes.json();
           
-          if (!provisionRes.ok) {
-            const errorMsg = provisionData?.detail || provisionData?.error || 'Failed to create policies';
-            throw new Error(errorMsg);
+          let paymentPolicies = (checkRes.ok && checkData?.payment?.json?.paymentPolicies) || [];
+          let returnPolicies = (checkRes.ok && checkData?.returns?.json?.returnPolicies) || [];
+          let fulfillmentPolicies = (checkRes.ok && checkData?.fulfillment?.json?.fulfillmentPolicies) || [];
+          
+          // Only provision if policies don't exist
+          if (paymentPolicies.length === 0 || returnPolicies.length === 0 || fulfillmentPolicies.length === 0) {
+            btn.textContent = 'Creating policies...';
+            const provisionRes = await authClient.authFetch('/.netlify/functions/ebay-provision-policies');
+            const provisionData = await provisionRes.json();
+            
+            if (!provisionRes.ok) {
+              const errorMsg = provisionData?.detail || provisionData?.error || 'Failed to create policies';
+              throw new Error(errorMsg);
+            }
+            
+            // Refresh policy list after creation
+            const policiesRes = await authClient.authFetch('/.netlify/functions/ebay-list-policies');
+            const policiesData = await policiesRes.json();
+            
+            if (!policiesRes.ok) {
+              throw new Error('Failed to retrieve policies');
+            }
+            
+            paymentPolicies = policiesData?.payment?.json?.paymentPolicies || [];
+            returnPolicies = policiesData?.returns?.json?.returnPolicies || [];
+            fulfillmentPolicies = policiesData?.fulfillment?.json?.fulfillmentPolicies || [];
           }
           
-          // Get the newly created policies
-          const policiesRes = await authClient.authFetch('/.netlify/functions/ebay-list-policies');
-          const policiesData = await policiesRes.json();
-          
-          if (!policiesRes.ok) {
-            throw new Error('Failed to retrieve policies');
-          }
-          
-          const paymentPolicies = policiesData?.payment?.json?.paymentPolicies || [];
-          const returnPolicies = policiesData?.returns?.json?.returnPolicies || [];
-          const fulfillmentPolicies = policiesData?.fulfillment?.json?.fulfillmentPolicies || [];
-          
-          // Set the first of each as default
+          // Set defaults (whether policies were just created or already existed)
+          btn.textContent = 'Setting defaults...';
           if (paymentPolicies.length > 0 || returnPolicies.length > 0 || fulfillmentPolicies.length > 0) {
             const defaultsRes = await authClient.authFetch('/.netlify/functions/ebay-set-policy-defaults', {
               method: 'POST',
@@ -884,12 +918,11 @@
             
             if (!defaultsRes.ok) {
               const defaultsData = await defaultsRes.json();
-              console.warn('Failed to set defaults:', defaultsData);
-              // Don't fail the whole flow if defaults fail
+              throw new Error(defaultsData?.detail || defaultsData?.error || 'Failed to set defaults');
             }
           }
           
-          showStatus('paymentStatus', '✓ All policies created and set as defaults!', 'success');
+          showStatus('paymentStatus', '✓ All policies configured with defaults!', 'success');
           // Mark that we have policies now
           setupStatus.hasPolicies = true;
           setupStatus.hasDefaults = true;
@@ -898,6 +931,9 @@
         } catch (err) {
           showStatus('paymentStatus', `Error: ${err.message}`, 'error');
           btn.disabled = false;
+          btn.textContent = originalText;
+        }
+      }
           btn.textContent = 'Create Policies →';
         }
       }
