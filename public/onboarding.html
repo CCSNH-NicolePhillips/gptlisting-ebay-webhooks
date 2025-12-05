@@ -859,10 +859,11 @@
           const data = await res.json();
           const policies = (res.ok && data?.payment?.json?.paymentPolicies) || [];
           
-          // Check if default is set
+          // Check if default is set AND valid
           const defRes = await authClient.authFetch('/.netlify/functions/ebay-get-policy-defaults');
           const defaults = await defRes.json();
-          const hasDefault = !!(defRes.ok && defaults?.defaults?.payment);
+          const defaultId = defaults?.defaults?.payment;
+          const hasDefault = !!(defRes.ok && defaultId && policies.some(p => p.paymentPolicyId === defaultId));
           
           if (policies.length === 0) {
             // No policies - show create button
@@ -955,10 +956,11 @@
           const data = await res.json();
           const policies = (res.ok && data?.returns?.json?.returnPolicies) || [];
           
-          // Check if default is set
+          // Check if default is set AND valid
           const defRes = await authClient.authFetch('/.netlify/functions/ebay-get-policy-defaults');
           const defaults = await defRes.json();
-          const hasDefault = !!(defRes.ok && defaults?.defaults?.return);
+          const defaultId = defaults?.defaults?.return;
+          const hasDefault = !!(defRes.ok && defaultId && policies.some(p => p.returnPolicyId === defaultId));
           
           if (policies.length === 0) {
             // No policies - show create button
@@ -1049,10 +1051,11 @@
           const data = await res.json();
           const policies = (res.ok && data?.fulfillment?.json?.fulfillmentPolicies) || [];
           
-          // Check if default is set
+          // Check if default is set AND valid
           const defRes = await authClient.authFetch('/.netlify/functions/ebay-get-policy-defaults');
           const defaults = await defRes.json();
-          const hasDefault = !!(defRes.ok && defaults?.defaults?.fulfillment);
+          const defaultId = defaults?.defaults?.fulfillment;
+          const hasDefault = !!(defRes.ok && defaultId && policies.some(p => p.fulfillmentPolicyId === defaultId));
           
           if (policies.length === 0) {
             // No policies - show create button
