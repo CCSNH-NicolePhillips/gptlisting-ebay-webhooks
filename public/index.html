@@ -628,16 +628,18 @@
           const userNameHeading = document.getElementById('dpUserNameHeading');
           
           // Get user info from connections API or fall back to authClient
-          const user = cj?.user || authClient.getUser?.() || {};
-          console.log('[Dashboard] User info:', { connectionsUser: cj?.user, authClientUser: authClient.getUser?.(), merged: user });
+          const authUser = authClient.getUser?.() || {};
+          const user = cj?.user || {};
+          console.log('[Dashboard] User info:', { connectionsUser: cj?.user, authClientUser: authUser, merged: { ...authUser, ...user } });
           
-          const name = user?.name || user?.given_name || '';
-          const email = user?.email || '';
-          const displayName = name || email || 'User';
-          const firstName = user?.given_name || name?.split(' ')[0] || email?.split('@')[0] || 'Seller';
-          const initial = displayName.charAt(0).toUpperCase();
+          const givenName = user?.given_name || authUser?.given_name || '';
+          const fullName = user?.name || authUser?.name || '';
+          const email = user?.email || authUser?.email || '';
+          const displayName = fullName || givenName || email || 'User';
+          const firstName = givenName || fullName?.split(' ')[0] || email?.split('@')[0] || 'User';
+          const initial = (givenName || fullName || email || 'U').charAt(0).toUpperCase();
           
-          console.log('[Dashboard] Display values:', { name, email, displayName, firstName, initial });
+          console.log('[Dashboard] Display values:', { givenName, fullName, email, displayName, firstName, initial });
           
           if (userName) userName.textContent = displayName;
           if (userEmail) userEmail.textContent = email || 'Signed in';
