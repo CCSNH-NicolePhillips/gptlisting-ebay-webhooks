@@ -53,6 +53,14 @@ export interface PromotionStatus {
   adFees?: number;
 }
 
+export interface PromoteSkuResult {
+  sku: string;
+  campaignId: string;
+  adId: string | null;
+  adRatePercent: number;
+  status: PromotionStatus;
+}
+
 // ============================================================================
 // AUTO PRICE REDUCTION TYPES
 // ============================================================================
@@ -206,4 +214,55 @@ export interface PriceReductionStats {
   minPriceReached: boolean;
   nextScheduledReduction?: Date;
   schedule: 'daily' | 'weekly' | 'monthly';
+}
+
+// High-level helper for promoting a single offer once
+
+export interface PromoteOfferOnceRequest {
+  /**
+   * Auth0 user id / DraftPilot user id.
+   * This is the same userId you pass into other eBay helpers.
+   */
+  userId: string;
+
+  /**
+   * eBay offer id returned by the inventory/offer APIs.
+   */
+  offerId: string;
+
+  /**
+   * Marketplace id (e.g. "EBAY_US").
+   */
+  marketplaceId: string;
+
+  /**
+   * Configuration that describes HOW this user wants to promote listings.
+   * (Default rate, caps, min days active, etc.)
+   */
+  config: PromotedListingsConfig;
+}
+
+export interface PromoteOfferOnceResult {
+  /**
+   * The campaign that was ultimately used for this offer.
+   */
+  campaignId: string;
+  campaignName: string;
+
+  /**
+   * The ad representing this offer inside that campaign.
+   */
+  adId: string;
+
+  /**
+   * Final ad rate percentage that ended up applied (e.g. 4.0 for 4%).
+   */
+  finalAdRate: number;
+
+  /**
+   * Flags to help calling code understand what actually happened.
+   */
+  wasCampaignCreated: boolean;
+  wasAdCreated: boolean;
+  wasAdRateUpdated: boolean;
 }

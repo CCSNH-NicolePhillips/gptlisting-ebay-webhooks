@@ -48,9 +48,10 @@
       })();
     </script>
     <!-- Lightweight loading state to avoid flashes while auth/status loads -->
-    <div class="card" id="loadingCard" style="display:block; text-align:center;">
-      <h1>Loading…</h1>
-      <p class="muted">Preparing your workspace</p>
+    <div class="dp-card" id="loadingCard" style="display:block; text-align:center; max-width: 400px; margin: 100px auto; padding: 40px;">
+      <div class="dp-spinner" style="margin: 0 auto 24px;"></div>
+      <h1 style="margin-bottom: 16px;">Loading…</h1>
+      <p class="dp-muted">Preparing your workspace</p>
     </div>
     
     <!-- Main Settings Shell -->
@@ -212,25 +213,19 @@
               </div>
               
               <div class="dp-card__content">
-                <div class="form-group">
-                  <label class="form-label" for="displayName">Display name</label>
-                  <input type="text" id="displayName" class="form-input" placeholder="Enter your display name" />
-                </div>
+                <label class="dp-form-label">Display name</label>
+                <input type="text" id="displayName" class="dp-input" placeholder="Enter your display name" style="margin-bottom: 16px;" />
                 
-                <div class="form-group">
-                  <label class="form-label" for="notificationEmail">Notification email</label>
-                  <input type="email" id="notificationEmail" class="form-input" placeholder="your@email.com" />
-                </div>
+                <label class="dp-form-label">Notification email</label>
+                <input type="email" id="notificationEmail" class="dp-input" placeholder="your@email.com" style="margin-bottom: 16px;" />
                 
-                <div class="form-group">
-                  <label class="form-checkbox">
-                    <input type="checkbox" id="emailAfterRun" />
-                    <span>Send email after each SmartDraft run</span>
-                  </label>
-                </div>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 24px;">
+                  <input type="checkbox" id="emailAfterRun" style="width: 16px; height: 16px;" />
+                  <span style="font-size: 14px;">Send email after each SmartDraft run</span>
+                </label>
                 
-                <button id="settingsSaveButton" class="dp-btn dp-btn-primary">Save settings</button>
-                <span id="saveMessage" class="small muted" style="margin-left: 1rem;"></span>
+                <button id="settingsSaveButton" class="dp-btn dp-btn-primary" style="width: 100%;">Save settings</button>
+                <span id="saveMessage" class="dp-muted" style="display: block; margin-top: 12px; text-align: center; font-size: 14px;"></span>
               </div>
             </section>
             
@@ -242,18 +237,20 @@
               </div>
               
               <div class="dp-card__content">
-                <div class="connection-summary">
-                  <div class="connection-row">
-                    <span class="connection-label">Dropbox</span>
-                    <span class="connection-status" id="dropboxConnectionStatus">Not connected</span>
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                    <span style="font-weight: 500;">Dropbox</span>
+                    <span id="dropboxConnectionStatus" style="color: #10b981; font-size: 14px;">Not connected</span>
                   </div>
-                  <div class="connection-row">
-                    <span class="connection-label">eBay</span>
-                    <span class="connection-status" id="ebayConnectionStatus">Not connected</span>
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0;">
+                    <span style="font-weight: 500;">eBay</span>
+                    <span id="ebayConnectionStatus" style="color: #10b981; font-size: 14px;">Not connected</span>
                   </div>
                 </div>
-                
-                <a href="/index.html" class="dp-btn dp-btn-secondary">Manage connections</a>
+              </div>
+
+              <div class="dp-card__footer">
+                <a href="/index.html" style="display: block; text-align: center; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 6px; color: inherit; text-decoration: none; font-size: 14px; font-weight: 500;">Manage connections</a>
               </div>
             </section>
           </div>
