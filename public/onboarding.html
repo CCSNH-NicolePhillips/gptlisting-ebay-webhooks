@@ -403,7 +403,15 @@
             
             <div id="paymentStatus"></div>
             
-            <div class="policy-preview">
+            <div id="paymentPolicySelector" style="display:none; margin-top:1rem;">
+              <label class="form-label">Select Payment Policy</label>
+              <select id="paymentPolicyDropdown" class="form-input"></select>
+              <div style="margin-top:0.5rem;">
+                <a href="/policy-create.html?type=payment" target="_blank" style="color:#5b7cff; font-size:0.9rem;">+ Create new policy</a>
+              </div>
+            </div>
+            
+            <div id="paymentPolicyPreview" class="policy-preview">
               <div class="policy-preview-title">We'll create this policy for you:</div>
               <div class="policy-preview-item">Immediate payment required</div>
               <div class="policy-preview-item">PayPal and credit/debit cards accepted</div>
@@ -413,7 +421,7 @@
           
           <div class="step-actions">
             <button class="dp-btn dp-btn-secondary" onclick="prevStep()">← Back</button>
-            <button class="dp-btn dp-btn-primary" onclick="createPaymentPolicy()">Create Policy →</button>
+            <button class="dp-btn dp-btn-primary" id="paymentActionBtn" onclick="handlePaymentPolicy()">Create Policy →</button>
           </div>
         </div>
         
@@ -443,7 +451,15 @@
             
             <div id="returnStatus"></div>
             
-            <div class="policy-preview">
+            <div id="returnPolicySelector" style="display:none; margin-top:1rem;">
+              <label class="form-label">Select Return Policy</label>
+              <select id="returnPolicyDropdown" class="form-input"></select>
+              <div style="margin-top:0.5rem;">
+                <a href="/policy-create.html?type=return" target="_blank" style="color:#5b7cff; font-size:0.9rem;">+ Create new policy</a>
+              </div>
+            </div>
+            
+            <div id="returnPolicyPreview" class="policy-preview">
               <div class="policy-preview-title">We'll create this policy for you:</div>
               <div class="policy-preview-item">30-day returns accepted</div>
               <div class="policy-preview-item">Buyer pays return shipping</div>
@@ -454,7 +470,7 @@
           
           <div class="step-actions">
             <button class="dp-btn dp-btn-secondary" onclick="prevStep()">← Back</button>
-            <button class="dp-btn dp-btn-primary" onclick="createReturnPolicy()">Create Policy →</button>
+            <button class="dp-btn dp-btn-primary" id="returnActionBtn" onclick="handleReturnPolicy()">Create Policy →</button>
           </div>
         </div>
         
@@ -485,7 +501,15 @@
             
             <div id="shippingStatus"></div>
             
-            <div class="policy-preview">
+            <div id="shippingPolicySelector" style="display:none; margin-top:1rem;">
+              <label class="form-label">Select Shipping Policy</label>
+              <select id="shippingPolicyDropdown" class="form-input"></select>
+              <div style="margin-top:0.5rem;">
+                <a href="/policy-create.html?type=fulfillment" target="_blank" style="color:#5b7cff; font-size:0.9rem;">+ Create new policy</a>
+              </div>
+            </div>
+            
+            <div id="shippingPolicyPreview" class="policy-preview">
               <div class="policy-preview-title">We'll create this policy for you:</div>
               <div class="policy-preview-item">USPS Ground Advantage (1-5 business days)</div>
               <div class="policy-preview-item">Calculated shipping based on buyer's location</div>
@@ -496,7 +520,7 @@
           
           <div class="step-actions">
             <button class="dp-btn dp-btn-secondary" onclick="prevStep()">← Back</button>
-            <button class="dp-btn dp-btn-primary" onclick="createShippingPolicy()">Create Policy →</button>
+            <button class="dp-btn dp-btn-primary" id="shippingActionBtn" onclick="handleShippingPolicy()">Create Policy →</button>
           </div>
         </div>
         
@@ -833,72 +857,95 @@
         try {
           const res = await authClient.authFetch('/.netlify/functions/ebay-list-policies');
           const data = await res.json();
-          const pay = (res.ok && data?.payment?.json?.paymentPolicies) || [];
-          if (pay.length > 0) {
-            showStatus('paymentStatus', '✓ Payment policy already configured!', 'success');
-            setTimeout(() => nextStep(), 1500);
+          const policies = (res.ok && data?.payment?.json?.paymentPolicies) || [];
+          
+          // Check if default is set
+          const defRes = await authClient.authFetch('/.netlify/functions/ebay-get-policy-defaults');
+          const defaults = await defRes.json();
+          const hasDefault = !!(defRes.ok && defaults?.defaults?.payment);
+          
+          if (policies.length === 0) {
+            // No policies - show create button
+            document.getElementById('paymentPolicySelector').style.display = 'none';
+            document.getElementById('paymentPolicyPreview').style.display = 'block';
+            document.getElementById('paymentActionBtn').textContent = 'Create Policy →';
+          } else if (!hasDefault) {
+            // Has policies but no default - show dropdown
+            document.getElementById('paymentPolicyPreview').style.display = 'none';
+            document.getElementById('paymentPolicySelector').style.display = 'block';
+            const dropdown = document.getElementById('paymentPolicyDropdown');
+            dropdown.innerHTML = policies.map(p => 
+              `<option value="${p.paymentPolicyId}">${p.name || p.paymentPolicyId}</option>`
+            ).join('');
+            document.getElementById('paymentActionBtn').textContent = 'Set as Default →';
+            showStatus('paymentStatus', '⚠️ Select a policy to set as default', 'warning');
+          } else {
+            // Has default - auto-skip
+            showStatus('paymentStatus', '✓ Payment policy configured!', 'success');
+            setTimeout(() => nextStep(), 500);
           }
         } catch (err) {
-          console.log('No payment policy yet');
+          console.log('Error checking payment policy:', err);
         }
       }
       
-      async function createPaymentPolicy() {
-        const btn = event.target;
+      async function handlePaymentPolicy() {
+        const btn = document.getElementById('paymentActionBtn');
         btn.disabled = true;
-        btn.textContent = 'Creating...';
+        const originalText = btn.textContent;
+        btn.textContent = 'Working...';
         
         try {
-          // Provision all policies (GET request like policies.html does)
-          const provisionRes = await authClient.authFetch('/.netlify/functions/ebay-provision-policies');
-          const provisionData = await provisionRes.json();
+          const selector = document.getElementById('paymentPolicySelector');
           
-          if (!provisionRes.ok) {
-            const errorMsg = provisionData?.detail || provisionData?.error || 'Failed to create policies';
-            throw new Error(errorMsg);
-          }
-          
-          // Get the newly created policies
-          const policiesRes = await authClient.authFetch('/.netlify/functions/ebay-list-policies');
-          const policiesData = await policiesRes.json();
-          
-          if (!policiesRes.ok) {
-            throw new Error('Failed to retrieve policies');
-          }
-          
-          const paymentPolicies = policiesData?.payment?.json?.paymentPolicies || [];
-          const returnPolicies = policiesData?.returns?.json?.returnPolicies || [];
-          const fulfillmentPolicies = policiesData?.fulfillment?.json?.fulfillmentPolicies || [];
-          
-          // Set the first of each as default
-          if (paymentPolicies.length > 0 || returnPolicies.length > 0 || fulfillmentPolicies.length > 0) {
-            const defaultsRes = await authClient.authFetch('/.netlify/functions/ebay-set-policy-defaults', {
+          if (selector.style.display === 'none') {
+            // Create new policy
+            const provisionRes = await authClient.authFetch('/.netlify/functions/ebay-provision-policies');
+            const provisionData = await provisionRes.json();
+            
+            if (!provisionRes.ok) {
+              throw new Error(provisionData?.detail || provisionData?.error || 'Failed to create policy');
+            }
+            
+            // Get the policy that was just created
+            const policiesRes = await authClient.authFetch('/.netlify/functions/ebay-list-policies');
+            const policiesData = await policiesRes.json();
+            const paymentPolicy = (policiesData?.payment?.json?.paymentPolicies || [])[0];
+            
+            if (paymentPolicy) {
+              // Set it as default
+              await authClient.authFetch('/.netlify/functions/ebay-set-policy-defaults', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ payment: paymentPolicy.paymentPolicyId })
+              });
+            }
+            
+            showStatus('paymentStatus', '✓ Payment policy created and set as default!', 'success');
+          } else {
+            // Set existing policy as default
+            const dropdown = document.getElementById('paymentPolicyDropdown');
+            const policyId = dropdown.value;
+            
+            const res = await authClient.authFetch('/.netlify/functions/ebay-set-policy-defaults', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                payment: paymentPolicies[0]?.paymentPolicyId,
-                return: returnPolicies[0]?.returnPolicyId,
-                fulfillment: fulfillmentPolicies[0]?.fulfillmentPolicyId
-              })
+              body: JSON.stringify({ payment: policyId })
             });
             
-            if (!defaultsRes.ok) {
-              const defaultsData = await defaultsRes.json();
-              console.warn('Failed to set defaults:', defaultsData);
-              // Don't fail the whole flow if defaults fail
+            if (!res.ok) {
+              const data = await res.json();
+              throw new Error(data?.detail || data?.error || 'Failed to set default');
             }
+            
+            showStatus('paymentStatus', '✓ Payment policy set as default!', 'success');
           }
           
-          showStatus('paymentStatus', '✓ All policies created and set as defaults!', 'success');
-          // Mark that we have policies now
-          setupStatus.hasPolicies = true;
-          setupStatus.hasDefaults = true;
-          // Skip directly to Dropbox (step 7)
-          setTimeout(() => showStep(7), 1000);
+          setTimeout(() => nextStep(), 1000);
         } catch (err) {
           showStatus('paymentStatus', `Error: ${err.message}`, 'error');
           btn.disabled = false;
-          btn.textContent = 'Create Policies →';
+          btn.textContent = originalText;
         }
       }
       
@@ -906,42 +953,188 @@
         try {
           const res = await authClient.authFetch('/.netlify/functions/ebay-list-policies');
           const data = await res.json();
-          const ret = (res.ok && data?.returns?.json?.returnPolicies) || [];
-          if (ret.length > 0) {
-            showStatus('returnStatus', '✓ Return policy already configured!', 'success');
-            // Auto-skip to next step
-            setTimeout(() => showStep(6), 500);
+          const policies = (res.ok && data?.returns?.json?.returnPolicies) || [];
+          
+          // Check if default is set
+          const defRes = await authClient.authFetch('/.netlify/functions/ebay-get-policy-defaults');
+          const defaults = await defRes.json();
+          const hasDefault = !!(defRes.ok && defaults?.defaults?.return);
+          
+          if (policies.length === 0) {
+            // No policies - show create button
+            document.getElementById('returnPolicySelector').style.display = 'none';
+            document.getElementById('returnPolicyPreview').style.display = 'block';
+            document.getElementById('returnActionBtn').textContent = 'Create Policy →';
+          } else if (!hasDefault) {
+            // Has policies but no default - show dropdown
+            document.getElementById('returnPolicyPreview').style.display = 'none';
+            document.getElementById('returnPolicySelector').style.display = 'block';
+            const dropdown = document.getElementById('returnPolicyDropdown');
+            dropdown.innerHTML = policies.map(p => 
+              `<option value="${p.returnPolicyId}">${p.name || p.returnPolicyId}</option>`
+            ).join('');
+            document.getElementById('returnActionBtn').textContent = 'Set as Default →';
+            showStatus('returnStatus', '⚠️ Select a policy to set as default', 'warning');
+          } else {
+            // Has default - auto-skip
+            showStatus('returnStatus', '✓ Return policy configured!', 'success');
+            setTimeout(() => nextStep(), 500);
           }
         } catch (err) {
-          console.log('No return policy yet');
+          console.log('Error checking return policy:', err);
         }
       }
       
-      async function createReturnPolicy() {
-        // Should never be called - step 4 creates all policies
-        showStatus('returnStatus', '✓ Policies already created!', 'success');
-        setTimeout(() => showStep(6), 500);
+      async function handleReturnPolicy() {
+        const btn = document.getElementById('returnActionBtn');
+        btn.disabled = true;
+        const originalText = btn.textContent;
+        btn.textContent = 'Working...';
+        
+        try {
+          const selector = document.getElementById('returnPolicySelector');
+          
+          if (selector.style.display === 'none') {
+            // Create new policy
+            const provisionRes = await authClient.authFetch('/.netlify/functions/ebay-provision-policies');
+            const provisionData = await provisionRes.json();
+            
+            if (!provisionRes.ok) {
+              throw new Error(provisionData?.detail || provisionData?.error || 'Failed to create policy');
+            }
+            
+            const policiesRes = await authClient.authFetch('/.netlify/functions/ebay-list-policies');
+            const policiesData = await policiesRes.json();
+            const returnPolicy = (policiesData?.returns?.json?.returnPolicies || [])[0];
+            
+            if (returnPolicy) {
+              await authClient.authFetch('/.netlify/functions/ebay-set-policy-defaults', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ return: returnPolicy.returnPolicyId })
+              });
+            }
+            
+            showStatus('returnStatus', '✓ Return policy created and set as default!', 'success');
+          } else {
+            // Set existing policy as default
+            const dropdown = document.getElementById('returnPolicyDropdown');
+            const policyId = dropdown.value;
+            
+            const res = await authClient.authFetch('/.netlify/functions/ebay-set-policy-defaults', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ return: policyId })
+            });
+            
+            if (!res.ok) {
+              const data = await res.json();
+              throw new Error(data?.detail || data?.error || 'Failed to set default');
+            }
+            
+            showStatus('returnStatus', '✓ Return policy set as default!', 'success');
+          }
+          
+          setTimeout(() => nextStep(), 1000);
+        } catch (err) {
+          showStatus('returnStatus', `Error: ${err.message}`, 'error');
+          btn.disabled = false;
+          btn.textContent = originalText;
+        }
       }
       
       async function checkShippingPolicy() {
         try {
           const res = await authClient.authFetch('/.netlify/functions/ebay-list-policies');
           const data = await res.json();
-          const fp = (res.ok && data?.fulfillment?.json?.fulfillmentPolicies) || [];
-          if (fp.length > 0) {
-            showStatus('shippingStatus', '✓ Shipping policy already configured!', 'success');
-            // Skip to Dropbox
-            setTimeout(() => showStep(7), 500);
+          const policies = (res.ok && data?.fulfillment?.json?.fulfillmentPolicies) || [];
+          
+          // Check if default is set
+          const defRes = await authClient.authFetch('/.netlify/functions/ebay-get-policy-defaults');
+          const defaults = await defRes.json();
+          const hasDefault = !!(defRes.ok && defaults?.defaults?.fulfillment);
+          
+          if (policies.length === 0) {
+            // No policies - show create button
+            document.getElementById('shippingPolicySelector').style.display = 'none';
+            document.getElementById('shippingPolicyPreview').style.display = 'block';
+            document.getElementById('shippingActionBtn').textContent = 'Create Policy →';
+          } else if (!hasDefault) {
+            // Has policies but no default - show dropdown
+            document.getElementById('shippingPolicyPreview').style.display = 'none';
+            document.getElementById('shippingPolicySelector').style.display = 'block';
+            const dropdown = document.getElementById('shippingPolicyDropdown');
+            dropdown.innerHTML = policies.map(p => 
+              `<option value="${p.fulfillmentPolicyId}">${p.name || p.fulfillmentPolicyId}</option>`
+            ).join('');
+            document.getElementById('shippingActionBtn').textContent = 'Set as Default →';
+            showStatus('shippingStatus', '⚠️ Select a policy to set as default', 'warning');
+          } else {
+            // Has default - auto-skip
+            showStatus('shippingStatus', '✓ Shipping policy configured!', 'success');
+            setTimeout(() => nextStep(), 500);
           }
         } catch (err) {
-          console.log('No shipping policy yet');
+          console.log('Error checking shipping policy:', err);
         }
       }
       
-      async function createShippingPolicy() {
-        // Should never be called - step 4 creates all policies
-        showStatus('shippingStatus', '✓ Policies already created!', 'success');
-        setTimeout(() => showStep(7), 500);
+      async function handleShippingPolicy() {
+        const btn = document.getElementById('shippingActionBtn');
+        btn.disabled = true;
+        const originalText = btn.textContent;
+        btn.textContent = 'Working...';
+        
+        try {
+          const selector = document.getElementById('shippingPolicySelector');
+          
+          if (selector.style.display === 'none') {
+            // Create new policy
+            const provisionRes = await authClient.authFetch('/.netlify/functions/ebay-provision-policies');
+            const provisionData = await provisionRes.json();
+            
+            if (!provisionRes.ok) {
+              throw new Error(provisionData?.detail || provisionData?.error || 'Failed to create policy');
+            }
+            
+            const policiesRes = await authClient.authFetch('/.netlify/functions/ebay-list-policies');
+            const policiesData = await policiesRes.json();
+            const fulfillmentPolicy = (policiesData?.fulfillment?.json?.fulfillmentPolicies || [])[0];
+            
+            if (fulfillmentPolicy) {
+              await authClient.authFetch('/.netlify/functions/ebay-set-policy-defaults', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fulfillment: fulfillmentPolicy.fulfillmentPolicyId })
+              });
+            }
+            
+            showStatus('shippingStatus', '✓ Shipping policy created and set as default!', 'success');
+          } else {
+            // Set existing policy as default
+            const dropdown = document.getElementById('shippingPolicyDropdown');
+            const policyId = dropdown.value;
+            
+            const res = await authClient.authFetch('/.netlify/functions/ebay-set-policy-defaults', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ fulfillment: policyId })
+            });
+            
+            if (!res.ok) {
+              const data = await res.json();
+              throw new Error(data?.detail || data?.error || 'Failed to set default');
+            }
+            
+            showStatus('shippingStatus', '✓ Shipping policy set as default!', 'success');
+          }
+          
+          setTimeout(() => nextStep(), 1000);
+        } catch (err) {
+          showStatus('shippingStatus', `Error: ${err.message}`, 'error');
+          btn.disabled = false;
+          btn.textContent = originalText;
+        }
       }
       
       function completeOnboarding() {
