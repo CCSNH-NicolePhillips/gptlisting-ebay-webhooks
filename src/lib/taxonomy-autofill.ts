@@ -55,15 +55,40 @@ export function buildItemSpecifics(cat: CategoryDef, group: GroupRecord): Record
     aspectsValue: group.aspects
   });
   
+  // Placeholder values to filter out (GPT sometimes returns these)
+  const placeholders = [
+    'select', 'choose', '...', 'value', 'not applicable', 'n/a', 
+    'does not apply', 'see description'
+  ];
+  
+  const isPlaceholder = (val: string): boolean => {
+    const lower = val.toLowerCase().trim();
+    if (lower.length === 0) return true;
+    if (lower.length > 50) return false; // Long values are likely real
+    return placeholders.some(p => lower.includes(p) && lower.length < 30);
+  };
+  
   if (group.aspects && typeof group.aspects === 'object') {
     console.log('[buildItemSpecifics] Merging group.aspects into aspects...');
     for (const [name, value] of Object.entries(group.aspects)) {
       if (Array.isArray(value) && value.length > 0) {
-        aspects[name] = value;
-        console.log(`  ✓ Merged ${name}: ${JSON.stringify(value)}`);
+        const filtered = value.filter(v => {
+          const str = String(v || '').trim();
+          return str && !isPlaceholder(str);
+        });
+        if (filtered.length > 0) {
+          aspects[name] = filtered;
+          console.log(`  ✓ Merged ${name}: ${JSON.stringify(filtered)}`);
+        } else {
+          console.log(`  ✗ Skipped ${name}: all values were placeholders`);
+        }
       } else if (typeof value === 'string' && value.trim()) {
-        aspects[name] = [value.trim()];
-        console.log(`  ✓ Merged ${name}: ["${value.trim()}"]`);
+        if (!isPlaceholder(value.trim())) {
+          aspects[name] = [value.trim()];
+          console.log(`  ✓ Merged ${name}: ["${value.trim()}"]`);
+        } else {
+          console.log(`  ✗ Skipped ${name}: placeholder value "${value.trim()}"`);
+        }
       } else {
         console.log(`  ✗ Skipped ${name}: invalid value type/empty`);
       }

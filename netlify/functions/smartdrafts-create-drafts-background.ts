@@ -568,24 +568,41 @@ function parseGptResponse(responseText: string, product: PairedProduct): any {
 function normalizeAspects(aspects: any, product: PairedProduct): Record<string, string[]> {
   const normalized: Record<string, string[]> = {};
   
+  // Placeholder values to filter out (GPT sometimes returns these)
+  const placeholders = [
+    'select', 'choose', '...', 'value', 'not applicable', 'n/a', 
+    'does not apply', 'unknown', 'other', 'see description'
+  ];
+  
+  const isPlaceholder = (val: string): boolean => {
+    const lower = val.toLowerCase().trim();
+    if (lower.length === 0) return true;
+    if (lower.length > 50) return false; // Long values are likely real
+    return placeholders.some(p => lower.includes(p) && lower.length < 30);
+  };
+  
   if (typeof aspects === 'object' && aspects !== null) {
     for (const [key, value] of Object.entries(aspects)) {
       if (Array.isArray(value)) {
-        const stringValues = value.map(v => String(v).trim()).filter(Boolean);
+        const stringValues = value
+          .map(v => String(v).trim())
+          .filter(v => v && !isPlaceholder(v)); // Filter out empty and placeholders
         if (stringValues.length > 0) {
           normalized[key] = stringValues.slice(0, 10);
         }
       } else if (value !== null && value !== undefined) {
         const stringValue = String(value).trim();
-        if (stringValue) {
+        if (stringValue && !isPlaceholder(stringValue)) {
           normalized[key] = [stringValue];
         }
       }
     }
   }
   
-  if (product.brand && product.brand !== "Unknown" && !normalized.Brand) {
+  // CRITICAL: Always ensure Brand is present from product data if missing or invalid
+  if (product.brand && product.brand !== "Unknown" && (!normalized.Brand || normalized.Brand.length === 0)) {
     normalized.Brand = [product.brand];
+    console.log(`[normalizeAspects] ✓ Brand set from product.brand: "${product.brand}"`);
   }
   
   if (product.size && !normalized.Size) {
