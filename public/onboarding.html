@@ -819,10 +819,8 @@
         btn.textContent = 'Creating...';
         
         try {
-          // Provision all policies
-          await fetchJSON('/.netlify/functions/ebay-provision-policies', {
-            method: 'POST'
-          });
+          // Provision all policies (GET request like policies.html does)
+          await fetchJSON('/.netlify/functions/ebay-provision-policies');
           
           // Get the newly created policies
           const policiesData = await fetchJSON('/.netlify/functions/ebay-list-policies');
