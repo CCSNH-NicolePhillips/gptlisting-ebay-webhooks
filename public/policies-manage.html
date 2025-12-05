@@ -3,95 +3,500 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Manage Policies · DraftPilot</title>
+    <title>eBay Policies – DraftPilot</title>
+    <link rel="stylesheet" href="/draftpilot.css">
     <style>
-      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin:0; padding:2rem; background:#0b1020; color:#f4f6fb; }
-      .card { max-width: 980px; margin: 0 auto; background: #141a33; border: 1px solid #2a335c; border-radius: 12px; padding: 1.25rem; }
-      .muted { color:#a2a9c8; }
-      a { color:#a8c1ff; }
-      button { background:#4f7cff; color:#fff; border:none; border-radius:8px; padding:.45rem .7rem; cursor:pointer; font-weight:600; }
-      button.secondary { background: transparent; color: #cbd5ff; border: 1px solid #3d4a86; }
-      table { width:100%; border-collapse: collapse; margin-top: .5rem; }
-      th, td { text-align:left; padding: .5rem; border-bottom: 1px solid #26305a; }
-      .badge { display:inline-block; padding:.1rem .4rem; border-radius: 6px; font-size: .75rem; background:#223066; color:#cbd5ff; border:1px solid #2f3f7a; }
-  /* Stack sections vertically for clearer reading */
-  .row { display:block; }
-  .col { background:#0f1530; border:1px solid #26305a; border-radius:10px; padding:.9rem; margin:0 0 1rem; }
-  /* Tighter, consistent action buttons in tables */
-  .btn-sm { padding:.35rem .6rem; font-size:.85rem; border-radius:7px; }
-  td.actions { text-align:right; white-space:nowrap; }
-  th:last-child, td:last-child { width:1%; }
+      /* Policy-specific table styles */
+      .policy-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 16px;
+      }
+      
+      .policy-table thead {
+        border-bottom: 1px solid var(--border-subtle);
+      }
+      
+      .policy-table th {
+        text-align: left;
+        padding: 12px 16px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      
+      .policy-table td {
+        padding: 16px;
+        border-bottom: 1px solid var(--border-subtle);
+        color: var(--text-primary);
+      }
+      
+      .policy-table tbody tr:hover {
+        background: rgba(148, 163, 184, 0.02);
+      }
+      
+      .policy-table tbody tr:last-child td {
+        border-bottom: none;
+      }
+      
+      .policy-name {
+        font-weight: 500;
+        color: var(--text-primary);
+      }
+      
+      .policy-id {
+        font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+      }
+      
+      .default-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 10px;
+        background: rgba(79, 124, 255, 0.1);
+        border: 1px solid rgba(79, 124, 255, 0.2);
+        border-radius: 6px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--accent);
+      }
+      
+      .policy-actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+      }
+      
+      .btn-inspect,
+      .btn-set-default,
+      .btn-delete {
+        padding: 6px 12px;
+        font-size: 0.8125rem;
+        border-radius: 6px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        border: none;
+      }
+      
+      .btn-inspect {
+        background: transparent;
+        color: var(--text-muted);
+        border: 1px solid var(--border-subtle);
+      }
+      
+      .btn-inspect:hover {
+        background: rgba(148, 163, 184, 0.05);
+        color: var(--text-primary);
+      }
+      
+      .btn-set-default {
+        background: transparent;
+        color: var(--accent);
+        border: 1px solid rgba(79, 124, 255, 0.3);
+      }
+      
+      .btn-set-default:hover {
+        background: rgba(79, 124, 255, 0.1);
+        border-color: var(--accent);
+      }
+      
+      .btn-delete {
+        background: transparent;
+        color: #ff6b6b;
+        border: 1px solid rgba(255, 107, 107, 0.3);
+      }
+      
+      .btn-delete:hover {
+        background: rgba(255, 107, 107, 0.1);
+        border-color: #ff6b6b;
+      }
+      
+      .policy-section {
+        background: var(--bg-card);
+        border: 1px solid var(--border-subtle);
+        border-radius: 12px;
+        padding: 24px;
+        margin-bottom: 24px;
+      }
+      
+      .policy-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+      }
+      
+      .policy-header h3 {
+        margin: 0;
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+      
+      .policy-count {
+        font-size: 0.875rem;
+        color: var(--text-muted);
+      }
+      
+      .inspector-panel {
+        background: var(--bg-card);
+        border: 1px solid var(--border-subtle);
+        border-radius: 12px;
+        padding: 24px;
+        margin-top: 24px;
+      }
+      
+      .inspector-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16px;
+      }
+      
+      .inspector-header h3 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+      
+      .inspector-summary,
+      .inspector-json {
+        background: var(--bg-subtle);
+        border: 1px solid var(--border-subtle);
+        border-radius: 8px;
+        padding: 16px;
+        overflow: auto;
+        font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+        font-size: 0.8125rem;
+        line-height: 1.6;
+        color: var(--text-muted);
+      }
+      
+      .inspector-summary {
+        max-height: 180px;
+        white-space: pre-wrap;
+        margin-bottom: 20px;
+      }
+      
+      .inspector-json {
+        max-height: 320px;
+      }
+      
+      .inspector-label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 8px;
+      }
     </style>
   </head>
   <body>
     <script src="/auth-client.js"></script>
-    <div class="card">
-      <h2>Manage business policies</h2>
-      <p class="muted">Set preferred defaults used when creating drafts. You can also delete policies here; for full edits, use Seller Hub.</p>
-      <div style="margin:.5rem 0 1rem;">
-        <a class="secondary" href="/">← Back to landing</a>
-        <a class="secondary" href="/policies.html" style="margin-left:.5rem;">Create baseline policies</a>
-  <a class="secondary" href="https://www.ebay.com/bp/manage" target="_blank" style="margin-left:.5rem;">Open in eBay ↗</a>
-        <a class="secondary" href="/policies.html#debug" style="margin-left:.5rem;">Debug tools</a>
-      </div>
-
-      <div class="row">
-        <div class="col">
-          <div style="display:flex; align-items:center; justify-content:space-between; gap:.5rem;">
-            <h3 style="margin:0">Shipping (Fulfillment)</h3>
-            <a class="secondary btn-sm" href="/policy-create.html?type=fulfillment">Create new</a>
+    
+    <!-- Main Dashboard Shell -->
+    <div class="dp-shell">
+      <!-- Sidebar -->
+      <aside class="dp-sidebar">
+        <div class="dp-sidebar__brand">
+          <img src="logo/LogoWhiteText_NoBg.png" alt="DraftPilot" class="dp-brand-logo" />
+        </div>
+        
+        <nav class="dp-sidebar__nav">
+          <div class="dp-nav-group">
+            <div class="dp-nav-group__label">APP</div>
+            <div class="dp-nav-group__items">
+              <a href="/index.html" class="dp-nav-item">
+                <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                  <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                </svg>
+                <span class="dp-nav-item__label">Overview</span>
+              </a>
+              <a href="/quick-list.html" class="dp-nav-item">
+                <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                </svg>
+                <span class="dp-nav-item__label">Create Listings</span>
+              </a>
+              <a href="/drafts.html" class="dp-nav-item">
+                <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                </svg>
+                <span class="dp-nav-item__label">Drafts</span>
+              </a>
+            </div>
           </div>
-          <div class="muted small" id="fStatus">Loading…</div>
-          <table id="fTable"><thead><tr><th>Name</th><th>ID</th><th>Default</th><th>Actions</th></tr></thead><tbody></tbody></table>
-        </div>
-        <div class="col">
-          <div style="display:flex; align-items:center; justify-content:space-between; gap:.5rem;">
-            <h3 style="margin:0">Payment</h3>
-            <a class="secondary btn-sm" href="/policy-create.html?type=payment">Create new</a>
+          
+          <div class="dp-nav-group">
+            <div class="dp-nav-group__label">ACCOUNT</div>
+            <div class="dp-nav-group__items">
+              <a href="/policies-manage.html" class="dp-nav-item dp-nav-item--active">
+                <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="16" y1="13" x2="8" y2="13"></line>
+                  <line x1="16" y1="17" x2="8" y2="17"></line>
+                  <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+                <span class="dp-nav-item__label">eBay Policies</span>
+              </a>
+              <a href="/location.html" class="dp-nav-item">
+                <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                  <circle cx="12" cy="10" r="3"></circle>
+                </svg>
+                <span class="dp-nav-item__label">Inventory Locations</span>
+              </a>
+              <a href="/settings.html" class="dp-nav-item">
+                <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <path d="M12 1v6m0 6v6m5.196-15.196l-4.243 4.243m0 5.656l-4.242 4.243m15.195-5.196l-4.242-4.243m-5.657 0l-4.243-4.243"></path>
+                </svg>
+                <span class="dp-nav-item__label">Settings</span>
+              </a>
+              <a href="/faq.html" class="dp-nav-item">
+                <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                  <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+                <span class="dp-nav-item__label">FAQ</span>
+              </a>
+              <a href="/support.html" class="dp-nav-item">
+                <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                  <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+                <span class="dp-nav-item__label">Support</span>
+              </a>
+            </div>
           </div>
-          <div class="muted small" id="pStatus">Loading…</div>
-          <table id="pTable"><thead><tr><th>Name</th><th>ID</th><th>Default</th><th>Actions</th></tr></thead><tbody></tbody></table>
-        </div>
-        <div class="col">
-          <div style="display:flex; align-items:center; justify-content:space-between; gap:.5rem;">
-            <h3 style="margin:0">Returns</h3>
-            <a class="secondary btn-sm" href="/policy-create.html?type=return">Create new</a>
+        </nav>
+        
+        <div class="dp-sidebar__spacer"></div>
+        
+        <div class="dp-sidebar__footer">
+          <div class="dp-user-card" id="userCard">
+            <div class="dp-user-card__avatar" id="userAvatar">U</div>
+            <div class="dp-user-card__info">
+              <div class="dp-user-card__name" id="userName">Loading...</div>
+              <div class="dp-user-card__status" id="userEmail">Signed in</div>
+            </div>
           </div>
-          <div class="muted small" id="rStatus">Loading…</div>
-          <table id="rTable"><thead><tr><th>Name</th><th>ID</th><th>Default</th><th>Actions</th></tr></thead><tbody></tbody></table>
+          <div class="dp-user-menu" id="userMenu" style="display: none;">
+            <a href="/logout.html" class="dp-user-menu__item">
+              <svg class="dp-user-menu__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                <polyline points="16 17 21 12 16 7"></polyline>
+                <line x1="21" y1="12" x2="9" y2="12"></line>
+              </svg>
+              <span>Sign out</span>
+            </a>
+          </div>
         </div>
-      </div>
+      </aside>
+      
+      <div class="dp-mobile-backdrop" id="mobileBackdrop"></div>
+      
+      <!-- Main Content -->
+      <div class="dp-main-wrapper">
+        <header class="dp-topbar">
+          <div class="dp-topbar__left">
+            <button class="dp-mobile-menu-btn" id="mobileMenuBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
+              </svg>
+            </button>
+            <div class="dp-topbar__title">
+              <h1 class="dp-topbar__heading">eBay Policies</h1>
+              <p class="dp-topbar__subtitle">Manage shipping, payment, and return policies</p>
+            </div>
+          </div>
+          <div class="dp-topbar__right">
+            <div class="dp-user-avatar" id="topbarAvatar">U</div>
+          </div>
+        </header>
+        
+        <main class="dp-main-content">
+          <div class="dp-page-actions">
+            <a href="https://www.ebay.com/bp/manage" target="_blank" class="dp-btn dp-btn--secondary">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                <polyline points="15 3 21 3 21 9"></polyline>
+                <line x1="10" y1="14" x2="21" y2="3"></line>
+              </svg>
+              Open in eBay
+            </a>
+          </div>
+          
+          <div id="msg" class="dp-status-message" style="display: none;"></div>
 
-      <div class="col" id="inspector" style="display:none;">
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:.5rem;">
-          <h3 style="margin:0" id="inspectorTitle">Policy details</h3>
-          <button class="secondary btn-sm" id="inspectorHide">Close</button>
-        </div>
-        <div class="muted small" id="inspectorStatus">Select a policy to view its full payload and logistics summary.</div>
-        <div id="inspectorBody" style="display:none; margin-top:.75rem;">
-          <div class="muted" style="font-size:.85rem; margin-bottom:.35rem;">Logistics summary</div>
-          <pre id="inspectorSummary" style="background:#0b1020; border:1px solid #26305a; border-radius:6px; padding:.6rem; overflow:auto; max-height:180px; white-space:pre-wrap; font-size:.85rem;">n/a</pre>
-          <div class="muted" style="font-size:.85rem; margin:.75rem 0 .35rem;">Raw payload from eBay</div>
-          <pre id="inspectorJson" style="background:#0b1020; border:1px solid #26305a; border-radius:6px; padding:.6rem; overflow:auto; max-height:320px;">n/a</pre>
-        </div>
+          
+          <div id="msg" class="dp-status-message" style="display: none;"></div>
+          
+          <!-- Shipping Policies -->
+          <div class="policy-section">
+            <div class="policy-header">
+              <div>
+                <h3>Shipping (Fulfillment)</h3>
+                <div class="policy-count" id="fStatus">Loading...</div>
+              </div>
+              <a href="/policy-create.html?type=fulfillment" class="dp-btn dp-btn--primary">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                Create Policy
+              </a>
+            </div>
+            <table class="policy-table" id="fTable">
+              <thead>
+                <tr>
+                  <th>Policy Name</th>
+                  <th>Policy ID</th>
+                  <th>Status</th>
+                  <th style="text-align: right;">Actions</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          
+          <!-- Payment Policies -->
+          <div class="policy-section">
+            <div class="policy-header">
+              <div>
+                <h3>Payment</h3>
+                <div class="policy-count" id="pStatus">Loading...</div>
+              </div>
+              <a href="/policy-create.html?type=payment" class="dp-btn dp-btn--primary">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                Create Policy
+              </a>
+            </div>
+            <table class="policy-table" id="pTable">
+              <thead>
+                <tr>
+                  <th>Policy Name</th>
+                  <th>Policy ID</th>
+                  <th>Status</th>
+                  <th style="text-align: right;">Actions</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          
+          <!-- Return Policies -->
+          <div class="policy-section">
+            <div class="policy-header">
+              <div>
+                <h3>Returns</h3>
+                <div class="policy-count" id="rStatus">Loading...</div>
+              </div>
+              <a href="/policy-create.html?type=return" class="dp-btn dp-btn--primary">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                Create Policy
+              </a>
+            </div>
+            <table class="policy-table" id="rTable">
+              <thead>
+                <tr>
+                  <th>Policy Name</th>
+                  <th>Policy ID</th>
+                  <th>Status</th>
+                  <th style="text-align: right;">Actions</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          
+          <!-- Inspector Panel -->
+          <div class="inspector-panel" id="inspector" style="display: none;">
+            <div class="inspector-header">
+              <h3 id="inspectorTitle">Policy Details</h3>
+              <button class="dp-btn dp-btn--secondary" id="inspectorHide">Close</button>
+            </div>
+            <div id="inspectorStatus" class="policy-count">Select a policy to view its full payload and logistics summary.</div>
+            <div id="inspectorBody" style="display: none; margin-top: 20px;">
+              <div class="inspector-label">Logistics Summary</div>
+              <pre class="inspector-summary" id="inspectorSummary">n/a</pre>
+              <div class="inspector-label">Raw Payload from eBay</div>
+              <pre class="inspector-json" id="inspectorJson">n/a</pre>
+            </div>
+          </div>
+        </main>
       </div>
-
-      <div id="msg" class="muted" style="margin-top:.75rem;"></div>
     </div>
-
-    <!-- Edit modal removed (we now create new policies instead). -->
+    
+    <!-- Mobile Menu Script -->
+    <script>
+      function initUserMenu() {
+        const card = document.getElementById('userCard');
+        const menu = document.getElementById('userMenu');
+        if (!card || !menu) return;
+        
+        card.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const isVisible = menu.style.display === 'block';
+          menu.style.display = isVisible ? 'none' : 'block';
+        });
+        
+        document.addEventListener('click', () => {
+          menu.style.display = 'none';
+        });
+      }
+      
+      (function() {
+        const btn = document.getElementById('mobileMenuBtn');
+        const sidebar = document.querySelector('.dp-sidebar');
+        const backdrop = document.getElementById('mobileBackdrop');
+        
+        if (btn && sidebar && backdrop) {
+          btn.addEventListener('click', () => {
+            sidebar.classList.toggle('dp-sidebar--mobile-open');
+            backdrop.classList.toggle('dp-mobile-backdrop--visible');
+          });
+          
+          backdrop.addEventListener('click', () => {
+            sidebar.classList.remove('dp-sidebar--mobile-open');
+            backdrop.classList.remove('dp-mobile-backdrop--visible');
+          });
+        }
+      })();
+    </script>
 
     <script>
       // Wait for authClient to be available
       window.addEventListener('DOMContentLoaded', async () => {
-        // Give auth-client.js time to load
         while (typeof authClient === 'undefined') {
           await new Promise(resolve => setTimeout(resolve, 50));
         }
         
-        try { await authClient.requireAuth(); } catch {}
-        await authClient.updateUserCard().catch(() => {});
+        try { 
+          await authClient.requireAuth(); 
+          await authClient.updateUserDisplay().catch(() => {});
+        } catch {}
         
+        initUserMenu();
         await init();
       });
 
@@ -110,50 +515,127 @@
         if (!table) return;
         const tbody = table.querySelector('tbody');
         tbody.innerHTML = '';
+        
+        if (list.length === 0) {
+          const tr = document.createElement('tr');
+          const td = document.createElement('td');
+          td.colSpan = 4;
+          td.style.textAlign = 'center';
+          td.style.padding = '40px';
+          td.style.color = 'var(--text-muted)';
+          td.textContent = 'No policies found. Create your first policy to get started.';
+          tr.appendChild(td);
+          tbody.appendChild(tr);
+          return;
+        }
+        
         const chosen = defaults[typeKey] || '';
         list.forEach((p) => {
           const tr = document.createElement('tr');
-          const name = document.createElement('td');
-          name.textContent = p.name || '(unnamed)';
-          const id = document.createElement('td');
-          id.textContent = p.id || p[`${typeKey}PolicyId`] || '';
-          const def = document.createElement('td');
-          def.innerHTML = (String(id.textContent) === String(chosen)) ? '<span class="badge">Default</span>' : '';
-          const act = document.createElement('td'); act.className = 'actions';
+          
+          // Name column
+          const nameCell = document.createElement('td');
+          const nameSpan = document.createElement('span');
+          nameSpan.className = 'policy-name';
+          nameSpan.textContent = p.name || '(unnamed)';
+          nameCell.appendChild(nameSpan);
+          
+          // ID column
+          const idCell = document.createElement('td');
+          const idSpan = document.createElement('span');
+          idSpan.className = 'policy-id';
+          const policyId = p.id || p[`${typeKey}PolicyId`] || '';
+          idSpan.textContent = policyId;
+          idCell.appendChild(idSpan);
+          
+          // Status column
+          const statusCell = document.createElement('td');
+          if (String(policyId) === String(chosen)) {
+            const badge = document.createElement('span');
+            badge.className = 'default-badge';
+            badge.textContent = 'Default';
+            statusCell.appendChild(badge);
+          }
+          
+          // Actions column
+          const actionsCell = document.createElement('td');
+          const actionsDiv = document.createElement('div');
+          actionsDiv.className = 'policy-actions';
+          
           const inspectBtn = document.createElement('button');
           inspectBtn.textContent = 'Inspect';
-          inspectBtn.className = 'secondary btn-sm';
-          inspectBtn.onclick = () => inspectPolicy(typeKey, id.textContent, name.textContent);
-          act.appendChild(inspectBtn);
-          const setBtn = document.createElement('button'); setBtn.textContent = 'Set default'; setBtn.className='secondary btn-sm';
-          setBtn.style.marginLeft = '.35rem';
+          inspectBtn.className = 'btn-inspect';
+          inspectBtn.onclick = () => inspectPolicy(typeKey, policyId, p.name);
+          
+          const setBtn = document.createElement('button');
+          setBtn.textContent = 'Set Default';
+          setBtn.className = 'btn-set-default';
           setBtn.onclick = async () => {
             try {
-              const body = {}; body[typeKey] = id.textContent;
-              const r = await authClient.authFetch('/.netlify/functions/ebay-set-policy-defaults', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
-              const j = await r.json(); Object.assign(defaults, j?.defaults || {});
+              const body = {}; 
+              body[typeKey] = policyId;
+              const r = await authClient.authFetch('/.netlify/functions/ebay-set-policy-defaults', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify(body)
+              });
+              const j = await r.json(); 
+              Object.assign(defaults, j?.defaults || {});
               await populate();
-            } catch (e) { showMsg('Failed to set default: '+(e?.message||e)); }
+              showMsg('✓ Default policy updated', 'success');
+            } catch (e) { 
+              showMsg('Failed to set default: ' + (e?.message || e), 'error'); 
+            }
           };
-          const delBtn = document.createElement('button'); delBtn.textContent = 'Delete'; delBtn.style.marginLeft='.35rem'; delBtn.className='btn-sm';
+          
+          const delBtn = document.createElement('button');
+          delBtn.textContent = 'Delete';
+          delBtn.className = 'btn-delete';
           delBtn.onclick = async () => {
             if (!confirm('Delete this policy on eBay? This cannot be undone.')) return;
             try {
               const url = new URL('/.netlify/functions/ebay-delete-policy', window.location.origin);
-              url.searchParams.set('type', typeKey); url.searchParams.set('id', id.textContent);
+              url.searchParams.set('type', typeKey);
+              url.searchParams.set('id', policyId);
               const r = await authClient.authFetch(url.toString(), { method: 'DELETE' });
-              if (!r.ok) { const t = await r.text(); throw new Error(t); }
-              showMsg('Deleted. Refreshing…');
+              if (!r.ok) { 
+                const t = await r.text(); 
+                throw new Error(t); 
+              }
+              showMsg('✓ Policy deleted. Refreshing...', 'success');
               await populate();
-            } catch (e) { showMsg('Delete failed: '+(e?.message||e)); }
+            } catch (e) { 
+              showMsg('Delete failed: ' + (e?.message || e), 'error'); 
+            }
           };
-          act.appendChild(setBtn); act.appendChild(delBtn);
-          tr.appendChild(name); tr.appendChild(id); tr.appendChild(def); tr.appendChild(act);
+          
+          actionsDiv.appendChild(inspectBtn);
+          actionsDiv.appendChild(setBtn);
+          actionsDiv.appendChild(delBtn);
+          actionsCell.appendChild(actionsDiv);
+          
+          tr.appendChild(nameCell);
+          tr.appendChild(idCell);
+          tr.appendChild(statusCell);
+          tr.appendChild(actionsCell);
           tbody.appendChild(tr);
         });
       }
 
-      function showMsg(s) { const el = document.getElementById('msg'); if (el) el.textContent = s; }
+      function showMsg(s, type = 'info') { 
+        const el = document.getElementById('msg'); 
+        if (el) {
+          el.textContent = s;
+          el.className = 'dp-status-message dp-status-message--' + type;
+          el.style.display = s ? 'block' : 'none';
+          
+          if (type === 'success') {
+            setTimeout(() => {
+              el.style.display = 'none';
+            }, 3000);
+          }
+        }
+      }
 
       function ensureInspectorVisible() {
         const box = document.getElementById('inspector');
@@ -251,7 +733,7 @@
 
 
       async function populate() {
-        showMsg('');
+        showMsg('', 'info');
         try {
           await loadDefaults();
           console.log('[Policies] Fetching policy list...');
@@ -266,18 +748,27 @@
           renderTable('fTable', f, 'fulfillment');
           renderTable('pTable', p, 'payment');
           renderTable('rTable', rr, 'return');
-          document.getElementById('fStatus').textContent = f.length? `${f.length} policy(ies)` : 'No policies';
-          document.getElementById('pStatus').textContent = p.length? `${p.length} policy(ies)` : 'No policies';
-          document.getElementById('rStatus').textContent = rr.length? `${rr.length} policy(ies)` : 'No policies';
+          document.getElementById('fStatus').textContent = f.length ? `${f.length} ${f.length === 1 ? 'policy' : 'policies'}` : 'No policies';
+          document.getElementById('pStatus').textContent = p.length ? `${p.length} ${p.length === 1 ? 'policy' : 'policies'}` : 'No policies';
+          document.getElementById('rStatus').textContent = rr.length ? `${rr.length} ${rr.length === 1 ? 'policy' : 'policies'}` : 'No policies';
         } catch (e) { 
           console.error('[Policies] Error:', e);
-          showMsg('Error loading policies: ' + (e?.message || e)); 
+          showMsg('Error loading policies: ' + (e?.message || e), 'error'); 
         }
       }
 
       // If redirected back after creation, show a short status message
       (function(){
-        try { const usp = new URLSearchParams(location.search); const c = usp.get('created'); if (c) { showMsg('Created new ' + c + ' policy. Refreshing…'); setTimeout(()=>{ showMsg(''); history.replaceState({}, document.title, '/policies-manage.html'); }, 1500); } } catch {}
+        try { 
+          const usp = new URLSearchParams(location.search); 
+          const c = usp.get('created'); 
+          if (c) { 
+            showMsg('✓ Created new ' + c + ' policy', 'success'); 
+            setTimeout(() => { 
+              history.replaceState({}, document.title, '/policies-manage.html'); 
+            }, 1500); 
+          } 
+        } catch {}
       })();
 
       // Initialize after authClient is ready
