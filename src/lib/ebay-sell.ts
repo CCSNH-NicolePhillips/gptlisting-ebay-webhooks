@@ -247,8 +247,14 @@ export async function createOffer(
     merchantLocationKey,
   };
 
+  // CRITICAL: Always set condition for eBay listings
+  // Many categories REQUIRE condition to be set (e.g., Dietary Supplements 180960)
+  // Default to NEW (1000) if not provided or invalid
   if (typeof input.condition === "number" && Number.isFinite(input.condition) && input.condition > 0) {
     payload.condition = input.condition;
+  } else {
+    payload.condition = 1000; // NEW - safest default for most categories
+    console.warn(`[createOffer] Condition not provided or invalid, defaulting to NEW (1000) for SKU: ${input.sku}`);
   }
   
   // Add merchant data if provided (stores pricing status and metadata)

@@ -195,6 +195,8 @@ export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>): P
   // Get condition code, but validate against allowed conditions
   let offerCondition = conditionStringToCode(condition) ?? 1000;
   
+  console.log(`[taxonomy-map] Condition mapping: input="${condition}" → code=${offerCondition} (categoryId=${categoryId})`);
+  
   // If category has allowed conditions, ensure the selected condition is valid
   if (matched?.allowedConditions && matched.allowedConditions.length > 0) {
     const allowedIds = matched.allowedConditions.map(c => c.conditionId);
