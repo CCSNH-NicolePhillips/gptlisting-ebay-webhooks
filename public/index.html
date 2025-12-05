@@ -945,6 +945,16 @@
         const userCacheKey = currentUser?.sub || currentUser?.email || 'anonymous';
         const cacheKey = `${STATUS_CACHE_KEY}.${userCacheKey}`;
         
+        // Force refresh once to get new defaults logic (temporary)
+        const VERSION_KEY = 'draftpilot.cache.version';
+        const CURRENT_VERSION = '2'; // Increment this to force cache clear
+        if (sessionStorage.getItem(VERSION_KEY) !== CURRENT_VERSION) {
+          console.log('[Dashboard] Cache version changed, clearing old cache');
+          sessionStorage.removeItem(cacheKey);
+          sessionStorage.setItem(VERSION_KEY, CURRENT_VERSION);
+          forceRefresh = true;
+        }
+        
         // Try to use cached status first
         if (!forceRefresh) {
           try {
@@ -1003,6 +1013,7 @@
                 setupHints.push('Set default policies for payment, shipping, and returns.');
               }
             }
+            console.log('[Dashboard] Policy status:', { hasPolicies, hasDefaults, policiesReady });
           } catch {
             policiesReady = false;
             setupHints.push('Create your payment, shipping, and return policies on the setup page.');
