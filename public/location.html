@@ -103,11 +103,15 @@
         border: 1px solid var(--border-subtle);
         border-radius: 12px;
         padding: 24px;
-        margin-bottom: 32px;
+        margin-bottom: 24px;
       }
       
-      .location-section:last-of-type {
-        margin-bottom: 0;
+      .inspector-panel {
+        background: var(--bg-card);
+        border: 1px solid var(--border-subtle);
+        border-radius: 12px;
+        padding: 24px;
+        margin-top: 24px;
       }
       
       .location-header {
@@ -370,24 +374,26 @@
         <main class="dp-main-content">
           <!-- Page Actions -->
           <div class="dp-page-actions">
-            <a href="https://www.ebay.com/sh/locations" target="_blank" rel="noopener" class="dp-btn-secondary">
-              Open in eBay
-              <svg style="width:14px;height:14px;margin-left:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
+            <a href="https://www.ebay.com/sh/locations" target="_blank" class="dp-btn dp-btn-secondary">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                <polyline points="15 3 21 3 21 9"></polyline>
+                <line x1="10" y1="14" x2="21" y2="3"></line>
               </svg>
+              Open in eBay
             </a>
           </div>
 
           <!-- Existing Locations Section -->
-          <div class="dp-card dp-card--full">
+          <div class="location-section">
             <div class="location-header">
               <div>
                 <h3>Existing Locations</h3>
                 <div class="location-count" id="locationsStatus">Loading...</div>
               </div>
               <div class="header-actions">
-                <button class="dp-btn-secondary" id="refreshBtn">Refresh</button>
-                <button class="dp-btn-primary" id="setDefaultBtn" disabled>Set as Default</button>
+                <button class="dp-btn dp-btn-secondary" id="refreshBtn">Refresh</button>
+                <button class="dp-btn dp-btn-primary" id="setDefaultBtn" disabled>Set as Default</button>
               </div>
             </div>
 
@@ -404,10 +410,10 @@
           </div>
 
           <!-- Inspector Panel -->
-          <div class="dp-card dp-card--full" id="inspector" style="display:none;">
+          <div class="inspector-panel" id="inspector" style="display:none;">
             <div class="inspector-header">
               <h3 id="inspectorTitle">Location Details</h3>
-              <button class="dp-btn-ghost" id="closeInspector">Close</button>
+              <button class="dp-btn dp-btn-secondary" id="closeInspector">Close</button>
             </div>
             <div id="inspectorStatus" style="color:var(--text-muted);font-size:0.875rem;">Select a location to see its full payload.</div>
             <div id="inspectorBody" style="display:none;margin-top:16px;">
@@ -427,7 +433,7 @@
           </div>
 
           <!-- Create/Update Location Section -->
-          <div class="dp-card dp-card--full">
+          <div class="location-section">
             <div class="location-header">
               <div>
                 <h3>Create or Update Location</h3>
@@ -525,8 +531,8 @@
             </div>
             
             <div class="form-actions">
-              <button class="dp-btn-primary" id="createLocation">Create or Update</button>
-              <button class="dp-btn-ghost" id="resetForm">Reset Form</button>
+              <button class="dp-btn dp-btn-primary" id="createLocation">Create or Update</button>
+              <button class="dp-btn dp-btn-secondary" id="resetForm">Reset Form</button>
             </div>
           </div>
 
