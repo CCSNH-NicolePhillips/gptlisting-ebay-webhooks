@@ -155,16 +155,60 @@ async function getOrCreateDefaultCampaignId(
   ctx: AccessContext,
   params: { adRate: number }
 ): Promise<string> {
-  // TODO: In a future task, we will:
-  //  - List campaigns for the account
-  //  - Pick a default one OR create a new "DraftPilot Default" campaign
-  // For now, assume a single default campaign exists and is configured
-  // in environment / config.
-  const id = process.env.EBAY_DEFAULT_PROMO_CAMPAIGN_ID;
-  if (!id) {
-    throw new Error('EBAY_DEFAULT_PROMO_CAMPAIGN_ID is not configured');
+  // Check cache first
+  const cached = userCampaignCache[ctx.userId];
+  if (cached && cached.expiresAt > Date.now()) {
+    console.log(`[getOrCreateDefaultCampaignId] Using cached campaign: ${cached.campaignId}`);
+    return cached.campaignId;
   }
-  return id;
+
+  // Try env var override first (for backwards compatibility)
+  const envCampaignId = process.env.EBAY_DEFAULT_PROMO_CAMPAIGN_ID;
+  if (envCampaignId) {
+    console.log(`[getOrCreateDefaultCampaignId] Using env campaign: ${envCampaignId}`);
+    userCampaignCache[ctx.userId] = {
+      campaignId: envCampaignId,
+      expiresAt: Date.now() + 1000 * 60 * 60, // 1 hour cache
+    };
+    return envCampaignId;
+  }
+
+  // Fetch user's existing campaigns
+  console.log(`[getOrCreateDefaultCampaignId] Fetching campaigns for user: ${ctx.userId}`);
+  const apiHost = ctx.apiHost || getMarketingApiHost();
+  const url = `${apiHost}/sell/marketing/v1/ad_campaign?campaign_status=RUNNING&limit=50`;
+  
+  const res = await fetch(url, {
+    headers: {
+      'Authorization': `Bearer ${ctx.accessToken}`,
+      'Content-Type': 'application/json',
+      'X-EBAY-C-MARKETPLACE-ID': MARKETPLACE_ID,
+    },
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Failed to fetch campaigns: ${res.status} ${errorText}`);
+  }
+
+  const data = await res.json() as { campaigns?: Array<{ campaignId: string; campaignName: string; campaignStatus: string }> };
+  
+  if (data.campaigns && data.campaigns.length > 0) {
+    // Use the first RUNNING campaign
+    const campaignId = data.campaigns[0].campaignId;
+    console.log(`[getOrCreateDefaultCampaignId] Found existing campaign: ${campaignId} (${data.campaigns[0].campaignName})`);
+    
+    // Cache it
+    userCampaignCache[ctx.userId] = {
+      campaignId,
+      expiresAt: Date.now() + 1000 * 60 * 60, // 1 hour cache
+    };
+    
+    return campaignId;
+  }
+
+  // No campaigns found - user needs to create one in eBay Seller Hub
+  throw new Error('No RUNNING promotion campaigns found. Please create a campaign in eBay Seller Hub first: https://www.ebay.com/sh/mkt/campaigns');
 }
 
 export class EbayPromote {
