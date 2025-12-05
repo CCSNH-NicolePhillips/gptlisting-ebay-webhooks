@@ -155,11 +155,12 @@ export async function putInventoryItem(
     );
   }
 
-  // DO NOT add condition to inventory item - condition is set on the offer, not the inventory
-  // Some categories reject inventory items with condition field
-  // if (inventory.condition) {
-  //   payload.condition = inventory.condition;
-  // }
+  // Add condition to inventory item if provided
+  // Required for some categories (e.g., Dietary Supplements 180960)
+  if (inventory.condition) {
+    payload.condition = inventory.condition;
+    console.log(`[putInventoryItem] Setting condition on inventory: ${inventory.condition}`);
+  }
 
   // Log the payload being sent to eBay for debugging
   console.log('[putInventoryItem] Sending to eBay:', JSON.stringify({
