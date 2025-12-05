@@ -639,11 +639,27 @@
               setupStatus.hasPolicies = false;
             }
             
-            // Check if defaults are set
+            // Check if defaults are set AND valid
             try {
               const defRes = await authClient.authFetch('/.netlify/functions/ebay-get-policy-defaults');
               const defaults = await defRes.json();
-              setupStatus.hasDefaults = !!(defaults?.defaults?.fulfillment && defaults?.defaults?.payment && defaults?.defaults?.return);
+              const polRes = await authClient.authFetch('/.netlify/functions/ebay-list-policies');
+              const policies = await polRes.json();
+              
+              const paymentDefault = defaults?.defaults?.payment;
+              const returnDefault = defaults?.defaults?.return;
+              const fulfillmentDefault = defaults?.defaults?.fulfillment;
+              
+              const paymentPolicies = policies?.payment?.json?.paymentPolicies || [];
+              const returnPolicies = policies?.returns?.json?.returnPolicies || [];
+              const fulfillmentPolicies = policies?.fulfillment?.json?.fulfillmentPolicies || [];
+              
+              const paymentValid = paymentDefault && paymentPolicies.some(p => p.paymentPolicyId === paymentDefault);
+              const returnValid = returnDefault && returnPolicies.some(p => p.returnPolicyId === returnDefault);
+              const fulfillmentValid = fulfillmentDefault && fulfillmentPolicies.some(p => p.fulfillmentPolicyId === fulfillmentDefault);
+              
+              setupStatus.hasDefaults = paymentValid && returnValid && fulfillmentValid;
+              console.log('[Onboarding] Defaults validation:', { paymentValid, returnValid, fulfillmentValid });
             } catch {
               setupStatus.hasDefaults = false;
             }
