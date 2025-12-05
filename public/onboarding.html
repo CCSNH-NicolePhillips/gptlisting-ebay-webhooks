@@ -302,6 +302,13 @@
               </div>
             </div>
             
+            <div class="info-box" style="margin-top: 1rem; border-left: 3px solid #ff6b6b;">
+              <div class="info-box-title">⚠️ Important</div>
+              <div class="info-box-text">
+                You must have an eBay account before clicking "Connect eBay". If you don't have one, <a href="https://www.ebay.com/" target="_blank" style="color: #5b7cff;">create your free eBay account first</a>, then come back here.
+              </div>
+            </div>
+            
             <div id="ebayStatus" class="status-message warning">
               Please connect your eBay account to continue.
             </div>
@@ -882,9 +889,11 @@
             }
           }
           
-          showStatus('paymentStatus', '✓ Policies created and set as defaults!', 'success');
-          // Skip the next policy steps since we created all at once
-          currentStep = 6; // Jump to Dropbox step
+          showStatus('paymentStatus', '✓ All policies created and set as defaults!', 'success');
+          // Mark that we have policies now
+          setupStatus.hasPolicies = true;
+          setupStatus.hasDefaults = true;
+          // Skip directly to Dropbox (step 7)
           setTimeout(() => showStep(7), 1000);
         } catch (err) {
           showStatus('paymentStatus', `Error: ${err.message}`, 'error');
@@ -900,7 +909,8 @@
           const ret = (res.ok && data?.returns?.json?.returnPolicies) || [];
           if (ret.length > 0) {
             showStatus('returnStatus', '✓ Return policy already configured!', 'success');
-            setTimeout(() => nextStep(), 1500);
+            // Auto-skip to next step
+            setTimeout(() => showStep(6), 500);
           }
         } catch (err) {
           console.log('No return policy yet');
@@ -908,9 +918,9 @@
       }
       
       async function createReturnPolicy() {
-        // Skip - provision-policies creates all at once
-        showStatus('returnStatus', '✓ Using existing policies!', 'success');
-        setTimeout(() => nextStep(), 1000);
+        // Should never be called - step 4 creates all policies
+        showStatus('returnStatus', '✓ Policies already created!', 'success');
+        setTimeout(() => showStep(6), 500);
       }
       
       async function checkShippingPolicy() {
@@ -920,7 +930,8 @@
           const fp = (res.ok && data?.fulfillment?.json?.fulfillmentPolicies) || [];
           if (fp.length > 0) {
             showStatus('shippingStatus', '✓ Shipping policy already configured!', 'success');
-            setTimeout(() => nextStep(), 1500);
+            // Skip to Dropbox
+            setTimeout(() => showStep(7), 500);
           }
         } catch (err) {
           console.log('No shipping policy yet');
@@ -928,9 +939,9 @@
       }
       
       async function createShippingPolicy() {
-        // Skip - provision-policies creates all at once
-        showStatus('shippingStatus', '✓ Using existing policies!', 'success');
-        setTimeout(() => nextStep(), 1000);
+        // Should never be called - step 4 creates all policies
+        showStatus('shippingStatus', '✓ Policies already created!', 'success');
+        setTimeout(() => showStep(7), 500);
       }
       
       function completeOnboarding() {
