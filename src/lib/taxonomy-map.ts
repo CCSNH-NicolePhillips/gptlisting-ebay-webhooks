@@ -202,24 +202,24 @@ export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>): P
     
     if (!allowedIds.includes(conditionStr)) {
       // Condition not allowed, try to find best fallback
-      console.warn(`Condition ${offerCondition} not allowed for category ${categoryId}. Allowed: ${allowedIds.join(', ')}`);
+      console.warn(`[taxonomy-map] Condition ${offerCondition} not allowed for category ${categoryId}. Allowed: ${allowedIds.join(', ')}`);
       
-      // Priority fallback: USED (3000) > NEW (1000) > first allowed
-      if (allowedIds.includes('3000')) {
-        offerCondition = 3000;
-      } else if (allowedIds.includes('1000')) {
+      // Priority fallback: NEW (1000) > USED (3000) > first allowed
+      // Most supplements/new products should default to NEW if user specified it
+      if (allowedIds.includes('1000')) {
         offerCondition = 1000;
+      } else if (allowedIds.includes('3000')) {
+        offerCondition = 3000;
       } else {
         offerCondition = parseInt(allowedIds[0], 10);
       }
       
-      console.log(`Using fallback condition: ${offerCondition}`);
+      console.log(`[taxonomy-map] Using fallback condition: ${offerCondition}`);
     }
   } else {
-    // No condition data available - use safest default
-    // USED (3000) is accepted by most categories, NEW (1000) is often restricted
-    console.warn(`Category ${categoryId} has no allowedConditions data. Using USED (3000) as safe default.`);
-    offerCondition = 3000;
+    // No condition data available - use the condition we already determined from group/GPT
+    // Don't override user/GPT selection with arbitrary defaults
+    console.warn(`[taxonomy-map] Category ${categoryId} has no allowedConditions data. Using determined condition: ${offerCondition} (${condition})`);
   }
   
   const quantity = deriveQuantity(group, matched);
