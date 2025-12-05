@@ -377,6 +377,14 @@ body {
 .dp-topbar-left {
   flex: 0 0 auto;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.dp-topbar-heading {
+  flex: 1;
+  min-width: 0;
 }
 
 .dp-topbar__title {

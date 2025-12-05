@@ -310,21 +310,26 @@
       <!-- Main Content -->
       <div class="dp-main-wrapper">
         <header class="dp-topbar">
-          <div class="dp-topbar__left">
-            <button class="dp-mobile-menu-btn" id="mobileMenuBtn">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="3" y1="12" x2="21" y2="12"></line>
-                <line x1="3" y1="6" x2="21" y2="6"></line>
-                <line x1="3" y1="18" x2="21" y2="18"></line>
+          <div class="dp-topbar-left">
+            <button
+              class="dp-topbar-icon dp-topbar-icon--menu"
+              id="mobileMenuButton"
+              aria-label="Open navigation"
+              type="button"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="4" y1="6" x2="20" y2="6"></line>
+                <line x1="4" y1="12" x2="20" y2="12"></line>
+                <line x1="4" y1="18" x2="20" y2="18"></line>
               </svg>
             </button>
-            <div class="dp-topbar__title">
-              <h1 class="dp-topbar__heading">eBay Policies</h1>
+            <div class="dp-topbar-heading">
+              <h1 class="dp-topbar__title">eBay Policies</h1>
               <p class="dp-topbar__subtitle">Manage shipping, payment, and return policies</p>
             </div>
           </div>
-          <div class="dp-topbar__right">
-            <div class="dp-user-avatar" id="topbarAvatar">U</div>
+          <div class="dp-topbar-right">
+            <div class="dp-topbar-avatar" id="topbarAvatar">U</div>
           </div>
         </header>
         
@@ -466,7 +471,7 @@
       }
       
       (function() {
-        const btn = document.getElementById('mobileMenuBtn');
+        const btn = document.getElementById('mobileMenuButton');
         const sidebar = document.querySelector('.dp-sidebar');
         const backdrop = document.getElementById('mobileBackdrop');
         
