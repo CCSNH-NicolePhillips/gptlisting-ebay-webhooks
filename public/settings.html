@@ -3,8 +3,39 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>DraftPilot – Settings</title>
+    <title>Settings – DraftPilot</title>
     <link rel="stylesheet" href="/draftpilot.css">
+    <style>
+      .dp-form-label {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #cbd5ff;
+        margin-bottom: 0.5rem;
+        margin-top: 1rem;
+      }
+      .dp-form-label:first-child {
+        margin-top: 0;
+      }
+      .dp-input,
+      .dp-textarea {
+        width: 100%;
+        padding: 0.75rem;
+        font-size: 0.9375rem;
+        background: #0f1529;
+        border: 1px solid #2a335c;
+        border-radius: 6px;
+        color: #f4f6fb;
+        font-family: inherit;
+        box-sizing: border-box;
+      }
+      .dp-input:focus,
+      .dp-textarea:focus {
+        outline: none;
+        border-color: #5b7cff;
+        box-shadow: 0 0 0 3px rgba(91, 124, 255, 0.1);
+      }
+    </style>
   </head>
   <body>
     <script src="/auth-client.js"></script>
@@ -47,6 +78,7 @@
         } catch {}
       })();
     </script>
+    
     <!-- Lightweight loading state to avoid flashes while auth/status loads -->
     <div class="dp-card" id="loadingCard" style="display:block; text-align:center; max-width: 400px; margin: 100px auto; padding: 40px;">
       <div class="dp-spinner" style="margin: 0 auto 24px;"></div>
@@ -214,18 +246,18 @@
               
               <div class="dp-card__content">
                 <label class="dp-form-label">Display name</label>
-                <input type="text" id="displayName" class="dp-input" placeholder="Enter your display name" style="margin-bottom: 16px;" />
+                <input type="text" id="displayName" class="dp-input" placeholder="Enter your display name" />
                 
                 <label class="dp-form-label">Notification email</label>
-                <input type="email" id="notificationEmail" class="dp-input" placeholder="your@email.com" style="margin-bottom: 16px;" />
+                <input type="email" id="notificationEmail" class="dp-input" placeholder="your@email.com" />
                 
-                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 24px;">
-                  <input type="checkbox" id="emailAfterRun" style="width: 16px; height: 16px;" />
-                  <span style="font-size: 14px;">Send email after each SmartDraft run</span>
+                <label class="dp-form-label" style="margin-top: 1.5rem;">
+                  <input type="checkbox" id="emailAfterRun" style="margin-right: 8px; vertical-align: middle;" />
+                  <span>Send email after each SmartDraft run</span>
                 </label>
                 
-                <button id="settingsSaveButton" class="dp-btn dp-btn-primary" style="width: 100%;">Save settings</button>
-                <span id="saveMessage" class="dp-muted" style="display: block; margin-top: 12px; text-align: center; font-size: 14px;"></span>
+                <button id="settingsSaveButton" class="dp-btn dp-btn-primary" style="margin-top: 24px;">Save settings</button>
+                <p id="saveMessage" class="dp-muted" style="text-align: center; margin-top: 12px; min-height: 20px;"></p>
               </div>
             </section>
             

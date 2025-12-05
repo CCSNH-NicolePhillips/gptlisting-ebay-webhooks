@@ -11,14 +11,17 @@ import { getCachedPrice, setCachedPrice, makePriceSig } from "./price-cache.js";
 
 /**
  * Generate common URL variations for a product page
- * Example: /glutathione-rapid-boost.html → [/glutathione-rapid-boost-supplement.html, /glutathione-rapid-boost-sports-drink.html, ...]
+ * Handles different URL patterns:
+ * - /zero-in.html → /product/zero-in/, /products/zero-in/, /zero-in-supplement.html, etc.
+ * - /product-name/ → /product-name.html, /products/product-name/, etc.
  */
 function generateUrlVariations(url: string): string[] {
   try {
     const urlObj = new URL(url);
     const path = urlObj.pathname;
+    const variations: string[] = [];
     
-    // Extract base path and extension
+    // Extract base path and filename
     const lastSlash = path.lastIndexOf('/');
     const basePath = path.substring(0, lastSlash + 1);
     const filename = path.substring(lastSlash + 1);
@@ -26,19 +29,38 @@ function generateUrlVariations(url: string): string[] {
     const ext = dotIndex > 0 ? filename.substring(dotIndex) : '';
     const base = dotIndex > 0 ? filename.substring(0, dotIndex) : filename;
     
-    // Common suffixes to try
-    const suffixes = [
-      '-supplement',
-      '-sports-drink', 
-      '-product',
-      '-capsules',
-      '-formula'
-    ];
+    // Pattern 1: If URL is /product-name.html, try /product/product-name/ and /products/product-name/
+    if (ext === '.html') {
+      variations.push(`${urlObj.origin}/product/${base}/`);
+      variations.push(`${urlObj.origin}/products/${base}/`);
+      variations.push(`${urlObj.origin}/shop/${base}/`);
+    }
     
-    const variations: string[] = [];
+    // Pattern 2: If URL is /product-name/, try /product-name.html
+    if (!ext && base) {
+      variations.push(`${urlObj.origin}${basePath}${base}.html`);
+      variations.push(`${urlObj.origin}${basePath}${base}.php`);
+    }
+    
+    // Pattern 3: Try common suffix variations
+    const suffixes = ['-supplement', '-sports-drink', '-product', '-capsules', '-formula'];
     for (const suffix of suffixes) {
-      const newPath = `${basePath}${base}${suffix}${ext}`;
-      variations.push(`${urlObj.origin}${newPath}`);
+      if (ext) {
+        variations.push(`${urlObj.origin}${basePath}${base}${suffix}${ext}`);
+      } else {
+        variations.push(`${urlObj.origin}${basePath}${base}${suffix}/`);
+      }
+    }
+    
+    // Pattern 4: Try common path prefixes
+    if (!path.startsWith('/product/') && !path.startsWith('/products/') && !path.startsWith('/shop/')) {
+      if (ext) {
+        variations.push(`${urlObj.origin}/product/${filename}`);
+        variations.push(`${urlObj.origin}/products/${filename}`);
+      } else if (base) {
+        variations.push(`${urlObj.origin}/product/${base}/`);
+        variations.push(`${urlObj.origin}/products/${base}/`);
+      }
     }
     
     return variations;
@@ -463,6 +485,27 @@ export async function lookupPrice(
       if (brandPrice) {
         brandUrl = input.brandWebsite;
         console.log(`[price] ✓ Brand MSRP from Vision API website: $${brandPrice.toFixed(2)}`);
+        
+        // ALWAYS try URL variations to find the best (lowest) price
+        // This protects against Vision AI providing wrong URLs (e.g., bundle pages, old URLs)
+        const variations = generateUrlVariations(input.brandWebsite);
+        let lowestPrice = brandPrice;
+        let bestUrl = brandUrl;
+        
+        for (const variant of variations) {
+          const variantPrice = await extractPriceFromBrand(variant, input.brand, input.title);
+          if (variantPrice && variantPrice < lowestPrice) {
+            lowestPrice = variantPrice;
+            bestUrl = variant;
+            console.log(`[price] ✓ Found better price via URL variation: $${variantPrice.toFixed(2)} (${variant})`);
+          }
+        }
+        
+        if (lowestPrice < brandPrice) {
+          brandPrice = lowestPrice;
+          brandUrl = bestUrl;
+          console.log(`[price] ✓ Using lowest price $${brandPrice.toFixed(2)} from ${brandUrl}`);
+        }
       } else {
         // Check if domain is reachable
         const { isDnsFailure } = await fetchHtml(input.brandWebsite);
