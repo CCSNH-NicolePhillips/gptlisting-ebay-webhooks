@@ -789,7 +789,14 @@
           });
           
           const url = `/.netlify/functions/ebay-create-location?${qs.toString()}`;
-          await authClient.authFetch(url);
+          const res = await authClient.authFetch(url);
+          const text = await res.text();
+          const payload = text ? JSON.parse(text) : {};
+          
+          if (!res.ok || payload?.error) {
+            const detail = payload?.detail || payload?.error || payload?.message || text || 'Failed to create location';
+            throw new Error(detail);
+          }
           
           showStatus('locationStatus', '✓ Shipping location created successfully!', 'success');
           setTimeout(() => nextStep(), 1000);
