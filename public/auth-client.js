@@ -661,4 +661,42 @@
   }
   // Expose for pages that want to re-render after app-specific flows
   window.authClient.renderBadge = renderBadge;
+
+  // Global utility to populate user display elements across all pages
+  window.authClient.updateUserDisplay = async function() {
+    try {
+      // Fetch user info from connections API
+      const cr = await window.authClient.authFetch('/.netlify/functions/connections');
+      const cj = await cr.json().catch(() => ({}));
+      
+      // Get user info from both sources
+      const authUser = window.authClient.getUser?.() || {};
+      const user = cj?.user || {};
+      
+      const givenName = user?.given_name || authUser?.given_name || '';
+      const fullName = user?.name || authUser?.name || '';
+      const email = user?.email || authUser?.email || '';
+      const displayName = fullName || givenName || email || 'User';
+      const firstName = givenName || fullName?.split(' ')[0] || email?.split('@')[0] || 'User';
+      const initial = (givenName || fullName || email || 'U').charAt(0).toUpperCase();
+      
+      // Update all user display elements if they exist
+      const userName = document.getElementById('userName');
+      const userEmail = document.getElementById('userEmail');
+      const userAvatar = document.getElementById('userAvatar');
+      const topbarAvatar = document.getElementById('topbarAvatar');
+      const userNameHeading = document.getElementById('dpUserNameHeading');
+      
+      if (userName) userName.textContent = displayName;
+      if (userEmail) userEmail.textContent = email || 'Signed in';
+      if (userAvatar) userAvatar.textContent = initial;
+      if (topbarAvatar) topbarAvatar.textContent = initial;
+      if (userNameHeading) userNameHeading.textContent = firstName;
+      
+      return { givenName, fullName, email, displayName, firstName, initial };
+    } catch (err) {
+      console.error('[AuthClient] Failed to update user display:', err);
+      return null;
+    }
+  };
 })();

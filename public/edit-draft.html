@@ -753,7 +753,7 @@
         }
         
         // Populate sidebar user info
-        await window.authClient.updateUserCard().catch(() => {});
+        await window.authClient.updateUserDisplay().catch(() => {});
         
         await loadDraft();
       } catch (e) {

@@ -482,21 +482,7 @@
         
         // Update sidebar user card
         try {
-          const user = s.user || {};
-          const userName = document.getElementById('userName');
-          const userEmail = document.getElementById('userEmail');
-          const userAvatar = document.getElementById('userAvatar');
-          const topbarAvatar = document.getElementById('topbarAvatar');
-          
-          const name = user.name || user.given_name || '';
-          const email = user.email || '';
-          const displayName = name || email || 'User';
-          const initial = displayName.charAt(0).toUpperCase();
-          
-          if (userName) userName.textContent = displayName;
-          if (userEmail) userEmail.textContent = email || 'Signed in';
-          if (userAvatar) userAvatar.textContent = initial;
-          
+          await authClient.updateUserDisplay();
           // Store user info for support form
           window.userInfo = { name: displayName, email: email };
         } catch {}

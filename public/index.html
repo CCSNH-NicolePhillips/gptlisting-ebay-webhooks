@@ -615,37 +615,14 @@
         try {
           await loadDropboxFolders(!!s.dropbox?.connected);
         } catch {}
-        // Also load connection identities to display 'Signed in as'
+        // Update user display using global utility
+        try {
+          await authClient.updateUserDisplay();
+        } catch {}
+        // Also load connection identities to display provider-specific info
         try {
           const cr = await authClient.authFetch('/.netlify/functions/connections');
           const cj = await cr.json().catch(() => ({}));
-          
-          // Update sidebar user card
-          const userName = document.getElementById('userName');
-          const userEmail = document.getElementById('userEmail');
-          const userAvatar = document.getElementById('userAvatar');
-          const topbarAvatar = document.getElementById('topbarAvatar');
-          const userNameHeading = document.getElementById('dpUserNameHeading');
-          
-          // Get user info from connections API or fall back to authClient
-          const authUser = authClient.getUser?.() || {};
-          const user = cj?.user || {};
-          console.log('[Dashboard] User info:', { connectionsUser: cj?.user, authClientUser: authUser, merged: { ...authUser, ...user } });
-          
-          const givenName = user?.given_name || authUser?.given_name || '';
-          const fullName = user?.name || authUser?.name || '';
-          const email = user?.email || authUser?.email || '';
-          const displayName = fullName || givenName || email || 'User';
-          const firstName = givenName || fullName?.split(' ')[0] || email?.split('@')[0] || 'User';
-          const initial = (givenName || fullName || email || 'U').charAt(0).toUpperCase();
-          
-          console.log('[Dashboard] Display values:', { givenName, fullName, email, displayName, firstName, initial });
-          
-          if (userName) userName.textContent = displayName;
-          if (userEmail) userEmail.textContent = email || 'Signed in';
-          if (userAvatar) userAvatar.textContent = initial;
-          if (topbarAvatar) topbarAvatar.textContent = initial;
-          if (userNameHeading) userNameHeading.textContent = firstName;
           
           const dbxWho = document.getElementById('dbxWho');
           if (dbxWho) {
