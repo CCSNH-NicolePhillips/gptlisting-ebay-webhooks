@@ -298,6 +298,9 @@ body {
   color: #64748b;
   line-height: 1.2;
   margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dp-user-menu {
