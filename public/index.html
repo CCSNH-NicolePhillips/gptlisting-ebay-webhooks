@@ -1008,16 +1008,18 @@
         }
         const ready = connected && policiesReady && locationReady && optedIn;
         try {
-          const suppressed = sessionStorage.getItem(SETUP_REDIRECT_GUARD) === '1';
-          // Redirect to onboarding if not ready
-          if (!ready && !suppressed) {
+          // Only suppress redirect if we just came from onboarding to prevent loop
+          const params = new URLSearchParams(window.location.search);
+          const justFromOnboarding = params.get('from') === 'onboarding';
+          
+          // Redirect to onboarding if not ready (unless we just came from there)
+          if (!ready && !justFromOnboarding) {
             console.log('[Dashboard] User not ready, redirecting to onboarding. Ready status:', { connected, policiesReady, locationReady, optedIn });
-            sessionStorage.setItem(SETUP_REDIRECT_GUARD, '1');
             location.replace('/onboarding.html');
             return;
           }
           if (ready) {
-            // Clear guard when user is ready
+            // Clear guard when user is ready (not needed anymore but keep for backwards compat)
             sessionStorage.removeItem(SETUP_REDIRECT_GUARD);
           }
         } catch {}
@@ -1117,13 +1119,13 @@ function updateUIFromCache(data) {
   
   // Check if we need to redirect to onboarding
   try {
-    const suppressed = sessionStorage.getItem(SETUP_REDIRECT_GUARD) === '1';
-    if (!ready && !suppressed) {
-      sessionStorage.setItem(SETUP_REDIRECT_GUARD, '1');
+    const params = new URLSearchParams(window.location.search);
+    const justFromOnboarding = params.get('from') === 'onboarding';
+    
+    if (!ready && !justFromOnboarding) {
       location.replace('/onboarding.html');
       return;
     }
-    if (ready) sessionStorage.removeItem(SETUP_REDIRECT_GUARD);
   } catch {}
   
   // Update connection status UI
