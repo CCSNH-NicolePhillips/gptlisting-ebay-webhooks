@@ -1001,6 +1001,7 @@
             if (hasPolicies) {
               try {
                 const def = await (await authClient.authFetch('/.netlify/functions/ebay-get-policy-defaults')).json();
+                console.log('[Dashboard] Defaults response:', def);
                 hasDefaults = !!(def?.defaults?.fulfillment && def?.defaults?.payment && def?.defaults?.return);
               } catch {}
             }
