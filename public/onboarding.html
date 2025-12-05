@@ -242,7 +242,6 @@
           <div class="step-dot"></div>
           <div class="step-dot"></div>
           <div class="step-dot"></div>
-          <div class="step-dot"></div>
         </div>
         
         <!-- Step 1: Welcome -->
@@ -266,10 +265,8 @@
               <div class="info-box-text">
                 1. Connect your eBay account<br>
                 2. Set up your shipping location<br>
-                3. Create payment policy<br>
-                4. Create return policy<br>
-                5. Create shipping policy<br>
-                6. (Optional) Connect Dropbox for photos
+                3. Create business policies (payment, return, shipping)<br>
+                4. (Optional) Connect Dropbox for photos
               </div>
             </div>
           </div>
@@ -371,7 +368,7 @@
           </div>
         </div>
         
-        <!-- Step 4: Payment Policy -->
+        <!-- Step 4: Business Policies -->
         <div class="step-content" data-step="4">
           <div class="step-header">
             <div class="step-icon">
@@ -380,9 +377,9 @@
                 <line x1="1" y1="10" x2="23" y2="10"></line>
               </svg>
             </div>
-            <h1 class="step-title">Payment Policy</h1>
+            <h1 class="step-title">Business Policies</h1>
             <p class="step-description">
-              Set up how you'll receive payments from buyers.
+              Set up your payment, return, and shipping policies using the policy manager.
             </p>
           </div>
           
@@ -390,28 +387,22 @@
             <div class="info-box">
               <div class="info-box-title">What is this?</div>
               <div class="info-box-text">
-                Your payment policy tells buyers how they can pay you. We'll use eBay's recommended settings that require immediate payment for a smooth transaction.
+                Business policies tell buyers how you handle payments, returns, and shipping. eBay requires these before creating listings. Click below to open the policy manager where you can create and configure all your policies.
               </div>
             </div>
             
             <div id="paymentStatus"></div>
-            
-            <div class="policy-preview">
-              <div class="policy-preview-title">We'll create this policy for you:</div>
-              <div class="policy-preview-item">Immediate payment required</div>
-              <div class="policy-preview-item">PayPal and credit/debit cards accepted</div>
-              <div class="policy-preview-item">Applies to all categories except motor vehicles</div>
-            </div>
           </div>
           
           <div class="step-actions">
             <button class="dp-btn dp-btn-secondary" onclick="prevStep()">← Back</button>
-            <button class="dp-btn dp-btn-primary" onclick="createPaymentPolicy()">Create Policy →</button>
+            <a class="dp-btn dp-btn-primary" href="/policies-manage.html?from=onboarding" target="_blank">Manage Policies →</a>
+            <button class="dp-btn dp-btn-secondary" onclick="nextStep()">I've set up policies →</button>
           </div>
         </div>
         
-        <!-- Step 5: Return Policy -->
-        <div class="step-content" data-step="5">
+        <!-- Step 5: Return Policy (HIDDEN - using policies-manage instead) -->
+        <div class="step-content" data-step="old-5" style="display:none !important;">
           <div class="step-header">
             <div class="step-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -451,8 +442,8 @@
           </div>
         </div>
         
-        <!-- Step 6: Shipping Policy -->
-        <div class="step-content" data-step="6">
+        <!-- Step 6: Shipping Policy (HIDDEN - using policies-manage instead) -->
+        <div class="step-content" data-step="old-6" style="display:none !important;">
           <div class="step-header">
             <div class="step-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -493,8 +484,8 @@
           </div>
         </div>
         
-        <!-- Step 7: Dropbox (Optional) -->
-        <div class="step-content" data-step="7">
+        <!-- Step 5: Dropbox (Optional) -->
+        <div class="step-content" data-step="5">
           <div class="step-header">
             <div class="step-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -530,8 +521,8 @@
           </div>
         </div>
         
-        <!-- Step 8: Complete -->
-        <div class="step-content" data-step="8">
+        <!-- Step 6: Complete -->
+        <div class="step-content" data-step="6">
           <div class="step-header">
             <div class="step-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -614,9 +605,9 @@
           } else if (!setupStatus.hasPolicies || !setupStatus.hasDefaults) {
             showStep(4); // Policies
           } else if (!setupStatus.dropboxConnected) {
-            showStep(7); // Dropbox (optional)
+            showStep(5); // Dropbox (optional)
           } else {
-            showStep(8); // All done
+            showStep(6); // All done
           }
         } catch (err) {
           console.error('[Onboarding] Failed to check requirements:', err);
@@ -652,10 +643,8 @@
         // Check connection status when showing relevant steps
         if (step === 2) checkEbayConnection();
         if (step === 3) checkLocation();
-        if (step === 4) checkPaymentPolicy();
-        if (step === 5) checkReturnPolicy();
-        if (step === 6) checkShippingPolicy();
-        if (step === 7) checkDropboxConnection();
+        if (step === 4) checkPolicies();
+        if (step === 5) checkDropboxConnection();
       }
       
       function nextStep() {
@@ -800,100 +789,30 @@
         }
       }
       
-      async function checkPaymentPolicy() {
+      async function checkPolicies() {
         try {
           const data = await fetchJSON('/.netlify/functions/ebay-list-policies');
-          const pay = data?.payment?.json?.paymentPolicies || [];
-          if (pay.length > 0) {
-            showStatus('paymentStatus', '✓ Payment policy already configured!', 'success');
-            setTimeout(() => nextStep(), 1500);
-          }
-        } catch (err) {
-          console.log('No payment policy yet');
-        }
-      }
-      
-      async function createPaymentPolicy() {
-        const btn = event.target;
-        btn.disabled = true;
-        btn.textContent = 'Creating...';
-        
-        try {
-          // Provision all policies
-          await fetchJSON('/.netlify/functions/ebay-provision-policies', {
-            method: 'POST'
-          });
+          const payment = data?.payment?.json?.paymentPolicies || [];
+          const returns = data?.returns?.json?.returnPolicies || [];
+          const fulfillment = data?.fulfillment?.json?.fulfillmentPolicies || [];
           
-          // Get the newly created policies
-          const policiesData = await fetchJSON('/.netlify/functions/ebay-list-policies');
-          const paymentPolicies = policiesData?.payment?.json?.paymentPolicies || [];
-          const returnPolicies = policiesData?.returns?.json?.returnPolicies || [];
-          const fulfillmentPolicies = policiesData?.fulfillment?.json?.fulfillmentPolicies || [];
-          
-          // Set the first of each as default
-          if (paymentPolicies.length > 0 || returnPolicies.length > 0 || fulfillmentPolicies.length > 0) {
-            await fetchJSON('/.netlify/functions/ebay-set-policy-defaults', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                payment: paymentPolicies[0]?.paymentPolicyId,
-                return: returnPolicies[0]?.returnPolicyId,
-                fulfillment: fulfillmentPolicies[0]?.fulfillmentPolicyId
-              })
-            });
-          }
-          
-          showStatus('paymentStatus', '✓ Policies created and set as defaults!', 'success');
-          // Skip the next policy steps since we created all at once
-          currentStep = 6; // Jump to Dropbox step
-          setTimeout(() => showStep(6), 1000);
-        } catch (err) {
-          showStatus('paymentStatus', `Error: ${err.message}`, 'error');
-          btn.disabled = false;
-          btn.textContent = 'Create Policies →';
-        }
-      }
-      
-      async function checkReturnPolicy() {
-        try {
-          const data = await fetchJSON('/.netlify/functions/ebay-list-policies');
-          const ret = data?.returns?.json?.returnPolicies || [];
-          if (ret.length > 0) {
-            showStatus('returnStatus', '✓ Return policy already configured!', 'success');
-            setTimeout(() => nextStep(), 1500);
+          if (payment.length > 0 && returns.length > 0 && fulfillment.length > 0) {
+            showStatus('paymentStatus', '✓ All business policies configured!', 'success');
+          } else {
+            showStatus('paymentStatus', 'Click "Manage Policies" to set up your payment, return, and shipping policies.', 'info');
           }
         } catch (err) {
-          console.log('No return policy yet');
+          console.log('Could not check policies:', err);
+          showStatus('paymentStatus', 'Click "Manage Policies" to set up your business policies.', 'info');
         }
-      }
-      
-      async function createReturnPolicy() {
-        // Skip - provision-policies creates all at once
-        showStatus('returnStatus', '✓ Using existing policies!', 'success');
-        setTimeout(() => nextStep(), 1000);
-      }
-      
-      async function checkShippingPolicy() {
-        try {
-          const data = await fetchJSON('/.netlify/functions/ebay-list-policies');
-          const fp = data?.fulfillment?.json?.fulfillmentPolicies || [];
-          if (fp.length > 0) {
-            showStatus('shippingStatus', '✓ Shipping policy already configured!', 'success');
-            setTimeout(() => nextStep(), 1500);
-          }
-        } catch (err) {
-          console.log('No shipping policy yet');
-        }
-      }
-      
-      async function createShippingPolicy() {
-        // Skip - provision-policies creates all at once
-        showStatus('shippingStatus', '✓ Using existing policies!', 'success');
-        setTimeout(() => nextStep(), 1000);
       }
       
       function completeOnboarding() {
-        showStep(8);
+        showStep(6);
+      }
+      
+      function skipToComplete() {
+        showStep(6);
       }
       
       // Handle OAuth redirects
