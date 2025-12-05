@@ -984,8 +984,25 @@
             const fp = p?.fulfillment?.json?.fulfillmentPolicies || [];
             const pay = p?.payment?.json?.paymentPolicies || [];
             const ret = p?.returns?.json?.returnPolicies || [];
-            policiesReady = fp.length > 0 && pay.length > 0 && ret.length > 0;
-            if (!policiesReady) setupHints.push('Create your payment, shipping, and return policies on the setup page.');
+            const hasPolicies = fp.length > 0 && pay.length > 0 && ret.length > 0;
+            
+            // Also check if defaults are set
+            let hasDefaults = false;
+            if (hasPolicies) {
+              try {
+                const def = await (await authClient.authFetch('/.netlify/functions/ebay-get-policy-defaults')).json();
+                hasDefaults = !!(def?.defaults?.fulfillment && def?.defaults?.payment && def?.defaults?.return);
+              } catch {}
+            }
+            
+            policiesReady = hasPolicies && hasDefaults;
+            if (!policiesReady) {
+              if (!hasPolicies) {
+                setupHints.push('Create your payment, shipping, and return policies.');
+              } else {
+                setupHints.push('Set default policies for payment, shipping, and returns.');
+              }
+            }
           } catch {
             policiesReady = false;
             setupHints.push('Create your payment, shipping, and return policies on the setup page.');
