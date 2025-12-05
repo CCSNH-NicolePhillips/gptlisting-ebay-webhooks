@@ -76,6 +76,28 @@
         justify-content: flex-end;
       }
       
+      .location-actions button {
+        font-size: 0.8125rem;
+        padding: 6px 12px;
+      }
+      
+      .btn-delete {
+        background: transparent;
+        color: #ef4444;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        border-radius: 6px;
+        padding: 6px 12px;
+        cursor: pointer;
+        font-weight: 500;
+        font-size: 0.8125rem;
+        transition: all 0.15s ease;
+      }
+      
+      .btn-delete:hover {
+        background: rgba(239, 68, 68, 0.1);
+        border-color: #ef4444;
+      }
+      
       .location-section {
         background: var(--bg-card);
         border: 1px solid var(--border-subtle);
@@ -201,6 +223,11 @@
         gap: 12px;
         flex-wrap: wrap;
       }
+      
+      .header-actions {
+        display: flex;
+        gap: 12px;
+      }
     </style>
   </head>
   <body>
@@ -313,7 +340,7 @@
                 <h3>Existing Locations</h3>
                 <div class="location-count" id="locationsStatus">Loading...</div>
               </div>
-              <div style="display:flex; gap:12px;">
+              <div class="header-actions">
                 <button class="dp-btn-secondary" id="refreshBtn">Refresh</button>
                 <button class="dp-btn-primary" id="setDefaultBtn" disabled>Set as Default</button>
               </div>
@@ -621,7 +648,7 @@
             
             const inspectBtn = document.createElement('button');
             inspectBtn.textContent = 'Inspect';
-            inspectBtn.className = 'dp-btn-ghost';
+            inspectBtn.className = 'dp-btn-secondary';
             inspectBtn.onclick = () => {
               state.selectedKey = loc.merchantLocationKey;
               renderLocations();
@@ -651,8 +678,7 @@
             
             const deleteBtn = document.createElement('button');
             deleteBtn.textContent = 'Delete';
-            deleteBtn.className = 'dp-btn-ghost';
-            deleteBtn.style.color = '#ef4444';
+            deleteBtn.className = 'btn-delete';
             deleteBtn.onclick = async () => {
               if (!loc.merchantLocationKey) return;
               if (!confirm(`Delete location "${loc.merchantLocationKey}" on eBay? This cannot be undone.`)) return;
