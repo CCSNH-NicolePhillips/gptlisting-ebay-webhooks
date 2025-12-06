@@ -833,7 +833,7 @@ export async function promoteSingleListing(
   // The offer object contains listing details - check for listing.listingId
   const offer = offers[0];
   const listingId = offer.listing?.listingId || offer.offerId;
-  console.log(`[promoteSingleListing] Using listing ID: ${listingId} for SKU ${inventoryReferenceId}`);
+  console.log(`[promoteSingleListing] Extracted listingId: ${listingId} (from ${offer.listing?.listingId ? 'offer.listing.listingId' : 'offer.offerId'})`);
 
   // 4c) Build AdCreateRequest (marketing-types.ts)
   const bidPercentage = adRate.toFixed(1); // 5 -> "5.0"
