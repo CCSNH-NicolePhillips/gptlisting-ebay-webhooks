@@ -1,7 +1,7 @@
 import type { Handler } from '@netlify/functions';
-import { getBearerToken, getJwtSubUnverified, requireAuthVerified } from '../../src/lib/_auth.js';
-import { getAds } from '../../src/lib/ebay-promote.js';
-import { getOrCreateDefaultCampaignId } from '../../src/lib/ebay-promote.js';
+import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
+import { getAds, getCampaigns } from '../../src/lib/ebay-promote.js';
+import { tokensStore } from '../../src/lib/_blobs.js';
 
 /**
  * Get all promoted listings (ads) for the current user
@@ -23,27 +23,39 @@ export const handler: Handler = async (event) => {
       set: async () => {},
     };
 
-    // Get the user's default campaign ID
-    let campaignId: string;
+    // Get the user's default campaign ID from policy defaults
+    let campaignId: string | null = null;
+    
     try {
-      const ctx = {
-        userId: sub,
-        apiHost: process.env.EBAY_ENV === 'PROD' 
-          ? 'https://api.ebay.com' 
-          : 'https://api.sandbox.ebay.com',
-        accessToken: '', // Not needed for getOrCreateDefaultCampaignId
-      };
-      
-      campaignId = await getOrCreateDefaultCampaignId(ctx as any, { adRate: 5 });
-    } catch (err: any) {
-      console.error('[get-promoted-listings] Failed to get campaign:', err.message);
+      const store = tokensStore();
+      const policyDefaultsKey = userScopedKey(sub, 'policy-defaults.json');
+      const policyDefaults: any = (await store.get(policyDefaultsKey, { type: 'json' })) || {};
+      campaignId = policyDefaults.promoCampaignId || null;
+    } catch (e) {
+      console.log('[get-promoted-listings] No policy defaults found');
+    }
+
+    // If no campaign in policy defaults, try to get the first RUNNING campaign
+    if (!campaignId) {
+      try {
+        const campaignsResult = await getCampaigns(sub, { tokenCache, limit: 10 });
+        const runningCampaign = campaignsResult.campaigns.find(c => c.campaignStatus === 'RUNNING');
+        if (runningCampaign) {
+          campaignId = runningCampaign.campaignId;
+        }
+      } catch (err: any) {
+        console.error('[get-promoted-listings] Failed to get campaigns:', err.message);
+      }
+    }
+
+    if (!campaignId) {
       return {
         statusCode: 200,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           ok: true, 
           ads: [],
-          error: 'Could not find or create campaign',
+          error: 'No active campaign found',
         }),
       };
     }
@@ -62,7 +74,6 @@ export const handler: Handler = async (event) => {
           ok: true,
           campaignId,
           ads: adsResult.ads || [],
-          total: adsResult.total || 0,
         }),
       };
     } catch (err: any) {
