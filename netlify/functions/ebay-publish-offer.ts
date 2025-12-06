@@ -2,6 +2,7 @@ import type { Handler } from '@netlify/functions';
 import { accessTokenFromRefresh, tokenHosts } from '../../src/lib/_common.js';
 import { tokensStore } from '../../src/lib/_blobs.js';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
+import { promoteSingleListing } from '../../src/lib/ebay-promote.js';
 
 export const handler: Handler = async (event) => {
 	try {
@@ -185,10 +186,103 @@ export const handler: Handler = async (event) => {
 		} catch {
 			// ignore persistence errors
 		}
+
+		// Step 3: Check for auto-promotion after successful publish
+		let promotionResult: any = null;
+		try {
+			// Fetch the offer to check merchantData.autoPromote
+			const getOfferUrl = `${apiHost}/sell/inventory/v1/offer/${encodeURIComponent(offerId)}`;
+			const getOfferRes = await fetch(getOfferUrl, { headers });
+			
+			if (getOfferRes.ok) {
+				const offerText = await getOfferRes.text();
+				const offer = JSON.parse(offerText);
+				const merchantData = offer?.merchantData || {};
+				const autoPromote = merchantData.autoPromote === true;
+				const autoPromoteAdRate = typeof merchantData.autoPromoteAdRate === 'number' 
+					? merchantData.autoPromoteAdRate 
+					: null;
+				
+				if (autoPromote && offer.sku) {
+					console.log(`[ebay-publish-offer] Auto-promotion enabled for SKU ${offer.sku}, offerId ${offerId}`);
+					console.log(`[ebay-publish-offer] Ad rate: ${autoPromoteAdRate || 'default from policy'}`);
+					
+					// Determine ad rate: use draft-specific rate or fall back to user's default
+					let adRate = autoPromoteAdRate;
+					if (!adRate) {
+						// Load promotion defaults to get default ad rate
+						const policyDefaultsKey = userScopedKey(sub!, 'policy-defaults.json');
+						try {
+							const policyDefaults = (await store.get(policyDefaultsKey, { type: 'json' })) || {};
+							adRate = policyDefaults.defaultAdRate || 5; // Fall back to 5% if not set
+							console.log(`[ebay-publish-offer] Using default ad rate from policy: ${adRate}%`);
+						} catch (e) {
+							adRate = 5; // Ultimate fallback
+							console.log(`[ebay-publish-offer] Using hardcoded fallback ad rate: ${adRate}%`);
+						}
+					}
+					
+					// Call promotion adapter (non-blocking)
+					try {
+						const tokenCache = new Map<string, string>();
+						tokenCache.set(sub!, access_token);
+						
+						const promoStatus = await promoteSingleListing({
+							tokenCache,
+							userId: sub!,
+							ebayAccountId: sub!,
+							inventoryReferenceId: offer.sku,
+							adRate: adRate,
+						});
+						
+						console.log(`[ebay-publish-offer] Promotion result for SKU ${offer.sku}:`, {
+							success: promoStatus.success,
+							campaignId: promoStatus.campaignId,
+							adId: promoStatus.adId,
+							listingId: promoStatus.listingId,
+						});
+						
+						promotionResult = {
+							success: true,
+							sku: offer.sku,
+							campaignId: promoStatus.campaignId,
+							adId: promoStatus.adId,
+							adRate: adRate,
+						};
+					} catch (promoErr: any) {
+						// Log promotion error but don't fail the publish
+						console.error(`[ebay-publish-offer] Promotion failed for SKU ${offer.sku}:`, {
+							error: promoErr.message,
+							sku: offer.sku,
+							offerId: offerId,
+						});
+						
+						promotionResult = {
+							success: false,
+							sku: offer.sku,
+							error: promoErr.message,
+							reason: 'Promotion adapter failed',
+						};
+					}
+				} else if (autoPromote && !offer.sku) {
+					console.log(`[ebay-publish-offer] Auto-promotion enabled but SKU missing for offerId ${offerId}`);
+				} else {
+					console.log(`[ebay-publish-offer] Auto-promotion not enabled for offerId ${offerId}`);
+				}
+			}
+		} catch (err: any) {
+			// Log error but don't fail the publish
+			console.error(`[ebay-publish-offer] Error checking auto-promotion:`, err.message);
+		}
+
 		return {
 			statusCode: 200,
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ ok: true, result: pub.body }),
+			body: JSON.stringify({ 
+				ok: true, 
+				result: pub.body,
+				promotion: promotionResult, // Include promotion result in response
+			}),
 		};
 	} catch (e: any) {
 		return {
