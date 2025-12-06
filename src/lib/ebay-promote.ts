@@ -780,13 +780,35 @@ export async function promoteSingleListing(
     campaignIdOverride ??
     (await getOrCreateDefaultCampaignId(ctx, { adRate }));
 
+  // 4b.5) Get the offer ID (listingId) for this SKU
+  // eBay Marketing API requires listingId, not inventoryReferenceId
+  const offersUrl = `${ctx.apiHost}/sell/inventory/v1/offer?sku=${encodeURIComponent(inventoryReferenceId)}`;
+  const offersResp = await fetch(offersUrl, {
+    headers: {
+      'Authorization': `Bearer ${ctx.accessToken}`,
+      'Content-Type': 'application/json',
+    },
+  });
+  
+  if (!offersResp.ok) {
+    throw new Error(`Failed to fetch offer for SKU ${inventoryReferenceId}: ${offersResp.status}`);
+  }
+  
+  const offersData = await offersResp.json();
+  const offers = offersData.offers || [];
+  
+  if (offers.length === 0) {
+    throw new Error(`No published offer found for SKU ${inventoryReferenceId}. Publish the listing first.`);
+  }
+  
+  const listingId = offers[0].offerId;
+
   // 4c) Build AdCreateRequest (marketing-types.ts)
   const bidPercentage = adRate.toFixed(1); // 5 -> "5.0"
 
-  const requestBody: AdCreateRequest = {
+  const requestBody = {
     bidPercentage,
-    inventoryReferenceId,
-    inventoryReferenceType: 'INVENTORY_ITEM',
+    listingId,
   };
 
   try {
