@@ -454,6 +454,14 @@
           
           <!-- Right: Actions -->
           <div class="dp-topbar-right" style="display: flex !important; gap: 0.75rem;">
+            <button id="btnPromoteNow" class="dp-btn dp-btn-primary" title="Promote all published drafts" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 0.35rem;">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="16 12 12 8 8 12"></polyline>
+                <line x1="12" y1="8" x2="12" y2="16"></line>
+              </svg>
+              Promote Now
+            </button>
             <button id="btnRefresh" class="dp-btn dp-btn-secondary" title="Reload drafts" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 0.35rem;">
                 <polyline points="23 4 23 10 17 10"></polyline>
@@ -1205,6 +1213,104 @@
         } catch (e) {
           flash.textContent = 'Delete error: ' + (e?.message || String(e));
           console.error('[Delete All] Exception:', e);
+        }
+      });
+      
+      // "Promote Now" button handler
+      document.getElementById('btnPromoteNow')?.addEventListener('click', async () => {
+        try {
+          flash.textContent = 'Collecting published drafts...';
+          
+          // Fetch all offers to find published ones
+          const rawSku = new URL(location.href).searchParams.get('sku') || '';
+          const skuOk = /^[A-Za-z0-9]{1,50}$/.test(rawSku);
+          const base = '/.netlify/functions/ebay-list-offers?limit=100' + (skuOk ? '&sku=' + encodeURIComponent(rawSku) : '');
+          
+          // Get PUBLISHED offers
+          let publishedOffers = [];
+          try {
+            const pubRes = await fetchJSON(base + '&status=PUBLISHED');
+            publishedOffers = Array.isArray(pubRes?.offers) ? pubRes.offers : [];
+          } catch (e) {
+            console.error('[Promote Now] Failed to fetch published offers:', e);
+            flash.textContent = 'Error fetching published listings';
+            return;
+          }
+          
+          if (!publishedOffers.length) {
+            flash.textContent = 'No published listings found to promote';
+            return;
+          }
+          
+          // Collect SKUs from published offers
+          const skus = publishedOffers
+            .map(o => o.sku)
+            .filter(sku => sku && typeof sku === 'string');
+          
+          if (!skus.length) {
+            flash.textContent = 'No valid SKUs found in published listings';
+            return;
+          }
+          
+          flash.textContent = `Promoting ${skus.length} published listing(s)...`;
+          
+          // Get default ad rate from policy defaults
+          let adRate = 5; // Default fallback
+          try {
+            const exec = (window.authClient && typeof window.authClient.authFetch === 'function') 
+              ? window.authClient.authFetch 
+              : fetch;
+            const policyRes = await exec('/.netlify/functions/ebay-get-policy-defaults');
+            if (policyRes.ok) {
+              const policyData = await policyRes.json();
+              adRate = policyData.defaultAdRate || 5;
+            }
+          } catch (e) {
+            console.log('[Promote Now] Could not get default ad rate, using 5%');
+          }
+          
+          // Call promote-drafts endpoint
+          const exec = (window.authClient && typeof window.authClient.authFetch === 'function') 
+            ? window.authClient.authFetch 
+            : fetch;
+          
+          const promoRes = await exec('/.netlify/functions/promote-drafts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              skus: skus,
+              adRate: adRate,
+            }),
+          });
+          
+          if (!promoRes.ok) {
+            const errorText = await promoRes.text();
+            flash.textContent = `Promotion failed: ${errorText}`;
+            return;
+          }
+          
+          const result = await promoRes.json();
+          
+          // Display results
+          const promoted = result.promotedCount || 0;
+          const total = result.totalCount || skus.length;
+          const failed = total - promoted;
+          
+          let message = `✓ Promoted ${promoted} listing(s)`;
+          if (failed > 0) {
+            message += `. ${failed} failed`;
+            if (result.failures && result.failures.length > 0) {
+              message += ': ';
+              message += result.failures.map(f => `${f.sku} (${f.reason})`).join(', ');
+            }
+          }
+          
+          flash.textContent = message;
+          console.log('[Promote Now] Results:', result);
+          
+        } catch (e) {
+          flash.textContent = 'Promotion error: ' + (e?.message || String(e));
+          console.error('[Promote Now] Exception:', e);
         }
       });
       
