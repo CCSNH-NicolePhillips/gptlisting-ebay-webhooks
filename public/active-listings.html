@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Active Listings - DraftPilot</title>
+  <link rel="stylesheet" href="/draftpilot.css" />
+  <style>
+    .page {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 1.5rem 1.25rem 2.5rem;
+    }
+    .heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.25rem;
+    }
+    .muted { color: var(--muted); }
+    .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .btn {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 0.55rem 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+    }
+    .btn.secondary { background: transparent; color: #cbd5ff; border: 1px solid var(--line); box-shadow: none; }
+    .flash { min-height: 1.25rem; color: var(--muted); margin-bottom: 0.6rem; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .card {
+      background: var(--dp-surface-elevated, #020617);
+      border: 1px solid rgba(148, 163, 184, 0.15);
+      border-radius: 14px;
+      padding: 0.9rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      box-shadow: 0 14px 30px rgba(15, 23, 42, 0.45);
+    }
+    .title { font-weight: 600; font-size: 0.98rem; line-height: 1.35; }
+    .row { display: flex; flex-wrap: wrap; gap: 0.45rem; font-size: 0.85rem; color: var(--muted); }
+    .badge { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.18rem 0.55rem; border-radius: 999px; border: 1px solid var(--line); font-size: 0.78rem; }
+    .pill { padding: 0.15rem 0.45rem; border-radius: 8px; background: rgba(94, 234, 212, 0.08); color: #d6e1ff; font-size: 0.8rem; }
+    .loading { display: flex; align-items: center; gap: 0.6rem; color: var(--muted); }
+    .spinner { width: 26px; height: 26px; border: 3px solid rgba(255,255,255,0.15); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="heading">
+      <div>
+        <h1 style="margin: 0;">Active Listings</h1>
+        <div class="muted" id="subtext">Read-only view of live eBay listings (cannot edit in-app).</div>
+      </div>
+      <div class="actions">
+        <button class="btn secondary" id="btnRefresh">Refresh</button>
+      </div>
+    </div>
+    <div class="flash" id="flash"></div>
+    <div id="counts" class="muted"></div>
+    <div id="loading" class="loading" style="display:none;"><div class="spinner"></div><span>Loading active listings...</span></div>
+    <div id="grid" class="grid"></div>
+  </div>
+
+  <script type="module">
+    const flash = document.getElementById('flash');
+    const grid = document.getElementById('grid');
+    const loading = document.getElementById('loading');
+    const counts = document.getElementById('counts');
+    const subtext = document.getElementById('subtext');
+    const exec = (window.authClient && typeof window.authClient.authFetch === 'function') ? window.authClient.authFetch : fetch;
+
+    function fmtPrice(p) {
+      if (!p) return '';
+      try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: p.currency || 'USD' }).format(Number(p.value)); }
+      catch { return `${p.value || ''} ${p.currency || ''}`; }
+    }
+
+    function renderCard(o) {
+      const card = document.createElement('div');
+      card.className = 'card';
+
+      const localFlash = document.createElement('div');
+      localFlash.className = 'muted';
+      localFlash.style.minHeight = '1.1rem';
+      card.appendChild(localFlash);
+
+      const title = document.createElement('div');
+      title.className = 'title';
+      title.textContent = o.title || o.sku || '(untitled)';
+      card.appendChild(title);
+
+      const row1 = document.createElement('div');
+      row1.className = 'row';
+      row1.textContent = [o.sku ? `SKU: ${o.sku}` : null, o.offerId ? `Offer: ${o.offerId}` : null, o.listingId ? `Listing: ${o.listingId}` : null].filter(Boolean).join(' • ');
+      card.appendChild(row1);
+
+      const row2 = document.createElement('div');
+      row2.className = 'row';
+      row2.textContent = [fmtPrice(o.price), o.availableQuantity != null ? `Qty: ${o.availableQuantity}` : null].filter(Boolean).join(' • ');
+      card.appendChild(row2);
+
+      const badges = document.createElement('div');
+      badges.className = 'row';
+      const status = document.createElement('span');
+      status.className = 'badge';
+      status.textContent = o.listingStatus || 'ACTIVE';
+      badges.appendChild(status);
+
+      if (o.autoPromote) {
+        const promo = document.createElement('span');
+        promo.className = 'pill';
+        promo.textContent = `Auto-promote ${o.autoPromoteAdRate ? o.autoPromoteAdRate + '%' : ''}`.trim();
+        badges.appendChild(promo);
+      }
+
+      card.appendChild(badges);
+
+      // Inline control to set/update promoted ad rate
+      const control = document.createElement('div');
+      control.style.display = 'flex';
+      control.style.gap = '0.4rem';
+      control.style.alignItems = 'center';
+      control.style.marginTop = '0.2rem';
+
+      const rateInput = document.createElement('input');
+      rateInput.type = 'number';
+      rateInput.inputMode = 'decimal';
+      rateInput.min = '0.1';
+      rateInput.max = '100';
+      rateInput.step = '0.1';
+      rateInput.value = o.autoPromoteAdRate != null ? String(o.autoPromoteAdRate) : '5';
+      rateInput.style.width = '90px';
+      rateInput.style.padding = '0.35rem 0.45rem';
+      rateInput.style.borderRadius = '8px';
+      rateInput.style.border = '1px solid var(--line)';
+      rateInput.style.background = '#0f1529';
+      rateInput.style.color = '#f4f6fb';
+
+      const saveBtn = document.createElement('button');
+      saveBtn.className = 'btn secondary';
+      saveBtn.textContent = 'Save Rate';
+      saveBtn.style.padding = '0.4rem 0.65rem';
+      saveBtn.style.fontSize = '0.82rem';
+
+      saveBtn.addEventListener('click', async () => {
+        const val = parseFloat(rateInput.value);
+        if (!Number.isFinite(val)) {
+          localFlash.textContent = 'Enter a valid percent';
+          return;
+        }
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+        localFlash.textContent = '';
+        try {
+          const res = await exec('/.netlify/functions/ebay-update-active-promo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ listingId: o.listingId, offerId: o.offerId, sku: o.sku, adRate: val }),
+          });
+          const txt = await res.text();
+          const data = txt ? JSON.parse(txt) : {};
+          if (!res.ok || !data.ok) {
+            localFlash.textContent = data?.error || `Save failed (${res.status})`;
+            return;
+          }
+          localFlash.textContent = `Saved ${data.adRate}% (${data.action})`;
+          setTimeout(() => {
+            localFlash.textContent = '';
+          }, 2500);
+        } catch (e) {
+          localFlash.textContent = e?.message || String(e);
+        } finally {
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'Save Rate';
+        }
+      });
+
+      control.appendChild(rateInput);
+      control.appendChild(saveBtn);
+      card.appendChild(control);
+
+      return card;
+    }
+
+    async function load() {
+      flash.textContent = '';
+      loading.style.display = 'flex';
+      grid.innerHTML = '';
+      counts.textContent = '';
+
+      try {
+        const res = await exec('/.netlify/functions/ebay-list-active');
+        const text = await res.text();
+        const data = text ? JSON.parse(text) : {};
+
+        if (!res.ok || !data.ok) {
+          flash.textContent = data?.error || `Error ${res.status}`;
+          return;
+        }
+
+        const offers = Array.isArray(data.offers) ? data.offers : [];
+        counts.textContent = `${offers.length} active listing${offers.length === 1 ? '' : 's'}`;
+        if (!offers.length) {
+          subtext.textContent = 'No active listings found for this account.';
+          return;
+        }
+
+        for (const o of offers) {
+          grid.appendChild(renderCard(o));
+        }
+      } catch (e) {
+        flash.textContent = e?.message || String(e);
+      } finally {
+        loading.style.display = 'none';
+      }
+    }
+
+    document.getElementById('btnRefresh')?.addEventListener('click', () => load());
+    load();
+  </script>
+</body>
+</html>

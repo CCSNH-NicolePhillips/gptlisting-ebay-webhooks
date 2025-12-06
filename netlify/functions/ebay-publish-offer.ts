@@ -198,16 +198,29 @@ export const handler: Handler = async (event) => {
 				const offerText = await getOfferRes.text();
 				const offer = JSON.parse(offerText);
 				const merchantData = offer?.merchantData || {};
+
+				// Coerce legacy/loose values so auto-promo still triggers
+				const autoPromoteFlag = merchantData.autoPromote;
+				const autoPromote =
+					autoPromoteFlag === true ||
+					autoPromoteFlag === 'true' ||
+					autoPromoteFlag === 1 ||
+					autoPromoteFlag === '1';
+
+				const adRateRaw = merchantData.autoPromoteAdRate;
+				const parsedAdRate =
+					typeof adRateRaw === 'number' ? adRateRaw : parseFloat(adRateRaw);
+				const autoPromoteAdRate = Number.isFinite(parsedAdRate)
+					? Math.max(0.1, Math.min(parsedAdRate, 100))
+					: undefined;
 				
 				if (offer.sku) {
 					// Call the auto-promotion helper (never throws)
 					const promoResult = await maybeAutoPromoteDraftListing({
 						userId: sub!,
 						sku: offer.sku,
-						autoPromote: merchantData.autoPromote === true,
-						autoPromoteAdRate: typeof merchantData.autoPromoteAdRate === 'number' 
-							? merchantData.autoPromoteAdRate 
-							: undefined,
+						autoPromote,
+						autoPromoteAdRate,
 						accessToken: access_token,
 						offerId,
 					});

@@ -1,0 +1,118 @@
+import type { Handler } from '@netlify/functions';
+import { accessTokenFromRefresh, tokenHosts } from '../../src/lib/_common.js';
+import { tokensStore } from '../../src/lib/_blobs.js';
+import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
+
+interface ActiveOffer {
+  offerId: string;
+  sku: string;
+  title?: string;
+  price?: { value: string; currency: string };
+  availableQuantity?: number;
+  listingId?: string;
+  listingStatus?: string;
+  marketplaceId?: string;
+  condition?: number;
+  lastModifiedDate?: string;
+  autoPromote?: boolean;
+  autoPromoteAdRate?: number;
+}
+
+export const handler: Handler = async (event) => {
+  try {
+    const bearer = getBearerToken(event);
+    let sub = (await requireAuthVerified(event))?.sub || null;
+    if (!sub) sub = getJwtSubUnverified(event);
+    if (!bearer || !sub) return { statusCode: 401, body: 'Unauthorized' };
+
+    // Load refresh token
+    const store = tokensStore();
+    const saved = (await store.get(userScopedKey(sub, 'ebay.json'), { type: 'json' })) as any;
+    const refresh = saved?.refresh_token as string | undefined;
+    if (!refresh) return { statusCode: 400, body: JSON.stringify({ error: 'Connect eBay first' }) };
+
+    const { access_token } = await accessTokenFromRefresh(refresh);
+    const { apiHost } = tokenHosts(process.env.EBAY_ENV);
+    const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || 'EBAY_US';
+
+    async function listActiveOffers(): Promise<ActiveOffer[]> {
+      const results: ActiveOffer[] = [];
+      let offset = 0;
+      const limit = 200;
+
+      while (true) {
+        const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+        const url = `${apiHost}/sell/inventory/v1/offer?${params.toString()}`;
+        const res = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${access_token}`,
+            'Content-Type': 'application/json',
+            'Accept-Language': 'en-US',
+            'X-EBAY-C-MARKETPLACE-ID': MARKETPLACE_ID,
+          },
+        });
+
+        const text = await res.text();
+        let data: any = {};
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch {
+          throw new Error(`Failed to parse offers response at offset ${offset}`);
+        }
+
+        if (!res.ok) {
+          const errMsg = data?.errors?.[0]?.message || data?.message || text || 'Unknown error';
+          throw new Error(`Offer list failed ${res.status}: ${errMsg}`);
+        }
+
+        const offers = Array.isArray(data.offers) ? data.offers : [];
+        for (const o of offers) {
+          const status = String(o.status || '').toUpperCase();
+          const listingStatus = String(o.listing?.status || o.publication?.status || '').toUpperCase();
+          // Treat PUBLISHED/ACTIVE as "active" listings
+          const isActive = status === 'PUBLISHED' || listingStatus === 'ACTIVE';
+          if (!isActive) continue;
+
+          const adRateRaw = o?.merchantData?.autoPromoteAdRate;
+          const adRate = typeof adRateRaw === 'number' ? adRateRaw : parseFloat(adRateRaw);
+
+          results.push({
+            offerId: String(o.offerId || ''),
+            sku: String(o.sku || ''),
+            title: o?.listing?.title || o?.title || o?.sku || '',
+            price: o?.pricingSummary?.price,
+            availableQuantity: o?.availableQuantity,
+            listingId: o?.listing?.listingId || o?.publication?.listingId,
+            listingStatus: o?.listing?.status || o?.publication?.status || o?.status,
+            marketplaceId: o?.marketplaceId,
+            condition: typeof o?.condition === 'number' ? o.condition : undefined,
+            lastModifiedDate: o?.listing?.lastModifiedDate || o?.lastModifiedDate,
+            autoPromote: o?.merchantData?.autoPromote === true,
+            autoPromoteAdRate: Number.isFinite(adRate) ? adRate : undefined,
+          });
+        }
+
+        const next = data?.next;
+        if (!next || offers.length < limit) break;
+        offset += limit;
+      }
+
+      return results;
+    }
+
+    const activeOffers = await listActiveOffers();
+
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ok: true, count: activeOffers.length, offers: activeOffers }),
+    };
+  } catch (e: any) {
+    console.error('[ebay-list-active] Error:', e?.message || e);
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'Failed to list active offers', detail: e?.message || String(e) }),
+    };
+  }
+};
