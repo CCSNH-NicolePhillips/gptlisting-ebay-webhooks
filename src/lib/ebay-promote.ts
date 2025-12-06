@@ -783,11 +783,14 @@ export async function promoteSingleListing(
   // 4b.5) Get the offer ID (listingId) for this SKU
   // eBay Marketing API requires listingId, not inventoryReferenceId
   // We need to get the inventory item which contains the offer information
+  const MARKETPLACE_ID = process.env.DEFAULT_MARKETPLACE_ID || process.env.EBAY_MARKETPLACE_ID || 'EBAY_US';
   const inventoryUrl = `${ctx.apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(inventoryReferenceId)}`;
   const inventoryResp = await fetch(inventoryUrl, {
     headers: {
       'Authorization': `Bearer ${ctx.accessToken}`,
       'Content-Type': 'application/json',
+      'Accept-Language': 'en-US',
+      'X-EBAY-C-MARKETPLACE-ID': MARKETPLACE_ID,
     },
   });
   
@@ -805,6 +808,8 @@ export async function promoteSingleListing(
     headers: {
       'Authorization': `Bearer ${ctx.accessToken}`,
       'Content-Type': 'application/json',
+      'Accept-Language': 'en-US',
+      'X-EBAY-C-MARKETPLACE-ID': MARKETPLACE_ID,
     },
   });
   
