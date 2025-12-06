@@ -818,15 +818,17 @@
           }
         });
         
+        // Build card body in correct order
+        body.appendChild(title);
+        if (desc.textContent) body.appendChild(desc);
+        body.appendChild(meta);
+        body.appendChild(badge);
+        
         promoControls.appendChild(promoToggleDiv);
         promoControls.appendChild(promoRateDiv);
         promoControls.appendChild(promoSaveBtn);
-        
-        body.appendChild(title);
-  if (desc.textContent) body.appendChild(desc);
-  body.appendChild(meta);
-        body.appendChild(badge);
         body.appendChild(promoControls);
+        
         body.appendChild(row);
         el.appendChild(th);
         el.appendChild(body);
