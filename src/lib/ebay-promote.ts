@@ -100,7 +100,12 @@ async function ensureAccess(params: {
     throw new Error(`No eBay refresh token found for user ${trimmed}`);
   }
   
-  const { access_token } = await accessTokenFromRefresh(refresh);
+  const { access_token } = await accessTokenFromRefresh(refresh, [
+    'https://api.ebay.com/oauth/api_scope',
+    'https://api.ebay.com/oauth/api_scope/sell.account',
+    'https://api.ebay.com/oauth/api_scope/sell.inventory',
+    'https://api.ebay.com/oauth/api_scope/sell.marketing',
+  ]);
   if (!access_token) {
     throw new Error('Failed to exchange refresh token for access token');
   }
