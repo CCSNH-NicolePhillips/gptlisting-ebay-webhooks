@@ -122,7 +122,7 @@ async function marketingRequest<T>(
   options: MarketingRequestOptions
 ): Promise<T> {
   const { accessToken, apiHost } = ctx;
-  const url = new URL(options.path, `https://${apiHost}`);
+  const url = new URL(options.path, apiHost);
   const { path, method, headers, body, ...rest } = options;
 
   const resp = await fetch(url.toString(), {
