@@ -44,6 +44,8 @@ export const handler: Handler = async (event) => {
           'https://api.ebay.com/oauth/api_scope',
           'https://api.ebay.com/oauth/api_scope/sell.account',
           'https://api.ebay.com/oauth/api_scope/sell.inventory',
+          'https://api.ebay.com/oauth/api_scope/sell.fulfillment',
+          'https://api.ebay.com/oauth/api_scope/sell.marketing',
         ]);
         // Light probe: list payment policies and locations to verify token works and identify account context
         const polUrl = `${apiHost}/sell/account/v1/payment_policy?marketplace_id=${MARKETPLACE_ID}`;

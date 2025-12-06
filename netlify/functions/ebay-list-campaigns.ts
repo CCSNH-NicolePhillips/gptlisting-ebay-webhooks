@@ -30,7 +30,12 @@ export const handler: Handler = async (event) => {
 		const defaultPromoCampaignId = prefs.defaultPromoCampaignId ?? null;
 
 		// Get eBay access token and setup
-		const { access_token } = await accessTokenFromRefresh(refresh);
+		const { access_token } = await accessTokenFromRefresh(refresh, [
+			'https://api.ebay.com/oauth/api_scope',
+			'https://api.ebay.com/oauth/api_scope/sell.account',
+			'https://api.ebay.com/oauth/api_scope/sell.inventory',
+			'https://api.ebay.com/oauth/api_scope/sell.marketing',
+		]);
 		const { apiHost } = tokenHosts(process.env.EBAY_ENV);
 		const MARKETPLACE_ID = process.env.DEFAULT_MARKETPLACE_ID || process.env.EBAY_MARKETPLACE_ID || 'EBAY_US';
 
