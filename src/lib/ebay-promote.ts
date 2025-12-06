@@ -840,6 +840,8 @@ export async function promoteSingleListing(
       campaignId,
       adRate,
       error: msg,
+      fullError: err,
+      stack: err?.stack,
     });
 
     return {
