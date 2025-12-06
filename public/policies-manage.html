@@ -564,14 +564,265 @@
 
       function renderPromoDefaults() {
         const statusEl = document.getElementById('promoStatus');
-        const inputEl = document.getElementById('promoCampaignIdInput');
-        if (!statusEl || !inputEl) return;
+        if (!statusEl) return;
 
         const id = defaults.promoCampaignId || '';
-        inputEl.value = id;
         statusEl.textContent = id
           ? `Default campaign: ${id}`
           : 'Default campaign: not configured';
+      }
+
+      async function loadPromotionsSection() {
+        const table = document.getElementById('promoTable');
+        if (!table) return;
+        const tbody = table.querySelector('tbody');
+        tbody.innerHTML = '';
+
+        let campaigns = [];
+        try {
+          const r = await authClient.authFetch('/.netlify/functions/ebay-list-campaigns');
+          const j = await r.json();
+          campaigns = j?.campaigns || [];
+        } catch (e) {
+          const tr = document.createElement('tr');
+          const td = document.createElement('td');
+          td.colSpan = 4;
+          td.style.textAlign = 'center';
+          td.style.padding = '40px';
+          td.style.color = 'var(--text-muted)';
+          td.textContent = 'Failed to load campaigns: ' + (e?.message || e);
+          tr.appendChild(td);
+          tbody.appendChild(tr);
+          return;
+        }
+
+        if (campaigns.length === 0) {
+          const tr = document.createElement('tr');
+          const td = document.createElement('td');
+          td.colSpan = 4;
+          td.style.textAlign = 'center';
+          td.style.padding = '40px';
+          td.style.color = 'var(--text-muted)';
+          td.innerHTML = 'No campaigns found. <a href="https://www.ebay.com/sh/mkt/campaigns" target="_blank" rel="noopener">Create a campaign on eBay ↗</a>';
+          tr.appendChild(td);
+          tbody.appendChild(tr);
+          return;
+        }
+
+        const chosen = defaults.promoCampaignId || '';
+        campaigns.forEach((c) => {
+          const tr = document.createElement('tr');
+          
+          // Name column
+          const nameCell = document.createElement('td');
+          const nameSpan = document.createElement('span');
+          nameSpan.className = 'policy-name';
+          nameSpan.textContent = c.campaignName || '(unnamed)';
+          nameCell.appendChild(nameSpan);
+          
+          // ID column
+          const idCell = document.createElement('td');
+          const idSpan = document.createElement('span');
+          idSpan.className = 'policy-id';
+          const campaignId = c.campaignId || '';
+          idSpan.textContent = campaignId;
+          idCell.appendChild(idSpan);
+          
+          // Status column
+          const statusCell = document.createElement('td');
+          if (String(campaignId) === String(chosen)) {
+            const badge = document.createElement('span');
+            badge.className = 'default-badge';
+            badge.textContent = 'Default';
+            statusCell.appendChild(badge);
+          } else if (c.campaignStatus) {
+            const statusSpan = document.createElement('span');
+            statusSpan.textContent = c.campaignStatus;
+            statusCell.appendChild(statusSpan);
+          }
+          
+          // Actions column
+          const actionsCell = document.createElement('td');
+          const actionsDiv = document.createElement('div');
+          actionsDiv.className = 'policy-actions';
+          
+          const setBtn = document.createElement('button');
+          setBtn.textContent = 'Set Default';
+          setBtn.className = 'btn-set-default';
+          setBtn.onclick = async () => {
+            try {
+              const body = { promoCampaignId: campaignId };
+              const r = await authClient.authFetch('/.netlify/functions/ebay-set-policy-defaults', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify(body)
+              });
+              const j = await r.json(); 
+              Object.assign(defaults, j?.defaults || {});
+              renderPromoDefaults();
+              await loadPromotionsSection();
+              showMsg('✓ Default campaign updated', 'success');
+            } catch (e) { 
+              showMsg('Failed to set default: ' + (e?.message || e), 'error'); 
+            }
+          };
+          
+          const clearBtn = document.createElement('button');
+          clearBtn.textContent = 'Clear Default';
+          clearBtn.className = 'btn-secondary';
+          clearBtn.onclick = async () => {
+            try {
+              const body = { promoCampaignId: null };
+              const r = await authClient.authFetch('/.netlify/functions/ebay-set-policy-defaults', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify(body)
+              });
+              const j = await r.json(); 
+              Object.assign(defaults, j?.defaults || {});
+              renderPromoDefaults();
+              await loadPromotionsSection();
+              showMsg('✓ Default campaign cleared', 'success');
+            } catch (e) { 
+              showMsg('Failed to clear default: ' + (e?.message || e), 'error'); 
+            }
+          };
+          
+          actionsDiv.appendChild(setBtn);
+          if (String(campaignId) === String(chosen)) {
+            actionsDiv.appendChild(clearBtn);
+          }
+          actionsCell.appendChild(actionsDiv);
+          
+          tr.appendChild(nameCell);
+          tr.appendChild(idCell);
+          tr.appendChild(statusCell);
+          tr.appendChild(actionsCell);
+          tbody.appendChild(tr);
+        });
+
+        let campaigns = [];
+        try {
+          const r = await authClient.authFetch('/.netlify/functions/ebay-list-campaigns');
+          const j = await r.json();
+          campaigns = j?.campaigns || [];
+        } catch (e) {
+          const tr = document.createElement('tr');
+          const td = document.createElement('td');
+          td.colSpan = 4;
+          td.style.textAlign = 'center';
+          td.style.padding = '40px';
+          td.style.color = 'var(--text-muted)';
+          td.textContent = 'Failed to load campaigns: ' + (e?.message || e);
+          tr.appendChild(td);
+          tbody.appendChild(tr);
+          return;
+        }
+
+        if (campaigns.length === 0) {
+          const tr = document.createElement('tr');
+          const td = document.createElement('td');
+          td.colSpan = 4;
+          td.style.textAlign = 'center';
+          td.style.padding = '40px';
+          td.style.color = 'var(--text-muted)';
+          td.innerHTML = 'No campaigns found. <a href="https://www.ebay.com/sh/mkt/campaigns" target="_blank" rel="noopener">Create a campaign on eBay ↗</a>';
+          tr.appendChild(td);
+          tbody.appendChild(tr);
+          return;
+        }
+
+        const chosen = defaults.promoCampaignId || '';
+        campaigns.forEach((c) => {
+          const tr = document.createElement('tr');
+          
+          // Name column
+          const nameCell = document.createElement('td');
+          const nameSpan = document.createElement('span');
+          nameSpan.className = 'policy-name';
+          nameSpan.textContent = c.campaignName || '(unnamed)';
+          nameCell.appendChild(nameSpan);
+          
+          // ID column
+          const idCell = document.createElement('td');
+          const idSpan = document.createElement('span');
+          idSpan.className = 'policy-id';
+          const campaignId = c.campaignId || '';
+          idSpan.textContent = campaignId;
+          idCell.appendChild(idSpan);
+          
+          // Status column
+          const statusCell = document.createElement('td');
+          if (String(campaignId) === String(chosen)) {
+            const badge = document.createElement('span');
+            badge.className = 'default-badge';
+            badge.textContent = 'Default';
+            statusCell.appendChild(badge);
+          } else if (c.campaignStatus) {
+            const statusSpan = document.createElement('span');
+            statusSpan.textContent = c.campaignStatus;
+            statusCell.appendChild(statusSpan);
+          }
+          
+          // Actions column
+          const actionsCell = document.createElement('td');
+          const actionsDiv = document.createElement('div');
+          actionsDiv.className = 'policy-actions';
+          
+          const setBtn = document.createElement('button');
+          setBtn.textContent = 'Set Default';
+          setBtn.className = 'btn-set-default';
+          setBtn.onclick = async () => {
+            try {
+              const body = { promoCampaignId: campaignId };
+              const r = await authClient.authFetch('/.netlify/functions/ebay-set-policy-defaults', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify(body)
+              });
+              const j = await r.json(); 
+              Object.assign(defaults, j?.defaults || {});
+              renderPromoDefaults();
+              await loadPromotionsSection();
+              showMsg('✓ Default campaign updated', 'success');
+            } catch (e) { 
+              showMsg('Failed to set default: ' + (e?.message || e), 'error'); 
+            }
+          };
+          
+          const clearBtn = document.createElement('button');
+          clearBtn.textContent = 'Clear Default';
+          clearBtn.className = 'btn-secondary';
+          clearBtn.onclick = async () => {
+            try {
+              const body = { promoCampaignId: null };
+              const r = await authClient.authFetch('/.netlify/functions/ebay-set-policy-defaults', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify(body)
+              });
+              const j = await r.json(); 
+              Object.assign(defaults, j?.defaults || {});
+              renderPromoDefaults();
+              await loadPromotionsSection();
+              showMsg('✓ Default campaign cleared', 'success');
+            } catch (e) { 
+              showMsg('Failed to clear default: ' + (e?.message || e), 'error'); 
+            }
+          };
+          
+          actionsDiv.appendChild(setBtn);
+          if (String(campaignId) === String(chosen)) {
+            actionsDiv.appendChild(clearBtn);
+          }
+          actionsCell.appendChild(actionsDiv);
+          
+          tr.appendChild(nameCell);
+          tr.appendChild(idCell);
+          tr.appendChild(statusCell);
+          tr.appendChild(actionsCell);
+          tbody.appendChild(tr);
+        });
       }
 
       function renderTable(elId, list, typeKey) {
@@ -795,56 +1046,7 @@
         };
       })();
 
-      (function setupPromoDefaults() {
-        const saveBtn = document.getElementById('promoSaveBtn');
-        const clearBtn = document.getElementById('promoClearBtn');
-        const inputEl = document.getElementById('promoCampaignIdInput');
-        if (!saveBtn || !clearBtn || !inputEl) return;
-
-        saveBtn.onclick = async () => {
-          const value = (inputEl.value || '').trim();
-          try {
-            const body = { promoCampaignId: value || null };
-            const r = await authClient.authFetch(
-              '/.netlify/functions/ebay-set-policy-defaults',
-              {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body),
-              }
-            );
-            const j = await r.json().catch(() => ({}));
-            if (j && j.defaults) Object.assign(defaults, j.defaults);
-            else defaults.promoCampaignId = value || null;
-            renderPromoDefaults();
-            showMsg('✓ Default campaign updated', 'success');
-          } catch (e) {
-            showMsg('Failed to update default campaign: ' + (e?.message || e), 'error');
-          }
-        };
-
-        clearBtn.onclick = async () => {
-          inputEl.value = '';
-          try {
-            const body = { promoCampaignId: null };
-            const r = await authClient.authFetch(
-              '/.netlify/functions/ebay-set-policy-defaults',
-              {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body),
-              }
-            );
-            const j = await r.json().catch(() => ({}));
-            if (j && j.defaults) Object.assign(defaults, j.defaults);
-            else defaults.promoCampaignId = null;
-            renderPromoDefaults();
-            showMsg('✓ Default campaign cleared', 'success');
-          } catch (e) {
-            showMsg('Failed to clear default campaign: ' + (e?.message || e), 'error');
-          }
-        };
-      })();
+      // Promo defaults now handled by table buttons in loadPromotionsSection()
 
 
       async function populate() {
@@ -867,6 +1069,7 @@
           document.getElementById('pStatus').textContent = p.length ? `${p.length} ${p.length === 1 ? 'policy' : 'policies'}` : 'No policies';
           document.getElementById('rStatus').textContent = rr.length ? `${rr.length} ${rr.length === 1 ? 'policy' : 'policies'}` : 'No policies';
           renderPromoDefaults();
+          await loadPromotionsSection();
         } catch (e) { 
           console.error('[Policies] Error:', e);
           showMsg('Error loading policies: ' + (e?.message || e), 'error'); 
