@@ -823,20 +823,16 @@ export async function promoteSingleListing(
   
   console.log(`[promoteSingleListing] Found ${offers.length} offers for SKU ${inventoryReferenceId}`);
   if (offers.length > 0) {
-    console.log(`[promoteSingleListing] First offer:`, {
-      offerId: offers[0].offerId,
-      listingId: offers[0].listingId,
-      status: offers[0].status,
-      sku: offers[0].sku,
-    });
+    console.log(`[promoteSingleListing] Full offer object:`, JSON.stringify(offers[0], null, 2));
   }
   
   if (offers.length === 0) {
     throw new Error(`No published offer found for SKU ${inventoryReferenceId}. Publish the listing first.`);
   }
-  
-  // Use listingId if available, otherwise fall back to offerId
-  const listingId = offers[0].listingId || offers[0].offerId;
+
+  // The offer object contains listing details - check for listing.listingId
+  const offer = offers[0];
+  const listingId = offer.listing?.listingId || offer.offerId;
   console.log(`[promoteSingleListing] Using listing ID: ${listingId} for SKU ${inventoryReferenceId}`);
 
   // 4c) Build AdCreateRequest (marketing-types.ts)
