@@ -140,7 +140,7 @@ export const handler: Handler = async (event) => {
   }
 
   // Load per-user policy defaults (if any)
-  let userPolicyDefaults: { fulfillment?: string; payment?: string; return?: string } = {};
+  let userPolicyDefaults: { fulfillment?: string; payment?: string; return?: string; promoCampaignId?: string | null } = {};
   try {
     const store = tokensStore();
     const saved = (await store.get(userScopedKey(user.userId, "policy-defaults.json"), { type: "json" })) as any;
@@ -149,6 +149,7 @@ export const handler: Handler = async (event) => {
         fulfillment: typeof saved.fulfillment === "string" ? saved.fulfillment : undefined,
         payment: typeof saved.payment === "string" ? saved.payment : undefined,
         return: typeof saved.return === "string" ? saved.return : undefined,
+        promoCampaignId: typeof saved.promoCampaignId === "string" ? saved.promoCampaignId : null,
       };
     }
   } catch {

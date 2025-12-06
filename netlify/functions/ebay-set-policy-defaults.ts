@@ -13,6 +13,7 @@ export const handler: Handler = async (event) => {
 		const fulfillment = body.fulfillment as string | undefined;
 		const payment = body.payment as string | undefined;
 		const ret = body.return as string | undefined;
+		const promoCampaignId = body.promoCampaignId as string | undefined;
 
 		const store = tokensStore();
 		const key = userScopedKey(sub, 'policy-defaults.json');
@@ -22,6 +23,7 @@ export const handler: Handler = async (event) => {
 		if (fulfillment != null) prefs.fulfillment = String(fulfillment || '').trim() || undefined;
 		if (payment != null) prefs.payment = String(payment || '').trim() || undefined;
 		if (ret != null) prefs.return = String(ret || '').trim() || undefined;
+		if (promoCampaignId !== undefined) prefs.promoCampaignId = promoCampaignId ? String(promoCampaignId).trim() : null;
 		// Clean undefined keys
 		Object.keys(prefs).forEach((k) => { if (prefs[k] == null || prefs[k] === '') delete prefs[k]; });
 		await store.set(key, JSON.stringify(prefs));
