@@ -490,11 +490,20 @@
       const readyList = $('readyList');
       const needsList = $('needsList');
       const flash = $('flash');
+      const readySection = $('readySection');
+      const needsSection = $('needsAttention');
 
       const fmtPrice = (v, c) =>
         v != null && c
           ? new Intl.NumberFormat(undefined, { style: 'currency', currency: c }).format(Number(v))
           : '';
+
+      function updateSectionVisibility() {
+        const hasReadyCards = !!readyList.querySelector('.card');
+        const hasNeedsCards = !!needsList.querySelector('.card');
+        if (readySection) readySection.style.display = hasReadyCards ? 'block' : 'none';
+        if (needsSection) needsSection.style.display = hasNeedsCards ? 'block' : 'none';
+      }
 
       function card(offer) {
         const el = document.createElement('div');
@@ -605,6 +614,7 @@
               sessionStorage.removeItem('drafts-cache-time');
               el.remove();
               flash.textContent = `Published ${offer.offerId}`;
+              updateSectionVisibility();
               return;
             }
             if (r.ok && data.ok && data.deleted) {
@@ -612,6 +622,7 @@
               sessionStorage.removeItem('drafts-cache-time');
               el.remove();
               flash.textContent = `Draft ${offer.offerId} had errors and was deleted.`;
+              updateSectionVisibility();
               return;
             }
             // Improve error details: surface common onboarding/privilege errors with a direct link
@@ -672,6 +683,7 @@
               sessionStorage.removeItem('drafts-cache-time');
               el.remove();
               flash.textContent = `Deleted ${offer.offerId}`;
+              updateSectionVisibility();
             } else {
               flash.textContent = `Delete error: ${data.error || ''}`;
               pub.disabled = del.disabled = false;
