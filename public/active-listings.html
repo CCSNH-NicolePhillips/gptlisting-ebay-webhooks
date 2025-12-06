@@ -205,7 +205,20 @@
       try {
         const res = await exec('/.netlify/functions/ebay-list-active');
         const text = await res.text();
-        const data = text ? JSON.parse(text) : {};
+
+        // Handle auth errors and plain-text responses safely
+        if (res.status === 401) {
+          flash.textContent = 'Unauthorized – please sign in and ensure your eBay account is connected.';
+          return;
+        }
+
+        let data: any = {};
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch {
+          flash.textContent = text || `Error ${res.status}`;
+          return;
+        }
 
         if (!res.ok || !data.ok) {
           flash.textContent = data?.error || `Error ${res.status}`;
