@@ -59,9 +59,9 @@ export async function maybeAutoPromoteDraftListing(
     console.log(`[autoPromote] Auto-promotion enabled for SKU ${sku}${offerId ? `, offerId ${offerId}` : ''}`);
     
     // 1) Determine ad rate: draft override, then defaults, then fallback
-    let adRate = autoPromoteAdRate;
+    let adRate: number = autoPromoteAdRate || 5; // Start with draft override or fallback
     
-    if (!adRate) {
+    if (!autoPromoteAdRate) {
       // Load promotion defaults to get default ad rate
       const store = tokensStore();
       const policyDefaultsKey = userScopedKey(userId, 'policy-defaults.json');
