@@ -436,49 +436,28 @@
             <div class="policy-header">
               <div>
                 <h3>Promoted Listings (Advertising)</h3>
-                <div class="policy-count" id="promoStatus">
-                  Default campaign: not configured
-                </div>
+                <div class="policy-count" id="promoStatus">Loading...</div>
               </div>
-              <a href="https://www.ebay.com/sh/ebaypromotedlistings/campaigns"
-                 target="_blank"
-                 class="dp-btn dp-btn-secondary">
+              <a href="https://www.ebay.com/sh/mkt/campaigns" target="_blank" class="dp-btn dp-btn-secondary">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px; margin-right: 0.25rem;">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                  <polyline points="15 3 21 3 21 9"></polyline>
+                  <line x1="10" y1="14" x2="21" y2="3"></line>
+                </svg>
                 View campaigns in eBay
               </a>
             </div>
-            <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:center;">
-              <div style="flex:1 1 260px; min-width:240px;">
-                <label style="font-size:0.85rem; color:var(--text-muted); display:block; margin-bottom:0.25rem;">
-                  Default campaign ID
-                </label>
-                <input
-                  id="promoCampaignIdInput"
-                  type="text"
-                  placeholder="Paste your eBay campaign ID (e.g. 1234567890)"
-                  style="
-                    width:100%;
-                    background:var(--bg-subtle);
-                    border:1px solid var(--border-subtle);
-                    border-radius:8px;
-                    padding:0.55rem 0.6rem;
-                    color:var(--text-primary);
-                    font-size:0.9rem;
-                  "
-                />
-              </div>
-              <div style="display:flex; gap:0.5rem; align-items:center;">
-                <button type="button" class="dp-btn dp-btn-primary" id="promoSaveBtn">
-                  Save default
-                </button>
-                <button type="button" class="dp-btn dp-btn-secondary" id="promoClearBtn">
-                  Clear
-                </button>
-              </div>
-            </div>
-            <p style="margin-top:0.5rem; font-size:0.8rem; color:var(--text-muted);">
-              This campaign will be used when promoting your drafts from DraftPilot unless a specific
-              campaign is supplied. You can change it at any time.
-            </p>
+            <table class="policy-table" id="promoTable">
+              <thead>
+                <tr>
+                  <th>Campaign Name</th>
+                  <th>Campaign ID</th>
+                  <th>Status</th>
+                  <th style="text-align: right;">Actions</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
           </div>
           
           <!-- Inspector Panel -->
@@ -567,9 +546,7 @@
         if (!statusEl) return;
 
         const id = defaults.promoCampaignId || '';
-        statusEl.textContent = id
-          ? `Default campaign: ${id}`
-          : 'Default campaign: not configured';
+        statusEl.textContent = id ? `Default: ${id}` : 'No default configured';
       }
 
       async function loadPromotionsSection() {
