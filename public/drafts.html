@@ -1242,24 +1242,56 @@
             return;
           }
           
-          // Collect SKUs from published offers
-          const skus = publishedOffers
+          // Get currently promoted items to filter them out
+          flash.textContent = 'Checking promotion status...';
+          const exec = (window.authClient && typeof window.authClient.authFetch === 'function') 
+            ? window.authClient.authFetch 
+            : fetch;
+          
+          let promotedSkus = new Set();
+          try {
+            const promoteCheckRes = await exec('/.netlify/functions/ebay-get-promoted-listings');
+            if (promoteCheckRes.ok) {
+              const promoteData = await promoteCheckRes.json();
+              // Add all promoted SKUs to the set
+              if (promoteData.ads && Array.isArray(promoteData.ads)) {
+                promoteData.ads.forEach(ad => {
+                  if (ad.inventoryReferenceId) {
+                    promotedSkus.add(ad.inventoryReferenceId);
+                  }
+                });
+              }
+            }
+          } catch (e) {
+            console.log('[Promote Now] Could not check promoted listings, will attempt all');
+          }
+          
+          // Collect SKUs from published offers, excluding already promoted ones
+          const allPublishedSkus = publishedOffers
             .map(o => o.sku)
             .filter(sku => sku && typeof sku === 'string');
           
+          const skus = allPublishedSkus.filter(sku => !promotedSkus.has(sku));
+          const alreadyPromoted = allPublishedSkus.length - skus.length;
+          
           if (!skus.length) {
-            flash.textContent = 'No valid SKUs found in published listings';
+            if (alreadyPromoted > 0) {
+              flash.textContent = `All ${alreadyPromoted} published listing(s) are already promoted`;
+            } else {
+              flash.textContent = 'No valid SKUs found in published listings';
+            }
             return;
           }
           
-          flash.textContent = `Promoting ${skus.length} published listing(s)...`;
+          let statusMsg = `Promoting ${skus.length} listing(s)...`;
+          if (alreadyPromoted > 0) {
+            statusMsg += ` (${alreadyPromoted} already promoted, skipped)`;
+          }
+          flash.textContent = statusMsg;
           
           // Get default ad rate from policy defaults
           let adRate = 5; // Default fallback
           try {
-            const exec = (window.authClient && typeof window.authClient.authFetch === 'function') 
-              ? window.authClient.authFetch 
-              : fetch;
             const policyRes = await exec('/.netlify/functions/ebay-get-policy-defaults');
             if (policyRes.ok) {
               const policyData = await policyRes.json();
@@ -1297,6 +1329,9 @@
           const failed = total - promoted;
           
           let message = `✓ Promoted ${promoted} listing(s)`;
+          if (alreadyPromoted > 0) {
+            message += `. ${alreadyPromoted} already promoted (skipped)`;
+          }
           if (failed > 0) {
             message += `. ${failed} failed`;
             if (result.failures && result.failures.length > 0) {
