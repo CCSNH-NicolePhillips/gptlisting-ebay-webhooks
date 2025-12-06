@@ -224,8 +224,10 @@ export const handler: Handler = async (event) => {
 					
 					// Call promotion adapter (non-blocking)
 					try {
-						const tokenCache = new Map<string, string>();
-						tokenCache.set(sub!, access_token);
+						const tokenCache: any = {
+							get: async (userId: string) => access_token,
+							set: async (userId: string, token: string, expiresIn: number) => {},
+						};
 						
 						const promoStatus = await promoteSingleListing({
 							tokenCache,
@@ -236,17 +238,17 @@ export const handler: Handler = async (event) => {
 						});
 						
 						console.log(`[ebay-publish-offer] Promotion result for SKU ${offer.sku}:`, {
-							success: promoStatus.success,
+							enabled: promoStatus.enabled,
 							campaignId: promoStatus.campaignId,
 							adId: promoStatus.adId,
-							listingId: promoStatus.listingId,
+							adRate: promoStatus.adRate,
 						});
 						
 						promotionResult = {
-							success: true,
+							success: promoStatus.enabled,
 							sku: offer.sku,
-							campaignId: promoStatus.campaignId,
-							adId: promoStatus.adId,
+							campaignId: promoStatus.campaignId || '',
+							adId: promoStatus.adId || '',
 							adRate: adRate,
 						};
 					} catch (promoErr: any) {
