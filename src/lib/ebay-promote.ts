@@ -782,7 +782,25 @@ export async function promoteSingleListing(
 
   // 4b.5) Get the offer ID (listingId) for this SKU
   // eBay Marketing API requires listingId, not inventoryReferenceId
-  const offersUrl = `${ctx.apiHost}/sell/inventory/v1/offer?sku=${encodeURIComponent(inventoryReferenceId)}`;
+  // We need to get the inventory item which contains the offer information
+  const inventoryUrl = `${ctx.apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(inventoryReferenceId)}`;
+  const inventoryResp = await fetch(inventoryUrl, {
+    headers: {
+      'Authorization': `Bearer ${ctx.accessToken}`,
+      'Content-Type': 'application/json',
+    },
+  });
+  
+  if (!inventoryResp.ok) {
+    const errorText = await inventoryResp.text();
+    throw new Error(`Failed to fetch inventory item ${inventoryReferenceId}: ${inventoryResp.status} ${errorText}`);
+  }
+  
+  const inventoryData = await inventoryResp.json();
+  
+  // The inventory item doesn't directly contain offers, we need to query offers by SKU
+  // Use the offers endpoint with SKU filter
+  const offersUrl = `${ctx.apiHost}/sell/inventory/v1/offer?sku=${encodeURIComponent(inventoryReferenceId)}&limit=1`;
   const offersResp = await fetch(offersUrl, {
     headers: {
       'Authorization': `Bearer ${ctx.accessToken}`,
@@ -791,7 +809,8 @@ export async function promoteSingleListing(
   });
   
   if (!offersResp.ok) {
-    throw new Error(`Failed to fetch offer for SKU ${inventoryReferenceId}: ${offersResp.status}`);
+    const errorText = await offersResp.text();
+    throw new Error(`Failed to fetch offers for SKU ${inventoryReferenceId}: ${offersResp.status} ${errorText}`);
   }
   
   const offersData = await offersResp.json();
