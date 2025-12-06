@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Drafts Î“Ã‡Ã´ DraftPilot</title>
+  <title>Drafts ÃŽâ€œÃƒâ€¡ÃƒÂ´ DraftPilot</title>
     <link rel="stylesheet" href="/draftpilot.css">
     <style>
       /* Drafts page specific styles */
@@ -399,7 +399,7 @@
               </svg>
               Refresh
             </button>
-            <a href="/index.html" class="dp-btn dp-btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem;">Î“Ã¥Ã‰ Back to Dashboard</a>
+            <a href="/index.html" class="dp-btn dp-btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem;">ÃŽâ€œÃƒÂ¥Ãƒâ€° Back to Dashboard</a>
             <button id="btnClean" class="dp-btn dp-btn-danger" title="Delete ALL UNPUBLISHED drafts" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
               Delete all drafts
             </button>
@@ -414,12 +414,12 @@
       </div>
       
       <div id="needsAttention" style="display: none; margin-bottom: 2rem;">
-        <h2 style="font-size: 1.25rem; margin: 1.5rem 0 1rem; color: var(--warning);">Î“ÃœÃ¡âˆ©â••Ã… Needs Attention <span id="needsCount" style="font-size: 0.875rem; color: var(--text-muted);"></span></h2>
+        <h2 style="font-size: 1.25rem; margin: 1.5rem 0 1rem; color: var(--warning);">ÃŽâ€œÃƒÅ“ÃƒÂ¡Ã¢Ë†Â©Ã¢â€¢â€¢Ãƒâ€¦ Needs Attention <span id="needsCount" style="font-size: 0.875rem; color: var(--text-muted);"></span></h2>
         <div id="needsList" class="grid" aria-live="polite"></div>
       </div>
       
       <div id="readySection" style="display: none;">
-        <h2 style="font-size: 1.25rem; margin: 1.5rem 0 1rem; color: var(--success);">Î“Â£Ã´ Ready to Publish <span id="readyCount" style="font-size: 0.875rem; color: var(--text-muted);"></span></h2>
+        <h2 style="font-size: 1.25rem; margin: 1.5rem 0 1rem; color: var(--success);">ÃŽâ€œÃ‚Â£ÃƒÂ´ Ready to Publish <span id="readyCount" style="font-size: 0.875rem; color: var(--text-muted);"></span></h2>
         <div id="readyList" class="grid" aria-live="polite"></div>
       </div>
     </main>
@@ -472,7 +472,7 @@
         const title = document.createElement('div');
         title.className = 'title';
   // Use enriched title from backend if available, otherwise show SKU temporarily
-  title.textContent = offer?._enrichedTitle || offer?.title || offer?.sku || '(loading titleÎ“Ã‡Âª)';
+  title.textContent = offer?._enrichedTitle || offer?.title || offer?.sku || '(loading titleÃŽâ€œÃƒâ€¡Ã‚Âª)';
   const desc = document.createElement('div');
   desc.className = 'desc';
   const descSrc = (offer.listingDescription || '').replace(/\s+/g, ' ').trim();
@@ -492,10 +492,10 @@
           offer.sku ? `SKU: ${offer.sku}` : null,
           offer.categoryId ? `Cat: ${offer.categoryId}` : null,
           offer.availableQuantity != null ? `Qty: ${offer.availableQuantity}` : null,
-          priceStr ? `Price: ${priceStr}` : (needsReview ? 'Price: Î“ÃœÃ¡âˆ©â••Ã… Needs Review' : null),
+          priceStr ? `Price: ${priceStr}` : (needsReview ? 'Price: ÃŽâ€œÃƒÅ“ÃƒÂ¡Ã¢Ë†Â©Ã¢â€¢â€¢Ãƒâ€¦ Needs Review' : null),
         ]
           .filter(Boolean)
-          .join(' Î“Ã‡Ã³ ');
+          .join(' ÃŽâ€œÃƒâ€¡ÃƒÂ³ ');
   const badge = document.createElement('div');
   badge.className = 'badge';
   const st = String(offer?.status || 'UNPUBLISHED');
@@ -526,7 +526,7 @@
         pub.onclick = async () => {
           pub.disabled = true;
           del.disabled = true;
-          flash.textContent = 'PublishingÎ“Ã‡Âª';
+          flash.textContent = 'PublishingÃŽâ€œÃƒâ€¡Ã‚Âª';
           
           // Store for debugging
           lastPublishAttempt = {
@@ -593,7 +593,7 @@
                   typeof data?.publish?.detail === 'string'
                     ? data.publish.detail
                     : data?.publish?.detail?.message || JSON.stringify(data?.publish?.detail || data);
-                flash.textContent = `Publish error: ${data.error || ''}${detail ? ' Î“Ã‡Ã¶ ' + detail : ''}`;
+                flash.textContent = `Publish error: ${data.error || ''}${detail ? ' ÃŽâ€œÃƒâ€¡ÃƒÂ¶ ' + detail : ''}`;
               }
             } catch {
               flash.textContent = `Publish error: ${data.error || ''}`;
@@ -608,7 +608,7 @@
           if (!confirm('Delete this draft?')) return;
           pub.disabled = true;
           del.disabled = true;
-          flash.textContent = 'DeletingÎ“Ã‡Âª';
+          flash.textContent = 'DeletingÃŽâ€œÃƒâ€¡Ã‚Âª';
           try {
             const exec = (window.authClient && typeof window.authClient.authFetch === 'function') ? window.authClient.authFetch : fetch;
             const r = await exec(
@@ -662,7 +662,7 @@
         
         const promoLabel = document.createElement('label');
         promoLabel.htmlFor = `promo-${offer.offerId}`;
-        promoLabel.textContent = 'ðŸš€ Promote when listed';
+        promoLabel.textContent = 'Ã°Å¸Å¡â‚¬ Promote when listed';
         
         promoToggleDiv.appendChild(promoCheckbox);
         promoToggleDiv.appendChild(promoLabel);
@@ -720,8 +720,8 @@
             const data = await response.json();
             
             if (response.ok && data.ok) {
-              flash.textContent = `âœ“ Promotion settings saved for ${offer.offerId}`;
-              promoSaveBtn.textContent = 'Saved âœ“';
+              flash.textContent = `Ã¢Å“â€œ Promotion settings saved for ${offer.offerId}`;
+              promoSaveBtn.textContent = 'Saved Ã¢Å“â€œ';
               
               // Update local offer data
               if (!offer.merchantData) offer.merchantData = {};
@@ -782,7 +782,7 @@
         const loader = document.createElement('div');
         loader.className = 'loading';
         loader.innerHTML =
-          '<div class="spinner" role="status" aria-label="Loading"></div><div class="label">Loading draftsÎ“Ã‡Âª</div>';
+          '<div class="spinner" role="status" aria-label="Loading"></div><div class="label">Loading draftsÃŽâ€œÃƒâ€¡Ã‚Âª</div>';
         readyList.appendChild(loader.cloneNode(true));
         needsList.appendChild(loader);
         
@@ -879,7 +879,7 @@
             ? JSON.stringify(e.response).slice(0, 500)
             : e?.message || String(e);
           wrap.innerHTML = `
-            <div style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;">Î“ÃœÃ¡âˆ©â••Ã…</div>
+            <div style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;">ÃŽâ€œÃƒÅ“ÃƒÂ¡Ã¢Ë†Â©Ã¢â€¢â€¢Ãƒâ€¦</div>
             <div style="font-size: 1.25rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;">Failed to load drafts</div>
             <div style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1.5rem;">${escapeHtml(msg)}</div>
             <button class="dp-btn dp-btn-secondary" id="retryBtn">Retry</button>
@@ -975,7 +975,7 @@
                 n._sk?.remove?.();
               }
             } else {
-              // No image found Î“Ã‡Ã´ clear skeleton and leave a subtle placeholder
+              // No image found ÃŽâ€œÃƒâ€¡ÃƒÂ´ clear skeleton and leave a subtle placeholder
               if (n._sk) n._sk.remove();
             }
           });
@@ -1061,7 +1061,7 @@
         const maxAttempts = 10; // Safety limit
         
         try {
-          flash.textContent = 'Deleting draftsÎ“Ã‡Âª';
+          flash.textContent = 'Deleting draftsÃŽâ€œÃƒâ€¡Ã‚Âª';
           
           // Loop until no more deletions (handles partial batches due to timeout)
           while (attempts < maxAttempts) {
@@ -1094,7 +1094,7 @@
               
               // Check for eBay token errors
               if (errorMsg.includes('invalid_grant') || errorMsg.includes('token refresh failed')) {
-                flash.textContent = 'Î“ÃœÃ¡âˆ©â••Ã… eBay token expired - please reconnect eBay on the Connections page';
+                flash.textContent = 'ÃŽâ€œÃƒÅ“ÃƒÂ¡Ã¢Ë†Â©Ã¢â€¢â€¢Ãƒâ€¦ eBay token expired - please reconnect eBay on the Connections page';
                 console.error('[Delete All] eBay token expired:', j);
               } else {
                 flash.textContent = `Delete failed: ${errorMsg}`;
@@ -1111,12 +1111,12 @@
               queryParams = '?deleteAll=true&deleteInventory=true&skipFastScan=true';
             }
             
-            flash.textContent = `Deleted ${totalDeleted} drafts so farÎ“Ã‡Âª`;
+            flash.textContent = `Deleted ${totalDeleted} drafts so farÃŽâ€œÃƒâ€¡Ã‚Âª`;
             
             // Check if there are more to delete
             if (!j.summary?.hasMore && !j.timedOut) {
               // All done - show no drafts message without reloading
-              flash.textContent = `Î“Â£Ã´ Deleted ${totalDeleted} drafts total`;
+              flash.textContent = `ÃŽâ€œÃ‚Â£ÃƒÂ´ Deleted ${totalDeleted} drafts total`;
               const readyList = document.getElementById('readyList');
               const needsList = document.getElementById('needsList');
               if (readyList) readyList.innerHTML =
