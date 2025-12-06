@@ -1,9 +1,9 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Drafts – DraftPilot</title>
+  <title>Drafts ΓÇô DraftPilot</title>
     <link rel="stylesheet" href="/draftpilot.css">
     <style>
       /* Drafts page specific styles */
@@ -235,77 +235,6 @@
         justify-content: space-between;
         margin: 0.25rem 0 1rem;
       }
-      
-      /* Promotion controls */
-      .promo-controls {
-        display: flex;
-        flex-direction: column;
-        gap: 0.4rem;
-        padding: 0.6rem;
-        background: rgba(99, 102, 241, 0.08);
-        border: 1px solid rgba(99, 102, 241, 0.2);
-        border-radius: 8px;
-        margin-top: 0.6rem;
-        font-size: 0.8rem;
-      }
-      .promo-toggle {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        cursor: pointer;
-        user-select: none;
-      }
-      .promo-toggle input[type="checkbox"] {
-        width: 16px;
-        height: 16px;
-        cursor: pointer;
-      }
-      .promo-toggle label {
-        cursor: pointer;
-        color: #cbd5ff;
-        font-weight: 500;
-      }
-      .promo-rate {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-      }
-      .promo-rate label {
-        color: var(--muted);
-        font-size: 0.75rem;
-      }
-      .promo-rate input[type="number"] {
-        width: 60px;
-        padding: 0.3rem 0.4rem;
-        background: rgba(0, 0, 0, 0.3);
-        border: 1px solid var(--line);
-        border-radius: 6px;
-        color: #fff;
-        font-size: 0.8rem;
-      }
-      .promo-rate span {
-        color: var(--muted);
-        font-size: 0.75rem;
-      }
-      .promo-save {
-        padding: 0.35rem 0.6rem;
-        background: rgba(99, 102, 241, 0.2);
-        border: 1px solid rgba(99, 102, 241, 0.4);
-        color: #cbd5ff;
-        border-radius: 6px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.15s ease;
-      }
-      .promo-save:hover {
-        background: rgba(99, 102, 241, 0.3);
-        border-color: rgba(99, 102, 241, 0.6);
-      }
-      .promo-save:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-      }
     </style>
   </head>
   <body>
@@ -454,14 +383,6 @@
           
           <!-- Right: Actions -->
           <div class="dp-topbar-right" style="display: flex !important; gap: 0.75rem;">
-            <button id="btnPromoteNow" class="dp-btn dp-btn-primary" title="Promote all published drafts" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 0.35rem;">
-                <circle cx="12" cy="12" r="10"></circle>
-                <polyline points="16 12 12 8 8 12"></polyline>
-                <line x1="12" y1="8" x2="12" y2="16"></line>
-              </svg>
-              Promote Now
-            </button>
             <button id="btnRefresh" class="dp-btn dp-btn-secondary" title="Reload drafts" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 0.35rem;">
                 <polyline points="23 4 23 10 17 10"></polyline>
@@ -470,7 +391,7 @@
               </svg>
               Refresh
             </button>
-            <a href="/index.html" class="dp-btn dp-btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem;">← Back to Dashboard</a>
+            <a href="/index.html" class="dp-btn dp-btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem;">ΓåÉ Back to Dashboard</a>
             <button id="btnClean" class="dp-btn dp-btn-danger" title="Delete ALL UNPUBLISHED drafts" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
               Delete all drafts
             </button>
@@ -485,12 +406,12 @@
       </div>
       
       <div id="needsAttention" style="display: none; margin-bottom: 2rem;">
-        <h2 style="font-size: 1.25rem; margin: 1.5rem 0 1rem; color: var(--warning);">⚠️ Needs Attention <span id="needsCount" style="font-size: 0.875rem; color: var(--text-muted);"></span></h2>
+        <h2 style="font-size: 1.25rem; margin: 1.5rem 0 1rem; color: var(--warning);">ΓÜá∩╕Å Needs Attention <span id="needsCount" style="font-size: 0.875rem; color: var(--text-muted);"></span></h2>
         <div id="needsList" class="grid" aria-live="polite"></div>
       </div>
       
       <div id="readySection" style="display: none;">
-        <h2 style="font-size: 1.25rem; margin: 1.5rem 0 1rem; color: var(--success);">✓ Ready to Publish <span id="readyCount" style="font-size: 0.875rem; color: var(--text-muted);"></span></h2>
+        <h2 style="font-size: 1.25rem; margin: 1.5rem 0 1rem; color: var(--success);">Γ£ô Ready to Publish <span id="readyCount" style="font-size: 0.875rem; color: var(--text-muted);"></span></h2>
         <div id="readyList" class="grid" aria-live="polite"></div>
       </div>
     </main>
@@ -543,7 +464,7 @@
         const title = document.createElement('div');
         title.className = 'title';
   // Use enriched title from backend if available, otherwise show SKU temporarily
-  title.textContent = offer?._enrichedTitle || offer?.title || offer?.sku || '(loading title…)';
+  title.textContent = offer?._enrichedTitle || offer?.title || offer?.sku || '(loading titleΓÇª)';
   const desc = document.createElement('div');
   desc.className = 'desc';
   const descSrc = (offer.listingDescription || '').replace(/\s+/g, ' ').trim();
@@ -563,10 +484,10 @@
           offer.sku ? `SKU: ${offer.sku}` : null,
           offer.categoryId ? `Cat: ${offer.categoryId}` : null,
           offer.availableQuantity != null ? `Qty: ${offer.availableQuantity}` : null,
-          priceStr ? `Price: ${priceStr}` : (needsReview ? 'Price: ⚠️ Needs Review' : null),
+          priceStr ? `Price: ${priceStr}` : (needsReview ? 'Price: ΓÜá∩╕Å Needs Review' : null),
         ]
           .filter(Boolean)
-          .join(' • ');
+          .join(' ΓÇó ');
   const badge = document.createElement('div');
   badge.className = 'badge';
   const st = String(offer?.status || 'UNPUBLISHED');
@@ -597,7 +518,7 @@
         pub.onclick = async () => {
           pub.disabled = true;
           del.disabled = true;
-          flash.textContent = 'Publishing…';
+          flash.textContent = 'PublishingΓÇª';
           
           // Store for debugging
           lastPublishAttempt = {
@@ -664,7 +585,7 @@
                   typeof data?.publish?.detail === 'string'
                     ? data.publish.detail
                     : data?.publish?.detail?.message || JSON.stringify(data?.publish?.detail || data);
-                flash.textContent = `Publish error: ${data.error || ''}${detail ? ' — ' + detail : ''}`;
+                flash.textContent = `Publish error: ${data.error || ''}${detail ? ' ΓÇö ' + detail : ''}`;
               }
             } catch {
               flash.textContent = `Publish error: ${data.error || ''}`;
@@ -679,7 +600,7 @@
           if (!confirm('Delete this draft?')) return;
           pub.disabled = true;
           del.disabled = true;
-          flash.textContent = 'Deleting…';
+          flash.textContent = 'DeletingΓÇª';
           try {
             const exec = (window.authClient && typeof window.authClient.authFetch === 'function') ? window.authClient.authFetch : fetch;
             const r = await exec(
@@ -718,117 +639,10 @@
         }
         row.appendChild(edit);
         row.appendChild(del);
-        
-        // Promotion controls
-        const promoControls = document.createElement('div');
-        promoControls.className = 'promo-controls';
-        
-        const promoToggleDiv = document.createElement('div');
-        promoToggleDiv.className = 'promo-toggle';
-        
-        const promoCheckbox = document.createElement('input');
-        promoCheckbox.type = 'checkbox';
-        promoCheckbox.id = `promo-${offer.offerId}`;
-        promoCheckbox.checked = offer.merchantData?.autoPromote || false;
-        
-        const promoLabel = document.createElement('label');
-        promoLabel.htmlFor = `promo-${offer.offerId}`;
-        promoLabel.textContent = '🚀 Promote when listed';
-        
-        promoToggleDiv.appendChild(promoCheckbox);
-        promoToggleDiv.appendChild(promoLabel);
-        
-        const promoRateDiv = document.createElement('div');
-        promoRateDiv.className = 'promo-rate';
-        promoRateDiv.style.display = promoCheckbox.checked ? 'flex' : 'none';
-        
-        const rateLabel = document.createElement('label');
-        rateLabel.textContent = 'Ad rate:';
-        
-        const rateInput = document.createElement('input');
-        rateInput.type = 'number';
-        rateInput.min = '1';
-        rateInput.max = '20';
-        rateInput.step = '0.1';
-        rateInput.value = String(offer.merchantData?.autoPromoteAdRate || 5);
-        
-        const ratePercent = document.createElement('span');
-        ratePercent.textContent = '%';
-        
-        promoRateDiv.appendChild(rateLabel);
-        promoRateDiv.appendChild(rateInput);
-        promoRateDiv.appendChild(ratePercent);
-        
-        const promoSaveBtn = document.createElement('button');
-        promoSaveBtn.className = 'promo-save';
-        promoSaveBtn.textContent = 'Save Promo Settings';
-        
-        // Toggle rate input visibility
-        promoCheckbox.addEventListener('change', () => {
-          promoRateDiv.style.display = promoCheckbox.checked ? 'flex' : 'none';
-        });
-        
-        // Save promotion settings
-        promoSaveBtn.addEventListener('click', async () => {
-          promoSaveBtn.disabled = true;
-          promoSaveBtn.textContent = 'Saving...';
-          
-          try {
-            const exec = (window.authClient && typeof window.authClient.authFetch === 'function') 
-              ? window.authClient.authFetch 
-              : fetch;
-            
-            const response = await exec('/.netlify/functions/ebay-update-draft-promo', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                offerId: offer.offerId,
-                autoPromote: promoCheckbox.checked,
-                autoPromoteAdRate: parseFloat(rateInput.value) || 5,
-              }),
-            });
-            
-            const data = await response.json();
-            
-            if (response.ok && data.ok) {
-              flash.textContent = `✓ Promotion settings saved for ${offer.offerId}`;
-              promoSaveBtn.textContent = 'Saved ✓';
-              
-              // Update local offer data
-              if (!offer.merchantData) offer.merchantData = {};
-              offer.merchantData.autoPromote = data.autoPromote;
-              offer.merchantData.autoPromoteAdRate = data.autoPromoteAdRate;
-              
-              // Clear cache to reflect changes on reload
-              sessionStorage.removeItem('drafts-cache');
-              sessionStorage.removeItem('drafts-cache-time');
-              
-              setTimeout(() => {
-                promoSaveBtn.textContent = 'Save Promo Settings';
-              }, 2000);
-            } else {
-              flash.textContent = `Promo save error: ${data.error || 'Unknown error'}`;
-              promoSaveBtn.textContent = 'Save Promo Settings';
-            }
-          } catch (e) {
-            flash.textContent = `Promo save error: ${e.message}`;
-            promoSaveBtn.textContent = 'Save Promo Settings';
-          } finally {
-            promoSaveBtn.disabled = false;
-          }
-        });
-        
-        // Build card body in correct order
         body.appendChild(title);
-        if (desc.textContent) body.appendChild(desc);
-        body.appendChild(meta);
+  if (desc.textContent) body.appendChild(desc);
+  body.appendChild(meta);
         body.appendChild(badge);
-        
-        promoControls.appendChild(promoToggleDiv);
-        promoControls.appendChild(promoRateDiv);
-        promoControls.appendChild(promoSaveBtn);
-        body.appendChild(promoControls);
-        
         body.appendChild(row);
         el.appendChild(th);
         el.appendChild(body);
@@ -855,7 +669,7 @@
         const loader = document.createElement('div');
         loader.className = 'loading';
         loader.innerHTML =
-          '<div class="spinner" role="status" aria-label="Loading"></div><div class="label">Loading drafts…</div>';
+          '<div class="spinner" role="status" aria-label="Loading"></div><div class="label">Loading draftsΓÇª</div>';
         readyList.appendChild(loader.cloneNode(true));
         needsList.appendChild(loader);
         
@@ -952,7 +766,7 @@
             ? JSON.stringify(e.response).slice(0, 500)
             : e?.message || String(e);
           wrap.innerHTML = `
-            <div style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;">⚠️</div>
+            <div style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;">ΓÜá∩╕Å</div>
             <div style="font-size: 1.25rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;">Failed to load drafts</div>
             <div style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1.5rem;">${escapeHtml(msg)}</div>
             <button class="dp-btn dp-btn-secondary" id="retryBtn">Retry</button>
@@ -1048,7 +862,7 @@
                 n._sk?.remove?.();
               }
             } else {
-              // No image found – clear skeleton and leave a subtle placeholder
+              // No image found ΓÇô clear skeleton and leave a subtle placeholder
               if (n._sk) n._sk.remove();
             }
           });
@@ -1134,7 +948,7 @@
         const maxAttempts = 10; // Safety limit
         
         try {
-          flash.textContent = 'Deleting drafts…';
+          flash.textContent = 'Deleting draftsΓÇª';
           
           // Loop until no more deletions (handles partial batches due to timeout)
           while (attempts < maxAttempts) {
@@ -1167,7 +981,7 @@
               
               // Check for eBay token errors
               if (errorMsg.includes('invalid_grant') || errorMsg.includes('token refresh failed')) {
-                flash.textContent = '⚠️ eBay token expired - please reconnect eBay on the Connections page';
+                flash.textContent = 'ΓÜá∩╕Å eBay token expired - please reconnect eBay on the Connections page';
                 console.error('[Delete All] eBay token expired:', j);
               } else {
                 flash.textContent = `Delete failed: ${errorMsg}`;
@@ -1184,12 +998,12 @@
               queryParams = '?deleteAll=true&deleteInventory=true&skipFastScan=true';
             }
             
-            flash.textContent = `Deleted ${totalDeleted} drafts so far…`;
+            flash.textContent = `Deleted ${totalDeleted} drafts so farΓÇª`;
             
             // Check if there are more to delete
             if (!j.summary?.hasMore && !j.timedOut) {
               // All done - show no drafts message without reloading
-              flash.textContent = `✓ Deleted ${totalDeleted} drafts total`;
+              flash.textContent = `Γ£ô Deleted ${totalDeleted} drafts total`;
               const readyList = document.getElementById('readyList');
               const needsList = document.getElementById('needsList');
               if (readyList) readyList.innerHTML =
@@ -1215,139 +1029,6 @@
         } catch (e) {
           flash.textContent = 'Delete error: ' + (e?.message || String(e));
           console.error('[Delete All] Exception:', e);
-        }
-      });
-      
-      // "Promote Now" button handler
-      document.getElementById('btnPromoteNow')?.addEventListener('click', async () => {
-        try {
-          flash.textContent = 'Collecting published drafts...';
-          
-          // Fetch all offers to find published ones
-          const rawSku = new URL(location.href).searchParams.get('sku') || '';
-          const skuOk = /^[A-Za-z0-9]{1,50}$/.test(rawSku);
-          const base = '/.netlify/functions/ebay-list-offers?limit=100' + (skuOk ? '&sku=' + encodeURIComponent(rawSku) : '');
-          
-          // Get PUBLISHED offers
-          let publishedOffers = [];
-          try {
-            const pubRes = await fetchJSON(base + '&status=PUBLISHED');
-            publishedOffers = Array.isArray(pubRes?.offers) ? pubRes.offers : [];
-          } catch (e) {
-            console.error('[Promote Now] Failed to fetch published offers:', e);
-            flash.textContent = 'Error fetching published listings';
-            return;
-          }
-          
-          if (!publishedOffers.length) {
-            flash.textContent = 'No published listings found to promote';
-            return;
-          }
-          
-          // Get currently promoted items to filter them out
-          flash.textContent = 'Checking promotion status...';
-          const exec = (window.authClient && typeof window.authClient.authFetch === 'function') 
-            ? window.authClient.authFetch 
-            : fetch;
-          
-          let promotedSkus = new Set();
-          try {
-            const promoteCheckRes = await exec('/.netlify/functions/ebay-get-promoted-listings');
-            if (promoteCheckRes.ok) {
-              const promoteData = await promoteCheckRes.json();
-              // Add all promoted SKUs to the set
-              if (promoteData.ads && Array.isArray(promoteData.ads)) {
-                promoteData.ads.forEach(ad => {
-                  if (ad.inventoryReferenceId) {
-                    promotedSkus.add(ad.inventoryReferenceId);
-                  }
-                });
-              }
-            }
-          } catch (e) {
-            console.log('[Promote Now] Could not check promoted listings, will attempt all');
-          }
-          
-          // Collect SKUs from published offers, excluding already promoted ones
-          const allPublishedSkus = publishedOffers
-            .map(o => o.sku)
-            .filter(sku => sku && typeof sku === 'string');
-          
-          const skus = allPublishedSkus.filter(sku => !promotedSkus.has(sku));
-          const alreadyPromoted = allPublishedSkus.length - skus.length;
-          
-          if (!skus.length) {
-            if (alreadyPromoted > 0) {
-              flash.textContent = `All ${alreadyPromoted} published listing(s) are already promoted`;
-            } else {
-              flash.textContent = 'No valid SKUs found in published listings';
-            }
-            return;
-          }
-          
-          let statusMsg = `Promoting ${skus.length} listing(s)...`;
-          if (alreadyPromoted > 0) {
-            statusMsg += ` (${alreadyPromoted} already promoted, skipped)`;
-          }
-          flash.textContent = statusMsg;
-          
-          // Get default ad rate from policy defaults
-          let adRate = 5; // Default fallback
-          try {
-            const policyRes = await exec('/.netlify/functions/ebay-get-policy-defaults');
-            if (policyRes.ok) {
-              const policyData = await policyRes.json();
-              adRate = policyData.defaultAdRate || 5;
-            }
-          } catch (e) {
-            console.log('[Promote Now] Could not get default ad rate, using 5%');
-          }
-          
-          // Call promote-drafts endpoint
-          const exec = (window.authClient && typeof window.authClient.authFetch === 'function') 
-            ? window.authClient.authFetch 
-            : fetch;
-          
-          const promoRes = await exec('/.netlify/functions/promote-drafts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              skus: skus,
-              adRate: adRate,
-            }),
-          });
-          
-          if (!promoRes.ok) {
-            const errorText = await promoRes.text();
-            flash.textContent = `Promotion failed: ${errorText}`;
-            return;
-          }
-          
-          const result = await promoRes.json();
-          
-          // Display results
-          const promoted = result.promotedCount || 0;
-          const total = result.totalCount || skus.length;
-          const failed = total - promoted;
-          
-          let message = `✓ Promoted ${promoted} listing(s)`;
-          if (alreadyPromoted > 0) {
-            message += `. ${alreadyPromoted} already promoted (skipped)`;
-          }
-          if (failed > 0) {
-            message += `. ${failed} failed`;
-            if (result.failures && result.failures.length > 0) {
-              message += ': ';
-              message += result.failures.map(f => `${f.sku} (${f.reason})`).join(', ');
-            }
-          }
-          
-          flash.textContent = message;
-          console.log('[Promote Now] Results:', result);
-          
-        } catch (e) {
-          flash.textContent = 'Promotion error: ' + (e?.message || String(e));
-          console.error('[Promote Now] Exception:', e);
         }
       });
       
