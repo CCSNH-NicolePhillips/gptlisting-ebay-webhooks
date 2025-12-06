@@ -594,7 +594,7 @@
           const nameCell = document.createElement('td');
           const nameSpan = document.createElement('span');
           nameSpan.className = 'policy-name';
-          nameSpan.textContent = c.campaignName || '(unnamed)';
+          nameSpan.textContent = c.name || '(unnamed)';
           nameCell.appendChild(nameSpan);
           
           // ID column
@@ -612,9 +612,9 @@
             badge.className = 'default-badge';
             badge.textContent = 'Default';
             statusCell.appendChild(badge);
-          } else if (c.campaignStatus) {
+          } else if (c.status) {
             const statusSpan = document.createElement('span');
-            statusSpan.textContent = c.campaignStatus;
+            statusSpan.textContent = c.status;
             statusCell.appendChild(statusSpan);
           }
           
