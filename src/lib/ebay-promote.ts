@@ -167,7 +167,28 @@ async function getOrCreateDefaultCampaignId(
     return cached.campaignId;
   }
 
-  // Try env var override first (for backwards compatibility)
+  // Load user's policy defaults and check for promoCampaignId
+  const store = tokensStore();
+  const policyDefaultsKey = userScopedKey(ctx.userId, 'policy-defaults.json');
+  let policyDefaults: any = {};
+  try {
+    policyDefaults = (await store.get(policyDefaultsKey, { type: 'json' })) || {};
+  } catch (e) {
+    console.log(`[getOrCreateDefaultCampaignId] No policy defaults found for user ${ctx.userId}`);
+  }
+  
+  const userDefaultCampaign = policyDefaults.promoCampaignId;
+  if (userDefaultCampaign) {
+    console.log(`[getOrCreateDefaultCampaignId] Using user's default campaign from policy defaults: ${userDefaultCampaign}`);
+    // Cache it
+    userCampaignCache[ctx.userId] = {
+      campaignId: userDefaultCampaign,
+      expiresAt: Date.now() + 1000 * 60 * 60, // 1 hour cache
+    };
+    return userDefaultCampaign;
+  }
+
+  // Try env var override (for backwards compatibility)
   const envCampaignId = process.env.EBAY_DEFAULT_PROMO_CAMPAIGN_ID;
   if (envCampaignId) {
     console.log(`[getOrCreateDefaultCampaignId] Using env campaign: ${envCampaignId}`);
