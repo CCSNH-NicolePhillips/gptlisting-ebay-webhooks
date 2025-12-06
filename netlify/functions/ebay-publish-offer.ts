@@ -2,7 +2,7 @@ import type { Handler } from '@netlify/functions';
 import { accessTokenFromRefresh, tokenHosts } from '../../src/lib/_common.js';
 import { tokensStore } from '../../src/lib/_blobs.js';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
-import { promoteSingleListing } from '../../src/lib/ebay-promote.js';
+import { maybeAutoPromoteDraftListing } from '../../src/lib/auto-promote-helper.js';
 
 export const handler: Handler = async (event) => {
 	try {
@@ -187,7 +187,7 @@ export const handler: Handler = async (event) => {
 			// ignore persistence errors
 		}
 
-		// Step 3: Check for auto-promotion after successful publish
+		// Auto-promotion: Check if this draft should be automatically promoted
 		let promotionResult: any = null;
 		try {
 			// Fetch the offer to check merchantData.autoPromote
@@ -198,83 +198,37 @@ export const handler: Handler = async (event) => {
 				const offerText = await getOfferRes.text();
 				const offer = JSON.parse(offerText);
 				const merchantData = offer?.merchantData || {};
-				const autoPromote = merchantData.autoPromote === true;
-				const autoPromoteAdRate = typeof merchantData.autoPromoteAdRate === 'number' 
-					? merchantData.autoPromoteAdRate 
-					: null;
 				
-				if (autoPromote && offer.sku) {
-					console.log(`[ebay-publish-offer] Auto-promotion enabled for SKU ${offer.sku}, offerId ${offerId}`);
-					console.log(`[ebay-publish-offer] Ad rate: ${autoPromoteAdRate || 'default from policy'}`);
+				if (offer.sku) {
+					// Call the auto-promotion helper (never throws)
+					const promoResult = await maybeAutoPromoteDraftListing({
+						userId: sub!,
+						sku: offer.sku,
+						autoPromote: merchantData.autoPromote === true,
+						autoPromoteAdRate: typeof merchantData.autoPromoteAdRate === 'number' 
+							? merchantData.autoPromoteAdRate 
+							: undefined,
+						accessToken: access_token,
+						offerId,
+					});
 					
-					// Determine ad rate: use draft-specific rate or fall back to user's default
-					let adRate = autoPromoteAdRate;
-					if (!adRate) {
-						// Load promotion defaults to get default ad rate
-						const policyDefaultsKey = userScopedKey(sub!, 'policy-defaults.json');
-						try {
-							const policyDefaults = (await store.get(policyDefaultsKey, { type: 'json' })) || {};
-							adRate = policyDefaults.defaultAdRate || 5; // Fall back to 5% if not set
-							console.log(`[ebay-publish-offer] Using default ad rate from policy: ${adRate}%`);
-						} catch (e) {
-							adRate = 5; // Ultimate fallback
-							console.log(`[ebay-publish-offer] Using hardcoded fallback ad rate: ${adRate}%`);
-						}
-					}
-					
-					// Call promotion adapter (non-blocking)
-					try {
-						const tokenCache: any = {
-							get: async (userId: string) => access_token,
-							set: async (userId: string, token: string, expiresIn: number) => {},
-						};
-						
-						const promoStatus = await promoteSingleListing({
-							tokenCache,
-							userId: sub!,
-							ebayAccountId: sub!,
-							inventoryReferenceId: offer.sku,
-							adRate: adRate,
-						});
-						
-						console.log(`[ebay-publish-offer] Promotion result for SKU ${offer.sku}:`, {
-							enabled: promoStatus.enabled,
-							campaignId: promoStatus.campaignId,
-							adId: promoStatus.adId,
-							adRate: promoStatus.adRate,
-						});
-						
+					// Include promotion result in response
+					if (promoResult.attempted) {
 						promotionResult = {
-							success: promoStatus.enabled,
-							sku: offer.sku,
-							campaignId: promoStatus.campaignId || '',
-							adId: promoStatus.adId || '',
-							adRate: adRate,
-						};
-					} catch (promoErr: any) {
-						// Log promotion error but don't fail the publish
-						console.error(`[ebay-publish-offer] Promotion failed for SKU ${offer.sku}:`, {
-							error: promoErr.message,
-							sku: offer.sku,
-							offerId: offerId,
-						});
-						
-						promotionResult = {
-							success: false,
-							sku: offer.sku,
-							error: promoErr.message,
-							reason: 'Promotion adapter failed',
+							success: promoResult.success,
+							sku: promoResult.sku,
+							campaignId: promoResult.campaignId || '',
+							adId: promoResult.adId || '',
+							adRate: promoResult.adRate,
+							error: promoResult.error,
+							reason: promoResult.reason,
 						};
 					}
-				} else if (autoPromote && !offer.sku) {
-					console.log(`[ebay-publish-offer] Auto-promotion enabled but SKU missing for offerId ${offerId}`);
-				} else {
-					console.log(`[ebay-publish-offer] Auto-promotion not enabled for offerId ${offerId}`);
 				}
 			}
 		} catch (err: any) {
 			// Log error but don't fail the publish
-			console.error(`[ebay-publish-offer] Error checking auto-promotion:`, err.message);
+			console.error(`[ebay-publish-offer] Error in auto-promotion flow:`, err.message);
 		}
 
 		return {
