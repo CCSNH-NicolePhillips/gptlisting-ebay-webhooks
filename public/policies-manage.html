@@ -431,6 +431,56 @@
             </table>
           </div>
           
+          <!-- Promoted Listings (Marketing) -->
+          <div class="policy-section">
+            <div class="policy-header">
+              <div>
+                <h3>Promoted Listings (Advertising)</h3>
+                <div class="policy-count" id="promoStatus">
+                  Default campaign: not configured
+                </div>
+              </div>
+              <a href="https://www.ebay.com/sh/ebaypromotedlistings/campaigns"
+                 target="_blank"
+                 class="dp-btn dp-btn-secondary">
+                View campaigns in eBay
+              </a>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:center;">
+              <div style="flex:1 1 260px; min-width:240px;">
+                <label style="font-size:0.85rem; color:var(--text-muted); display:block; margin-bottom:0.25rem;">
+                  Default campaign ID
+                </label>
+                <input
+                  id="promoCampaignIdInput"
+                  type="text"
+                  placeholder="Paste your eBay campaign ID (e.g. 1234567890)"
+                  style="
+                    width:100%;
+                    background:var(--bg-subtle);
+                    border:1px solid var(--border-subtle);
+                    border-radius:8px;
+                    padding:0.55rem 0.6rem;
+                    color:var(--text-primary);
+                    font-size:0.9rem;
+                  "
+                />
+              </div>
+              <div style="display:flex; gap:0.5rem; align-items:center;">
+                <button type="button" class="dp-btn dp-btn-primary" id="promoSaveBtn">
+                  Save default
+                </button>
+                <button type="button" class="dp-btn dp-btn-secondary" id="promoClearBtn">
+                  Clear
+                </button>
+              </div>
+            </div>
+            <p style="margin-top:0.5rem; font-size:0.8rem; color:var(--text-muted);">
+              This campaign will be used when promoting your drafts from DraftPilot unless a specific
+              campaign is supplied. You can change it at any time.
+            </p>
+          </div>
+          
           <!-- Inspector Panel -->
           <div class="inspector-panel" id="inspector" style="display: none;">
             <div class="inspector-header">
@@ -502,7 +552,7 @@
         await init();
       });
 
-      const defaults = { fulfillment: null, payment: null, return: null };
+      const defaults = { fulfillment: null, payment: null, return: null, promoCampaignId: null };
 
       async function loadDefaults() {
         try {
@@ -510,6 +560,18 @@
           const j = await r.json();
           Object.assign(defaults, j?.defaults || {});
         } catch {}
+      }
+
+      function renderPromoDefaults() {
+        const statusEl = document.getElementById('promoStatus');
+        const inputEl = document.getElementById('promoCampaignIdInput');
+        if (!statusEl || !inputEl) return;
+
+        const id = defaults.promoCampaignId || '';
+        inputEl.value = id;
+        statusEl.textContent = id
+          ? `Default campaign: ${id}`
+          : 'Default campaign: not configured';
       }
 
       function renderTable(elId, list, typeKey) {
@@ -724,12 +786,63 @@
         }
       }
 
-      (function setupInspectorHide(){
+      (function setupInspectorHide() {
         const btn = document.getElementById('inspectorHide');
         if (!btn) return;
         btn.onclick = () => {
           const box = document.getElementById('inspector');
           if (box) box.style.display = 'none';
+        };
+      })();
+
+      (function setupPromoDefaults() {
+        const saveBtn = document.getElementById('promoSaveBtn');
+        const clearBtn = document.getElementById('promoClearBtn');
+        const inputEl = document.getElementById('promoCampaignIdInput');
+        if (!saveBtn || !clearBtn || !inputEl) return;
+
+        saveBtn.onclick = async () => {
+          const value = (inputEl.value || '').trim();
+          try {
+            const body = { promoCampaignId: value || null };
+            const r = await authClient.authFetch(
+              '/.netlify/functions/ebay-set-policy-defaults',
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+              }
+            );
+            const j = await r.json().catch(() => ({}));
+            if (j && j.defaults) Object.assign(defaults, j.defaults);
+            else defaults.promoCampaignId = value || null;
+            renderPromoDefaults();
+            showMsg('✓ Default campaign updated', 'success');
+          } catch (e) {
+            showMsg('Failed to update default campaign: ' + (e?.message || e), 'error');
+          }
+        };
+
+        clearBtn.onclick = async () => {
+          inputEl.value = '';
+          try {
+            const body = { promoCampaignId: null };
+            const r = await authClient.authFetch(
+              '/.netlify/functions/ebay-set-policy-defaults',
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+              }
+            );
+            const j = await r.json().catch(() => ({}));
+            if (j && j.defaults) Object.assign(defaults, j.defaults);
+            else defaults.promoCampaignId = null;
+            renderPromoDefaults();
+            showMsg('✓ Default campaign cleared', 'success');
+          } catch (e) {
+            showMsg('Failed to clear default campaign: ' + (e?.message || e), 'error');
+          }
         };
       })();
 
@@ -753,6 +866,7 @@
           document.getElementById('fStatus').textContent = f.length ? `${f.length} ${f.length === 1 ? 'policy' : 'policies'}` : 'No policies';
           document.getElementById('pStatus').textContent = p.length ? `${p.length} ${p.length === 1 ? 'policy' : 'policies'}` : 'No policies';
           document.getElementById('rStatus').textContent = rr.length ? `${rr.length} ${rr.length === 1 ? 'policy' : 'policies'}` : 'No policies';
+          renderPromoDefaults();
         } catch (e) { 
           console.error('[Policies] Error:', e);
           showMsg('Error loading policies: ' + (e?.message || e), 'error'); 
