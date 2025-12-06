@@ -127,8 +127,32 @@
           </div>
         </div>
 
+        <div class="section" id="marketing">
+          <h2>4. Marketing defaults</h2>
+          <p class="muted">Control default settings for Promoted Listings. These values are used when creating new ads for your listings.</p>
+          <div class="panel">
+            <h3>Promotion settings</h3>
+            <div class="status" id="marketingStatus">Connect eBay to configure marketing defaults.</div>
+            <div style="margin-top: 0.75rem;">
+              <label for="marketing-default-ad-rate" style="display: block; margin-bottom: 0.3rem; font-weight: 600; color: #cbd5ff;">Default ad rate (%)</label>
+              <input type="number" id="marketing-default-ad-rate" min="0" max="100" step="0.1" value="5" style="width: 100%; max-width: 200px; padding: 0.5rem; border-radius: 6px; border: 1px solid #3d4a86; background: #0f1530; color: #f4f6fb; font-size: 0.95rem;" />
+              <div class="small muted" style="margin-top: 0.3rem;">Percentage of sale price paid as advertising fee (typically 2-20%).</div>
+            </div>
+            <div style="margin-top: 1rem;">
+              <label for="marketing-default-campaign-id" style="display: block; margin-bottom: 0.3rem; font-weight: 600; color: #cbd5ff;">Default promotion campaign ID</label>
+              <input type="text" id="marketing-default-campaign-id" placeholder="e.g. 151310691012" style="width: 100%; max-width: 400px; padding: 0.5rem; border-radius: 6px; border: 1px solid #3d4a86; background: #0f1530; color: #f4f6fb; font-size: 0.95rem;" />
+              <div class="small muted" style="margin-top: 0.3rem;">Paste the campaign ID from your eBay Promotions dashboard.</div>
+            </div>
+            <div class="actions" style="margin-top: 1rem;">
+              <button id="save-marketing-defaults" disabled>Save marketing defaults</button>
+              <button class="secondary" id="reset-marketing-defaults">Reset to defaults</button>
+            </div>
+            <div class="small muted" id="marketingMessage" style="margin-top: 0.5rem;"></div>
+          </div>
+        </div>
+
         <div class="section" id="inventory">
-          <h2>4. Confirm your shipping location</h2>
+          <h2>5. Confirm your shipping location</h2>
           <p class="muted">eBay drafts require at least one inventory location. Add your warehouse address directly on eBay before returning to DraftPilot.</p>
           <div class="panel">
             <div class="status" id="locationStatus">Connect eBay to manage locations.</div>
@@ -166,6 +190,13 @@
         returnPolicies: [],
         locations: [],
       };
+
+      let marketingDefaults = {
+        defaultPromoPercent: 5,
+        defaultPromoCampaignId: ''
+      };
+      let marketingDefaultsLoaded = false;
+      let marketingDefaultsSaving = false;
 
       const recommendedPayloads = {
         payment: {
@@ -581,14 +612,143 @@
         }
       }
 
+      async function loadMarketingDefaults() {
+        const statusEl = document.getElementById('marketingStatus');
+        const msgEl = document.getElementById('marketingMessage');
+        
+        if (!state.ebayConnected) {
+          if (statusEl) statusEl.textContent = 'Connect eBay to configure marketing defaults.';
+          if (msgEl) msgEl.textContent = '';
+          marketingDefaultsLoaded = false;
+          const saveBtn = document.getElementById('save-marketing-defaults');
+          if (saveBtn) saveBtn.disabled = true;
+          return;
+        }
+
+        try {
+          const token = await authClient.getToken?.();
+          const res = await fetch('/.netlify/functions/ebay-get-marketing-defaults', {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.ok && data?.defaults) {
+              marketingDefaults.defaultPromoPercent = data.defaults.defaultPromoPercent ?? 5;
+              marketingDefaults.defaultPromoCampaignId = data.defaults.defaultPromoCampaignId ?? '';
+            }
+            
+            const rateInput = document.getElementById('marketing-default-ad-rate');
+            const campaignInput = document.getElementById('marketing-default-campaign-id');
+            if (rateInput) rateInput.value = marketingDefaults.defaultPromoPercent.toString();
+            if (campaignInput) campaignInput.value = marketingDefaults.defaultPromoCampaignId || '';
+            
+            marketingDefaultsLoaded = true;
+            if (statusEl) {
+              const hasCampaign = marketingDefaults.defaultPromoCampaignId?.trim();
+              statusEl.innerHTML = hasCampaign 
+                ? `<span class="badge">Configured · ${marketingDefaults.defaultPromoPercent}% ad rate</span>`
+                : 'Ready · configure campaign ID to enable promotions';
+            }
+            if (msgEl && marketingDefaults.defaultPromoCampaignId?.trim()) {
+              msgEl.textContent = `Listings will be promoted at ${marketingDefaults.defaultPromoPercent}% to campaign ${marketingDefaults.defaultPromoCampaignId}.`;
+            }
+            
+            const saveBtn = document.getElementById('save-marketing-defaults');
+            if (saveBtn) saveBtn.disabled = false;
+          } else {
+            console.warn('[setup] Failed to load marketing defaults:', res.status);
+            if (statusEl) statusEl.textContent = 'Configure promotion defaults below';
+            const saveBtn = document.getElementById('save-marketing-defaults');
+            if (saveBtn) saveBtn.disabled = false;
+          }
+        } catch (err) {
+          console.error('[setup] Failed to load marketing defaults:', err);
+          if (statusEl) statusEl.textContent = 'Configure promotion defaults below';
+          const saveBtn = document.getElementById('save-marketing-defaults');
+          if (saveBtn) saveBtn.disabled = false;
+        }
+      }
+
+      async function saveMarketingDefaults() {
+        if (marketingDefaultsSaving) return;
+        marketingDefaultsSaving = true;
+        
+        const msgEl = document.getElementById('marketingMessage');
+        const statusEl = document.getElementById('marketingStatus');
+        const saveBtn = document.getElementById('save-marketing-defaults');
+        
+        try {
+          if (saveBtn) saveBtn.disabled = true;
+          if (msgEl) msgEl.textContent = 'Saving...';
+          
+          const rateInput = document.getElementById('marketing-default-ad-rate');
+          const campaignInput = document.getElementById('marketing-default-campaign-id');
+          
+          let defaultPromoPercent = Number(rateInput?.value || '0');
+          defaultPromoPercent = Math.max(0, Math.min(100, defaultPromoPercent));
+          
+          const defaultPromoCampaignId = (campaignInput?.value || '').trim();
+          
+          const token = await authClient.getToken?.();
+          const res = await fetch('/.netlify/functions/ebay-set-marketing-default', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              defaultPromoPercent,
+              defaultPromoCampaignId
+            })
+          });
+          
+          const data = await res.json();
+          
+          if (res.ok && data?.ok) {
+            marketingDefaults.defaultPromoPercent = defaultPromoPercent;
+            marketingDefaults.defaultPromoCampaignId = defaultPromoCampaignId;
+            
+            if (msgEl) msgEl.textContent = 'Saved successfully!';
+            if (statusEl) {
+              const hasCampaign = defaultPromoCampaignId?.trim();
+              statusEl.innerHTML = hasCampaign 
+                ? `<span class="badge">Configured · ${defaultPromoPercent}% ad rate</span>`
+                : 'Ready · configure campaign ID to enable promotions';
+            }
+            
+            setTimeout(() => {
+              if (msgEl) msgEl.textContent = defaultPromoCampaignId?.trim() 
+                ? `Listings will be promoted at ${defaultPromoPercent}% to campaign ${defaultPromoCampaignId}.`
+                : '';
+            }, 2000);
+          } else {
+            const errMsg = data?.error || data?.message || 'Failed to save';
+            console.error('[setup] Failed to save marketing defaults:', errMsg);
+            if (msgEl) msgEl.textContent = 'Error: ' + errMsg;
+          }
+        } catch (err) {
+          console.error('[setup] Failed to save marketing defaults:', err);
+          if (msgEl) msgEl.textContent = 'Error: ' + (err?.message || err);
+        } finally {
+          marketingDefaultsSaving = false;
+          if (saveBtn) saveBtn.disabled = false;
+        }
+      }
+
       async function refreshAll() {
         await loadConnections();
         if (state.ebayConnected) {
-          await Promise.all([loadOptInStatus(), loadPolicies(), loadLocations()]);
+          await Promise.all([loadOptInStatus(), loadPolicies(), loadLocations(), loadMarketingDefaults()]);
         } else {
           await loadOptInStatus();
           await loadPolicies();
           await loadLocations();
+          await loadMarketingDefaults();
         }
       }
 
@@ -610,6 +770,20 @@
     if (btnDeleteLocation) btnDeleteLocation.onclick = deleteLocation;
         const btnOpt = document.getElementById('btnOptIn');
         if (btnOpt) btnOpt.onclick = optIn;
+
+        const btnSaveMarketing = document.getElementById('save-marketing-defaults');
+        if (btnSaveMarketing) btnSaveMarketing.onclick = () => { void saveMarketingDefaults(); };
+        
+        const btnResetMarketing = document.getElementById('reset-marketing-defaults');
+        if (btnResetMarketing) btnResetMarketing.onclick = () => {
+          marketingDefaults = { defaultPromoPercent: 5, defaultPromoCampaignId: '' };
+          const rateInput = document.getElementById('marketing-default-ad-rate');
+          const campaignInput = document.getElementById('marketing-default-campaign-id');
+          if (rateInput) rateInput.value = '5';
+          if (campaignInput) campaignInput.value = '';
+          const msgEl = document.getElementById('marketingMessage');
+          if (msgEl) msgEl.textContent = 'Reset to defaults (not saved yet)';
+        };
 
         refreshAll();
         window.addEventListener('focus', () => { refreshAll(); });
