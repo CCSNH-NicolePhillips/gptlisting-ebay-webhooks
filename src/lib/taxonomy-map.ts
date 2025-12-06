@@ -167,6 +167,9 @@ export type TaxonomyMappedDraft = {
     categoryId: string;
     price: number;
   };
+  // Promotion intent fields
+  autoPromote?: boolean;        // default false
+  autoPromoteAdRate?: number;   // default from promotion defaults, e.g. 5
 };
 
 export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>): Promise<TaxonomyMappedDraft> {

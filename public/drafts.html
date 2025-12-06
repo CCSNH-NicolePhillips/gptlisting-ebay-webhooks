@@ -235,6 +235,77 @@
         justify-content: space-between;
         margin: 0.25rem 0 1rem;
       }
+      
+      /* Promotion controls */
+      .promo-controls {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+        padding: 0.6rem;
+        background: rgba(99, 102, 241, 0.08);
+        border: 1px solid rgba(99, 102, 241, 0.2);
+        border-radius: 8px;
+        margin-top: 0.6rem;
+        font-size: 0.8rem;
+      }
+      .promo-toggle {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        cursor: pointer;
+        user-select: none;
+      }
+      .promo-toggle input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+      }
+      .promo-toggle label {
+        cursor: pointer;
+        color: #cbd5ff;
+        font-weight: 500;
+      }
+      .promo-rate {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .promo-rate label {
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+      .promo-rate input[type="number"] {
+        width: 60px;
+        padding: 0.3rem 0.4rem;
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        color: #fff;
+        font-size: 0.8rem;
+      }
+      .promo-rate span {
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+      .promo-save {
+        padding: 0.35rem 0.6rem;
+        background: rgba(99, 102, 241, 0.2);
+        border: 1px solid rgba(99, 102, 241, 0.4);
+        color: #cbd5ff;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+      .promo-save:hover {
+        background: rgba(99, 102, 241, 0.3);
+        border-color: rgba(99, 102, 241, 0.6);
+      }
+      .promo-save:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
     </style>
   </head>
   <body>
@@ -639,10 +710,115 @@
         }
         row.appendChild(edit);
         row.appendChild(del);
+        
+        // Promotion controls
+        const promoControls = document.createElement('div');
+        promoControls.className = 'promo-controls';
+        
+        const promoToggleDiv = document.createElement('div');
+        promoToggleDiv.className = 'promo-toggle';
+        
+        const promoCheckbox = document.createElement('input');
+        promoCheckbox.type = 'checkbox';
+        promoCheckbox.id = `promo-${offer.offerId}`;
+        promoCheckbox.checked = offer.merchantData?.autoPromote || false;
+        
+        const promoLabel = document.createElement('label');
+        promoLabel.htmlFor = `promo-${offer.offerId}`;
+        promoLabel.textContent = '🚀 Promote when listed';
+        
+        promoToggleDiv.appendChild(promoCheckbox);
+        promoToggleDiv.appendChild(promoLabel);
+        
+        const promoRateDiv = document.createElement('div');
+        promoRateDiv.className = 'promo-rate';
+        promoRateDiv.style.display = promoCheckbox.checked ? 'flex' : 'none';
+        
+        const rateLabel = document.createElement('label');
+        rateLabel.textContent = 'Ad rate:';
+        
+        const rateInput = document.createElement('input');
+        rateInput.type = 'number';
+        rateInput.min = '1';
+        rateInput.max = '20';
+        rateInput.step = '0.1';
+        rateInput.value = String(offer.merchantData?.autoPromoteAdRate || 5);
+        
+        const ratePercent = document.createElement('span');
+        ratePercent.textContent = '%';
+        
+        promoRateDiv.appendChild(rateLabel);
+        promoRateDiv.appendChild(rateInput);
+        promoRateDiv.appendChild(ratePercent);
+        
+        const promoSaveBtn = document.createElement('button');
+        promoSaveBtn.className = 'promo-save';
+        promoSaveBtn.textContent = 'Save Promo Settings';
+        
+        // Toggle rate input visibility
+        promoCheckbox.addEventListener('change', () => {
+          promoRateDiv.style.display = promoCheckbox.checked ? 'flex' : 'none';
+        });
+        
+        // Save promotion settings
+        promoSaveBtn.addEventListener('click', async () => {
+          promoSaveBtn.disabled = true;
+          promoSaveBtn.textContent = 'Saving...';
+          
+          try {
+            const exec = (window.authClient && typeof window.authClient.authFetch === 'function') 
+              ? window.authClient.authFetch 
+              : fetch;
+            
+            const response = await exec('/.netlify/functions/ebay-update-draft-promo', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                offerId: offer.offerId,
+                autoPromote: promoCheckbox.checked,
+                autoPromoteAdRate: parseFloat(rateInput.value) || 5,
+              }),
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok && data.ok) {
+              flash.textContent = `✓ Promotion settings saved for ${offer.offerId}`;
+              promoSaveBtn.textContent = 'Saved ✓';
+              
+              // Update local offer data
+              if (!offer.merchantData) offer.merchantData = {};
+              offer.merchantData.autoPromote = data.autoPromote;
+              offer.merchantData.autoPromoteAdRate = data.autoPromoteAdRate;
+              
+              // Clear cache to reflect changes on reload
+              sessionStorage.removeItem('drafts-cache');
+              sessionStorage.removeItem('drafts-cache-time');
+              
+              setTimeout(() => {
+                promoSaveBtn.textContent = 'Save Promo Settings';
+              }, 2000);
+            } else {
+              flash.textContent = `Promo save error: ${data.error || 'Unknown error'}`;
+              promoSaveBtn.textContent = 'Save Promo Settings';
+            }
+          } catch (e) {
+            flash.textContent = `Promo save error: ${e.message}`;
+            promoSaveBtn.textContent = 'Save Promo Settings';
+          } finally {
+            promoSaveBtn.disabled = false;
+          }
+        });
+        
+        promoControls.appendChild(promoToggleDiv);
+        promoControls.appendChild(promoRateDiv);
+        promoControls.appendChild(promoSaveBtn);
+        
         body.appendChild(title);
   if (desc.textContent) body.appendChild(desc);
   body.appendChild(meta);
         body.appendChild(badge);
+        body.appendChild(promoControls);
         body.appendChild(row);
         el.appendChild(th);
         el.appendChild(body);
