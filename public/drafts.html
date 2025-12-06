@@ -17,6 +17,47 @@
         gap: 0.5rem;
         align-items: center;
       }
+      .dp-form-label {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #cbd5ff;
+        margin-bottom: 0.35rem;
+        margin-top: 0.4rem;
+      }
+      .promo-rate {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.35rem;
+        margin-bottom: 0.5rem;
+        font-size: 0.875rem;
+      }
+      .promo-rate-input {
+        width: 130px;
+        padding: 0.5rem 0.65rem;
+        font-size: 0.9375rem;
+        background: #0f1529;
+        border: 1px solid #2a335c;
+        border-radius: 6px;
+        color: #f4f6fb;
+        font-family: inherit;
+        box-sizing: border-box;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+      }
+      .promo-rate-input:focus {
+        outline: none;
+        border-color: #5b7cff;
+        box-shadow: 0 0 0 3px rgba(91, 124, 255, 0.1);
+      }
+      .promo-rate-input[type=number]::-webkit-outer-spin-button,
+      .promo-rate-input[type=number]::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+      .promo-rate-input[type=number] {
+        -moz-appearance: textfield;
+      }
       .btn {
         background: var(--primary);
         color: #fff;
@@ -662,6 +703,7 @@
         
         const promoLabel = document.createElement('label');
         promoLabel.htmlFor = `promo-${offer.offerId}`;
+        promoLabel.className = 'dp-form-label';
         promoLabel.textContent = 'Promote when listed';
         
         promoToggleDiv.appendChild(promoCheckbox);
@@ -672,13 +714,16 @@
         promoRateDiv.style.display = promoCheckbox.checked ? 'flex' : 'none';
         
         const rateLabel = document.createElement('label');
+        rateLabel.className = 'dp-form-label';
         rateLabel.textContent = 'Ad rate:';
         
         const rateInput = document.createElement('input');
         rateInput.type = 'number';
+        rateInput.inputMode = 'decimal';
         rateInput.min = '1';
         rateInput.max = '20';
         rateInput.step = '0.1';
+        rateInput.className = 'promo-rate-input';
         rateInput.value = String(offer.merchantData?.autoPromoteAdRate || 5);
         
         const ratePercent = document.createElement('span');
