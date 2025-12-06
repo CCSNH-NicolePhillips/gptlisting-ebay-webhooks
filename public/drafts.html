@@ -383,6 +383,14 @@
           
           <!-- Right: Actions -->
           <div class="dp-topbar-right" style="display: flex !important; gap: 0.75rem;">
+            <button id="btnPromoteNow" class="dp-btn dp-btn-primary" title="Promote all published drafts" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 0.35rem;">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="16 12 12 8 8 12"></polyline>
+                <line x1="12" y1="8" x2="12" y2="16"></line>
+              </svg>
+              Promote Now
+            </button>
             <button id="btnRefresh" class="dp-btn dp-btn-secondary" title="Reload drafts" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 0.35rem;">
                 <polyline points="23 4 23 10 17 10"></polyline>
@@ -639,10 +647,115 @@
         }
         row.appendChild(edit);
         row.appendChild(del);
+        
+        // Promotion controls
+        const promoControls = document.createElement('div');
+        promoControls.className = 'promo-controls';
+        
+        const promoToggleDiv = document.createElement('div');
+        promoToggleDiv.className = 'promo-toggle';
+        
+        const promoCheckbox = document.createElement('input');
+        promoCheckbox.type = 'checkbox';
+        promoCheckbox.id = `promo-${offer.offerId}`;
+        promoCheckbox.checked = offer.merchantData?.autoPromote || false;
+        
+        const promoLabel = document.createElement('label');
+        promoLabel.htmlFor = `promo-${offer.offerId}`;
+        promoLabel.textContent = '🚀 Promote when listed';
+        
+        promoToggleDiv.appendChild(promoCheckbox);
+        promoToggleDiv.appendChild(promoLabel);
+        
+        const promoRateDiv = document.createElement('div');
+        promoRateDiv.className = 'promo-rate';
+        promoRateDiv.style.display = promoCheckbox.checked ? 'flex' : 'none';
+        
+        const rateLabel = document.createElement('label');
+        rateLabel.textContent = 'Ad rate:';
+        
+        const rateInput = document.createElement('input');
+        rateInput.type = 'number';
+        rateInput.min = '1';
+        rateInput.max = '20';
+        rateInput.step = '0.1';
+        rateInput.value = String(offer.merchantData?.autoPromoteAdRate || 5);
+        
+        const ratePercent = document.createElement('span');
+        ratePercent.textContent = '%';
+        
+        promoRateDiv.appendChild(rateLabel);
+        promoRateDiv.appendChild(rateInput);
+        promoRateDiv.appendChild(ratePercent);
+        
+        const promoSaveBtn = document.createElement('button');
+        promoSaveBtn.className = 'promo-save';
+        promoSaveBtn.textContent = 'Save Promo Settings';
+        
+        // Toggle rate input visibility
+        promoCheckbox.addEventListener('change', () => {
+          promoRateDiv.style.display = promoCheckbox.checked ? 'flex' : 'none';
+        });
+        
+        // Save promotion settings
+        promoSaveBtn.addEventListener('click', async () => {
+          promoSaveBtn.disabled = true;
+          promoSaveBtn.textContent = 'Saving...';
+          
+          try {
+            const exec = (window.authClient && typeof window.authClient.authFetch === 'function') 
+              ? window.authClient.authFetch 
+              : fetch;
+            
+            const response = await exec('/.netlify/functions/ebay-update-draft-promo', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                offerId: offer.offerId,
+                autoPromote: promoCheckbox.checked,
+                autoPromoteAdRate: parseFloat(rateInput.value) || 5,
+              }),
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok && data.ok) {
+              flash.textContent = `✓ Promotion settings saved for ${offer.offerId}`;
+              promoSaveBtn.textContent = 'Saved ✓';
+              
+              // Update local offer data
+              if (!offer.merchantData) offer.merchantData = {};
+              offer.merchantData.autoPromote = data.autoPromote;
+              offer.merchantData.autoPromoteAdRate = data.autoPromoteAdRate;
+              
+              // Clear cache to reflect changes on reload
+              sessionStorage.removeItem('drafts-cache');
+              sessionStorage.removeItem('drafts-cache-time');
+              
+              setTimeout(() => {
+                promoSaveBtn.textContent = 'Save Promo Settings';
+              }, 2000);
+            } else {
+              flash.textContent = `Promo save error: ${data.error || 'Unknown error'}`;
+              promoSaveBtn.textContent = 'Save Promo Settings';
+            }
+          } catch (e) {
+            flash.textContent = `Promo save error: ${e.message}`;
+            promoSaveBtn.textContent = 'Save Promo Settings';
+          } finally {
+            promoSaveBtn.disabled = false;
+          }
+        });
+        
+        promoControls.appendChild(promoToggleDiv);
+        promoControls.appendChild(promoRateDiv);
+        promoControls.appendChild(promoSaveBtn);
+        
         body.appendChild(title);
-  if (desc.textContent) body.appendChild(desc);
-  body.appendChild(meta);
+        if (desc.textContent) body.appendChild(desc);
+        body.appendChild(meta);
         body.appendChild(badge);
+        body.appendChild(promoControls);
         body.appendChild(row);
         el.appendChild(th);
         el.appendChild(body);
@@ -1107,6 +1220,117 @@
           load(); 
         } catch {} 
       });
+      
+      // "Promote Now" button handler
+      document.getElementById('btnPromoteNow')?.addEventListener('click', async () => {
+        try {
+          flash.textContent = 'Collecting published drafts...';
+          
+          // Fetch all offers to find published ones
+          const rawSku = new URL(location.href).searchParams.get('sku') || '';
+          const skuOk = /^[A-Za-z0-9]{1,50}$/.test(rawSku);
+          const base = '/.netlify/functions/ebay-list-offers?limit=100' + (skuOk ? '&sku=' + encodeURIComponent(rawSku) : '');
+          
+          // Get PUBLISHED offers
+          let publishedOffers = [];
+          try {
+            const pubRes = await fetchJSON(base + '&status=PUBLISHED');
+            publishedOffers = Array.isArray(pubRes?.offers) ? pubRes.offers : [];
+          } catch (e) {
+            console.error('[Promote Now] Failed to fetch published offers:', e);
+            flash.textContent = 'Error fetching published listings';
+            return;
+          }
+          
+          if (!publishedOffers.length) {
+            flash.textContent = 'No published listings found to promote';
+            return;
+          }
+          
+          // Get currently promoted items to filter them out
+          flash.textContent = 'Checking promotion status...';
+          const exec = (window.authClient && typeof window.authClient.authFetch === 'function') 
+            ? window.authClient.authFetch 
+            : fetch;
+          
+          let promotedSkus = new Set();
+          try {
+            const promoteCheckRes = await exec('/.netlify/functions/ebay-get-promoted-listings');
+            if (promoteCheckRes.ok) {
+              const promoteData = await promoteCheckRes.json();
+              // Add all promoted SKUs to the set
+              if (promoteData.ads && Array.isArray(promoteData.ads)) {
+                promoteData.ads.forEach(ad => {
+                  if (ad.inventoryReferenceId) {
+                    promotedSkus.add(ad.inventoryReferenceId);
+                  }
+                });
+              }
+            }
+          } catch (e) {
+            console.log('[Promote Now] Could not check promoted listings, will attempt all');
+          }
+          
+          // Collect SKUs from published offers, excluding already promoted ones
+          const allPublishedSkus = publishedOffers
+            .map(o => o.sku)
+            .filter(sku => sku && typeof sku === 'string');
+          
+          const skus = allPublishedSkus.filter(sku => !promotedSkus.has(sku));
+          const alreadyPromoted = allPublishedSkus.length - skus.length;
+          
+          if (!skus.length) {
+            if (alreadyPromoted > 0) {
+              flash.textContent = `All ${alreadyPromoted} published listing(s) are already promoted`;
+            } else {
+              flash.textContent = 'No valid SKUs found in published listings';
+            }
+            return;
+          }
+          
+          let statusMsg = `Promoting ${skus.length} listing(s)...`;
+          if (alreadyPromoted > 0) {
+            statusMsg += ` (${alreadyPromoted} already promoted, skipped)`;
+          }
+          flash.textContent = statusMsg;
+          
+          // Get default ad rate from policy defaults
+          let adRate = 5; // Default fallback
+          try {
+            const policyRes = await exec('/.netlify/functions/ebay-get-policy-defaults');
+            if (policyRes.ok) {
+              const policyData = await policyRes.json();
+              if (policyData.defaultAdRate) {
+                adRate = policyData.defaultAdRate;
+              }
+            }
+          } catch (e) {
+            console.log('[Promote Now] Could not get policy defaults, using 5%');
+          }
+          
+          // Call promote-drafts endpoint
+          const promoteRes = await exec('/.netlify/functions/promote-drafts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ skus, adRate }),
+          });
+          
+          const result = await promoteRes.json();
+          
+          if (result.promotedCount > 0) {
+            flash.textContent = `\u2713 Promoted ${result.promotedCount} of ${result.totalCount} listings at ${adRate}% ad rate`;
+            if (result.failures && result.failures.length > 0) {
+              console.log('[Promote Now] Some promotions failed:', result.failures);
+            }
+          } else {
+            flash.textContent = `Failed to promote listings. ${result.failures?.[0]?.reason || 'Unknown error'}`;
+          }
+        } catch (e) {
+          console.error('[Promote Now] Error:', e);
+          flash.textContent = 'Promotion error: ' + e.message;
+        }
+      });
+      
       initUserMenu();
       bootstrap();
     </script>
