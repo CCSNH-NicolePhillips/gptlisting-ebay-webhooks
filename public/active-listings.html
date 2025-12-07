@@ -3,24 +3,23 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Active Listings - DraftPilot</title>
-  <link rel="stylesheet" href="/draftpilot.css" />
+  <title>Active Listings – DraftPilot</title>
+  <link rel="stylesheet" href="/draftpilot.css">
   <style>
-    .page {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 1.5rem 1.25rem 2.5rem;
+    .flash {
+      min-height: 1.25rem;
+      color: var(--muted);
+      margin-bottom: 0.6rem;
     }
-    .heading {
+    .flash.error {
+      color: #ffb4b4;
+    }
+    .toolbar {
       display: flex;
+      gap: 0.5rem;
       align-items: center;
-      justify-content: space-between;
-      gap: 0.75rem;
-      flex-wrap: wrap;
-      margin-bottom: 0.25rem;
+      margin-bottom: 1rem;
     }
-    .muted { color: var(--muted); }
-    .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
     .btn {
       background: var(--primary);
       color: #fff;
@@ -31,62 +30,194 @@
       cursor: pointer;
       box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
     }
-    .btn.secondary { background: transparent; color: #cbd5ff; border: 1px solid var(--line); box-shadow: none; }
-    .flash { min-height: 1.25rem; color: var(--muted); margin-bottom: 0.6rem; }
+    .btn:hover {
+      background: var(--primary-600);
+    }
+    .btn.secondary {
+      background: transparent;
+      color: #cbd5ff;
+      border: 1px solid var(--line);
+      box-shadow: none;
+    }
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 1rem;
-      margin-top: 1rem;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1.5rem;
+      align-items: flex-start;
+      margin-top: 1.5rem;
+    }
+    @media (min-width: 1280px) {
+      .grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
     }
     .card {
-      background: var(--dp-surface-elevated, #020617);
-      border: 1px solid rgba(148, 163, 184, 0.15);
-      border-radius: 14px;
-      padding: 0.9rem;
       display: flex;
       flex-direction: column;
-      gap: 0.4rem;
-      box-shadow: 0 14px 30px rgba(15, 23, 42, 0.45);
+      background: var(--dp-surface-elevated, #020617);
+      border-radius: 18px;
+      padding: 0.9rem;
+      border: 1px solid rgba(148, 163, 184, 0.15);
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.45);
+      transition: transform 0.15s ease-out, box-shadow 0.15s ease-out, border-color 0.15s ease-out;
+      gap: 0.5rem;
     }
-    .title { font-weight: 600; font-size: 0.98rem; line-height: 1.35; }
-    .row { display: flex; flex-wrap: wrap; gap: 0.45rem; font-size: 0.85rem; color: var(--muted); }
-    .badge { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.18rem 0.55rem; border-radius: 999px; border: 1px solid var(--line); font-size: 0.78rem; }
-    .pill { padding: 0.15rem 0.45rem; border-radius: 8px; background: rgba(94, 234, 212, 0.08); color: #d6e1ff; font-size: 0.8rem; }
-    .loading { display: flex; align-items: center; gap: 0.6rem; color: var(--muted); }
-    .spinner { width: 26px; height: 26px; border: 3px solid rgba(255,255,255,0.15); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 22px 55px rgba(15, 23, 42, 0.6);
+      border-color: rgba(94, 234, 212, 0.5);
+    }
+    .card-flash {
+      min-height: 1.1rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .card-flash.success {
+      color: var(--success);
+    }
+    .card-flash.error {
+      color: #ffb4b4;
+    }
+    .card-title {
+      font-weight: 600;
+      font-size: 0.98rem;
+      line-height: 1.35;
+      margin-bottom: 0.3rem;
+    }
+    .card-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 0.3rem;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.18rem 0.55rem;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      font-size: 0.78rem;
+    }
+    .pill {
+      padding: 0.15rem 0.45rem;
+      border-radius: 8px;
+      background: rgba(94, 234, 212, 0.08);
+      color: #d6e1ff;
+      font-size: 0.8rem;
+    }
+    .promo-control {
+      display: flex;
+      gap: 0.4rem;
+      align-items: center;
+      margin-top: 0.4rem;
+      padding-top: 0.5rem;
+      border-top: 1px solid rgba(148, 163, 184, 0.1);
+    }
+    .promo-control input {
+      width: 90px;
+      padding: 0.35rem 0.45rem;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: #0f1529;
+      color: #f4f6fb;
+      font-size: 0.9rem;
+    }
+    .promo-control .btn {
+      padding: 0.4rem 0.65rem;
+      font-size: 0.82rem;
+    }
+    .loading {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      color: var(--muted);
+      margin: 2rem 0;
+    }
+    .spinner {
+      width: 26px;
+      height: 26px;
+      border: 3px solid rgba(255,255,255,0.15);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .empty-state {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--muted);
+    }
+    .empty-state h3 {
+      margin-bottom: 0.5rem;
+      color: var(--text-primary);
+    }
   </style>
 </head>
 <body>
-  <div class="page">
-    <div class="heading">
-      <div>
-        <h1 style="margin: 0;">Active Listings</h1>
-        <div class="muted" id="subtext">Read-only view of live eBay listings (cannot edit in-app).</div>
+  <script src="/auth-client.js"></script>
+  
+  <div id="pageContent">
+    <div class="dp-card">
+      <div class="flash" id="flash"></div>
+      
+      <div class="toolbar">
+        <button class="btn secondary" id="btnRefresh">↻ Refresh</button>
+        <div style="flex: 1;"></div>
+        <div id="counts" style="color: var(--muted); font-size: 0.9rem;"></div>
       </div>
-      <div class="actions">
-        <button class="btn secondary" id="btnRefresh">Refresh</button>
+      
+      <div id="loading" class="loading" style="display:none;">
+        <div class="spinner"></div>
+        <span>Loading active listings...</span>
+      </div>
+      
+      <div id="grid" class="grid"></div>
+      
+      <div id="emptyState" class="empty-state" style="display:none;">
+        <h3>No Active Listings</h3>
+        <p>You don't have any published listings on eBay yet.</p>
+        <p style="margin-top: 1rem;">
+          <a href="/quick-list.html" class="btn">Create Your First Listing</a>
+        </p>
       </div>
     </div>
-    <div class="flash" id="flash"></div>
-    <div id="counts" class="muted"></div>
-    <div id="loading" class="loading" style="display:none;"><div class="spinner"></div><span>Loading active listings...</span></div>
-    <div id="grid" class="grid"></div>
   </div>
 
+  <script src="/sidebar-shell.js"></script>
+  <script>
+    DraftPilotShell.init({
+      title: 'Active Listings',
+      subtitle: 'Manage your live eBay listings and promotions',
+      activePage: 'drafts',
+      showSearch: false
+    });
+  </script>
+  
   <script type="module">
     const flash = document.getElementById('flash');
     const grid = document.getElementById('grid');
     const loading = document.getElementById('loading');
     const counts = document.getElementById('counts');
-    const subtext = document.getElementById('subtext');
-    const exec = (window.authClient && typeof window.authClient.authFetch === 'function') ? window.authClient.authFetch : fetch;
+    const emptyState = document.getElementById('emptyState');
+    const exec = (window.authClient && typeof window.authClient.authFetch === 'function') 
+      ? window.authClient.authFetch 
+      : fetch;
 
     function fmtPrice(p) {
       if (!p) return '';
-      try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: p.currency || 'USD' }).format(Number(p.value)); }
-      catch { return `${p.value || ''} ${p.currency || ''}`; }
+      try {
+        return new Intl.NumberFormat('en-US', { 
+          style: 'currency', 
+          currency: p.currency || 'USD' 
+        }).format(Number(p.value));
+      } catch {
+        return `${p.value || ''} ${p.currency || ''}`;
+      }
     }
 
     function renderCard(o) {
@@ -94,47 +225,59 @@
       card.className = 'card';
 
       const localFlash = document.createElement('div');
-      localFlash.className = 'muted';
-      localFlash.style.minHeight = '1.1rem';
+      localFlash.className = 'card-flash';
       card.appendChild(localFlash);
 
       const title = document.createElement('div');
-      title.className = 'title';
+      title.className = 'card-title';
       title.textContent = o.title || o.sku || '(untitled)';
       card.appendChild(title);
 
-      const row1 = document.createElement('div');
-      row1.className = 'row';
-      row1.textContent = [o.sku ? `SKU: ${o.sku}` : null, o.offerId ? `Offer: ${o.offerId}` : null, o.listingId ? `Listing: ${o.listingId}` : null].filter(Boolean).join(' • ');
-      card.appendChild(row1);
+      const meta = document.createElement('div');
+      meta.className = 'card-meta';
+      const metaParts = [];
+      if (o.sku) metaParts.push(`SKU: ${o.sku}`);
+      if (o.listingId) metaParts.push(`ID: ${o.listingId}`);
+      meta.textContent = metaParts.join(' • ');
+      card.appendChild(meta);
 
-      const row2 = document.createElement('div');
-      row2.className = 'row';
-      row2.textContent = [fmtPrice(o.price), o.availableQuantity != null ? `Qty: ${o.availableQuantity}` : null].filter(Boolean).join(' • ');
-      card.appendChild(row2);
+      const priceLine = document.createElement('div');
+      priceLine.className = 'card-meta';
+      const priceParts = [];
+      if (o.price) priceParts.push(fmtPrice(o.price));
+      if (o.availableQuantity != null) priceParts.push(`Qty: ${o.availableQuantity}`);
+      priceLine.textContent = priceParts.join(' • ');
+      card.appendChild(priceLine);
 
       const badges = document.createElement('div');
-      badges.className = 'row';
-      const status = document.createElement('span');
-      status.className = 'badge';
-      status.textContent = o.listingStatus || 'ACTIVE';
-      badges.appendChild(status);
+      badges.style.display = 'flex';
+      badges.style.gap = '0.4rem';
+      badges.style.flexWrap = 'wrap';
+      badges.style.marginTop = '0.3rem';
+
+      const statusBadge = document.createElement('span');
+      statusBadge.className = 'badge';
+      statusBadge.textContent = o.listingStatus || 'ACTIVE';
+      badges.appendChild(statusBadge);
 
       if (o.autoPromote) {
-        const promo = document.createElement('span');
-        promo.className = 'pill';
-        promo.textContent = `Auto-promote ${o.autoPromoteAdRate ? o.autoPromoteAdRate + '%' : ''}`.trim();
-        badges.appendChild(promo);
+        const promoBadge = document.createElement('span');
+        promoBadge.className = 'pill';
+        promoBadge.textContent = `Promoted ${o.autoPromoteAdRate ? o.autoPromoteAdRate + '%' : ''}`.trim();
+        badges.appendChild(promoBadge);
       }
 
       card.appendChild(badges);
 
-      // Inline control to set/update promoted ad rate
-      const control = document.createElement('div');
-      control.style.display = 'flex';
-      control.style.gap = '0.4rem';
-      control.style.alignItems = 'center';
-      control.style.marginTop = '0.2rem';
+      // Promotion control
+      const promoControl = document.createElement('div');
+      promoControl.className = 'promo-control';
+
+      const label = document.createElement('label');
+      label.textContent = 'Ad Rate:';
+      label.style.fontSize = '0.85rem';
+      label.style.color = 'var(--muted)';
+      promoControl.appendChild(label);
 
       const rateInput = document.createElement('input');
       rateInput.type = 'number';
@@ -143,92 +286,102 @@
       rateInput.max = '100';
       rateInput.step = '0.1';
       rateInput.value = o.autoPromoteAdRate != null ? String(o.autoPromoteAdRate) : '5';
-      rateInput.style.width = '90px';
-      rateInput.style.padding = '0.35rem 0.45rem';
-      rateInput.style.borderRadius = '8px';
-      rateInput.style.border = '1px solid var(--line)';
-      rateInput.style.background = '#0f1529';
-      rateInput.style.color = '#f4f6fb';
+      promoControl.appendChild(rateInput);
 
       const saveBtn = document.createElement('button');
       saveBtn.className = 'btn secondary';
-      saveBtn.textContent = 'Save Rate';
-      saveBtn.style.padding = '0.4rem 0.65rem';
-      saveBtn.style.fontSize = '0.82rem';
+      saveBtn.textContent = 'Save';
+      promoControl.appendChild(saveBtn);
 
       saveBtn.addEventListener('click', async () => {
         const val = parseFloat(rateInput.value);
         if (!Number.isFinite(val)) {
           localFlash.textContent = 'Enter a valid percent';
+          localFlash.className = 'card-flash error';
           return;
         }
         saveBtn.disabled = true;
         saveBtn.textContent = 'Saving...';
         localFlash.textContent = '';
+        localFlash.className = 'card-flash';
+        
         try {
           const res = await exec('/.netlify/functions/ebay-update-active-promo', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ listingId: o.listingId, offerId: o.offerId, sku: o.sku, adRate: val }),
+            body: JSON.stringify({ 
+              listingId: o.listingId, 
+              offerId: o.offerId, 
+              sku: o.sku, 
+              adRate: val 
+            }),
           });
           const txt = await res.text();
           const data = txt ? JSON.parse(txt) : {};
+          
           if (!res.ok || !data.ok) {
             localFlash.textContent = data?.error || `Save failed (${res.status})`;
+            localFlash.className = 'card-flash error';
             return;
           }
-          localFlash.textContent = `Saved ${data.adRate}% (${data.action})`;
+          
+          localFlash.textContent = `✓ Saved ${data.adRate}% (${data.action})`;
+          localFlash.className = 'card-flash success';
           setTimeout(() => {
             localFlash.textContent = '';
-          }, 2500);
+            localFlash.className = 'card-flash';
+          }, 3000);
         } catch (e) {
           localFlash.textContent = e?.message || String(e);
+          localFlash.className = 'card-flash error';
         } finally {
           saveBtn.disabled = false;
-          saveBtn.textContent = 'Save Rate';
+          saveBtn.textContent = 'Save';
         }
       });
 
-      control.appendChild(rateInput);
-      control.appendChild(saveBtn);
-      card.appendChild(control);
-
+      card.appendChild(promoControl);
       return card;
     }
 
     async function load() {
       flash.textContent = '';
+      flash.className = 'flash';
       loading.style.display = 'flex';
       grid.innerHTML = '';
       counts.textContent = '';
+      emptyState.style.display = 'none';
 
       try {
         const res = await exec('/.netlify/functions/ebay-list-active');
         const text = await res.text();
 
-        // Handle auth errors and plain-text responses safely
         if (res.status === 401) {
           flash.textContent = 'Unauthorized – please sign in and ensure your eBay account is connected.';
+          flash.className = 'flash error';
           return;
         }
 
-        let data: any = {};
+        let data = {};
         try {
           data = text ? JSON.parse(text) : {};
         } catch {
           flash.textContent = text || `Error ${res.status}`;
+          flash.className = 'flash error';
           return;
         }
 
         if (!res.ok || !data.ok) {
           flash.textContent = data?.error || `Error ${res.status}`;
+          flash.className = 'flash error';
           return;
         }
 
         const offers = Array.isArray(data.offers) ? data.offers : [];
         counts.textContent = `${offers.length} active listing${offers.length === 1 ? '' : 's'}`;
+        
         if (!offers.length) {
-          subtext.textContent = 'No active listings found for this account.';
+          emptyState.style.display = 'block';
           return;
         }
 
@@ -237,13 +390,20 @@
         }
       } catch (e) {
         flash.textContent = e?.message || String(e);
+        flash.className = 'flash error';
       } finally {
         loading.style.display = 'none';
       }
     }
 
     document.getElementById('btnRefresh')?.addEventListener('click', () => load());
-    load();
+    
+    // Load on page ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', load);
+    } else {
+      load();
+    }
   </script>
 </body>
 </html>
