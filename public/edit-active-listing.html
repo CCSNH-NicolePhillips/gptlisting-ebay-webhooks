@@ -447,6 +447,8 @@
         
         const updatedListing = {
           itemId: currentItemId,
+          sku: originalItem.sku,
+          isInventoryListing: originalItem.isInventoryListing || false,
           title: $('title').value.trim(),
           description: $('description').value.trim(),
           price: parseFloat($('price').value) || 0,

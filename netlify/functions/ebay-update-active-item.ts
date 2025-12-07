@@ -19,13 +19,13 @@ export const handler: Handler = async (event) => {
     }
 
     const body = event.body ? JSON.parse(event.body) : {};
-    const { itemId, title, description, price, quantity, condition, aspects, images } = body;
+    const { itemId, sku, isInventoryListing, title, description, price, quantity, condition, aspects, images } = body;
 
     if (!itemId) {
       return { statusCode: 400, body: JSON.stringify({ error: 'Missing itemId' }) };
     }
 
-    console.log('[ebay-update-active-item] Updating item:', itemId);
+    console.log('[ebay-update-active-item] Updating item:', itemId, 'Inventory listing:', isInventoryListing);
 
     // Load refresh token
     const store = tokensStore();
@@ -36,6 +36,106 @@ export const handler: Handler = async (event) => {
     }
 
     const { access_token } = await accessTokenFromRefresh(refresh);
+
+    // Use Inventory API for inventory listings, Trading API for traditional listings
+    if (isInventoryListing) {
+      // Use Inventory API - updateOffer
+      console.log('[ebay-update-active-item] Using Inventory API for inventory listing');
+      
+      if (!sku) {
+        return { statusCode: 400, body: JSON.stringify({ error: 'SKU required for inventory listings' }) };
+      }
+
+      const { apiHost } = require('../../src/lib/_common.js').tokenHosts(process.env.EBAY_ENV);
+      
+      // Build aspects
+      const aspectsArray = aspects && typeof aspects === 'object' 
+        ? Object.entries(aspects).map(([name, values]) => ({
+            name,
+            values: Array.isArray(values) ? values : [values]
+          }))
+        : [];
+
+      const updatePayload: any = {};
+      
+      if (title) updatePayload.listingDescription = title;
+      if (description) updatePayload.listingPolicies = { productCompliancePolicyIds: [] }; // Can't update description via offer
+      if (price) updatePayload.pricingSummary = { price: { value: String(price), currency: 'USD' } };
+      if (quantity !== undefined) updatePayload.availableQuantity = quantity;
+      if (condition) {
+        const conditionMap: Record<string, string> = {
+          '1000': 'NEW',
+          '1500': 'NEW_OTHER',
+          '1750': 'NEW_WITH_DEFECTS',
+          '2000': 'MANUFACTURER_REFURBISHED',
+          '2500': 'SELLER_REFURBISHED',
+          '3000': 'USED_EXCELLENT',
+          '4000': 'USED_VERY_GOOD',
+          '5000': 'USED_GOOD',
+          '6000': 'USED_ACCEPTABLE',
+          '7000': 'FOR_PARTS_OR_NOT_WORKING'
+        };
+        // Note: Condition can't be changed on published offers
+      }
+
+      // First, get the current offer to get offerId
+      const getOfferUrl = `${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}/offer`;
+      const getRes = await fetch(getOfferUrl, {
+        headers: {
+          'Authorization': `Bearer ${access_token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!getRes.ok) {
+        const errorText = await getRes.text();
+        console.error('[ebay-update-active-item] Failed to get offers:', errorText);
+        return {
+          statusCode: getRes.status,
+          body: JSON.stringify({ error: 'Failed to get offer details', detail: errorText }),
+        };
+      }
+
+      const offersData = await getRes.json();
+      const offer = offersData.offers?.[0];
+      
+      if (!offer || !offer.offerId) {
+        return { statusCode: 404, body: JSON.stringify({ error: 'No offer found for this SKU' }) };
+      }
+
+      // Update the offer
+      const updateUrl = `${apiHost}/sell/inventory/v1/offer/${offer.offerId}`;
+      const updateRes = await fetch(updateUrl, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...offer, // Keep existing fields
+          ...updatePayload, // Override with updates
+        }),
+      });
+
+      if (!updateRes.ok) {
+        const errorText = await updateRes.text();
+        console.error('[ebay-update-active-item] Inventory API error:', errorText);
+        return {
+          statusCode: updateRes.status,
+          body: JSON.stringify({ error: 'Failed to update offer', detail: errorText }),
+        };
+      }
+
+      console.log('[ebay-update-active-item] Inventory listing updated successfully');
+      return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ok: true, itemId, method: 'inventory' }),
+      };
+    }
+
+    // Use Trading API for traditional listings
+    console.log('[ebay-update-active-item] Using Trading API for traditional listing');
 
     // Build ItemSpecifics XML
     let itemSpecificsXml = '';

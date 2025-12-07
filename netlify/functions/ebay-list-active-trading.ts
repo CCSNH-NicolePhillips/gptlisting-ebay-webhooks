@@ -156,6 +156,10 @@ export const handler: Handler = async (event) => {
           const watchCountMatch = itemXml.match(/<WatchCount>([^<]+)<\/WatchCount>/);
           const hitCountMatch = itemXml.match(/<HitCount>([^<]+)<\/HitCount>/);
           
+          // Check if this is an Inventory API listing (has SellerInventoryID)
+          const sellerInventoryIdMatch = itemXml.match(/<SellerInventoryID>([^<]+)<\/SellerInventoryID>/);
+          const isInventoryListing = !!sellerInventoryIdMatch;
+          
           // Check listing status - skip if ended, deleted, or not active
           const listingStatusMatch = itemXml.match(/<ListingStatus>([^<]+)<\/ListingStatus>/);
           const listingStatus = listingStatusMatch ? listingStatusMatch[1] : '';
@@ -196,6 +200,7 @@ export const handler: Handler = async (event) => {
               offerId: itemId,
               listingId: itemId,
               sku: skuMatch ? skuMatch[1] : itemId, // Use itemId as fallback SKU
+              isInventoryListing: isInventoryListing, // Flag to determine which API to use for updates
               title: titleMatch ? titleMatch[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>') : '',
               price: priceMatch ? {
                 value: priceMatch[1],

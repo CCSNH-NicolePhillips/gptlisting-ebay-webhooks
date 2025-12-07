@@ -105,6 +105,11 @@ export const handler: Handler = async (event) => {
       descMatch = xmlText.match(/<Description>(.*?)<\/Description>/s);
     }
     const skuMatch = xmlText.match(/<SKU>([^<]+)<\/SKU>/);
+    
+    // Check if this is an Inventory API listing
+    const sellerInventoryIdMatch = xmlText.match(/<SellerInventoryID>([^<]+)<\/SellerInventoryID>/);
+    const isInventoryListing = !!sellerInventoryIdMatch;
+    
     const priceMatch = xmlText.match(/<CurrentPrice[^>]*>([^<]+)<\/CurrentPrice>/);
     const currencyMatch = xmlText.match(/<CurrentPrice currencyID="([^"]+)"/);
     const quantityMatch = xmlText.match(/<Quantity>([^<]+)<\/Quantity>/);
@@ -140,6 +145,7 @@ export const handler: Handler = async (event) => {
     const item = {
       itemId,
       sku: skuMatch ? skuMatch[1] : '',
+      isInventoryListing: isInventoryListing,
       title: titleMatch ? titleMatch[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>') : '',
       description: descMatch ? descMatch[1] : '',
       price: priceMatch ? priceMatch[1] : '',
