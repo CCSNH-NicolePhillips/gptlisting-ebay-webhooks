@@ -192,6 +192,7 @@ export const handler: Handler = async (event) => {
           if (itemIdMatch) {
             const itemId = itemIdMatch[1];
             const listing = {
+              itemId: itemId,
               offerId: itemId,
               listingId: itemId,
               sku: skuMatch ? skuMatch[1] : itemId, // Use itemId as fallback SKU
