@@ -76,7 +76,6 @@
     }
     .aspect-item input,
     .aspect-item select {
-      flex: 1;
       background: #0f1529;
       border: 1px solid #2a335c;
       border-radius: 6px;
@@ -85,10 +84,12 @@
       font-size: 0.9375rem;
     }
     .aspect-item .aspect-key {
-      max-width: 250px;
+      width: 250px;
+      flex-shrink: 0;
     }
     .aspect-item .aspect-value {
-      max-width: 400px;
+      width: 400px;
+      flex-shrink: 0;
     }
     .aspect-item input:focus,
     .aspect-item select:focus {
