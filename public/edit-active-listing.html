@@ -37,6 +37,9 @@
       box-sizing: border-box;
       transition: border-color 0.2s, box-shadow 0.2s;
     }
+    .form-field input[type="number"] {
+      max-width: 150px;
+    }
     .form-field input:focus, 
     .form-field textarea:focus, 
     .form-field select:focus {
@@ -272,7 +275,7 @@
       div.className = 'aspect-item';
       
       div.innerHTML = `
-        <input type="text" placeholder="Name (e.g. Brand)" value="${key}" class="aspect-key" />
+        <input type="text" placeholder="Name (e.g. Brand)" value="${key}" class="aspect-key" ${key ? 'readonly' : ''} />
         <input type="text" placeholder="Value" value="${value}" class="aspect-value" />
         <button class="dp-btn dp-btn-secondary" type="button" onclick="this.parentElement.remove()">×</button>
       `;
