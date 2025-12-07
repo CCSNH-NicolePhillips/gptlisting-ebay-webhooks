@@ -156,6 +156,22 @@ export const handler: Handler = async (event) => {
           const watchCountMatch = itemXml.match(/<WatchCount>([^<]+)<\/WatchCount>/);
           const hitCountMatch = itemXml.match(/<HitCount>([^<]+)<\/HitCount>/);
           
+          // Check listing status - skip if ended, deleted, or not active
+          const listingStatusMatch = itemXml.match(/<ListingStatus>([^<]+)<\/ListingStatus>/);
+          const listingStatus = listingStatusMatch ? listingStatusMatch[1] : '';
+          
+          // Skip if not active or quantity available is 0
+          if (listingStatus && listingStatus !== 'Active') {
+            console.log(`[ebay-list-active-trading] Skipping item ${itemIdMatch?.[1]} with status: ${listingStatus}`);
+            continue;
+          }
+          
+          const quantityAvailable = quantityAvailMatch ? parseInt(quantityAvailMatch[1]) : (quantityMatch ? parseInt(quantityMatch[1]) : 0);
+          if (quantityAvailable <= 0) {
+            console.log(`[ebay-list-active-trading] Skipping item ${itemIdMatch?.[1]} with 0 quantity available`);
+            continue;
+          }
+          
           if (itemIdMatch) {
             const itemId = itemIdMatch[1];
             const listing = {
@@ -167,7 +183,7 @@ export const handler: Handler = async (event) => {
                 value: priceMatch[1],
                 currency: currencyMatch ? currencyMatch[1] : 'USD'
               } : undefined,
-              availableQuantity: quantityAvailMatch ? parseInt(quantityAvailMatch[1]) : (quantityMatch ? parseInt(quantityMatch[1]) : 0),
+              availableQuantity: quantityAvailable,
               quantitySold: quantitySoldMatch ? parseInt(quantitySoldMatch[1]) : 0,
               listingStatus: 'ACTIVE',
               marketplaceId: 'EBAY_US',
