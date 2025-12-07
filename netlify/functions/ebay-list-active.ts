@@ -90,29 +90,34 @@ export const handler: Handler = async (event) => {
 
         const offers = Array.isArray(data.offers) ? data.offers : [];
         for (const o of offers) {
-          const status = String(o.status || '').toUpperCase();
-          const listingStatus = String(o.listing?.status || o.publication?.status || '').toUpperCase();
-          // Treat PUBLISHED/ACTIVE as "active" listings
-          const isActive = status === 'PUBLISHED' || listingStatus === 'ACTIVE';
-          if (!isActive) continue;
+          try {
+            const status = String(o.status || '').toUpperCase();
+            const listingStatus = String(o.listing?.status || o.publication?.status || '').toUpperCase();
+            // Treat PUBLISHED/ACTIVE as "active" listings
+            const isActive = status === 'PUBLISHED' || listingStatus === 'ACTIVE';
+            if (!isActive) continue;
 
-          const adRateRaw = o?.merchantData?.autoPromoteAdRate;
-          const adRate = typeof adRateRaw === 'number' ? adRateRaw : parseFloat(adRateRaw);
+            const adRateRaw = o?.merchantData?.autoPromoteAdRate;
+            const adRate = typeof adRateRaw === 'number' ? adRateRaw : parseFloat(adRateRaw);
 
-          results.push({
-            offerId: String(o.offerId || ''),
-            sku: String(o.sku || ''),
-            title: o?.listing?.title || o?.title || o?.sku || '',
-            price: o?.pricingSummary?.price,
-            availableQuantity: o?.availableQuantity,
-            listingId: o?.listing?.listingId || o?.publication?.listingId,
-            listingStatus: o?.listing?.status || o?.publication?.status || o?.status,
-            marketplaceId: o?.marketplaceId,
-            condition: typeof o?.condition === 'number' ? o.condition : undefined,
-            lastModifiedDate: o?.listing?.lastModifiedDate || o?.lastModifiedDate,
-            autoPromote: o?.merchantData?.autoPromote === true,
-            autoPromoteAdRate: Number.isFinite(adRate) ? adRate : undefined,
-          });
+            results.push({
+              offerId: String(o.offerId || ''),
+              sku: String(o.sku || ''),
+              title: o?.listing?.title || o?.title || o?.sku || '',
+              price: o?.pricingSummary?.price,
+              availableQuantity: o?.availableQuantity,
+              listingId: o?.listing?.listingId || o?.publication?.listingId,
+              listingStatus: o?.listing?.status || o?.publication?.status || o?.status,
+              marketplaceId: o?.marketplaceId,
+              condition: typeof o?.condition === 'number' ? o.condition : undefined,
+              lastModifiedDate: o?.listing?.lastModifiedDate || o?.lastModifiedDate,
+              autoPromote: o?.merchantData?.autoPromote === true,
+              autoPromoteAdRate: Number.isFinite(adRate) ? adRate : undefined,
+            });
+          } catch (offerErr: any) {
+            console.warn(`[ebay-list-active] Error processing offer ${o?.offerId}:`, offerErr?.message);
+            // Continue to next offer
+          }
         }
 
         const next = data?.next;
