@@ -99,7 +99,11 @@ export const handler: Handler = async (event) => {
 
     // Parse item details from XML
     const titleMatch = xmlText.match(/<Title>([^<]+)<\/Title>/);
-    const descMatch = xmlText.match(/<Description><!\[CDATA\[(.*?)\]\]><\/Description>/s);
+    // Try CDATA first, then regular content
+    let descMatch = xmlText.match(/<Description><!\[CDATA\[(.*?)\]\]><\/Description>/s);
+    if (!descMatch) {
+      descMatch = xmlText.match(/<Description>(.*?)<\/Description>/s);
+    }
     const skuMatch = xmlText.match(/<SKU>([^<]+)<\/SKU>/);
     const priceMatch = xmlText.match(/<CurrentPrice[^>]*>([^<]+)<\/CurrentPrice>/);
     const currencyMatch = xmlText.match(/<CurrentPrice currencyID="([^"]+)"/);

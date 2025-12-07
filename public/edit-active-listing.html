@@ -124,6 +124,15 @@
       font-size: 0.75rem;
       font-weight: 600;
     }
+    /* Hide spinner arrows on number inputs */
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    input[type="number"] {
+      -moz-appearance: textfield;
+    }
   </style>
 </head>
 <body>
@@ -294,7 +303,9 @@
         
         // Populate form
         $('title').value = originalItem.title || '';
-        $('description').value = originalItem.description || '';
+        // Handle description - it may contain HTML entities or be empty
+        const desc = originalItem.description || '';
+        $('description').value = desc;
         $('price').value = originalItem.price || '';
         $('quantity').value = originalItem.quantity || '';
         $('condition').value = originalItem.condition || '1000';
