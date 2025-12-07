@@ -20,9 +20,6 @@ interface ActiveOffer {
 
 export const handler: Handler = async (event) => {
   console.log('[ebay-list-active] Function invoked');
-  console.log('[ebay-list-active] Method:', event.httpMethod);
-  console.log('[ebay-list-active] Query params:', JSON.stringify(event.queryStringParameters));
-  
   try {
     const devBypassEnabled = process.env.DEV_BYPASS_AUTH_FOR_LIST_ACTIVE === 'true';
     const wantBypass =
@@ -39,11 +36,9 @@ export const handler: Handler = async (event) => {
       bearer = bearer || 'dev-bypass';
     }
 
-    console.log('[ebay-list-active] User ID:', sub);
-    console.log('[ebay-list-active] Dev bypass:', wantBypass);
+    console.log('[ebay-list-active] User ID:', sub, 'Dev bypass:', wantBypass);
 
     if (!bearer || !sub) {
-      console.log('[ebay-list-active] Unauthorized - no bearer or sub');
       return {
         statusCode: 401,
         headers: { 'Content-Type': 'application/json' },
@@ -55,24 +50,18 @@ export const handler: Handler = async (event) => {
     const store = tokensStore();
     const saved = (await store.get(userScopedKey(sub, 'ebay.json'), { type: 'json' })) as any;
     const refresh = saved?.refresh_token as string | undefined;
-    if (!refresh) {
-      console.log('[ebay-list-active] No eBay refresh token found for user');
-      return { statusCode: 400, body: JSON.stringify({ error: 'Connect eBay first' }) };
-    }
+    if (!refresh) return { statusCode: 400, body: JSON.stringify({ error: 'Connect eBay first' }) };
 
-    console.log('[ebay-list-active] Getting access token...');
+    console.log('[ebay-list-active] Getting eBay access token...');
     const { access_token } = await accessTokenFromRefresh(refresh);
     const { apiHost } = tokenHosts(process.env.EBAY_ENV);
     const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || 'EBAY_US';
-    
-    console.log('[ebay-list-active] API Host:', apiHost);
-    console.log('[ebay-list-active] Marketplace:', MARKETPLACE_ID);
+    console.log('[ebay-list-active] API Host:', apiHost, 'Marketplace:', MARKETPLACE_ID);
 
     async function listActiveOffers(): Promise<ActiveOffer[]> {
       const results: ActiveOffer[] = [];
       let offset = 0;
       const limit = 200;
-
       console.log('[ebay-list-active] Starting to fetch offers...');
 
       while (true) {
@@ -82,8 +71,7 @@ export const handler: Handler = async (event) => {
           offer_status: 'PUBLISHED' // Only fetch PUBLISHED offers
         });
         const url = `${apiHost}/sell/inventory/v1/offer?${params.toString()}`;
-        console.log('[ebay-list-active] Fetching batch at offset', offset);
-        
+        console.log('[ebay-list-active] Fetching batch at offset', offset, 'URL:', url);
         const res = await fetch(url, {
           headers: {
             Authorization: `Bearer ${access_token}`,
@@ -97,9 +85,12 @@ export const handler: Handler = async (event) => {
         let data: any = {};
         try {
           data = text ? JSON.parse(text) : {};
+        } catch {
+          throw new Error(`Failed to parse offers response at offset ${offset}`);
+        }
+
         if (!res.ok) {
           const errMsg = data?.errors?.[0]?.message || data?.message || text || 'Unknown error';
-          console.error('[ebay-list-active] eBay API error at offset', offset, ':', res.status, errMsg);
           // If it's a validation error, log and continue to next batch
           if (res.status === 400 && errMsg.includes('SKU')) {
             console.warn(`[ebay-list-active] SKU validation error at offset ${offset}, skipping batch:`, errMsg);
@@ -109,11 +100,7 @@ export const handler: Handler = async (event) => {
         }
 
         const offers = Array.isArray(data.offers) ? data.offers : [];
-        console.log('[ebay-list-active] Received', offers.length, 'offers in this batch');
-          throw new Error(`Offer list failed ${res.status}: ${errMsg}`);
-        }
-
-        const offers = Array.isArray(data.offers) ? data.offers : [];
+        console.log('[ebay-list-active] Received', offers.length, 'offers in this batch. Total so far:', results.length);
         for (const o of offers) {
           try {
             const adRateRaw = o?.merchantData?.autoPromoteAdRate;
@@ -140,10 +127,18 @@ export const handler: Handler = async (event) => {
         }
 
         const next = data?.next;
-    const activeOffers = await listActiveOffers();
+        if (!next || offers.length < limit) break;
+        offset += limit;
+      }
 
-    console.log('[ebay-list-active] SUCCESS - Found', activeOffers.length, 'active offers');
-    console.log('[ebay-list-active] Sample offer:', activeOffers[0] ? JSON.stringify(activeOffers[0]) : 'none');
+      return results;
+    }
+
+    const activeOffers = await listActiveOffers();
+    console.log('[ebay-list-active] SUCCESS - Found', activeOffers.length, 'total active offers');
+    if (activeOffers.length > 0) {
+      console.log('[ebay-list-active] Sample offer:', JSON.stringify(activeOffers[0]).substring(0, 200));
+    }
 
     return {
       statusCode: 200,
@@ -153,13 +148,6 @@ export const handler: Handler = async (event) => {
   } catch (e: any) {
     console.error('[ebay-list-active] Error:', e?.message || e);
     console.error('[ebay-list-active] Stack:', e?.stack);
-    return {
-      statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Failed to list active offers', detail: e?.message || String(e) }),
-    };
-  }
-};  console.error('[ebay-list-active] Error:', e?.message || e);
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
