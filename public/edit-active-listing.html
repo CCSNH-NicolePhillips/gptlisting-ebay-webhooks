@@ -293,8 +293,8 @@
       div.className = 'aspect-item';
       
       div.innerHTML = `
-        <input type="text" placeholder="Name (e.g. Brand)" value="${key}" class="aspect-key" ${key ? 'readonly' : ''} />
-        <input type="text" placeholder="Value" value="${value}" class="aspect-value" />
+        <input type="text" placeholder="Name (e.g. Brand)" value="${key}" class="aspect-key" ${key ? 'readonly' : ''} style="width: 250px; flex-shrink: 0;" />
+        <input type="text" placeholder="Value" value="${value}" class="aspect-value" style="width: 400px; flex-shrink: 0;" />
         <button class="dp-btn dp-btn-secondary" type="button" onclick="this.parentElement.remove()">×</button>
       `;
       container.appendChild(div);
