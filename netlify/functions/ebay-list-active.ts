@@ -59,7 +59,11 @@ export const handler: Handler = async (event) => {
       const limit = 200;
 
       while (true) {
-        const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+        const params = new URLSearchParams({ 
+          limit: String(limit), 
+          offset: String(offset),
+          offer_status: 'PUBLISHED' // Only fetch PUBLISHED offers
+        });
         const url = `${apiHost}/sell/inventory/v1/offer?${params.toString()}`;
         const res = await fetch(url, {
           headers: {
@@ -91,12 +95,6 @@ export const handler: Handler = async (event) => {
         const offers = Array.isArray(data.offers) ? data.offers : [];
         for (const o of offers) {
           try {
-            const status = String(o.status || '').toUpperCase();
-            const listingStatus = String(o.listing?.status || o.publication?.status || '').toUpperCase();
-            // Treat PUBLISHED/ACTIVE as "active" listings
-            const isActive = status === 'PUBLISHED' || listingStatus === 'ACTIVE';
-            if (!isActive) continue;
-
             const adRateRaw = o?.merchantData?.autoPromoteAdRate;
             const adRate = typeof adRateRaw === 'number' ? adRateRaw : parseFloat(adRateRaw);
 
