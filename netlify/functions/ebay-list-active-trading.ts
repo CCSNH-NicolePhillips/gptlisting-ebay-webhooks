@@ -17,6 +17,10 @@ interface ActiveOffer {
   autoPromote?: boolean;
   autoPromoteAdRate?: number;
   imageUrl?: string;
+  startTime?: string;
+  quantitySold?: number;
+  watchCount?: number;
+  hitCount?: number;
 }
 
 export const handler: Handler = async (event) => {
@@ -133,7 +137,11 @@ export const handler: Handler = async (event) => {
           const currencyMatch = itemXml.match(/<CurrentPrice currencyID="([^"]+)"/);
           const quantityMatch = itemXml.match(/<Quantity>([^<]+)<\/Quantity>/);
           const quantityAvailMatch = itemXml.match(/<QuantityAvailable>([^<]+)<\/QuantityAvailable>/);
+          const quantitySoldMatch = itemXml.match(/<QuantitySold>([^<]+)<\/QuantitySold>/);
           const pictureMatch = itemXml.match(/<PictureURL>([^<]+)<\/PictureURL>/);
+          const startTimeMatch = itemXml.match(/<StartTime>([^<]+)<\/StartTime>/);
+          const watchCountMatch = itemXml.match(/<WatchCount>([^<]+)<\/WatchCount>/);
+          const hitCountMatch = itemXml.match(/<HitCount>([^<]+)<\/HitCount>/);
           
           if (itemIdMatch) {
             const itemId = itemIdMatch[1];
@@ -147,9 +155,13 @@ export const handler: Handler = async (event) => {
                 currency: currencyMatch ? currencyMatch[1] : 'USD'
               } : undefined,
               availableQuantity: quantityAvailMatch ? parseInt(quantityAvailMatch[1]) : (quantityMatch ? parseInt(quantityMatch[1]) : 0),
+              quantitySold: quantitySoldMatch ? parseInt(quantitySoldMatch[1]) : 0,
               listingStatus: 'ACTIVE',
               marketplaceId: 'EBAY_US',
               imageUrl: pictureMatch ? pictureMatch[1] : undefined,
+              startTime: startTimeMatch ? startTimeMatch[1] : undefined,
+              watchCount: watchCountMatch ? parseInt(watchCountMatch[1]) : 0,
+              hitCount: hitCountMatch ? parseInt(hitCountMatch[1]) : 0,
             });
             itemCount++;
           }

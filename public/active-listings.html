@@ -167,6 +167,18 @@
       
       <div class="toolbar">
         <button class="btn secondary" id="btnRefresh">↻ Refresh</button>
+        <select id="sortSelect" style="padding: 0.5rem 0.8rem; border-radius: 6px; background: var(--card-bg); border: 1px solid var(--border); color: var(--text); font-size: 0.9rem; cursor: pointer;">
+          <option value="newest">Newest First</option>
+          <option value="oldest">Oldest First</option>
+          <option value="title-asc">Title (A-Z)</option>
+          <option value="title-desc">Title (Z-A)</option>
+          <option value="price-high">Price (High to Low)</option>
+          <option value="price-low">Price (Low to High)</option>
+          <option value="sold-high">Most Sold</option>
+          <option value="sold-low">Least Sold</option>
+          <option value="popular">Most Popular (Views)</option>
+          <option value="watched">Most Watched</option>
+        </select>
         <div style="flex: 1;"></div>
         <div id="counts" style="color: var(--muted); font-size: 0.9rem;"></div>
       </div>
@@ -204,9 +216,65 @@
     const loading = document.getElementById('loading');
     const counts = document.getElementById('counts');
     const emptyState = document.getElementById('emptyState');
+    const sortSelect = document.getElementById('sortSelect');
     const exec = (window.authClient && typeof window.authClient.authFetch === 'function') 
       ? window.authClient.authFetch 
       : fetch;
+
+    let allOffers = []; // Store all offers for sorting
+
+    function sortOffers(offers, sortBy) {
+      const sorted = [...offers];
+      
+      switch(sortBy) {
+        case 'newest':
+          sorted.sort((a, b) => (b.startTime || '').localeCompare(a.startTime || ''));
+          break;
+        case 'oldest':
+          sorted.sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
+          break;
+        case 'title-asc':
+          sorted.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+          break;
+        case 'title-desc':
+          sorted.sort((a, b) => (b.title || '').localeCompare(a.title || ''));
+          break;
+        case 'price-high':
+          sorted.sort((a, b) => parseFloat(b.price?.value || '0') - parseFloat(a.price?.value || '0'));
+          break;
+        case 'price-low':
+          sorted.sort((a, b) => parseFloat(a.price?.value || '0') - parseFloat(b.price?.value || '0'));
+          break;
+        case 'sold-high':
+          sorted.sort((a, b) => (b.quantitySold || 0) - (a.quantitySold || 0));
+          break;
+        case 'sold-low':
+          sorted.sort((a, b) => (a.quantitySold || 0) - (b.quantitySold || 0));
+          break;
+        case 'popular':
+          sorted.sort((a, b) => (b.hitCount || 0) - (a.hitCount || 0));
+          break;
+        case 'watched':
+          sorted.sort((a, b) => (b.watchCount || 0) - (a.watchCount || 0));
+          break;
+      }
+      
+      return sorted;
+    }
+
+    function renderGrid(offers) {
+      grid.innerHTML = '';
+      const sorted = sortOffers(offers, sortSelect.value);
+      sorted.forEach(o => {
+        grid.appendChild(renderCard(o));
+      });
+    }
+
+    sortSelect.addEventListener('change', () => {
+      if (allOffers.length > 0) {
+        renderGrid(allOffers);
+      }
+    });
 
     function fmtPrice(p) {
       if (!p) return '';
@@ -401,6 +469,7 @@
         }
 
         const offers = Array.isArray(data.offers) ? data.offers : [];
+        allOffers = offers; // Store for sorting
         counts.textContent = `${offers.length} active listing${offers.length === 1 ? '' : 's'}`;
         
         if (!offers.length) {
@@ -408,9 +477,7 @@
           return;
         }
 
-        for (const o of offers) {
-          grid.appendChild(renderCard(o));
-        }
+        renderGrid(offers);
       } catch (e) {
         flash.textContent = e?.message || String(e);
         flash.className = 'flash error';
