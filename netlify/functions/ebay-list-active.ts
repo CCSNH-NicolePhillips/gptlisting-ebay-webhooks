@@ -80,6 +80,11 @@ export const handler: Handler = async (event) => {
 
         if (!res.ok) {
           const errMsg = data?.errors?.[0]?.message || data?.message || text || 'Unknown error';
+          // If it's a validation error, log and continue to next batch
+          if (res.status === 400 && errMsg.includes('SKU')) {
+            console.warn(`[ebay-list-active] SKU validation error at offset ${offset}, skipping batch:`, errMsg);
+            break; // Stop pagination on validation errors
+          }
           throw new Error(`Offer list failed ${res.status}: ${errMsg}`);
         }
 
