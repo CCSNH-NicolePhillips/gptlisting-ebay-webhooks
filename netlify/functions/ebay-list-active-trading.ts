@@ -160,15 +160,32 @@ export const handler: Handler = async (event) => {
           const listingStatusMatch = itemXml.match(/<ListingStatus>([^<]+)<\/ListingStatus>/);
           const listingStatus = listingStatusMatch ? listingStatusMatch[1] : '';
           
-          // Skip if not active or quantity available is 0
-          if (listingStatus && listingStatus !== 'Active') {
-            console.log(`[ebay-list-active-trading] Skipping item ${itemIdMatch?.[1]} with status: ${listingStatus}`);
+          // Check selling state - skip if listing has ended
+          const sellingStateMatch = itemXml.match(/<SellingStatus>.*?<ListingStatus>([^<]+)<\/ListingStatus>.*?<\/SellingStatus>/s);
+          const sellingStatus = sellingStateMatch ? sellingStateMatch[1] : listingStatus;
+          
+          // Parse quantities
+          const quantityAvailable = quantityAvailMatch ? parseInt(quantityAvailMatch[1]) : (quantityMatch ? parseInt(quantityMatch[1]) : 0);
+          const quantitySold = quantitySoldMatch ? parseInt(quantitySoldMatch[1]) : 0;
+          const totalQuantity = quantityMatch ? parseInt(quantityMatch[1]) : 0;
+          
+          // Skip if:
+          // 1. Status is not "Active" (could be "Completed", "Ended", "Inactive")
+          // 2. Quantity available is 0 or negative
+          // 3. All items are sold (quantity sold >= total quantity for fixed price listings)
+          if (sellingStatus && sellingStatus !== 'Active') {
+            console.log(`[ebay-list-active-trading] Skipping item ${itemIdMatch?.[1]} - status: ${sellingStatus}`);
             continue;
           }
           
-          const quantityAvailable = quantityAvailMatch ? parseInt(quantityAvailMatch[1]) : (quantityMatch ? parseInt(quantityMatch[1]) : 0);
           if (quantityAvailable <= 0) {
-            console.log(`[ebay-list-active-trading] Skipping item ${itemIdMatch?.[1]} with 0 quantity available`);
+            console.log(`[ebay-list-active-trading] Skipping item ${itemIdMatch?.[1]} - 0 quantity available`);
+            continue;
+          }
+          
+          // For fixed price listings, skip if completely sold out
+          if (totalQuantity > 0 && quantitySold >= totalQuantity) {
+            console.log(`[ebay-list-active-trading] Skipping item ${itemIdMatch?.[1]} - sold out (${quantitySold}/${totalQuantity})`);
             continue;
           }
           
@@ -184,7 +201,7 @@ export const handler: Handler = async (event) => {
                 currency: currencyMatch ? currencyMatch[1] : 'USD'
               } : undefined,
               availableQuantity: quantityAvailable,
-              quantitySold: quantitySoldMatch ? parseInt(quantitySoldMatch[1]) : 0,
+              quantitySold: quantitySold,
               listingStatus: 'ACTIVE',
               marketplaceId: 'EBAY_US',
               imageUrl: pictureUrl || undefined,
