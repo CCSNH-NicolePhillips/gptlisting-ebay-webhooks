@@ -224,6 +224,28 @@
       const card = document.createElement('div');
       card.className = 'card';
 
+      // Add image thumbnail if available
+      if (o.imageUrl) {
+        const imgContainer = document.createElement('div');
+        imgContainer.style.width = '100%';
+        imgContainer.style.height = '180px';
+        imgContainer.style.marginBottom = '0.8rem';
+        imgContainer.style.overflow = 'hidden';
+        imgContainer.style.borderRadius = '6px';
+        imgContainer.style.backgroundColor = '#2a2a2a';
+        
+        const img = document.createElement('img');
+        img.src = o.imageUrl;
+        img.alt = o.title || 'Product image';
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.objectFit = 'contain';
+        img.style.objectPosition = 'center';
+        
+        imgContainer.appendChild(img);
+        card.appendChild(imgContainer);
+      }
+
       const localFlash = document.createElement('div');
       localFlash.className = 'card-flash';
       card.appendChild(localFlash);
