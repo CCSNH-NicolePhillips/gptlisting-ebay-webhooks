@@ -113,6 +113,11 @@ export const handler: Handler = async (event) => {
         const xmlText = await res.text();
         console.log(`[ebay-list-active-trading] Got XML response, length: ${xmlText.length}`);
         
+        // Log first 2000 chars of first page to see structure
+        if (pageNumber === 1) {
+          console.log('[ebay-list-active-trading] Sample XML:', xmlText.substring(0, 2000));
+        }
+        
         // Check for API errors in response
         if (xmlText.includes('<Ack>Failure</Ack>') || xmlText.includes('<Ack>PartialFailure</Ack>')) {
           console.error('[ebay-list-active-trading] API returned error:', xmlText.substring(0, 500));
@@ -138,14 +143,22 @@ export const handler: Handler = async (event) => {
           const quantityMatch = itemXml.match(/<Quantity>([^<]+)<\/Quantity>/);
           const quantityAvailMatch = itemXml.match(/<QuantityAvailable>([^<]+)<\/QuantityAvailable>/);
           const quantitySoldMatch = itemXml.match(/<QuantitySold>([^<]+)<\/QuantitySold>/);
+          
+          // Try multiple patterns for picture URL
+          let pictureUrl = null;
+          const galleryMatch = itemXml.match(/<GalleryURL>([^<]+)<\/GalleryURL>/);
           const pictureMatch = itemXml.match(/<PictureURL>([^<]+)<\/PictureURL>/);
+          const pictureDetailsMatch = itemXml.match(/<PictureDetails>.*?<GalleryURL>([^<]+)<\/GalleryURL>/s);
+          
+          pictureUrl = galleryMatch?.[1] || pictureMatch?.[1] || pictureDetailsMatch?.[1];
+          
           const startTimeMatch = itemXml.match(/<StartTime>([^<]+)<\/StartTime>/);
           const watchCountMatch = itemXml.match(/<WatchCount>([^<]+)<\/WatchCount>/);
           const hitCountMatch = itemXml.match(/<HitCount>([^<]+)<\/HitCount>/);
           
           if (itemIdMatch) {
             const itemId = itemIdMatch[1];
-            results.push({
+            const listing = {
               offerId: itemId,
               listingId: itemId,
               sku: skuMatch ? skuMatch[1] : itemId, // Use itemId as fallback SKU
@@ -158,11 +171,19 @@ export const handler: Handler = async (event) => {
               quantitySold: quantitySoldMatch ? parseInt(quantitySoldMatch[1]) : 0,
               listingStatus: 'ACTIVE',
               marketplaceId: 'EBAY_US',
-              imageUrl: pictureMatch ? pictureMatch[1] : undefined,
+              imageUrl: pictureUrl || undefined,
               startTime: startTimeMatch ? startTimeMatch[1] : undefined,
               watchCount: watchCountMatch ? parseInt(watchCountMatch[1]) : 0,
               hitCount: hitCountMatch ? parseInt(hitCountMatch[1]) : 0,
-            });
+            };
+            
+            results.push(listing);
+            
+            // Log first item to see what we got
+            if (pageNumber === 1 && itemCount === 0) {
+              console.log('[ebay-list-active-trading] First item sample:', JSON.stringify(listing));
+            }
+            
             itemCount++;
           }
         }
