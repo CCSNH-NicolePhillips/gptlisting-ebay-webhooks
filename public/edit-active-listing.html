@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Edit Active Listing – DraftPilot</title>
+  <link rel="stylesheet" href="/draftpilot.css?v=2">
+  <style>
+    .form-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+    .form-field {
+      flex: 1 1 250px;
+      min-width: 220px;
+    }
+    .form-field label {
+      display: block;
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+      font-size: 0.875rem;
+      color: #cbd5ff;
+    }
+    .form-field input, 
+    .form-field textarea, 
+    .form-field select {
+      width: 100%;
+      background: #0f1529;
+      border: 1px solid #2a335c;
+      border-radius: 6px;
+      padding: 0.75rem;
+      color: #f4f6fb;
+      font-family: inherit;
+      font-size: 0.9375rem;
+      box-sizing: border-box;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .form-field input:focus, 
+    .form-field textarea:focus, 
+    .form-field select:focus {
+      outline: none;
+      border-color: #5b7cff;
+      box-shadow: 0 0 0 3px rgba(91, 124, 255, 0.1);
+    }
+    .form-field textarea {
+      resize: vertical;
+      min-height: 140px;
+      line-height: 1.6;
+    }
+    .muted-hint {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-top: 0.3rem;
+    }
+    .aspect-item {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.65rem;
+      align-items: center;
+    }
+    .aspect-item input,
+    .aspect-item select {
+      flex: 1;
+      background: #0f1529;
+      border: 1px solid #2a335c;
+      border-radius: 6px;
+      padding: 0.75rem;
+      color: #f4f6fb;
+      font-size: 0.9375rem;
+    }
+    .aspect-item input:focus,
+    .aspect-item select:focus {
+      outline: none;
+      border-color: #5b7cff;
+      box-shadow: 0 0 0 3px rgba(91, 124, 255, 0.1);
+    }
+    .aspect-item button {
+      padding: 0.4rem 0.8rem;
+      font-size: 0.85rem;
+    }
+    .images-preview {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .image-thumb {
+      position: relative;
+      aspect-ratio: 1;
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      border: 1px solid var(--border-subtle);
+      background: rgba(15, 23, 42, 0.5);
+      transition: border-color 0.2s, transform 0.2s;
+      cursor: move;
+    }
+    .image-thumb:hover {
+      border-color: var(--accent-hover);
+      transform: scale(1.02);
+    }
+    .image-thumb.dragging {
+      opacity: 0.5;
+    }
+    .image-thumb.drag-over {
+      border-color: var(--accent);
+      border-width: 2px;
+    }
+    .image-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      pointer-events: none;
+    }
+    .image-thumb .image-order {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <script src="/auth-client.js"></script>
+  <script src="/sidebar-shell.js"></script>
+  
+  <div class="dp-shell">
+    <!-- Sidebar will be injected by sidebar-shell.js -->
+    
+    <!-- Main Content -->
+    <main class="dp-main">
+      <div class="dp-page-header">
+        <div>
+          <h1 class="dp-page-header__title">Edit Active Listing</h1>
+          <p class="dp-page-header__subtitle">Update your live eBay listing details</p>
+        </div>
+        <div style="display: flex; gap: 0.75rem;">
+          <button class="dp-btn dp-btn-secondary" onclick="window.location.href='/active-listings.html'">
+            ← Back to Listings
+          </button>
+          <button id="btnSave" class="dp-btn dp-btn-primary" onclick="saveListing()">
+            Update Listing
+          </button>
+        </div>
+      </div>
+      
+      <div class="dp-content">
+        <div id="flashMessage" class="dp-flash" style="display: none;"></div>
+        
+        <form id="editForm" onsubmit="event.preventDefault(); saveListing();">
+          
+          <!-- Title & Price -->
+          <div class="form-row">
+            <div class="form-field" style="flex: 2;">
+              <label for="title">
+                Title <span style="color: #ef4444;">*</span>
+                <span id="titleCount" style="float: right; color: var(--text-muted);">0 / 80</span>
+              </label>
+              <input type="text" id="title" placeholder="Enter listing title (max 80 characters)" maxlength="80" required />
+            </div>
+            <div class="form-field">
+              <label for="price">Price (USD) <span style="color: #ef4444;">*</span></label>
+              <input type="number" id="price" placeholder="0.00" step="0.01" min="0" required />
+            </div>
+          </div>
+          
+          <!-- Description -->
+          <div class="form-row">
+            <div class="form-field" style="flex: 1 1 100%;">
+              <label for="description">Description</label>
+              <textarea id="description" placeholder="Detailed description of your item..."></textarea>
+            </div>
+          </div>
+          
+          <!-- Quantity & Condition -->
+          <div class="form-row">
+            <div class="form-field">
+              <label for="quantity">Quantity</label>
+              <input type="number" id="quantity" placeholder="1" min="0" />
+            </div>
+            <div class="form-field">
+              <label for="condition">Condition</label>
+              <select id="condition">
+                <option value="1000">New</option>
+                <option value="1500">New other (see details)</option>
+                <option value="1750">New with defects</option>
+                <option value="2000">Manufacturer refurbished</option>
+                <option value="2500">Seller refurbished</option>
+                <option value="3000">Used</option>
+                <option value="4000">Very Good</option>
+                <option value="5000">Good</option>
+                <option value="6000">Acceptable</option>
+                <option value="7000">For parts or not working</option>
+              </select>
+            </div>
+          </div>
+          
+          <!-- Item Specifics (Aspects) -->
+          <div class="form-row">
+            <div class="form-field" style="flex: 1 1 100%;">
+              <label>Item Specifics (Aspects)</label>
+              <div id="aspectsList"></div>
+              <button type="button" class="dp-btn dp-btn-secondary" style="margin-top: 0.5rem;" onclick="addAspect()">
+                + Add Aspect
+              </button>
+            </div>
+          </div>
+          
+          <!-- Images -->
+          <div class="form-row">
+            <div class="form-field" style="flex: 1 1 100%;">
+              <label>Product Images</label>
+              <p class="muted-hint">Drag and drop to reorder. First image is the main listing photo.</p>
+              <div id="imagesPreview" class="images-preview"></div>
+              <input type="file" id="imageUploadInput" accept="image/*" multiple style="display: none;" />
+            </div>
+          </div>
+        </form>
+      </div>
+    </main>
+  </div>
+  
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let currentItemId = null;
+    let originalItem = null;
+    
+    function showFlash(message, type = 'success') {
+      const flash = $('flashMessage');
+      flash.textContent = message;
+      flash.className = `dp-flash dp-flash--${type}`;
+      flash.style.display = 'block';
+      setTimeout(() => flash.style.display = 'none', 5000);
+    }
+    
+    async function fetchJSON(url, options = {}) {
+      const bearer = localStorage.getItem('access_token');
+      const headers = { ...options.headers };
+      if (bearer) headers.Authorization = `Bearer ${bearer}`;
+      
+      const res = await fetch(url, { ...options, headers });
+      if (res.status === 401) {
+        window.location.href = '/login.html';
+        return null;
+      }
+      return res.json();
+    }
+    
+    function updateTitleCount() {
+      const title = $('title');
+      $('titleCount').textContent = `${title.value.length} / 80`;
+    }
+    
+    function addAspect(key = '', value = '') {
+      const container = $('aspectsList');
+      const div = document.createElement('div');
+      div.className = 'aspect-item';
+      
+      div.innerHTML = `
+        <input type="text" placeholder="Name (e.g. Brand)" value="${key}" class="aspect-key" />
+        <input type="text" placeholder="Value" value="${value}" class="aspect-value" />
+        <button class="dp-btn dp-btn-secondary" type="button" onclick="this.parentElement.remove()">×</button>
+      `;
+      container.appendChild(div);
+    }
+    
+    async function loadListing() {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        currentItemId = params.get('itemId');
+        
+        if (!currentItemId) {
+          throw new Error('Missing itemId in URL');
+        }
+        
+        console.log('Loading listing for itemId:', currentItemId);
+        showFlash('Loading listing...', 'success');
+        
+        const res = await fetchJSON(`/.netlify/functions/ebay-get-active-item?itemId=${encodeURIComponent(currentItemId)}`);
+        
+        console.log('Listing loaded:', res);
+        
+        if (!res.ok || !res.item) {
+          throw new Error('Listing not found');
+        }
+        
+        originalItem = res.item;
+        
+        // Populate form
+        $('title').value = originalItem.title || '';
+        $('description').value = originalItem.description || '';
+        $('price').value = originalItem.price || '';
+        $('quantity').value = originalItem.quantity || '';
+        $('condition').value = originalItem.condition || '1000';
+        
+        updateTitleCount();
+        
+        // Populate aspects
+        if (originalItem.aspects && typeof originalItem.aspects === 'object') {
+          Object.entries(originalItem.aspects).forEach(([key, values]) => {
+            const valueStr = Array.isArray(values) ? values.join(', ') : values;
+            addAspect(key, valueStr);
+          });
+        }
+        
+        // Show images
+        if (originalItem.images && Array.isArray(originalItem.images)) {
+          const preview = $('imagesPreview');
+          originalItem.images.forEach((url, index) => {
+            const div = document.createElement('div');
+            div.className = 'image-thumb';
+            div.draggable = true;
+            div.dataset.url = url;
+            div.innerHTML = `
+              <div class="image-order">${index + 1}</div>
+              <img src="${url}" alt="Product image" />
+            `;
+            
+            // Drag and drop event handlers
+            div.addEventListener('dragstart', handleDragStart);
+            div.addEventListener('dragend', handleDragEnd);
+            div.addEventListener('dragover', handleDragOver);
+            div.addEventListener('drop', handleDrop);
+            div.addEventListener('dragleave', handleDragLeave);
+            
+            preview.appendChild(div);
+          });
+        }
+        
+        showFlash('Listing loaded successfully!', 'success');
+        
+      } catch (err) {
+        console.error('Failed to load listing:', err);
+        showFlash(`Error: ${err.message}`, 'error');
+      }
+    }
+    
+    // Drag and drop handlers for image reordering
+    let draggedElement = null;
+    
+    function handleDragStart(e) {
+      draggedElement = this;
+      this.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    }
+    
+    function handleDragEnd(e) {
+      this.classList.remove('dragging');
+      document.querySelectorAll('.image-thumb').forEach(el => {
+        el.classList.remove('drag-over');
+      });
+      updateImageOrderLabels();
+    }
+    
+    function handleDragOver(e) {
+      if (e.preventDefault) e.preventDefault();
+      if (this.classList.contains('image-thumb')) {
+        this.classList.add('drag-over');
+      }
+      e.dataTransfer.dropEffect = 'move';
+      return false;
+    }
+    
+    function handleDrop(e) {
+      if (e.stopPropagation) e.stopPropagation();
+      
+      if (draggedElement !== this && this.classList.contains('image-thumb')) {
+        const allImages = Array.from($('imagesPreview').children).filter(el => el.classList.contains('image-thumb'));
+        const draggedIndex = allImages.indexOf(draggedElement);
+        const targetIndex = allImages.indexOf(this);
+        
+        if (draggedIndex < targetIndex) {
+          this.parentNode.insertBefore(draggedElement, this.nextSibling);
+        } else {
+          this.parentNode.insertBefore(draggedElement, this);
+        }
+      }
+      
+      this.classList.remove('drag-over');
+      return false;
+    }
+    
+    function handleDragLeave(e) {
+      this.classList.remove('drag-over');
+    }
+    
+    function updateImageOrderLabels() {
+      document.querySelectorAll('.image-thumb').forEach((el, index) => {
+        const orderLabel = el.querySelector('.image-order');
+        if (orderLabel) orderLabel.textContent = index + 1;
+      });
+    }
+    
+    async function saveListing() {
+      try {
+        const btn = $('btnSave');
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+        
+        // Collect aspects
+        const aspects = {};
+        document.querySelectorAll('.aspect-item').forEach(item => {
+          const key = item.querySelector('.aspect-key').value.trim();
+          const value = item.querySelector('.aspect-value').value.trim();
+          if (key && value) {
+            aspects[key] = value.includes(',') ? value.split(',').map(v => v.trim()) : [value];
+          }
+        });
+        
+        // Collect images in their current order
+        const images = Array.from(document.querySelectorAll('.image-thumb')).map(el => el.dataset.url);
+        
+        const updatedListing = {
+          itemId: currentItemId,
+          title: $('title').value.trim(),
+          description: $('description').value.trim(),
+          price: parseFloat($('price').value) || 0,
+          quantity: parseInt($('quantity').value) || 0,
+          condition: $('condition').value,
+          aspects,
+          images,
+        };
+        
+        console.log('Saving listing:', updatedListing);
+        
+        // Save to backend
+        const res = await fetchJSON('/.netlify/functions/ebay-update-active-item', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedListing),
+        });
+        
+        if (res.ok) {
+          showFlash('Listing updated successfully!', 'success');
+          setTimeout(() => window.location.href = '/active-listings.html', 1500);
+        } else {
+          throw new Error(res.error || 'Failed to update listing');
+        }
+        
+      } catch (err) {
+        console.error('Failed to save listing:', err);
+        showFlash(`Error: ${err.message}`, 'error');
+        $('btnSave').disabled = false;
+        $('btnSave').textContent = 'Update Listing';
+      }
+    }
+    
+    $('title').addEventListener('input', updateTitleCount);
+    
+    async function bootstrap() {
+      try {
+        if (!window.authClient) {
+          await new Promise(resolve => {
+            const check = setInterval(() => {
+              if (window.authClient) {
+                clearInterval(check);
+                resolve();
+              }
+            }, 100);
+          });
+        }
+        
+        const ok = await window.authClient.requireAuth();
+        if (!ok) {
+          showFlash('Authentication required. Redirecting to login...', 'error');
+          return;
+        }
+        
+        await window.authClient.updateUserDisplay().catch(() => {});
+        await loadListing();
+      } catch (e) {
+        console.error('Bootstrap failed', e);
+        showFlash(`Failed to load: ${e.message}`, 'error');
+      }
+    }
+    
+    bootstrap();
+  </script>
+</body>
+</html>
