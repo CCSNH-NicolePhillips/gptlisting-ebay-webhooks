@@ -67,8 +67,10 @@ export const handler: Handler = async (event) => {
       while (true) {
         const params = new URLSearchParams({ 
           limit: String(limit), 
-          offset: String(offset),
-          offer_status: 'PUBLISHED' // Only fetch PUBLISHED offers
+          offset: String(offset)
+          // Note: NOT filtering by offer_status here because eBay validates ALL SKUs
+          // even in filtered results, and bad SKUs cause the entire request to fail.
+          // We'll filter for PUBLISHED status client-side instead.
         });
         const url = `${apiHost}/sell/inventory/v1/offer?${params.toString()}`;
         console.log('[ebay-list-active] Fetching batch at offset', offset, 'URL:', url);
@@ -101,8 +103,17 @@ export const handler: Handler = async (event) => {
 
         const offers = Array.isArray(data.offers) ? data.offers : [];
         console.log('[ebay-list-active] Received', offers.length, 'offers in this batch. Total so far:', results.length);
+        
+        let publishedCount = 0;
         for (const o of offers) {
           try {
+            // Filter for PUBLISHED status only
+            const status = o?.status || o?.listing?.status || o?.publication?.status;
+            if (status !== 'PUBLISHED') {
+              continue; // Skip non-published offers
+            }
+            publishedCount++;
+            
             const adRateRaw = o?.merchantData?.autoPromoteAdRate;
             const adRate = typeof adRateRaw === 'number' ? adRateRaw : parseFloat(adRateRaw);
 
@@ -113,7 +124,7 @@ export const handler: Handler = async (event) => {
               price: o?.pricingSummary?.price,
               availableQuantity: o?.availableQuantity,
               listingId: o?.listing?.listingId || o?.publication?.listingId,
-              listingStatus: o?.listing?.status || o?.publication?.status || o?.status,
+              listingStatus: status,
               marketplaceId: o?.marketplaceId,
               condition: typeof o?.condition === 'number' ? o.condition : undefined,
               lastModifiedDate: o?.listing?.lastModifiedDate || o?.lastModifiedDate,
@@ -125,6 +136,7 @@ export const handler: Handler = async (event) => {
             // Continue to next offer
           }
         }
+        console.log('[ebay-list-active] Found', publishedCount, 'PUBLISHED offers in this batch');
 
         const next = data?.next;
         if (!next || offers.length < limit) break;
