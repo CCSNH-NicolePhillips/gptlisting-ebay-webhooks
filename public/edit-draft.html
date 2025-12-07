@@ -426,17 +426,17 @@
           const selected = av.localizedValue === value ? 'selected' : '';
           return `<option value="${av.localizedValue}" ${selected}>${av.localizedValue}</option>`;
         }).join('');
-        valueInput = `<select class="aspect-value" ${isRequired ? 'required' : ''} style="width: 400px; flex-shrink: 0;">
+        valueInput = `<select class="aspect-value" ${isRequired ? 'required' : ''} style="width: 400px !important; flex-shrink: 0;">
           <option value="">Select ${key}...</option>
           ${options}
         </select>`;
       } else {
         // Regular text input
-        valueInput = `<input type="text" placeholder="Value${requiredMark}" value="${value}" class="aspect-value" ${isRequired ? 'required' : ''} style="width: 400px; flex-shrink: 0;" />`;
+        valueInput = `<input type="text" placeholder="Value${requiredMark}" value="${value}" class="aspect-value" ${isRequired ? 'required' : ''} style="width: 400px !important; flex-shrink: 0;" />`;
       }
       
       div.innerHTML = `
-        <input type="text" placeholder="Name (e.g. Brand)" value="${key}" class="aspect-key" ${keyReadonly} style="width: 250px; flex-shrink: 0;" />
+        <input type="text" placeholder="Name (e.g. Brand)" value="${key}" class="aspect-key" ${keyReadonly} style="width: 250px !important; flex-shrink: 0;" />
         ${valueInput}
         <button class="dp-btn dp-btn-secondary" onclick="this.parentElement.remove()" ${isRequired ? 'disabled title="Required field"' : ''}>×</button>
       `;
