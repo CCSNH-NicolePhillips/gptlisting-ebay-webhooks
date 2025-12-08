@@ -69,32 +69,33 @@ export const handler: Handler = async (event) => {
 
         const currentItem = await getItemRes.json();
         
-        // Build inventory item update payload
+        // Build inventory item update payload - preserve all existing data
         const inventoryItemPayload: any = {
           ...currentItem, // Keep existing fields
+          product: {
+            ...(currentItem.product || {}), // Keep existing product data
+          },
         };
         
-        // Update product data
-        if (title || description) {
-          inventoryItemPayload.product = inventoryItemPayload.product || {};
-          if (title) inventoryItemPayload.product.title = title;
-          if (description) inventoryItemPayload.product.description = description;
+        // Update product data - only override fields we're changing
+        if (title) {
+          inventoryItemPayload.product.title = title;
+        }
+        if (description) {
+          inventoryItemPayload.product.description = description;
         }
         
         // Update images
         if (images && images.length > 0) {
-          inventoryItemPayload.product = inventoryItemPayload.product || {};
           inventoryItemPayload.product.imageUrls = images;
         }
         
-        // Update aspects
+        // Update aspects - merge with existing aspects
         if (aspects && typeof aspects === 'object') {
-          inventoryItemPayload.product = inventoryItemPayload.product || {};
-          inventoryItemPayload.product.aspects = inventoryItemPayload.product.aspects || {};
-          // Merge aspects
-          Object.entries(aspects).forEach(([name, values]) => {
-            inventoryItemPayload.product.aspects[name] = Array.isArray(values) ? values : [values];
-          });
+          inventoryItemPayload.product.aspects = {
+            ...(inventoryItemPayload.product.aspects || {}), // Keep existing aspects
+            ...aspects, // Override with new aspects
+          };
         }
         
         // Update condition (if provided)
