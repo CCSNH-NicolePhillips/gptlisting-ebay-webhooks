@@ -50,37 +50,16 @@ export const handler: Handler = async (event) => {
       const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || 'EBAY_US';
       
       // STEP 1: Update Inventory Item (title, description, images, aspects)
-      if (title || description || images || aspects) {
+      // Note: Building minimal payload instead of GET-then-PUT due to Inventory API header issues
+      if (title || description || images || aspects || condition) {
         console.log('[ebay-update-active-item] Updating inventory item:', sku);
         
-        // First, get current inventory item to preserve fields we're not updating
-        const getItemUrl = `${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
-        console.log('[ebay-update-active-item] GET inventory item from:', getItemUrl);
-        const getItemRes = await fetch(getItemUrl, {
-          method: 'GET',
-          headers: new Headers({
-            'Authorization': `Bearer ${access_token}`,
-          }),
-        });
-        console.log('[ebay-update-active-item] GET response status:', getItemRes.status);
-
-        if (!getItemRes.ok) {
-          const errorText = await getItemRes.text();
-          console.error('[ebay-update-active-item] Failed to get inventory item:', errorText);
-          return { statusCode: getItemRes.status, body: JSON.stringify({ error: 'Failed to get inventory item', detail: errorText }) };
-        }
-
-        const currentItem = await getItemRes.json();
-        
-        // Build inventory item update payload - preserve all existing data
+        // Build minimal inventory item update payload with only changed fields
         const inventoryItemPayload: any = {
-          ...currentItem, // Keep existing fields
-          product: {
-            ...(currentItem.product || {}), // Keep existing product data
-          },
+          product: {},
         };
         
-        // Update product data - only override fields we're changing
+        // Update product data - only include fields we're changing
         if (title) {
           inventoryItemPayload.product.title = title;
         }
@@ -93,12 +72,9 @@ export const handler: Handler = async (event) => {
           inventoryItemPayload.product.imageUrls = images;
         }
         
-        // Update aspects - merge with existing aspects
+        // Update aspects
         if (aspects && typeof aspects === 'object') {
-          inventoryItemPayload.product.aspects = {
-            ...(inventoryItemPayload.product.aspects || {}), // Keep existing aspects
-            ...aspects, // Override with new aspects
-          };
+          inventoryItemPayload.product.aspects = aspects;
         }
         
         // Update condition (if provided)
