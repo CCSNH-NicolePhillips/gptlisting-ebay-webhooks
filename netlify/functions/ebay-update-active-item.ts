@@ -36,6 +36,10 @@ export const handler: Handler = async (event) => {
     }
 
     const { access_token } = await accessTokenFromRefresh(refresh);
+    
+    // TEMPORARY DEBUG: Log token for local testing
+    console.log('[DEBUG] eBay access token for testing:', access_token);
+    console.log('[DEBUG] Token preview:', access_token.substring(0, 50) + '...');
 
     // Use Inventory API for inventory listings, Trading API for traditional listings
     if (isInventoryListing) {
