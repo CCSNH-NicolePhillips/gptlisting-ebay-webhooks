@@ -343,30 +343,22 @@
           </div>
         </div>
 
-        <!-- Right side can stay empty or hold actions later -->
-        <div class="dp-topbar-right"></div>
+        <!-- Right: Actions -->
+        <div class="dp-topbar-right" style="display: flex !important; gap: 0.75rem;">
+          <button class="dp-btn dp-btn-secondary" onclick="window.location.href='/active-listings.html'" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
+            ← Back to Listings
+          </button>
+          <button id="btnSave" class="dp-btn dp-btn-primary" onclick="saveListing()" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
+            Update Listing
+          </button>
+        </div>
       </header>
 
       <!-- Main Content Area -->
       <main class="dp-main">
-        <div class="dp-page-header">
-          <div>
-            <h1 class="dp-page-header__title">Edit Active Listing</h1>
-            <p class="dp-page-header__subtitle">Update your live eBay listing details</p>
-          </div>
-          <div style="display: flex; gap: 0.75rem;">
-            <button class="dp-btn dp-btn-secondary" onclick="window.location.href='/active-listings.html'">
-              ← Back to Listings
-            </button>
-            <button id="btnSave" class="dp-btn dp-btn-primary" onclick="saveListing()">
-              Update Listing
-            </button>
-          </div>
-        </div>
+        <div id="flashMessage" class="dp-flash" style="display: none; margin-bottom: 1rem;"></div>
         
         <div class="dp-content">
-        <div id="flashMessage" class="dp-flash" style="display: none;"></div>
-        
         <form id="editForm" onsubmit="event.preventDefault(); saveListing();">
           
           <!-- Title & Price -->
