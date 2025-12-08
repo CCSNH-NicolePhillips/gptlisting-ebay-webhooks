@@ -79,14 +79,17 @@ export const handler: Handler = async (event) => {
       }
 
       // First, get the current offer to get offerId
+      // API doc: GET /sell/inventory/v1/offer?sku={sku}&marketplace_id={marketplace_id}
       const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || 'EBAY_US';
-      const getOfferUrl = `${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}/offer`;
+      const getOfferUrl = `${apiHost}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${MARKETPLACE_ID}`;
+      console.log('[ebay-update-active-item] Fetching offers from:', getOfferUrl);
       const getRes = await fetch(getOfferUrl, {
         headers: {
           'Authorization': `Bearer ${access_token}`,
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          'X-EBAY-C-MARKETPLACE-ID': MARKETPLACE_ID,
+          'Accept-Language': 'en-US',
+          'Content-Language': 'en-US',
         },
       });
 
@@ -108,16 +111,15 @@ export const handler: Handler = async (event) => {
 
       // Update the offer
       const updateUrl = `${apiHost}/sell/inventory/v1/offer/${offer.offerId}`;
+      console.log('[ebay-update-active-item] Updating offer:', offer.offerId);
       const updateRes = await fetch(updateUrl, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${access_token}`,
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          'X-EBAY-C-MARKETPLACE-ID': MARKETPLACE_ID,
-        },
-          'Authorization': `Bearer ${access_token}`,
-          'Content-Type': 'application/json',
+          'Content-Language': 'en-US',
+          'Accept-Language': 'en-US',
         },
         body: JSON.stringify({
           ...offer, // Keep existing fields
