@@ -300,11 +300,16 @@
         const params = new URLSearchParams(window.location.search);
         currentItemId = params.get('itemId');
         
+        // Get isInventoryListing from URL params as fallback
+        const isInventoryListingParam = params.get('isInventoryListing');
+        const skuParam = params.get('sku');
+        
         if (!currentItemId) {
           throw new Error('Missing itemId in URL');
         }
         
         console.log('Loading listing for itemId:', currentItemId);
+        console.log('isInventoryListing from URL:', isInventoryListingParam);
         showFlash('Loading listing...', 'success');
         
         const res = await fetchJSON(`/.netlify/functions/ebay-get-active-item?itemId=${encodeURIComponent(currentItemId)}`);
@@ -316,6 +321,16 @@
         }
         
         originalItem = res.item;
+        
+        // Use isInventoryListing from item data, or fall back to URL param
+        if (originalItem.isInventoryListing === undefined && isInventoryListingParam) {
+          originalItem.isInventoryListing = isInventoryListingParam === '1';
+        }
+        if (!originalItem.sku && skuParam) {
+          originalItem.sku = skuParam;
+        }
+        
+        console.log('Item loaded - isInventoryListing:', originalItem.isInventoryListing, 'SKU:', originalItem.sku);
         
         // Populate form
         $('title').value = originalItem.title || '';

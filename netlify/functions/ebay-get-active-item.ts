@@ -110,6 +110,9 @@ export const handler: Handler = async (event) => {
     const sellerInventoryIdMatch = xmlText.match(/<SellerInventoryID>([^<]+)<\/SellerInventoryID>/);
     const isInventoryListing = !!sellerInventoryIdMatch;
     
+    console.log('[ebay-get-active-item] SellerInventoryID found:', sellerInventoryIdMatch?.[1] || 'NONE');
+    console.log('[ebay-get-active-item] isInventoryListing:', isInventoryListing);
+    
     const priceMatch = xmlText.match(/<CurrentPrice[^>]*>([^<]+)<\/CurrentPrice>/);
     const currencyMatch = xmlText.match(/<CurrentPrice currencyID="([^"]+)"/);
     const quantityMatch = xmlText.match(/<Quantity>([^<]+)<\/Quantity>/);

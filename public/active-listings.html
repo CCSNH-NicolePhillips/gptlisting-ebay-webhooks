@@ -447,7 +447,12 @@
       editBtn.style.marginTop = '0.75rem';
       editBtn.style.width = '100%';
       editBtn.addEventListener('click', () => {
-        window.location.href = `/edit-active-listing.html?itemId=${encodeURIComponent(o.itemId)}`;
+        const params = new URLSearchParams({
+          itemId: o.itemId,
+          isInventoryListing: o.isInventoryListing ? '1' : '0',
+          sku: o.sku || ''
+        });
+        window.location.href = `/edit-active-listing.html?${params.toString()}`;
       });
       card.appendChild(editBtn);
       
