@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Drafts - DraftPilot</title>
+  <title>Drafts – DraftPilot</title>
     <link rel="stylesheet" href="/draftpilot.css">
     <style>
       /* Drafts page specific styles */
@@ -16,47 +16,6 @@
         display: flex;
         gap: 0.5rem;
         align-items: center;
-      }
-      .dp-form-label {
-        display: block;
-        font-size: 0.875rem;
-        font-weight: 500;
-        color: #cbd5ff;
-        margin-bottom: 0.35rem;
-        margin-top: 0.4rem;
-      }
-      .promo-rate {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.35rem;
-        margin-bottom: 0.5rem;
-        font-size: 0.875rem;
-      }
-      .promo-rate-input {
-        width: 130px;
-        padding: 0.5rem 0.65rem;
-        font-size: 0.9375rem;
-        background: #0f1529;
-        border: 1px solid #2a335c;
-        border-radius: 6px;
-        color: #f4f6fb;
-        font-family: inherit;
-        box-sizing: border-box;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
-      }
-      .promo-rate-input:focus {
-        outline: none;
-        border-color: #5b7cff;
-        box-shadow: 0 0 0 3px rgba(91, 124, 255, 0.1);
-      }
-      .promo-rate-input[type=number]::-webkit-outer-spin-button,
-      .promo-rate-input[type=number]::-webkit-inner-spin-button {
-        -webkit-appearance: none;
-        margin: 0;
-      }
-      .promo-rate-input[type=number] {
-        -moz-appearance: textfield;
       }
       .btn {
         background: var(--primary);
@@ -276,6 +235,77 @@
         justify-content: space-between;
         margin: 0.25rem 0 1rem;
       }
+      
+      /* Promotion controls */
+      .promo-controls {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+        padding: 0.6rem;
+        background: rgba(99, 102, 241, 0.08);
+        border: 1px solid rgba(99, 102, 241, 0.2);
+        border-radius: 8px;
+        margin-top: 0.6rem;
+        font-size: 0.8rem;
+      }
+      .promo-toggle {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        cursor: pointer;
+        user-select: none;
+      }
+      .promo-toggle input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+      }
+      .promo-toggle label {
+        cursor: pointer;
+        color: #cbd5ff;
+        font-weight: 500;
+      }
+      .promo-rate {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .promo-rate label {
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+      .promo-rate input[type="number"] {
+        width: 60px;
+        padding: 0.3rem 0.4rem;
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        color: #fff;
+        font-size: 0.8rem;
+      }
+      .promo-rate span {
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+      .promo-save {
+        padding: 0.35rem 0.6rem;
+        background: rgba(99, 102, 241, 0.2);
+        border: 1px solid rgba(99, 102, 241, 0.4);
+        color: #cbd5ff;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+      .promo-save:hover {
+        background: rgba(99, 102, 241, 0.3);
+        border-color: rgba(99, 102, 241, 0.6);
+      }
+      .promo-save:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
     </style>
   </head>
   <body>
@@ -440,7 +470,7 @@
               </svg>
               Refresh
             </button>
-            <a href="/index.html" class="dp-btn dp-btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem;"><- Back to Dashboard</a>
+            <a href="/index.html" class="dp-btn dp-btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem;">← Back to Dashboard</a>
             <button id="btnClean" class="dp-btn dp-btn-danger" title="Delete ALL UNPUBLISHED drafts" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
               Delete all drafts
             </button>
@@ -455,12 +485,12 @@
       </div>
       
       <div id="needsAttention" style="display: none; margin-bottom: 2rem;">
-        <h2 style="font-size: 1.25rem; margin: 1.5rem 0 1rem; color: var(--warning);">&#9888; Needs Attention <span id="needsCount" style="font-size: 0.875rem; color: var(--text-muted);"></span></h2>
+        <h2 style="font-size: 1.25rem; margin: 1.5rem 0 1rem; color: var(--warning);">⚠️ Needs Attention <span id="needsCount" style="font-size: 0.875rem; color: var(--text-muted);"></span></h2>
         <div id="needsList" class="grid" aria-live="polite"></div>
       </div>
       
       <div id="readySection" style="display: none;">
-        <h2 style="font-size: 1.25rem; margin: 1.5rem 0 1rem; color: var(--success);">&#10003; Ready to Publish <span id="readyCount" style="font-size: 0.875rem; color: var(--text-muted);"></span></h2>
+        <h2 style="font-size: 1.25rem; margin: 1.5rem 0 1rem; color: var(--success);">✓ Ready to Publish <span id="readyCount" style="font-size: 0.875rem; color: var(--text-muted);"></span></h2>
         <div id="readyList" class="grid" aria-live="polite"></div>
       </div>
     </main>
@@ -490,20 +520,11 @@
       const readyList = $('readyList');
       const needsList = $('needsList');
       const flash = $('flash');
-      const readySection = $('readySection');
-      const needsSection = $('needsAttention');
 
       const fmtPrice = (v, c) =>
         v != null && c
           ? new Intl.NumberFormat(undefined, { style: 'currency', currency: c }).format(Number(v))
           : '';
-
-      function updateSectionVisibility() {
-        const hasReadyCards = !!readyList.querySelector('.card');
-        const hasNeedsCards = !!needsList.querySelector('.card');
-        if (readySection) readySection.style.display = hasReadyCards ? 'block' : 'none';
-        if (needsSection) needsSection.style.display = hasNeedsCards ? 'block' : 'none';
-      }
 
       function card(offer) {
         const el = document.createElement('div');
@@ -522,7 +543,7 @@
         const title = document.createElement('div');
         title.className = 'title';
   // Use enriched title from backend if available, otherwise show SKU temporarily
-  title.textContent = offer?._enrichedTitle || offer?.title || offer?.sku || '(loading title...)';
+  title.textContent = offer?._enrichedTitle || offer?.title || offer?.sku || '(loading title…)';
   const desc = document.createElement('div');
   desc.className = 'desc';
   const descSrc = (offer.listingDescription || '').replace(/\s+/g, ' ').trim();
@@ -542,7 +563,7 @@
           offer.sku ? `SKU: ${offer.sku}` : null,
           offer.categoryId ? `Cat: ${offer.categoryId}` : null,
           offer.availableQuantity != null ? `Qty: ${offer.availableQuantity}` : null,
-          priceStr ? `Price: ${priceStr}` : (needsReview ? 'Price: &#9888; Needs Review' : null),
+          priceStr ? `Price: ${priceStr}` : (needsReview ? 'Price: ⚠️ Needs Review' : null),
         ]
           .filter(Boolean)
           .join(' • ');
@@ -576,7 +597,7 @@
         pub.onclick = async () => {
           pub.disabled = true;
           del.disabled = true;
-          flash.textContent = 'Publishing...';
+          flash.textContent = 'Publishing…';
           
           // Store for debugging
           lastPublishAttempt = {
@@ -614,7 +635,6 @@
               sessionStorage.removeItem('drafts-cache-time');
               el.remove();
               flash.textContent = `Published ${offer.offerId}`;
-              updateSectionVisibility();
               return;
             }
             if (r.ok && data.ok && data.deleted) {
@@ -622,7 +642,6 @@
               sessionStorage.removeItem('drafts-cache-time');
               el.remove();
               flash.textContent = `Draft ${offer.offerId} had errors and was deleted.`;
-              updateSectionVisibility();
               return;
             }
             // Improve error details: surface common onboarding/privilege errors with a direct link
@@ -645,7 +664,7 @@
                   typeof data?.publish?.detail === 'string'
                     ? data.publish.detail
                     : data?.publish?.detail?.message || JSON.stringify(data?.publish?.detail || data);
-                flash.textContent = `Publish error: ${data.error || ''}${detail ? ' - ' + detail : ''}`;
+                flash.textContent = `Publish error: ${data.error || ''}${detail ? ' — ' + detail : ''}`;
               }
             } catch {
               flash.textContent = `Publish error: ${data.error || ''}`;
@@ -660,7 +679,7 @@
           if (!confirm('Delete this draft?')) return;
           pub.disabled = true;
           del.disabled = true;
-          flash.textContent = 'Deleting...';
+          flash.textContent = 'Deleting…';
           try {
             const exec = (window.authClient && typeof window.authClient.authFetch === 'function') ? window.authClient.authFetch : fetch;
             const r = await exec(
@@ -683,7 +702,6 @@
               sessionStorage.removeItem('drafts-cache-time');
               el.remove();
               flash.textContent = `Deleted ${offer.offerId}`;
-              updateSectionVisibility();
             } else {
               flash.textContent = `Delete error: ${data.error || ''}`;
               pub.disabled = del.disabled = false;
@@ -715,8 +733,7 @@
         
         const promoLabel = document.createElement('label');
         promoLabel.htmlFor = `promo-${offer.offerId}`;
-        promoLabel.className = 'dp-form-label';
-        promoLabel.textContent = 'Promote when listed';
+        promoLabel.textContent = '🚀 Promote when listed';
         
         promoToggleDiv.appendChild(promoCheckbox);
         promoToggleDiv.appendChild(promoLabel);
@@ -726,16 +743,13 @@
         promoRateDiv.style.display = promoCheckbox.checked ? 'flex' : 'none';
         
         const rateLabel = document.createElement('label');
-        rateLabel.className = 'dp-form-label';
         rateLabel.textContent = 'Ad rate:';
         
         const rateInput = document.createElement('input');
         rateInput.type = 'number';
-        rateInput.inputMode = 'decimal';
         rateInput.min = '1';
         rateInput.max = '20';
         rateInput.step = '0.1';
-        rateInput.className = 'promo-rate-input';
         rateInput.value = String(offer.merchantData?.autoPromoteAdRate || 5);
         
         const ratePercent = document.createElement('span');
@@ -809,8 +823,8 @@
         promoControls.appendChild(promoSaveBtn);
         
         body.appendChild(title);
-        if (desc.textContent) body.appendChild(desc);
-        body.appendChild(meta);
+  if (desc.textContent) body.appendChild(desc);
+  body.appendChild(meta);
         body.appendChild(badge);
         body.appendChild(promoControls);
         body.appendChild(row);
@@ -839,7 +853,7 @@
         const loader = document.createElement('div');
         loader.className = 'loading';
         loader.innerHTML =
-          '<div class="spinner" role="status" aria-label="Loading"></div><div class="label">Loading drafts...</div>';
+          '<div class="spinner" role="status" aria-label="Loading"></div><div class="label">Loading drafts…</div>';
         readyList.appendChild(loader.cloneNode(true));
         needsList.appendChild(loader);
         
@@ -936,7 +950,7 @@
             ? JSON.stringify(e.response).slice(0, 500)
             : e?.message || String(e);
           wrap.innerHTML = `
-            <div style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;">&#9888;</div>
+            <div style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;">⚠️</div>
             <div style="font-size: 1.25rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;">Failed to load drafts</div>
             <div style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1.5rem;">${escapeHtml(msg)}</div>
             <button class="dp-btn dp-btn-secondary" id="retryBtn">Retry</button>
@@ -1032,7 +1046,7 @@
                 n._sk?.remove?.();
               }
             } else {
-              // No image found - clear skeleton and leave a subtle placeholder
+              // No image found – clear skeleton and leave a subtle placeholder
               if (n._sk) n._sk.remove();
             }
           });
@@ -1118,7 +1132,7 @@
         const maxAttempts = 10; // Safety limit
         
         try {
-          flash.textContent = 'Deleting drafts...';
+          flash.textContent = 'Deleting drafts…';
           
           // Loop until no more deletions (handles partial batches due to timeout)
           while (attempts < maxAttempts) {
@@ -1151,7 +1165,7 @@
               
               // Check for eBay token errors
               if (errorMsg.includes('invalid_grant') || errorMsg.includes('token refresh failed')) {
-                flash.textContent = 'Warning: eBay token expired - please reconnect eBay on the Connections page';
+                flash.textContent = '⚠️ eBay token expired - please reconnect eBay on the Connections page';
                 console.error('[Delete All] eBay token expired:', j);
               } else {
                 flash.textContent = `Delete failed: ${errorMsg}`;
@@ -1168,7 +1182,7 @@
               queryParams = '?deleteAll=true&deleteInventory=true&skipFastScan=true';
             }
             
-            flash.textContent = `Deleted ${totalDeleted} drafts so far...`;
+            flash.textContent = `Deleted ${totalDeleted} drafts so far…`;
             
             // Check if there are more to delete
             if (!j.summary?.hasMore && !j.timedOut) {
@@ -1277,117 +1291,6 @@
           load(); 
         } catch {} 
       });
-      
-      // "Promote Now" button handler
-      document.getElementById('btnPromoteNow')?.addEventListener('click', async () => {
-        try {
-          flash.textContent = 'Collecting published drafts...';
-          
-          // Fetch all offers to find published ones
-          const rawSku = new URL(location.href).searchParams.get('sku') || '';
-          const skuOk = /^[A-Za-z0-9]{1,50}$/.test(rawSku);
-          const base = '/.netlify/functions/ebay-list-offers?limit=100' + (skuOk ? '&sku=' + encodeURIComponent(rawSku) : '');
-          
-          // Get PUBLISHED offers
-          let publishedOffers = [];
-          try {
-            const pubRes = await fetchJSON(base + '&status=PUBLISHED');
-            publishedOffers = Array.isArray(pubRes?.offers) ? pubRes.offers : [];
-          } catch (e) {
-            console.error('[Promote Now] Failed to fetch published offers:', e);
-            flash.textContent = 'Error fetching published listings';
-            return;
-          }
-          
-          if (!publishedOffers.length) {
-            flash.textContent = 'No published listings found to promote';
-            return;
-          }
-          
-          // Get currently promoted items to filter them out
-          flash.textContent = 'Checking promotion status...';
-          const exec = (window.authClient && typeof window.authClient.authFetch === 'function') 
-            ? window.authClient.authFetch 
-            : fetch;
-          
-          let promotedSkus = new Set();
-          try {
-            const promoteCheckRes = await exec('/.netlify/functions/ebay-get-promoted-listings');
-            if (promoteCheckRes.ok) {
-              const promoteData = await promoteCheckRes.json();
-              // Add all promoted SKUs to the set
-              if (promoteData.ads && Array.isArray(promoteData.ads)) {
-                promoteData.ads.forEach(ad => {
-                  if (ad.inventoryReferenceId) {
-                    promotedSkus.add(ad.inventoryReferenceId);
-                  }
-                });
-              }
-            }
-          } catch (e) {
-            console.log('[Promote Now] Could not check promoted listings, will attempt all');
-          }
-          
-          // Collect SKUs from published offers, excluding already promoted ones
-          const allPublishedSkus = publishedOffers
-            .map(o => o.sku)
-            .filter(sku => sku && typeof sku === 'string');
-          
-          const skus = allPublishedSkus.filter(sku => !promotedSkus.has(sku));
-          const alreadyPromoted = allPublishedSkus.length - skus.length;
-          
-          if (!skus.length) {
-            if (alreadyPromoted > 0) {
-              flash.textContent = `All ${alreadyPromoted} published listing(s) are already promoted`;
-            } else {
-              flash.textContent = 'No valid SKUs found in published listings';
-            }
-            return;
-          }
-          
-          let statusMsg = `Promoting ${skus.length} listing(s)...`;
-          if (alreadyPromoted > 0) {
-            statusMsg += ` (${alreadyPromoted} already promoted, skipped)`;
-          }
-          flash.textContent = statusMsg;
-          
-          // Get default ad rate from policy defaults
-          let adRate = 5; // Default fallback
-          try {
-            const policyRes = await exec('/.netlify/functions/ebay-get-policy-defaults');
-            if (policyRes.ok) {
-              const policyData = await policyRes.json();
-              if (policyData.defaultAdRate) {
-                adRate = policyData.defaultAdRate;
-              }
-            }
-          } catch (e) {
-            console.log('[Promote Now] Could not get policy defaults, using 5%');
-          }
-          
-          // Call promote-drafts endpoint
-          const promoteRes = await exec('/.netlify/functions/promote-drafts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ skus, adRate }),
-          });
-          
-          const result = await promoteRes.json();
-          
-          if (result.promotedCount > 0) {
-            flash.textContent = `\u2713 Promoted ${result.promotedCount} of ${result.totalCount} listings at ${adRate}% ad rate`;
-            if (result.failures && result.failures.length > 0) {
-              console.log('[Promote Now] Some promotions failed:', result.failures);
-            }
-          } else {
-            flash.textContent = `Failed to promote listings. ${result.failures?.[0]?.reason || 'Unknown error'}`;
-          }
-        } catch (e) {
-          console.error('[Promote Now] Error:', e);
-          flash.textContent = 'Promotion error: ' + e.message;
-        }
-      });
-      
       initUserMenu();
       bootstrap();
     </script>

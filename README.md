@@ -84,9 +84,6 @@ A complete eBay-Dropbox integration with:
    - `GET /auth/ebay` → connect eBay seller.
    - `POST /process?limit=10` → process up to 10 product groups from Dropbox into eBay (**see body format below**).
 
-> **Heads-up: active listings UI**
-> The local dev server is not configured for the Active Listings page or promotion edits. Those calls require a real seller account with Marketing API access; test them on your deployed Netlify site. Sandbox usually returns no active listings and may reject promo updates.
-
 ### Processing endpoint
 
 `POST /process?limit=10` body (JSON):

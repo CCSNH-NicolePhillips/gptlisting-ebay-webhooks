@@ -30,6 +30,12 @@ test-*.ts
 # Temporary scripts
 scripts/delete-*.mjs
 
+# Old/backup versions
+*-v2.ts
+*.backup
+*-old.ts
+*-temp.ts
+
 # Test output HTML files
 *.html
 !public/**/*.html
