@@ -68,23 +68,31 @@
       margin-top: 0.3rem;
     }
     .aspect-item {
-      display: flex;
-      gap: 0.5rem;
+      display: grid;
+      grid-template-columns: minmax(160px, 0.4fr) minmax(220px, 1fr) auto;
+      gap: 0.75rem;
       margin-bottom: 0.65rem;
       align-items: center;
-      justify-content: flex-start;
     }
     #aspectsList {
-      padding: 0 10rem;
+      padding: 0;
+      margin-top: 0.5rem;
     }
     .aspect-item input,
     .aspect-item select {
+      width: 100%;
       background: #0f1529;
       border: 1px solid #2a335c;
       border-radius: 6px;
       padding: 0.75rem;
       color: #f4f6fb;
       font-size: 0.9375rem;
+      box-sizing: border-box;
+    }
+    @media (max-width: 768px) {
+      .aspect-item {
+        grid-template-columns: 1fr;
+      }
     }
     .aspect-item input:focus,
     .aspect-item select:focus {
@@ -288,8 +296,8 @@
       div.className = 'aspect-item';
       
       div.innerHTML = `
-        <input type="text" placeholder="Name (e.g. Brand)" value="${key}" class="aspect-key" ${key ? 'readonly' : ''} style="width: 250px !important; flex-shrink: 0;" />
-        <input type="text" placeholder="Value" value="${value}" class="aspect-value" style="width: 400px !important; flex-shrink: 0;" />
+        <input type="text" placeholder="Name (e.g. Brand)" value="${key}" class="aspect-key" ${key ? 'readonly' : ''} />
+        <input type="text" placeholder="Value" value="${value}" class="aspect-value" />
         <button class="dp-btn dp-btn-secondary" type="button" onclick="this.parentElement.remove()">×</button>
       `;
       container.appendChild(div);
