@@ -55,11 +55,14 @@ export const handler: Handler = async (event) => {
         
         // First, get current inventory item to preserve fields we're not updating
         const getItemUrl = `${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
+        console.log('[ebay-update-active-item] GET inventory item from:', getItemUrl);
         const getItemRes = await fetch(getItemUrl, {
-          headers: {
+          method: 'GET',
+          headers: new Headers({
             'Authorization': `Bearer ${access_token}`,
-          },
+          }),
         });
+        console.log('[ebay-update-active-item] GET response status:', getItemRes.status);
 
         if (!getItemRes.ok) {
           const errorText = await getItemRes.text();
