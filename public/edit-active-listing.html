@@ -6,6 +6,7 @@
   <title>Edit Active Listing – DraftPilot</title>
   <link rel="stylesheet" href="/draftpilot.css?v=2">
   <style>
+    /* Edit active listing specific styles */
     .form-row {
       display: flex;
       flex-wrap: wrap;
@@ -147,15 +148,6 @@
       border-radius: 4px;
       font-size: 0.75rem;
       font-weight: 600;
-    }
-    /* Hide spinner arrows on number inputs */
-    input[type="number"]::-webkit-inner-spin-button,
-    input[type="number"]::-webkit-outer-spin-button {
-      -webkit-appearance: none;
-      margin: 0;
-    }
-    input[type="number"] {
-      -moz-appearance: textfield;
     }
     .dp-content {
       max-width: 1100px;
@@ -313,14 +305,16 @@
         </div>
       </div>
     </aside>
-
+    
     <div class="dp-mobile-backdrop" id="mobileBackdrop"></div>
-
+    
     <!-- Main Content Wrapper -->
     <div class="dp-main-wrapper">
       <!-- Top Bar -->
       <header class="dp-topbar">
+        <!-- Left: Mobile menu + Page Title & Subtitle -->
         <div class="dp-topbar-left">
+          <!-- Mobile-only hamburger -->
           <button
             class="dp-topbar-icon dp-topbar-icon--menu"
             id="mobileMenuButton"
@@ -336,51 +330,47 @@
           </button>
 
           <div class="dp-topbar-heading">
-            <h1 class="dp-topbar__title">Edit Active Listing</h1>
+            <h1 class="dp-topbar__title">✏️ Edit Active Listing</h1>
             <p class="dp-topbar__subtitle">
               Update your live eBay listing details
             </p>
           </div>
         </div>
-
+        
         <!-- Right: Actions -->
         <div class="dp-topbar-right" style="display: flex !important; gap: 0.75rem;">
-          <button class="dp-btn dp-btn-secondary" onclick="window.location.href='/active-listings.html'" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
-            ← Back to Listings
-          </button>
-          <button id="btnSave" class="dp-btn dp-btn-primary" onclick="saveListing()" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
-            Update Listing
-          </button>
+          <a href="/active-listings.html" class="dp-btn dp-btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem;">← Back to Listings</a>
+          <button id="btnSave" class="dp-btn dp-btn-primary" onclick="saveListing()" style="padding: 0.5rem 1rem; font-size: 0.875rem;">Update Listing</button>
         </div>
       </header>
-
+      
       <!-- Main Content Area -->
       <main class="dp-main">
         <div id="flashMessage" class="dp-flash" style="display: none; margin-bottom: 1rem;"></div>
         
-        <div class="dp-content">
-        <form id="editForm" onsubmit="event.preventDefault(); saveListing();">
+        <!-- Basic Information -->
+        <div class="dp-card dp-card--full">
+          <h3 style="margin-top: 0; margin-bottom: 1rem; color: var(--text-primary);">Basic Information</h3>
           
-          <!-- Title & Price -->
           <div class="form-row">
             <div class="form-field" style="flex: 2;">
-              <label for="title">
-                Title <span style="color: #ef4444;">*</span>
-                <span id="titleCount" style="float: right; color: var(--text-muted);">0 / 80</span>
-              </label>
-              <input type="text" id="title" placeholder="Enter listing title (max 80 characters)" maxlength="80" required />
-            </div>
-            <div class="form-field">
-              <label for="price">Price (USD) <span style="color: #ef4444;">*</span></label>
-              <input type="number" id="price" placeholder="0.00" step="0.01" min="0" required />
+              <label for="title">Title <small class="muted-hint">(max 80 characters)</small></label>
+              <input type="text" id="title" maxlength="80" />
+              <small class="muted-hint" id="titleCount">0 / 80</small>
             </div>
           </div>
           
-          <!-- Description -->
           <div class="form-row">
-            <div class="form-field" style="flex: 1 1 100%;">
+            <div class="form-field" style="flex: 2;">
               <label for="description">Description</label>
-              <textarea id="description" placeholder="Detailed description of your item..."></textarea>
+              <textarea id="description"></textarea>
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-field">
+              <label for="price">Price (USD)</label>
+              <input type="number" id="price" step="0.01" min="0" />
             </div>
           </div>
           
@@ -406,57 +396,49 @@
               </select>
             </div>
           </div>
-          
-          <!-- Item Specifics (Aspects) -->
-          <div class="form-row">
-            <div class="form-field" style="flex: 1 1 100%;">
-              <label>Item Specifics (Aspects)</label>
-              <div id="aspectsList"></div>
-              <button type="button" class="dp-btn dp-btn-secondary" style="margin-top: 0.5rem;" onclick="addAspect()">
-                + Add Aspect
-              </button>
-            </div>
-          </div>
-          
-          <!-- Images -->
-          <div class="form-row">
-            <div class="form-field" style="flex: 1 1 100%;">
-              <label>Product Images</label>
-              <p class="muted-hint">Drag and drop to reorder. First image is the main listing photo.</p>
-              <div id="imagesPreview" class="images-preview"></div>
-              <input type="file" id="imageUploadInput" accept="image/*" multiple style="display: none;" />
-            </div>
-          </div>
-        </form>
-      </div>
-    </main>
+        </div>
+        
+        <!-- Item Specifics -->
+        <div class="dp-card dp-card--full">
+          <h3 style="margin-top: 0; margin-bottom: 1rem; color: var(--text-primary);">Item Specifics (Aspects)</h3>
+          <div id="aspectsList"></div>
+          <button class="dp-btn dp-btn-secondary" style="margin-top: 0.5rem;" onclick="addAspect()">+ Add Aspect</button>
+        </div>
+        
+        <!-- Images -->
+        <div class="dp-card dp-card--full">
+          <h3 style="margin-top: 0; margin-bottom: 1rem; color: var(--text-primary);">📸 Images</h3>
+          <p style="color: var(--text-muted); font-size: 0.875rem; margin-bottom: 1rem;">Drag to reorder images. First image is the main listing photo.</p>
+          <div class="images-preview" id="imagesPreview"></div>
+        </div>
+      </main>
+    </div>
   </div>
-</div>
   
   <script>
     const $ = (id) => document.getElementById(id);
+    
     let currentItemId = null;
     let originalItem = null;
+    
+    async function fetchJSON(url, opts = {}) {
+      const exec = window.authClient?.authFetch || fetch;
+      const r = await exec(url, opts);
+      const data = await r.json();
+      if (!r.ok) {
+        const error = data.error || `HTTP ${r.status}`;
+        const detail = data.detail ? ` - ${data.detail}` : '';
+        throw new Error(error + detail);
+      }
+      return data;
+    }
     
     function showFlash(message, type = 'success') {
       const flash = $('flashMessage');
       flash.textContent = message;
-      flash.className = `dp-flash dp-flash--${type}`;
+      flash.className = type === 'error' ? 'dp-flash dp-flash--error' : 'dp-flash dp-flash--success';
       flash.style.display = 'block';
-      setTimeout(() => flash.style.display = 'none', 5000);
-    }
-    
-    async function fetchJSON(url, options = {}) {
-      const bearer = localStorage.getItem('access_token');
-      const headers = { ...options.headers };
-      if (bearer) headers.Authorization = `Bearer ${bearer}`;
-      
-      const res = await fetch(url, { ...options, headers });
-      if (res.status === 401) {
-        window.location.href = '/login.html';
-        return null;
-      }
-      return res.json();
+      setTimeout(() => { flash.style.display = 'none'; }, 5000);
     }
     
     function updateTitleCount() {
@@ -469,10 +451,12 @@
       const div = document.createElement('div');
       div.className = 'aspect-item';
       
+      const keyReadonly = key ? 'readonly' : '';
+      
       div.innerHTML = `
-        <input type="text" placeholder="Name (e.g. Brand)" value="${key}" class="aspect-key" ${key ? 'readonly' : ''} />
+        <input type="text" placeholder="Name (e.g. Brand)" value="${key}" class="aspect-key" ${keyReadonly} />
         <input type="text" placeholder="Value" value="${value}" class="aspect-value" />
-        <button class="dp-btn dp-btn-secondary" type="button" onclick="this.parentElement.remove()">×</button>
+        <button class="dp-btn dp-btn-secondary" onclick="this.parentElement.remove()">×</button>
       `;
       container.appendChild(div);
     }
@@ -516,9 +500,7 @@
         
         // Populate form
         $('title').value = originalItem.title || '';
-        // Handle description - it may contain HTML entities or be empty
-        const desc = originalItem.description || '';
-        $('description').value = desc;
+        $('description').value = originalItem.description || '';
         $('price').value = originalItem.price || '';
         $('quantity').value = originalItem.quantity || '';
         $('condition').value = originalItem.condition || '1000';
@@ -533,7 +515,7 @@
           });
         }
         
-        // Show images
+        // Show images with drag-and-drop reordering
         if (originalItem.images && Array.isArray(originalItem.images)) {
           const preview = $('imagesPreview');
           originalItem.images.forEach((url, index) => {
@@ -584,9 +566,6 @@
     
     function handleDragOver(e) {
       if (e.preventDefault) e.preventDefault();
-      if (this.classList.contains('image-thumb')) {
-        this.classList.add('drag-over');
-      }
       e.dataTransfer.dropEffect = 'move';
       return false;
     }
@@ -594,8 +573,8 @@
     function handleDrop(e) {
       if (e.stopPropagation) e.stopPropagation();
       
-      if (draggedElement !== this && this.classList.contains('image-thumb')) {
-        const allImages = Array.from($('imagesPreview').children).filter(el => el.classList.contains('image-thumb'));
+      if (draggedElement !== this) {
+        const allImages = Array.from($('imagesPreview').children);
         const draggedIndex = allImages.indexOf(draggedElement);
         const targetIndex = allImages.indexOf(this);
         
@@ -633,6 +612,7 @@
           const key = item.querySelector('.aspect-key').value.trim();
           const value = item.querySelector('.aspect-value').value.trim();
           if (key && value) {
+            // Split comma-separated values into array
             aspects[key] = value.includes(',') ? value.split(',').map(v => v.trim()) : [value];
           }
         });
@@ -650,7 +630,7 @@
           quantity: parseInt($('quantity').value) || 0,
           condition: $('condition').value,
           aspects,
-          images,
+          images, // Include reordered images
         };
         
         console.log('Saving listing:', updatedListing);
@@ -701,7 +681,9 @@
     
     async function bootstrap() {
       try {
+        // Wait for authClient to be available
         if (!window.authClient) {
+          console.log('Waiting for authClient...');
           await new Promise(resolve => {
             const check = setInterval(() => {
               if (window.authClient) {
@@ -718,7 +700,9 @@
           return;
         }
         
+        // Populate sidebar user info
         await window.authClient.updateUserDisplay().catch(() => {});
+        
         await loadListing();
       } catch (e) {
         console.error('Bootstrap failed', e);
