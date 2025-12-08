@@ -104,17 +104,14 @@ export const handler: Handler = async (event) => {
         // PUT update to inventory item
         const updateItemUrl = `${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
         
-        // Use Headers object to have full control and prevent auto-added headers
-        const updateHeaders = new Headers();
-        updateHeaders.set('Authorization', `Bearer ${access_token}`);
-        updateHeaders.set('Content-Type', 'application/json');
-        // Explicitly remove Accept-Language if it exists
-        updateHeaders.delete('Accept-Language');
-        updateHeaders.delete('accept-language');
-        
+        // eBay requires Accept-Language header with a valid value
         const updateItemRes = await fetch(updateItemUrl, {
           method: 'PUT',
-          headers: updateHeaders,
+          headers: {
+            'Authorization': `Bearer ${access_token}`,
+            'Content-Type': 'application/json',
+            'Accept-Language': 'en-US',
+          },
           body: JSON.stringify(inventoryItemPayload),
         });
 
@@ -136,14 +133,11 @@ export const handler: Handler = async (event) => {
         const getOfferUrl = `${apiHost}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${MARKETPLACE_ID}`;
         console.log('[ebay-update-active-item] Fetching offers from:', getOfferUrl);
         
-        // Use Headers object to prevent auto-added headers
-        const getHeaders = new Headers();
-        getHeaders.set('Authorization', `Bearer ${access_token}`);
-        getHeaders.delete('Accept-Language');
-        getHeaders.delete('accept-language');
-        
         const getRes = await fetch(getOfferUrl, {
-          headers: getHeaders,
+          headers: {
+            'Authorization': `Bearer ${access_token}`,
+            'Accept-Language': 'en-US',
+          },
         });
 
         if (!getRes.ok) {
@@ -185,16 +179,13 @@ export const handler: Handler = async (event) => {
         const updateUrl = `${apiHost}/sell/inventory/v1/offer/${offer.offerId}`;
         console.log('[ebay-update-active-item] Updating offer:', offer.offerId);
         
-        // Use Headers object to have full control
-        const updateOfferHeaders = new Headers();
-        updateOfferHeaders.set('Authorization', `Bearer ${access_token}`);
-        updateOfferHeaders.set('Content-Type', 'application/json');
-        updateOfferHeaders.delete('Accept-Language');
-        updateOfferHeaders.delete('accept-language');
-        
         const updateRes = await fetch(updateUrl, {
           method: 'PUT',
-          headers: updateOfferHeaders,
+          headers: {
+            'Authorization': `Bearer ${access_token}`,
+            'Content-Type': 'application/json',
+            'Accept-Language': 'en-US',
+          },
           body: JSON.stringify(offerUpdatePayload),
         });
 
