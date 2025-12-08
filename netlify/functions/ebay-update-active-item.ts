@@ -58,8 +58,6 @@ export const handler: Handler = async (event) => {
         const getItemRes = await fetch(getItemUrl, {
           headers: {
             'Authorization': `Bearer ${access_token}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
           },
         });
 
@@ -126,8 +124,6 @@ export const handler: Handler = async (event) => {
           headers: {
             'Authorization': `Bearer ${access_token}`,
             'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Content-Language': 'en-US',
           },
           body: JSON.stringify(inventoryItemPayload),
         });
@@ -152,10 +148,6 @@ export const handler: Handler = async (event) => {
         const getRes = await fetch(getOfferUrl, {
           headers: {
             'Authorization': `Bearer ${access_token}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Accept-Language': 'en-US',
-            'Content-Language': 'en-US',
           },
         });
 
@@ -202,9 +194,7 @@ export const handler: Handler = async (event) => {
           headers: {
             'Authorization': `Bearer ${access_token}`,
             'Content-Type': 'application/json',
-            'Accept': 'application/json',
             'Content-Language': 'en-US',
-            'Accept-Language': 'en-US',
           },
           body: JSON.stringify(offerUpdatePayload),
         });
