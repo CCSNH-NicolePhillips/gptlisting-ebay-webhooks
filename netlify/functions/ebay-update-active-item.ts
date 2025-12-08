@@ -79,11 +79,14 @@ export const handler: Handler = async (event) => {
       }
 
       // First, get the current offer to get offerId
+      const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || 'EBAY_US';
       const getOfferUrl = `${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}/offer`;
       const getRes = await fetch(getOfferUrl, {
         headers: {
           'Authorization': `Bearer ${access_token}`,
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-EBAY-C-MARKETPLACE-ID': MARKETPLACE_ID,
         },
       });
 
@@ -108,6 +111,11 @@ export const handler: Handler = async (event) => {
       const updateRes = await fetch(updateUrl, {
         method: 'PUT',
         headers: {
+          'Authorization': `Bearer ${access_token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-EBAY-C-MARKETPLACE-ID': MARKETPLACE_ID,
+        },
           'Authorization': `Bearer ${access_token}`,
           'Content-Type': 'application/json',
         },
