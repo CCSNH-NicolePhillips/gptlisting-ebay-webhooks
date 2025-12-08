@@ -110,8 +110,37 @@ export const handler: Handler = async (event) => {
     const sellerInventoryIdMatch = xmlText.match(/<SellerInventoryID>([^<]+)<\/SellerInventoryID>/);
     const isInventoryListing = !!sellerInventoryIdMatch;
     
+    console.log('[ebay-get-active-item] SKU found:', skuMatch?.[1] || 'NONE');
     console.log('[ebay-get-active-item] SellerInventoryID found:', sellerInventoryIdMatch?.[1] || 'NONE');
     console.log('[ebay-get-active-item] isInventoryListing:', isInventoryListing);
+    
+    // If we have a SKU but no SellerInventoryID, try to detect inventory listing by attempting Inventory API lookup
+    let finalIsInventoryListing = isInventoryListing;
+    if (!isInventoryListing && skuMatch?.[1]) {
+      try {
+        console.log('[ebay-get-active-item] No SellerInventoryID, attempting Inventory API lookup with SKU:', skuMatch[1]);
+        const invApiUrl = `https://api.ebay.com/sell/inventory/v1/inventory_item/${encodeURIComponent(skuMatch[1])}`;
+        const invRes = await fetch(invApiUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${access_token}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+        });
+        
+        if (invRes.ok) {
+          console.log('[ebay-get-active-item] Inventory API lookup succeeded - this IS an inventory listing');
+          finalIsInventoryListing = true;
+        } else {
+          console.log('[ebay-get-active-item] Inventory API lookup failed with status:', invRes.status, '- likely NOT an inventory listing');
+        }
+      } catch (invErr) {
+        console.log('[ebay-get-active-item] Inventory API lookup error:', invErr);
+      }
+    }
+    
+    console.log('[ebay-get-active-item] Final isInventoryListing:', finalIsInventoryListing);
     
     const priceMatch = xmlText.match(/<CurrentPrice[^>]*>([^<]+)<\/CurrentPrice>/);
     const currencyMatch = xmlText.match(/<CurrentPrice currencyID="([^"]+)"/);
@@ -148,7 +177,7 @@ export const handler: Handler = async (event) => {
     const item = {
       itemId,
       sku: skuMatch ? skuMatch[1] : '',
-      isInventoryListing: isInventoryListing,
+      isInventoryListing: finalIsInventoryListing,
       title: titleMatch ? titleMatch[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>') : '',
       description: descMatch ? descMatch[1] : '',
       price: priceMatch ? priceMatch[1] : '',
