@@ -27,6 +27,9 @@ test-*.ts
 *-test-*.json
 *.local.*
 
+# Temporary scripts
+scripts/delete-*.mjs
+
 # Test output HTML files
 *.html
 !public/**/*.html
