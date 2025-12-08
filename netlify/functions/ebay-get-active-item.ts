@@ -120,17 +120,11 @@ export const handler: Handler = async (event) => {
       try {
         console.log('[ebay-get-active-item] No SellerInventoryID, attempting Inventory API lookup with SKU:', skuMatch[1]);
         const { apiHost } = tokenHosts(process.env.EBAY_ENV);
-        const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || 'EBAY_US';
         const invApiUrl = `${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(skuMatch[1])}`;
         const invRes = await fetch(invApiUrl, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${access_token}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Accept-Language': 'en-US',
-            'Content-Language': 'en-US',
-            'X-EBAY-C-MARKETPLACE-ID': MARKETPLACE_ID,
           },
         });
         
