@@ -104,13 +104,14 @@ export const handler: Handler = async (event) => {
         // PUT update to inventory item
         const updateItemUrl = `${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
         
-        // eBay requires Accept-Language header with a valid value
+        // eBay requires both Accept-Language and Content-Language headers
         const updateItemRes = await fetch(updateItemUrl, {
           method: 'PUT',
           headers: {
             'Authorization': `Bearer ${access_token}`,
             'Content-Type': 'application/json',
             'Accept-Language': 'en-US',
+            'Content-Language': 'en-US',
           },
           body: JSON.stringify(inventoryItemPayload),
         });
@@ -137,6 +138,7 @@ export const handler: Handler = async (event) => {
           headers: {
             'Authorization': `Bearer ${access_token}`,
             'Accept-Language': 'en-US',
+            'Content-Language': 'en-US',
           },
         });
 
@@ -185,6 +187,7 @@ export const handler: Handler = async (event) => {
             'Authorization': `Bearer ${access_token}`,
             'Content-Type': 'application/json',
             'Accept-Language': 'en-US',
+            'Content-Language': 'en-US',
           },
           body: JSON.stringify(offerUpdatePayload),
         });
