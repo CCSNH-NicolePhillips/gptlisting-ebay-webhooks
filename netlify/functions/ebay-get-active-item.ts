@@ -4,7 +4,7 @@ import { tokensStore } from '../../src/lib/_blobs.js';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
 
 export const handler: Handler = async (event) => {
-  console.log('[ebay-get-active-item] Function invoked - VERSION: 2024-12-07-v2');
+  console.log('[ebay-get-active-item] Function invoked - VERSION: 2024-12-08-v3-NO-HEADERS');
   try {
     const devBypassEnabled = process.env.DEV_BYPASS_AUTH_FOR_LIST_ACTIVE === 'true';
     const wantBypass =
