@@ -262,34 +262,50 @@ export const handler: Handler = async (event) => {
         console.log('[ebay-update-active-item] Offer updated successfully');
       }
 
-      // STEP 4: Publish/republish the offer to push all changes to live listing
-      console.log('[ebay-update-active-item] Publishing offer to push changes to live listing...');
-      const publishUrl = `${apiHost}/sell/inventory/v1/offer/${offer.offerId}/publish`;
-      const publishRes = await fetch(publishUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${access_token}`,
-          'Content-Type': 'application/json',
-          'Accept-Language': 'en-US',
-          'Content-Language': 'en-US',
-        },
-        body: JSON.stringify({}),
-      });
+      // STEP 4: For already-published offers, we need to update the offer to trigger listing refresh
+      // Even if price/quantity didn't change, updating the offer forces eBay to sync inventory_item changes
+      if (!price && !quantity) {
+        console.log('[ebay-update-active-item] No price/quantity changes - doing minimal offer update to trigger sync...');
+        
+        // Get fresh offer data
+        const freshOfferUrl = `${apiHost}/sell/inventory/v1/offer/${offer.offerId}`;
+        const freshOfferRes = await fetch(freshOfferUrl, {
+          headers: {
+            'Authorization': `Bearer ${access_token}`,
+            'Accept-Language': 'en-US',
+            'Content-Language': 'en-US',
+          },
+        });
+        
+        if (freshOfferRes.ok) {
+          const freshOffer = await freshOfferRes.json();
+          
+          // Update offer with same data to trigger eBay to sync inventory_item changes
+          const syncUpdateUrl = `${apiHost}/sell/inventory/v1/offer/${offer.offerId}`;
+          const syncUpdateRes = await fetch(syncUpdateUrl, {
+            method: 'PUT',
+            headers: {
+              'Authorization': `Bearer ${access_token}`,
+              'Content-Type': 'application/json',
+              'Accept-Language': 'en-US',
+              'Content-Language': 'en-US',
+            },
+            body: JSON.stringify(freshOffer),
+          });
 
-      const publishText = await publishRes.text();
-      console.log('[ebay-update-active-item] Publish response status:', publishRes.status);
-      console.log('[ebay-update-active-item] Publish response:', publishText.substring(0, 300));
+          const syncText = await syncUpdateRes.text();
+          console.log('[ebay-update-active-item] Sync update response status:', syncUpdateRes.status);
+          console.log('[ebay-update-active-item] Sync update response:', syncText.substring(0, 300));
 
-      if (!publishRes.ok) {
-        console.error('[ebay-update-active-item] Failed to publish offer:', publishText);
-        return {
-          statusCode: publishRes.status,
-          headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
-          body: JSON.stringify({ error: 'Updated inventory but failed to publish to live listing', detail: publishText }),
-        };
+          if (!syncUpdateRes.ok) {
+            console.error('[ebay-update-active-item] Failed to sync offer:', syncText);
+            // Don't fail the whole operation - inventory_item was updated successfully
+            console.log('[ebay-update-active-item] Warning: Inventory updated but offer sync failed. Changes may take time to appear on eBay.');
+          } else {
+            console.log('[ebay-update-active-item] Offer synced successfully - changes should appear on eBay');
+          }
+        }
       }
-
-      console.log('[ebay-update-active-item] Offer published successfully - changes now live on eBay');
       
       console.log('[ebay-update-active-item] === UPDATE COMPLETE ===');
       return {
