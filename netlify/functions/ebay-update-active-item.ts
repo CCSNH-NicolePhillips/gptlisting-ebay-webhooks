@@ -81,6 +81,21 @@ export const handler: Handler = async (event) => {
           ...existingItem,
         };
         
+        // Fix missing or invalid package weight (common issue with Trading API migrated listings)
+        if (!inventoryItemPayload.packageWeightAndSize) {
+          inventoryItemPayload.packageWeightAndSize = {};
+        }
+        if (!inventoryItemPayload.packageWeightAndSize.weight) {
+          inventoryItemPayload.packageWeightAndSize.weight = {
+            value: 1,
+            unit: 'POUND'
+          };
+          console.log('[ebay-update-active-item] Added default package weight (1 POUND)');
+        } else if (!inventoryItemPayload.packageWeightAndSize.weight.value || inventoryItemPayload.packageWeightAndSize.weight.value <= 0) {
+          inventoryItemPayload.packageWeightAndSize.weight.value = 1;
+          console.log('[ebay-update-active-item] Fixed invalid package weight value');
+        }
+        
         // Update product data - merge with existing
         if (!inventoryItemPayload.product) {
           inventoryItemPayload.product = {};
