@@ -307,6 +307,52 @@ export const handler: Handler = async (event) => {
         }
       }
       
+      // CRITICAL: Inventory API updates don't sync to live listings automatically
+      // Use Trading API ReviseItem to force the changes to appear on eBay
+      if (title || description || images) {
+        console.log('[ebay-update-active-item] Using Trading API ReviseItem to push changes to live listing...');
+        
+        let pictureDetailsXml = '';
+        if (images && images.length > 0) {
+          const pictureUrls = images.map((url: string) => `<PictureURL>${url}</PictureURL>`).join('');
+          pictureDetailsXml = `<PictureDetails>${pictureUrls}</PictureDetails>`;
+        }
+        
+        const reviseXml = `<?xml version="1.0" encoding="utf-8"?>
+<ReviseItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <RequesterCredentials>
+    <eBayAuthToken>${access_token}</eBayAuthToken>
+  </RequesterCredentials>
+  <Item>
+    <ItemID>${itemId}</ItemID>
+    ${title ? `<Title>${escapeXml(title)}</Title>` : ''}
+    ${description ? `<Description><![CDATA[${description}]]></Description>` : ''}
+    ${pictureDetailsXml}
+  </Item>
+</ReviseItemRequest>`;
+
+        const reviseRes = await fetch('https://api.ebay.com/ws/api.dll', {
+          method: 'POST',
+          headers: {
+            'X-EBAY-API-COMPATIBILITY-LEVEL': '1193',
+            'X-EBAY-API-CALL-NAME': 'ReviseItem',
+            'X-EBAY-API-SITEID': '0',
+            'Content-Type': 'text/xml; charset=utf-8',
+          },
+          body: reviseXml,
+        });
+
+        const reviseText = await reviseRes.text();
+        console.log('[ebay-update-active-item] ReviseItem response:', reviseText.substring(0, 500));
+        
+        if (reviseText.includes('<Ack>Success</Ack>') || reviseText.includes('<Ack>Warning</Ack>')) {
+          console.log('[ebay-update-active-item] Trading API ReviseItem SUCCESS - changes now live on eBay!');
+        } else {
+          console.error('[ebay-update-active-item] Trading API ReviseItem FAILED:', reviseText.substring(0, 1000));
+          // Don't fail the whole operation - inventory was still updated
+        }
+      }
+      
       console.log('[ebay-update-active-item] === UPDATE COMPLETE ===');
       return {
         statusCode: 200,
