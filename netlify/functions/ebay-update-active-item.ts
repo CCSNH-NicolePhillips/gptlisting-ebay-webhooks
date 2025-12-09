@@ -148,6 +148,7 @@ export const handler: Handler = async (event) => {
         console.log('[ebay-update-active-item] About to PUT inventory item. Payload keys:', Object.keys(inventoryItemPayload));
         console.log('[ebay-update-active-item] Product keys:', Object.keys(inventoryItemPayload.product || {}));
         console.log('[ebay-update-active-item] Description length:', inventoryItemPayload.product?.description?.length || 0);
+        console.log('[ebay-update-active-item] FULL PAYLOAD:', JSON.stringify(inventoryItemPayload, null, 2).substring(0, 1000));
         
         const updateItemUrl = `${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
         const updateItemRes = await fetch(updateItemUrl, {
@@ -161,14 +162,16 @@ export const handler: Handler = async (event) => {
           body: JSON.stringify(inventoryItemPayload),
         });
 
+        const responseText = await updateItemRes.text();
+        console.log('[ebay-update-active-item] eBay response status:', updateItemRes.status);
+        console.log('[ebay-update-active-item] eBay response body:', responseText.substring(0, 500));
+
         if (!updateItemRes.ok) {
-          const errorText = await updateItemRes.text();
-          console.error('[ebay-update-active-item] Failed to update inventory item:', errorText);
-          return { statusCode: updateItemRes.status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' }, body: JSON.stringify({ error: 'Failed to update inventory item', detail: errorText }) };
+          console.error('[ebay-update-active-item] Failed to update inventory item:', responseText);
+          return { statusCode: updateItemRes.status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' }, body: JSON.stringify({ error: 'Failed to update inventory item', detail: responseText }) };
         }
         
         console.log('[ebay-update-active-item] Inventory item updated successfully');
-        console.log('[ebay-update-active-item] Response status:', updateItemRes.status);
       }
 
       // STEP 2: Update Offer (price, quantity, policies)
