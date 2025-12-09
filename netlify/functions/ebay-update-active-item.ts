@@ -217,8 +217,10 @@ export const handler: Handler = async (event) => {
       console.log('[ebay-update-active-item] Updating offer to sync inventory_item changes to live listing...');
       
       // Build offer update payload - keep all existing offer fields
+      // Remove read-only fields that shouldn't be in PUT request
+      const { listing, offerId: _, ...offerData } = offer;
       const offerUpdatePayload: any = {
-        ...offer,
+        ...offerData,
       };
       
       // Update price if provided
@@ -240,6 +242,8 @@ export const handler: Handler = async (event) => {
       // Update the offer - this triggers the live listing update
       const updateUrl = `${apiHost}/sell/inventory/v1/offer/${offer.offerId}`;
       console.log('[ebay-update-active-item] PUT offer:', offer.offerId);
+      console.log('[ebay-update-active-item] Offer payload keys:', Object.keys(offerUpdatePayload));
+      console.log('[ebay-update-active-item] SKU in offer:', offerUpdatePayload.sku);
       
       const updateRes = await fetch(updateUrl, {
         method: 'PUT',
@@ -264,52 +268,12 @@ export const handler: Handler = async (event) => {
       
       console.log('[ebay-update-active-item] Offer updated successfully');
       
-      // STEP 4: Also use Trading API ReviseItem as belt-and-suspenders
-      // Some users report this is what actually makes changes appear on eBay
-      if (title || description || images) {
-        console.log('[ebay-update-active-item] Also using Trading API ReviseItem to ensure changes appear...');
-        
-        let pictureDetailsXml = '';
-        if (images && images.length > 0) {
-          const pictureUrls = images.map((url: string) => `<PictureURL>${url}</PictureURL>`).join('');
-          pictureDetailsXml = `<PictureDetails>${pictureUrls}</PictureDetails>`;
-        }
-        
-        const reviseXml = `<?xml version="1.0" encoding="utf-8"?>
-<ReviseItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
-  <RequesterCredentials>
-    <eBayAuthToken>${access_token}</eBayAuthToken>
-  </RequesterCredentials>
-  <Item>
-    <ItemID>${itemId}</ItemID>
-    ${title ? `<Title>${escapeXml(title)}</Title>` : ''}
-    ${description ? `<Description><![CDATA[${description}]]></Description>` : ''}
-    ${pictureDetailsXml}
-  </Item>
-</ReviseItemRequest>`;
-
-        const reviseRes = await fetch('https://api.ebay.com/ws/api.dll', {
-          method: 'POST',
-          headers: {
-            'X-EBAY-API-COMPATIBILITY-LEVEL': '1193',
-            'X-EBAY-API-CALL-NAME': 'ReviseItem',
-            'X-EBAY-API-SITEID': '0',
-            'Content-Type': 'text/xml; charset=utf-8',
-          },
-          body: reviseXml,
-        });
-
-        const reviseText = await reviseRes.text();
-        console.log('[ebay-update-active-item] Trading API response:', reviseText.substring(0, 500));
-        
-        if (reviseText.includes('<Ack>Success</Ack>') || reviseText.includes('<Ack>Warning</Ack>')) {
-          console.log('[ebay-update-active-item] Trading API SUCCESS!');
-        } else {
-          console.error('[ebay-update-active-item] Trading API failed:', reviseText);
-        }
-      }
+      // Note: Trading API ReviseItem is NOT supported for inventory-based listings
+      // eBay returns error 21919474: "This operation is not allowed for inventory items"
+      // We must rely on the Inventory API offer update to sync changes to live listing
       
       console.log('[ebay-update-active-item] === UPDATE COMPLETE ===');
+      console.log('[ebay-update-active-item] Per eBay API: offer update should sync inventory changes to live listing');
       return {
         statusCode: 200,
         headers: { 
