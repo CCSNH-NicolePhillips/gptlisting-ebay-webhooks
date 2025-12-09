@@ -125,6 +125,7 @@ export const handler: Handler = async (event) => {
     console.log('[ebay-get-active-item] Final isInventoryListing:', finalIsInventoryListing);
     
     // If it's an inventory listing, fetch the latest data from Inventory API
+    let inventoryDescription: string | null = null;
     if (finalIsInventoryListing && skuMatch?.[1]) {
       const sku = skuMatch[1];
       console.log('[ebay-get-active-item] Fetching from Inventory API for SKU:', sku);
@@ -141,15 +142,9 @@ export const handler: Handler = async (event) => {
       
       if (inventoryRes.ok) {
         const inventoryData = await inventoryRes.json();
-        console.log('[ebay-get-active-item] Got inventory item data, updating description from Inventory API');
-        
-        // Override Trading API data with fresh Inventory API data
         if (inventoryData.product?.description) {
-          // Find the description in XML and replace it
-          const inventoryDesc = inventoryData.product.description;
-          // We'll use the Inventory API description instead of Trading API
-          xmlText = xmlText.replace(/<Description>.*?<\/Description>/s, `<Description><![CDATA[${inventoryDesc}]]></Description>`);
-          console.log('[ebay-get-active-item] Updated description from Inventory API (length:', inventoryDesc.length, ')');
+          inventoryDescription = inventoryData.product.description;
+          console.log('[ebay-get-active-item] Got fresh description from Inventory API (length:', inventoryDescription.length, ')');
         }
       } else {
         console.log('[ebay-get-active-item] Failed to fetch from Inventory API:', inventoryRes.status);
@@ -193,7 +188,7 @@ export const handler: Handler = async (event) => {
       sku: skuMatch ? skuMatch[1] : '',
       isInventoryListing: finalIsInventoryListing,
       title: titleMatch ? titleMatch[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>') : '',
-      description: descMatch ? descMatch[1] : '',
+      description: inventoryDescription || (descMatch ? descMatch[1] : ''),
       price: priceMatch ? priceMatch[1] : '',
       currency: currencyMatch ? currencyMatch[1] : 'USD',
       quantity: quantityMatch ? parseInt(quantityMatch[1]) : 0,
