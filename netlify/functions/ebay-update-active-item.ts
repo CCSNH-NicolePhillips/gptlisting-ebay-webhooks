@@ -54,29 +54,47 @@ export const handler: Handler = async (event) => {
       const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || 'EBAY_US';
       
       // STEP 1: Update Inventory Item (title, description, images, aspects)
-      // Note: Building minimal payload instead of GET-then-PUT due to Inventory API header issues
       if (title || description || images || aspects || condition) {
         console.log('[ebay-update-active-item] Updating inventory item:', sku);
         
-        // Build minimal inventory item update payload with only changed fields
+        // First, GET the existing inventory item to preserve all fields
+        const getItemUrl = `${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
+        const getItemRes = await fetch(getItemUrl, {
+          headers: {
+            'Authorization': `Bearer ${access_token}`,
+            'Accept-Language': 'en-US',
+            'Content-Language': 'en-US',
+          },
+        });
+
+        if (!getItemRes.ok) {
+          const errorText = await getItemRes.text();
+          console.error('[ebay-update-active-item] Failed to get inventory item:', errorText);
+          return { statusCode: getItemRes.status, body: JSON.stringify({ error: 'Failed to get inventory item', detail: errorText }) };
+        }
+
+        const existingItem = await getItemRes.json();
+        console.log('[ebay-update-active-item] Retrieved existing inventory item');
+        
+        // Merge our updates into the existing item
         const inventoryItemPayload: any = {
-          product: {},
+          ...existingItem,
         };
         
-        // Update product data - only include fields we're changing
+        // Update product data - merge with existing
+        if (!inventoryItemPayload.product) {
+          inventoryItemPayload.product = {};
+        }
+        
         if (title) {
           inventoryItemPayload.product.title = title;
         }
         if (description) {
           inventoryItemPayload.product.description = description;
         }
-        
-        // Update images
         if (images && images.length > 0) {
           inventoryItemPayload.product.imageUrls = images;
         }
-        
-        // Update aspects
         if (aspects && typeof aspects === 'object') {
           inventoryItemPayload.product.aspects = aspects;
         }
@@ -101,10 +119,8 @@ export const handler: Handler = async (event) => {
           }
         }
         
-        // PUT update to inventory item
+        // PUT update to inventory item with full merged data
         const updateItemUrl = `${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
-        
-        // eBay requires both Accept-Language and Content-Language headers
         const updateItemRes = await fetch(updateItemUrl, {
           method: 'PUT',
           headers: {
