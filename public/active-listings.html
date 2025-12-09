@@ -469,7 +469,7 @@
 
       try {
         // Use Trading API endpoint which gets ALL listings (not just Inventory API ones)
-        const res = await exec('/.netlify/functions/ebay-list-active-v2');
+        const res = await exec('/.netlify/functions/ebay-list-active-trading');
         const text = await res.text();
 
         if (res.status === 401) {
