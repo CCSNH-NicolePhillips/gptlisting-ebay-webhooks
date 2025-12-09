@@ -92,7 +92,7 @@ export const handler: Handler = async (event) => {
       console.error('[ebay-get-active-item] API returned error:', xmlText.substring(0, 500));
       return {
         statusCode: 400,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
         body: JSON.stringify({ error: 'eBay API error', detail: xmlText.substring(0, 500) }),
       };
     }
