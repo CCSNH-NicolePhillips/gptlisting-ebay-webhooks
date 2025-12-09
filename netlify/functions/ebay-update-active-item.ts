@@ -26,6 +26,7 @@ export const handler: Handler = async (event) => {
     }
 
     console.log('[ebay-update-active-item] Updating item:', itemId, 'Inventory listing:', isInventoryListing);
+    console.log('[ebay-update-active-item] Received data - title:', title ? 'YES' : 'NO', 'description:', description ? 'YES' : 'NO', 'price:', price, 'quantity:', quantity);
 
     // Load refresh token
     const store = tokensStore();

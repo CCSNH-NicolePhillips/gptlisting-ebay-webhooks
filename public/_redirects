@@ -6,3 +6,5 @@
 /location /location.html 200!
 /analyze /analyze.html 200!
 /setup /setup.html 200!
+/active-listings /active-listings.html 200!
+/edit-active-listing /edit-active-listing.html 200!
