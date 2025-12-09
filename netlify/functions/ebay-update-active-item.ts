@@ -174,40 +174,47 @@ export const handler: Handler = async (event) => {
         console.log('[ebay-update-active-item] Inventory item updated successfully');
       }
 
-      // STEP 2: Update Offer (price, quantity, policies)
+      // STEP 2: Republish the offer to push inventory_item changes to the live listing
+      // Even if we only updated title/description/images, we need to republish the offer
+      console.log('[ebay-update-active-item] Getting offer to republish changes...');
+      
+      const getOfferUrl = `${apiHost}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${MARKETPLACE_ID}`;
+      const getOfferRes = await fetch(getOfferUrl, {
+        headers: {
+          'Authorization': `Bearer ${access_token}`,
+          'Accept-Language': 'en-US',
+          'Content-Language': 'en-US',
+        },
+      });
+
+      if (!getOfferRes.ok) {
+        const errorText = await getOfferRes.text();
+        console.error('[ebay-update-active-item] Failed to get offers:', errorText);
+        return {
+          statusCode: getOfferRes.status,
+          headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
+          body: JSON.stringify({ error: 'Failed to get offer details', detail: errorText }),
+        };
+      }
+
+      const offersData = await getOfferRes.json();
+      const offer = offersData.offers?.[0];
+      
+      if (!offer || !offer.offerId) {
+        console.log('[ebay-update-active-item] No offer found - changes saved to inventory but not published');
+        return { 
+          statusCode: 200, 
+          headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
+          body: JSON.stringify({ ok: true, itemId, method: 'inventory', warning: 'Updated inventory item but no offer found to republish' })
+        };
+      }
+
+      console.log('[ebay-update-active-item] Found offer:', offer.offerId);
+
+      // STEP 3: Update Offer if price/quantity changed
       if (price !== undefined || quantity !== undefined) {
         console.log('[ebay-update-active-item] Updating offer with price/quantity changes');
         
-        // Get the current offer to get offerId
-        // API doc: GET /sell/inventory/v1/offer?sku={sku}&marketplace_id={marketplace_id}
-        const getOfferUrl = `${apiHost}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${MARKETPLACE_ID}`;
-        console.log('[ebay-update-active-item] Fetching offers from:', getOfferUrl);
-        
-        const getRes = await fetch(getOfferUrl, {
-          headers: {
-            'Authorization': `Bearer ${access_token}`,
-            'Accept-Language': 'en-US',
-            'Content-Language': 'en-US',
-          },
-        });
-
-        if (!getRes.ok) {
-          const errorText = await getRes.text();
-          console.error('[ebay-update-active-item] Failed to get offers:', errorText);
-          return {
-            statusCode: getRes.status,
-            headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
-            body: JSON.stringify({ error: 'Failed to get offer details', detail: errorText }),
-          };
-        }
-
-        const offersData = await getRes.json();
-        const offer = offersData.offers?.[0];
-        
-        if (!offer || !offer.offerId) {
-          return { statusCode: 404, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' }, body: JSON.stringify({ error: 'No offer found for this SKU' }) };
-        }
-
         // Build offer update payload - keep all existing offer fields
         const offerUpdatePayload: any = {
           ...offer,
@@ -254,6 +261,35 @@ export const handler: Handler = async (event) => {
         
         console.log('[ebay-update-active-item] Offer updated successfully');
       }
+
+      // STEP 4: Publish/republish the offer to push all changes to live listing
+      console.log('[ebay-update-active-item] Publishing offer to push changes to live listing...');
+      const publishUrl = `${apiHost}/sell/inventory/v1/offer/${offer.offerId}/publish`;
+      const publishRes = await fetch(publishUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${access_token}`,
+          'Content-Type': 'application/json',
+          'Accept-Language': 'en-US',
+          'Content-Language': 'en-US',
+        },
+        body: JSON.stringify({}),
+      });
+
+      const publishText = await publishRes.text();
+      console.log('[ebay-update-active-item] Publish response status:', publishRes.status);
+      console.log('[ebay-update-active-item] Publish response:', publishText.substring(0, 300));
+
+      if (!publishRes.ok) {
+        console.error('[ebay-update-active-item] Failed to publish offer:', publishText);
+        return {
+          statusCode: publishRes.status,
+          headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
+          body: JSON.stringify({ error: 'Updated inventory but failed to publish to live listing', detail: publishText }),
+        };
+      }
+
+      console.log('[ebay-update-active-item] Offer published successfully - changes now live on eBay');
       
       console.log('[ebay-update-active-item] === UPDATE COMPLETE ===');
       return {
