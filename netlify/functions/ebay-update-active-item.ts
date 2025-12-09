@@ -262,7 +262,53 @@ export const handler: Handler = async (event) => {
         };
       }
       
-      console.log('[ebay-update-active-item] Offer updated successfully - live listing should now reflect changes!');
+      console.log('[ebay-update-active-item] Offer updated successfully');
+      
+      // STEP 4: Also use Trading API ReviseItem as belt-and-suspenders
+      // Some users report this is what actually makes changes appear on eBay
+      if (title || description || images) {
+        console.log('[ebay-update-active-item] Also using Trading API ReviseItem to ensure changes appear...');
+        
+        let pictureDetailsXml = '';
+        if (images && images.length > 0) {
+          const pictureUrls = images.map((url: string) => `<PictureURL>${url}</PictureURL>`).join('');
+          pictureDetailsXml = `<PictureDetails>${pictureUrls}</PictureDetails>`;
+        }
+        
+        const reviseXml = `<?xml version="1.0" encoding="utf-8"?>
+<ReviseItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <RequesterCredentials>
+    <eBayAuthToken>${access_token}</eBayAuthToken>
+  </RequesterCredentials>
+  <Item>
+    <ItemID>${itemId}</ItemID>
+    ${title ? `<Title>${escapeXml(title)}</Title>` : ''}
+    ${description ? `<Description><![CDATA[${description}]]></Description>` : ''}
+    ${pictureDetailsXml}
+  </Item>
+</ReviseItemRequest>`;
+
+        const reviseRes = await fetch('https://api.ebay.com/ws/api.dll', {
+          method: 'POST',
+          headers: {
+            'X-EBAY-API-COMPATIBILITY-LEVEL': '1193',
+            'X-EBAY-API-CALL-NAME': 'ReviseItem',
+            'X-EBAY-API-SITEID': '0',
+            'Content-Type': 'text/xml; charset=utf-8',
+          },
+          body: reviseXml,
+        });
+
+        const reviseText = await reviseRes.text();
+        console.log('[ebay-update-active-item] Trading API response:', reviseText.substring(0, 500));
+        
+        if (reviseText.includes('<Ack>Success</Ack>') || reviseText.includes('<Ack>Warning</Ack>')) {
+          console.log('[ebay-update-active-item] Trading API SUCCESS!');
+        } else {
+          console.error('[ebay-update-active-item] Trading API failed:', reviseText);
+        }
+      }
+      
       console.log('[ebay-update-active-item] === UPDATE COMPLETE ===');
       return {
         statusCode: 200,
