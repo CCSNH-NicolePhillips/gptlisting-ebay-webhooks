@@ -211,62 +211,59 @@ export const handler: Handler = async (event) => {
 
       console.log('[ebay-update-active-item] Found offer:', offer.offerId);
 
-      // STEP 3: Update Offer if price/quantity changed
-      if (price !== undefined || quantity !== undefined) {
-        console.log('[ebay-update-active-item] Updating offer with price/quantity changes');
-        
-        // Build offer update payload - keep all existing offer fields
-        const offerUpdatePayload: any = {
-          ...offer,
+      // STEP 3: ALWAYS update the offer to sync changes to live listing
+      // Per eBay docs: "For a published offer, a successful updateOffer call will not only update 
+      // the offer object, but will update the associated active eBay listing in real time."
+      console.log('[ebay-update-active-item] Updating offer to sync inventory_item changes to live listing...');
+      
+      // Build offer update payload - keep all existing offer fields
+      const offerUpdatePayload: any = {
+        ...offer,
+      };
+      
+      // Update price if provided
+      if (price !== undefined) {
+        console.log('[ebay-update-active-item] Updating price to:', price);
+        offerUpdatePayload.pricingSummary = offerUpdatePayload.pricingSummary || {};
+        offerUpdatePayload.pricingSummary.price = {
+          value: String(price),
+          currency: 'USD'
         };
-        
-        // Update price
-        if (price !== undefined) {
-          offerUpdatePayload.pricingSummary = offerUpdatePayload.pricingSummary || {};
-          offerUpdatePayload.pricingSummary.price = {
-            value: String(price),
-            currency: 'USD'
-          };
-        }
-        
-        // Update quantity
-        if (quantity !== undefined) {
-          offerUpdatePayload.availableQuantity = quantity;
-        }
-
-        // Update the offer
-        const updateUrl = `${apiHost}/sell/inventory/v1/offer/${offer.offerId}`;
-        console.log('[ebay-update-active-item] Updating offer:', offer.offerId);
-        
-        const updateRes = await fetch(updateUrl, {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${access_token}`,
-            'Content-Type': 'application/json',
-            'Accept-Language': 'en-US',
-            'Content-Language': 'en-US',
-          },
-          body: JSON.stringify(offerUpdatePayload),
-        });
-
-        if (!updateRes.ok) {
-          const errorText = await updateRes.text();
-          console.error('[ebay-update-active-item] Inventory API error:', errorText);
-          return {
-            statusCode: updateRes.status,
-            headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
-            body: JSON.stringify({ error: 'Failed to update offer', detail: errorText }),
-          };
-        }
-        
-        console.log('[ebay-update-active-item] Offer updated successfully');
+      }
+      
+      // Update quantity if provided
+      if (quantity !== undefined) {
+        console.log('[ebay-update-active-item] Updating quantity to:', quantity);
+        offerUpdatePayload.availableQuantity = quantity;
       }
 
-      // According to eBay's documentation: "if changes are made to an inventory item that is part 
-      // of one or more active eBay listings, a successful call will automatically update these eBay listings"
-      // The GET-then-PUT approach with all fields preserved should sync changes to the live listing.
+      // Update the offer - this triggers the live listing update
+      const updateUrl = `${apiHost}/sell/inventory/v1/offer/${offer.offerId}`;
+      console.log('[ebay-update-active-item] PUT offer:', offer.offerId);
+      
+      const updateRes = await fetch(updateUrl, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${access_token}`,
+          'Content-Type': 'application/json',
+          'Accept-Language': 'en-US',
+          'Content-Language': 'en-US',
+        },
+        body: JSON.stringify(offerUpdatePayload),
+      });
+
+      if (!updateRes.ok) {
+        const errorText = await updateRes.text();
+        console.error('[ebay-update-active-item] Failed to update offer:', errorText);
+        return {
+          statusCode: updateRes.status,
+          headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
+          body: JSON.stringify({ error: 'Failed to update offer', detail: errorText }),
+        };
+      }
+      
+      console.log('[ebay-update-active-item] Offer updated successfully - live listing should now reflect changes!');
       console.log('[ebay-update-active-item] === UPDATE COMPLETE ===');
-      console.log('[ebay-update-active-item] Changes saved. Per eBay API docs, live listing should auto-update.');
       return {
         statusCode: 200,
         headers: { 
