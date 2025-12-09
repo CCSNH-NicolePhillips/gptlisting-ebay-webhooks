@@ -262,98 +262,11 @@ export const handler: Handler = async (event) => {
         console.log('[ebay-update-active-item] Offer updated successfully');
       }
 
-      // STEP 4: For already-published offers, we need to update the offer to trigger listing refresh
-      // Even if price/quantity didn't change, updating the offer forces eBay to sync inventory_item changes
-      if (!price && !quantity) {
-        console.log('[ebay-update-active-item] No price/quantity changes - doing minimal offer update to trigger sync...');
-        
-        // Get fresh offer data
-        const freshOfferUrl = `${apiHost}/sell/inventory/v1/offer/${offer.offerId}`;
-        const freshOfferRes = await fetch(freshOfferUrl, {
-          headers: {
-            'Authorization': `Bearer ${access_token}`,
-            'Accept-Language': 'en-US',
-            'Content-Language': 'en-US',
-          },
-        });
-        
-        if (freshOfferRes.ok) {
-          const freshOffer = await freshOfferRes.json();
-          
-          // Update offer with same data to trigger eBay to sync inventory_item changes
-          const syncUpdateUrl = `${apiHost}/sell/inventory/v1/offer/${offer.offerId}`;
-          const syncUpdateRes = await fetch(syncUpdateUrl, {
-            method: 'PUT',
-            headers: {
-              'Authorization': `Bearer ${access_token}`,
-              'Content-Type': 'application/json',
-              'Accept-Language': 'en-US',
-              'Content-Language': 'en-US',
-            },
-            body: JSON.stringify(freshOffer),
-          });
-
-          const syncText = await syncUpdateRes.text();
-          console.log('[ebay-update-active-item] Sync update response status:', syncUpdateRes.status);
-          console.log('[ebay-update-active-item] Sync update response:', syncText.substring(0, 300));
-
-          if (!syncUpdateRes.ok) {
-            console.error('[ebay-update-active-item] Failed to sync offer:', syncText);
-            // Don't fail the whole operation - inventory_item was updated successfully
-            console.log('[ebay-update-active-item] Warning: Inventory updated but offer sync failed. Changes may take time to appear on eBay.');
-          } else {
-            console.log('[ebay-update-active-item] Offer synced successfully - changes should appear on eBay');
-          }
-        }
-      }
-      
-      // CRITICAL: Inventory API updates don't sync to live listings automatically
-      // Use Trading API ReviseItem to force the changes to appear on eBay
-      if (title || description || images) {
-        console.log('[ebay-update-active-item] Using Trading API ReviseItem to push changes to live listing...');
-        
-        let pictureDetailsXml = '';
-        if (images && images.length > 0) {
-          const pictureUrls = images.map((url: string) => `<PictureURL>${url}</PictureURL>`).join('');
-          pictureDetailsXml = `<PictureDetails>${pictureUrls}</PictureDetails>`;
-        }
-        
-        const reviseXml = `<?xml version="1.0" encoding="utf-8"?>
-<ReviseItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
-  <RequesterCredentials>
-    <eBayAuthToken>${access_token}</eBayAuthToken>
-  </RequesterCredentials>
-  <Item>
-    <ItemID>${itemId}</ItemID>
-    ${title ? `<Title>${escapeXml(title)}</Title>` : ''}
-    ${description ? `<Description><![CDATA[${description}]]></Description>` : ''}
-    ${pictureDetailsXml}
-  </Item>
-</ReviseItemRequest>`;
-
-        const reviseRes = await fetch('https://api.ebay.com/ws/api.dll', {
-          method: 'POST',
-          headers: {
-            'X-EBAY-API-COMPATIBILITY-LEVEL': '1193',
-            'X-EBAY-API-CALL-NAME': 'ReviseItem',
-            'X-EBAY-API-SITEID': '0',
-            'Content-Type': 'text/xml; charset=utf-8',
-          },
-          body: reviseXml,
-        });
-
-        const reviseText = await reviseRes.text();
-        console.log('[ebay-update-active-item] ReviseItem response:', reviseText.substring(0, 500));
-        
-        if (reviseText.includes('<Ack>Success</Ack>') || reviseText.includes('<Ack>Warning</Ack>')) {
-          console.log('[ebay-update-active-item] Trading API ReviseItem SUCCESS - changes now live on eBay!');
-        } else {
-          console.error('[ebay-update-active-item] Trading API ReviseItem FAILED:', reviseText.substring(0, 1000));
-          // Don't fail the whole operation - inventory was still updated
-        }
-      }
-      
+      // According to eBay's documentation: "if changes are made to an inventory item that is part 
+      // of one or more active eBay listings, a successful call will automatically update these eBay listings"
+      // The GET-then-PUT approach with all fields preserved should sync changes to the live listing.
       console.log('[ebay-update-active-item] === UPDATE COMPLETE ===');
+      console.log('[ebay-update-active-item] Changes saved. Per eBay API docs, live listing should auto-update.');
       return {
         statusCode: 200,
         headers: { 
