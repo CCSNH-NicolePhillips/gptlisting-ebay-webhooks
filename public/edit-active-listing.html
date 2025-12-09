@@ -644,7 +644,7 @@
         
         if (res.ok) {
           showFlash('Listing updated successfully!', 'success');
-          setTimeout(() => window.location.href = '/active-listings.html', 1500);
+          setTimeout(() => window.location.href = '/active-listings', 1500);
         } else {
           throw new Error(res.error || 'Failed to update listing');
         }
