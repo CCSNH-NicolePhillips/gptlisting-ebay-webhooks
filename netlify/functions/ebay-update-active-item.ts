@@ -223,6 +223,14 @@ export const handler: Handler = async (event) => {
         ...offerData,
       };
       
+      // CRITICAL: Update listingDescription in the offer if description changed
+      // The listingDescription field is what actually appears on the eBay listing!
+      // (product.description in inventory_item is just the product catalog description)
+      if (description) {
+        console.log('[ebay-update-active-item] Updating listingDescription in offer to:', description.substring(0, 100) + '...');
+        offerUpdatePayload.listingDescription = description;
+      }
+      
       // Update price if provided
       if (price !== undefined) {
         console.log('[ebay-update-active-item] Updating price to:', price);
