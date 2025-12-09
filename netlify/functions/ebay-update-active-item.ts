@@ -7,7 +7,7 @@ export const handler: Handler = async (event) => {
   console.log('[ebay-update-active-item] Function invoked');
   
   if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) };
+    return { statusCode: 405, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Method not allowed' }) };
   }
 
   try {
@@ -15,14 +15,14 @@ export const handler: Handler = async (event) => {
     let sub = (await requireAuthVerified(event))?.sub || null;
     if (!sub) sub = getJwtSubUnverified(event);
     if (!bearer || !sub) {
-      return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) };
+      return { statusCode: 401, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Unauthorized' }) };
     }
 
     const body = event.body ? JSON.parse(event.body) : {};
     const { itemId, sku, isInventoryListing, title, description, price, quantity, condition, aspects, images } = body;
 
     if (!itemId) {
-      return { statusCode: 400, body: JSON.stringify({ error: 'Missing itemId' }) };
+      return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Missing itemId' }) };
     }
 
     console.log('[ebay-update-active-item] Updating item:', itemId, 'Inventory listing:', isInventoryListing);
@@ -33,7 +33,7 @@ export const handler: Handler = async (event) => {
     const saved = (await store.get(userScopedKey(sub, 'ebay.json'), { type: 'json' })) as any;
     const refresh = saved?.refresh_token as string | undefined;
     if (!refresh) {
-      return { statusCode: 400, body: JSON.stringify({ error: 'Connect eBay first' }) };
+      return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Connect eBay first' }) };
     }
 
     const { access_token } = await accessTokenFromRefresh(refresh);
@@ -48,7 +48,7 @@ export const handler: Handler = async (event) => {
       console.log('[ebay-update-active-item] Using Inventory API for inventory listing');
       
       if (!sku) {
-        return { statusCode: 400, body: JSON.stringify({ error: 'SKU required for inventory listings' }) };
+        return { statusCode: 400, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'SKU required for inventory listings' }) };
       }
 
       const { apiHost } = require('../../src/lib/_common.js').tokenHosts(process.env.EBAY_ENV);
@@ -71,7 +71,7 @@ export const handler: Handler = async (event) => {
         if (!getItemRes.ok) {
           const errorText = await getItemRes.text();
           console.error('[ebay-update-active-item] Failed to get inventory item:', errorText);
-          return { statusCode: getItemRes.status, body: JSON.stringify({ error: 'Failed to get inventory item', detail: errorText }) };
+          return { statusCode: getItemRes.status, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Failed to get inventory item', detail: errorText }) };
         }
 
         const existingItem = await getItemRes.json();
@@ -164,7 +164,7 @@ export const handler: Handler = async (event) => {
         if (!updateItemRes.ok) {
           const errorText = await updateItemRes.text();
           console.error('[ebay-update-active-item] Failed to update inventory item:', errorText);
-          return { statusCode: updateItemRes.status, body: JSON.stringify({ error: 'Failed to update inventory item', detail: errorText }) };
+          return { statusCode: updateItemRes.status, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Failed to update inventory item', detail: errorText }) };
         }
         
         console.log('[ebay-update-active-item] Inventory item updated successfully');
@@ -193,6 +193,7 @@ export const handler: Handler = async (event) => {
           console.error('[ebay-update-active-item] Failed to get offers:', errorText);
           return {
             statusCode: getRes.status,
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ error: 'Failed to get offer details', detail: errorText }),
           };
         }
@@ -201,7 +202,7 @@ export const handler: Handler = async (event) => {
         const offer = offersData.offers?.[0];
         
         if (!offer || !offer.offerId) {
-          return { statusCode: 404, body: JSON.stringify({ error: 'No offer found for this SKU' }) };
+          return { statusCode: 404, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'No offer found for this SKU' }) };
         }
 
         // Build offer update payload - keep all existing offer fields
@@ -243,6 +244,7 @@ export const handler: Handler = async (event) => {
           console.error('[ebay-update-active-item] Inventory API error:', errorText);
           return {
             statusCode: updateRes.status,
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ error: 'Failed to update offer', detail: errorText }),
           };
         }

@@ -25,7 +25,7 @@ export const handler: Handler = async (event) => {
     if (!itemId) {
       return {
         statusCode: 400,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
         body: JSON.stringify({ error: 'Missing itemId parameter' }),
       };
     }
@@ -35,7 +35,7 @@ export const handler: Handler = async (event) => {
     if (!bearer || !sub) {
       return {
         statusCode: 401,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
         body: JSON.stringify({ error: 'Unauthorized' }),
       };
     }
@@ -46,7 +46,7 @@ export const handler: Handler = async (event) => {
     const refresh = saved?.refresh_token as string | undefined;
     if (!refresh) {
       console.log('[ebay-get-active-item] No eBay refresh token found');
-      return { statusCode: 400, body: JSON.stringify({ error: 'Connect eBay first' }) };
+      return { statusCode: 400, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' }, body: JSON.stringify({ error: 'Connect eBay first' }) };
     }
 
     console.log('[ebay-get-active-item] Getting access token...');
@@ -186,7 +186,7 @@ export const handler: Handler = async (event) => {
     console.error('[ebay-get-active-item] Stack:', e?.stack);
     return {
       statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
       body: JSON.stringify({ error: 'Failed to get item', detail: e?.message || String(e) }),
     };
   }
