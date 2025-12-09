@@ -106,15 +106,21 @@ export const handler: Handler = async (event) => {
         }
         
         if (title) {
+          console.log('[ebay-update-active-item] Setting title to:', title.substring(0, 50) + '...');
           inventoryItemPayload.product.title = title;
         }
         if (description) {
+          console.log('[ebay-update-active-item] Setting description to:', description.substring(0, 100) + '...');
           inventoryItemPayload.product.description = description;
+        } else {
+          console.log('[ebay-update-active-item] WARNING: No description provided in update request');
         }
         if (images && images.length > 0) {
+          console.log('[ebay-update-active-item] Setting', images.length, 'images');
           inventoryItemPayload.product.imageUrls = images;
         }
         if (aspects && typeof aspects === 'object') {
+          console.log('[ebay-update-active-item] Setting aspects:', Object.keys(aspects).length, 'keys');
           inventoryItemPayload.product.aspects = aspects;
         }
         
@@ -139,6 +145,10 @@ export const handler: Handler = async (event) => {
         }
         
         // PUT update to inventory item with full merged data
+        console.log('[ebay-update-active-item] About to PUT inventory item. Payload keys:', Object.keys(inventoryItemPayload));
+        console.log('[ebay-update-active-item] Product keys:', Object.keys(inventoryItemPayload.product || {}));
+        console.log('[ebay-update-active-item] Description length:', inventoryItemPayload.product?.description?.length || 0);
+        
         const updateItemUrl = `${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
         const updateItemRes = await fetch(updateItemUrl, {
           method: 'PUT',
@@ -158,6 +168,7 @@ export const handler: Handler = async (event) => {
         }
         
         console.log('[ebay-update-active-item] Inventory item updated successfully');
+        console.log('[ebay-update-active-item] Response status:', updateItemRes.status);
       }
 
       // STEP 2: Update Offer (price, quantity, policies)
@@ -238,9 +249,14 @@ export const handler: Handler = async (event) => {
         
         console.log('[ebay-update-active-item] Offer updated successfully');
       }
+      
+      console.log('[ebay-update-active-item] === UPDATE COMPLETE ===');
       return {
         statusCode: 200,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        },
         body: JSON.stringify({ ok: true, itemId, method: 'inventory' }),
       };
     }
@@ -324,9 +340,13 @@ export const handler: Handler = async (event) => {
 
     console.log('[ebay-update-active-item] Item updated successfully');
 
+    console.log('[ebay-update-active-item] === UPDATE COMPLETE (Trading API) ===');
     return {
       statusCode: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      },
       body: JSON.stringify({ ok: true, itemId }),
     };
   } catch (e: any) {
