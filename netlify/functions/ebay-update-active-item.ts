@@ -75,13 +75,14 @@ export const handler: Handler = async (event) => {
 
         const existingItem = await getItemRes.json();
         console.log('[ebay-update-active-item] Retrieved existing inventory item');
+        console.log('[ebay-update-active-item] Package weight data:', JSON.stringify(existingItem.packageWeightAndSize));
         
         // Merge our updates into the existing item
         const inventoryItemPayload: any = {
           ...existingItem,
         };
         
-        // Fix missing or invalid package weight (common issue with Trading API migrated listings)
+        // Fix missing or invalid package weight
         if (!inventoryItemPayload.packageWeightAndSize) {
           inventoryItemPayload.packageWeightAndSize = {};
         }
@@ -95,6 +96,8 @@ export const handler: Handler = async (event) => {
           inventoryItemPayload.packageWeightAndSize.weight.value = 1;
           console.log('[ebay-update-active-item] Fixed invalid package weight value');
         }
+        
+        console.log('[ebay-update-active-item] Final package weight:', JSON.stringify(inventoryItemPayload.packageWeightAndSize.weight));
         
         // Update product data - merge with existing
         if (!inventoryItemPayload.product) {
