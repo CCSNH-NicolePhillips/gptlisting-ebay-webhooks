@@ -144,7 +144,7 @@ export const handler: Handler = async (event) => {
         const inventoryData = await inventoryRes.json();
         if (inventoryData.product?.description) {
           inventoryDescription = inventoryData.product.description;
-          console.log('[ebay-get-active-item] Got fresh description from Inventory API (length:', inventoryDescription.length, ')');
+          console.log('[ebay-get-active-item] Got fresh description from Inventory API (length:', inventoryData.product.description.length, ')');
         }
       } else {
         console.log('[ebay-get-active-item] Failed to fetch from Inventory API:', inventoryRes.status);
