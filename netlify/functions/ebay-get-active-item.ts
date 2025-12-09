@@ -124,6 +124,38 @@ export const handler: Handler = async (event) => {
     
     console.log('[ebay-get-active-item] Final isInventoryListing:', finalIsInventoryListing);
     
+    // If it's an inventory listing, fetch the latest data from Inventory API
+    if (finalIsInventoryListing && skuMatch?.[1]) {
+      const sku = skuMatch[1];
+      console.log('[ebay-get-active-item] Fetching from Inventory API for SKU:', sku);
+      
+      const inventoryUrl = `https://api.ebay.com/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
+      const inventoryRes = await fetch(inventoryUrl, {
+        headers: {
+          'Authorization': `Bearer ${access_token}`,
+          'Content-Type': 'application/json',
+          'Accept-Language': 'en-US',
+          'Content-Language': 'en-US',
+        },
+      });
+      
+      if (inventoryRes.ok) {
+        const inventoryData = await inventoryRes.json();
+        console.log('[ebay-get-active-item] Got inventory item data, updating description from Inventory API');
+        
+        // Override Trading API data with fresh Inventory API data
+        if (inventoryData.product?.description) {
+          // Find the description in XML and replace it
+          const inventoryDesc = inventoryData.product.description;
+          // We'll use the Inventory API description instead of Trading API
+          xmlText = xmlText.replace(/<Description>.*?<\/Description>/s, `<Description><![CDATA[${inventoryDesc}]]></Description>`);
+          console.log('[ebay-get-active-item] Updated description from Inventory API (length:', inventoryDesc.length, ')');
+        }
+      } else {
+        console.log('[ebay-get-active-item] Failed to fetch from Inventory API:', inventoryRes.status);
+      }
+    }
+    
     const priceMatch = xmlText.match(/<CurrentPrice[^>]*>([^<]+)<\/CurrentPrice>/);
     const currencyMatch = xmlText.match(/<CurrentPrice currencyID="([^"]+)"/);
     const quantityMatch = xmlText.match(/<Quantity>([^<]+)<\/Quantity>/);
