@@ -69,6 +69,18 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* ===== NUMBER INPUT SPINNER REMOVAL ===== */
+/* Hide up/down arrows on number input fields */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
 /* ===== LAYOUT SHELL ===== */
 .dp-shell {
   display: flex;

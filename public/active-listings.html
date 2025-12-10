@@ -225,11 +225,14 @@
     const counts = document.getElementById('counts');
     const emptyState = document.getElementById('emptyState');
     const sortSelect = document.getElementById('sortSelect');
-    const exec = (window.authClient && typeof window.authClient.authFetch === 'function') 
-      ? window.authClient.authFetch 
-      : fetch;
 
     let allOffers = []; // Store all offers for sorting
+    
+    function getAuthFetch() {
+      return (window.authClient && typeof window.authClient.authFetch === 'function') 
+        ? window.authClient.authFetch 
+        : fetch;
+    }
 
     function sortOffers(offers, sortBy) {
       const sorted = [...offers];
@@ -404,6 +407,7 @@
         localFlash.className = 'card-flash';
         
         try {
+          const exec = getAuthFetch();
           const res = await exec('/.netlify/functions/ebay-update-active-promo', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -469,6 +473,7 @@
 
       try {
         // Use Trading API endpoint which gets ALL listings (not just Inventory API ones)
+        const exec = getAuthFetch();
         const res = await exec('/.netlify/functions/ebay-list-active-trading');
         const text = await res.text();
 
