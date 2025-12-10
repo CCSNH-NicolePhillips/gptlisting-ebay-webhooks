@@ -98,6 +98,68 @@
       border-color: #5b7cff;
       box-shadow: 0 0 0 3px rgba(91, 124, 255, 0.1);
     }
+    .aspect-multiselect {
+      position: relative;
+      width: 100%;
+    }
+    .aspect-multiselect-display {
+      width: 100%;
+      background: #0f1529;
+      border: 1px solid #2a335c;
+      border-radius: 6px;
+      padding: 0.75rem;
+      color: #f4f6fb;
+      font-size: 0.9375rem;
+      cursor: pointer;
+      user-select: none;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .aspect-multiselect-display:hover {
+      border-color: #5b7cff;
+    }
+    .aspect-multiselect-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: #0f1529;
+      border: 1px solid #2a335c;
+      border-radius: 6px;
+      margin-top: 4px;
+      max-height: 300px;
+      overflow-y: auto;
+      z-index: 1000;
+      display: none;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+    .aspect-multiselect-dropdown.open {
+      display: block;
+    }
+    .aspect-multiselect-option {
+      padding: 0.75rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: background-color 0.2s;
+    }
+    .aspect-multiselect-option:hover {
+      background: #1a2038;
+    }
+    .aspect-multiselect-option input[type="checkbox"] {
+      width: auto;
+      margin: 0;
+      cursor: pointer;
+    }
+    .aspect-multiselect-arrow {
+      font-size: 0.75rem;
+      transition: transform 0.2s;
+    }
+    .aspect-multiselect-arrow.open {
+      transform: rotate(180deg);
+    }
     .aspect-item button {
       padding: 0.4rem 0.8rem;
       font-size: 0.85rem;
@@ -471,17 +533,51 @@
       const requiredMark = isRequired ? ' <span style="color: #ef4444;">*</span>' : '';
       const keyReadonly = isRequired || key ? 'readonly' : '';
       
+      // Parse existing values (could be comma-separated string or array)
+      let existingValues = [];
+      if (value) {
+        if (Array.isArray(value)) {
+          existingValues = value;
+        } else if (typeof value === 'string') {
+          existingValues = value.split(',').map(v => v.trim()).filter(v => v);
+        }
+      }
+      
       // Check if aspect has predefined values (dropdown)
       let valueInput = '';
       if (aspectMetadata?.aspectValues && aspectMetadata.aspectValues.length > 0) {
-        // For dropdowns, if we have a value, just use a text input instead
-        // This allows the AI-generated values to be displayed and edited
-        if (value && value.trim()) {
-          valueInput = `<input type="text" placeholder="Value${requiredMark}" value="${value}" class="aspect-value" ${isRequired ? 'required' : ''} />`;
-        } else {
-          // Create dropdown for empty fields
+        const mode = aspectMetadata.aspectConstraint?.aspectMode || 'SELECTION_ONLY';
+        const cardinality = aspectMetadata.cardinality || 'SINGLE';
+        
+        // If multiple selections allowed, create multi-select dropdown
+        if (cardinality === 'MULTI') {
+          const multiselectId = `multiselect-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          const displayText = existingValues.length > 0 ? existingValues.join(', ') : `Select ${key}...`;
+          
           const options = aspectMetadata.aspectValues.map(av => {
-            return `<option value="${av.localizedValue}">${av.localizedValue}</option>`;
+            const checked = existingValues.includes(av.localizedValue) ? 'checked' : '';
+            return `<div class="aspect-multiselect-option">
+              <input type="checkbox" value="${av.localizedValue}" ${checked} />
+              <label>${av.localizedValue}</label>
+            </div>`;
+          }).join('');
+          
+          valueInput = `<div class="aspect-multiselect" data-multiselect-id="${multiselectId}">
+            <div class="aspect-multiselect-display">
+              <span class="multiselect-text">${displayText}</span>
+              <span class="aspect-multiselect-arrow">▼</span>
+            </div>
+            <div class="aspect-multiselect-dropdown">
+              ${options}
+            </div>
+            <input type="hidden" class="aspect-value" value="${existingValues.join(', ')}" />
+          </div>`;
+        } else {
+          // Single selection - use regular dropdown
+          const selectedValue = existingValues[0] || '';
+          const options = aspectMetadata.aspectValues.map(av => {
+            const selected = av.localizedValue === selectedValue ? 'selected' : '';
+            return `<option value="${av.localizedValue}" ${selected}>${av.localizedValue}</option>`;
           }).join('');
           valueInput = `<select class="aspect-value" ${isRequired ? 'required' : ''}>
             <option value="">Select ${key}...</option>
@@ -490,8 +586,49 @@
         }
       } else {
         // Regular text input
-        valueInput = `<input type="text" placeholder="Value${requiredMark}" value="${value}" class="aspect-value" ${isRequired ? 'required' : ''} />`;
+        const displayValue = existingValues.join(', ');
+        valueInput = `<input type="text" placeholder="Value${requiredMark}" value="${displayValue}" class="aspect-value" ${isRequired ? 'required' : ''} />`;
       }
+      
+      div.innerHTML = `
+        <input type="text" placeholder="Name (e.g. Brand)" value="${key}" class="aspect-key" ${keyReadonly} />
+        ${valueInput}
+        <button class="dp-btn dp-btn-secondary" onclick="this.parentElement.remove()" ${isRequired ? 'disabled title="Required field"' : ''}>×</button>
+      `;
+      container.appendChild(div);
+      
+      // Add event listeners for multi-select
+      if (aspectMetadata?.aspectValues && (aspectMetadata.cardinality || 'SINGLE') === 'MULTI') {
+        const multiselect = div.querySelector('.aspect-multiselect');
+        const display = multiselect.querySelector('.aspect-multiselect-display');
+        const dropdown = multiselect.querySelector('.aspect-multiselect-dropdown');
+        const arrow = multiselect.querySelector('.aspect-multiselect-arrow');
+        const hiddenInput = multiselect.querySelector('input[type="hidden"]');
+        const textDisplay = multiselect.querySelector('.multiselect-text');
+        
+        display.addEventListener('click', (e) => {
+          e.stopPropagation();
+          dropdown.classList.toggle('open');
+          arrow.classList.toggle('open');
+        });
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', () => {
+          dropdown.classList.remove('open');
+          arrow.classList.remove('open');
+        });
+        
+        // Handle checkbox changes
+        dropdown.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+          checkbox.addEventListener('change', () => {
+            const selectedValues = Array.from(dropdown.querySelectorAll('input[type="checkbox"]:checked'))
+              .map(cb => cb.value);
+            hiddenInput.value = selectedValues.join(', ');
+            textDisplay.textContent = selectedValues.length > 0 ? selectedValues.join(', ') : `Select ${key}...`;
+          });
+        });
+      }
+    }
       
       div.innerHTML = `
         <input type="text" placeholder="Name (e.g. Brand)" value="${key}" class="aspect-key" ${keyReadonly} />
