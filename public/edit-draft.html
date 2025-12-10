@@ -474,15 +474,20 @@
       // Check if aspect has predefined values (dropdown)
       let valueInput = '';
       if (aspectMetadata?.aspectValues && aspectMetadata.aspectValues.length > 0) {
-        // Create dropdown
-        const options = aspectMetadata.aspectValues.map(av => {
-          const selected = av.localizedValue === value ? 'selected' : '';
-          return `<option value="${av.localizedValue}" ${selected}>${av.localizedValue}</option>`;
-        }).join('');
-        valueInput = `<select class="aspect-value" ${isRequired ? 'required' : ''}>
-          <option value="">Select ${key}...</option>
-          ${options}
-        </select>`;
+        // For dropdowns, if we have a value, just use a text input instead
+        // This allows the AI-generated values to be displayed and edited
+        if (value && value.trim()) {
+          valueInput = `<input type="text" placeholder="Value${requiredMark}" value="${value}" class="aspect-value" ${isRequired ? 'required' : ''} />`;
+        } else {
+          // Create dropdown for empty fields
+          const options = aspectMetadata.aspectValues.map(av => {
+            return `<option value="${av.localizedValue}">${av.localizedValue}</option>`;
+          }).join('');
+          valueInput = `<select class="aspect-value" ${isRequired ? 'required' : ''}>
+            <option value="">Select ${key}...</option>
+            ${options}
+          </select>`;
+        }
       } else {
         // Regular text input
         valueInput = `<input type="text" placeholder="Value${requiredMark}" value="${value}" class="aspect-value" ${isRequired ? 'required' : ''} />`;
