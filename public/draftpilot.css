@@ -81,6 +81,21 @@ input[type="number"] {
   -moz-appearance: textfield;
 }
 
+/* ===== SELECT/DROPDOWN STYLING ===== */
+/* Fix dropdown appearance and prevent text cursor */
+select {
+  cursor: pointer !important;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+}
+
+/* Ensure dropdown options match theme */
+select option {
+  background: #0f1529;
+  color: #f4f6fb;
+}
+
 /* ===== LAYOUT SHELL ===== */
 .dp-shell {
   display: flex;
