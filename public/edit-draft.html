@@ -629,14 +629,6 @@
         });
       }
     }
-      
-      div.innerHTML = `
-        <input type="text" placeholder="Name (e.g. Brand)" value="${key}" class="aspect-key" ${keyReadonly} />
-        ${valueInput}
-        <button class="dp-btn dp-btn-secondary" onclick="this.parentElement.remove()" ${isRequired ? 'disabled title="Required field"' : ''}>×</button>
-      `;
-      container.appendChild(div);
-    }
     
     async function loadDraft() {
       try {

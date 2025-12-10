@@ -493,12 +493,22 @@
       
       <div id="needsAttention" style="display: none; margin-bottom: 2rem;">
         <h2 style="font-size: 1.25rem; margin: 1.5rem 0 1rem; color: var(--warning);">⚠️ Needs Attention <span id="needsCount" style="font-size: 0.875rem; color: var(--text-muted);"></span></h2>
-        <div id="needsList" class="grid" aria-live="polite"></div>
+        <div id="needsList" class="grid" aria-live="polite">
+          <div class="loading">
+            <div class="spinner" role="status" aria-label="Loading"></div>
+            <div class="label">Loading drafts…</div>
+          </div>
+        </div>
       </div>
       
       <div id="readySection" style="display: none;">
         <h2 style="font-size: 1.25rem; margin: 1.5rem 0 1rem; color: var(--success);">✓ Ready to Publish <span id="readyCount" style="font-size: 0.875rem; color: var(--text-muted);"></span></h2>
-        <div id="readyList" class="grid" aria-live="polite"></div>
+        <div id="readyList" class="grid" aria-live="polite">
+          <div class="loading">
+            <div class="spinner" role="status" aria-label="Loading"></div>
+            <div class="label">Loading drafts…</div>
+          </div>
+        </div>
       </div>
     </main>
     </div>
