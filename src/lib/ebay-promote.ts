@@ -637,6 +637,33 @@ export async function updateAdRate(
 }
 
 /**
+ * Delete an ad from a campaign (remove promotion)
+ */
+export async function deleteAd(
+  userId: string,
+  campaignId: string,
+  adId: string,
+  opts: { tokenCache?: EbayTokenCache } = {}
+): Promise<void> {
+  const accessToken = await getEbayAccessToken(userId);
+  const apiHost = getMarketingApiHost();
+  
+  const url = `${apiHost}/sell/marketing/v1/ad_campaign/${encodeURIComponent(campaignId)}/ad/${encodeURIComponent(adId)}`;
+  
+  const res = await fetch(url, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+  
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to delete ad ${res.status}: ${text}`);
+  }
+}
+
+/**
  * High-level helper to ensure a single offer is promoted according to the
  * provided PromotedListingsConfig.
  *

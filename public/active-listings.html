@@ -118,11 +118,23 @@
     }
     .promo-control {
       display: flex;
-      gap: 0.4rem;
-      align-items: center;
+      flex-direction: column;
+      gap: 0.5rem;
       margin-top: 0.4rem;
       padding-top: 0.5rem;
       border-top: 1px solid rgba(148, 163, 184, 0.1);
+    }
+    .promo-status {
+      display: flex;
+      gap: 0.4rem;
+      align-items: center;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .promo-edit-form {
+      display: flex;
+      gap: 0.4rem;
+      align-items: center;
     }
     .promo-control input {
       width: 90px;
@@ -136,6 +148,14 @@
     .promo-control .btn {
       padding: 0.4rem 0.65rem;
       font-size: 0.82rem;
+    }
+    .promo-control .btn.danger {
+      background: rgba(239, 68, 68, 0.15);
+      color: #fca5a5;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    .promo-control .btn.danger:hover {
+      background: rgba(239, 68, 68, 0.25);
     }
     .loading {
       display: flex;
@@ -374,73 +394,273 @@
       const promoControl = document.createElement('div');
       promoControl.className = 'promo-control';
 
-      const label = document.createElement('label');
-      label.textContent = 'Ad Rate:';
-      label.style.fontSize = '0.85rem';
-      label.style.color = 'var(--muted)';
-      promoControl.appendChild(label);
-
-      const rateInput = document.createElement('input');
-      rateInput.type = 'number';
-      rateInput.inputMode = 'decimal';
-      rateInput.min = '0.1';
-      rateInput.max = '100';
-      rateInput.step = '0.1';
-      rateInput.value = o.autoPromoteAdRate != null ? String(o.autoPromoteAdRate) : '5';
-      promoControl.appendChild(rateInput);
-
-      const saveBtn = document.createElement('button');
-      saveBtn.className = 'btn secondary';
-      saveBtn.textContent = 'Save';
-      promoControl.appendChild(saveBtn);
-
-      saveBtn.addEventListener('click', async () => {
-        const val = parseFloat(rateInput.value);
-        if (!Number.isFinite(val)) {
-          localFlash.textContent = 'Enter a valid percent';
-          localFlash.className = 'card-flash error';
-          return;
-        }
-        saveBtn.disabled = true;
-        saveBtn.textContent = 'Saving...';
-        localFlash.textContent = '';
-        localFlash.className = 'card-flash';
+      // Check if already promoted
+      const isPromoted = o.autoPromote && o.autoPromoteAdRate != null;
+      
+      if (isPromoted) {
+        // Show current promotion status
+        const statusDiv = document.createElement('div');
+        statusDiv.className = 'promo-status';
+        statusDiv.innerHTML = `<strong>📢 Promoted at ${o.autoPromoteAdRate}%</strong>`;
+        promoControl.appendChild(statusDiv);
         
-        try {
-          const exec = getAuthFetch();
-          const res = await exec('/.netlify/functions/ebay-update-active-promo', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              listingId: o.listingId, 
-              offerId: o.offerId, 
-              sku: o.sku, 
-              adRate: val 
-            }),
-          });
-          const txt = await res.text();
-          const data = txt ? JSON.parse(txt) : {};
-          
-          if (!res.ok || !data.ok) {
-            localFlash.textContent = data?.error || `Save failed (${res.status})`;
+        // Edit form (initially hidden)
+        const editForm = document.createElement('div');
+        editForm.className = 'promo-edit-form';
+        editForm.style.display = 'none';
+        
+        const rateInput = document.createElement('input');
+        rateInput.type = 'number';
+        rateInput.inputMode = 'decimal';
+        rateInput.min = '0.1';
+        rateInput.max = '100';
+        rateInput.step = '0.1';
+        rateInput.value = String(o.autoPromoteAdRate);
+        editForm.appendChild(rateInput);
+        
+        const saveBtn = document.createElement('button');
+        saveBtn.className = 'btn secondary';
+        saveBtn.textContent = 'Save';
+        editForm.appendChild(saveBtn);
+        
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'btn secondary';
+        cancelBtn.textContent = 'Cancel';
+        editForm.appendChild(cancelBtn);
+        
+        promoControl.appendChild(editForm);
+        
+        // Action buttons (initially visible)
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'promo-edit-form';
+        
+        const changeBtn = document.createElement('button');
+        changeBtn.className = 'btn secondary';
+        changeBtn.textContent = 'Change Rate';
+        actionsDiv.appendChild(changeBtn);
+        
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'btn danger';
+        removeBtn.textContent = 'Remove Promotion';
+        actionsDiv.appendChild(removeBtn);
+        
+        promoControl.appendChild(actionsDiv);
+        
+        // Toggle edit mode
+        changeBtn.addEventListener('click', () => {
+          actionsDiv.style.display = 'none';
+          editForm.style.display = 'flex';
+          rateInput.focus();
+        });
+        
+        cancelBtn.addEventListener('click', () => {
+          editForm.style.display = 'none';
+          actionsDiv.style.display = 'flex';
+          rateInput.value = String(o.autoPromoteAdRate);
+        });
+        
+        // Save changes
+        saveBtn.addEventListener('click', async () => {
+          const val = parseFloat(rateInput.value);
+          if (!Number.isFinite(val) || val < 0.1 || val > 100) {
+            localFlash.textContent = 'Enter a rate between 0.1 and 100';
             localFlash.className = 'card-flash error';
             return;
           }
+          saveBtn.disabled = true;
+          saveBtn.textContent = 'Saving...';
+          localFlash.textContent = '';
+          localFlash.className = 'card-flash';
           
-          localFlash.textContent = `✓ Saved ${data.adRate}% (${data.action})`;
-          localFlash.className = 'card-flash success';
-          setTimeout(() => {
-            localFlash.textContent = '';
-            localFlash.className = 'card-flash';
-          }, 3000);
-        } catch (e) {
-          localFlash.textContent = e?.message || String(e);
-          localFlash.className = 'card-flash error';
-        } finally {
-          saveBtn.disabled = false;
-          saveBtn.textContent = 'Save';
-        }
-      });
+          try {
+            const exec = getAuthFetch();
+            const res = await exec('/.netlify/functions/ebay-update-active-promo', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                listingId: o.listingId, 
+                offerId: o.offerId, 
+                sku: o.sku, 
+                adRate: val 
+              }),
+            });
+            const txt = await res.text();
+            const data = txt ? JSON.parse(txt) : {};
+            
+            if (!res.ok || !data.ok) {
+              localFlash.textContent = data?.error || `Save failed (${res.status})`;
+              localFlash.className = 'card-flash error';
+              return;
+            }
+            
+            // Update UI
+            o.autoPromoteAdRate = val;
+            statusDiv.innerHTML = `<strong>📢 Promoted at ${val}%</strong>`;
+            editForm.style.display = 'none';
+            actionsDiv.style.display = 'flex';
+            
+            localFlash.textContent = `✓ Updated to ${val}%`;
+            localFlash.className = 'card-flash success';
+            setTimeout(() => {
+              localFlash.textContent = '';
+              localFlash.className = 'card-flash';
+            }, 3000);
+          } catch (e) {
+            localFlash.textContent = e?.message || String(e);
+            localFlash.className = 'card-flash error';
+          } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Save';
+          }
+        });
+        
+        // Remove promotion
+        removeBtn.addEventListener('click', async () => {
+          if (!confirm('Remove this listing from promotion?')) return;
+          
+          removeBtn.disabled = true;
+          removeBtn.textContent = 'Removing...';
+          localFlash.textContent = '';
+          localFlash.className = 'card-flash';
+          
+          try {
+            const exec = getAuthFetch();
+            const res = await exec('/.netlify/functions/ebay-remove-promo', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                listingId: o.listingId, 
+                offerId: o.offerId, 
+                sku: o.sku
+              }),
+            });
+            const txt = await res.text();
+            const data = txt ? JSON.parse(txt) : {};
+            
+            if (!res.ok || !data.ok) {
+              localFlash.textContent = data?.error || `Remove failed (${res.status})`;
+              localFlash.className = 'card-flash error';
+              return;
+            }
+            
+            // Reload the page to show updated state
+            localFlash.textContent = '✓ Promotion removed - refreshing...';
+            localFlash.className = 'card-flash success';
+            setTimeout(() => load(), 1500);
+          } catch (e) {
+            localFlash.textContent = e?.message || String(e);
+            localFlash.className = 'card-flash error';
+          } finally {
+            removeBtn.disabled = false;
+            removeBtn.textContent = 'Remove Promotion';
+          }
+        });
+        
+      } else {
+        // Not promoted - show promotion form
+        const statusDiv = document.createElement('div');
+        statusDiv.className = 'promo-status';
+        statusDiv.textContent = 'Not promoted';
+        promoControl.appendChild(statusDiv);
+        
+        const editForm = document.createElement('div');
+        editForm.className = 'promo-edit-form';
+        editForm.style.display = 'none';
+        
+        const label = document.createElement('label');
+        label.textContent = 'Ad Rate:';
+        label.style.fontSize = '0.85rem';
+        label.style.color = 'var(--muted)';
+        editForm.appendChild(label);
+        
+        const rateInput = document.createElement('input');
+        rateInput.type = 'number';
+        rateInput.inputMode = 'decimal';
+        rateInput.min = '0.1';
+        rateInput.max = '100';
+        rateInput.step = '0.1';
+        rateInput.value = '5';
+        rateInput.placeholder = '5.0';
+        editForm.appendChild(rateInput);
+        
+        const saveBtn = document.createElement('button');
+        saveBtn.className = 'btn primary';
+        saveBtn.textContent = 'Create';
+        editForm.appendChild(saveBtn);
+        
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'btn secondary';
+        cancelBtn.textContent = 'Cancel';
+        editForm.appendChild(cancelBtn);
+        
+        promoControl.appendChild(editForm);
+        
+        const promoteBtn = document.createElement('button');
+        promoteBtn.className = 'btn primary';
+        promoteBtn.textContent = '📢 Promote This Listing';
+        promoteBtn.style.width = '100%';
+        promoControl.appendChild(promoteBtn);
+        
+        // Show promotion form
+        promoteBtn.addEventListener('click', () => {
+          promoteBtn.style.display = 'none';
+          editForm.style.display = 'flex';
+          rateInput.focus();
+        });
+        
+        cancelBtn.addEventListener('click', () => {
+          editForm.style.display = 'none';
+          promoteBtn.style.display = 'block';
+          rateInput.value = '5';
+        });
+        
+        // Create promotion
+        saveBtn.addEventListener('click', async () => {
+          const val = parseFloat(rateInput.value);
+          if (!Number.isFinite(val) || val < 0.1 || val > 100) {
+            localFlash.textContent = 'Enter a rate between 0.1 and 100';
+            localFlash.className = 'card-flash error';
+            return;
+          }
+          saveBtn.disabled = true;
+          saveBtn.textContent = 'Creating...';
+          localFlash.textContent = '';
+          localFlash.className = 'card-flash';
+          
+          try {
+            const exec = getAuthFetch();
+            const res = await exec('/.netlify/functions/ebay-update-active-promo', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                listingId: o.listingId, 
+                offerId: o.offerId, 
+                sku: o.sku, 
+                adRate: val 
+              }),
+            });
+            const txt = await res.text();
+            const data = txt ? JSON.parse(txt) : {};
+            
+            if (!res.ok || !data.ok) {
+              localFlash.textContent = data?.error || `Create failed (${res.status})`;
+              localFlash.className = 'card-flash error';
+              return;
+            }
+            
+            // Reload to show updated state
+            localFlash.textContent = `✓ Promotion created at ${val}% - refreshing...`;
+            localFlash.className = 'card-flash success';
+            setTimeout(() => load(), 1500);
+          } catch (e) {
+            localFlash.textContent = e?.message || String(e);
+            localFlash.className = 'card-flash error';
+          } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Create';
+          }
+        });
+      }
 
       card.appendChild(promoControl);
       
