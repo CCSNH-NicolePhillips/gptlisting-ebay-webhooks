@@ -724,6 +724,22 @@
               sessionStorage.removeItem('drafts-cache-time');
               el.remove();
               flash.textContent = `Deleted ${offer.offerId}`;
+              
+              // Check if the parent section is now empty and hide it
+              const parentList = el.parentElement;
+              if (parentList && parentList.children.length === 0) {
+                if (parentList.id === 'readyList') {
+                  $('readySection').style.display = 'none';
+                } else if (parentList.id === 'needsList') {
+                  $('needsAttention').style.display = 'none';
+                }
+              }
+              
+              // Update counts
+              const readyCards = document.querySelectorAll('#readyList .card').length;
+              const needsCards = document.querySelectorAll('#needsList .card').length;
+              $('readyCount').textContent = readyCards ? `(${readyCards})` : '';
+              $('needsCount').textContent = needsCards ? `(${needsCards})` : '';
             } else {
               flash.textContent = `Delete error: ${data.error || ''}`;
               pub.disabled = del.disabled = false;
