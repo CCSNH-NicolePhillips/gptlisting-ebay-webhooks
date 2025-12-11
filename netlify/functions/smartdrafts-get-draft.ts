@@ -146,6 +146,12 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       categoryAspects: categoryAspects?.aspects || [], // Available aspects for this category
     };
     
+    // Debug: Check cardinality values
+    if (categoryAspects?.aspects) {
+      const mainPurpose = categoryAspects.aspects.find((a: any) => a.localizedAspectName === 'Main Purpose');
+      console.log('[DEBUG] Main Purpose aspect:', JSON.stringify(mainPurpose, null, 2));
+    }
+    
     console.log('Mapped draft:', JSON.stringify(draft, null, 2));
 
     return {
