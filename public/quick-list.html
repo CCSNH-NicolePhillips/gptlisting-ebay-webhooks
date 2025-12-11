@@ -1109,8 +1109,12 @@
             body: JSON.stringify({ stagedUrls })
           });
 
+          console.log('[Quick List] Scan start response:', scanRes);
+
           if (!scanRes.ok || !scanRes.jobId) {
-            throw new Error(scanRes.error || 'Scan failed to start');
+            const errorDetail = scanRes.error || scanRes.message || 'Scan failed to start';
+            console.error('[Quick List] Scan failed:', scanRes);
+            throw new Error(errorDetail);
           }
 
           scanJobId = scanRes.jobId;
@@ -1133,8 +1137,12 @@
             })
           });
 
+          console.log('[Quick List] Dropbox scan start response:', scanRes);
+
           if (!scanRes.ok || !scanRes.jobId) {
-            throw new Error(scanRes.error || 'Scan failed to start');
+            const errorDetail = scanRes.error || scanRes.message || 'Scan failed to start';
+            console.error('[Quick List] Dropbox scan failed:', scanRes);
+            throw new Error(errorDetail);
           }
 
           scanJobId = scanRes.jobId;
