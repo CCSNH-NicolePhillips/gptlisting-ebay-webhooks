@@ -323,6 +323,47 @@
       border-color: #5b7cff;
       box-shadow: 0 0 0 3px rgba(91, 124, 255, 0.1);
     }
+    
+    /* Toggle switch styles */
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 48px;
+      height: 26px;
+    }
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: var(--line);
+      transition: 0.3s;
+      border-radius: 26px;
+    }
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 20px;
+      width: 20px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: 0.3s;
+      border-radius: 50%;
+    }
+    .toggle-switch input:checked + .toggle-slider {
+      background-color: var(--primary);
+    }
+    .toggle-switch input:checked + .toggle-slider:before {
+      transform: translateX(22px);
+    }
   </style>
 </head>
 <body>
@@ -514,6 +555,34 @@
                 <option value="USED_GOOD">Used - Good</option>
                 <option value="USED_ACCEPTABLE">Used - Acceptable</option>
               </select>
+            </div>
+          </div>
+          
+          <!-- Promotion Settings -->
+          <div style="margin-top: 1.5rem; padding: 1rem; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--line);">
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+              <span style="font-size: 1.125rem;">📢</span>
+              <label style="font-weight: 600; color: var(--text-primary); cursor: pointer; user-select: none; flex: 1;" for="promotionEnabled">
+                Promoted Listing
+              </label>
+              <label class="toggle-switch">
+                <input type="checkbox" id="promotionEnabled" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            
+            <div id="promotionOptions" style="opacity: 0.5; pointer-events: none; transition: opacity 0.2s;">
+              <label for="promotionRate" style="display: block; font-size: 0.875rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                Ad Rate (1-20%)
+              </label>
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <input type="number" id="promotionRate" min="1" max="20" step="0.1" placeholder="5.0" 
+                       style="width: 100px; padding: 0.5rem 0.75rem; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; color: var(--text-primary); font-size: 0.9375rem;" />
+                <span style="color: var(--text-muted); font-size: 0.9375rem;">%</span>
+              </div>
+              <div style="font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.5rem;">
+                💡 Promoted listings appear higher in eBay search results
+              </div>
             </div>
           </div>
         </div>
@@ -818,6 +887,16 @@
         $('price').value = originalDraft.price || '';
         $('condition').value = originalDraft.condition || 'NEW';
         
+        // Populate promotion settings
+        if (originalDraft.promotion) {
+          $('promotionEnabled').checked = originalDraft.promotion.enabled || false;
+          $('promotionRate').value = originalDraft.promotion.rate || '';
+          if (originalDraft.promotion.enabled) {
+            $('promotionOptions').style.opacity = '1';
+            $('promotionOptions').style.pointerEvents = 'auto';
+          }
+        }
+        
         updateTitleCount();
         
         // Build aspect metadata lookup
@@ -1030,6 +1109,10 @@
         // Collect images in their current order
         const images = Array.from(document.querySelectorAll('.image-thumb')).map(el => el.dataset.url);
         
+        // Collect promotion settings
+        const promotionEnabled = $('promotionEnabled').checked;
+        const promotionRate = parseFloat($('promotionRate').value) || null;
+        
         const updatedDraft = {
           ...originalDraft,
           title: $('title').value.trim(),
@@ -1038,6 +1121,10 @@
           condition: $('condition').value,
           aspects,
           images, // Include reordered images
+          promotion: {
+            enabled: promotionEnabled,
+            rate: promotionEnabled ? promotionRate : null
+          }
         };
         
         // Save to backend
@@ -1110,6 +1197,21 @@
         
         // Populate sidebar user info
         await window.authClient.updateUserDisplay().catch(() => {});
+        
+        // Setup promotion toggle handler
+        const promotionToggle = $('promotionEnabled');
+        const promotionOptions = $('promotionOptions');
+        if (promotionToggle && promotionOptions) {
+          promotionToggle.addEventListener('change', () => {
+            if (promotionToggle.checked) {
+              promotionOptions.style.opacity = '1';
+              promotionOptions.style.pointerEvents = 'auto';
+            } else {
+              promotionOptions.style.opacity = '0.5';
+              promotionOptions.style.pointerEvents = 'none';
+            }
+          });
+        }
         
         await loadDraft();
       } catch (e) {
