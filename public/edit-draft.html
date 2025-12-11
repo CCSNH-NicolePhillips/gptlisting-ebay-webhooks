@@ -698,9 +698,9 @@
         const existingAspects = new Set();
         if (originalDraft.aspects && typeof originalDraft.aspects === 'object') {
           Object.entries(originalDraft.aspects).forEach(([key, values]) => {
-            const valueStr = Array.isArray(values) ? values.join(', ') : values;
+            // Pass the array directly, don't join it yet
             const metadata = aspectsMetadata[key];
-            addAspect(key, valueStr, false, metadata);
+            addAspect(key, values, false, metadata);
             existingAspects.add(key);
           });
         }
