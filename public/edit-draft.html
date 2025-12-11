@@ -137,6 +137,31 @@
     .aspect-multiselect-dropdown.open {
       display: block;
     }
+    .aspect-multiselect-search {
+      position: sticky;
+      top: 0;
+      background: #0f1529;
+      padding: 0.5rem;
+      border-bottom: 1px solid #2a335c;
+      z-index: 1;
+    }
+    .aspect-multiselect-search input {
+      width: 100%;
+      background: #1a2038;
+      border: 1px solid #2a335c;
+      border-radius: 4px;
+      padding: 0.5rem;
+      color: #f4f6fb;
+      font-size: 0.875rem;
+    }
+    .aspect-multiselect-search input:focus {
+      outline: none;
+      border-color: #5b7cff;
+    }
+    .aspect-multiselect-options {
+      max-height: 250px;
+      overflow-y: auto;
+    }
     .aspect-multiselect-option {
       padding: 0.75rem;
       cursor: pointer;
@@ -145,6 +170,9 @@
       gap: 0.5rem;
       transition: background-color 0.2s;
     }
+    .aspect-multiselect-option.hidden {
+      display: none;
+    }
     .aspect-multiselect-option:hover {
       background: #1a2038;
     }
@@ -152,6 +180,26 @@
       width: auto;
       margin: 0;
       cursor: pointer;
+    }
+    .aspect-multiselect-custom {
+      position: sticky;
+      bottom: 0;
+      background: #0f1529;
+      padding: 0.5rem;
+      border-top: 1px solid #2a335c;
+    }
+    .aspect-multiselect-custom input {
+      width: 100%;
+      background: #1a2038;
+      border: 1px solid #2a335c;
+      border-radius: 4px;
+      padding: 0.5rem;
+      color: #f4f6fb;
+      font-size: 0.875rem;
+    }
+    .aspect-multiselect-custom input:focus {
+      outline: none;
+      border-color: #5b7cff;
     }
     .aspect-multiselect-arrow {
       font-size: 0.75rem;
@@ -579,6 +627,7 @@
             </div>`;
           }).join('');
           
+          const hasSearch = aspectMetadata.aspectValues.length > 10;
           const escapedJoinedValues = escapeHtml(existingValues.join(', '));
           valueInput = `<div class="aspect-multiselect" data-multiselect-id="${multiselectId}">
             <div class="aspect-multiselect-display">
@@ -586,7 +635,13 @@
               <span class="aspect-multiselect-arrow">▼</span>
             </div>
             <div class="aspect-multiselect-dropdown">
-              ${options}
+              ${hasSearch ? '<div class="aspect-multiselect-search"><input type="text" placeholder="Search..." class="multiselect-search-input" /></div>' : ''}
+              <div class="aspect-multiselect-options">
+                ${options}
+              </div>
+              <div class="aspect-multiselect-custom">
+                <input type="text" placeholder="Or type custom value and press Enter..." class="multiselect-custom-input" />
+              </div>
             </div>
             <input type="hidden" class="aspect-value" value="${escapedJoinedValues}" />
           </div>`;
@@ -620,14 +675,20 @@
         const multiselect = div.querySelector('.aspect-multiselect');
         const display = multiselect.querySelector('.aspect-multiselect-display');
         const dropdown = multiselect.querySelector('.aspect-multiselect-dropdown');
+        const optionsContainer = multiselect.querySelector('.aspect-multiselect-options');
         const arrow = multiselect.querySelector('.aspect-multiselect-arrow');
         const hiddenInput = multiselect.querySelector('input[type="hidden"]');
         const textDisplay = multiselect.querySelector('.multiselect-text');
+        const searchInput = multiselect.querySelector('.multiselect-search-input');
+        const customInput = multiselect.querySelector('.multiselect-custom-input');
         
         display.addEventListener('click', (e) => {
           e.stopPropagation();
           dropdown.classList.toggle('open');
           arrow.classList.toggle('open');
+          if (dropdown.classList.contains('open') && searchInput) {
+            setTimeout(() => searchInput.focus(), 0);
+          }
         });
         
         // Prevent dropdown from closing when clicking inside
@@ -641,8 +702,47 @@
           arrow.classList.remove('open');
         });
         
+        // Search functionality
+        if (searchInput) {
+          searchInput.addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            optionsContainer.querySelectorAll('.aspect-multiselect-option').forEach(option => {
+              const text = option.querySelector('label').textContent.toLowerCase();
+              if (text.includes(searchTerm)) {
+                option.classList.remove('hidden');
+              } else {
+                option.classList.add('hidden');
+              }
+            });
+          });
+        }
+        
+        // Custom value input
+        if (customInput) {
+          customInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && customInput.value.trim()) {
+              e.preventDefault();
+              const customValue = customInput.value.trim();
+              
+              // Get current values
+              const currentValues = hiddenInput.value ? hiddenInput.value.split(',').map(v => v.trim()) : [];
+              
+              // Add custom value if not already present
+              if (!currentValues.includes(customValue)) {
+                currentValues.push(customValue);
+                hiddenInput.value = currentValues.join(', ');
+                textDisplay.textContent = currentValues.join(', ');
+              }
+              
+              customInput.value = '';
+              dropdown.classList.remove('open');
+              arrow.classList.remove('open');
+            }
+          });
+        }
+        
         // Handle checkbox and label clicks
-        dropdown.querySelectorAll('.aspect-multiselect-option').forEach(option => {
+        optionsContainer.querySelectorAll('.aspect-multiselect-option').forEach(option => {
           const checkbox = option.querySelector('input[type="checkbox"]');
           const label = option.querySelector('label');
           
@@ -657,7 +757,7 @@
         });
         
         function updateMultiselectValues() {
-          const selectedValues = Array.from(dropdown.querySelectorAll('input[type="checkbox"]:checked'))
+          const selectedValues = Array.from(optionsContainer.querySelectorAll('input[type="checkbox"]:checked'))
             .map(cb => cb.value);
           hiddenInput.value = selectedValues.join(', ');
           textDisplay.textContent = selectedValues.length > 0 ? selectedValues.join(', ') : `Select ${key}...`;
