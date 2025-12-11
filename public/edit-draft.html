@@ -549,11 +549,21 @@
         }
       }
       
+      console.log(`[addAspect] ${key}:`, {
+        value,
+        existingValues,
+        hasMetadata: !!aspectMetadata,
+        cardinality: aspectMetadata?.cardinality,
+        aspectValuesCount: aspectMetadata?.aspectValues?.length
+      });
+      
       // Check if aspect has predefined values (dropdown)
       let valueInput = '';
       if (aspectMetadata?.aspectValues && aspectMetadata.aspectValues.length > 0) {
         const mode = aspectMetadata.aspectConstraint?.aspectMode || 'SELECTION_ONLY';
         const cardinality = aspectMetadata.cardinality || 'SINGLE';
+        
+        console.log(`[addAspect] ${key} cardinality: ${cardinality}`);
         
         // If multiple selections allowed, create multi-select dropdown
         if (cardinality === 'MULTI') {
