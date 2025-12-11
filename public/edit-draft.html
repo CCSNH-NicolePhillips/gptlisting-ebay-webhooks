@@ -526,6 +526,12 @@
       $('titleCount').textContent = `${title.value.length} / 80`;
     }
     
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+    
     function addAspect(key = '', value = '', isRequired = false, aspectMetadata = null) {
       const container = $('aspectsList');
       const div = document.createElement('div');
@@ -552,16 +558,18 @@
         // If multiple selections allowed, create multi-select dropdown
         if (cardinality === 'MULTI') {
           const multiselectId = `multiselect-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-          const displayText = existingValues.length > 0 ? existingValues.join(', ') : `Select ${key}...`;
+          const displayText = existingValues.length > 0 ? escapeHtml(existingValues.join(', ')) : `Select ${escapeHtml(key)}...`;
           
           const options = aspectMetadata.aspectValues.map(av => {
             const checked = existingValues.includes(av.localizedValue) ? 'checked' : '';
-            return `<div class="aspect-multiselect-option">
-              <input type="checkbox" value="${av.localizedValue}" ${checked} />
-              <label>${av.localizedValue}</label>
+            const escapedValue = escapeHtml(av.localizedValue);
+            return `<div class="aspect-multiselect-option" data-value="${escapedValue}">
+              <input type="checkbox" value="${escapedValue}" ${checked} />
+              <label>${escapedValue}</label>
             </div>`;
           }).join('');
           
+          const escapedJoinedValues = escapeHtml(existingValues.join(', '));
           valueInput = `<div class="aspect-multiselect" data-multiselect-id="${multiselectId}">
             <div class="aspect-multiselect-display">
               <span class="multiselect-text">${displayText}</span>
@@ -570,7 +578,7 @@
             <div class="aspect-multiselect-dropdown">
               ${options}
             </div>
-            <input type="hidden" class="aspect-value" value="${existingValues.join(', ')}" />
+            <input type="hidden" class="aspect-value" value="${escapedJoinedValues}" />
           </div>`;
         } else {
           // Single selection - use regular dropdown
@@ -612,21 +620,38 @@
           arrow.classList.toggle('open');
         });
         
+        // Prevent dropdown from closing when clicking inside
+        dropdown.addEventListener('click', (e) => {
+          e.stopPropagation();
+        });
+        
         // Close dropdown when clicking outside
         document.addEventListener('click', () => {
           dropdown.classList.remove('open');
           arrow.classList.remove('open');
         });
         
-        // Handle checkbox changes
-        dropdown.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-          checkbox.addEventListener('change', () => {
-            const selectedValues = Array.from(dropdown.querySelectorAll('input[type="checkbox"]:checked'))
-              .map(cb => cb.value);
-            hiddenInput.value = selectedValues.join(', ');
-            textDisplay.textContent = selectedValues.length > 0 ? selectedValues.join(', ') : `Select ${key}...`;
+        // Handle checkbox and label clicks
+        dropdown.querySelectorAll('.aspect-multiselect-option').forEach(option => {
+          const checkbox = option.querySelector('input[type="checkbox"]');
+          const label = option.querySelector('label');
+          
+          // Make label clickable
+          label.addEventListener('click', (e) => {
+            e.preventDefault();
+            checkbox.checked = !checkbox.checked;
+            updateMultiselectValues();
           });
+          
+          checkbox.addEventListener('change', updateMultiselectValues);
         });
+        
+        function updateMultiselectValues() {
+          const selectedValues = Array.from(dropdown.querySelectorAll('input[type="checkbox"]:checked'))
+            .map(cb => cb.value);
+          hiddenInput.value = selectedValues.join(', ');
+          textDisplay.textContent = selectedValues.length > 0 ? selectedValues.join(', ') : `Select ${key}...`;
+        }
       }
     }
     

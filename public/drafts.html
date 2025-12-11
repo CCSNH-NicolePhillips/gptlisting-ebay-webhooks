@@ -491,6 +491,11 @@
         <div id="flash" class="flash"></div>
       </div>
       
+      <div id="initialLoader" class="loading" style="margin: 3rem 0;">
+        <div class="spinner" role="status" aria-label="Loading"></div>
+        <div class="label">Loading drafts…</div>
+      </div>
+      
       <div id="needsAttention" style="display: none; margin-bottom: 2rem;">
         <h2 style="font-size: 1.25rem; margin: 1.5rem 0 1rem; color: var(--warning);">⚠️ Needs Attention <span id="needsCount" style="font-size: 0.875rem; color: var(--text-muted);"></span></h2>
         <div id="needsList" class="grid" aria-live="polite">
@@ -865,6 +870,10 @@
       }
 
       async function load() {
+        // Hide initial loader
+        const initialLoader = document.getElementById('initialLoader');
+        if (initialLoader) initialLoader.style.display = 'none';
+        
         readyList.innerHTML = '';
         needsList.innerHTML = '';
         const loader = document.createElement('div');
