@@ -561,7 +561,7 @@
       let valueInput = '';
       if (aspectMetadata?.aspectValues && aspectMetadata.aspectValues.length > 0) {
         const mode = aspectMetadata.aspectConstraint?.aspectMode || 'SELECTION_ONLY';
-        const cardinality = aspectMetadata.cardinality || 'SINGLE';
+        const cardinality = aspectMetadata.aspectConstraint?.itemToAspectCardinality || 'SINGLE';
         
         console.log(`[addAspect] ${key} cardinality: ${cardinality}`);
         
@@ -616,7 +616,7 @@
       container.appendChild(div);
       
       // Add event listeners for multi-select
-      if (aspectMetadata?.aspectValues && (aspectMetadata.cardinality || 'SINGLE') === 'MULTI') {
+      if (aspectMetadata?.aspectValues && (aspectMetadata.aspectConstraint?.itemToAspectCardinality || 'SINGLE') === 'MULTI') {
         const multiselect = div.querySelector('.aspect-multiselect');
         const display = multiselect.querySelector('.aspect-multiselect-display');
         const dropdown = multiselect.querySelector('.aspect-multiselect-dropdown');
