@@ -11,6 +11,10 @@ type HeadersMap = Record<string, string | undefined>;
 
 type CreateDraftsRequest = {
   products?: any[];
+  promotion?: {
+    enabled: boolean;
+    rate: number | null;
+  };
 };
 
 export const handler: Handler = async (event) => {
@@ -53,6 +57,8 @@ export const handler: Handler = async (event) => {
     return json(400, { ok: false, error: "Provide products array" }, originHdr, METHODS);
   }
 
+  const promotion = payload?.promotion || { enabled: false, rate: null };
+
   const jobId = crypto.randomUUID();
   const jobKey = k.job(user.userId, jobId);
 
@@ -78,7 +84,7 @@ export const handler: Handler = async (event) => {
     const resp = await fetch(target, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jobId, userId: user.userId, products }),
+      body: JSON.stringify({ jobId, userId: user.userId, products, promotion }),
     });
 
     if (!resp.ok) {

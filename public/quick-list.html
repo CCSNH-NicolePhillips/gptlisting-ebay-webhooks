@@ -616,6 +616,52 @@
       </button>
     </div>
 
+    <!-- Promotion Settings Card -->
+    <div class="dp-card dp-card--full">
+      <h3 style="margin-top: 0; margin-bottom: 1rem; color: var(--text-primary);">📢 Promoted Listings (Optional)</h3>
+      
+      <div style="margin-bottom: 1rem;">
+        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; padding: 0.75rem; background: rgba(255, 255, 255, 0.02); border-radius: 8px; border: 1px solid var(--line);">
+          <input type="radio" name="promotionMode" value="default" id="promotionDefault" checked style="margin: 0;" />
+          <div style="flex: 1;">
+            <div style="font-weight: 600; color: var(--text-primary);">Use my default settings</div>
+            <div style="font-size: 0.875rem; color: var(--text-muted);" id="defaultPromotionInfo">Loading...</div>
+          </div>
+        </label>
+      </div>
+      
+      <div style="margin-bottom: 1rem;">
+        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; padding: 0.75rem; background: rgba(255, 255, 255, 0.02); border-radius: 8px; border: 1px solid var(--line);">
+          <input type="radio" name="promotionMode" value="custom" id="promotionCustom" style="margin: 0;" />
+          <div style="flex: 1;">
+            <div style="font-weight: 600; color: var(--text-primary);">Use custom rate for this run</div>
+            <div style="font-size: 0.875rem; color: var(--text-muted);">Override with a different promotion rate</div>
+          </div>
+        </label>
+        
+        <div id="customPromotionInput" style="margin-top: 0.75rem; padding-left: 2.5rem; display: none;">
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <input type="number" id="customPromotionRate" class="dp-input" placeholder="5.0" min="1" max="20" step="0.1" style="width: 120px; padding: 0.5rem; font-size: 0.9rem;" />
+            <span style="color: var(--text-muted);">% ad rate</span>
+          </div>
+        </div>
+      </div>
+      
+      <div style="margin-bottom: 0;">
+        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; padding: 0.75rem; background: rgba(255, 255, 255, 0.02); border-radius: 8px; border: 1px solid var(--line);">
+          <input type="radio" name="promotionMode" value="none" id="promotionNone" style="margin: 0;" />
+          <div style="flex: 1;">
+            <div style="font-weight: 600; color: var(--text-primary);">No promotion</div>
+            <div style="font-size: 0.875rem; color: var(--text-muted);">Skip promoted listings for this run</div>
+          </div>
+        </label>
+      </div>
+      
+      <p style="font-size: 0.875rem; color: var(--text-muted); margin-top: 1rem; padding: 0.75rem; background: rgba(91, 124, 255, 0.1); border-radius: 8px; border: 1px solid rgba(91, 124, 255, 0.3);">
+        💡 <strong>Tip:</strong> Promoted listings increase visibility on eBay. You can change these settings later in <a href="/settings.html" style="color: var(--primary); text-decoration: underline;">Settings</a>.
+      </p>
+    </div>
+
     <div class="dp-card dp-card--full">
       <h3 style="margin-top: 0; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; color: var(--text-primary);">
         <span>🔄 Automated Pipeline</span>
@@ -1089,6 +1135,14 @@
         return;
       }
       
+      // Get promotion settings for this run
+      const promotionSettings = getPromotionSettings();
+      if (promotionSettings === null) {
+        return; // Validation failed (custom rate out of range)
+      }
+      
+      console.log('[Quick List] Promotion settings for this run:', promotionSettings);
+      
       const btn = $('btnStart');
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner"></span>Processing...';
@@ -1371,7 +1425,10 @@
         const draftBgRes = await fetchJSON('/.netlify/functions/smartdrafts-create-drafts-bg', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ products })
+          body: JSON.stringify({ 
+            products,
+            promotion: promotionSettings
+          })
         });
 
         if (!draftBgRes.ok || !draftBgRes.jobId) {
@@ -1593,14 +1650,93 @@
       });
     }
     
+    // Promotion settings state
+    let defaultPromotionSettings = {
+      enabled: false,
+      rate: null
+    };
+    
+    // Load user's default promotion settings
+    async function loadPromotionSettings() {
+      try {
+        const response = await authClient.authFetch('/.netlify/functions/user-settings-get');
+        if (response.ok) {
+          const settings = await response.json();
+          defaultPromotionSettings = {
+            enabled: settings.autoPromoteEnabled || false,
+            rate: settings.defaultPromotionRate || null
+          };
+          
+          // Update the default option info text
+          const infoEl = document.getElementById('defaultPromotionInfo');
+          if (infoEl) {
+            if (defaultPromotionSettings.enabled && defaultPromotionSettings.rate) {
+              infoEl.textContent = `Promotion enabled at ${defaultPromotionSettings.rate}% ad rate`;
+              infoEl.style.color = 'var(--success)';
+            } else {
+              infoEl.textContent = 'No promotion (not configured in settings)';
+              infoEl.style.color = 'var(--text-muted)';
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[Quick List] Failed to load promotion settings:', err);
+        const infoEl = document.getElementById('defaultPromotionInfo');
+        if (infoEl) {
+          infoEl.textContent = 'Failed to load settings';
+          infoEl.style.color = '#ef4444';
+        }
+      }
+    }
+    
+    // Handle promotion radio button changes
+    function initPromotionControls() {
+      const customRadio = document.getElementById('promotionCustom');
+      const customInput = document.getElementById('customPromotionInput');
+      const radios = document.querySelectorAll('input[name="promotionMode"]');
+      
+      radios.forEach(radio => {
+        radio.addEventListener('change', () => {
+          if (customInput) {
+            customInput.style.display = customRadio?.checked ? 'block' : 'none';
+          }
+        });
+      });
+    }
+    
+    // Get current promotion settings for this run
+    function getPromotionSettings() {
+      const mode = document.querySelector('input[name="promotionMode"]:checked')?.value;
+      
+      if (mode === 'none') {
+        return { enabled: false, rate: null };
+      } else if (mode === 'custom') {
+        const rate = parseFloat(document.getElementById('customPromotionRate')?.value || '0');
+        if (rate < 1 || rate > 20) {
+          alert('Please enter a promotion rate between 1% and 20%');
+          return null;
+        }
+        return { enabled: true, rate };
+      } else {
+        // default
+        return defaultPromotionSettings;
+      }
+    }
+    
     async function bootstrap() {
       try {
         const ok = await authClient.requireAuth();
         if (!ok) return;
         await authClient.updateUserDisplay().catch(() => {});
 
-        // Load Dropbox folders
-        await loadFolders();
+        // Load Dropbox folders and promotion settings
+        await Promise.all([
+          loadFolders(),
+          loadPromotionSettings()
+        ]);
+        
+        // Initialize promotion controls
+        initPromotionControls();
       } catch (e) {
         console.error('Auth check failed', e);
       }

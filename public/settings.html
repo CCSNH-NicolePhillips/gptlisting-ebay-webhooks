@@ -261,6 +261,35 @@
               </div>
             </section>
             
+            <!-- Promotion Settings Card -->
+            <section class="dp-card">
+              <div class="dp-card__header">
+                <h3 class="dp-card__title">📢 Promoted Listings</h3>
+                <p class="dp-card__subtitle">Automatically apply eBay promoted listings to new drafts</p>
+              </div>
+              
+              <div class="dp-card__content">
+                <label class="dp-form-label">
+                  <input type="checkbox" id="autoPromoteEnabled" style="margin-right: 8px; vertical-align: middle;" />
+                  <span>Enable automatic promoted listings on new drafts</span>
+                </label>
+                
+                <div id="promotionOptions" style="margin-top: 1rem; padding-left: 1.5rem; opacity: 0.5; pointer-events: none;">
+                  <label class="dp-form-label">Default promotion rate</label>
+                  <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <input type="number" id="defaultPromotionRate" class="dp-input" placeholder="5.0" min="1" max="20" step="0.1" style="width: 120px;" />
+                    <span style="color: var(--text-muted);">% ad rate</span>
+                  </div>
+                  <p style="font-size: 0.875rem; color: var(--text-muted); margin-top: 0.5rem;">
+                    Recommended: 5-10% for most categories. Higher rates increase visibility but reduce profit margins.
+                  </p>
+                </div>
+                
+                <button id="promotionSaveButton" class="dp-btn dp-btn-primary" style="margin-top: 24px;">Save promotion settings</button>
+                <p id="promotionSaveMessage" class="dp-muted" style="text-align: center; margin-top: 12px; min-height: 20px;"></p>
+              </div>
+            </section>
+            
             <!-- Connections Card -->
             <section class="dp-card">
               <div class="dp-card__header">
@@ -352,6 +381,109 @@
         };
       }
       
+      // Promotion settings toggle
+      const autoPromoteCheckbox = document.getElementById('autoPromoteEnabled');
+      const promotionOptions = document.getElementById('promotionOptions');
+      
+      if (autoPromoteCheckbox && promotionOptions) {
+        autoPromoteCheckbox.addEventListener('change', () => {
+          if (autoPromoteCheckbox.checked) {
+            promotionOptions.style.opacity = '1';
+            promotionOptions.style.pointerEvents = 'auto';
+          } else {
+            promotionOptions.style.opacity = '0.5';
+            promotionOptions.style.pointerEvents = 'none';
+          }
+        });
+      }
+      
+      // Save promotion settings
+      const promotionSaveBtn = document.getElementById('promotionSaveButton');
+      if (promotionSaveBtn) {
+        promotionSaveBtn.onclick = async () => {
+          const msg = document.getElementById('promotionSaveMessage');
+          const enabled = document.getElementById('autoPromoteEnabled')?.checked || false;
+          const rate = parseFloat(document.getElementById('defaultPromotionRate')?.value || '0');
+          
+          if (enabled && (rate < 1 || rate > 20)) {
+            if (msg) {
+              msg.textContent = 'Please enter a rate between 1% and 20%';
+              msg.style.color = '#ef4444';
+              setTimeout(() => {
+                msg.textContent = '';
+                msg.style.color = '';
+              }, 3000);
+            }
+            return;
+          }
+          
+          if (msg) msg.textContent = 'Saving...';
+          
+          try {
+            const response = await authClient.authFetch('/.netlify/functions/user-settings-save', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                autoPromoteEnabled: enabled,
+                defaultPromotionRate: enabled ? rate : null
+              })
+            });
+            
+            if (response.ok) {
+              if (msg) {
+                msg.textContent = 'Promotion settings saved!';
+                msg.style.color = '#10b981';
+                setTimeout(() => {
+                  msg.textContent = '';
+                  msg.style.color = '';
+                }, 3000);
+              }
+            } else {
+              throw new Error('Failed to save');
+            }
+          } catch (err) {
+            console.error('[Settings] Failed to save promotion settings:', err);
+            if (msg) {
+              msg.textContent = 'Failed to save settings';
+              msg.style.color = '#ef4444';
+              setTimeout(() => {
+                msg.textContent = '';
+                msg.style.color = '';
+              }, 3000);
+            }
+          }
+        };
+      }
+      
+      // Load promotion settings
+      async function loadPromotionSettings() {
+        try {
+          const response = await authClient.authFetch('/.netlify/functions/user-settings-get');
+          if (response.ok) {
+            const settings = await response.json();
+            
+            const enabledCheckbox = document.getElementById('autoPromoteEnabled');
+            const rateInput = document.getElementById('defaultPromotionRate');
+            const promotionOptions = document.getElementById('promotionOptions');
+            
+            if (enabledCheckbox && settings.autoPromoteEnabled !== undefined) {
+              enabledCheckbox.checked = settings.autoPromoteEnabled;
+              
+              if (settings.autoPromoteEnabled && promotionOptions) {
+                promotionOptions.style.opacity = '1';
+                promotionOptions.style.pointerEvents = 'auto';
+              }
+            }
+            
+            if (rateInput && settings.defaultPromotionRate) {
+              rateInput.value = settings.defaultPromotionRate;
+            }
+          }
+        } catch (err) {
+          console.error('[Settings] Failed to load promotion settings:', err);
+        }
+      }
+      
       const bannerLoginBtn = document.getElementById('bannerLogin');
       if (bannerLoginBtn) bannerLoginBtn.onclick = () => {
         try { sessionStorage.setItem('returnTo', '/settings.html'); } catch {}
@@ -383,6 +515,7 @@
         try { await refreshStatus(); } catch {}
         initUserMenu();
         await authClient.updateUserCard().catch(() => {});
+        await loadPromotionSettings().catch(() => {});
         const lc = document.getElementById('loadingCard');
         const mc = document.getElementById('mainCard');
         if (lc) lc.style.display = 'none';

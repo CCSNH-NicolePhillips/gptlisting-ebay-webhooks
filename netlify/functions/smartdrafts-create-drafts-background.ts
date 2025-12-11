@@ -23,6 +23,10 @@ type BackgroundPayload = {
   jobId?: string;
   userId?: string;
   products?: any[];
+  promotion?: {
+    enabled: boolean;
+    rate: number | null;
+  };
 };
 
 type PairedProduct = {
@@ -66,6 +70,10 @@ type Draft = {
     chosenSource?: string;
     basePrice?: number;
     candidates?: any[];
+  };
+  promotion?: {
+    enabled: boolean;
+    rate: number | null;
   };
 };
 
@@ -612,7 +620,11 @@ function normalizeAspects(aspects: any, product: PairedProduct): Record<string, 
   return normalized;
 }
 
-async function createDraftForProduct(product: PairedProduct, retryAttempt: number = 0): Promise<Draft> {
+async function createDraftForProduct(
+  product: PairedProduct, 
+  promotion: { enabled: boolean; rate: number | null }, 
+  retryAttempt: number = 0
+): Promise<Draft> {
   const startTime = Date.now();
   const retryLabel = retryAttempt > 0 ? ` (retry ${retryAttempt})` : '';
   console.log(`[Draft] Creating for: ${product.productId}${retryLabel}`);
@@ -749,6 +761,7 @@ async function createDraftForProduct(product: PairedProduct, retryAttempt: numbe
     keyText: product.keyText, // Pass through Vision API key text for formulation detection
     pricingStatus,
     priceMeta,
+    promotion, // Include promotion settings in draft
   };
   
   console.log(`[Draft] ✓ Created for ${product.productId} in ${Date.now() - startTime}ms: "${draft.title}"`);
@@ -779,7 +792,7 @@ async function createDraftForProduct(product: PairedProduct, retryAttempt: numbe
     console.warn(`[Draft] ⚠️ Incomplete draft for ${product.productId}: category=${hasCategory}, brand=${hasBrand}, aspectsCount=${aspectsCount}`);
     console.warn(`[Draft] 🔄 Retrying draft creation (attempt ${retryAttempt + 1}/2)...`);
     await sleep(1000); // Brief delay before retry
-    return createDraftForProduct(product, retryAttempt + 1);
+    return createDraftForProduct(product, promotion, retryAttempt + 1);
   }
   
   if (isIncomplete && retryAttempt >= 2) {
@@ -795,6 +808,7 @@ export const handler: Handler = async (event) => {
   const jobId = typeof body.jobId === "string" ? body.jobId : undefined;
   const userId = typeof body.userId === "string" ? body.userId : undefined;
   const products = Array.isArray(body.products) ? body.products : [];
+  const promotion = body.promotion || { enabled: false, rate: null };
 
   console.log(`[PERF] Handler started for jobId: ${jobId}, products: ${products.length}`);
   
@@ -883,7 +897,7 @@ export const handler: Handler = async (event) => {
           console.log(`[PERF] Product ID: ${product.productId}`);
           
           try {
-            const draft = await createDraftForProduct(product);
+            const draft = await createDraftForProduct(product, promotion);
             
             const productTotalTime = Date.now() - productStartTime;
             console.log(`[PERF] Product ${absoluteIndex + 1}/${products.length} TOTAL time: ${productTotalTime}ms`);
