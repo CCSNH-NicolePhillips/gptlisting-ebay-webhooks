@@ -1094,7 +1094,7 @@
           // Step 1b: Start scan with stagedUrls
           $('status1').innerHTML = '<span class="spinner"></span>Starting analysis...';
 
-          const scanRes = await fetchJSON('/.netlify/functions/smartdrafts-scan-bg', {
+          const scanRes = await fetchJSON('/.netlify/functions/smartdrafts-scan-background', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ stagedUrls })

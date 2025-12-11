@@ -156,8 +156,13 @@ function pickBestOffer(candidates: OfferCandidate[], requestedSize?: string | nu
 /**
  * Best-effort JSON-LD extraction for brand sites
  * No retailer-specific logic - just try to find Product schema and extract price
+ * 
+ * Returns:
+ * - { price: number } if valid price found
+ * - { price: -1, skipOpenGraph: true } if all prices rejected (bulk/subscription only)
+ * - { price: null } if no prices found
  */
-function extractFromJsonLd($: cheerio.CheerioAPI, requestedSize?: string | null): ExtractedData {
+function extractFromJsonLd($: cheerio.CheerioAPI, requestedSize?: string | null): ExtractedData & { skipOpenGraph?: boolean } {
   const scripts = $('script[type="application/ld+json"]').toArray();
   
   if (scripts.length === 0) {
@@ -307,13 +312,36 @@ function extractFromJsonLd($: cheerio.CheerioAPI, requestedSize?: string | null)
     name: c.nameText?.slice(0, 80)
   })));
   
+  // Filter out subscription offers (we want one-time purchase prices)
+  const nonSubscriptionCandidates = allCandidates.filter(c => {
+    const nameText = (c.nameText || '').toLowerCase();
+    const descText = (c.descriptionText || '').toLowerCase();
+    const isSubscription = nameText.includes('subscription') || 
+                          nameText.includes('subscribe') || 
+                          descText.includes('subscription') || 
+                          descText.includes('subscribe');
+    return !isSubscription;
+  });
+  
+  if (allCandidates.length > 0 && nonSubscriptionCandidates.length === 0) {
+    console.log(`[HTML Parser] All ${allCandidates.length} offer(s) are subscription-only, falling back to other methods`);
+    return { price: null, skipOpenGraph: true }; // Skip OpenGraph (likely has subscription price) and go to body parsing
+  }
+  
+  if (nonSubscriptionCandidates.length > 0 && nonSubscriptionCandidates.length < allCandidates.length) {
+    console.log(`[HTML Parser] Filtered out ${allCandidates.length - nonSubscriptionCandidates.length} subscription offer(s)`);
+  }
+  
+  // Use non-subscription candidates
+  const candidatesToUse = nonSubscriptionCandidates.length > 0 ? nonSubscriptionCandidates : allCandidates;
+  
   // Filter out unrealistic bulk/wholesale prices (>$500 for supplements/beauty)
-  const retailCandidates = allCandidates.filter(c => c.price <= 500);
+  const retailCandidates = candidatesToUse.filter(c => c.price <= 500);
   
   if (retailCandidates.length === 0) {
     const prices = allCandidates.map(c => c.price).join(', ');
     console.log(`[HTML Parser] All prices rejected as bulk/wholesale (>$500): ${prices}`);
-    return { price: -1 }; // -1 signals rejection (don't fallback to other parsers)
+    return { price: -1, skipOpenGraph: true }; // -1 signals rejection (don't fallback)
   }
   
   // Pick the best offer (prefer size match, then single-unit, else lowest unit price)
@@ -342,10 +370,16 @@ function extractFromOpenGraph($: cheerio.CheerioAPI): number | null {
     $(
       'meta[property="product:price:amount"], meta[property="og:price:amount"], meta[name="product:price:amount"], meta[name="og:price:amount"]'
     ).attr("content") || "";
-  return og ? toNumber(og) : null;
+  const price = og ? toNumber(og) : null;
+  if (price) {
+    console.log(`[HTML Parser] Found OpenGraph price: $${price}`);
+  } else {
+    console.log(`[HTML Parser] No OpenGraph price found`);
+  }
+  return price;
 }
 
-function extractFromBody($: cheerio.CheerioAPI, packInfo?: { isMultiPack: boolean; packSize?: number }): number | null {
+function extractFromBody($: cheerio.CheerioAPI, packInfo?: { isMultiPack: boolean; packSize?: number }, productTitle?: string): number | null {
   const bodyText = $.root().text().replace(/\s+/g, " ");
   
   // Use passed pack info or detect locally if not provided
@@ -360,6 +394,7 @@ function extractFromBody($: cheerio.CheerioAPI, packInfo?: { isMultiPack: boolea
   const targeted = bodyText.match(/(?:price|buy|order)[^$]{0,60}\$\s?(\d{1,4}(?:\.\d{2})?)/i);
   if (targeted) {
     let price = toNumber(targeted[1]);
+    console.log(`[HTML Parser] Targeted match found: $${price} (full match: "${targeted[0].slice(0, 80)}...")`);
     if (price && price >= 15) {
       // Divide by pack size if multi-pack
       if (multiPackInfo.isMultiPack && packSize > 1) {
@@ -371,13 +406,71 @@ function extractFromBody($: cheerio.CheerioAPI, packInfo?: { isMultiPack: boolea
     }
   }
   
+  // Try to find JSON-style price attributes (common in Shopify/e-commerce sites)
+  // Look for patterns like: "price":"39.95" or price:39.95 or "price":39.95
+  const jsonPricePattern = /"price"\s*:\s*"?(\d+\.\d{2})"?/gi;
+  const jsonMatches = [...bodyText.matchAll(jsonPricePattern)];
+  if (jsonMatches.length > 0) {
+    const jsonPrices = jsonMatches
+      .map(m => toNumber(m[1]))
+      .filter((p): p is number => p !== null && p >= 15 && p <= 500);
+    
+    if (jsonPrices.length > 0) {
+      console.log(`[HTML Parser] Found ${jsonPrices.length} JSON-style prices: [${jsonPrices.slice(0, 10).join(', ')}]`);
+      
+      // Prefer retail-formatted prices (.95 or .99)
+      const retailJsonPrices = jsonPrices.filter(p => {
+        const cents = Math.round((p % 1) * 100);
+        return cents === 95 || cents === 99;
+      });
+      
+      if (retailJsonPrices.length > 0) {
+        // Deduplicate and sort
+        const uniquePrices = [...new Set(retailJsonPrices)].sort((a, b) => a - b);
+        console.log(`[HTML Parser] Unique retail-formatted JSON prices: [${uniquePrices.join(', ')}]`);
+        
+        // Try to find price near the product title if provided
+        if (productTitle) {
+          // Look for product title in context of price
+          const titleWords = productTitle.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+          for (const price of uniquePrices) {
+            const pricePattern = new RegExp(`"price"\\s*:\\s*"?${price.toFixed(2)}"?`, 'gi');
+            const matches = [...bodyText.matchAll(pricePattern)];
+            for (const match of matches) {
+              const contextStart = Math.max(0, match.index! - 300);
+              const contextEnd = Math.min(bodyText.length, match.index! + 100);
+              const context = bodyText.substring(contextStart, contextEnd).toLowerCase();
+              
+              // Check if product title words appear near this price
+              const matchCount = titleWords.filter(word => context.includes(word)).length;
+              if (matchCount >= 2) {
+                console.log(`[HTML Parser] Found price $${price} near product title (${matchCount} words matched)`);
+                return price;
+              }
+            }
+          }
+          console.log(`[HTML Parser] No JSON price found near product title, using highest (likely main product)`);
+        }
+        
+        // If no product title or no match, use highest price (often the main product, subscriptions are discounted)
+        const chosen = uniquePrices[uniquePrices.length - 1];
+        console.log(`[HTML Parser] Using JSON-style price: $${chosen} (from ${uniquePrices.length} retail-formatted options)`);
+        return chosen;
+      }
+    }
+  }
+  
   // Second try: Extract all dollar amounts and filter
   const allMatches = bodyText.match(/\$\s?(\d{1,4}(?:\.\d{2})?)/g);
+  console.log(`[HTML Parser] Looking for all $ amounts in body text...`);
   if (allMatches) {
+    console.log(`[HTML Parser] Found ${allMatches.length} $-prefixed prices in body`);
     const allPrices = allMatches
       .map(m => m.replace(/\$/g, '').trim())
       .map(m => toNumber(m))
       .filter((p): p is number => p !== null && p >= 15 && p <= 500); // Filter out discounts/fees (<$15)
+    
+    console.log(`[HTML Parser] After filtering (>=$15, <=$500): ${allPrices.length} prices - [${allPrices.slice(0, 10).join(', ')}${allPrices.length > 10 ? '...' : ''}]`);
     
     if (allPrices.length > 0) {
       // Prefer retail-formatted prices (.95 or .99) over round numbers
@@ -386,14 +479,16 @@ function extractFromBody($: cheerio.CheerioAPI, packInfo?: { isMultiPack: boolea
         return cents === 95 || cents === 99;
       });
       
+      console.log(`[HTML Parser] Retail-formatted (.95/.99) prices: ${retailPrices.length} - [${retailPrices.slice(0, 10).join(', ')}${retailPrices.length > 10 ? '...' : ''}]`);
+      
       let extractedPrice: number;
       if (retailPrices.length > 0) {
-        console.log(`[HTML Parser] Found ${allPrices.length} prices (>=$15), using lowest retail-formatted (.95/.99): $${Math.min(...retailPrices)}`);
         extractedPrice = Math.min(...retailPrices);
+        console.log(`[HTML Parser] Found ${allPrices.length} prices (>=$15), using lowest retail-formatted (.95/.99): $${extractedPrice}`);
       } else {
         // Fallback: Return lowest price if no retail formatting found
-        console.log(`[HTML Parser] Found ${allPrices.length} prices (>=$15), no retail formatting found, using lowest: $${Math.min(...allPrices)}`);
         extractedPrice = Math.min(...allPrices);
+        console.log(`[HTML Parser] Found ${allPrices.length} prices (>=$15), no retail formatting found, using lowest: $${extractedPrice}`);
       }
       
       // Divide by pack size if multi-pack
@@ -478,8 +573,11 @@ export function extractPriceFromHtml(html: string, productTitle?: string): numbe
     // If JSON-LD explicitly rejected prices (returned -1), don't fallback
     if (data.price === -1) return null;
     
-    // Pass pack info to body extraction
-    return data.price ?? extractFromOpenGraph($) ?? extractFromBody($, packInfo);
+    // If JSON-LD says to skip OpenGraph (e.g., subscription-only), skip it
+    const openGraphPrice = data.skipOpenGraph ? null : extractFromOpenGraph($);
+    
+    // Pass pack info and product title to body extraction
+    return data.price ?? openGraphPrice ?? extractFromBody($, packInfo, productTitle);
   } catch {
     return null;
   }
