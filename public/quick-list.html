@@ -189,6 +189,29 @@
       gap: 0.75rem;
       margin-top: 1rem;
     }
+    .actions .btn {
+      flex: 1;
+      text-align: center;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .actions .btn:not(.secondary) {
+      background: var(--success);
+    }
+    .actions .btn:not(.secondary):hover {
+      background: #16a34a;
+    }
+    .actions .btn.secondary {
+      background: transparent;
+      border: 1px solid var(--line);
+      color: var(--text);
+    }
+    .actions .btn.secondary:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: var(--primary);
+    }
     
     select {
       width: 100%;
@@ -683,7 +706,7 @@
         </div>
 
         <div class="actions">
-          <a href="/drafts.html" class="btn" style="background: var(--success); font-weight: 700;">✓ View & Publish Drafts</a>
+          <a href="/drafts.html" class="btn">✓ View & Publish Drafts</a>
           <button class="btn secondary" onclick="resetPipeline()">🔄 Run Again</button>
         </div>
       </div>
