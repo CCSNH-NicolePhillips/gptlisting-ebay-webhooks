@@ -715,6 +715,30 @@
               }
             });
           });
+          
+          // Allow adding custom value from search box with Enter
+          searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && searchInput.value.trim()) {
+              e.preventDefault();
+              const customValue = searchInput.value.trim();
+              
+              // Get current values
+              const currentValues = hiddenInput.value ? hiddenInput.value.split(',').map(v => v.trim()) : [];
+              
+              // Add custom value if not already present
+              if (!currentValues.includes(customValue)) {
+                currentValues.push(customValue);
+                hiddenInput.value = currentValues.join(', ');
+                textDisplay.textContent = currentValues.join(', ');
+              }
+              
+              searchInput.value = '';
+              // Reset search filter
+              optionsContainer.querySelectorAll('.aspect-multiselect-option').forEach(option => {
+                option.classList.remove('hidden');
+              });
+            }
+          });
         }
         
         // Custom value input
