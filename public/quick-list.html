@@ -863,7 +863,16 @@
           throw new Error('No response received from server');
         }
 
-        const data = await r.json();
+        // Safe JSON parsing - handle empty responses
+        let data;
+        try {
+          const text = await r.text();
+          data = text ? JSON.parse(text) : {};
+        } catch (parseErr) {
+          console.error('[fetchJSON] JSON parse error:', parseErr);
+          throw new Error('Invalid JSON response from server');
+        }
+
         if (!r.ok) {
           // Check for auth errors
           if (r.status === 401 || r.status === 403) {
