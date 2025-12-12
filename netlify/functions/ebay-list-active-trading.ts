@@ -270,9 +270,11 @@ export const handler: Handler = async (event) => {
       console.log('[ebay-list-active-trading] Fetching promotion data...');
       
       // Use Marketing API directly with the access token we already have
-      const marketingApiHost = process.env.EBAY_ENV === 'production' 
-        ? 'https://api.ebay.com' 
-        : 'https://api.sandbox.ebay.com';
+      const ebayEnv = process.env.EBAY_ENV || 'PROD';
+      const marketingApiHost = ebayEnv === 'SANDBOX' 
+        ? 'https://api.sandbox.ebay.com' 
+        : 'https://api.ebay.com';
+      console.log('[ebay-list-active-trading] Using Marketing API host:', marketingApiHost, '(EBAY_ENV:', ebayEnv, ')');
       
       // Get all campaigns
       const campaignsUrl = `${marketingApiHost}/sell/marketing/v1/ad_campaign?campaign_status=RUNNING&limit=100`;
