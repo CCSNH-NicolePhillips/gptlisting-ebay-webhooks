@@ -143,7 +143,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       };
     }
     
-    // Update the offer (price)
+    // Update the offer (price and promotion settings)
     const offerPayload = {
       ...currentOffer,
       pricingSummary: {
@@ -151,6 +151,14 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
           value: draft.price.toString(),
           currency: currentOffer.pricingSummary?.price?.currency || 'USD',
         },
+      },
+      // Update merchantData with promotion settings if provided
+      merchantData: {
+        ...(currentOffer.merchantData || {}),
+        autoPromote: draft.promotion?.enabled || false,
+        autoPromoteAdRate: draft.promotion?.enabled && draft.promotion?.rate 
+          ? draft.promotion.rate 
+          : null,
       },
     };
     

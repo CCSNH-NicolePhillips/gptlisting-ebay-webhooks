@@ -29,6 +29,10 @@ type ChatGptDraft = {
   images: string[];
   price: number;
   condition: string;
+  promotion?: {
+    enabled: boolean;
+    rate: number | null;
+  };
 };
 
 type EbayDraftInput = {
@@ -111,6 +115,8 @@ function convertToEbayDraft(draft: ChatGptDraft, index: number) {
       source: "smartdrafts-chatgpt",
       productId: draft.productId,
     },
+    // Include promotion settings from draft
+    promotion: draft.promotion || { enabled: false, rate: null },
   };
 }
 
