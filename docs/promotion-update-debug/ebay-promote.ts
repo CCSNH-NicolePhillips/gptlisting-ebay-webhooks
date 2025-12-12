@@ -65,7 +65,7 @@ const userCampaignCache: CampaignCache = {};
 
 // Helper to get API host for eBay marketing calls
 function getMarketingApiHost(): string {
-  const env = process.env.EBAY_ENV || 'production';
+  const env = process.env.NODE_ENV || 'production';
   return env === 'production'
     ? 'https://api.ebay.com'
     : 'https://api.sandbox.ebay.com';
@@ -490,7 +490,7 @@ export async function getCampaigns(
   userId: string,
   opts: { tokenCache?: EbayTokenCache; limit?: number } = {}
 ): Promise<{ campaigns: EbayCampaignResponse[] }> {
-  const { token: accessToken } = await getEbayAccessToken(userId);
+  const accessToken = await getEbayAccessToken(userId);
   const apiHost = getMarketingApiHost();
   const limit = opts.limit ?? 100;
   
@@ -521,7 +521,7 @@ export async function createCampaign(
   payload: any,
   opts: { tokenCache?: EbayTokenCache } = {}
 ): Promise<EbayCampaignResponse> {
-  const { token: accessToken } = await getEbayAccessToken(userId);
+  const accessToken = await getEbayAccessToken(userId);
   const apiHost = getMarketingApiHost();
   
   const url = `${apiHost}/sell/marketing/v1/ad_campaign`;
@@ -551,7 +551,7 @@ export async function getAds(
   campaignId: string,
   opts: { tokenCache?: EbayTokenCache; limit?: number } = {}
 ): Promise<{ ads: EbayAdResponse[] }> {
-  const { token: accessToken } = await getEbayAccessToken(userId);
+  const accessToken = await getEbayAccessToken(userId);
   const apiHost = getMarketingApiHost();
   const limit = opts.limit ?? 200;
   
@@ -583,7 +583,7 @@ export async function createAds(
   payload: any,
   opts: { tokenCache?: EbayTokenCache } = {}
 ): Promise<{ ads: EbayAdResponse[] }> {
-  const { token: accessToken } = await getEbayAccessToken(userId);
+  const accessToken = await getEbayAccessToken(userId);
   const apiHost = getMarketingApiHost();
   
   const url = `${apiHost}/sell/marketing/v1/ad_campaign/${encodeURIComponent(campaignId)}/ad`;
@@ -616,10 +616,10 @@ export async function updateAdRate(
   newAdRate: number,
   opts: { tokenCache?: EbayTokenCache } = {}
 ): Promise<void> {
-  const { token: accessToken } = await getEbayAccessToken(userId);
+  const accessToken = await getEbayAccessToken(userId);
   const apiHost = getMarketingApiHost();
   
-  const url = `${apiHost}/sell/marketing/v1/ad_campaign/${encodeURIComponent(campaignId)}/ad/${encodeURIComponent(adId)}/bid`;
+  const url = `${apiHost}/sell/marketing/v1/ad_campaign/${encodeURIComponent(campaignId)}/ad/${encodeURIComponent(adId)}`;
   
   const res = await fetch(url, {
     method: 'PUT',
@@ -645,7 +645,7 @@ export async function deleteAd(
   adId: string,
   opts: { tokenCache?: EbayTokenCache } = {}
 ): Promise<void> {
-  const { token: accessToken } = await getEbayAccessToken(userId);
+  const accessToken = await getEbayAccessToken(userId);
   const apiHost = getMarketingApiHost();
   
   const url = `${apiHost}/sell/marketing/v1/ad_campaign/${encodeURIComponent(campaignId)}/ad/${encodeURIComponent(adId)}`;
