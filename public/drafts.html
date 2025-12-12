@@ -886,10 +886,9 @@
       }
 
       async function load() {
-        // Hide initial loader
         const initialLoader = document.getElementById('initialLoader');
-        if (initialLoader) initialLoader.style.display = 'none';
         
+        // Show loading state
         readyList.innerHTML = '';
         needsList.innerHTML = '';
         const loader = document.createElement('div');
@@ -944,10 +943,16 @@
             } catch {}
           }
 
+          // Hide initial loader once we have data
+          if (initialLoader) initialLoader.style.display = 'none';
+          
           if (!offers.length) {
             readyList.innerHTML =
               '<div class="empty">No drafts found (UNPUBLISHED/DRAFT/INACTIVE). Create your first listing draft from the wizard.</div>';
             needsList.innerHTML = '';
+            // Show at least the ready section for the empty message
+            $('readySection').style.display = 'block';
+            $('needsAttention').style.display = 'none';
             return;
           }
           
@@ -962,7 +967,7 @@
           $('needsCount').textContent = needsAttention.length ? `(${needsAttention.length})` : '';
           $('readyCount').textContent = ready.length ? `(${ready.length})` : '';
           
-          // Hide sections if empty
+          // Show sections before rendering to prevent layout shift
           $('needsAttention').style.display = needsAttention.length ? 'block' : 'none';
           $('readySection').style.display = ready.length ? 'block' : 'none';
           
@@ -985,6 +990,9 @@
             } catch {}
           }).catch(() => {});
         } catch (e) {
+          // Hide initial loader on error
+          if (initialLoader) initialLoader.style.display = 'none';
+          
           const wrap = document.createElement('div');
           wrap.className = 'dp-card';
           wrap.style.cssText = 'text-align: center; padding: 3rem 2rem;';

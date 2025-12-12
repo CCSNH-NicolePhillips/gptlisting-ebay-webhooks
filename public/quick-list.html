@@ -345,47 +345,25 @@
       margin-bottom: 0.75rem;
     }
     
-    /* Promotion option styles */
-    .promo-option {
-      display: flex;
-      align-items: flex-start;
-      gap: 0.75rem;
-      cursor: pointer;
-      padding: 0.875rem;
+    /* Promotion dropdown styles */
+    .promo-select {
+      width: 100%;
+      padding: 0.75rem;
       background: var(--bg-secondary);
-      border-radius: 8px;
       border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--text-primary);
+      font-size: 0.9375rem;
+      cursor: pointer;
       transition: all 0.2s;
     }
-    .promo-option:hover {
+    .promo-select:hover {
       border-color: var(--primary);
-      background: rgba(91, 124, 255, 0.05);
     }
-    .promo-option input[type="radio"] {
-      margin-top: 0.125rem;
-      width: 18px;
-      height: 18px;
-      cursor: pointer;
-      flex-shrink: 0;
-      accent-color: var(--primary);
-    }
-    .promo-content {
-      flex: 1;
-    }
-    .promo-title {
-      font-weight: 600;
-      color: var(--text-primary);
-      margin-bottom: 0.25rem;
-      font-size: 0.9375rem;
-    }
-    .promo-desc {
-      font-size: 0.875rem;
-      color: var(--text-muted);
-      line-height: 1.4;
-    }
-    .promo-option:has(input:checked) {
+    .promo-select:focus {
+      outline: none;
       border-color: var(--primary);
-      background: rgba(91, 124, 255, 0.1);
+      box-shadow: 0 0 0 3px rgba(91, 124, 255, 0.1);
     }
   </style>
 </head>
@@ -665,38 +643,25 @@
         <span>📢 Promoted Listings (Optional)</span>
       </h3>
       
-      <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-        <label class="promo-option">
-          <input type="radio" name="promotionMode" value="default" id="promotionDefault" checked />
-          <div class="promo-content">
-            <div class="promo-title">Use my default settings</div>
-            <div class="promo-desc" id="defaultPromotionInfo">Loading...</div>
-          </div>
-        </label>
+      <div style="display: flex; flex-direction: column; gap: 0.875rem;">
+        <div>
+          <label style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--text-muted); font-weight: 500;">Promotion Mode</label>
+          <select id="promotionMode" class="promo-select">
+            <option value="default">Use my default settings</option>
+            <option value="custom">Use custom rate for this run</option>
+            <option value="none">No promotion</option>
+          </select>
+          <div id="defaultPromotionInfo" style="margin-top: 0.5rem; font-size: 0.875rem; color: var(--text-muted);">Loading...</div>
+        </div>
         
-        <label class="promo-option">
-          <input type="radio" name="promotionMode" value="custom" id="promotionCustom" />
-          <div class="promo-content">
-            <div class="promo-title">Use custom rate for this run</div>
-            <div class="promo-desc">Override with a different promotion rate</div>
-          </div>
-        </label>
-        
-        <div id="customPromotionInput" style="margin-left: 2.25rem; margin-top: -0.25rem; display: none;">
+        <div id="customPromotionInput" style="display: none;">
+          <label style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--text-muted); font-weight: 500;">Custom Ad Rate</label>
           <div style="display: flex; gap: 0.625rem; align-items: center;">
             <input type="number" id="customPromotionRate" placeholder="5.0" min="1" max="20" step="0.1" 
-                   style="width: 100px; padding: 0.5rem 0.75rem; background: var(--bg-secondary); border: 1px solid var(--line); border-radius: 6px; color: var(--text-primary); font-size: 0.9375rem;" />
+                   style="width: 120px; padding: 0.625rem 0.75rem; background: var(--bg-secondary); border: 1px solid var(--line); border-radius: 6px; color: var(--text-primary); font-size: 0.9375rem;" />
             <span style="color: var(--text-muted); font-size: 0.9375rem;">% ad rate</span>
           </div>
         </div>
-        
-        <label class="promo-option">
-          <input type="radio" name="promotionMode" value="none" id="promotionNone" />
-          <div class="promo-content">
-            <div class="promo-title">No promotion</div>
-            <div class="promo-desc">Skip promoted listings for this run</div>
-          </div>
-        </label>
       </div>
       
       <div style="margin-top: 1.25rem; padding: 0.875rem; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--line);">
@@ -1736,22 +1701,24 @@
     
     // Handle promotion radio button changes
     function initPromotionControls() {
-      const customRadio = document.getElementById('promotionCustom');
+      const modeSelect = document.getElementById('promotionMode');
       const customInput = document.getElementById('customPromotionInput');
-      const radios = document.querySelectorAll('input[name="promotionMode"]');
+      const defaultInfo = document.getElementById('defaultPromotionInfo');
       
-      radios.forEach(radio => {
-        radio.addEventListener('change', () => {
-          if (customInput) {
-            customInput.style.display = customRadio?.checked ? 'block' : 'none';
-          }
-        });
+      modeSelect.addEventListener('change', () => {
+        const mode = modeSelect.value;
+        if (customInput) {
+          customInput.style.display = mode === 'custom' ? 'block' : 'none';
+        }
+        if (defaultInfo) {
+          defaultInfo.style.display = mode === 'default' ? 'block' : 'none';
+        }
       });
     }
     
     // Get current promotion settings for this run
     function getPromotionSettings() {
-      const mode = document.querySelector('input[name="promotionMode"]:checked')?.value;
+      const mode = document.getElementById('promotionMode')?.value;
       
       if (mode === 'none') {
         return { enabled: false, rate: null };
