@@ -2,7 +2,6 @@ import type { Handler } from '@netlify/functions';
 import { accessTokenFromRefresh, tokenHosts } from '../../src/lib/_common.js';
 import { tokensStore } from '../../src/lib/_blobs.js';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
-import { getAds, getCampaigns } from '../../src/lib/ebay-promote.js';
 
 interface ActiveOffer {
   offerId: string;
@@ -247,16 +246,55 @@ export const handler: Handler = async (event) => {
     // Fetch promotion status for all listings
     try {
       console.log('[ebay-list-active-trading] Fetching promotion data...');
-      const campaigns = await getCampaigns(sub!);
-      console.log('[ebay-list-active-trading] Found', campaigns.campaigns?.length || 0, 'campaigns');
+      
+      // Use Marketing API directly with the access token we already have
+      const marketingApiHost = process.env.EBAY_ENV === 'production' 
+        ? 'https://api.ebay.com' 
+        : 'https://api.sandbox.ebay.com';
+      
+      // Get all campaigns
+      const campaignsUrl = `${marketingApiHost}/sell/marketing/v1/ad_campaign?campaign_status=RUNNING&limit=100`;
+      const campaignsRes = await fetch(campaignsUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${access_token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!campaignsRes.ok) {
+        const errText = await campaignsRes.text();
+        console.error('[ebay-list-active-trading] Failed to fetch campaigns:', campaignsRes.status, errText);
+        throw new Error(`Failed to fetch campaigns: ${campaignsRes.status}`);
+      }
+      
+      const campaignsData = await campaignsRes.json();
+      const campaigns = campaignsData.campaigns || [];
+      console.log('[ebay-list-active-trading] Found', campaigns.length, 'running campaigns');
       
       // Build a map of inventoryReferenceId -> promotion data
       const promotionMap = new Map<string, { rate: number; adId: string; campaignId: string }>();
       
-      for (const campaign of campaigns.campaigns || []) {
-        if (campaign.campaignStatus === 'RUNNING' && campaign.campaignId) {
+      for (const campaign of campaigns) {
+        if (campaign.campaignId) {
           try {
-            const { ads } = await getAds(sub!, campaign.campaignId, { limit: 500 });
+            // Get ads for this campaign
+            const adsUrl = `${marketingApiHost}/sell/marketing/v1/ad_campaign/${encodeURIComponent(campaign.campaignId)}/ad?limit=500`;
+            const adsRes = await fetch(adsUrl, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${access_token}`,
+                'Content-Type': 'application/json',
+              },
+            });
+            
+            if (!adsRes.ok) {
+              console.error(`[ebay-list-active-trading] Failed to fetch ads for campaign ${campaign.campaignId}:`, adsRes.status);
+              continue;
+            }
+            
+            const adsData = await adsRes.json();
+            const ads = adsData.ads || [];
             console.log(`[ebay-list-active-trading] Campaign ${campaign.campaignId}: Found ${ads.length} ads`);
             
             for (const ad of ads) {
@@ -281,26 +319,28 @@ export const handler: Handler = async (event) => {
       console.log('[ebay-list-active-trading] Built promotion map with', promotionMap.size, 'entries');
       
       // Merge promotion data into listings
+      let promotedCount = 0;
       for (const offer of activeOffers) {
         const promoData = promotionMap.get(offer.sku);
         if (promoData) {
           offer.autoPromote = true;
           offer.autoPromoteAdRate = promoData.rate;
+          promotedCount++;
         } else {
           offer.autoPromote = false;
           offer.autoPromoteAdRate = undefined;
         }
       }
       
-      console.log('[ebay-list-active-trading] Merged promotion data - found', 
-        activeOffers.filter(o => o.autoPromote).length, 'promoted listings');
+      console.log('[ebay-list-active-trading] Merged promotion data -', promotedCount, 'of', activeOffers.length, 'listings are promoted');
     } catch (promoErr: any) {
       console.error('[ebay-list-active-trading] Error fetching promotion data:', promoErr.message);
+      console.error('[ebay-list-active-trading] Stack:', promoErr.stack);
       // Continue without promotion data - just log the error
     }
     
     if (activeOffers.length > 0) {
-      console.log('[ebay-list-active-trading] Sample:', JSON.stringify(activeOffers[0]).substring(0, 300));
+      console.log('[ebay-list-active-trading] Sample listing:', JSON.stringify(activeOffers[0]).substring(0, 400));
     }
 
     return {
