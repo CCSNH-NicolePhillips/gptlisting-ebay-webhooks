@@ -219,8 +219,11 @@
         background: rgba(255, 255, 255, 0.02);
         border: 1px dashed var(--line);
         border-radius: 12px;
-        padding: 1.25rem;
+        padding: 3rem 2rem;
         text-align: center;
+        margin: 4rem auto;
+        max-width: 500px;
+        font-size: 1rem;
       }
       a {
         color: #9db2ff;
@@ -657,6 +660,9 @@
               sessionStorage.removeItem('drafts-cache-time');
               el.remove();
               flash.textContent = `Published ${offer.offerId}`;
+              
+              // Check if all drafts are now gone
+              checkAndShowEmptyState();
               return;
             }
             if (r.ok && data.ok && data.deleted) {
@@ -664,6 +670,9 @@
               sessionStorage.removeItem('drafts-cache-time');
               el.remove();
               flash.textContent = `Draft ${offer.offerId} had errors and was deleted.`;
+              
+              // Check if all drafts are now gone
+              checkAndShowEmptyState();
               return;
             }
             // Improve error details: surface common onboarding/privilege errors with a direct link
@@ -724,6 +733,11 @@
               sessionStorage.removeItem('drafts-cache-time');
               el.remove();
               flash.textContent = `Deleted ${offer.offerId}`;
+              
+              // Check if all drafts are now gone
+              if (checkAndShowEmptyState()) {
+                return;
+              }
               
               // Check if the parent section is now empty and hide it
               const parentList = el.parentElement;
@@ -947,12 +961,12 @@
           if (initialLoader) initialLoader.style.display = 'none';
           
           if (!offers.length) {
+            // Hide both section headers and show centered empty message
+            $('needsAttention').style.display = 'none';
+            $('readySection').style.display = 'none';
             readyList.innerHTML =
               '<div class="empty">No drafts found (UNPUBLISHED/DRAFT/INACTIVE). Create your first listing draft from the wizard.</div>';
             needsList.innerHTML = '';
-            // Show at least the ready section for the empty message
-            $('readySection').style.display = 'block';
-            $('needsAttention').style.display = 'none';
             return;
           }
           
@@ -1014,6 +1028,22 @@
 
       function proxied(url) {
         return '/.netlify/functions/image-proxy?url=' + encodeURIComponent(url);
+      }
+
+      // Check if all drafts are gone and show empty state
+      function checkAndShowEmptyState() {
+        const readyCards = document.querySelectorAll('#readyList .card').length;
+        const needsCards = document.querySelectorAll('#needsList .card').length;
+        
+        if (readyCards === 0 && needsCards === 0) {
+          // All drafts are gone - show empty state
+          $('needsAttention').style.display = 'none';
+          $('readySection').style.display = 'none';
+          readyList.innerHTML = '<div class="empty">No drafts found (UNPUBLISHED/DRAFT/INACTIVE). Create your first listing draft from the wizard.</div>';
+          needsList.innerHTML = '';
+          return true;
+        }
+        return false;
       }
 
       async function getImagesForSKU(sku) {
@@ -1240,6 +1270,8 @@
               flash.textContent = `✓ Deleted ${totalDeleted} drafts total`;
               const readyList = document.getElementById('readyList');
               const needsList = document.getElementById('needsList');
+              $('needsAttention').style.display = 'none';
+              $('readySection').style.display = 'none';
               if (readyList) readyList.innerHTML =
                 '<div class="empty">No drafts found (UNPUBLISHED/DRAFT/INACTIVE). Create your first listing draft from the wizard.</div>';
               if (needsList) needsList.innerHTML = '';
@@ -1255,6 +1287,8 @@
             // Show no drafts message without reloading
             const readyList = document.getElementById('readyList');
             const needsList = document.getElementById('needsList');
+            $('needsAttention').style.display = 'none';
+            $('readySection').style.display = 'none';
             if (readyList) readyList.innerHTML =
               '<div class="empty">No drafts found (UNPUBLISHED/DRAFT/INACTIVE). Create your first listing draft from the wizard.</div>';
             if (needsList) needsList.innerHTML = '';
