@@ -4,6 +4,7 @@ import { tokensStore } from '../../src/lib/_blobs.js';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
 
 interface ActiveOffer {
+  itemId?: string;
   offerId: string;
   sku: string;
   title?: string;
@@ -361,7 +362,7 @@ export const handler: Handler = async (event) => {
       for (const offer of activeOffers) {
         // Try matching by SKU, itemId, or offerId
         const promoData = promotionMap.get(offer.sku) || 
-                         promotionMap.get(offer.itemId) || 
+                         (offer.itemId ? promotionMap.get(offer.itemId) : undefined) || 
                          promotionMap.get(offer.offerId);
         if (promoData) {
           offer.autoPromote = true;
