@@ -496,7 +496,14 @@
           try {
             e.preventDefault();
             const ok = await authClient.ensureAuth();
-            if (!ok) return await authClient.login({});
+            if (!ok) {
+              // Save that we need to connect after login
+              try {
+                sessionStorage.setItem('pendingConnect', fnPath);
+                sessionStorage.setItem('returnTo', window.location.href);
+              } catch {}
+              return await authClient.login({});
+            }
             const r = await authClient.authFetch(fnPath, {
               method: 'POST',
               headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
@@ -509,7 +516,14 @@
               window.location.assign(j.redirect);
               return;
             }
-            if (r.status === 401) return await authClient.login({});
+            if (r.status === 401) {
+              // Save that we need to connect after login
+              try {
+                sessionStorage.setItem('pendingConnect', fnPath);
+                sessionStorage.setItem('returnTo', window.location.href);
+              } catch {}
+              return await authClient.login({});
+            }
             alert('Could not start the connect flow. See console for details.');
             console.error('connect start failed', { status: r.status, body: text });
           } catch {}
@@ -784,6 +798,32 @@
           const msgEl = document.getElementById('marketingMessage');
           if (msgEl) msgEl.textContent = 'Reset to defaults (not saved yet)';
         };
+
+        // Check if we need to complete a pending connection after Auth0 login
+        try {
+          const pendingConnect = sessionStorage.getItem('pendingConnect');
+          if (pendingConnect) {
+            sessionStorage.removeItem('pendingConnect');
+            // Small delay to ensure auth is ready
+            setTimeout(async () => {
+              try {
+                const r = await authClient.authFetch(pendingConnect, {
+                  method: 'POST',
+                  headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ returnTo: window.location.href }),
+                });
+                const text = await r.text();
+                let j = null;
+                try { j = JSON.parse(text); } catch {}
+                if (r.ok && j?.redirect) {
+                  window.location.assign(j.redirect);
+                }
+              } catch (err) {
+                console.error('Failed to complete pending connection:', err);
+              }
+            }, 500);
+          }
+        } catch {}
 
         refreshAll();
         window.addEventListener('focus', () => { refreshAll(); });
