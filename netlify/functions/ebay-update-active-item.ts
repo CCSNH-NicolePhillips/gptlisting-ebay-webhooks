@@ -276,19 +276,44 @@ export const handler: Handler = async (event) => {
       
       console.log('[ebay-update-active-item] Offer updated successfully');
       
-      // Note: Trading API ReviseItem is NOT supported for inventory-based listings
-      // eBay returns error 21919474: "This operation is not allowed for inventory items"
-      // We must rely on the Inventory API offer update to sync changes to live listing
+      // STEP 4: Explicitly publish the offer to sync all changes to the live eBay listing
+      // Despite eBay docs saying updateOffer syncs to live listings, in practice it doesn't
+      // We must explicitly call publishOffer to push inventory_item and offer changes live
+      console.log('[ebay-update-active-item] Publishing offer to sync changes to live listing...');
       
+      const publishUrl = `${apiHost}/sell/inventory/v1/offer/${offer.offerId}/publish`;
+      const publishRes = await fetch(publishUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${access_token}`,
+          'Content-Type': 'application/json',
+          'Accept-Language': 'en-US',
+          'Content-Language': 'en-US',
+        },
+        body: JSON.stringify({}),
+      });
+
+      if (!publishRes.ok) {
+        const errorText = await publishRes.text();
+        console.error('[ebay-update-active-item] Failed to publish offer:', errorText);
+        return {
+          statusCode: publishRes.status,
+          headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
+          body: JSON.stringify({ error: 'Failed to publish changes to live listing', detail: errorText }),
+        };
+      }
+      
+      console.log('[ebay-update-active-item] Offer published successfully');
       console.log('[ebay-update-active-item] === UPDATE COMPLETE ===');
-      console.log('[ebay-update-active-item] Per eBay API: offer update should sync inventory changes to live listing');
+      console.log('[ebay-update-active-item] All changes synced to live eBay listing');
+      
       return {
         statusCode: 200,
         headers: { 
           'Content-Type': 'application/json',
           'Cache-Control': 'no-cache, no-store, must-revalidate'
         },
-        body: JSON.stringify({ ok: true, itemId, method: 'inventory' }),
+        body: JSON.stringify({ ok: true, itemId, method: 'inventory', published: true }),
       };
     }
 
