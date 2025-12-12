@@ -11,6 +11,7 @@ function normalizeRate(input: any): number | null {
 }
 
 export const handler: Handler = async (event) => {
+  console.log('[ebay-update-active-promo] Request received');
   try {
     if (event.httpMethod !== 'POST') {
       return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) };
@@ -23,6 +24,7 @@ export const handler: Handler = async (event) => {
 
     const body = event.body ? JSON.parse(event.body) : {};
     const { listingId, offerId, sku, adRate } = body;
+    console.log('[ebay-update-active-promo] Input:', { listingId, offerId, sku, adRate });
     const normalizedRate = normalizeRate(adRate);
 
     if (!listingId && !offerId && !sku) {
@@ -49,17 +51,23 @@ export const handler: Handler = async (event) => {
     }
 
     if (!campaignId) {
+      console.log('[ebay-update-active-promo] No campaign in policy defaults, searching for RUNNING campaign');
       const { campaigns } = await getCampaigns(sub!, { limit: 10 });
+      console.log('[ebay-update-active-promo] Found campaigns:', campaigns.length);
       const running = campaigns.find((c) => c.campaignStatus === 'RUNNING');
       if (running) campaignId = running.campaignId;
     }
 
     if (!campaignId) {
+      console.log('[ebay-update-active-promo] No active campaign found');
       return { statusCode: 400, body: JSON.stringify({ error: 'No active promotion campaign found' }) };
     }
 
+    console.log('[ebay-update-active-promo] Using campaign:', campaignId);
+    
     // Fetch ads in the campaign and find a match by listingId or inventory reference
     const { ads } = await getAds(sub!, campaignId, { limit: 500 });
+    console.log('[ebay-update-active-promo] Fetched ads:', ads.length);
     const match = (ads as any[]).find((ad: any) => {
       const inv = String(ad.inventoryReferenceId || '').trim();
       const lid = String((ad as any).listingId || '').trim();
@@ -76,9 +84,11 @@ export const handler: Handler = async (event) => {
     let action: 'updated' | 'created' = 'updated';
 
     if (adId) {
+      console.log('[ebay-update-active-promo] Updating existing ad:', adId);
       await updateAdRate(sub!, campaignId, adId, normalizedRate);
     } else {
       // Create a new ad using listingId if available
+      console.log('[ebay-update-active-promo] Creating new ad for listing:', listingId);
       if (!listingId) {
         return { statusCode: 400, body: JSON.stringify({ error: 'listingId required to create promotion' }) };
       }
@@ -92,11 +102,13 @@ export const handler: Handler = async (event) => {
         ],
       };
       const created = await createAds(sub!, campaignId, createPayload);
+      console.log('[ebay-update-active-promo] Create result:', JSON.stringify(created));
       const firstAd: any = (created as any).ads?.[0];
       adId = firstAd?.adId || firstAd?.id || null;
       action = 'created';
     }
 
+    console.log('[ebay-update-active-promo] Success:', { action, campaignId, adId, rate: normalizedRate });
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
@@ -104,6 +116,7 @@ export const handler: Handler = async (event) => {
     };
   } catch (e: any) {
     console.error('[ebay-update-active-promo] Error:', e);
+    console.error('[ebay-update-active-promo] Stack:', e?.stack);
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
