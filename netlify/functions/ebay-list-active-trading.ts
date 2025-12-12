@@ -329,12 +329,11 @@ export const handler: Handler = async (event) => {
             }
             
             for (const ad of ads) {
-              // Ads can be ACTIVE, PAUSED, ARCHIVED - we want active ones
-              // They might use listingId or inventoryReferenceId depending on listing type
+              // Ads returned from RUNNING campaigns are already active
+              // They use listingId for non-inventory items, inventoryReferenceId for inventory items
               const adId = ad.listingId || ad.inventoryReferenceId;
-              const isActive = ad.adStatus === 'ACTIVE' || ad.adStatus === 'RUNNING';
               
-              if (isActive && adId) {
+              if (adId) {
                 const bidPercentage = typeof ad.bidPercentage === 'string' 
                   ? parseFloat(ad.bidPercentage) 
                   : ad.bidPercentage;
