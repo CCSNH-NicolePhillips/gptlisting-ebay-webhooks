@@ -411,6 +411,14 @@ export const handler: Handler = async (event) => {
           }),
         },
         });
+        console.log(`[create-ebay-draft-user] Promotion data for ${mapped.sku}:`, {
+          hasPromotion: !!group.promotion,
+          promotionEnabled: group.promotion?.enabled,
+          promotionRate: group.promotion?.rate,
+          merchantDataAutoPromote: group.promotion?.enabled ? true : false,
+          merchantDataAutoPromoteAdRate: group.promotion?.enabled ? (group.promotion.rate || 5) : null
+        });
+        });
         console.log(`[create-ebay-draft-user] ✓ Offer created successfully for SKU: ${mapped.sku}, offerId: ${offerResult.offerId}`);
       } catch (e: any) {
         const msg = String(e?.message || e || "");
