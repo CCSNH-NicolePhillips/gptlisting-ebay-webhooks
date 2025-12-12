@@ -92,15 +92,18 @@ export const handler: Handler = async (event) => {
       if (!listingId) {
         return { statusCode: 400, body: JSON.stringify({ error: 'listingId required to create promotion' }) };
       }
+      
+      // eBay Marketing API expects bidPercentage as a string, not number
       const createPayload = {
         requests: [
           {
-            listingId,
-            listingType: 'OFFER',
-            bidPercentage: normalizedRate,
+            listingId: String(listingId),
+            bidPercentage: String(normalizedRate),
           },
         ],
       };
+      
+      console.log('[ebay-update-active-promo] Create payload:', JSON.stringify(createPayload));
       const created = await createAds(sub!, campaignId, createPayload);
       console.log('[ebay-update-active-promo] Create result:', JSON.stringify(created));
       const firstAd: any = (created as any).ads?.[0];
