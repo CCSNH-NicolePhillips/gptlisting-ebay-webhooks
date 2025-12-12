@@ -1730,8 +1730,11 @@
         }
         return { enabled: true, rate };
       } else {
-        // default
-        return defaultPromotionSettings;
+        // default - use user's default settings with 5% fallback
+        return {
+          enabled: defaultPromotionSettings.enabled,
+          rate: defaultPromotionSettings.rate || 5 // Fallback to 5% if not configured
+        };
       }
     }
     

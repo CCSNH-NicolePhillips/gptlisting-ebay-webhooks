@@ -404,7 +404,7 @@ export const handler: Handler = async (event) => {
           // Include promotion settings from draft
           ...(group.promotion?.enabled ? {
             autoPromote: true,
-            autoPromoteAdRate: group.promotion.rate || null,
+            autoPromoteAdRate: group.promotion.rate || 5, // Default to 5% if not specified
           } : {
             autoPromote: false,
             autoPromoteAdRate: null,
