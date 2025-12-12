@@ -8,6 +8,8 @@ interface AmazonScraperResult {
   title?: string;
   asin?: string;
   url?: string;
+  packQuantity?: number; // Number of units in pack (1 for single, 2 for 2-pack, etc.)
+  pricePerUnit?: number; // Calculated price per single unit
 }
 
 /**
@@ -138,10 +140,44 @@ export async function scrapeAmazonPrice(
       return { price: null, asin };
     }
 
+    // Detect pack quantity from title or product details
+    let packQuantity = 1;
+    const packPatterns = [
+      /(\d+)[\s-]?pack/i,           // "2-Pack", "2 Pack", "3Pack"
+      /pack\s+of\s+(\d+)/i,         // "Pack of 2", "Pack of 3"
+      /(\d+)\s+count/i,             // "2 Count", "3 Count"
+      /set\s+of\s+(\d+)/i,          // "Set of 2"
+      /\((\d+)\s*pcs?\)/i,          // "(2 pcs)", "(3 pc)"
+      /(\d+)[\s-]?piece/i,          // "2-Piece", "2 Piece"
+    ];
+
+    // Check in a larger section that includes title
+    const searchSection = html.substring(asinSectionStart, asinSectionStart + 8000);
+    
+    for (const pattern of packPatterns) {
+      const match = searchSection.match(pattern);
+      if (match && match[1]) {
+        const quantity = parseInt(match[1], 10);
+        if (quantity > 1 && quantity <= 100) { // Sanity check
+          packQuantity = quantity;
+          console.log(`[amazon-scraper] ✓ Detected pack quantity: ${packQuantity} (${match[0]})`);
+          break;
+        }
+      }
+    }
+
+    const pricePerUnit = packQuantity > 1 ? price / packQuantity : price;
+    
+    if (packQuantity > 1) {
+      console.log(`[amazon-scraper] ⚠️  Multi-pack detected: ${packQuantity} units @ $${price} = $${pricePerUnit.toFixed(2)} per unit`);
+    }
+
     return {
       price,
       asin,
-      url: `https://www.amazon.com/dp/${asin}`
+      url: `https://www.amazon.com/dp/${asin}`,
+      packQuantity,
+      pricePerUnit: Math.round(pricePerUnit * 100) / 100, // Round to 2 decimals
     };
 
   } catch (error) {

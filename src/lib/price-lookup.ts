@@ -610,11 +610,19 @@ export async function lookupPrice(
     
     if (amazonUrlFound) {
       console.log(`[price] Amazon URL found: ${amazonUrlFound}`);
-      const { price } = await priceFrom(amazonUrlFound);
-      if (price && price > 0) {
-        amazonPrice = price;
-        amazonUrl = amazonUrlFound;
-        console.log(`[price] ✓ Amazon marketplace price: $${amazonPrice.toFixed(2)}`);
+      
+      // Use Amazon scraper with pack detection instead of generic HTML extraction
+      const { scrapeAmazonPrice } = await import('./amazon-scraper.js');
+      const scraperResult = await scrapeAmazonPrice(input.brand, input.title);
+      
+      if (scraperResult.pricePerUnit && scraperResult.pricePerUnit > 0) {
+        // Use price per unit if pack detected
+        amazonPrice = scraperResult.pricePerUnit;
+        amazonUrl = scraperResult.url || amazonUrlFound;
+        const packNote = scraperResult.packQuantity && scraperResult.packQuantity > 1 
+          ? ` (${scraperResult.packQuantity}-pack @ $${scraperResult.price?.toFixed(2)} total)` 
+          : '';
+        console.log(`[price] ✓ Amazon marketplace price: $${amazonPrice.toFixed(2)} per unit${packNote}`);
         
         // Add Amazon as a separate candidate for Phase 2 comparison
         candidates.push({
@@ -622,8 +630,24 @@ export async function lookupPrice(
           price: amazonPrice,
           currency: 'USD',
           url: amazonUrl,
-          notes: 'Amazon marketplace price',
+          notes: `Amazon marketplace price${packNote}`,
         });
+      } else {
+        // Fallback to generic HTML extraction if scraper fails
+        const { price } = await priceFrom(amazonUrlFound);
+        if (price && price > 0) {
+          amazonPrice = price;
+          amazonUrl = amazonUrlFound;
+          console.log(`[price] ✓ Amazon marketplace price: $${amazonPrice.toFixed(2)} (fallback)`);
+          
+          candidates.push({
+            source: 'brand-msrp',
+            price: amazonPrice,
+            currency: 'USD',
+            url: amazonUrl,
+            notes: 'Amazon marketplace price',
+          });
+        }
       }
     }
   }
