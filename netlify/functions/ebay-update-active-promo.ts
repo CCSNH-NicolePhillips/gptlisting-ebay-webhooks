@@ -94,13 +94,10 @@ export const handler: Handler = async (event) => {
       }
       
       // eBay Marketing API expects bidPercentage as a string, not number
+      // Note: /ad endpoint takes direct object, not wrapped in requests array
       const createPayload = {
-        requests: [
-          {
-            listingId: String(listingId),
-            bidPercentage: String(normalizedRate),
-          },
-        ],
+        listingId: String(listingId),
+        bidPercentage: String(normalizedRate),
       };
       
       console.log('[ebay-update-active-promo] Create payload:', JSON.stringify(createPayload));
