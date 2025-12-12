@@ -1,5 +1,36 @@
 import * as cheerio from "cheerio";
 
+// Currency conversion rates (approximate, updated periodically)
+const CURRENCY_TO_USD: Record<string, number> = {
+  USD: 1.0,
+  AUD: 0.65,  // Australian Dollar
+  CAD: 0.74,  // Canadian Dollar
+  EUR: 1.08,  // Euro
+  GBP: 1.27,  // British Pound
+  NZD: 0.60,  // New Zealand Dollar
+};
+
+/**
+ * Convert a price from one currency to USD
+ */
+function convertToUSD(price: number, currency: string): number {
+  const curr = currency.toUpperCase();
+  const rate = CURRENCY_TO_USD[curr];
+  
+  if (!rate) {
+    console.warn(`[HTML Parser] Unknown currency: ${currency}, assuming USD`);
+    return price;
+  }
+  
+  if (curr === 'USD') {
+    return price;
+  }
+  
+  const converted = price * rate;
+  console.log(`[HTML Parser] Currency conversion: ${currency} ${price.toFixed(2)} → USD ${converted.toFixed(2)} (rate: ${rate})`);
+  return converted;
+}
+
 function toNumber(value: unknown): number | null {
   const num = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(num) || num <= 0) return null;
@@ -216,13 +247,17 @@ function extractFromJsonLd($: cheerio.CheerioAPI, requestedSize?: string | null)
                 if (!priceValue) continue;
                 
                 const currency = String((offer as any).priceCurrency || 'USD');
+                
+                // Convert to USD if necessary
+                const priceUSD = convertToUSD(priceValue, currency);
+                
                 const packQty = detectPackQty(variantName) || 1;
                 const size = detectSize(variantName);
-                const unitPrice = priceValue / packQty;
+                const unitPrice = priceUSD / packQty;
                 
                 allCandidates.push({
-                  price: priceValue,
-                  currency,
+                  price: priceUSD,
+                  currency: 'USD', // Always store as USD after conversion
                   nameText: variantName,
                   descriptionText: undefined,
                   rawOffer: offer,
@@ -276,13 +311,16 @@ function extractFromJsonLd($: cheerio.CheerioAPI, requestedSize?: string | null)
             const descText = String((offer as any).description || productDescription);
             const currency = String((offer as any).priceCurrency || 'USD');
             
+            // Convert to USD if necessary
+            const priceUSD = convertToUSD(priceValue, currency);
+            
             const packQty = detectPackQty(nameText) || detectPackQty(descText) || 1;
             const size = detectSize(nameText) || detectSize(descText) || detectSize(productName);
-            const unitPrice = priceValue / packQty;
+            const unitPrice = priceUSD / packQty;
             
             allCandidates.push({
-              price: priceValue,
-              currency,
+              price: priceUSD,
+              currency: 'USD', // Always store as USD after conversion
               nameText,
               descriptionText: descText,
               rawOffer: offer,
