@@ -306,12 +306,18 @@
               <div class="dp-card__content">
                 <div style="display: flex; flex-direction: column; gap: 12px;">
                   <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                    <span style="font-weight: 500;">Dropbox</span>
-                    <span id="dropboxConnectionStatus" style="color: #10b981; font-size: 14px;">Not connected</span>
+                    <div>
+                      <span style="font-weight: 500;">Dropbox</span>
+                      <span id="dropboxConnectionStatus" style="color: #10b981; font-size: 14px; margin-left: 12px;">Not connected</span>
+                    </div>
+                    <button id="dropboxDisconnectBtn" class="dp-btn dp-btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem; display: none;">Disconnect</button>
                   </div>
                   <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0;">
-                    <span style="font-weight: 500;">eBay</span>
-                    <span id="ebayConnectionStatus" style="color: #10b981; font-size: 14px;">Not connected</span>
+                    <div>
+                      <span style="font-weight: 500;">eBay</span>
+                      <span id="ebayConnectionStatus" style="color: #10b981; font-size: 14px; margin-left: 12px;">Not connected</span>
+                    </div>
+                    <button id="ebayDisconnectBtn" class="dp-btn dp-btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem; display: none;">Disconnect</button>
                   </div>
                 </div>
               </div>
@@ -353,18 +359,26 @@
         // Update connection status
         try {
           const dropboxStatus = document.getElementById('dropboxConnectionStatus');
+          const dropboxDisconnectBtn = document.getElementById('dropboxDisconnectBtn');
           const ebayStatus = document.getElementById('ebayConnectionStatus');
+          const ebayDisconnectBtn = document.getElementById('ebayDisconnectBtn');
           
           if (dropboxStatus) {
             const isConnected = s.dropbox?.connected;
             dropboxStatus.textContent = isConnected ? 'Connected' : 'Not connected';
             if (isConnected) dropboxStatus.classList.add('connected');
+            if (dropboxDisconnectBtn) {
+              dropboxDisconnectBtn.style.display = isConnected ? 'block' : 'none';
+            }
           }
           
           if (ebayStatus) {
             const isConnected = s.ebay?.connected;
             ebayStatus.textContent = isConnected ? 'Connected' : 'Not connected';
             if (isConnected) ebayStatus.classList.add('connected');
+            if (ebayDisconnectBtn) {
+              ebayDisconnectBtn.style.display = isConnected ? 'block' : 'none';
+            }
           }
         } catch {}
       }
@@ -526,6 +540,52 @@
         const mc = document.getElementById('mainCard');
         if (lc) lc.style.display = 'none';
         if (mc) mc.style.display = 'block';
+        
+        // Setup disconnect button handlers
+        const dropboxDisconnectBtn = document.getElementById('dropboxDisconnectBtn');
+        const ebayDisconnectBtn = document.getElementById('ebayDisconnectBtn');
+        
+        if (dropboxDisconnectBtn) {
+          dropboxDisconnectBtn.onclick = async () => {
+            if (!confirm('Are you sure you want to disconnect Dropbox?')) return;
+            dropboxDisconnectBtn.disabled = true;
+            dropboxDisconnectBtn.textContent = 'Disconnecting...';
+            try {
+              const res = await authClient.authFetch('/.netlify/functions/disconnect?service=dropbox', { method: 'POST' });
+              if (res.ok) {
+                await refreshStatus();
+              } else {
+                alert('Failed to disconnect Dropbox');
+              }
+            } catch (err) {
+              console.error('Disconnect error:', err);
+              alert('Failed to disconnect Dropbox');
+            }
+            dropboxDisconnectBtn.disabled = false;
+            dropboxDisconnectBtn.textContent = 'Disconnect';
+          };
+        }
+        
+        if (ebayDisconnectBtn) {
+          ebayDisconnectBtn.onclick = async () => {
+            if (!confirm('Are you sure you want to disconnect eBay? You will need to reconnect to access eBay features.')) return;
+            ebayDisconnectBtn.disabled = true;
+            ebayDisconnectBtn.textContent = 'Disconnecting...';
+            try {
+              const res = await authClient.authFetch('/.netlify/functions/disconnect?service=ebay', { method: 'POST' });
+              if (res.ok) {
+                await refreshStatus();
+              } else {
+                alert('Failed to disconnect eBay');
+              }
+            } catch (err) {
+              console.error('Disconnect error:', err);
+              alert('Failed to disconnect eBay');
+            }
+            ebayDisconnectBtn.disabled = false;
+            ebayDisconnectBtn.textContent = 'Disconnect';
+          };
+        }
       }
       
       if (document.readyState === 'loading') {
