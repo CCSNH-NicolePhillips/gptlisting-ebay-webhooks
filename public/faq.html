@@ -81,12 +81,27 @@
       
       /* Reduce excessive white space */
       .dp-main {
-        max-width: 900px;
-        margin: 0 auto;
+        max-width: none;
+        margin: 0;
+        padding: 1.5rem;
+        height: calc(100vh - 80px);
+        overflow-y: auto;
+      }
+      
+      .dp-grid {
+        height: 100%;
       }
       
       .dp-card {
         margin: 0;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+      }
+      
+      .dp-card__content {
+        flex: 1;
+        overflow-y: auto;
       }
     </style>
   </head>
@@ -338,7 +353,7 @@
                     </button>
                     <div class="faq-answer">
                       <div class="faq-answer-content">
-                        SmartDrafts uses Vision AI and GPT-4 to analyze your product photos and automatically generate complete eBay listing drafts. It groups related images together, identifies the product, generates a compelling title and description, suggests pricing based on market research, and assigns the appropriate eBay category. You get ready-to-publish drafts in minutes instead of hours.
+                        SmartDrafts uses Vision AI and GPT-4 to analyze your product photos and automatically generate complete eBay listing drafts. It identifies products, groups related images, generates SEO-optimized titles and descriptions, suggests competitive pricing, selects the correct eBay category, and fills in product-specific attributes. You get ready-to-review drafts in minutes instead of hours of manual work.
                       </div>
                     </div>
                   </div>
@@ -352,21 +367,21 @@
                     </button>
                     <div class="faq-answer">
                       <div class="faq-answer-content">
-                        No, DraftPilot never publishes listings automatically. It only creates drafts that you can review, edit, and publish manually when you're ready. You have complete control over what goes live on eBay. Every draft stays in "UNPUBLISHED" status until you explicitly choose to publish it.
+                        No, DraftPilot never publishes listings automatically. It only creates drafts that you can review, edit, and publish manually when you're ready. You have complete control over what goes live on eBay. Every draft stays in "UNPUBLISHED" status until you explicitly click the Publish button.
                       </div>
                     </div>
                   </div>
                   
                   <div class="faq-item">
                     <button class="faq-question">
-                      <span>Can I change how titles or descriptions are written?</span>
+                      <span>Can I edit drafts before publishing?</span>
                       <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="6 9 12 15 18 9"></polyline>
                       </svg>
                     </button>
                     <div class="faq-answer">
                       <div class="faq-answer-content">
-                        Yes! You can edit any draft before publishing it to customize the title, description, pricing, and other details. For system-wide preferences on how DraftPilot generates content, check the Settings page where you can configure default behaviors and customize the AI's output style (additional configuration options coming soon).
+                        Yes! Every draft can be fully edited. Click on any draft to customize the title, description, price, condition, product attributes, category, and even reorder images. Changes are saved automatically, and you can return to edit as many times as needed before publishing.
                       </div>
                     </div>
                   </div>
@@ -380,7 +395,21 @@
                     </button>
                     <div class="faq-answer">
                       <div class="faq-answer-content">
-                        DraftPilot uses multiple pricing sources including Amazon marketplace data, brand websites, and product databases to suggest competitive prices. The AI applies smart logic to detect bundle pricing and adjust accordingly. However, all pricing suggestions should be reviewed and can be edited before publishing to ensure they match your margin requirements and market strategy.
+                        DraftPilot uses multiple pricing sources including Amazon marketplace data, manufacturer websites, and retail databases to suggest competitive prices. The AI detects bundles, subscription pricing, and applies smart logic for used/refurbished items. Drafts with uncertain pricing are flagged for review. Always verify pricing matches your margin requirements before publishing.
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div class="faq-item">
+                    <button class="faq-question">
+                      <span>What is Promoted Listings and how does it work?</span>
+                      <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                      </svg>
+                    </button>
+                    <div class="faq-answer">
+                      <div class="faq-answer-content">
+                        Promoted Listings is eBay's advertising program that boosts your listings' visibility in search results. You set an ad rate (1-20%), and only pay a fee when your item sells. DraftPilot can automatically promote listings when you publish them. Configure your default promotion rate in Settings, or set it per-batch when creating listings, or toggle it on individual drafts.
                       </div>
                     </div>
                   </div>
@@ -394,7 +423,21 @@
                     </button>
                     <div class="faq-answer">
                       <div class="faq-answer-content">
-                        You need to connect your eBay account, opt into eBay Business Policies, and set up at least one payment policy, shipping policy, return policy, and inventory location. The setup wizard will guide you through each step when you first connect your account.
+                        You need a connected eBay seller account with Business Policies enabled. Set up at least one payment policy, shipping policy, and return policy in eBay's Seller Hub, then configure them as defaults in DraftPilot's eBay Policies page. You'll also need at least one inventory location. The app will guide you through setup on first use.
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div class="faq-item">
+                    <button class="faq-question">
+                      <span>Can I manage my active eBay listings in DraftPilot?</span>
+                      <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                      </svg>
+                    </button>
+                    <div class="faq-answer">
+                      <div class="faq-answer-content">
+                        Yes! The Active Listings page shows all your published eBay listings. You can view listing details, check performance metrics, and manage promotions. Future updates will add bulk editing, repricing tools, and inventory sync capabilities.
                       </div>
                     </div>
                   </div>
@@ -408,7 +451,35 @@
                     </button>
                     <div class="faq-answer">
                       <div class="faq-answer-content">
-                        Yes. DraftPilot uses industry-standard security practices. Your eBay and Dropbox credentials are stored using OAuth tokens (never passwords), and all API communications are encrypted. User data is scoped per account, and you can disconnect services at any time from the dashboard. See our <a href="/privacy.html">Privacy Policy</a> for full details.
+                        Yes. DraftPilot uses industry-standard security practices. Your eBay and Dropbox credentials are stored using OAuth tokens (never passwords), all API communications are encrypted via HTTPS, and user data is isolated per account. You can disconnect services anytime. Images are processed securely and not permanently stored. See our <a href="/privacy.html">Privacy Policy</a> for details.
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div class="faq-item">
+                    <button class="faq-question">
+                      <span>What if the AI gets something wrong?</span>
+                      <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                      </svg>
+                    </button>
+                    <div class="faq-answer">
+                      <div class="faq-answer-content">
+                        The AI is highly accurate but not perfect. That's why everything goes to drafts first—you review, edit, and approve before anything goes live. Drafts flagged with "Needs Attention" typically need pricing verification or missing product details. You can edit any field, regenerate content, or delete and recreate drafts as needed.
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div class="faq-item">
+                    <button class="faq-question">
+                      <span>How do I get help or report issues?</span>
+                      <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                      </svg>
+                    </button>
+                    <div class="faq-answer">
+                      <div class="faq-answer-content">
+                        Visit the Support page from the navigation menu to contact us directly. We respond to all inquiries within 24 hours (usually much faster). For urgent issues, include your user email and a description of what you were doing when the problem occurred.
                       </div>
                     </div>
                   </div>
