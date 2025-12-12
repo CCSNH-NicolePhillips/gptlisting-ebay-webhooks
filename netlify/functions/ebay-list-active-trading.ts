@@ -61,7 +61,14 @@ export const handler: Handler = async (event) => {
     }
 
     console.log('[ebay-list-active-trading] Getting access token...');
-    const { access_token } = await accessTokenFromRefresh(refresh);
+    // Request token with Marketing API scope for promotion data
+    const { access_token } = await accessTokenFromRefresh(refresh, [
+      'https://api.ebay.com/oauth/api_scope',
+      'https://api.ebay.com/oauth/api_scope/sell.account',
+      'https://api.ebay.com/oauth/api_scope/sell.inventory',
+      'https://api.ebay.com/oauth/api_scope/sell.fulfillment',
+      'https://api.ebay.com/oauth/api_scope/sell.marketing',
+    ]);
     const { apiHost } = tokenHosts(process.env.EBAY_ENV);
 
     // Use GetMyeBaySelling Trading API - gets ALL active listings regardless of creation method
