@@ -62,13 +62,28 @@ export const handler: Handler = async (event) => {
 
     console.log('[ebay-list-active-trading] Getting access token...');
     // Request token with Marketing API scope for promotion data
-    const { access_token } = await accessTokenFromRefresh(refresh, [
+    const tokenScopes = [
       'https://api.ebay.com/oauth/api_scope',
       'https://api.ebay.com/oauth/api_scope/sell.account',
       'https://api.ebay.com/oauth/api_scope/sell.inventory',
       'https://api.ebay.com/oauth/api_scope/sell.fulfillment',
       'https://api.ebay.com/oauth/api_scope/sell.marketing',
-    ]);
+    ];
+    console.log('[ebay-list-active-trading] Requesting token with scopes:', tokenScopes.join(', '));
+    const { access_token } = await accessTokenFromRefresh(refresh, tokenScopes);
+    console.log('[ebay-list-active-trading] Got access token, length:', access_token?.length);
+    
+    // Decode token to see what scopes we actually got (JWT format: header.payload.signature)
+    try {
+      const tokenParts = access_token.split('.');
+      if (tokenParts.length === 3) {
+        const payload = JSON.parse(Buffer.from(tokenParts[1], 'base64').toString());
+        console.log('[ebay-list-active-trading] Token scopes:', payload.scope || payload.scopes || 'No scope field found');
+      }
+    } catch (decodeErr) {
+      console.log('[ebay-list-active-trading] Could not decode token (might not be JWT format)');
+    }
+    
     const { apiHost } = tokenHosts(process.env.EBAY_ENV);
 
     // Use GetMyeBaySelling Trading API - gets ALL active listings regardless of creation method
