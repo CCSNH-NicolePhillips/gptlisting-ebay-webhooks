@@ -2,6 +2,7 @@ import type { Handler } from '@netlify/functions';
 import { accessTokenFromRefresh, tokenHosts } from '../../src/lib/_common.js';
 import { tokensStore } from '../../src/lib/_blobs.js';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
+import { getAds, getCampaigns } from '../../src/lib/ebay-promote.js';
 
 interface ActiveOffer {
   offerId: string;
@@ -242,6 +243,62 @@ export const handler: Handler = async (event) => {
 
     const activeOffers = await listActiveOffers();
     console.log('[ebay-list-active-trading] SUCCESS - Found', activeOffers.length, 'total active listings');
+    
+    // Fetch promotion status for all listings
+    try {
+      console.log('[ebay-list-active-trading] Fetching promotion data...');
+      const campaigns = await getCampaigns(sub!);
+      console.log('[ebay-list-active-trading] Found', campaigns.campaigns?.length || 0, 'campaigns');
+      
+      // Build a map of inventoryReferenceId -> promotion data
+      const promotionMap = new Map<string, { rate: number; adId: string; campaignId: string }>();
+      
+      for (const campaign of campaigns.campaigns || []) {
+        if (campaign.campaignStatus === 'RUNNING' && campaign.campaignId) {
+          try {
+            const { ads } = await getAds(sub!, campaign.campaignId, { limit: 500 });
+            console.log(`[ebay-list-active-trading] Campaign ${campaign.campaignId}: Found ${ads.length} ads`);
+            
+            for (const ad of ads) {
+              if (ad.adStatus === 'ACTIVE' && ad.inventoryReferenceId) {
+                const bidPercentage = typeof ad.bidPercentage === 'string' 
+                  ? parseFloat(ad.bidPercentage) 
+                  : ad.bidPercentage;
+                
+                promotionMap.set(ad.inventoryReferenceId, {
+                  rate: bidPercentage || 0,
+                  adId: ad.adId || '',
+                  campaignId: campaign.campaignId
+                });
+              }
+            }
+          } catch (adErr: any) {
+            console.error(`[ebay-list-active-trading] Error fetching ads for campaign ${campaign.campaignId}:`, adErr.message);
+          }
+        }
+      }
+      
+      console.log('[ebay-list-active-trading] Built promotion map with', promotionMap.size, 'entries');
+      
+      // Merge promotion data into listings
+      for (const offer of activeOffers) {
+        const promoData = promotionMap.get(offer.sku);
+        if (promoData) {
+          offer.autoPromote = true;
+          offer.autoPromoteAdRate = promoData.rate;
+        } else {
+          offer.autoPromote = false;
+          offer.autoPromoteAdRate = undefined;
+        }
+      }
+      
+      console.log('[ebay-list-active-trading] Merged promotion data - found', 
+        activeOffers.filter(o => o.autoPromote).length, 'promoted listings');
+    } catch (promoErr: any) {
+      console.error('[ebay-list-active-trading] Error fetching promotion data:', promoErr.message);
+      // Continue without promotion data - just log the error
+    }
+    
     if (activeOffers.length > 0) {
       console.log('[ebay-list-active-trading] Sample:', JSON.stringify(activeOffers[0]).substring(0, 300));
     }
