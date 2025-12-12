@@ -197,10 +197,14 @@ export const handler: Handler = async (event) => {
           const totalQuantity = quantityMatch ? parseInt(quantityMatch[1]) : 0;
           
           // Skip if:
-          // 1. Status is not "Active" (could be "Completed", "Ended", "Inactive")
+          // 1. Status is not "Active" (could be "Completed", "Ended", "Inactive", "CustomCode")
           // 2. Quantity available is 0 or negative
           // 3. All items are sold (quantity sold >= total quantity for fixed price listings)
-          if (sellingStatus && sellingStatus !== 'Active') {
+          
+          // eBay statuses: Active, Completed, Ended, CustomCode, ActiveWithWatchers
+          // We only want Active or ActiveWithWatchers
+          const validStatuses = ['Active', 'ActiveWithWatchers'];
+          if (sellingStatus && !validStatuses.includes(sellingStatus)) {
             console.log(`[ebay-list-active-trading] Skipping item ${itemIdMatch?.[1]} - status: ${sellingStatus}`);
             continue;
           }
