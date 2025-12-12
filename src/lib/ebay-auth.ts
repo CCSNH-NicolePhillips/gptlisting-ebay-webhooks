@@ -38,7 +38,14 @@ export async function getEbayAccessToken(userId?: string): Promise<EbayAccessTok
     throw new Error("EBAY_REFRESH_TOKEN env var is required or connect eBay for this user");
   }
 
-  const { access_token } = await accessTokenFromRefresh(refreshToken);
+  // Request token with marketing scope for Marketing API calls
+  const { access_token } = await accessTokenFromRefresh(refreshToken, [
+    'https://api.ebay.com/oauth/api_scope',
+    'https://api.ebay.com/oauth/api_scope/sell.account',
+    'https://api.ebay.com/oauth/api_scope/sell.inventory',
+    'https://api.ebay.com/oauth/api_scope/sell.fulfillment',
+    'https://api.ebay.com/oauth/api_scope/sell.marketing',
+  ]);
   if (!access_token) {
     throw new Error("Failed to obtain eBay access token");
   }
@@ -57,7 +64,13 @@ export async function getEbayAccessTokenStrict(userId?: string): Promise<EbayAcc
       const saved = (await store.get(userScopedKey(userId, "ebay.json"), { type: "json" })) as any;
       const refreshToken = typeof saved?.refresh_token === "string" ? saved.refresh_token.trim() : "";
       if (!refreshToken) throw new Error("No eBay token for this user. Connect eBay in Setup.");
-      const { access_token } = await accessTokenFromRefresh(refreshToken);
+      const { access_token } = await accessTokenFromRefresh(refreshToken, [
+        'https://api.ebay.com/oauth/api_scope',
+        'https://api.ebay.com/oauth/api_scope/sell.account',
+        'https://api.ebay.com/oauth/api_scope/sell.inventory',
+        'https://api.ebay.com/oauth/api_scope/sell.fulfillment',
+        'https://api.ebay.com/oauth/api_scope/sell.marketing',
+      ]);
       const { apiHost } = tokenHosts(process.env.EBAY_ENV);
       return { token: access_token, apiHost };
     } catch (e: any) {
@@ -78,7 +91,13 @@ export async function getEbayAccessTokenStrict(userId?: string): Promise<EbayAcc
     }
   }
   if (!refreshToken) throw new Error("EBAY_REFRESH_TOKEN env var is required");
-  const { access_token } = await accessTokenFromRefresh(refreshToken);
+  const { access_token } = await accessTokenFromRefresh(refreshToken, [
+    'https://api.ebay.com/oauth/api_scope',
+    'https://api.ebay.com/oauth/api_scope/sell.account',
+    'https://api.ebay.com/oauth/api_scope/sell.inventory',
+    'https://api.ebay.com/oauth/api_scope/sell.fulfillment',
+    'https://api.ebay.com/oauth/api_scope/sell.marketing',
+  ]);
   const { apiHost } = tokenHosts(process.env.EBAY_ENV);
   return { token: access_token, apiHost };
 }
