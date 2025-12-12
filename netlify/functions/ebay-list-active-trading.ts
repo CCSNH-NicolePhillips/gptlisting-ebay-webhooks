@@ -322,13 +322,23 @@ export const handler: Handler = async (event) => {
             const ads = adsData.ads || [];
             console.log(`[ebay-list-active-trading] Campaign ${campaign.campaignId}: Found ${ads.length} ads`);
             
+            // Log first ad structure to understand the data
+            if (ads.length > 0 && promotionMap.size === 0) {
+              console.log('[ebay-list-active-trading] Sample ad structure:', JSON.stringify(ads[0]));
+            }
+            
             for (const ad of ads) {
-              if (ad.adStatus === 'ACTIVE' && ad.inventoryReferenceId) {
+              // Ads can be ACTIVE, PAUSED, ARCHIVED - we want active ones
+              // They might use listingId or inventoryReferenceId depending on listing type
+              const adId = ad.listingId || ad.inventoryReferenceId;
+              const isActive = ad.adStatus === 'ACTIVE' || ad.adStatus === 'RUNNING';
+              
+              if (isActive && adId) {
                 const bidPercentage = typeof ad.bidPercentage === 'string' 
                   ? parseFloat(ad.bidPercentage) 
                   : ad.bidPercentage;
                 
-                promotionMap.set(ad.inventoryReferenceId, {
+                promotionMap.set(adId, {
                   rate: bidPercentage || 0,
                   adId: ad.adId || '',
                   campaignId: campaign.campaignId
@@ -342,11 +352,17 @@ export const handler: Handler = async (event) => {
       }
       
       console.log('[ebay-list-active-trading] Built promotion map with', promotionMap.size, 'entries');
+      if (promotionMap.size > 0) {
+        console.log('[ebay-list-active-trading] Sample promotion keys:', Array.from(promotionMap.keys()).slice(0, 5));
+      }
       
       // Merge promotion data into listings
       let promotedCount = 0;
       for (const offer of activeOffers) {
-        const promoData = promotionMap.get(offer.sku);
+        // Try matching by SKU, itemId, or offerId
+        const promoData = promotionMap.get(offer.sku) || 
+                         promotionMap.get(offer.itemId) || 
+                         promotionMap.get(offer.offerId);
         if (promoData) {
           offer.autoPromote = true;
           offer.autoPromoteAdRate = promoData.rate;
