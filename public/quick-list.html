@@ -1311,6 +1311,7 @@
               product: pair.product || null,
               keyText: pair.keyText || [],
               categoryPath: pair.categoryPath || undefined,
+              photoQuantity: pair.photoQuantity || 1, // CHUNK 4: Pass photo quantity from vision analysis
               heroDisplayUrl: pair.frontUrl || '',
               backDisplayUrl: pair.backUrl || ''
             }));
@@ -1333,6 +1334,7 @@
                   product: item.product || null,
                   keyText: item.keyText || [],
                   categoryPath: item.categoryPath || undefined,
+                  photoQuantity: item.photoQuantity || 1, // CHUNK 4: Pass photo quantity from vision analysis
                   heroDisplayUrl: item.imageUrl,
                   backDisplayUrl: '' // No back image
                 });

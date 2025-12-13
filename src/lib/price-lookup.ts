@@ -82,6 +82,8 @@ export interface PriceLookupInput {
   quantity?: number;
   keyText?: string[]; // Text extracted from packaging (helps refine searches)
   categoryPath?: string; // Category from Vision API (e.g., "Dietary Supplement")
+  photoQuantity?: number; // How many physical products visible in photo (from vision analysis)
+  amazonPackSize?: number; // Pack size detected from Amazon product page (e.g., 2 for "2-pack")
 }
 
 export type PriceSource = 'ebay-sold' | 'brand-msrp' | 'brave-fallback' | 'estimate';
@@ -350,13 +352,44 @@ RESPONSE FORMAT (JSON only):
     // Find the chosen candidate
     const chosen = candidates.find(c => c.source === chosenSource) || candidates[0];
 
-    console.log(`[price] AI decision: source=${chosen.source} base=$${basePrice.toFixed(2)} final=$${recommendedListingPrice.toFixed(2)} | ${reasoning}`);
+    // CHUNK 4: Apply photoQuantity and amazonPackSize
+    // Step 1: Calculate per-unit Amazon price if pack size detected
+    const amazonPackSize = input.amazonPackSize || 1;
+    const perUnitAmazonPrice = basePrice / amazonPackSize;
+    
+    // Step 2: Multiply by photoQuantity to get lot price before discount
+    const photoQty = input.photoQuantity || 1;
+    const lotPriceBeforeDiscount = perUnitAmazonPrice * photoQty;
+    
+    // Step 3: Apply AI-recommended discount once
+    const finalListingPrice = recommendedListingPrice / basePrice * lotPriceBeforeDiscount;
+    
+    // CHUNK 5: Pricing evidence logging (always log, makes regressions obvious)
+    const packEvidence = amazonPackSize > 1 
+      ? `detected ${amazonPackSize}-pack` 
+      : 'single unit';
+    const photoEvidence = photoQty > 1 
+      ? `photo shows ${photoQty} bottles` 
+      : 'photo shows 1 bottle';
+    
+    console.log(
+      `[price] 💰 PRICING EVIDENCE: ` +
+      `rawAmazon=$${basePrice.toFixed(2)} | ` +
+      `packSize=${amazonPackSize} (${packEvidence}) | ` +
+      `photoQty=${photoQty} (${photoEvidence}) | ` +
+      `perUnit=$${perUnitAmazonPrice.toFixed(2)} | ` +
+      `lotBeforeDiscount=$${lotPriceBeforeDiscount.toFixed(2)} | ` +
+      `finalAfterDiscount=$${finalListingPrice.toFixed(2)} | ` +
+      `source=${chosen.source}`
+    );
+
+    console.log(`[price] AI decision: source=${chosen.source} base=$${basePrice.toFixed(2)} final=$${finalListingPrice.toFixed(2)} | ${reasoning}`);
 
     return {
       ok: true,
       chosen,
       candidates,
-      recommendedListingPrice,
+      recommendedListingPrice: finalListingPrice,
       reason: reasoning
     };
 

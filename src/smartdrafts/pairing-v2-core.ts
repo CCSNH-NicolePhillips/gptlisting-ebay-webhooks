@@ -28,6 +28,7 @@ export interface PairingResult {
     product?: string | null;
     keyText?: string[];
     categoryPath?: string | null;
+    photoQuantity?: number; // Max quantityInPhoto across front/back images
   }>;
   unpaired: Array<{
     imagePath: string;
@@ -40,6 +41,7 @@ export interface PairingResult {
     brandWebsite?: string | null;
     keyText?: string[];
     categoryPath?: string | null;
+    photoQuantity?: number; // quantityInPhoto from vision (for single-image products)
   }>;
   metrics: {
     totals: {
@@ -78,6 +80,7 @@ interface ImageClassificationV2 {
   colorSignature: string[];
   layoutSignature: string;
   confidence: number;
+  quantityInPhoto: number; // How many of this product are visible in the photo (1-10)
 }
 
 interface PairingInputItem {
@@ -186,6 +189,16 @@ For each image, provide:
 11. layoutSignature: brief description of label layout (e.g., "pouch vertical label center", "bottle wraparound")
 12. confidence: 0.0-1.0 representing your confidence in the classification
 13. rationale: brief explanation of your classification choices
+14. quantityInPhoto: How many of this specific product are visible in the photo (1-10)
+   - Count distinct bottles/jars/boxes of the SAME product
+   - If you see 2 identical bottles side-by-side → quantityInPhoto: 2
+   - If you see 1 bottle (even if photo shows front + back in separate images) → quantityInPhoto: 1
+   - DO NOT confuse with label text like "60 capsules", "90 count", or "2-pack" printed on packaging
+   - This is about PHYSICAL items visible in THIS SPECIFIC PHOTO, not what's written on the label
+   - If the photo shows front panel of a bottle → that's 1 bottle
+   - If the photo shows back panel of a bottle → that's still 1 bottle (same bottle, different angle)
+   - Only count as 2+ if you see multiple DISTINCT physical products in the same photo
+   - Range: 1-10 (if more than 10, use 10)
 
 DEFINITIONS:
 - PRODUCT: Clear consumer product packaging (supplement, cosmetic, food, book, etc.)
@@ -269,7 +282,8 @@ Respond ONLY with valid JSON:
       "colorSignature": ["color1", "color2", "pattern"],
       "layoutSignature": "layout description",
       "confidence": 0.95,
-      "rationale": "Brief explanation of classification choices"
+      "rationale": "Brief explanation of classification choices",
+      "quantityInPhoto": 1
     }
   ]
 }
@@ -347,6 +361,13 @@ ${JSON.stringify(filenames, null, 2)}`;
       console.error('[pairing-v2] Response preview:', result.substring(0, 500));
       throw new Error(`Invalid JSON from GPT: ${parseError.message}`);
     }
+    
+    // CHUNK 1: Default quantityInPhoto to 1 if missing from model output
+    parsed.items?.forEach((item: any) => {
+      if (typeof item.quantityInPhoto !== 'number' || item.quantityInPhoto < 1) {
+        item.quantityInPhoto = 1;
+      }
+    });
     
     // HOTFIX: GPT-4o sometimes ignores the title field for books
     // If packageType is book and title is missing, copy productName to title
@@ -991,6 +1012,14 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
   // Extract brand/product info for each accepted pair
   const pairs = acceptedPairs.map(p => {
     const frontClass = classMap.get(p.front);
+    const backClass = classMap.get(p.back);
+    
+    // CHUNK 3: Calculate photoQuantity as max across front/back images
+    // Reason: some angles hide duplicates; max is safer than min
+    const frontQty = frontClass?.quantityInPhoto || 1;
+    const backQty = backClass?.quantityInPhoto || 1;
+    const photoQuantity = Math.max(frontQty, backQty);
+    
     return {
       front: p.front,
       back: p.back,
@@ -1001,6 +1030,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
       product: frontClass?.productName || null,
       keyText: frontClass?.keyText || [],
       categoryPath: frontClass?.categoryPath || null,
+      photoQuantity,
     };
   });
   
@@ -1025,6 +1055,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
         brandWebsite: classification?.brandWebsite || null,
         keyText: classification?.keyText || [],
         categoryPath: classification?.categoryPath || null,
+        photoQuantity: classification?.quantityInPhoto || 1, // CHUNK 3: Single image products
       };
     }),
     ...rejectedPairs.flatMap(p => {
@@ -1042,6 +1073,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
           brandWebsite: frontClass?.brandWebsite || null,
           keyText: frontClass?.keyText || [],
           categoryPath: frontClass?.categoryPath || null,
+          photoQuantity: frontClass?.quantityInPhoto || 1, // CHUNK 3
         },
         {
           imagePath: p.back,
@@ -1054,6 +1086,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
           brandWebsite: backClass?.brandWebsite || null,
           keyText: backClass?.keyText || [],
           categoryPath: backClass?.categoryPath || null,
+          photoQuantity: backClass?.quantityInPhoto || 1, // CHUNK 3
         },
       ];
     }),

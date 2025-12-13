@@ -39,6 +39,7 @@ type PairedProduct = {
   size?: string;
   categoryPath?: string;
   keyText?: string[]; // Key text snippets from product packaging (from Vision API)
+  photoQuantity?: number; // CHUNK 4: How many physical products visible in photo (from vision analysis)
   heroDisplayUrl?: string;
   backDisplayUrl?: string;
   extras?: string[];
@@ -664,6 +665,8 @@ async function createDraftForProduct(
       quantity: undefined, // TODO: Add quantity to PairedProduct type if available
       keyText: product.keyText, // Pass extracted text from packaging (e.g., "DIETARY SUPPLEMENT")
       categoryPath: product.categoryPath, // Pass Vision API category
+      photoQuantity: product.photoQuantity || 1, // CHUNK 4: Pass photo quantity from vision analysis
+      amazonPackSize: undefined, // TODO: Extract from Amazon product detection in extractPriceFromHtml
     };
 
     pricingDecision = await lookupPrice(priceInput);

@@ -81,6 +81,7 @@ async function main() {
     console.log(`   Front: ${frontName}`);
     console.log(`   Back:  ${backName}`);
     console.log(`   Confidence: ${(pair.confidence * 100).toFixed(0)}%`);
+    console.log(`   photoQuantity: ${pair.photoQuantity || 1} (max across front/back)`);
     console.log(`   keyText: [${(pair.keyText || []).join(', ')}]`);
     console.log(`   categoryPath: ${pair.categoryPath || 'NOT EXTRACTED ❌'}`);
     
