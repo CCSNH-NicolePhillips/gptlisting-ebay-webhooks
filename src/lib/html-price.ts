@@ -113,6 +113,105 @@ function detectPackQty(text: string | undefined): number {
 }
 
 /**
+ * Detect units sold (pack quantity) from product title/h1 ONLY.
+ * This is separate from "contents" (60 capsules, 8 oz, etc.)
+ * 
+ * ONLY matches explicit pack language:
+ * - "2-pack", "2 pack", "pack of 2"
+ * - "bundle of 2", "set of 2"
+ * - "2 bottles" (when selling multiple bottles together)
+ * 
+ * Does NOT match:
+ * - Product contents: "60 capsules", "90 count", "120 softgels"
+ * - Size specifications: "8 oz", "1.3 lb", "30 ml"
+ * - Serving counts: "30 servings"
+ * 
+ * @param titleOrH1 - Product title or H1 text from webpage
+ * @returns Object with unitsSold (1 for single unit, 2+ for multi-packs) and evidence array
+ */
+export function detectUnitsSoldFromTitle(titleOrH1: string | undefined): { unitsSold: number; evidence: string[] } {
+  if (!titleOrH1) return { unitsSold: 1, evidence: [] };
+  
+  const t = titleOrH1.toLowerCase();
+  const evidence: string[] = [];
+  
+  // Pattern 1: "2-pack", "3-pack", etc.
+  const dashPackMatch = t.match(/\b(\d+)\s*-\s*pack\b/);
+  if (dashPackMatch) {
+    const qty = parseInt(dashPackMatch[1], 10);
+    if (qty >= 2 && qty <= 10) {
+      const matched = dashPackMatch[0];
+      evidence.push(`matched phrase: "${matched}"`);
+      console.log(`[HTML Parser] detectUnitsSoldFromTitle: Found "${matched}" → ${qty} units`);
+      return { unitsSold: qty, evidence };
+    }
+  }
+  
+  // Pattern 2: "pack of 2", "pack of 3", etc.
+  const packOfMatch = t.match(/\bpack\s+of\s+(\d+)\b/);
+  if (packOfMatch) {
+    const qty = parseInt(packOfMatch[1], 10);
+    if (qty >= 2 && qty <= 10) {
+      const matched = packOfMatch[0];
+      evidence.push(`matched phrase: "${matched}"`);
+      console.log(`[HTML Parser] detectUnitsSoldFromTitle: Found "${matched}" → ${qty} units`);
+      return { unitsSold: qty, evidence };
+    }
+  }
+  
+  // Pattern 3: "bundle of 2", "bundle of 3", etc.
+  const bundleOfMatch = t.match(/\bbundle\s+of\s+(\d+)\b/);
+  if (bundleOfMatch) {
+    const qty = parseInt(bundleOfMatch[1], 10);
+    if (qty >= 2 && qty <= 10) {
+      const matched = bundleOfMatch[0];
+      evidence.push(`matched phrase: "${matched}"`);
+      console.log(`[HTML Parser] detectUnitsSoldFromTitle: Found "${matched}" → ${qty} units`);
+      return { unitsSold: qty, evidence };
+    }
+  }
+  
+  // Pattern 4: "set of 2", "set of 3", etc.
+  const setOfMatch = t.match(/\bset\s+of\s+(\d+)\b/);
+  if (setOfMatch) {
+    const qty = parseInt(setOfMatch[1], 10);
+    if (qty >= 2 && qty <= 10) {
+      const matched = setOfMatch[0];
+      evidence.push(`matched phrase: "${matched}"`);
+      console.log(`[HTML Parser] detectUnitsSoldFromTitle: Found "${matched}" → ${qty} units`);
+      return { unitsSold: qty, evidence };
+    }
+  }
+  
+  // Pattern 5: "2 bottles", "3 bottles", etc. (when selling multiple bottles together)
+  const bottlesMatch = t.match(/\b(\d+)\s+bottles?\b/);
+  if (bottlesMatch) {
+    const qty = parseInt(bottlesMatch[1], 10);
+    if (qty >= 2 && qty <= 10) {
+      const matched = bottlesMatch[0];
+      evidence.push(`matched phrase: "${matched}"`);
+      console.log(`[HTML Parser] detectUnitsSoldFromTitle: Found "${matched}" → ${qty} units`);
+      return { unitsSold: qty, evidence };
+    }
+  }
+  
+  // Pattern 6: "2 pack" (with space)
+  const spacePackMatch = t.match(/\b(\d+)\s+pack\b/);
+  if (spacePackMatch) {
+    const qty = parseInt(spacePackMatch[1], 10);
+    if (qty >= 2 && qty <= 10) {
+      const matched = spacePackMatch[0];
+      evidence.push(`matched phrase: "${matched}"`);
+      console.log(`[HTML Parser] detectUnitsSoldFromTitle: Found "${matched}" → ${qty} units`);
+      return { unitsSold: qty, evidence };
+    }
+  }
+  
+  console.log(`[HTML Parser] detectUnitsSoldFromTitle: No pack indicators found → 1 unit`);
+  return { unitsSold: 1, evidence: [] };
+}
+
+/**
  * Extract size/volume from text (e.g., "8 oz", "226.8 g", "60 capsules")
  * Returns normalized string for matching (e.g., "8oz", "226.8g", "60cap")
  */
@@ -431,15 +530,10 @@ function extractFromBody($: cheerio.CheerioAPI, packInfo?: { isMultiPack: boolea
   // First try: Look for price in context of common keywords
   const targeted = bodyText.match(/(?:price|buy|order)[^$]{0,60}\$\s?(\d{1,4}(?:\.\d{2})?)/i);
   if (targeted) {
-    let price = toNumber(targeted[1]);
+    const price = toNumber(targeted[1]);
     console.log(`[HTML Parser] Targeted match found: $${price} (full match: "${targeted[0].slice(0, 80)}...")`);
     if (price && price >= 15) {
-      // Divide by pack size if multi-pack
-      if (multiPackInfo.isMultiPack && packSize > 1) {
-        const originalPrice = price;
-        price = price / packSize;
-        console.log(`[HTML Parser] Adjusted multi-pack price: $${originalPrice} / ${packSize} = $${price.toFixed(2)} per unit`);
-      }
+      // CHUNK 3: No division here - normalization happens in extractPriceFromHtml
       return price;
     }
   }
@@ -519,23 +613,17 @@ function extractFromBody($: cheerio.CheerioAPI, packInfo?: { isMultiPack: boolea
       
       console.log(`[HTML Parser] Retail-formatted (.95/.99) prices: ${retailPrices.length} - [${retailPrices.slice(0, 10).join(', ')}${retailPrices.length > 10 ? '...' : ''}]`);
       
-      let extractedPrice: number;
+      const extractedPrice: number = retailPrices.length > 0 
+        ? Math.min(...retailPrices)
+        : Math.min(...allPrices);
+      
       if (retailPrices.length > 0) {
-        extractedPrice = Math.min(...retailPrices);
         console.log(`[HTML Parser] Found ${allPrices.length} prices (>=$15), using lowest retail-formatted (.95/.99): $${extractedPrice}`);
       } else {
-        // Fallback: Return lowest price if no retail formatting found
-        extractedPrice = Math.min(...allPrices);
         console.log(`[HTML Parser] Found ${allPrices.length} prices (>=$15), no retail formatting found, using lowest: $${extractedPrice}`);
       }
       
-      // Divide by pack size if multi-pack
-      if (multiPackInfo.isMultiPack && packSize > 1) {
-        const originalPrice = extractedPrice;
-        extractedPrice = extractedPrice / packSize;
-        console.log(`[HTML Parser] Adjusted multi-pack price: $${originalPrice} / ${packSize} = $${extractedPrice.toFixed(2)} per unit`);
-      }
-      
+      // CHUNK 3: No division here - normalization happens in extractPriceFromHtml
       return extractedPrice;
     }
   }
@@ -591,6 +679,11 @@ export function extractPriceFromHtml(html: string, productTitle?: string): numbe
     
     const $ = cheerio.load(html);
     
+    // Extract title/h1 text for unitsSold detection
+    const pageTitle = $('title').text();
+    const h1Text = $('h1').first().text();
+    const titleForUnitsSold = pageTitle || h1Text || productTitle;
+    
     // Extract requested size from product title if provided
     const requestedSize = productTitle ? detectSize(productTitle) : null;
     if (requestedSize) {
@@ -615,7 +708,24 @@ export function extractPriceFromHtml(html: string, productTitle?: string): numbe
     const openGraphPrice = data.skipOpenGraph ? null : extractFromOpenGraph($);
     
     // Pass pack info and product title to body extraction
-    return data.price ?? openGraphPrice ?? extractFromBody($, packInfo, productTitle);
+    const rawPrice = data.price ?? openGraphPrice ?? extractFromBody($, packInfo, productTitle);
+    
+    // If no price found, return null
+    if (rawPrice === null) return null;
+    
+    // CHUNK 2 & 4: Calculate unitsSold and normalize price
+    const { unitsSold, evidence } = detectUnitsSoldFromTitle(titleForUnitsSold);
+    
+    let normalizedPrice = rawPrice;
+    if (unitsSold > 1) {
+      normalizedPrice = rawPrice / unitsSold;
+      const evidenceStr = evidence.length > 0 ? ` | Evidence: [${evidence.join(', ')}]` : '';
+      console.log(`[HTML Parser] 📦 Raw price: $${rawPrice.toFixed(2)} | Units sold: ${unitsSold} | Normalized price: $${normalizedPrice.toFixed(2)}${evidenceStr}`);
+    } else {
+      console.log(`[HTML Parser] 📦 Raw price: $${rawPrice.toFixed(2)} | Units sold: 1 | Normalized price: $${normalizedPrice.toFixed(2)} (no adjustment)`);
+    }
+    
+    return normalizedPrice;
   } catch {
     return null;
   }

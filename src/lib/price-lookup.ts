@@ -611,51 +611,25 @@ export async function lookupPrice(
     if (amazonUrlFound) {
       console.log(`[price] Amazon URL found: ${amazonUrlFound}`);
       
-      // Fetch HTML and extract price with pack detection
+      // Fetch HTML and extract price (already normalized by extractPriceFromHtml)
       const { html, isDnsFailure } = await fetchHtml(amazonUrlFound);
       if (html) {
-        const price = extractPriceFromHtml(html, input.title);
+        const normalizedPrice = extractPriceFromHtml(html, input.title);
         
-        if (price && price > 0) {
-          // Detect pack quantity from HTML
-          let packQuantity = 1;
-          const packPatterns = [
-            /(\d+)[\s-]?pack/i,           // "2-Pack", "2 Pack", "3Pack"
-            /pack\s+of\s+(\d+)/i,         // "Pack of 2", "Pack of 3"
-            /(\d+)\s+count/i,             // "2 Count", "3 Count"
-            /set\s+of\s+(\d+)/i,          // "Set of 2"
-            /\((\d+)\s*pcs?\)/i,          // "(2 pcs)", "(3 pc)"
-            /(\d+)[\s-]?piece/i,          // "2-Piece", "2 Piece"
-          ];
-          
-          const htmlLower = html.toLowerCase();
-          for (const pattern of packPatterns) {
-            const match = htmlLower.match(pattern);
-            if (match && match[1]) {
-              const quantity = parseInt(match[1], 10);
-              if (quantity > 1 && quantity <= 100) { // Sanity check
-                packQuantity = quantity;
-                console.log(`[price] ✓ Detected pack quantity: ${packQuantity} (${match[0]})`);
-                break;
-              }
-            }
-          }
-          
-          const pricePerUnit = packQuantity > 1 ? price / packQuantity : price;
-          amazonPrice = pricePerUnit;
+        if (normalizedPrice && normalizedPrice > 0) {
+          // CHUNK 3: extractPriceFromHtml now returns already-normalized price
+          // No need to detect pack quantity or divide again
+          amazonPrice = normalizedPrice;
           amazonUrl = amazonUrlFound;
           
-          const packNote = packQuantity > 1 
-            ? ` (${packQuantity}-pack @ $${price.toFixed(2)} total)` 
-            : '';
-          console.log(`[price] ✓ Amazon marketplace price: $${amazonPrice.toFixed(2)} per unit${packNote}`);
+          console.log(`[price] ✓ Amazon marketplace price: $${amazonPrice.toFixed(2)} per unit (normalized)`);
           
           candidates.push({
             source: 'brand-msrp',
             price: amazonPrice,
             currency: 'USD',
             url: amazonUrl,
-            notes: `Amazon marketplace price${packNote}`,
+            notes: 'Amazon marketplace price (normalized)',
           });
         }
       }

@@ -3,8 +3,8 @@
  * Usage: node scripts/check-inventory-item.mjs <SKU>
  */
 
-import { tokensStore } from '../src/lib/_blobs.js';
-import { accessTokenFromRefresh } from '../src/lib/_common.js';
+import { tokensStore } from '../dist/src/lib/_blobs.js';
+import { accessTokenFromRefresh } from '../dist/src/lib/_common.js';
 
 const sku = process.argv[2];
 if (!sku) {
@@ -61,6 +61,18 @@ async function main() {
   console.log('Description (first 200 chars):', (item.product?.description || 'N/A').substring(0, 200));
   console.log('Images:', item.product?.imageUrls?.length || 0);
   console.log('Aspects:', Object.keys(item.product?.aspects || {}).length, 'keys');
+  
+  // CHUNK 5: Display unitsSold if stored in aspects or custom field
+  const unitsSold = item.product?.aspects?.['Units Sold']?.[0] || 
+                    item.product?.aspects?.['unitsSold']?.[0] ||
+                    item.product?.aspects?.['PackQuantity']?.[0] ||
+                    item.customFieldData?.unitsSold;
+  
+  if (unitsSold) {
+    console.log('Units Sold:', unitsSold, '(pack quantity)');
+  } else {
+    console.log('Units Sold: NOT SET (would show pack quantity if stored)');
+  }
   
   if (item.packageWeightAndSize?.weight) {
     console.log('\n--- Package Weight ---');
