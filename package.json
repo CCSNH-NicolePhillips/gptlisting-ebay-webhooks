@@ -21,10 +21,10 @@
     "canary": "tsx scripts/canary-test.ts",
     "verify:golden": "tsx scripts/verify-golden.ts",
     "metrics:print": "tsx scripts/metrics-print.ts",
-    "test": "jest",
+    "test": "npm run typecheck && jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
-    "test:verbose": "jest --verbose",
+    "test:coverage": "npm run typecheck && jest --coverage",
+    "test:verbose": "npm run typecheck && jest --verbose",
     "test:direct-pairing": "tsx scripts/test-direct-pairing.ts"
   },
   "dependencies": {
