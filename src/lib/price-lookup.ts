@@ -1,5 +1,5 @@
 import { extractPriceFromHtml } from "./html-price.js";
-import { braveFirstUrlForBrandSite } from "./search.js";
+import { braveFirstUrlForBrandSite, braveFirstUrl } from "./search.js";
 import { getBrandUrls, setBrandUrls } from "./brand-map.js";
 import { fetchSoldPriceStats, type SoldPriceStats } from "./pricing/ebay-sold-prices.js";
 import { openai } from "./openai.js";
@@ -456,11 +456,16 @@ export async function lookupPrice(
 
   // Check cache first
   const cacheKey = makePriceSig(input.brand, input.title);
-  const cached = await getCachedPrice(cacheKey);
-  
-  if (cached?.recommendedListingPrice) {
-    console.log(`[price] ✓ Using cached price: $${cached.recommendedListingPrice.toFixed(2)} (source: ${cached.chosen?.source || 'unknown'})`);
-    return cached as PriceDecision;
+  try {
+    const cached = await getCachedPrice(cacheKey);
+    
+    if (cached?.recommendedListingPrice) {
+      console.log(`[price] ✓ Using cached price: $${cached.recommendedListingPrice.toFixed(2)} (source: ${cached.chosen?.source || 'unknown'})`);
+      return cached as PriceDecision;
+    }
+  } catch (error) {
+    console.warn('[price] Cache read error, proceeding without cache:', error);
+    // Continue with normal price lookup
   }
 
   const candidates: PriceSourceDetail[] = [];
