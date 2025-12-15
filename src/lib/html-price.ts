@@ -733,16 +733,18 @@ export function extractPriceFromHtml(html: string, productTitle?: string): numbe
 
 /**
  * @deprecated Use extractPriceFromHtml instead - productType extraction removed
+ * COMMENTED OUT - Not used anywhere in codebase (verified Dec 2025)
  */
-export function extractPriceAndTypeFromHtml(html: string): ExtractedData {
-  console.warn('[HTML Parser] extractPriceAndTypeFromHtml is deprecated, use extractPriceFromHtml');
-  try {
-    const $ = cheerio.load(html);
-    const data = extractFromJsonLd($);
-    if (data.price) return data;
-    const price = extractFromOpenGraph($) ?? extractFromBody($);
-    return { price };
-  } catch {
-    return { price: null };
-  }
-}
+/* istanbul ignore next */
+// export function extractPriceAndTypeFromHtml(html: string): ExtractedData {
+//   console.warn('[HTML Parser] extractPriceAndTypeFromHtml is deprecated, use extractPriceFromHtml');
+//   try {
+//     const $ = cheerio.load(html);
+//     const data = extractFromJsonLd($);
+//     if (data.price) return data;
+//     const price = extractFromOpenGraph($) ?? extractFromBody($);
+//     return { price };
+//   } catch {
+//     return { price: null };
+//   }
+// }
