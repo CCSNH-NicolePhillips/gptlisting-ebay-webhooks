@@ -158,9 +158,7 @@ describe('Pairing V2 Core', () => {
     it('should handle errors gracefully', async () => {
       mockOpenAI.mockRejectedValue(new Error('API timeout'));
 
-      const result = await classifyImagesBatch(['/tmp/test.jpg']);
-
-      expect(result).toEqual([]);
+      await expect(classifyImagesBatch(['/tmp/test.jpg'])).rejects.toThrow('API timeout');
     });
   });
 

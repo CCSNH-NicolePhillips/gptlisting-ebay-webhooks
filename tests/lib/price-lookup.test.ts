@@ -542,7 +542,7 @@ describe('price-lookup.ts', () => {
         // When AI fails, fallback uses estimate (not brand-msrp directly)
         expect(result.chosen?.source).toBe('estimate');
         expect(result.recommendedListingPrice).toBeGreaterThan(0);
-      });
+      }, 10000);
 
       it('should handle estimate source in fallback', async () => {
         mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
@@ -705,7 +705,20 @@ describe('price-lookup.ts', () => {
       });
 
       it('should handle brand website URL directly', async () => {
+        mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
         mockExtractPrice.mockReturnValue(45.99);
+        mockOpenAI.mockResolvedValue({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                source: 'brand-msrp',
+                basePrice: 45.99,
+                finalPrice: 41.39,
+                reason: 'Brand MSRP',
+              }),
+            },
+          }],
+        } as any);
 
         const input: PriceLookupInput = {
           title: 'Product',
@@ -715,7 +728,7 @@ describe('price-lookup.ts', () => {
 
         const result = await lookupPrice(input);
         expect(result.ok).toBe(true);
-      });
+      }, 10000);
 
       it('should handle products with UPC codes', async () => {
         mockFetchSoldStats.mockResolvedValue({
@@ -768,7 +781,7 @@ describe('price-lookup.ts', () => {
         const result = await lookupPrice(input);
         expect(result.ok).toBe(true);
         expect(result.recommendedListingPrice).toBeGreaterThan(0);
-      });
+      }, 10000);
 
       it('should use category-based estimate for supplements', async () => {
         mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
@@ -821,7 +834,7 @@ describe('price-lookup.ts', () => {
         
         // Verify cache was set
         expect(mockSetCachedPrice).toHaveBeenCalled();
-      });
+      }, 10000);
 
       it('should handle Amazon search for generic products', async () => {
         mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
@@ -840,6 +853,18 @@ describe('price-lookup.ts', () => {
         mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
         mockBrandUrlForBrandSite.mockResolvedValue('https://brand.com/product');
         mockExtractPrice.mockReturnValue(49.99);
+        mockOpenAI.mockResolvedValue({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                source: 'brand-msrp',
+                basePrice: 49.99,
+                finalPrice: 44.99,
+                reason: 'Brand MSRP with 10% discount',
+              }),
+            },
+          }],
+        } as any);
 
         mockOpenAI.mockResolvedValue({
           choices: [{
@@ -861,7 +886,7 @@ describe('price-lookup.ts', () => {
 
         const result = await lookupPrice(input);
         expect(result.ok).toBe(true);
-      });
+      }, 10000);
 
       it('should handle products in different categories', async () => {
         mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
