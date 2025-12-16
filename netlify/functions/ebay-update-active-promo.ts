@@ -1,7 +1,7 @@
 import type { Handler } from '@netlify/functions';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
 import { tokensStore } from '../../src/lib/_blobs.js';
-import { getCampaigns, getAds, createAds, updateAdRate } from '../../src/lib/ebay-promote.js';
+import { getCampaigns, getAds, createAds, deleteAd } from '../../src/lib/ebay-promote.js';
 
 function normalizeRate(input: any): number | null {
   const num = typeof input === 'number' ? input : parseFloat(input);
@@ -131,8 +131,30 @@ export const handler: Handler = async (event) => {
 
     if (adId) {
       console.log('[ebay-update-active-promo] Found existing ad:', { adId, inventoryReferenceId: matchAny?.inventoryReferenceId });
-      console.log('[ebay-update-active-promo] Calling updateAdRate with:', { campaignId, adId, rate: normalizedRate });
-      await updateAdRate(sub!, campaignId, adId, normalizedRate);
+      
+      // Check if rate is already correct
+      const currentRate = parseFloat(matchAny?.bidPercentage || '0');
+      if (Math.abs(currentRate - normalizedRate) < 0.01) {
+        console.log('[ebay-update-active-promo] Ad rate already correct:', { current: currentRate, target: normalizedRate });
+        return {
+          statusCode: 200,
+          body: JSON.stringify({ ok: true, action: 'unchanged', message: 'Ad rate is already set to the target value' })
+        };
+      }
+      
+      // eBay doesn't have a direct update endpoint - delete and recreate
+      console.log('[ebay-update-active-promo] Deleting old ad and creating new one with rate:', normalizedRate);
+      await deleteAd(sub!, campaignId, adId);
+      
+      if (!listingId) {
+        return { statusCode: 400, body: JSON.stringify({ error: 'listingId required to recreate promotion' }) };
+      }
+      
+      const createPayload = {
+        listingId: String(listingId),
+        bidPercentage: String(normalizedRate),
+      };
+      await createAds(sub!, campaignId, createPayload);
     } else {
       // Create a new ad using listingId if available
       console.log('[ebay-update-active-promo] Creating new ad for listing:', listingId);
