@@ -7,6 +7,7 @@ import { getEbayAccessTokenStrict } from "../../src/lib/ebay-auth.js";
 import { tokensStore } from "../../src/lib/_blobs.js";
 import { userScopedKey } from "../../src/lib/_auth.js";
 import { createOffer, putInventoryItem } from "../../src/lib/ebay-sell.js";
+import { promoteSingleListing } from "../../src/lib/ebay-promote.js";
 
 async function fetchOfferById(token: string, apiHost: string, offerId: string, marketplaceId: string) {
   const url = `${apiHost}/sell/inventory/v1/offer/${encodeURIComponent(offerId)}`;
@@ -419,6 +420,37 @@ export const handler: Handler = async (event) => {
           merchantDataAutoPromoteAdRate: group.promotion?.enabled ? (group.promotion.rate || 5) : null
         });
         console.log(`[create-ebay-draft-user] ✓ Offer created successfully for SKU: ${mapped.sku}, offerId: ${offerResult.offerId}`);
+        
+        // Apply promotion if enabled
+        if (group.promotion?.enabled) {
+          try {
+            console.log(`[create-ebay-draft-user] Applying promotion to ${mapped.sku} at ${group.promotion.rate || 5}%...`);
+            
+            // Create token cache implementation for promoteSingleListing
+            const promoteTokenCache = {
+              async get(userId: string): Promise<string | null> {
+                return userId === user.userId ? access.token : null;
+              },
+              async set(_userId: string, _token: string, _expiresIn: number): Promise<void> {
+                // No-op: we already have the token
+              }
+            };
+            
+            const promoResult = await promoteSingleListing({
+              tokenCache: promoteTokenCache,
+              userId: user.userId,
+              ebayAccountId: user.userId, // Use userId as accountId for default account
+              inventoryReferenceId: mapped.sku,
+              adRate: group.promotion.rate || 5,
+              campaignIdOverride: undefined,
+            });
+            
+            console.log(`[create-ebay-draft-user] ✓ Promotion applied to ${mapped.sku}: campaign=${promoResult.campaignId}, enabled=${promoResult.enabled}`);
+          } catch (promoErr: any) {
+            console.error(`[create-ebay-draft-user] ⚠️ Failed to promote ${mapped.sku}:`, promoErr?.message || promoErr);
+            // Don't fail the whole job - promotion is optional
+          }
+        }
       } catch (e: any) {
         const msg = String(e?.message || e || "");
         // Handle idempotency: offer already exists (errorId 25002)

@@ -703,6 +703,39 @@ function detectMultiPack($: cheerio.CheerioAPI): { isMultiPack: boolean; packSiz
   return { isMultiPack: false };
 }
 
+/**
+ * Detect selected variant on Amazon pages (size/pack dropdown)
+ * Amazon shows pack size in dropdown like "2 Fl Oz (Pack of 4)"
+ */
+function detectAmazonSelectedVariant($: cheerio.CheerioAPI): { packSize?: number; size?: string } | null {
+  // Look for selected option in size dropdown
+  const selectedOption = $('#native_dropdown_selected_size_name').text().trim();
+  
+  if (selectedOption) {
+    console.log(`[HTML Parser] Amazon selected variant: "${selectedOption}"`);
+    
+    // Extract pack size: "2 Fl Oz (Pack of 4)" → 4
+    const packMatch = selectedOption.match(/\(Pack of (\d+)\)/i);
+    if (packMatch) {
+      const packSize = parseInt(packMatch[1], 10);
+      console.log(`[HTML Parser] Detected pack size from dropdown: ${packSize}`);
+      const detectedSize = detectSize(selectedOption);
+      return { packSize, size: detectedSize || undefined };
+    }
+    
+    // Also check for "2 Fl Oz (Pack of 2)" format without "of"
+    const packMatch2 = selectedOption.match(/\((\d+)\s*Pack\)/i);
+    if (packMatch2) {
+      const packSize = parseInt(packMatch2[1], 10);
+      console.log(`[HTML Parser] Detected pack size from dropdown: ${packSize}`);
+      const detectedSize = detectSize(selectedOption);
+      return { packSize, size: detectedSize || undefined };
+    }
+  }
+  
+  return null;
+}
+
 export function extractPriceFromHtml(html: string, productTitle?: string): number | null {
   try {
     // Check for bundle/subscription page FIRST before parsing
@@ -712,6 +745,9 @@ export function extractPriceFromHtml(html: string, productTitle?: string): numbe
     }
     
     const $ = cheerio.load(html);
+    
+    // Check for Amazon variant selector (more reliable than title parsing)
+    const amazonVariant = detectAmazonSelectedVariant($);
     
     // Extract title/h1 text for unitsSold detection
     const pageTitle = $('title').text();
@@ -724,8 +760,11 @@ export function extractPriceFromHtml(html: string, productTitle?: string): numbe
       console.log(`[HTML Parser] Looking for variant with size: ${requestedSize}`);
     }
     
-    // Check for multi-pack products
-    const packInfo = detectMultiPack($);
+    // Check for multi-pack products (prefer Amazon variant data if available)
+    const packInfo = amazonVariant?.packSize 
+      ? { isMultiPack: amazonVariant.packSize > 1, packSize: amazonVariant.packSize }
+      : detectMultiPack($);
+      
     if (packInfo.isMultiPack) {
       const packMsg = packInfo.packSize 
         ? `${packInfo.packSize}-pack`
@@ -748,7 +787,17 @@ export function extractPriceFromHtml(html: string, productTitle?: string): numbe
     if (rawPrice === null) return null;
     
     // CHUNK 2 & 4: Calculate unitsSold and normalize price
-    const { unitsSold, evidence } = detectUnitsSoldFromTitle(titleForUnitsSold);
+    // Prefer Amazon variant pack size over title detection
+    let unitsSold: number;
+    let evidence: string[];
+    
+    if (amazonVariant?.packSize && amazonVariant.packSize > 1) {
+      unitsSold = amazonVariant.packSize;
+      evidence = [`Amazon dropdown: Pack of ${unitsSold}`];
+      console.log(`[HTML Parser] Using Amazon variant pack size: ${unitsSold}`);
+    } else {
+      ({ unitsSold, evidence } = detectUnitsSoldFromTitle(titleForUnitsSold));
+    }
     
     let normalizedPrice = rawPrice;
     if (unitsSold > 1) {
