@@ -621,6 +621,8 @@ export async function updateAdRate(
   
   const url = `${apiHost}/sell/marketing/v1/ad_campaign/${encodeURIComponent(campaignId)}/ad/${encodeURIComponent(adId)}/bid`;
   
+  console.log('[updateAdRate] Updating ad:', { url, campaignId, adId, newAdRate });
+  
   const res = await fetch(url, {
     method: 'PUT',
     headers: {

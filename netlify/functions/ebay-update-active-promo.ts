@@ -131,6 +131,7 @@ export const handler: Handler = async (event) => {
 
     if (adId) {
       console.log('[ebay-update-active-promo] Found existing ad:', { adId, inventoryReferenceId: matchAny?.inventoryReferenceId });
+      console.log('[ebay-update-active-promo] Calling updateAdRate with:', { campaignId, adId, rate: normalizedRate });
       await updateAdRate(sub!, campaignId, adId, normalizedRate);
     } else {
       // Create a new ad using listingId if available
