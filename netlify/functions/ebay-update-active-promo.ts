@@ -23,8 +23,8 @@ export const handler: Handler = async (event) => {
     if (!bearer || !sub) return { statusCode: 401, body: 'Unauthorized' };
 
     const body = event.body ? JSON.parse(event.body) : {};
-    const { listingId, offerId, sku, adRate } = body;
-    console.log('[ebay-update-active-promo] Input:', { listingId, offerId, sku, adRate });
+    const { listingId, offerId, sku, adRate, campaignId: userCampaignId } = body;
+    console.log('[ebay-update-active-promo] Input:', { listingId, offerId, sku, adRate, campaignId: userCampaignId });
     const normalizedRate = normalizeRate(adRate);
 
     if (!listingId && !offerId && !sku) {
@@ -40,14 +40,17 @@ export const handler: Handler = async (event) => {
     const refresh = saved?.refresh_token as string | undefined;
     if (!refresh) return { statusCode: 400, body: JSON.stringify({ error: 'Connect eBay first' }) };
 
-    // Resolve campaign: use policy defaults or first RUNNING
-    let campaignId: string | null = null;
-    try {
-      const policyDefaultsKey = userScopedKey(sub!, 'policy-defaults.json');
-      const policyDefaults: any = (await store.get(policyDefaultsKey, { type: 'json' })) || {};
-      campaignId = policyDefaults.promoCampaignId || null;
-    } catch {
-      // ignore
+    // Resolve campaign: use explicit campaignId if provided, otherwise use policy defaults or first RUNNING
+    let campaignId: string | null = userCampaignId || null;
+    
+    if (!campaignId) {
+      try {
+        const policyDefaultsKey = userScopedKey(sub!, 'policy-defaults.json');
+        const policyDefaults: any = (await store.get(policyDefaultsKey, { type: 'json' })) || {};
+        campaignId = policyDefaults.promoCampaignId || null;
+      } catch {
+        // ignore
+      }
     }
 
     if (!campaignId) {

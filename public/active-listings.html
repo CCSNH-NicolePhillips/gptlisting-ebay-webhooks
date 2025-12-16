@@ -135,15 +135,23 @@
       display: flex;
       gap: 0.4rem;
       align-items: center;
+      flex-wrap: wrap;
     }
-    .promo-control input {
-      width: 90px;
+    .promo-control input,
+    .promo-control select {
       padding: 0.35rem 0.45rem;
       border-radius: 8px;
       border: 1px solid var(--line);
       background: #0f1529;
       color: #f4f6fb;
       font-size: 0.9rem;
+    }
+    .promo-control input {
+      width: 90px;
+    }
+    .promo-control select {
+      flex: 1;
+      min-width: 140px;
     }
     .promo-control .btn {
       padding: 0.4rem 0.65rem;
@@ -247,11 +255,26 @@
     const sortSelect = document.getElementById('sortSelect');
 
     let allOffers = []; // Store all offers for sorting
+    let allCampaigns = []; // Store promotion campaigns
     
     function getAuthFetch() {
       return (window.authClient && typeof window.authClient.authFetch === 'function') 
         ? window.authClient.authFetch 
         : fetch;
+    }
+
+    // Fetch available promotion campaigns
+    async function fetchCampaigns() {
+      try {
+        const exec = getAuthFetch();
+        const res = await exec('/.netlify/functions/ebay-get-campaigns');
+        if (!res.ok) return [];
+        const data = await res.json();
+        return data.campaigns || [];
+      } catch (err) {
+        console.error('Failed to fetch campaigns:', err);
+        return [];
+      }
     }
 
     function sortOffers(offers, sortBy) {
@@ -416,7 +439,24 @@
         rateInput.max = '100';
         rateInput.step = '0.1';
         rateInput.value = String(o.autoPromoteAdRate);
+        rateInput.placeholder = 'Rate %';
         editForm.appendChild(rateInput);
+        
+        // Campaign dropdown
+        const campaignSelect = document.createElement('select');
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = 'Auto-detect campaign';
+        campaignSelect.appendChild(defaultOption);
+        
+        // Populate with campaigns
+        allCampaigns.forEach(camp => {
+          const opt = document.createElement('option');
+          opt.value = camp.campaignId || '';
+          opt.textContent = `${camp.campaignName || 'Unnamed'} (${camp.campaignStatus || ''})`;
+          campaignSelect.appendChild(opt);
+        });
+        editForm.appendChild(campaignSelect);
         
         const saveBtn = document.createElement('button');
         saveBtn.className = 'btn secondary';
@@ -467,6 +507,9 @@
             localFlash.className = 'card-flash error';
             return;
           }
+          
+          const selectedCampaignId = campaignSelect.value || undefined;
+          
           saveBtn.disabled = true;
           saveBtn.textContent = 'Saving...';
           localFlash.textContent = '';
@@ -474,15 +517,20 @@
           
           try {
             const exec = getAuthFetch();
+            const payload = { 
+              listingId: o.listingId, 
+              offerId: o.offerId, 
+              sku: o.sku, 
+              adRate: val 
+            };
+            if (selectedCampaignId) {
+              payload.campaignId = selectedCampaignId;
+            }
+            
             const res = await exec('/.netlify/functions/ebay-update-active-promo', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                listingId: o.listingId, 
-                offerId: o.offerId, 
-                sku: o.sku, 
-                adRate: val 
-              }),
+              body: JSON.stringify(payload),
             });
             const txt = await res.text();
             const data = txt ? JSON.parse(txt) : {};
@@ -692,6 +740,9 @@
       emptyState.style.display = 'none';
 
       try {
+        // Fetch campaigns in parallel with offers
+        const campaignsPromise = fetchCampaigns();
+        
         // Use Trading API endpoint which gets ALL listings (not just Inventory API ones)
         const exec = getAuthFetch();
         const res = await exec('/.netlify/functions/ebay-list-active-trading');
@@ -717,6 +768,10 @@
           flash.className = 'flash error';
           return;
         }
+
+        // Wait for campaigns to finish loading
+        allCampaigns = await campaignsPromise;
+        console.log('[active-listings] Loaded campaigns:', allCampaigns.length);
 
         const offers = Array.isArray(data.offers) ? data.offers : [];
         allOffers = offers; // Store for sorting
