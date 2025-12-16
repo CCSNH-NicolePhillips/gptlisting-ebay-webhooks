@@ -68,11 +68,18 @@ export const handler: Handler = async (event) => {
     // Fetch ads in the campaign and find a match by listingId or inventory reference
     const { ads } = await getAds(sub!, campaignId, { limit: 500 });
     console.log('[ebay-update-active-promo] Fetched ads:', ads.length);
+    
+    // Debug: log first few ads to see what we're working with
+    if (ads.length > 0) {
+      console.log('[ebay-update-active-promo] Sample ad structure:', JSON.stringify(ads[0]));
+    }
+    
     const match = (ads as any[]).find((ad: any) => {
       const inv = String(ad.inventoryReferenceId || '').trim();
-      const lid = String((ad as any).listingId || '').trim();
+      // Note: eBay API doesn't return a separate 'listingId' field
+      // The listing ID is stored in inventoryReferenceId when type is LISTING_ID
       return (
-        (listingId && lid && lid === String(listingId)) ||
+        (listingId && inv && inv === String(listingId)) ||
         (offerId && inv && inv === String(offerId)) ||
         (sku && inv && inv === String(sku))
       );
@@ -84,7 +91,7 @@ export const handler: Handler = async (event) => {
     let action: 'updated' | 'created' = 'updated';
 
     if (adId) {
-      console.log('[ebay-update-active-promo] Updating existing ad:', adId);
+      console.log('[ebay-update-active-promo] Found existing ad:', { adId, inventoryReferenceId: matchAny?.inventoryReferenceId });
       await updateAdRate(sub!, campaignId, adId, normalizedRate);
     } else {
       // Create a new ad using listingId if available
