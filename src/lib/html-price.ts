@@ -219,6 +219,18 @@ export function detectUnitsSoldFromTitle(titleOrH1: string | undefined): { units
     }
   }
   
+  // Pattern 8: "2pk", "4pk", "2pk Each", etc. (compact format)
+  const compactPkMatch = t.match(/\b(\d+)pk\b/);
+  if (compactPkMatch) {
+    const qty = parseInt(compactPkMatch[1], 10);
+    if (qty >= 2 && qty <= 10) {
+      const matched = compactPkMatch[0];
+      evidence.push(`matched phrase: "${matched}"`);
+      console.log(`[HTML Parser] detectUnitsSoldFromTitle: Found "${matched}" → ${qty} units`);
+      return { unitsSold: qty, evidence };
+    }
+  }
+  
   console.log(`[HTML Parser] detectUnitsSoldFromTitle: No pack indicators found → 1 unit`);
   console.log(`[HTML Parser] detectUnitsSoldFromTitle: DEBUG - First 300 chars of input: "${titleOrH1?.slice(0, 300)}"`);
   return { unitsSold: 1, evidence: [] };
@@ -658,6 +670,7 @@ function detectMultiPack($: cheerio.CheerioAPI): { isMultiPack: boolean; packSiz
   // Common multi-pack indicators (case-insensitive)
   const packPatterns = [
     /\((\d+)\s*pack\)/i,   // "(2 Pack)" or "(4 Pack)" - Amazon format
+    /\b(\d+)pk\b/i,        // "2pk", "4pk" - compact format
     /\b(\d+)\s*pack\b/i,
     /\b(\d+)\s*count\s*pack\b/i,
     /\bpack\s*of\s*(\d+)\b/i,
