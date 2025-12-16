@@ -207,7 +207,20 @@ export function detectUnitsSoldFromTitle(titleOrH1: string | undefined): { units
     }
   }
   
+  // Pattern 7: "(2 Pack)", "(4 Pack)" - parentheses format
+  const parenPackMatch = t.match(/\((\d+)\s+pack\)/);
+  if (parenPackMatch) {
+    const qty = parseInt(parenPackMatch[1], 10);
+    if (qty >= 2 && qty <= 10) {
+      const matched = parenPackMatch[0];
+      evidence.push(`matched phrase: "${matched}"`);
+      console.log(`[HTML Parser] detectUnitsSoldFromTitle: Found "${matched}" → ${qty} units`);
+      return { unitsSold: qty, evidence };
+    }
+  }
+  
   console.log(`[HTML Parser] detectUnitsSoldFromTitle: No pack indicators found → 1 unit`);
+  console.log(`[HTML Parser] detectUnitsSoldFromTitle: DEBUG - First 300 chars of input: "${titleOrH1?.slice(0, 300)}"`);
   return { unitsSold: 1, evidence: [] };
 }
 
@@ -635,12 +648,16 @@ function extractFromBody($: cheerio.CheerioAPI, packInfo?: { isMultiPack: boolea
  * Detect if the product is a multi-pack/bundle based on title and text
  */
 function detectMultiPack($: cheerio.CheerioAPI): { isMultiPack: boolean; packSize?: number } {
-  const title = $('title').text().toLowerCase();
-  const h1 = $('h1').first().text().toLowerCase();
+  const title = $('title').text();
+  const h1 = $('h1').first().text();
   const productText = `${title} ${h1}`;
   
-  // Common multi-pack indicators
+  console.log(`[HTML Parser] detectMultiPack - title: "${title.slice(0, 200)}"`);
+  console.log(`[HTML Parser] detectMultiPack - h1: "${h1.slice(0, 200)}"`);
+  
+  // Common multi-pack indicators (case-insensitive)
   const packPatterns = [
+    /\((\d+)\s*pack\)/i,   // "(2 Pack)" or "(4 Pack)" - Amazon format
     /\b(\d+)\s*pack\b/i,
     /\b(\d+)\s*count\s*pack\b/i,
     /\bpack\s*of\s*(\d+)\b/i,
@@ -655,6 +672,8 @@ function detectMultiPack($: cheerio.CheerioAPI): { isMultiPack: boolean; packSiz
   for (const pattern of packPatterns) {
     const match = productText.match(pattern);
     if (match) {
+      console.log(`[HTML Parser] detectMultiPack - matched pattern: ${pattern} → "${match[0]}"`);
+      
       // Extract pack size if available
       const packSize = match[1] ? parseInt(match[1], 10) : undefined;
       
@@ -662,10 +681,12 @@ function detectMultiPack($: cheerio.CheerioAPI): { isMultiPack: boolean; packSiz
       if (/twin|double/i.test(match[0])) return { isMultiPack: true, packSize: 2 };
       if (/triple/i.test(match[0])) return { isMultiPack: true, packSize: 3 };
       
+      console.log(`[HTML Parser] detectMultiPack - result: isMultiPack=true, packSize=${packSize}`);
       return { isMultiPack: true, packSize };
     }
   }
   
+  console.log(`[HTML Parser] detectMultiPack - no pack indicators found`);
   return { isMultiPack: false };
 }
 
