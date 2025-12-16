@@ -74,11 +74,19 @@ export const handler: Handler = async (event) => {
       console.log('[ebay-update-active-promo] Sample ad structure:', JSON.stringify(ads[0]));
     }
     
+    // Log all listing IDs to see if our target is in there
+    if (listingId) {
+      const adListingIds = (ads as any[]).map(ad => ad.listingId).filter(Boolean);
+      console.log('[ebay-update-active-promo] All ad listingIds:', adListingIds);
+      console.log('[ebay-update-active-promo] Looking for listingId:', listingId);
+    }
+    
     const match = (ads as any[]).find((ad: any) => {
+      // eBay API returns listingId directly in the ad response
+      const adListingId = String((ad as any).listingId || '').trim();
       const inv = String(ad.inventoryReferenceId || '').trim();
-      // Note: eBay API doesn't return a separate 'listingId' field
-      // The listing ID is stored in inventoryReferenceId when type is LISTING_ID
       return (
+        (listingId && adListingId && adListingId === String(listingId)) ||
         (listingId && inv && inv === String(listingId)) ||
         (offerId && inv && inv === String(offerId)) ||
         (sku && inv && inv === String(sku))
