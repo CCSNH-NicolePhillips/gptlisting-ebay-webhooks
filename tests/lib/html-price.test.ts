@@ -313,6 +313,73 @@ describe('html-price.ts', () => {
         // OR if JSON-LD doesn't detect, then: 44.90 / 2 = 22.45
         expect(price).toBeCloseTo(22.45, 1); // Allow some rounding variance
       });
+
+      it('should detect pack size from Amazon variant dropdown (Pack of 4)', () => {
+        const html = `
+          <html>
+            <head><title>Amazon.com: NUSAVA Vitamin B12 2pk Each</title></head>
+            <body>
+              <h1>NUSAVA Vitamin B12 Liquid Drops 2pk Each</h1>
+              <div>Price: $43.95</div>
+              <div>2 Fl Oz (Pack of 4)</div>
+            </body>
+          </html>
+        `;
+
+        const price = extractPriceFromHtml(html, 'B12 2 fl oz');
+        // Price $43.95 ÷ 4 (from "Pack of 4" in body text) = $10.99
+        expect(price).toBeCloseTo(10.99, 1);
+      });
+
+      it('should detect pack size from Amazon body text pattern', () => {
+        const html = `
+          <html>
+            <head><title>Amazon.com: Vitamin B12</title></head>
+            <body>
+              <div>2 Fl Oz (Pack of 4)</div>
+              <div>Price: $42.00</div>
+            </body>
+          </html>
+        `;
+
+        const price = extractPriceFromHtml(html);
+        // Price $42.00 ÷ 4 = $10.50
+        expect(price).toBeCloseTo(10.50, 1);
+      });
+
+      it('should detect pack size from Amazon input field', () => {
+        const html = `
+          <html>
+            <head><title>Amazon.com: Fish Oil</title></head>
+            <body>
+              <input name="dropdown_selected_size_name" value="2 Fl Oz (Pack of 2)">
+              <div>Price: $24.00</div>
+            </body>
+          </html>
+        `;
+
+        const price = extractPriceFromHtml(html);
+        // Price $24.00 ÷ 2 (from input value) = $12.00
+        expect(price).toBe(12.00);
+      });
+
+      it('should prefer dropdown pack size over title detection', () => {
+        const html = `
+          <html>
+            <head><title>Amazon.com: Vitamin B12 2pk Each</title></head>
+            <body>
+              <h1>Vitamin B12 2pk Each</h1>
+              <div>2 Fl Oz (Pack of 4)</div>
+              <div>Price: $43.00</div>
+            </body>
+          </html>
+        `;
+
+        const price = extractPriceFromHtml(html);
+        // Title says "2pk" but body shows "Pack of 4"
+        // Should use "Pack of 4" from body: $43.00 ÷ 4 = $10.75
+        expect(price).toBeCloseTo(10.75, 1);
+      });
     });
 
     describe('Additional coverage - JSON-LD edge cases', () => {
