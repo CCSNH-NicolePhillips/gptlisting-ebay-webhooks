@@ -66,8 +66,8 @@ export const handler: Handler = async (event) => {
     console.log('[ebay-update-active-promo] Using campaign:', campaignId);
     
     // Fetch ads in the campaign and find a match by listingId or inventory reference
-    const { ads } = await getAds(sub!, campaignId, { limit: 500 });
-    console.log('[ebay-update-active-promo] Fetched ads:', ads.length);
+    let { ads } = await getAds(sub!, campaignId, { limit: 500 });
+    console.log('[ebay-update-active-promo] Fetched ads in primary campaign:', ads.length);
     
     // Debug: log first few ads to see what we're working with
     if (ads.length > 0) {
@@ -77,11 +77,11 @@ export const handler: Handler = async (event) => {
     // Log all listing IDs to see if our target is in there
     if (listingId) {
       const adListingIds = (ads as any[]).map(ad => ad.listingId).filter(Boolean);
-      console.log('[ebay-update-active-promo] All ad listingIds:', adListingIds);
+      console.log('[ebay-update-active-promo] All ad listingIds in primary campaign:', adListingIds);
       console.log('[ebay-update-active-promo] Looking for listingId:', listingId);
     }
     
-    const match = (ads as any[]).find((ad: any) => {
+    let match = (ads as any[]).find((ad: any) => {
       // eBay API returns listingId directly in the ad response
       const adListingId = String((ad as any).listingId || '').trim();
       const inv = String(ad.inventoryReferenceId || '').trim();
@@ -92,6 +92,34 @@ export const handler: Handler = async (event) => {
         (sku && inv && inv === String(sku))
       );
     });
+
+    // If not found in primary campaign, search ALL campaigns
+    if (!match && listingId) {
+      console.log('[ebay-update-active-promo] Ad not found in primary campaign, searching all campaigns...');
+      const { campaigns } = await getCampaigns(sub!, { limit: 50 });
+      console.log('[ebay-update-active-promo] Total campaigns to search:', campaigns.length);
+      
+      for (const camp of campaigns) {
+        if (camp.campaignId === campaignId) continue; // Already searched
+        
+        const { ads: campAds } = await getAds(sub!, camp.campaignId, { limit: 500 });
+        const foundInCamp = (campAds as any[]).find((ad: any) => {
+          const adListingId = String((ad as any).listingId || '').trim();
+          return adListingId === String(listingId);
+        });
+        
+        if (foundInCamp) {
+          console.log('[ebay-update-active-promo] Found ad in different campaign:', {
+            campaignId: camp.campaignId,
+            campaignName: camp.campaignName,
+            adId: foundInCamp.adId
+          });
+          match = foundInCamp;
+          campaignId = camp.campaignId; // Update to use the correct campaign
+          break;
+        }
+      }
+    }
 
     // adId is standard; fall back to any loose id property if returned by API
     const matchAny = match as any;
