@@ -706,33 +706,86 @@ function detectMultiPack($: cheerio.CheerioAPI): { isMultiPack: boolean; packSiz
 /**
  * Detect selected variant on Amazon pages (size/pack dropdown)
  * Amazon shows pack size in dropdown like "2 Fl Oz (Pack of 4)"
+ * 
+ * CRITICAL: When fetching Amazon via Netlify Functions with ScrapingBee/Bright Data,
+ * the HTML may include variant info that's not in direct HTTP fetch.
  */
 function detectAmazonSelectedVariant($: cheerio.CheerioAPI): { packSize?: number; size?: string } | null {
-  // Look for selected option in size dropdown
-  const selectedOption = $('#native_dropdown_selected_size_name').text().trim();
-  
-  if (selectedOption) {
-    console.log(`[HTML Parser] Amazon selected variant: "${selectedOption}"`);
-    
-    // Extract pack size: "2 Fl Oz (Pack of 4)" → 4
-    const packMatch = selectedOption.match(/\(Pack of (\d+)\)/i);
+  // Strategy 1: Look for data attributes or hidden inputs with variant info
+  const variantData = $('input[name="dropdown_selected_size_name"]').val() as string;
+  if (variantData) {
+    console.log(`[HTML Parser] Found Amazon variant from input: "${variantData}"`);
+    const packMatch = variantData.match(/\(Pack of (\d+)\)/i);
     if (packMatch) {
       const packSize = parseInt(packMatch[1], 10);
-      console.log(`[HTML Parser] Detected pack size from dropdown: ${packSize}`);
-      const detectedSize = detectSize(selectedOption);
-      return { packSize, size: detectedSize || undefined };
-    }
-    
-    // Also check for "2 Fl Oz (Pack of 2)" format without "of"
-    const packMatch2 = selectedOption.match(/\((\d+)\s*Pack\)/i);
-    if (packMatch2) {
-      const packSize = parseInt(packMatch2[1], 10);
-      console.log(`[HTML Parser] Detected pack size from dropdown: ${packSize}`);
-      const detectedSize = detectSize(selectedOption);
-      return { packSize, size: detectedSize || undefined };
+      console.log(`[HTML Parser] ✓ Detected pack size from variant input: ${packSize}`);
+      return { packSize, size: detectSize(variantData) || undefined };
     }
   }
   
+  // Strategy 2: Look in the price block for variant text
+  // Amazon often shows "(Pack of 4)" near the price
+  const priceBlock = $('.a-price-whole').parent().parent().text();
+  if (priceBlock) {
+    const packMatch = priceBlock.match(/\(Pack of (\d+)\)/i);
+    if (packMatch) {
+      const packSize = parseInt(packMatch[1], 10);
+      console.log(`[HTML Parser] ✓ Detected pack size from price block: ${packSize}`);
+      return { packSize };
+    }
+  }
+  
+  // Strategy 3: Check the actual displayed price element's siblings
+  let packSizeFromPrice: number | undefined;
+  $('.a-price').each((_, priceEl) => {
+    const siblings = $(priceEl).parent().text();
+    const packMatch = siblings.match(/\(Pack of (\d+)\)/i);
+    if (packMatch) {
+      packSizeFromPrice = parseInt(packMatch[1], 10);
+      console.log(`[HTML Parser] ✓ Detected pack size near price element: ${packSizeFromPrice}`);
+      return false; // break
+    }
+  });
+  if (packSizeFromPrice) {
+    return { packSize: packSizeFromPrice };
+  }
+  
+  // Strategy 4: Try multiple selectors for Amazon's variant display
+  const selectors = [
+    '#native_dropdown_selected_size_name',     // Dropdown selected text
+    '.a-dropdown-prompt',                      // Dropdown prompt text
+    'span.selection',                          // Another variant selector
+    '#variation_size_name .selection',         // Size variation selector
+    'button[id^="a-autoid-"] .a-button-text'   // Size button text
+  ];
+  
+  for (const selector of selectors) {
+    const text = $(selector).first().text().trim();
+    if (text && text.length > 0 && text.includes('Pack of')) {
+      console.log(`[HTML Parser] Found Amazon variant using selector "${selector}": "${text.substring(0, 80)}"`);
+      const packMatch = text.match(/\(Pack of (\d+)\)/i);
+      if (packMatch) {
+        const packSize = parseInt(packMatch[1], 10);
+        console.log(`[HTML Parser] ✓ Detected pack size from dropdown: ${packSize}`);
+        return { packSize, size: detectSize(text) || undefined };
+      }
+    }
+  }
+  
+  // Strategy 5: Search all text nodes for "Pack of N" pattern near size info
+  const bodyText = $('body').text();
+  const packMatches = bodyText.match(/(\d+\.?\d*\s*(?:Fl\s*Oz|oz|ml))[^<>]{0,50}\(Pack of (\d+)\)/gi);
+  if (packMatches && packMatches.length > 0) {
+    // Take the first match (usually the selected variant)
+    const match = packMatches[0].match(/\(Pack of (\d+)\)/i);
+    if (match) {
+      const packSize = parseInt(match[1], 10);
+      console.log(`[HTML Parser] ✓ Detected pack size from body text pattern: ${packSize} (from "${packMatches[0].substring(0, 60)}...")`);
+      return { packSize, size: detectSize(packMatches[0]) || undefined };
+    }
+  }
+  
+  console.log(`[HTML Parser] No Amazon variant pack size found, will use title detection`);
   return null;
 }
 
