@@ -1020,6 +1020,8 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
     const backQty = backClass?.quantityInPhoto || 1;
     const photoQuantity = Math.max(frontQty, backQty);
     
+    console.log(`[pairing-v2] photoQuantity calculation: front=${frontQty}, back=${backQty}, max=${photoQuantity} (brand: ${frontClass?.brand})`);
+    
     return {
       front: p.front,
       back: p.back,

@@ -308,20 +308,24 @@ export const handler: Handler = async (event) => {
         }));
 
         // Convert full paths to basenames for storage
-        const basenamePairs = pairsWithUrls.map(p => ({
-          front: path.basename(p.front),
-          back: path.basename(p.back),
-          confidence: p.confidence,
-          brand: p.brand,
-          brandWebsite: p.brandWebsite,
-          product: p.product,
-          title: p.title, // Book title (null for products)
-          keyText: p.keyText || [], // Key text from product packaging
-          categoryPath: p.categoryPath || null, // Vision category path (e.g., "Health & Personal Care > Vitamins & Dietary Supplements")
-          photoQuantity: p.photoQuantity || 1, // CHUNK 3: How many physical products visible in photo
-          frontUrl: p.frontUrl,  // Dropbox shareable link for front image
-          backUrl: p.backUrl,    // Dropbox shareable link for back image
-        }));
+        const basenamePairs = pairsWithUrls.map(p => {
+          const photoQty = p.photoQuantity || 1;
+          console.log(`[pairing-v2-processor] Storing pair: brand=${p.brand}, photoQuantity=${photoQty}`);
+          return {
+            front: path.basename(p.front),
+            back: path.basename(p.back),
+            confidence: p.confidence,
+            brand: p.brand,
+            brandWebsite: p.brandWebsite,
+            product: p.product,
+            title: p.title, // Book title (null for products)
+            keyText: p.keyText || [], // Key text from product packaging
+            categoryPath: p.categoryPath || null, // Vision category path (e.g., "Health & Personal Care > Vitamins & Dietary Supplements")
+            photoQuantity: photoQty, // CHUNK 3: How many physical products visible in photo
+            frontUrl: p.frontUrl,  // Dropbox shareable link for front image
+            backUrl: p.backUrl,    // Dropbox shareable link for back image
+          };
+        });
 
         // Create URLs for unpaired items (method-specific)
         // For Dropbox mode, we skip creating shared links for unpaired items to avoid rate limits
