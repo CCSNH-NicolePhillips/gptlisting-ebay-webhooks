@@ -1,7 +1,7 @@
 import type { Handler } from '@netlify/functions';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
 import { tokensStore } from '../../src/lib/_blobs.js';
-import { getCampaigns, getAds, createAds, updateAdRate } from '../../src/lib/ebay-promote.js';
+import { getCampaigns, getAds, createAds, updateAdRate, createCampaign } from '../../src/lib/ebay-promote.js';
 
 function normalizeRate(input: any): number | null {
   const num = typeof input === 'number' ? input : parseFloat(input);
@@ -55,15 +55,29 @@ export const handler: Handler = async (event) => {
 
     if (!campaignId) {
       console.log('[ebay-update-active-promo] No campaign in policy defaults, searching for RUNNING campaign');
-      const { campaigns } = await getCampaigns(sub!, { limit: 10 });
+      const { campaigns } = await getCampaigns(sub!, { limit: 50 });
       console.log('[ebay-update-active-promo] Found campaigns:', campaigns.length);
       const running = campaigns.find((c) => c.campaignStatus === 'RUNNING');
       if (running) campaignId = running.campaignId;
     }
 
     if (!campaignId) {
-      console.log('[ebay-update-active-promo] No active campaign found');
-      return { statusCode: 400, body: JSON.stringify({ error: 'No active promotion campaign found' }) };
+      console.log('[ebay-update-active-promo] No active campaign found, creating new one');
+      const now = new Date();
+      const campaignName = `DraftPilot Auto ${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      
+      const newCampaign = await createCampaign(sub!, {
+        campaignName,
+        marketplaceId: 'EBAY_US',
+        fundingStrategy: {
+          fundingModel: 'COST_PER_SALE'
+        },
+        startDate: now.toISOString(),
+        campaignStatus: 'RUNNING'
+      });
+      
+      campaignId = newCampaign.campaignId;
+      console.log('[ebay-update-active-promo] Created new campaign:', { campaignId, campaignName });
     }
 
     console.log('[ebay-update-active-promo] Using campaign:', campaignId);
