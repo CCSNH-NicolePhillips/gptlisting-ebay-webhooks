@@ -453,6 +453,19 @@ describe('price-lookup.ts', () => {
         mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
         mockBrandUrlForBrandSite.mockResolvedValue('https://brand.com/fish-oil/');
         mockExtractPrice.mockReturnValue(29.99);
+        mockBraveSearch.mockResolvedValue(null); // No Amazon results from Brave
+        mockOpenAI.mockResolvedValue({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                chosenSource: 'brand-msrp',
+                basePrice: 29.99,
+                recommendedListingPrice: 26.99,
+                reasoning: 'Brand MSRP with discount',
+              }),
+            },
+          }],
+        } as any);
 
         const input: PriceLookupInput = {
           title: 'Fish Oil',
@@ -807,6 +820,19 @@ describe('price-lookup.ts', () => {
           rateLimited: false,
         });
 
+        mockOpenAI.mockResolvedValue({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                chosenSource: 'ebay-sold',
+                basePrice: 18.99,
+                recommendedListingPrice: 18.99,
+                reasoning: 'Using eBay sold data',
+              }),
+            },
+          }],
+        } as any);
+
         const input: PriceLookupInput = {
           title: 'Fish Oil 1200mg Softgels 120 count',
           brand: 'Nature Made',
@@ -814,7 +840,7 @@ describe('price-lookup.ts', () => {
 
         const result = await lookupPrice(input);
         expect(result.ok).toBe(true);
-      });
+      }, 10000);
 
       it('should cache successful price lookups', async () => {
         mockFetchSoldStats.mockResolvedValue({

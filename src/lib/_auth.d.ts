@@ -1,5 +1,4 @@
 // @ts-nocheck
-/* eslint-disable */
 declare module './_auth.js' {
   import type { HandlerEvent } from '@netlify/functions';
   export function getBearerToken(event: HandlerEvent): string | null;

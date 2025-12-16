@@ -8,24 +8,22 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "cli": "tsx src/cli.ts",
-    "lint": "eslint --cache --max-warnings=0 --ext .ts,.tsx,.js netlify/functions src",
-    "lint:fix": "eslint --cache --fix --ext .ts,.tsx,.js netlify/functions src",
+    "lint": "eslint --cache --max-warnings=0 --ext .ts,.tsx,.js netlify/functions src tests",
+    "lint:fix": "eslint --cache --fix --ext .ts,.tsx,.js netlify/functions src tests",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "format": "prettier -w netlify/functions src",
-    "format:check": "prettier --check netlify/functions src",
+    "typecheck:test": "tsc -p tsconfig.test.json --noEmit",
+    "test": "npm run lint && jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "npm run lint && jest --coverage",
+    "test:verbose": "npm run lint && jest --verbose",
     "smoke:sh": "bash scripts/smoke.sh",
     "smoke:ps": "pwsh -File scripts/smoke.ps1",
-    "prepare": "husky install",
-    "deploy": "netlify deploy --prod",
     "pairing": "tsx scripts/run-pairing.ts analysis.json pairing.json",
     "canary": "tsx scripts/canary-test.ts",
     "verify:golden": "tsx scripts/verify-golden.ts",
     "metrics:print": "tsx scripts/metrics-print.ts",
-    "test": "npm run typecheck && jest",
-    "test:watch": "jest --watch",
-    "test:coverage": "npm run typecheck && jest --coverage",
-    "test:verbose": "npm run typecheck && jest --verbose",
-    "test:direct-pairing": "tsx scripts/test-direct-pairing.ts"
+    "prepare": "husky install",
+    "deploy": "netlify deploy --prod"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.21.1",
@@ -59,6 +57,7 @@
     "prettier": "^3.6.2",
     "ts-jest": "^29.2.5",
     "tsx": "^4.16.2",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.50.0"
   }
 }
