@@ -608,9 +608,7 @@ export async function createAds(
 }
 
 /**
- * Update an ad's bid rate
- * Note: eBay Marketing API doesn't have a direct update endpoint for individual ads.
- * We delete the old ad and create a new one with the updated rate.
+ * Update an ad's bid rate using the update_bid endpoint
  */
 export async function updateAdRate(
   userId: string,
@@ -621,10 +619,10 @@ export async function updateAdRate(
 ): Promise<void> {
   const { token: accessToken, apiHost } = await getEbayAccessToken(userId);
   
-  console.log('[updateAdRate] Updating ad via bulk_update_ads_by_listing_id');
+  // Correct endpoint: POST /ad_campaign/{campaign_id}/ad/{ad_id}/update_bid
+  const url = `${apiHost}/sell/marketing/v1/ad_campaign/${encodeURIComponent(campaignId)}/ad/${encodeURIComponent(adId)}/update_bid`;
   
-  // Use bulk update endpoint to update the ad's bid percentage
-  const url = `${apiHost}/sell/marketing/v1/ad_campaign/${encodeURIComponent(campaignId)}/bulk_update_ads_by_listing_id`;
+  console.log('[updateAdRate] Updating ad bid:', { url, campaignId, adId, newAdRate });
   
   const res = await fetch(url, {
     method: 'POST',
@@ -632,12 +630,7 @@ export async function updateAdRate(
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      requests: [{
-        adId: adId,
-        bidPercentage: String(newAdRate)
-      }]
-    }),
+    body: JSON.stringify({ bidPercentage: String(newAdRate) }),
   });
   
   if (!res.ok) {
@@ -645,16 +638,7 @@ export async function updateAdRate(
     throw new Error(`Failed to update ad rate ${res.status}: ${text}`);
   }
   
-  const data = await res.json();
-  console.log('[updateAdRate] Update response:', JSON.stringify(data));
-  
-  // Check if the update was successful
-  if (data.responses && data.responses[0]) {
-    const resp = data.responses[0];
-    if (resp.statusCode !== 200) {
-      throw new Error(`Failed to update ad: ${JSON.stringify(resp.errors || resp)}`);
-    }
-  }
+  console.log('[updateAdRate] Ad bid updated successfully');
 }
 
 /**
