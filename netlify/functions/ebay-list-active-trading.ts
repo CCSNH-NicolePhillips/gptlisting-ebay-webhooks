@@ -112,23 +112,6 @@ export const handler: Handler = async (event) => {
     <IncludeNotes>false</IncludeNotes>
   </ActiveList>
   <DetailLevel>ReturnAll</DetailLevel>
-  <OutputSelector>Item.ItemID</OutputSelector>
-  <OutputSelector>Item.Title</OutputSelector>
-  <OutputSelector>Item.SKU</OutputSelector>
-  <OutputSelector>Item.SellerInventoryID</OutputSelector>
-  <OutputSelector>Item.SellingStatus.ListingStatus</OutputSelector>
-  <OutputSelector>Item.SellingStatus.AdminEnded</OutputSelector>
-  <OutputSelector>Item.SellingStatus.CurrentPrice</OutputSelector>
-  <OutputSelector>Item.SellingStatus.QuantitySold</OutputSelector>
-  <OutputSelector>Item.Quantity</OutputSelector>
-  <OutputSelector>Item.QuantityAvailable</OutputSelector>
-  <OutputSelector>Item.PictureDetails.GalleryURL</OutputSelector>
-  <OutputSelector>Item.GalleryURL</OutputSelector>
-  <OutputSelector>Item.PictureURL</OutputSelector>
-  <OutputSelector>Item.ListingDetails.StartTime</OutputSelector>
-  <OutputSelector>Item.ListingDetails.EndReason</OutputSelector>
-  <OutputSelector>Item.WatchCount</OutputSelector>
-  <OutputSelector>Item.HitCount</OutputSelector>
 </GetMyeBaySellingRequest>`;
 
         const callUrl = 'https://api.ebay.com/ws/api.dll';
