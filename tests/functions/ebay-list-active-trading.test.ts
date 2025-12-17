@@ -1,4 +1,4 @@
-import { parseItemIdsFromXml, checkXmlForErrors } from '../../netlify/functions/ebay-list-active-trading';
+import { parseItemIdsFromXml, checkXmlForErrors, shouldExcludeActiveItem } from '../../netlify/functions/ebay-list-active-trading';
 
 describe('ebay-list-active-trading helpers', () => {
   describe('parseItemIdsFromXml', () => {
@@ -213,6 +213,124 @@ describe('ebay-list-active-trading helpers', () => {
       // Should still parse ItemIDs even from error response (though Set would be empty)
       const result = parseItemIdsFromXml(xml);
       expect(result.size).toBe(0);
+    });
+  });
+
+  describe('shouldExcludeActiveItem', () => {
+    const nowMs = Date.parse('2025-12-17T12:00:00Z'); // Fixed timestamp for tests
+    const unsoldSet = new Set(['999888777']); // Sample unsold item
+
+    it('should exclude item with TimeLeft=PT0S (ended)', () => {
+      const itemXml = `
+        <ItemID>123456789</ItemID>
+        <Title>Test Item</Title>
+        <TimeLeft>PT0S</TimeLeft>
+        <EndTime>2025-12-17T11:00:00Z</EndTime>
+      `;
+      
+      const result = shouldExcludeActiveItem(itemXml, unsoldSet, nowMs);
+      expect(result).toBe(true);
+    });
+
+    it('should exclude item with EndTime in the past', () => {
+      const pastTime = '2025-12-17T10:00:00Z'; // 2 hours before nowMs
+      const itemXml = `
+        <ItemID>123456789</ItemID>
+        <Title>Test Item</Title>
+        <TimeLeft>P0DT0H0M0S</TimeLeft>
+        <EndTime>${pastTime}</EndTime>
+      `;
+      
+      const result = shouldExcludeActiveItem(itemXml, unsoldSet, nowMs);
+      expect(result).toBe(true);
+    });
+
+    it('should NOT exclude item with EndTime in the future', () => {
+      const futureTime = '2025-12-20T12:00:00Z'; // 3 days after nowMs
+      const itemXml = `
+        <ItemID>123456789</ItemID>
+        <Title>Test Item</Title>
+        <TimeLeft>P3DT0H0M0S</TimeLeft>
+        <EndTime>${futureTime}</EndTime>
+      `;
+      
+      const result = shouldExcludeActiveItem(itemXml, unsoldSet, nowMs);
+      expect(result).toBe(false);
+    });
+
+    it('should exclude item in unsold set', () => {
+      const itemXml = `
+        <ItemID>999888777</ItemID>
+        <Title>Test Item</Title>
+        <TimeLeft>P5DT0H0M0S</TimeLeft>
+        <EndTime>2025-12-22T12:00:00Z</EndTime>
+      `;
+      
+      const result = shouldExcludeActiveItem(itemXml, unsoldSet, nowMs);
+      expect(result).toBe(true);
+    });
+
+    it('should NOT exclude item with no EndTime and no TimeLeft', () => {
+      const itemXml = `
+        <ItemID>123456789</ItemID>
+        <Title>Test Item</Title>
+        <SKU>TESTSKU123</SKU>
+      `;
+      
+      const result = shouldExcludeActiveItem(itemXml, unsoldSet, nowMs);
+      expect(result).toBe(false);
+    });
+
+    it('should NOT exclude item within 60s clock jitter buffer', () => {
+      // EndTime is 30 seconds ago (within 60s buffer)
+      const recentTime = new Date(nowMs - 30_000).toISOString();
+      const itemXml = `
+        <ItemID>123456789</ItemID>
+        <Title>Test Item</Title>
+        <TimeLeft>P0DT0H0M0S</TimeLeft>
+        <EndTime>${recentTime}</EndTime>
+      `;
+      
+      const result = shouldExcludeActiveItem(itemXml, unsoldSet, nowMs);
+      expect(result).toBe(false);
+    });
+
+    it('should exclude item beyond 60s clock jitter buffer', () => {
+      // EndTime is 90 seconds ago (beyond 60s buffer)
+      const oldTime = new Date(nowMs - 90_000).toISOString();
+      const itemXml = `
+        <ItemID>123456789</ItemID>
+        <Title>Test Item</Title>
+        <TimeLeft>P0DT0H0M0S</TimeLeft>
+        <EndTime>${oldTime}</EndTime>
+      `;
+      
+      const result = shouldExcludeActiveItem(itemXml, unsoldSet, nowMs);
+      expect(result).toBe(true);
+    });
+
+    it('should handle item with no ItemID gracefully', () => {
+      const itemXml = `
+        <Title>Test Item</Title>
+        <TimeLeft>P5DT0H0M0S</TimeLeft>
+      `;
+      
+      const result = shouldExcludeActiveItem(itemXml, unsoldSet, nowMs);
+      expect(result).toBe(false); // No ItemID = don't exclude
+    });
+
+    it('should exclude based on PT0S even if EndTime is in future', () => {
+      // Edge case: TimeLeft=PT0S but EndTime is future (shouldn't happen, but PT0S wins)
+      const futureTime = '2025-12-20T12:00:00Z';
+      const itemXml = `
+        <ItemID>123456789</ItemID>
+        <Title>Test Item</Title>
+        <TimeLeft>PT0S</TimeLeft>
+        <EndTime>${futureTime}</EndTime>
+      `;
+      
+      const result = shouldExcludeActiveItem(itemXml, unsoldSet, nowMs);
+      expect(result).toBe(true); // PT0S takes precedence
     });
   });
 });

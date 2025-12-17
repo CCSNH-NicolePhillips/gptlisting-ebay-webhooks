@@ -20,6 +20,48 @@ export function checkXmlForErrors(xmlText: string): void {
   }
 }
 
+/**
+ * Determines if an active listing item should be excluded from results.
+ * Excludes "zombie" ended listings and items in the unsold list.
+ * 
+ * @param itemXml - The XML content of a single Item element
+ * @param unsoldSet - Set of ItemIDs that are in the UnsoldList
+ * @param nowMs - Current timestamp in milliseconds (for testing/clock jitter buffer)
+ * @returns true if the item should be excluded, false otherwise
+ */
+export function shouldExcludeActiveItem(itemXml: string, unsoldSet: Set<string>, nowMs: number): boolean {
+  // Extract ItemID
+  const itemIdMatch = itemXml.match(/<ItemID>([^<]+)<\/ItemID>/);
+  if (!itemIdMatch) {
+    return false; // No ItemID found, don't exclude
+  }
+  
+  const itemId = itemIdMatch[1];
+  
+  // Exclude if in unsold list
+  if (unsoldSet.has(itemId)) {
+    return true;
+  }
+  
+  // Check TimeLeft - if PT0S, this is ended
+  const timeLeftMatch = itemXml.match(/<TimeLeft>([^<]+)<\/TimeLeft>/);
+  if (timeLeftMatch && timeLeftMatch[1] === 'PT0S') {
+    return true; // Ended listing with no time left
+  }
+  
+  // Check EndTime - if in the past (with 60s buffer for clock jitter), this is ended
+  const endTimeMatch = itemXml.match(/<EndTime>([^<]+)<\/EndTime>/);
+  if (endTimeMatch) {
+    const endTimeStr = endTimeMatch[1];
+    const endTimeMs = Date.parse(endTimeStr);
+    if (!isNaN(endTimeMs) && endTimeMs <= nowMs - 60_000) {
+      return true; // EndTime in the past (with 60s buffer)
+    }
+  }
+  
+  return false; // Don't exclude
+}
+
 interface ActiveOffer {
   itemId?: string;
   offerId: string;
@@ -248,9 +290,11 @@ export const handler: Handler = async (event) => {
           // Extract fields using regex
           const itemIdMatch = itemXml.match(/<ItemID>([^<]+)<\/ItemID>/);
           
-          // Skip if this item is in the unsold list
-          if (itemIdMatch && unsoldItemIds.has(itemIdMatch[1])) {
-            console.log(`[ebay-list-active-trading] Skipping item ${itemIdMatch[1]} - in unsold list`);
+          // Skip zombie ended listings and unsold items
+          if (shouldExcludeActiveItem(itemXml, unsoldItemIds, Date.now())) {
+            if (itemIdMatch) {
+              console.log(`[ebay-list-active-trading] Skipping item ${itemIdMatch[1]} - excluded by filter`);
+            }
             continue;
           }
           
