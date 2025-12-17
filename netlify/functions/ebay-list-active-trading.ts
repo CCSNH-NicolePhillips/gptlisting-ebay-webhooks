@@ -133,7 +133,6 @@ export const handler: Handler = async (event) => {
   <OutputSelector>Item.GalleryURL</OutputSelector>
   <OutputSelector>Item.PictureURL</OutputSelector>
   <OutputSelector>Item.ListingDetails.StartTime</OutputSelector>
-  <OutputSelector>Item.ListingDetails.EndReason</OutputSelector>
   <OutputSelector>Item.WatchCount</OutputSelector>
   <OutputSelector>Item.HitCount</OutputSelector>
 </GetMyeBaySellingRequest>`;
@@ -241,12 +240,6 @@ export const handler: Handler = async (event) => {
                                    itemXml.match(/<AdminEnded>([^<]+)<\/AdminEnded>/);
           const isAdminEnded = adminEndedMatch && adminEndedMatch[1].toLowerCase() === 'true';
           
-          // Check for end reason (e.g., LostOrBroken, NotAvailable, Incorrect, Sold, etc.)
-          // EndReason is inside ListingDetails
-          const endReasonMatch = itemXml.match(/<ListingDetails>.*?<EndReason>([^<]+)<\/EndReason>.*?<\/ListingDetails>/s) ||
-                                 itemXml.match(/<EndReason>([^<]+)<\/EndReason>/);
-          const endReason = endReasonMatch ? endReasonMatch[1] : null;
-          
           // Parse quantities
           const quantityAvailable = quantityAvailMatch ? parseInt(quantityAvailMatch[1]) : (quantityMatch ? parseInt(quantityMatch[1]) : 0);
           const quantitySold = quantitySoldMatch ? parseInt(quantitySoldMatch[1]) : 0;
@@ -255,19 +248,12 @@ export const handler: Handler = async (event) => {
           // Skip if:
           // 1. Status is not "Active" (could be "Completed", "Ended", "Inactive", "CustomCode")
           // 2. Administratively ended by eBay
-          // 3. Has an end reason (seller or eBay ended it)
-          // 4. Quantity available is 0 or negative
-          // 5. All items are sold (quantity sold >= total quantity for fixed price listings)
+          // 3. Quantity available is 0 or negative
+          // 4. All items are sold (quantity sold >= total quantity for fixed price listings)
           
           // Check if administratively ended
           if (isAdminEnded) {
             console.log(`[ebay-list-active-trading] Skipping item ${itemIdMatch?.[1]} - administratively ended by eBay`);
-            continue;
-          }
-          
-          // Check if manually ended or has end reason
-          if (endReason) {
-            console.log(`[ebay-list-active-trading] Skipping item ${itemIdMatch?.[1]} - end reason: ${endReason}`);
             continue;
           }
           
