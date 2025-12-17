@@ -603,7 +603,15 @@ export async function createAds(
     throw new Error(`Failed to create ads ${res.status}: ${text}`);
   }
   
-  const data = await res.json();
+  // eBay sometimes returns empty body on success (201/204)
+  // This is normal for newly created listings that are still syncing
+  const text = await res.text();
+  if (!text || text.trim() === '') {
+    console.log('[createAds] eBay returned empty response (success) - ad created but details not available yet');
+    return { ads: [] }; // Return empty array to signal success without details
+  }
+  
+  const data = JSON.parse(text);
   return { ads: data.ads || data.responses || [] };
 }
 

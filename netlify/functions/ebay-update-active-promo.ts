@@ -167,22 +167,26 @@ export const handler: Handler = async (event) => {
         console.log('[ebay-update-active-promo] Create result:', JSON.stringify(created));
         const firstAd: any = (created as any).ads?.[0];
         adId = firstAd?.adId || firstAd?.id || null;
-        action = 'created';
-      } catch (createError: any) {
-        console.error('[ebay-update-active-promo] Create error:', createError.message);
         
-        // Check if it's a JSON parse error (empty/malformed response)
-        if (createError.message?.includes('JSON') || createError.message?.includes('SyntaxError')) {
-          console.error('[ebay-update-active-promo] eBay returned empty/invalid response - listing may not be synced yet:', listingId);
+        // If eBay returned empty response (HTTP 2xx but no JSON body), treat as success
+        if (!firstAd && created.ads?.length === 0) {
+          console.log('[ebay-update-active-promo] Ad created successfully (empty response from eBay - this is normal)');
           return {
-            statusCode: 400,
+            statusCode: 200,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
-              error: 'eBay\'s systems are still processing this listing. Please wait 1-2 minutes and try again.',
-              hint: 'Newly created listings need time to sync across eBay\'s systems before they can be promoted.'
+              ok: true, 
+              campaignId, 
+              adRate: normalizedRate, 
+              action: 'created',
+              message: 'Promotion created successfully! Refresh the page to see it.'
             }),
           };
         }
+        
+        action = 'created';
+      } catch (createError: any) {
+        console.error('[ebay-update-active-promo] Create error:', createError.message);
         
         // Check if it's error 35048 (listing invalid/ended)
         if (createError.message?.includes('35048') || createError.message?.includes('invalid or has ended')) {
