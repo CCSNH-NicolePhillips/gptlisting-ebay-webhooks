@@ -87,9 +87,64 @@ export const handler: Handler = async (event) => {
     
     const { apiHost } = tokenHosts(process.env.EBAY_ENV);
 
+    // First, get the list of unsold items to filter them out
+    async function getUnsoldItemIds(): Promise<Set<string>> {
+      console.log('[ebay-list-active-trading] Fetching unsold items list...');
+      const unsoldIds = new Set<string>();
+      let pageNumber = 1;
+      const entriesPerPage = 200;
+      
+      while (true) {
+        const xmlRequest = `<?xml version="1.0" encoding="utf-8"?>
+<GetMyeBaySellingRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <RequesterCredentials>
+    <eBayAuthToken>${access_token}</eBayAuthToken>
+  </RequesterCredentials>
+  <UnsoldList>
+    <Include>true</Include>
+    <Pagination>
+      <EntriesPerPage>${entriesPerPage}</EntriesPerPage>
+      <PageNumber>${pageNumber}</PageNumber>
+    </Pagination>
+  </UnsoldList>
+  <DetailLevel>ReturnAll</DetailLevel>
+</GetMyeBaySellingRequest>`;
+
+        const res = await fetch('https://api.ebay.com/ws/api.dll', {
+          method: 'POST',
+          headers: {
+            'X-EBAY-API-COMPATIBILITY-LEVEL': '1193',
+            'X-EBAY-API-CALL-NAME': 'GetMyeBaySelling',
+            'X-EBAY-API-SITEID': '0',
+            'Content-Type': 'text/xml; charset=utf-8',
+          },
+          body: xmlRequest,
+        });
+
+        const xmlText = await res.text();
+        
+        // Extract ItemIDs from unsold list
+        const itemIdMatches = xmlText.matchAll(/<ItemID>([^<]+)<\/ItemID>/g);
+        for (const match of itemIdMatches) {
+          unsoldIds.add(match[1]);
+        }
+        
+        // Check if there are more pages
+        const hasMoreItems = xmlText.includes('<HasMoreItems>true</HasMoreItems>');
+        if (!hasMoreItems) break;
+        pageNumber++;
+      }
+      
+      console.log(`[ebay-list-active-trading] Found ${unsoldIds.size} unsold items to exclude`);
+      return unsoldIds;
+    }
+
     // Use GetMyeBaySelling Trading API - gets ALL active listings regardless of creation method
     async function listActiveOffers(): Promise<ActiveOffer[]> {
       console.log('[ebay-list-active-trading] Using GetMyeBaySelling Trading API');
+      
+      // Get unsold items to filter out
+      const unsoldItemIds = await getUnsoldItemIds();
       
       const results: ActiveOffer[] = [];
       let pageNumber = 1;
@@ -166,6 +221,13 @@ export const handler: Handler = async (event) => {
           
           // Extract fields using regex
           const itemIdMatch = itemXml.match(/<ItemID>([^<]+)<\/ItemID>/);
+          
+          // Skip if this item is in the unsold list
+          if (itemIdMatch && unsoldItemIds.has(itemIdMatch[1])) {
+            console.log(`[ebay-list-active-trading] Skipping item ${itemIdMatch[1]} - in unsold list`);
+            continue;
+          }
+          
           const skuMatch = itemXml.match(/<SKU>([^<]+)<\/SKU>/);
           const titleMatch = itemXml.match(/<Title>([^<]+)<\/Title>/);
           const priceMatch = itemXml.match(/<CurrentPrice[^>]*>([^<]+)<\/CurrentPrice>/);
