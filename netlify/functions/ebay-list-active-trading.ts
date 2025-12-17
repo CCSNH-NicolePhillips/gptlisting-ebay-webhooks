@@ -222,22 +222,6 @@ export const handler: Handler = async (event) => {
           // Extract fields using regex
           const itemIdMatch = itemXml.match(/<ItemID>([^<]+)<\/ItemID>/);
           
-          // Check if item has ended (has EndTime tag) or time left is zero
-          const endTimeMatch = itemXml.match(/<EndTime>([^<]+)<\/EndTime>/);
-          const timeLeftMatch = itemXml.match(/<TimeLeft>([^<]+)<\/TimeLeft>/);
-          
-          // Skip if item has ended
-          if (endTimeMatch) {
-            console.log(`[ebay-list-active-trading] Skipping item ${itemIdMatch?.[1]} - has EndTime (ended listing)`);
-            continue;
-          }
-          
-          // Skip if time left is zero
-          if (timeLeftMatch && timeLeftMatch[1] === 'PT0S') {
-            console.log(`[ebay-list-active-trading] Skipping item ${itemIdMatch?.[1]} - TimeLeft is PT0S (ended)`);
-            continue;
-          }
-          
           // Skip if this item is in the unsold list
           if (itemIdMatch && unsoldItemIds.has(itemIdMatch[1])) {
             console.log(`[ebay-list-active-trading] Skipping item ${itemIdMatch[1]} - in unsold list`);
