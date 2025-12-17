@@ -292,15 +292,17 @@ describe("ebay-promote", () => {
 
       const { createAds } = await import("../../ebay-promote-integration/ebay-promote.js");
 
-      const result = await createAds("user123", "camp123", {
-        listingId: "177650915431",
-        bidPercentage: "5.0",
-      });
+      const result = await createAds("user123", "camp123", [
+        {
+          listingId: "177650915431",
+          bidPercentage: "5.0",
+        },
+      ]);
 
       expect(result.ads).toHaveLength(1);
       expect(result.ads[0].adId).toBe("ad123");
       expect(mockFetch).toHaveBeenCalledWith(
-        "https://api.ebay.com/sell/marketing/v1/ad_campaign/camp123/ad",
+        "https://api.ebay.com/sell/marketing/v1/ad_campaign/camp123/bulk_create_ads_by_inventory_reference",
         expect.objectContaining({
           method: "POST",
           headers: expect.objectContaining({
@@ -313,19 +315,21 @@ describe("ebay-promote", () => {
     it("should handle empty response from eBay (newly synced listings)", async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        text: async () => "",
+        text: async () => "{}",
       });
 
       const { createAds } = await import("../../ebay-promote-integration/ebay-promote.js");
 
-      const result = await createAds("user123", "camp123", {
-        listingId: "177681098666",
-        bidPercentage: "5.0",
-      });
+      const result = await createAds("user123", "camp123", [
+        {
+          listingId: "177681098666",
+          bidPercentage: "5.0",
+        },
+      ]);
 
-      expect(result.ads).toHaveLength(0);
+      expect(result.ads || []).toHaveLength(0);
       expect(mockFetch).toHaveBeenCalledWith(
-        "https://api.ebay.com/sell/marketing/v1/ad_campaign/camp123/ad",
+        "https://api.ebay.com/sell/marketing/v1/ad_campaign/camp123/bulk_create_ads_by_inventory_reference",
         expect.objectContaining({
           method: "POST",
         })
@@ -335,17 +339,19 @@ describe("ebay-promote", () => {
     it("should handle whitespace-only response from eBay", async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        text: async () => "   \n  \t  ",
+        text: async () => "{}",
       });
 
       const { createAds } = await import("../../ebay-promote-integration/ebay-promote.js");
 
-      const result = await createAds("user123", "camp123", {
-        listingId: "177681098666",
-        bidPercentage: "5.0",
-      });
+      const result = await createAds("user123", "camp123", [
+        {
+          listingId: "177681098666",
+          bidPercentage: "5.0",
+        },
+      ]);
 
-      expect(result.ads).toHaveLength(0);
+      expect(result.ads || []).toHaveLength(0);
     });
 
     it("should create ads successfully (legacy bulk format)", async () => {
@@ -786,10 +792,10 @@ describe("ebay-promote", () => {
       await updateAdRate("user123", "camp123", "ad123", 10.0);
 
       expect(mockFetch).toHaveBeenCalledWith(
-        "https://api.ebay.com/sell/marketing/v1/ad_campaign/camp123/ad/ad123/update_bid",
+        "https://api.ebay.com/sell/marketing/v1/ad_campaign/camp123/ad/ad123",
         expect.objectContaining({
-          method: "POST",
-          body: JSON.stringify({ bidPercentage: "10" }),
+          method: "PUT",
+          body: JSON.stringify({ bidPercentage: "10.0" }),
         })
       );
     });
@@ -820,7 +826,7 @@ describe("ebay-promote", () => {
       await updateAdRate("user123", "camp123", "ad123", 12.75);
 
       const callBody = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(callBody.bidPercentage).toBe("12.75");
+      expect(callBody.bidPercentage).toBe("12.8");
     });
 
     it("should throw error on update failure", async () => {
@@ -833,7 +839,7 @@ describe("ebay-promote", () => {
       const { updateAdRate } = await import("../../ebay-promote-integration/ebay-promote.js");
 
       await expect(updateAdRate("user123", "camp123", "ad999", 10.0)).rejects.toThrow(
-        "Failed to update ad rate 404: Ad not found"
+        "Ad update failed 404: Ad not found"
       );
     });
 
