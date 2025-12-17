@@ -1,6 +1,48 @@
-import { parseItemIdsFromXml, checkXmlForErrors, shouldExcludeActiveItem, extractItemIdsFromContainer, buildUnsoldListRequest } from '../../netlify/functions/ebay-list-active-trading';
+import { parseItemIdsFromXml, checkXmlForErrors, shouldExcludeActiveItem, extractItemIdsFromContainer, buildUnsoldListRequest, shouldApplyUnsoldFilter } from '../../netlify/functions/ebay-list-active-trading';
 
 describe('ebay-list-active-trading helpers', () => {
+  describe('shouldApplyUnsoldFilter', () => {
+    it('should disable filter when 100% overlap with items present', () => {
+      const activeItems = new Set(['111', '222', '333']);
+      const unsoldItems = new Set(['111', '222', '333', '444']); // All active items are in unsold
+      
+      const result = shouldApplyUnsoldFilter(activeItems, unsoldItems);
+      expect(result).toBe(false); // Filter disabled
+    });
+
+    it('should apply filter when partial overlap', () => {
+      const activeItems = new Set(['111', '222', '333', '444']);
+      const unsoldItems = new Set(['222', '333']); // Only 2/4 are unsold
+      
+      const result = shouldApplyUnsoldFilter(activeItems, unsoldItems);
+      expect(result).toBe(true); // Filter applied
+    });
+
+    it('should apply filter when no overlap', () => {
+      const activeItems = new Set(['111', '222', '333']);
+      const unsoldItems = new Set(['444', '555', '666']); // No active items in unsold
+      
+      const result = shouldApplyUnsoldFilter(activeItems, unsoldItems);
+      expect(result).toBe(true); // Filter applied
+    });
+
+    it('should apply filter when no active items', () => {
+      const activeItems = new Set<string>(); // Empty
+      const unsoldItems = new Set(['444', '555', '666']);
+      
+      const result = shouldApplyUnsoldFilter(activeItems, unsoldItems);
+      expect(result).toBe(true); // Filter applied (doesn't matter, no items)
+    });
+
+    it('should apply filter when no unsold items', () => {
+      const activeItems = new Set(['111', '222', '333']);
+      const unsoldItems = new Set<string>(); // Empty
+      
+      const result = shouldApplyUnsoldFilter(activeItems, unsoldItems);
+      expect(result).toBe(true); // Filter applied (all pass through)
+    });
+  });
+
   describe('buildUnsoldListRequest', () => {
     it('should include DurationInDays with default value', () => {
       const xml = buildUnsoldListRequest('test-token', 1, 200, 60);
@@ -496,6 +538,32 @@ describe('ebay-list-active-trading helpers', () => {
       
       const result = shouldExcludeActiveItem(itemXml, unsoldSet, nowMs);
       expect(result).toBe('timeLeftPT0S'); // PT0S takes precedence
+    });
+
+    it('should NOT filter by unsold list when applyUnsoldFilter=false', () => {
+      const futureTime = '2025-12-20T12:00:00Z';
+      const itemXml = `
+        <ItemID>999</ItemID>
+        <TimeLeft>P10DT5H</TimeLeft>
+        <EndTime>${futureTime}</EndTime>
+      `;
+      const unsoldSet = new Set(['999']); // Item IS in unsold list
+      
+      const result = shouldExcludeActiveItem(itemXml, unsoldSet, nowMs, false); // Filter disabled
+      expect(result).toBeNull(); // Should NOT be excluded despite being in unsold list
+    });
+
+    it('should still apply PT0S filter even when applyUnsoldFilter=false', () => {
+      const futureTime = '2025-12-20T12:00:00Z';
+      const itemXml = `
+        <ItemID>999</ItemID>
+        <TimeLeft>PT0S</TimeLeft>
+        <EndTime>${futureTime}</EndTime>
+      `;
+      const unsoldSet = new Set(['999']);
+      
+      const result = shouldExcludeActiveItem(itemXml, unsoldSet, nowMs, false);
+      expect(result).toBe('timeLeftPT0S'); // Zombie filters still apply
     });
   });
 });

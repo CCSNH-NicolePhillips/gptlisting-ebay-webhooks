@@ -57,9 +57,15 @@ export function checkXmlForErrors(xmlText: string): void {
  * @param itemXml - The XML content of a single Item element
  * @param unsoldSet - Set of ItemIDs that are in the UnsoldList
  * @param nowMs - Current timestamp in milliseconds (for testing/clock jitter buffer)
+ * @param applyUnsoldFilter - Whether to check unsold list (false disables unsold filtering)
  * @returns exclusion reason string if excluded, null if not excluded
  */
-export function shouldExcludeActiveItem(itemXml: string, unsoldSet: Set<string>, nowMs: number): string | null {
+export function shouldExcludeActiveItem(
+  itemXml: string, 
+  unsoldSet: Set<string>, 
+  nowMs: number, 
+  applyUnsoldFilter: boolean = true
+): string | null {
   // Extract ItemID
   const itemIdMatch = itemXml.match(/<ItemID>([^<]+)<\/ItemID>/);
   if (!itemIdMatch) {
@@ -68,8 +74,8 @@ export function shouldExcludeActiveItem(itemXml: string, unsoldSet: Set<string>,
   
   const itemId = itemIdMatch[1];
   
-  // Exclude if in unsold list
-  if (unsoldSet.has(itemId)) {
+  // Exclude if in unsold list (only if filter is enabled)
+  if (applyUnsoldFilter && unsoldSet.has(itemId)) {
     return 'unsold';
   }
   
@@ -90,6 +96,41 @@ export function shouldExcludeActiveItem(itemXml: string, unsoldSet: Set<string>,
   }
   
   return null; // Don't exclude
+}
+
+/**
+ * Decides whether to apply the unsold filter based on overlap analysis.
+ * If ALL active items are in the unsold list, this indicates a parsing error
+ * and we should NOT apply the filter to avoid showing 0 listings.
+ * 
+ * @param activeItemIds - Set of ItemIDs from ActiveList
+ * @param unsoldItemIds - Set of ItemIDs from UnsoldList
+ * @returns true if unsold filter should be applied, false if it should be disabled
+ */
+export function shouldApplyUnsoldFilter(activeItemIds: Set<string>, unsoldItemIds: Set<string>): boolean {
+  const activeCount = activeItemIds.size;
+  
+  // If no active items, filter doesn't matter
+  if (activeCount === 0) {
+    return true;
+  }
+  
+  // Calculate overlap: how many active items are in the unsold list
+  let overlapCount = 0;
+  for (const itemId of activeItemIds) {
+    if (unsoldItemIds.has(itemId)) {
+      overlapCount++;
+    }
+  }
+  
+  // If 100% overlap, this is suspicious - UnsoldList parsing likely went wrong
+  // Disable filter to avoid showing 0 listings
+  if (overlapCount === activeCount) {
+    return false; // Don't apply filter
+  }
+  
+  // Normal case: partial or no overlap
+  return true; // Apply filter
 }
 
 /**
@@ -268,8 +309,10 @@ export const handler: Handler = async (event) => {
       const unsoldItemIds = await getUnsoldItemIds();
       
       const results: ActiveOffer[] = [];
+      const activeItemIds = new Set<string>(); // Collect all active ItemIDs for overlap check
       let pageNumber = 1;
       const entriesPerPage = 200;
+      let applyUnsoldFilter = true; // Will be set to false if we detect 100% overlap
       
       // Diagnostic counters
       let totalItemsScanned = 0;
@@ -350,8 +393,21 @@ export const handler: Handler = async (event) => {
           // Extract fields using regex
           const itemIdMatch = itemXml.match(/<ItemID>([^<]+)<\/ItemID>/);
           
+          // Collect ItemID for overlap analysis (do this before any filtering)
+          if (itemIdMatch) {
+            activeItemIds.add(itemIdMatch[1]);
+          }
+          
+          // After first page, check for 100% overlap and disable unsold filter if needed
+          if (pageNumber === 1 && itemCount === 0 && activeItemIds.size > 0) {
+            applyUnsoldFilter = shouldApplyUnsoldFilter(activeItemIds, unsoldItemIds);
+            if (!applyUnsoldFilter) {
+              console.warn('[ebay-list-active-trading] WARNING: Detected 100% overlap on first page - disabling unsold filter!');
+            }
+          }
+          
           // Skip zombie ended listings and unsold items
-          const exclusionReason = shouldExcludeActiveItem(itemXml, unsoldItemIds, Date.now());
+          const exclusionReason = shouldExcludeActiveItem(itemXml, unsoldItemIds, Date.now(), applyUnsoldFilter);
           if (exclusionReason) {
             // Track skip reason
             if (exclusionReason === 'unsold') skippedUnsold++;
@@ -510,11 +566,31 @@ export const handler: Handler = async (event) => {
         pageNumber++;
       }
       
+      // Phase 3: Check for 100% overlap (suspicious UnsoldList parsing)
+      applyUnsoldFilter = shouldApplyUnsoldFilter(activeItemIds, unsoldItemIds);
+      
+      // Calculate overlap for diagnostics
+      let overlapCount = 0;
+      for (const itemId of activeItemIds) {
+        if (unsoldItemIds.has(itemId)) {
+          overlapCount++;
+        }
+      }
+      
+      if (!applyUnsoldFilter) {
+        console.warn('[ebay-list-active-trading] WARNING: Unsold filter disabled due to 100% overlap!');
+        console.warn(`[ebay-list-active-trading] All ${activeItemIds.size} active items appear in UnsoldList (suspicious).`);
+        console.warn('[ebay-list-active-trading] Returning active items with only PT0S/EndTime filtering applied.');
+      }
+      
       // Log diagnostic summary
       console.log('[ebay-list-active-trading] DIAGNOSTIC SUMMARY:', {
         unsoldCountFetched: unsoldItemIds.size,
         activeItemsScanned: totalItemsScanned,
         activeItemsReturned: results.length,
+        overlapCount,
+        overlapPercentage: activeItemIds.size > 0 ? Math.round((overlapCount / activeItemIds.size) * 100) : 0,
+        unsoldFilterApplied: applyUnsoldFilter,
         skippedByReason: {
           skippedUnsold,
           skippedTimeLeftPT0S,
