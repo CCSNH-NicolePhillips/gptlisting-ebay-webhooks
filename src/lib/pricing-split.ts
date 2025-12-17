@@ -11,7 +11,7 @@
  * - Not wired into production pipeline yet (Phase 4 is logic only)
  */
 
-import type { CompetitivePricingRules } from './pricing-config';
+import type { CompetitivePricingRules } from './pricing-config.js';
 
 /**
  * Result of splitting eBay target total into item and shipping components
