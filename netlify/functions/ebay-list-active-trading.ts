@@ -176,6 +176,11 @@ export const handler: Handler = async (event) => {
         for (const match of itemMatches) {
           const itemXml = match[1];
           
+          // Log first item's full XML to see structure
+          if (pageNumber === 1 && itemCount === 0) {
+            console.log('[ebay-list-active-trading] First item full XML (first 3000 chars):', itemXml.substring(0, 3000));
+          }
+          
           // Extract fields using regex
           const itemIdMatch = itemXml.match(/<ItemID>([^<]+)<\/ItemID>/);
           const skuMatch = itemXml.match(/<SKU>([^<]+)<\/SKU>/);
@@ -231,6 +236,15 @@ export const handler: Handler = async (event) => {
           const endReasonMatch = itemXml.match(/<ListingDetails>.*?<EndReason>([^<]+)<\/EndReason>.*?<\/ListingDetails>/s) ||
                                  itemXml.match(/<EndReason>([^<]+)<\/EndReason>/);
           const endReason = endReasonMatch ? endReasonMatch[1] : null;
+          
+          // Log status fields for first few items to see what we're getting
+          if (pageNumber === 1 && itemCount < 3) {
+            console.log(`[ebay-list-active-trading] Item ${itemIdMatch?.[1]} status fields:`, {
+              listingStatus: sellingStatus || 'NOT FOUND',
+              adminEnded: isAdminEnded ? 'true' : 'false',
+              endReason: endReason || 'NOT FOUND'
+            });
+          }
           
           // Parse quantities
           const quantityAvailable = quantityAvailMatch ? parseInt(quantityAvailMatch[1]) : (quantityMatch ? parseInt(quantityMatch[1]) : 0);
