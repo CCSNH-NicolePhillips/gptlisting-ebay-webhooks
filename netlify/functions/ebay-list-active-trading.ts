@@ -96,6 +96,8 @@ export const handler: Handler = async (event) => {
     const { apiHost } = tokenHosts(process.env.EBAY_ENV);
 
     // Use GetMyeBaySelling Trading API - gets ALL active listings regardless of creation method
+    // The <ActiveList> container returns only currently active listings
+    // Manually ended listings should NOT appear in ActiveList (they move to UnsoldList or DeletedFromSoldList)
     async function listActiveOffers(): Promise<ActiveOffer[]> {
       console.log('[ebay-list-active-trading] Using GetMyeBaySelling Trading API');
       
@@ -259,10 +261,16 @@ export const handler: Handler = async (event) => {
           
           // eBay statuses: Active, Completed, Ended, CustomCode, ActiveWithWatchers
           // We only want Active or ActiveWithWatchers
+          // Note: Items in ActiveList should only be Active, but filter just in case
           const validStatuses = ['Active', 'ActiveWithWatchers'];
-          if (sellingStatus && !validStatuses.includes(sellingStatus)) {
-            console.log(`[ebay-list-active-trading] Skipping item ${itemIdMatch?.[1]} - status: ${sellingStatus}`);
-            continue;
+          if (sellingStatus) {
+            if (!validStatuses.includes(sellingStatus)) {
+              console.log(`[ebay-list-active-trading] Skipping item ${itemIdMatch?.[1]} - invalid status: ${sellingStatus}`);
+              continue;
+            }
+          } else {
+            // If no status found, log it but include the item (ActiveList should only have active items)
+            console.log(`[ebay-list-active-trading] Warning: No ListingStatus found for item ${itemIdMatch?.[1]}, including it`);
           }
           
           if (quantityAvailable <= 0) {
