@@ -148,16 +148,22 @@ export const handler: Handler = async (event) => {
       console.log('[ebay-update-active-promo] Calling updateAdRate with:', { campaignId, adId, rate: normalizedRate });
       await updateAdRate(sub!, campaignId, adId, normalizedRate);
     } else {
-      // Create a new ad using listingId if available
-      console.log('[ebay-update-active-promo] Creating new ad for listing:', listingId);
-      if (!listingId) {
-        return { statusCode: 400, body: JSON.stringify({ error: 'listingId required to create promotion' }) };
+      // Create a new ad using inventoryReferenceId (offerId or sku)
+      console.log('[ebay-update-active-promo] Creating new ad for listing:', { listingId, offerId, sku });
+      
+      // eBay Marketing API requires inventoryReferenceId and inventoryReferenceType
+      // Prefer offerId, fall back to sku or listingId
+      const inventoryRef = offerId || sku || listingId;
+      const inventoryType = offerId ? 'OFFER' : (sku ? 'INVENTORY_ITEM' : 'LISTING_ID');
+      
+      if (!inventoryRef) {
+        return { statusCode: 400, body: JSON.stringify({ error: 'offerId, sku, or listingId required to create promotion' }) };
       }
       
       // eBay Marketing API expects bidPercentage as a string, not number
-      // Note: /ad endpoint takes direct object, not wrapped in requests array
       const createPayload = {
-        listingId: String(listingId),
+        inventoryReferenceId: String(inventoryRef),
+        inventoryReferenceType: inventoryType,
         bidPercentage: String(normalizedRate),
       };
       
