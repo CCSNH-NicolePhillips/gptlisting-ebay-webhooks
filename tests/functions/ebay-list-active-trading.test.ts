@@ -1,6 +1,131 @@
-import { parseItemIdsFromXml, checkXmlForErrors, shouldExcludeActiveItem } from '../../netlify/functions/ebay-list-active-trading';
+import { parseItemIdsFromXml, checkXmlForErrors, shouldExcludeActiveItem, extractItemIdsFromContainer } from '../../netlify/functions/ebay-list-active-trading';
 
 describe('ebay-list-active-trading helpers', () => {
+  describe('extractItemIdsFromContainer', () => {
+    it('should extract ItemIDs only from specified container', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<GetMyeBaySellingResponse xmlns="urn:ebay:apis:eBLBaseComponents">
+  <Ack>Success</Ack>
+  <UnsoldList>
+    <ItemArray>
+      <Item>
+        <ItemID>111</ItemID>
+        <Title>Unsold Item 1</Title>
+      </Item>
+      <Item>
+        <ItemID>222</ItemID>
+        <Title>Unsold Item 2</Title>
+      </Item>
+    </ItemArray>
+  </UnsoldList>
+  <ActiveList>
+    <ItemArray>
+      <Item>
+        <ItemID>333</ItemID>
+        <Title>Active Item 1</Title>
+      </Item>
+      <Item>
+        <ItemID>444</ItemID>
+        <Title>Active Item 2</Title>
+      </Item>
+      <Item>
+        <ItemID>555</ItemID>
+        <Title>Active Item 3</Title>
+      </Item>
+    </ItemArray>
+  </ActiveList>
+</GetMyeBaySellingResponse>`;
+      
+      const result = extractItemIdsFromContainer(xml, 'UnsoldList');
+      expect(result.size).toBe(2);
+      expect(result.has('111')).toBe(true);
+      expect(result.has('222')).toBe(true);
+      expect(result.has('333')).toBe(false);
+      expect(result.has('444')).toBe(false);
+      expect(result.has('555')).toBe(false);
+    });
+
+    it('should return empty Set when container not found', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<GetMyeBaySellingResponse xmlns="urn:ebay:apis:eBLBaseComponents">
+  <Ack>Success</Ack>
+  <ActiveList>
+    <ItemArray>
+      <Item>
+        <ItemID>123456789</ItemID>
+        <Title>Test Item</Title>
+      </Item>
+    </ItemArray>
+  </ActiveList>
+</GetMyeBaySellingResponse>`;
+      
+      const result = extractItemIdsFromContainer(xml, 'UnsoldList');
+      expect(result.size).toBe(0);
+    });
+
+    it('should handle container with no ItemIDs', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<GetMyeBaySellingResponse xmlns="urn:ebay:apis:eBLBaseComponents">
+  <Ack>Success</Ack>
+  <UnsoldList>
+    <ItemArray />
+  </UnsoldList>
+</GetMyeBaySellingResponse>`;
+      
+      const result = extractItemIdsFromContainer(xml, 'UnsoldList');
+      expect(result.size).toBe(0);
+    });
+
+    it('should extract from ActiveList container when specified', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<GetMyeBaySellingResponse xmlns="urn:ebay:apis:eBLBaseComponents">
+  <Ack>Success</Ack>
+  <UnsoldList>
+    <ItemArray>
+      <Item>
+        <ItemID>AAA</ItemID>
+      </Item>
+    </ItemArray>
+  </UnsoldList>
+  <ActiveList>
+    <ItemArray>
+      <Item>
+        <ItemID>BBB</ItemID>
+      </Item>
+      <Item>
+        <ItemID>CCC</ItemID>
+      </Item>
+    </ItemArray>
+  </ActiveList>
+</GetMyeBaySellingResponse>`;
+      
+      const result = extractItemIdsFromContainer(xml, 'ActiveList');
+      expect(result.size).toBe(2);
+      expect(result.has('BBB')).toBe(true);
+      expect(result.has('CCC')).toBe(true);
+      expect(result.has('AAA')).toBe(false);
+    });
+
+    it('should handle container with attributes', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<GetMyeBaySellingResponse xmlns="urn:ebay:apis:eBLBaseComponents">
+  <Ack>Success</Ack>
+  <UnsoldList includeWatchCount="true" pagination="true">
+    <ItemArray>
+      <Item>
+        <ItemID>999</ItemID>
+        <Title>Test</Title>
+      </Item>
+    </ItemArray>
+  </UnsoldList>
+</GetMyeBaySellingResponse>`;
+      
+      const result = extractItemIdsFromContainer(xml, 'UnsoldList');
+      expect(result.size).toBe(1);
+      expect(result.has('999')).toBe(true);
+    });
+  });
+
   describe('parseItemIdsFromXml', () => {
     it('should return empty Set for XML with no ItemIDs', () => {
       const xml = `<?xml version="1.0" encoding="UTF-8"?>

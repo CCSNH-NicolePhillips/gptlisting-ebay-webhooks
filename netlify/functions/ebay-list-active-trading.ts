@@ -3,7 +3,37 @@ import { accessTokenFromRefresh, tokenHosts } from '../../src/lib/_common.js';
 import { tokensStore } from '../../src/lib/_blobs.js';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
 
-// Helper function to parse ItemIDs from eBay XML response
+/**
+ * Extracts ItemIDs from within a specific XML container tag.
+ * This prevents accidentally matching ItemIDs from other sections of the XML.
+ * 
+ * @param xml - The full XML document
+ * @param containerTag - The container tag name (e.g., 'UnsoldList', 'ActiveList')
+ * @returns Set of ItemIDs found within the container, or empty Set if container not found
+ */
+export function extractItemIdsFromContainer(xml: string, containerTag: string): Set<string> {
+  const itemIds = new Set<string>();
+  
+  // Match the container block (non-greedy, across newlines)
+  const containerRegex = new RegExp(`<${containerTag}[^>]*>(.*?)</${containerTag}>`, 's');
+  const containerMatch = xml.match(containerRegex);
+  
+  if (!containerMatch) {
+    return itemIds; // Container not found, return empty Set
+  }
+  
+  const containerContent = containerMatch[1];
+  
+  // Extract all ItemIDs within this container only
+  const itemIdMatches = containerContent.matchAll(/<ItemID>([^<]+)<\/ItemID>/g);
+  for (const match of itemIdMatches) {
+    itemIds.add(match[1]);
+  }
+  
+  return itemIds;
+}
+
+// Helper function to parse ItemIDs from eBay XML response (legacy - use extractItemIdsFromContainer for scoped parsing)
 export function parseItemIdsFromXml(xmlText: string): Set<string> {
   const itemIds = new Set<string>();
   const itemIdMatches = xmlText.matchAll(/<ItemID>([^<]+)<\/ItemID>/g);
@@ -191,8 +221,8 @@ export const handler: Handler = async (event) => {
         // Check for API errors in response
         checkXmlForErrors(xmlText);
         
-        // Extract ItemIDs from unsold list
-        const itemIdsFromPage = parseItemIdsFromXml(xmlText);
+        // Extract ItemIDs from UnsoldList container only (not from entire XML)
+        const itemIdsFromPage = extractItemIdsFromContainer(xmlText, 'UnsoldList');
         for (const id of itemIdsFromPage) {
           unsoldIds.add(id);
         }
