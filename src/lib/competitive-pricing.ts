@@ -78,13 +78,26 @@ export function calculateCompetitivePricing(
   // Use default rules if not provided
   const pricingRules = rules || getDefaultCompetitivePricingRules();
 
+  console.log('[competitive-pricing] Starting calculation with rules:', {
+    discountPercent: pricingRules.discountPercent,
+    shippingStrategy: pricingRules.shippingStrategy,
+    productTitle: productTitle || 'N/A'
+  });
+
   // Step 1: Extract Amazon price and shipping from HTML
   const priceData = extractPriceWithShipping(amazonHtml, productTitle);
   
   if (priceData.amazonItemPrice === null) {
     // Could not extract price from HTML
+    console.log('[competitive-pricing] ❌ Failed to extract Amazon price from HTML');
     return null;
   }
+
+  console.log('[competitive-pricing] ✓ Extracted Amazon prices:', {
+    itemPrice: `$${priceData.amazonItemPrice.toFixed(2)}`,
+    shippingPrice: `$${priceData.amazonShippingPrice.toFixed(2)}`,
+    shippingEvidence: priceData.shippingEvidence
+  });
 
   // Step 2: Compute Amazon total and eBay target total
   const { amazonTotal, ebayTargetTotal } = computeAmazonTotals({
@@ -93,12 +106,26 @@ export function calculateCompetitivePricing(
     discountPercent: pricingRules.discountPercent,
   });
 
+  console.log('[competitive-pricing] ✓ Computed totals:', {
+    amazonTotal: `$${amazonTotal.toFixed(2)}`,
+    ebayTargetTotal: `$${ebayTargetTotal.toFixed(2)}`,
+    discountAmount: `$${(amazonTotal - ebayTargetTotal).toFixed(2)}`,
+    discountPercent: `${pricingRules.discountPercent}%`
+  });
+
   // Step 3: Split eBay target into item price and shipping
   const splitResult = splitEbayPrice({
     ebayTargetTotal,
     amazonShippingPrice: priceData.amazonShippingPrice,
     rules: pricingRules,
     amazonTotal,
+  });
+
+  console.log('[competitive-pricing] ✓ Split eBay pricing:', {
+    ebayItemPrice: `$${splitResult.ebayItemPrice.toFixed(2)}`,
+    ebayShippingPrice: `$${splitResult.ebayShippingPrice.toFixed(2)}`,
+    ebayTotal: `$${(splitResult.ebayItemPrice + splitResult.ebayShippingPrice).toFixed(2)}`,
+    strategy: pricingRules.shippingStrategy
   });
 
   // Combine evidence
@@ -151,26 +178,45 @@ export function calculateEbayPriceWithFlag(input: {
     );
     
     if (result) {
-      // Log evidence once at info level (not spammy)
+      // Log final result summary
+      console.log('[competitive-pricing] ✅ Final result:', {
+        ebayItem: `$${result.ebayItemPrice.toFixed(2)}`,
+        ebayShipping: `$${result.ebayShippingPrice.toFixed(2)}`,
+        ebayTotal: `$${(result.ebayItemPrice + result.ebayShippingPrice).toFixed(2)}`,
+        amazonTotal: `$${result.amazonData.totalPrice.toFixed(2)}`,
+        savings: `$${(result.amazonData.totalPrice - (result.ebayItemPrice + result.ebayShippingPrice)).toFixed(2)}`
+      });
+      
       if (result.evidence.length > 0) {
-        console.log('[competitive-pricing] Evidence:', result.evidence.slice(0, 3).join('; '));
+        console.log('[competitive-pricing] Evidence:', result.evidence.join(' | '));
       }
       return result;
     }
     
     // Fallback to legacy if competitive pricing fails
-    console.log('[competitive-pricing] Failed to extract competitive pricing, falling back to legacy');
+    console.log('[competitive-pricing] ⚠️  Failed to extract competitive pricing, falling back to legacy');
+    console.log('[competitive-pricing] Using legacy formula: base × 0.9 - $5 (if > $30)');
+    if (input.basePrice) {
+      console.log('[competitive-pricing] Legacy input: basePrice=$' + input.basePrice.toFixed(2));
+    }
   }
 
   // Legacy pricing mode (or fallback)
   const base = input.basePrice || 0;
   if (!isFinite(base) || base <= 0) {
+    console.log('[competitive-pricing] Legacy mode: Invalid base price, returning $0');
     return { ebayItemPrice: 0, ebayShippingPrice: 0 };
   }
   
   let price = base * 0.9; // 10% off
   if (base > 30) price -= 5;
   const ebayItemPrice = Math.round(price * 100) / 100;
+  
+  console.log('[competitive-pricing] Legacy result:', {
+    basePrice: `$${base.toFixed(2)}`,
+    ebayItemPrice: `$${ebayItemPrice.toFixed(2)}`,
+    formula: base > 30 ? 'base × 0.9 - $5' : 'base × 0.9'
+  });
   
   return { ebayItemPrice, ebayShippingPrice: 0 };
 }

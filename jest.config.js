@@ -23,6 +23,7 @@ export default {
     'smartdrafts-scan-core.test.ts',
     'pairing-v2-core.test.ts'
   ],
+  collectCoverage: true,
   collectCoverageFrom: ['src/**/*.ts'],
   coveragePathIgnorePatterns: ['/node_modules/', '/dist/'],
   coverageThreshold: {
