@@ -71,16 +71,8 @@ export const handler: Handler = async (event) => {
       'https://api.ebay.com/oauth/api_scope/sell.marketing',
     ];
     console.log('[ebay-list-active-trading] Requesting token with scopes:', tokenScopes.join(', '));
-    
-    let access_token: string;
-    try {
-      const tokenResult = await accessTokenFromRefresh(refresh, tokenScopes);
-      access_token = tokenResult.access_token;
-      console.log('[ebay-list-active-trading] [OK] Got access token, length:', access_token?.length);
-    } catch (tokenErr: any) {
-      console.error('[ebay-list-active-trading] [ERROR] Token refresh failed:', tokenErr?.message || tokenErr);
-      throw new Error(`Failed to refresh eBay token: ${tokenErr?.message || 'Unknown error'}`);
-    }
+    const { access_token } = await accessTokenFromRefresh(refresh, tokenScopes);
+    console.log('[ebay-list-active-trading] Got access token, length:', access_token?.length);
     
     // Decode token to see what scopes we actually got (JWT format: header.payload.signature)
     try {
@@ -96,8 +88,6 @@ export const handler: Handler = async (event) => {
     const { apiHost } = tokenHosts(process.env.EBAY_ENV);
 
     // Use GetMyeBaySelling Trading API - gets ALL active listings regardless of creation method
-    // The <ActiveList> container returns only currently active listings
-    // Manually ended listings should NOT appear in ActiveList (they move to UnsoldList or DeletedFromSoldList)
     async function listActiveOffers(): Promise<ActiveOffer[]> {
       console.log('[ebay-list-active-trading] Using GetMyeBaySelling Trading API');
       
@@ -125,6 +115,7 @@ export const handler: Handler = async (event) => {
   <OutputSelector>Item.ItemID</OutputSelector>
   <OutputSelector>Item.Title</OutputSelector>
   <OutputSelector>Item.SKU</OutputSelector>
+  <OutputSelector>Item.SellerInventoryID</OutputSelector>
   <OutputSelector>Item.SellingStatus.ListingStatus</OutputSelector>
   <OutputSelector>Item.SellingStatus.AdminEnded</OutputSelector>
   <OutputSelector>Item.SellingStatus.CurrentPrice</OutputSelector>
@@ -135,6 +126,7 @@ export const handler: Handler = async (event) => {
   <OutputSelector>Item.GalleryURL</OutputSelector>
   <OutputSelector>Item.PictureURL</OutputSelector>
   <OutputSelector>Item.ListingDetails.StartTime</OutputSelector>
+  <OutputSelector>Item.ListingDetails.EndReason</OutputSelector>
   <OutputSelector>Item.WatchCount</OutputSelector>
   <OutputSelector>Item.HitCount</OutputSelector>
 </GetMyeBaySellingRequest>`;
@@ -170,27 +162,15 @@ export const handler: Handler = async (event) => {
         
         // Check for API errors in response
         if (xmlText.includes('<Ack>Failure</Ack>') || xmlText.includes('<Ack>PartialFailure</Ack>')) {
-          // Extract error messages for better debugging
-          const errorMatch = xmlText.match(/<LongMessage>(.*?)<\/LongMessage>/);
-          const errorCode = xmlText.match(/<ErrorCode>(.*?)<\/ErrorCode>/);
-          const errorMsg = errorMatch ? errorMatch[1] : 'Unknown error';
-          const errCode = errorCode ? errorCode[1] : 'N/A';
-          console.error('[ebay-list-active-trading] [ERROR] API returned error:', errCode, errorMsg);
-          console.error('[ebay-list-active-trading] Error XML:', xmlText.substring(0, 1000));
-          throw new Error(`eBay API error ${errCode}: ${errorMsg}`);
+          console.error('[ebay-list-active-trading] API returned error:', xmlText.substring(0, 500));
+          throw new Error('eBay API returned error');
         }
         
         // Parse items from XML (basic regex parsing)
         const hasMoreItems = xmlText.includes('<HasMoreItems>true</HasMoreItems>');
         
-        // Extract ItemArray items - wrap in try/catch for regex issues
-        let itemMatches;
-        try {
-          itemMatches = xmlText.matchAll(/<Item>(.*?)<\/Item>/gs);
-        } catch (regexErr: any) {
-          console.error('[ebay-list-active-trading] [ERROR] Regex parsing failed:', regexErr?.message);
-          throw new Error('Failed to parse XML response');
-        }
+        // Extract ItemArray items
+        const itemMatches = xmlText.matchAll(/<Item>(.*?)<\/Item>/gs);
         
         let itemCount = 0;
         for (const match of itemMatches) {
@@ -218,6 +198,10 @@ export const handler: Handler = async (event) => {
           const watchCountMatch = itemXml.match(/<WatchCount>([^<]+)<\/WatchCount>/);
           const hitCountMatch = itemXml.match(/<HitCount>([^<]+)<\/HitCount>/);
           
+          // Check if this is an Inventory API listing (has SellerInventoryID)
+          const sellerInventoryIdMatch = itemXml.match(/<SellerInventoryID>([^<]+)<\/SellerInventoryID>/);
+          const isInventoryListing = !!sellerInventoryIdMatch;
+          
           // Check listing status - skip if ended, deleted, or not active
           // Try multiple patterns since eBay XML structure can vary
           let listingStatus = '';
@@ -242,6 +226,12 @@ export const handler: Handler = async (event) => {
                                    itemXml.match(/<AdminEnded>([^<]+)<\/AdminEnded>/);
           const isAdminEnded = adminEndedMatch && adminEndedMatch[1].toLowerCase() === 'true';
           
+          // Check for end reason (e.g., LostOrBroken, NotAvailable, Incorrect, Sold, etc.)
+          // EndReason is inside ListingDetails
+          const endReasonMatch = itemXml.match(/<ListingDetails>.*?<EndReason>([^<]+)<\/EndReason>.*?<\/ListingDetails>/s) ||
+                                 itemXml.match(/<EndReason>([^<]+)<\/EndReason>/);
+          const endReason = endReasonMatch ? endReasonMatch[1] : null;
+          
           // Parse quantities
           const quantityAvailable = quantityAvailMatch ? parseInt(quantityAvailMatch[1]) : (quantityMatch ? parseInt(quantityMatch[1]) : 0);
           const quantitySold = quantitySoldMatch ? parseInt(quantitySoldMatch[1]) : 0;
@@ -250,8 +240,9 @@ export const handler: Handler = async (event) => {
           // Skip if:
           // 1. Status is not "Active" (could be "Completed", "Ended", "Inactive", "CustomCode")
           // 2. Administratively ended by eBay
-          // 3. Quantity available is 0 or negative
-          // 4. All items are sold (quantity sold >= total quantity for fixed price listings)
+          // 3. Has an end reason (seller or eBay ended it)
+          // 4. Quantity available is 0 or negative
+          // 5. All items are sold (quantity sold >= total quantity for fixed price listings)
           
           // Check if administratively ended
           if (isAdminEnded) {
@@ -259,18 +250,18 @@ export const handler: Handler = async (event) => {
             continue;
           }
           
+          // Check if manually ended or has end reason
+          if (endReason) {
+            console.log(`[ebay-list-active-trading] Skipping item ${itemIdMatch?.[1]} - end reason: ${endReason}`);
+            continue;
+          }
+          
           // eBay statuses: Active, Completed, Ended, CustomCode, ActiveWithWatchers
           // We only want Active or ActiveWithWatchers
-          // Note: Items in ActiveList should only be Active, but filter just in case
           const validStatuses = ['Active', 'ActiveWithWatchers'];
-          if (sellingStatus) {
-            if (!validStatuses.includes(sellingStatus)) {
-              console.log(`[ebay-list-active-trading] Skipping item ${itemIdMatch?.[1]} - invalid status: ${sellingStatus}`);
-              continue;
-            }
-          } else {
-            // If no status found, log it but include the item (ActiveList should only have active items)
-            console.log(`[ebay-list-active-trading] Warning: No ListingStatus found for item ${itemIdMatch?.[1]}, including it`);
+          if (sellingStatus && !validStatuses.includes(sellingStatus)) {
+            console.log(`[ebay-list-active-trading] Skipping item ${itemIdMatch?.[1]} - status: ${sellingStatus}`);
+            continue;
           }
           
           if (quantityAvailable <= 0) {
@@ -291,7 +282,7 @@ export const handler: Handler = async (event) => {
               offerId: itemId,
               listingId: itemId,
               sku: skuMatch ? skuMatch[1] : itemId, // Use itemId as fallback SKU
-              isInventoryListing: false, // Cannot determine from Trading API, assume traditional listing
+              isInventoryListing: isInventoryListing, // Flag to determine which API to use for updates
               title: titleMatch ? titleMatch[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>') : '',
               price: priceMatch ? {
                 value: priceMatch[1],
@@ -458,28 +449,12 @@ export const handler: Handler = async (event) => {
       body: JSON.stringify({ ok: true, count: activeOffers.length, offers: activeOffers }),
     };
   } catch (e: any) {
-    console.error('[ebay-list-active-trading] [ERROR]:', e?.message || e);
-    console.error('[ebay-list-active-trading] Error name:', e?.name);
-    console.error('[ebay-list-active-trading] Error stack:', e?.stack);
-    
-    // Log additional context if available
-    if (e?.response) {
-      console.error('[ebay-list-active-trading] Response status:', e.response.status);
-      console.error('[ebay-list-active-trading] Response data:', e.response.data);
-    }
-    if (e?.cause) {
-      console.error('[ebay-list-active-trading] Error cause:', e.cause);
-    }
-    
+    console.error('[ebay-list-active-trading] Error:', e?.message || e);
+    console.error('[ebay-list-active-trading] Stack:', e?.stack);
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        error: 'Failed to list active offers', 
-        detail: e?.message || String(e),
-        errorType: e?.name || 'Unknown',
-        timestamp: new Date().toISOString()
-      }),
+      body: JSON.stringify({ error: 'Failed to list active offers', detail: e?.message || String(e) }),
     };
   }
 };
