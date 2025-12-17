@@ -3,6 +3,23 @@ import { accessTokenFromRefresh, tokenHosts } from '../../src/lib/_common.js';
 import { tokensStore } from '../../src/lib/_blobs.js';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
 
+// Helper function to parse ItemIDs from eBay XML response
+export function parseItemIdsFromXml(xmlText: string): Set<string> {
+  const itemIds = new Set<string>();
+  const itemIdMatches = xmlText.matchAll(/<ItemID>([^<]+)<\/ItemID>/g);
+  for (const match of itemIdMatches) {
+    itemIds.add(match[1]);
+  }
+  return itemIds;
+}
+
+// Helper function to check if XML contains error response
+export function checkXmlForErrors(xmlText: string): void {
+  if (xmlText.includes('<Ack>Failure</Ack>') || xmlText.includes('<Ack>PartialFailure</Ack>')) {
+    throw new Error(`eBay API returned error: ${xmlText.substring(0, 500)}`);
+  }
+}
+
 interface ActiveOffer {
   itemId?: string;
   offerId: string;
@@ -121,12 +138,21 @@ export const handler: Handler = async (event) => {
           body: xmlRequest,
         });
 
+        if (!res.ok) {
+          const text = await res.text();
+          console.error(`[ebay-list-active-trading] UnsoldList API error:`, res.status, text);
+          throw new Error(`UnsoldList API failed: ${res.status}`);
+        }
+
         const xmlText = await res.text();
         
+        // Check for API errors in response
+        checkXmlForErrors(xmlText);
+        
         // Extract ItemIDs from unsold list
-        const itemIdMatches = xmlText.matchAll(/<ItemID>([^<]+)<\/ItemID>/g);
-        for (const match of itemIdMatches) {
-          unsoldIds.add(match[1]);
+        const itemIdsFromPage = parseItemIdsFromXml(xmlText);
+        for (const id of itemIdsFromPage) {
+          unsoldIds.add(id);
         }
         
         // Check if there are more pages
