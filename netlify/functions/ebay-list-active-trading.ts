@@ -92,6 +92,38 @@ export function shouldExcludeActiveItem(itemXml: string, unsoldSet: Set<string>,
   return null; // Don't exclude
 }
 
+/**
+ * Builds the XML request for GetMyeBaySelling UnsoldList.
+ * 
+ * @param accessToken - eBay access token
+ * @param pageNumber - Page number for pagination (1-based)
+ * @param entriesPerPage - Number of entries per page
+ * @param durationInDays - Lookback window in days (default 60, configurable via env)
+ * @returns XML request string
+ */
+export function buildUnsoldListRequest(
+  accessToken: string,
+  pageNumber: number,
+  entriesPerPage: number,
+  durationInDays: number
+): string {
+  return `<?xml version="1.0" encoding="utf-8"?>
+<GetMyeBaySellingRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <RequesterCredentials>
+    <eBayAuthToken>${accessToken}</eBayAuthToken>
+  </RequesterCredentials>
+  <UnsoldList>
+    <Include>true</Include>
+    <DurationInDays>${durationInDays}</DurationInDays>
+    <Pagination>
+      <EntriesPerPage>${entriesPerPage}</EntriesPerPage>
+      <PageNumber>${pageNumber}</PageNumber>
+    </Pagination>
+  </UnsoldList>
+  <DetailLevel>ReturnAll</DetailLevel>
+</GetMyeBaySellingRequest>`;
+}
+
 interface ActiveOffer {
   itemId?: string;
   offerId: string;
@@ -183,21 +215,12 @@ export const handler: Handler = async (event) => {
       let pageNumber = 1;
       const entriesPerPage = 200;
       
+      // Get DurationInDays from env var or default to 60 days
+      const durationInDays = parseInt(process.env.UNSOLD_LIST_DURATION_DAYS || '60', 10);
+      console.log(`[ebay-list-active-trading] UnsoldList lookback window: ${durationInDays} days`);
+      
       while (true) {
-        const xmlRequest = `<?xml version="1.0" encoding="utf-8"?>
-<GetMyeBaySellingRequest xmlns="urn:ebay:apis:eBLBaseComponents">
-  <RequesterCredentials>
-    <eBayAuthToken>${access_token}</eBayAuthToken>
-  </RequesterCredentials>
-  <UnsoldList>
-    <Include>true</Include>
-    <Pagination>
-      <EntriesPerPage>${entriesPerPage}</EntriesPerPage>
-      <PageNumber>${pageNumber}</PageNumber>
-    </Pagination>
-  </UnsoldList>
-  <DetailLevel>ReturnAll</DetailLevel>
-</GetMyeBaySellingRequest>`;
+        const xmlRequest = buildUnsoldListRequest(access_token, pageNumber, entriesPerPage, durationInDays);
 
         const res = await fetch('https://api.ebay.com/ws/api.dll', {
           method: 'POST',

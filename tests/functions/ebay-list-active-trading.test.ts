@@ -1,6 +1,46 @@
-import { parseItemIdsFromXml, checkXmlForErrors, shouldExcludeActiveItem, extractItemIdsFromContainer } from '../../netlify/functions/ebay-list-active-trading';
+import { parseItemIdsFromXml, checkXmlForErrors, shouldExcludeActiveItem, extractItemIdsFromContainer, buildUnsoldListRequest } from '../../netlify/functions/ebay-list-active-trading';
 
 describe('ebay-list-active-trading helpers', () => {
+  describe('buildUnsoldListRequest', () => {
+    it('should include DurationInDays with default value', () => {
+      const xml = buildUnsoldListRequest('test-token', 1, 200, 60);
+      expect(xml).toContain('<DurationInDays>60</DurationInDays>');
+    });
+
+    it('should include DurationInDays with custom value', () => {
+      const xml = buildUnsoldListRequest('test-token', 1, 200, 90);
+      expect(xml).toContain('<DurationInDays>90</DurationInDays>');
+    });
+
+    it('should include pagination tags', () => {
+      const xml = buildUnsoldListRequest('test-token', 2, 100, 60);
+      expect(xml).toContain('<Pagination>');
+      expect(xml).toContain('<EntriesPerPage>100</EntriesPerPage>');
+      expect(xml).toContain('<PageNumber>2</PageNumber>');
+      expect(xml).toContain('</Pagination>');
+    });
+
+    it('should include access token', () => {
+      const xml = buildUnsoldListRequest('my-secret-token', 1, 200, 60);
+      expect(xml).toContain('<eBayAuthToken>my-secret-token</eBayAuthToken>');
+    });
+
+    it('should include UnsoldList container with Include true', () => {
+      const xml = buildUnsoldListRequest('test-token', 1, 200, 60);
+      expect(xml).toContain('<UnsoldList>');
+      expect(xml).toContain('<Include>true</Include>');
+      expect(xml).toContain('</UnsoldList>');
+    });
+
+    it('should be valid XML structure', () => {
+      const xml = buildUnsoldListRequest('test-token', 1, 200, 60);
+      expect(xml).toContain('<?xml version="1.0" encoding="utf-8"?>');
+      expect(xml).toContain('<GetMyeBaySellingRequest xmlns="urn:ebay:apis:eBLBaseComponents">');
+      expect(xml).toContain('</GetMyeBaySellingRequest>');
+      expect(xml).toContain('<DetailLevel>ReturnAll</DetailLevel>');
+    });
+  });
+
   describe('extractItemIdsFromContainer', () => {
     it('should extract ItemIDs only from specified container', () => {
       const xml = `<?xml version="1.0" encoding="UTF-8"?>
