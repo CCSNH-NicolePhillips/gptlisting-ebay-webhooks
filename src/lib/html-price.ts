@@ -70,6 +70,40 @@ type ExtractedData = {
   productType?: string;
 };
 
+/**
+ * Enhanced price extraction result with shipping information - Phase 3
+ * Maintains backward compatibility while adding Amazon shipping extraction
+ */
+export interface PriceExtractionResult {
+  /**
+   * Amazon item price (normalized for single unit if multi-pack)
+   * Same as the legacy extractPriceFromHtml return value
+   */
+  amazonItemPrice: number | null;
+  
+  /**
+   * Amazon shipping cost
+   * - 0 when "FREE Shipping" or "FREE Delivery" is detected
+   * - Parsed value when shipping cost is visible
+   * - 0 with shippingEvidence='unknown' when cannot be determined
+   */
+  amazonShippingPrice: number;
+  
+  /**
+   * Optional: Amazon total price if explicitly shown
+   * Useful for validation: amazonItemPrice + amazonShippingPrice should ≈ amazonTotalPrice
+   */
+  amazonTotalPrice?: number;
+  
+  /**
+   * Evidence for shipping price extraction
+   * - 'free': Explicit "FREE Shipping" or "FREE Delivery" found
+   * - 'paid': Shipping cost parsed (e.g., "$5.99 shipping")
+   * - 'unknown': Could not determine shipping (defaults to 0)
+   */
+  shippingEvidence: 'free' | 'paid' | 'unknown';
+}
+
 interface OfferCandidate {
   price: number;
   currency?: string;
@@ -789,15 +823,111 @@ function detectAmazonSelectedVariant($: cheerio.CheerioAPI): { packSize?: number
   return null;
 }
 
-export function extractPriceFromHtml(html: string, productTitle?: string): number | null {
+/**
+ * Extract Amazon shipping cost from HTML - Phase 3
+ * 
+ * PATTERNS TO DETECT:
+ * - "FREE Shipping" / "FREE Delivery" → 0, evidence='free'
+ * - "$5.99 shipping" / "$12.50 Shipping & Import Fees" → parsed value, evidence='paid'
+ * - Cannot determine → 0, evidence='unknown'
+ * 
+ * @param $ - Cheerio instance loaded with Amazon page HTML
+ * @returns Object with shippingPrice and evidence
+ */
+function extractAmazonShipping($: cheerio.CheerioAPI): { shippingPrice: number; evidence: 'free' | 'paid' | 'unknown' } {
+  // Pattern 1: Look for "FREE" shipping indicators
+  const freeShippingPatterns = [
+    /FREE\s+(Shipping|Delivery)/i,
+    /Free\s+Returns/i, // Often appears near shipping info
+  ];
+  
+  const bodyText = $('body').text();
+  
+  // Check for explicit FREE shipping
+  for (const pattern of freeShippingPatterns) {
+    if (pattern.test(bodyText)) {
+      console.log(`[HTML Parser] 🚚 Found FREE shipping indicator`);
+      return { shippingPrice: 0, evidence: 'free' };
+    }
+  }
+  
+  // Pattern 2: Look for paid shipping with price
+  // Common formats:
+  // - "$5.99 shipping"
+  // - "+ $12.50 Shipping & Import Fees"
+  // - "Shipping: $6.99"
+  const shippingPricePatterns = [
+    /\+?\s*\$(\d+\.?\d*)\s*(?:shipping|delivery|Shipping\s*&\s*Import)/i,
+    /(?:shipping|delivery):\s*\$(\d+\.?\d*)/i,
+  ];
+  
+  for (const pattern of shippingPricePatterns) {
+    const match = bodyText.match(pattern);
+    if (match && match[1]) {
+      const shippingCost = parseFloat(match[1]);
+      if (shippingCost > 0) {
+        console.log(`[HTML Parser] 🚚 Found paid shipping: $${shippingCost.toFixed(2)}`);
+        return { shippingPrice: shippingCost, evidence: 'paid' };
+      }
+    }
+  }
+  
+  // Pattern 3: Check common Amazon shipping selectors
+  const shippingSelectors = [
+    '#ourprice_shippingmessage',
+    '#price-shipping-message',
+    '[data-feature-name="shippingMessageInsideBuyBox"]',
+    '.a-size-base.a-color-secondary:contains("shipping")',
+  ];
+  
+  for (const selector of shippingSelectors) {
+    const element = $(selector);
+    if (element.length > 0) {
+      const text = element.text().trim();
+      
+      // Check if it says FREE
+      if (/FREE/i.test(text)) {
+        console.log(`[HTML Parser] 🚚 Found FREE shipping in selector: ${selector}`);
+        return { shippingPrice: 0, evidence: 'free' };
+      }
+      
+      // Try to parse a price
+      const priceMatch = text.match(/\$(\d+\.?\d*)/);
+      if (priceMatch && priceMatch[1]) {
+        const shippingCost = parseFloat(priceMatch[1]);
+        if (shippingCost > 0) {
+          console.log(`[HTML Parser] 🚚 Found paid shipping in selector ${selector}: $${shippingCost.toFixed(2)}`);
+          return { shippingPrice: shippingCost, evidence: 'paid' };
+        }
+      }
+    }
+  }
+  
+  // Could not determine shipping
+  console.log(`[HTML Parser] 🚚 Could not determine shipping cost, defaulting to 0 with evidence='unknown'`);
+  return { shippingPrice: 0, evidence: 'unknown' };
+}
+
+/**
+ * Extract price from HTML with shipping information - Phase 3 Enhanced
+ * Returns enhanced result with shipping data
+ */
+export function extractPriceWithShipping(html: string, productTitle?: string): PriceExtractionResult {
   try {
     // Check for bundle/subscription page FIRST before parsing
     if (isProbablyBundlePage(html)) {
       console.log('[HTML Parser] ⚠️ Bundle/subscription indicators found, skipping this URL as price source');
-      return null;
+      return {
+        amazonItemPrice: null,
+        amazonShippingPrice: 0,
+        shippingEvidence: 'unknown',
+      };
     }
     
     const $ = cheerio.load(html);
+    
+    // Extract shipping information
+    const { shippingPrice, evidence } = extractAmazonShipping($);
     
     // Check for Amazon variant selector (more reliable than title parsing)
     const amazonVariant = detectAmazonSelectedVariant($);
@@ -828,7 +958,13 @@ export function extractPriceFromHtml(html: string, productTitle?: string): numbe
     const data = extractFromJsonLd($, requestedSize);
     
     // If JSON-LD explicitly rejected prices (returned -1), don't fallback
-    if (data.price === -1) return null;
+    if (data.price === -1) {
+      return {
+        amazonItemPrice: null,
+        amazonShippingPrice: shippingPrice,
+        shippingEvidence: evidence,
+      };
+    }
     
     // If JSON-LD says to skip OpenGraph (e.g., subscription-only), skip it
     const openGraphPrice = data.skipOpenGraph ? null : extractFromOpenGraph($);
@@ -836,35 +972,62 @@ export function extractPriceFromHtml(html: string, productTitle?: string): numbe
     // Pass pack info and product title to body extraction
     const rawPrice = data.price ?? openGraphPrice ?? extractFromBody($, packInfo, productTitle);
     
-    // If no price found, return null
-    if (rawPrice === null) return null;
+    // If no price found, return null for item price
+    if (rawPrice === null) {
+      return {
+        amazonItemPrice: null,
+        amazonShippingPrice: shippingPrice,
+        shippingEvidence: evidence,
+      };
+    }
     
     // CHUNK 2 & 4: Calculate unitsSold and normalize price
     // Prefer Amazon variant pack size over title detection
     let unitsSold: number;
-    let evidence: string[];
+    let evidenceArray: string[];
     
     if (amazonVariant?.packSize && amazonVariant.packSize > 1) {
       unitsSold = amazonVariant.packSize;
-      evidence = [`Amazon dropdown: Pack of ${unitsSold}`];
+      evidenceArray = [`Amazon dropdown: Pack of ${unitsSold}`];
       console.log(`[HTML Parser] Using Amazon variant pack size: ${unitsSold}`);
     } else {
-      ({ unitsSold, evidence } = detectUnitsSoldFromTitle(titleForUnitsSold));
+      ({ unitsSold, evidence: evidenceArray } = detectUnitsSoldFromTitle(titleForUnitsSold));
     }
     
     let normalizedPrice = rawPrice;
     if (unitsSold > 1) {
       normalizedPrice = rawPrice / unitsSold;
-      const evidenceStr = evidence.length > 0 ? ` | Evidence: [${evidence.join(', ')}]` : '';
+      const evidenceStr = evidenceArray.length > 0 ? ` | Evidence: [${evidenceArray.join(', ')}]` : '';
       console.log(`[HTML Parser] 📦 Raw price: $${rawPrice.toFixed(2)} | Units sold: ${unitsSold} | Normalized price: $${normalizedPrice.toFixed(2)}${evidenceStr}`);
     } else {
       console.log(`[HTML Parser] 📦 Raw price: $${rawPrice.toFixed(2)} | Units sold: 1 | Normalized price: $${normalizedPrice.toFixed(2)} (no adjustment)`);
     }
     
-    return normalizedPrice;
-  } catch {
-    return null;
+    return {
+      amazonItemPrice: normalizedPrice,
+      amazonShippingPrice: shippingPrice,
+      shippingEvidence: evidence,
+    };
+  } catch (error) {
+    console.error('[HTML Parser] Error extracting price with shipping:', error);
+    return {
+      amazonItemPrice: null,
+      amazonShippingPrice: 0,
+      shippingEvidence: 'unknown',
+    };
   }
+}
+
+/**
+ * Legacy function - extracts price only (no shipping)
+ * Maintained for backward compatibility with existing callers
+ * 
+ * @deprecated Consider using extractPriceWithShipping for enhanced data
+ */
+export function extractPriceFromHtml(html: string, productTitle?: string): number | null {
+  // Delegate to new function and return only the item price for backward compatibility
+  const result = extractPriceWithShipping(html, productTitle);
+  return result.amazonItemPrice;
 }
 
 /**
