@@ -229,7 +229,7 @@ describe('ebay-list-active-trading helpers', () => {
       `;
       
       const result = shouldExcludeActiveItem(itemXml, unsoldSet, nowMs);
-      expect(result).toBe(true);
+      expect(result).toBe('timeLeftPT0S');
     });
 
     it('should exclude item with EndTime in the past', () => {
@@ -242,7 +242,7 @@ describe('ebay-list-active-trading helpers', () => {
       `;
       
       const result = shouldExcludeActiveItem(itemXml, unsoldSet, nowMs);
-      expect(result).toBe(true);
+      expect(result).toBe('endTimePast');
     });
 
     it('should NOT exclude item with EndTime in the future', () => {
@@ -255,7 +255,7 @@ describe('ebay-list-active-trading helpers', () => {
       `;
       
       const result = shouldExcludeActiveItem(itemXml, unsoldSet, nowMs);
-      expect(result).toBe(false);
+      expect(result).toBe(null);
     });
 
     it('should exclude item in unsold set', () => {
@@ -267,7 +267,7 @@ describe('ebay-list-active-trading helpers', () => {
       `;
       
       const result = shouldExcludeActiveItem(itemXml, unsoldSet, nowMs);
-      expect(result).toBe(true);
+      expect(result).toBe('unsold');
     });
 
     it('should NOT exclude item with no EndTime and no TimeLeft', () => {
@@ -278,7 +278,7 @@ describe('ebay-list-active-trading helpers', () => {
       `;
       
       const result = shouldExcludeActiveItem(itemXml, unsoldSet, nowMs);
-      expect(result).toBe(false);
+      expect(result).toBe(null);
     });
 
     it('should NOT exclude item within 60s clock jitter buffer', () => {
@@ -292,7 +292,7 @@ describe('ebay-list-active-trading helpers', () => {
       `;
       
       const result = shouldExcludeActiveItem(itemXml, unsoldSet, nowMs);
-      expect(result).toBe(false);
+      expect(result).toBe(null);
     });
 
     it('should exclude item beyond 60s clock jitter buffer', () => {
@@ -306,7 +306,7 @@ describe('ebay-list-active-trading helpers', () => {
       `;
       
       const result = shouldExcludeActiveItem(itemXml, unsoldSet, nowMs);
-      expect(result).toBe(true);
+      expect(result).toBe('endTimePast');
     });
 
     it('should handle item with no ItemID gracefully', () => {
@@ -316,7 +316,7 @@ describe('ebay-list-active-trading helpers', () => {
       `;
       
       const result = shouldExcludeActiveItem(itemXml, unsoldSet, nowMs);
-      expect(result).toBe(false); // No ItemID = don't exclude
+      expect(result).toBe(null); // No ItemID = don't exclude
     });
 
     it('should exclude based on PT0S even if EndTime is in future', () => {
@@ -330,7 +330,7 @@ describe('ebay-list-active-trading helpers', () => {
       `;
       
       const result = shouldExcludeActiveItem(itemXml, unsoldSet, nowMs);
-      expect(result).toBe(true); // PT0S takes precedence
+      expect(result).toBe('timeLeftPT0S'); // PT0S takes precedence
     });
   });
 });

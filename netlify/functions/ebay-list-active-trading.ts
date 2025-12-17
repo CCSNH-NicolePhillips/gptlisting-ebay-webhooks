@@ -27,26 +27,26 @@ export function checkXmlForErrors(xmlText: string): void {
  * @param itemXml - The XML content of a single Item element
  * @param unsoldSet - Set of ItemIDs that are in the UnsoldList
  * @param nowMs - Current timestamp in milliseconds (for testing/clock jitter buffer)
- * @returns true if the item should be excluded, false otherwise
+ * @returns exclusion reason string if excluded, null if not excluded
  */
-export function shouldExcludeActiveItem(itemXml: string, unsoldSet: Set<string>, nowMs: number): boolean {
+export function shouldExcludeActiveItem(itemXml: string, unsoldSet: Set<string>, nowMs: number): string | null {
   // Extract ItemID
   const itemIdMatch = itemXml.match(/<ItemID>([^<]+)<\/ItemID>/);
   if (!itemIdMatch) {
-    return false; // No ItemID found, don't exclude
+    return null; // No ItemID found, don't exclude
   }
   
   const itemId = itemIdMatch[1];
   
   // Exclude if in unsold list
   if (unsoldSet.has(itemId)) {
-    return true;
+    return 'unsold';
   }
   
   // Check TimeLeft - if PT0S, this is ended
   const timeLeftMatch = itemXml.match(/<TimeLeft>([^<]+)<\/TimeLeft>/);
   if (timeLeftMatch && timeLeftMatch[1] === 'PT0S') {
-    return true; // Ended listing with no time left
+    return 'timeLeftPT0S'; // Ended listing with no time left
   }
   
   // Check EndTime - if in the past (with 60s buffer for clock jitter), this is ended
@@ -55,11 +55,11 @@ export function shouldExcludeActiveItem(itemXml: string, unsoldSet: Set<string>,
     const endTimeStr = endTimeMatch[1];
     const endTimeMs = Date.parse(endTimeStr);
     if (!isNaN(endTimeMs) && endTimeMs <= nowMs - 60_000) {
-      return true; // EndTime in the past (with 60s buffer)
+      return 'endTimePast'; // EndTime in the past (with 60s buffer)
     }
   }
   
-  return false; // Don't exclude
+  return null; // Don't exclude
 }
 
 interface ActiveOffer {
@@ -218,6 +218,12 @@ export const handler: Handler = async (event) => {
       let pageNumber = 1;
       const entriesPerPage = 200;
       
+      // Diagnostic counters
+      let totalItemsScanned = 0;
+      let skippedUnsold = 0;
+      let skippedTimeLeftPT0S = 0;
+      let skippedEndTimePast = 0;
+      
       while (true) {
         // Build Trading API XML request for GetMyeBaySelling
         // Request selling status details to check for admin ended items and end reasons
@@ -281,6 +287,7 @@ export const handler: Handler = async (event) => {
         let itemCount = 0;
         for (const match of itemMatches) {
           const itemXml = match[1];
+          totalItemsScanned++;
           
           // Log first item's full XML to see structure
           if (pageNumber === 1 && itemCount === 0) {
@@ -291,10 +298,12 @@ export const handler: Handler = async (event) => {
           const itemIdMatch = itemXml.match(/<ItemID>([^<]+)<\/ItemID>/);
           
           // Skip zombie ended listings and unsold items
-          if (shouldExcludeActiveItem(itemXml, unsoldItemIds, Date.now())) {
-            if (itemIdMatch) {
-              console.log(`[ebay-list-active-trading] Skipping item ${itemIdMatch[1]} - excluded by filter`);
-            }
+          const exclusionReason = shouldExcludeActiveItem(itemXml, unsoldItemIds, Date.now());
+          if (exclusionReason) {
+            // Track skip reason
+            if (exclusionReason === 'unsold') skippedUnsold++;
+            else if (exclusionReason === 'timeLeftPT0S') skippedTimeLeftPT0S++;
+            else if (exclusionReason === 'endTimePast') skippedEndTimePast++;
             continue;
           }
           
@@ -447,6 +456,19 @@ export const handler: Handler = async (event) => {
         }
         pageNumber++;
       }
+      
+      // Log diagnostic summary
+      console.log('[ebay-list-active-trading] DIAGNOSTIC SUMMARY:', {
+        unsoldCountFetched: unsoldItemIds.size,
+        activeItemsScanned: totalItemsScanned,
+        activeItemsReturned: results.length,
+        skippedByReason: {
+          skippedUnsold,
+          skippedTimeLeftPT0S,
+          skippedEndTimePast,
+        },
+        totalSkipped: skippedUnsold + skippedTimeLeftPT0S + skippedEndTimePast,
+      });
       
       return results;
     }
