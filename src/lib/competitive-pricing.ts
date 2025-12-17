@@ -89,11 +89,11 @@ export function calculateCompetitivePricing(
   
   if (priceData.amazonItemPrice === null) {
     // Could not extract price from HTML
-    console.log('[competitive-pricing] ❌ Failed to extract Amazon price from HTML');
+    console.log('[competitive-pricing] [FAIL] Failed to extract Amazon price from HTML');
     return null;
   }
 
-  console.log('[competitive-pricing] ✓ Extracted Amazon prices:', {
+  console.log('[competitive-pricing] [OK] Extracted Amazon prices:', {
     itemPrice: `$${priceData.amazonItemPrice.toFixed(2)}`,
     shippingPrice: `$${priceData.amazonShippingPrice.toFixed(2)}`,
     shippingEvidence: priceData.shippingEvidence
@@ -106,7 +106,7 @@ export function calculateCompetitivePricing(
     discountPercent: pricingRules.discountPercent,
   });
 
-  console.log('[competitive-pricing] ✓ Computed totals:', {
+  console.log('[competitive-pricing] [OK] Computed totals:', {
     amazonTotal: `$${amazonTotal.toFixed(2)}`,
     ebayTargetTotal: `$${ebayTargetTotal.toFixed(2)}`,
     discountAmount: `$${(amazonTotal - ebayTargetTotal).toFixed(2)}`,
@@ -121,7 +121,7 @@ export function calculateCompetitivePricing(
     amazonTotal,
   });
 
-  console.log('[competitive-pricing] ✓ Split eBay pricing:', {
+  console.log('[competitive-pricing] [OK] Split eBay pricing:', {
     ebayItemPrice: `$${splitResult.ebayItemPrice.toFixed(2)}`,
     ebayShippingPrice: `$${splitResult.ebayShippingPrice.toFixed(2)}`,
     ebayTotal: `$${(splitResult.ebayItemPrice + splitResult.ebayShippingPrice).toFixed(2)}`,
@@ -179,7 +179,7 @@ export function calculateEbayPriceWithFlag(input: {
     
     if (result) {
       // Log final result summary
-      console.log('[competitive-pricing] ✅ Final result:', {
+      console.log('[competitive-pricing] [SUCCESS] Final result:', {
         ebayItem: `$${result.ebayItemPrice.toFixed(2)}`,
         ebayShipping: `$${result.ebayShippingPrice.toFixed(2)}`,
         ebayTotal: `$${(result.ebayItemPrice + result.ebayShippingPrice).toFixed(2)}`,
@@ -194,7 +194,7 @@ export function calculateEbayPriceWithFlag(input: {
     }
     
     // Fallback to legacy if competitive pricing fails
-    console.log('[competitive-pricing] ⚠️  Failed to extract competitive pricing, falling back to legacy');
+    console.log('[competitive-pricing] [WARN] Failed to extract competitive pricing, falling back to legacy');
     console.log('[competitive-pricing] Using legacy formula: base × 0.9 - $5 (if > $30)');
     if (input.basePrice) {
       console.log('[competitive-pricing] Legacy input: basePrice=$' + input.basePrice.toFixed(2));

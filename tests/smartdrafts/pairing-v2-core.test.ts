@@ -235,7 +235,7 @@ describe("pairing-v2-core", () => {
     it("should classify book type correctly", async () => {
       const imagePaths = ["book.jpg"];
 
-      mockOpenAI.chat.completions.create.mockResolvedValue({
+      (mockOpenAI.chat.completions.create as jest.Mock<any>).mockResolvedValue({
         choices: [
           {
             message: {

@@ -76,9 +76,9 @@ export const handler: Handler = async (event) => {
     try {
       const tokenResult = await accessTokenFromRefresh(refresh, tokenScopes);
       access_token = tokenResult.access_token;
-      console.log('[ebay-list-active-trading] ✓ Got access token, length:', access_token?.length);
+      console.log('[ebay-list-active-trading] [OK] Got access token, length:', access_token?.length);
     } catch (tokenErr: any) {
-      console.error('[ebay-list-active-trading] ❌ Token refresh failed:', tokenErr?.message || tokenErr);
+      console.error('[ebay-list-active-trading] [ERROR] Token refresh failed:', tokenErr?.message || tokenErr);
       throw new Error(`Failed to refresh eBay token: ${tokenErr?.message || 'Unknown error'}`);
     }
     
@@ -175,7 +175,7 @@ export const handler: Handler = async (event) => {
           const errorCode = xmlText.match(/<ErrorCode>(.*?)<\/ErrorCode>/);
           const errorMsg = errorMatch ? errorMatch[1] : 'Unknown error';
           const errCode = errorCode ? errorCode[1] : 'N/A';
-          console.error('[ebay-list-active-trading] ❌ API returned error:', errCode, errorMsg);
+          console.error('[ebay-list-active-trading] [ERROR] API returned error:', errCode, errorMsg);
           console.error('[ebay-list-active-trading] Error XML:', xmlText.substring(0, 1000));
           throw new Error(`eBay API error ${errCode}: ${errorMsg}`);
         }
@@ -188,7 +188,7 @@ export const handler: Handler = async (event) => {
         try {
           itemMatches = xmlText.matchAll(/<Item>(.*?)<\/Item>/gs);
         } catch (regexErr: any) {
-          console.error('[ebay-list-active-trading] ❌ Regex parsing failed:', regexErr?.message);
+          console.error('[ebay-list-active-trading] [ERROR] Regex parsing failed:', regexErr?.message);
           throw new Error('Failed to parse XML response');
         }
         
@@ -469,7 +469,7 @@ export const handler: Handler = async (event) => {
       body: JSON.stringify({ ok: true, count: activeOffers.length, offers: activeOffers }),
     };
   } catch (e: any) {
-    console.error('[ebay-list-active-trading] ❌ ERROR:', e?.message || e);
+    console.error('[ebay-list-active-trading] [ERROR]:', e?.message || e);
     console.error('[ebay-list-active-trading] Error name:', e?.name);
     console.error('[ebay-list-active-trading] Error stack:', e?.stack);
     
