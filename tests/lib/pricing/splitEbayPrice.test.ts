@@ -380,6 +380,98 @@ describe('eBay Price Splitting Strategy - Phase 4', () => {
       expect(result.ebayShippingPrice).toBe(10.00);
       expect(result.ebayItemPrice + result.ebayShippingPrice).toBe(50.00);
     });
+
+    it('should handle rounding edge cases that could cause exceed', () => {
+      const rules: CompetitivePricingRules = {
+        shippingStrategy: 'MATCH_AMAZON',
+        discountPercent: 10,
+        neverExceedAmazonTotal: true,
+      };
+
+      // Edge case: rounding could cause 0.01 cent exceed
+      const result = splitEbayPrice({
+        ebayTargetTotal: 39.995, // Rounds to 40.00
+        amazonShippingPrice: 6.999, // Rounds to 7.00
+        rules,
+        amazonTotal: 39.99, // Cap just below split result
+      });
+
+      const ebayTotal = result.ebayItemPrice + result.ebayShippingPrice;
+      
+      expect(ebayTotal).toBeLessThanOrEqual(39.99);
+      expect(result.evidence.some(e => e.includes('Guardrail'))).toBe(true);
+      expect(result.evidence.some(e => e.includes('Reducing'))).toBe(true);
+    });
+
+    it('should prevent negative item price when shipping exceeds Amazon total', () => {
+      const rules: CompetitivePricingRules = {
+        shippingStrategy: 'MATCH_AMAZON',
+        discountPercent: 10,
+        neverExceedAmazonTotal: true,
+      };
+
+      // Extreme case: Amazon shipping alone exceeds cap
+      const result = splitEbayPrice({
+        ebayTargetTotal: 30.00,
+        amazonShippingPrice: 15.00,
+        rules,
+        amazonTotal: 12.00, // Shipping > total!
+      });
+
+      // Item price should be clamped to 0, not negative
+      expect(result.ebayItemPrice).toBeGreaterThanOrEqual(0);
+      expect(result.ebayItemPrice).toBe(0);
+      
+      // Shipping should also be reduced to fit
+      expect(result.ebayShippingPrice).toBeLessThanOrEqual(12.00);
+      expect(result.ebayItemPrice + result.ebayShippingPrice).toBeLessThanOrEqual(12.00);
+      
+      expect(result.evidence.some(e => e.includes('Guardrail'))).toBe(true);
+    });
+
+    it('should handle scenario where both item and shipping need reduction', () => {
+      const rules: CompetitivePricingRules = {
+        shippingStrategy: 'MATCH_AMAZON',
+        discountPercent: 5,
+        neverExceedAmazonTotal: true,
+      };
+
+      const result = splitEbayPrice({
+        ebayTargetTotal: 50.00,
+        amazonShippingPrice: 20.00,
+        rules,
+        amazonTotal: 25.00, // Much lower than target
+      });
+
+      // Both should be reduced to fit within $25 total
+      expect(result.ebayItemPrice + result.ebayShippingPrice).toBeLessThanOrEqual(25.00);
+      expect(result.ebayItemPrice).toBeGreaterThanOrEqual(0);
+      expect(result.ebayShippingPrice).toBeGreaterThanOrEqual(0);
+      
+      expect(result.evidence.some(e => e.includes('Guardrail'))).toBe(true);
+      expect(result.evidence.some(e => e.includes('Reducing'))).toBe(true);
+    });
+
+    it('should document guardrail trigger in evidence', () => {
+      const rules: CompetitivePricingRules = {
+        shippingStrategy: 'FREE_IF_AMAZON_FREE',
+        discountPercent: 10,
+        neverExceedAmazonTotal: true,
+      };
+
+      const result = splitEbayPrice({
+        ebayTargetTotal: 100.00,
+        amazonShippingPrice: 10.00,
+        rules,
+        amazonTotal: 95.00,
+      });
+
+      // Should have clear evidence trail
+      expect(result.evidence.some(e => e.includes('⚠️  Guardrail'))).toBe(true);
+      expect(result.evidence.some(e => e.includes('exceeds Amazon total'))).toBe(true);
+      expect(result.evidence.some(e => e.includes('Reducing'))).toBe(true);
+      expect(result.evidence.some(e => e.includes('Final eBay total'))).toBe(true);
+    });
   });
 
   describe('Non-negative item price guarantee', () => {
