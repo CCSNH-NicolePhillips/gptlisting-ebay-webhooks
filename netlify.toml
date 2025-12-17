@@ -46,6 +46,11 @@
 [functions."ebay-list-offers"]
   timeout = 26  # Max for Pro tier, handles multiple eBay API calls with retries
 
+# Promotion worker runs every minute to process queued promotion jobs
+[functions."promotion-worker"]
+  schedule = "*/1 * * * *"  # Every minute
+  timeout = 26
+
 # Reduce false positives in Netlify Secrets Scanning by omitting documentation/examples
 [build.environment]
   USE_NEW_SORTER = "false"
