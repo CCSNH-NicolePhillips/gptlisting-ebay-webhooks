@@ -71,8 +71,16 @@ export const handler: Handler = async (event) => {
       'https://api.ebay.com/oauth/api_scope/sell.marketing',
     ];
     console.log('[ebay-list-active-trading] Requesting token with scopes:', tokenScopes.join(', '));
-    const { access_token } = await accessTokenFromRefresh(refresh, tokenScopes);
-    console.log('[ebay-list-active-trading] Got access token, length:', access_token?.length);
+    
+    let access_token: string;
+    try {
+      const tokenResult = await accessTokenFromRefresh(refresh, tokenScopes);
+      access_token = tokenResult.access_token;
+      console.log('[ebay-list-active-trading] ✓ Got access token, length:', access_token?.length);
+    } catch (tokenErr: any) {
+      console.error('[ebay-list-active-trading] ❌ Token refresh failed:', tokenErr?.message || tokenErr);
+      throw new Error(`Failed to refresh eBay token: ${tokenErr?.message || 'Unknown error'}`);
+    }
     
     // Decode token to see what scopes we actually got (JWT format: header.payload.signature)
     try {
@@ -162,15 +170,27 @@ export const handler: Handler = async (event) => {
         
         // Check for API errors in response
         if (xmlText.includes('<Ack>Failure</Ack>') || xmlText.includes('<Ack>PartialFailure</Ack>')) {
-          console.error('[ebay-list-active-trading] API returned error:', xmlText.substring(0, 500));
-          throw new Error('eBay API returned error');
+          // Extract error messages for better debugging
+          const errorMatch = xmlText.match(/<LongMessage>(.*?)<\/LongMessage>/);
+          const errorCode = xmlText.match(/<ErrorCode>(.*?)<\/ErrorCode>/);
+          const errorMsg = errorMatch ? errorMatch[1] : 'Unknown error';
+          const errCode = errorCode ? errorCode[1] : 'N/A';
+          console.error('[ebay-list-active-trading] ❌ API returned error:', errCode, errorMsg);
+          console.error('[ebay-list-active-trading] Error XML:', xmlText.substring(0, 1000));
+          throw new Error(`eBay API error ${errCode}: ${errorMsg}`);
         }
         
         // Parse items from XML (basic regex parsing)
         const hasMoreItems = xmlText.includes('<HasMoreItems>true</HasMoreItems>');
         
-        // Extract ItemArray items
-        const itemMatches = xmlText.matchAll(/<Item>(.*?)<\/Item>/gs);
+        // Extract ItemArray items - wrap in try/catch for regex issues
+        let itemMatches;
+        try {
+          itemMatches = xmlText.matchAll(/<Item>(.*?)<\/Item>/gs);
+        } catch (regexErr: any) {
+          console.error('[ebay-list-active-trading] ❌ Regex parsing failed:', regexErr?.message);
+          throw new Error('Failed to parse XML response');
+        }
         
         let itemCount = 0;
         for (const match of itemMatches) {
@@ -449,12 +469,28 @@ export const handler: Handler = async (event) => {
       body: JSON.stringify({ ok: true, count: activeOffers.length, offers: activeOffers }),
     };
   } catch (e: any) {
-    console.error('[ebay-list-active-trading] Error:', e?.message || e);
-    console.error('[ebay-list-active-trading] Stack:', e?.stack);
+    console.error('[ebay-list-active-trading] ❌ ERROR:', e?.message || e);
+    console.error('[ebay-list-active-trading] Error name:', e?.name);
+    console.error('[ebay-list-active-trading] Error stack:', e?.stack);
+    
+    // Log additional context if available
+    if (e?.response) {
+      console.error('[ebay-list-active-trading] Response status:', e.response.status);
+      console.error('[ebay-list-active-trading] Response data:', e.response.data);
+    }
+    if (e?.cause) {
+      console.error('[ebay-list-active-trading] Error cause:', e.cause);
+    }
+    
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Failed to list active offers', detail: e?.message || String(e) }),
+      body: JSON.stringify({ 
+        error: 'Failed to list active offers', 
+        detail: e?.message || String(e),
+        errorType: e?.name || 'Unknown',
+        timestamp: new Date().toISOString()
+      }),
     };
   }
 };
