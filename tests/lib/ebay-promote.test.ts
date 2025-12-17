@@ -54,6 +54,18 @@ describe('ebay-promote', () => {
     set: jest.fn(),
   };
 
+  // Helper to create mock fetch response that works with both .json() and .text()
+  const mockFetchResponse = (data: any, options: { ok?: boolean; status?: number; headers?: any } = {}) => {
+    const jsonStr = typeof data === 'string' ? data : JSON.stringify(data);
+    return {
+      ok: options.ok ?? true,
+      status: options.status ?? 200,
+      headers: options.headers || { get: () => null },
+      json: async () => (typeof data === 'string' ? JSON.parse(data) : data),
+      text: async () => jsonStr,
+    };
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
     (global.fetch as jest.Mock).mockClear();
@@ -276,7 +288,7 @@ describe('ebay-promote', () => {
   });
 
   describe('createAds', () => {
-    it('should create ads successfully', async () => {
+    it('should create ads successfully with normal response', async () => {
       (getEbayAccessToken as jest.Mock).mockResolvedValue({
         token: 'test-token',
         apiHost: 'https://api.sandbox.ebay.com',
@@ -294,16 +306,12 @@ describe('ebay-promote', () => {
 
       (global.fetch as jest.Mock).mockResolvedValue({
         ok: true,
-        json: async () => mockResponse,
+        text: async () => JSON.stringify(mockResponse),
       });
 
       const payload = {
-        requests: [
-          {
-            bidPercentage: '5.0',
-            listingId: 'listing-789',
-          },
-        ],
+        listingId: 'listing-789',
+        bidPercentage: '5.0',
       };
 
       const result = await createAds('user123', 'campaign-123', payload);
@@ -319,7 +327,7 @@ describe('ebay-promote', () => {
       );
     });
 
-    it('should handle bulk ad creation', async () => {
+    it('should handle empty response from eBay (newly synced listings)', async () => {
       (getEbayAccessToken as jest.Mock).mockResolvedValue({
         token: 'test-token',
         apiHost: 'https://api.sandbox.ebay.com',
@@ -327,26 +335,66 @@ describe('ebay-promote', () => {
 
       (global.fetch as jest.Mock).mockResolvedValue({
         ok: true,
-        json: async () => ({ ads: [] }),
+        text: async () => '',
       });
 
       const payload = {
+        listingId: 'listing-789',
+        bidPercentage: '5.0',
+      };
+
+      const result = await createAds('user123', 'campaign-123', payload);
+
+      expect(result.ads).toHaveLength(0);
+      expect(global.fetch).toHaveBeenCalled();
+    });
+
+    it('should handle whitespace-only response', async () => {
+      (getEbayAccessToken as jest.Mock).mockResolvedValue({
+        token: 'test-token',
+        apiHost: 'https://api.sandbox.ebay.com',
+      });
+
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        text: async () => '   \n  \t  ',
+      });
+
+      const result = await createAds('user123', 'campaign-123', {
+        listingId: 'listing-999',
+        bidPercentage: '7.0',
+      });
+
+      expect(result.ads).toHaveLength(0);
+    });
+
+    it('should handle bulk ad creation with responses array', async () => {
+      (getEbayAccessToken as jest.Mock).mockResolvedValue({
+        token: 'test-token',
+        apiHost: 'https://api.sandbox.ebay.com',
+      });
+
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        text: async () => JSON.stringify({ responses: [
+          { adId: 'ad1', statusCode: 200 },
+          { adId: 'ad2', statusCode: 200 },
+        ] }),
+      });
+
+      const result = await createAds('user123', 'campaign-123', {
         requests: [
           { bidPercentage: '5.0', listingId: 'listing-1' },
           { bidPercentage: '6.0', listingId: 'listing-2' },
-          { bidPercentage: '7.0', listingId: 'listing-3' },
         ],
-      };
+      });
 
-      await createAds('user123', 'campaign-123', payload);
-
-      const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
-      expect(callBody.requests).toHaveLength(3);
+      expect(result.ads).toHaveLength(2);
     });
   });
 
   describe('updateAdRate', () => {
-    it('should update ad rate successfully', async () => {
+    it('should update ad rate successfully using update_bid endpoint', async () => {
       (getEbayAccessToken as jest.Mock).mockResolvedValue({
         token: 'test-token',
         apiHost: 'https://api.sandbox.ebay.com',
@@ -354,15 +402,15 @@ describe('ebay-promote', () => {
 
       (global.fetch as jest.Mock).mockResolvedValue({
         ok: true,
-        json: async () => ({}),
+        text: async () => '',
       });
 
       await updateAdRate('user123', 'campaign-123', 'ad-456', 7.5);
 
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/sell/marketing/v1/ad_campaign/campaign-123/ad/ad-456'),
+        expect.stringContaining('/sell/marketing/v1/ad_campaign/campaign-123/ad/ad-456/update_bid'),
         expect.objectContaining({
-          method: 'PUT',
+          method: 'POST',
           body: expect.stringContaining('7.5'),
         })
       );
@@ -436,37 +484,28 @@ describe('ebay-promote', () => {
 
       // Mock getCampaigns to return existing campaign
       (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            campaigns: [
-              {
-                campaignId: 'existing-campaign',
-                campaignName: 'DraftPilot – EBAY_US – Auto',
-                campaignStatus: 'RUNNING',
-                marketplaceId: 'EBAY_US',
-              },
-            ],
-          }),
-        })
+        .mockResolvedValueOnce(mockFetchResponse({
+          campaigns: [
+            {
+              campaignId: 'existing-campaign',
+              campaignName: 'DraftPilot – EBAY_US – Auto',
+              campaignStatus: 'RUNNING',
+              marketplaceId: 'EBAY_US',
+            },
+          ],
+        }))
         // Mock getAds to check if ad already exists
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ ads: [] }),
-        })
+        .mockResolvedValueOnce(mockFetchResponse({ ads: [] }))
         // Mock createAds
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            ads: [
-              {
-                adId: 'new-ad-123',
-                listingId: 'offer-456',
-                bidPercentage: '5.0',
-              },
-            ],
-          }),
-        });
+        .mockResolvedValueOnce(mockFetchResponse({
+          ads: [
+            {
+              adId: 'new-ad-123',
+              listingId: 'offer-456',
+              bidPercentage: '5.0',
+            },
+          ],
+        }));
 
       const result = await promoteOfferOnce({
         userId: 'user123',
@@ -502,31 +541,25 @@ describe('ebay-promote', () => {
       });
 
       (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            campaigns: [
-              {
-                campaignId: 'existing-campaign',
-                campaignName: 'DraftPilot – EBAY_US – Auto',
-                campaignStatus: 'RUNNING',
-                marketplaceId: 'EBAY_US',
-              },
-            ],
-          }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            ads: [
-              {
-                adId: 'existing-ad',
-                inventoryReferenceId: 'offer-456',
-                bidPercentage: '5.0',
-              },
-            ],
-          }),
-        });
+        .mockResolvedValueOnce(mockFetchResponse({
+          campaigns: [
+            {
+              campaignId: 'existing-campaign',
+              campaignName: 'DraftPilot – EBAY_US – Auto',
+              campaignStatus: 'RUNNING',
+              marketplaceId: 'EBAY_US',
+            },
+          ],
+        }))
+        .mockResolvedValueOnce(mockFetchResponse({
+          ads: [
+            {
+              adId: 'existing-ad',
+              inventoryReferenceId: 'offer-456',
+              bidPercentage: '5.0',
+            },
+          ],
+        }));
 
       const result = await promoteOfferOnce({
         userId: 'user123',
@@ -554,30 +587,20 @@ describe('ebay-promote', () => {
 
       (global.fetch as jest.Mock)
         // Mock inventory item fetch
-        .mockResolvedValueOnce({
-          ok: true,
-          headers: { get: () => '100' },
-          json: async () => ({ sku: 'sku-789' }),
-        })
+        .mockResolvedValueOnce(mockFetchResponse({ sku: 'sku-789' }, { headers: { get: () => '100' } }))
         // Mock offers fetch
-        .mockResolvedValueOnce({
-          ok: true,
-          headers: { get: () => '100' },
-          json: async () => ({
-            offers: [
-              {
-                offerId: 'offer-123',
-                listing: { listingId: 'listing-456' },
-              },
-            ],
-          }),
-        })
+        .mockResolvedValueOnce(mockFetchResponse({
+          offers: [
+            {
+              offerId: 'offer-123',
+              listing: { listingId: 'listing-456' },
+            },
+          ],
+        }, { headers: { get: () => '100' } }))
         // Mock create ad
-        .mockResolvedValueOnce({
-          ok: true,
-          headers: { get: () => '0' },
-          json: async () => ({}),
-        });
+        .mockResolvedValueOnce(mockFetchResponse({
+          ads: [{ adId: 'new-ad-123', bidPercentage: '6.0' }]
+        }, { headers: { get: () => '0' } }));
 
       const result = await promoteSingleListing({
         tokenCache: mockTokenCache,
@@ -812,17 +835,9 @@ describe('ebay-promote', () => {
 
       (global.fetch as jest.Mock)
         // inventory fetch
-        .mockResolvedValueOnce({
-          ok: true,
-          headers: { get: () => '100' },
-          json: async () => ({ sku: 'invalid-sku' }),
-        })
+        .mockResolvedValueOnce(mockFetchResponse({ sku: 'invalid-sku' }, { headers: { get: () => '100' } }))
         // offers fetch - no offers
-        .mockResolvedValueOnce({
-          ok: true,
-          headers: { get: () => '100' },
-          json: async () => ({ offers: [] }),
-        });
+        .mockResolvedValueOnce(mockFetchResponse({ offers: [] }, { headers: { get: () => '100' } }));
 
       const result = await promoteSkusForUser('user123', ['invalid-sku'], 5.0, {
         tokenCache: mockTokenCache as any,

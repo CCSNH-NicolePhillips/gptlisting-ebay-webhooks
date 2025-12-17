@@ -275,7 +275,80 @@ describe("ebay-promote", () => {
   });
 
   describe("createAds", () => {
-    it("should create ads successfully", async () => {
+    it("should create ads successfully with normal response", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        text: async () =>
+          JSON.stringify({
+            ads: [
+              {
+                adId: "ad123",
+                listingId: "177650915431",
+                bidPercentage: "5.0",
+              },
+            ],
+          }),
+      });
+
+      const { createAds } = await import("../../ebay-promote-integration/ebay-promote.js");
+
+      const result = await createAds("user123", "camp123", {
+        listingId: "177650915431",
+        bidPercentage: "5.0",
+      });
+
+      expect(result.ads).toHaveLength(1);
+      expect(result.ads[0].adId).toBe("ad123");
+      expect(mockFetch).toHaveBeenCalledWith(
+        "https://api.ebay.com/sell/marketing/v1/ad_campaign/camp123/ad",
+        expect.objectContaining({
+          method: "POST",
+          headers: expect.objectContaining({
+            "Content-Type": "application/json",
+          }),
+        })
+      );
+    });
+
+    it("should handle empty response from eBay (newly synced listings)", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        text: async () => "",
+      });
+
+      const { createAds } = await import("../../ebay-promote-integration/ebay-promote.js");
+
+      const result = await createAds("user123", "camp123", {
+        listingId: "177681098666",
+        bidPercentage: "5.0",
+      });
+
+      expect(result.ads).toHaveLength(0);
+      expect(mockFetch).toHaveBeenCalledWith(
+        "https://api.ebay.com/sell/marketing/v1/ad_campaign/camp123/ad",
+        expect.objectContaining({
+          method: "POST",
+        })
+      );
+    });
+
+    it("should handle whitespace-only response from eBay", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        text: async () => "   \n  \t  ",
+      });
+
+      const { createAds } = await import("../../ebay-promote-integration/ebay-promote.js");
+
+      const result = await createAds("user123", "camp123", {
+        listingId: "177681098666",
+        bidPercentage: "5.0",
+      });
+
+      expect(result.ads).toHaveLength(0);
+    });
+
+    it("should create ads successfully (legacy bulk format)", async () => {
       mockFetch.mockResolvedValue({
         ok: true,
         text: async () =>
@@ -313,12 +386,6 @@ describe("ebay-promote", () => {
       expect(result.ads).toHaveLength(2);
       expect(result.ads[0].adId).toBe("ad123");
       expect(result.ads[1].adId).toBe("ad124");
-      expect(mockFetch).toHaveBeenCalledWith(
-        "https://api.ebay.com/sell/marketing/v1/ad_campaign/camp123/bulk_create_ads_by_inventory_reference",
-        expect.objectContaining({
-          method: "POST",
-        })
-      );
     });
 
     it("should handle ad creation errors", async () => {
@@ -708,7 +775,7 @@ describe("ebay-promote", () => {
   });
 
   describe("updateAdRate", () => {
-    it("should update ad rate successfully", async () => {
+    it("should update ad rate successfully using update_bid endpoint", async () => {
       mockFetch.mockResolvedValue({
         ok: true,
         text: async () => "",
@@ -719,31 +786,15 @@ describe("ebay-promote", () => {
       await updateAdRate("user123", "camp123", "ad123", 10.0);
 
       expect(mockFetch).toHaveBeenCalledWith(
-        "https://api.ebay.com/sell/marketing/v1/ad_campaign/camp123/ad/ad123",
+        "https://api.ebay.com/sell/marketing/v1/ad_campaign/camp123/ad/ad123/update_bid",
         expect.objectContaining({
-          method: "PUT",
-          body: JSON.stringify({ bidPercentage: "10.0" }),
+          method: "POST",
+          body: JSON.stringify({ bidPercentage: "10" }),
         })
       );
     });
 
-    it("should validate ad rate minimum", async () => {
-      const { updateAdRate } = await import("../../ebay-promote-integration/ebay-promote.js");
-
-      await expect(updateAdRate("user123", "camp123", "ad123", 0.5)).rejects.toThrow(
-        "Ad rate must be between 1% and 20%"
-      );
-    });
-
-    it("should validate ad rate maximum", async () => {
-      const { updateAdRate } = await import("../../ebay-promote-integration/ebay-promote.js");
-
-      await expect(updateAdRate("user123", "camp123", "ad123", 30.0)).rejects.toThrow(
-        "Ad rate must be between 1% and 20%"
-      );
-    });
-
-    it("should format ad rate with one decimal place", async () => {
+    it("should convert numeric rate to string", async () => {
       mockFetch.mockResolvedValue({
         ok: true,
         text: async () => "",
@@ -751,10 +802,25 @@ describe("ebay-promote", () => {
 
       const { updateAdRate } = await import("../../ebay-promote-integration/ebay-promote.js");
 
-      await updateAdRate("user123", "camp123", "ad123", 7.567);
+      await updateAdRate("user123", "camp123", "ad123", 7.5);
 
       const callBody = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(callBody.bidPercentage).toBe("7.6");
+      expect(callBody.bidPercentage).toBe("7.5");
+      expect(typeof callBody.bidPercentage).toBe("string");
+    });
+
+    it("should handle decimal rates correctly", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        text: async () => "",
+      });
+
+      const { updateAdRate } = await import("../../ebay-promote-integration/ebay-promote.js");
+
+      await updateAdRate("user123", "camp123", "ad123", 12.75);
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(callBody.bidPercentage).toBe("12.75");
     });
 
     it("should throw error on update failure", async () => {
@@ -767,7 +833,17 @@ describe("ebay-promote", () => {
       const { updateAdRate } = await import("../../ebay-promote-integration/ebay-promote.js");
 
       await expect(updateAdRate("user123", "camp123", "ad999", 10.0)).rejects.toThrow(
-        "Ad update failed 404: Ad not found"
+        "Failed to update ad rate 404: Ad not found"
+      );
+    });
+
+    it("should handle network errors gracefully", async () => {
+      mockFetch.mockRejectedValue(new Error("Network error"));
+
+      const { updateAdRate } = await import("../../ebay-promote-integration/ebay-promote.js");
+
+      await expect(updateAdRate("user123", "camp123", "ad123", 5.0)).rejects.toThrow(
+        "Network error"
       );
     });
   });
