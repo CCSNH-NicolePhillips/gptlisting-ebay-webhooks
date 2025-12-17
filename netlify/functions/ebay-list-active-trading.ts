@@ -123,7 +123,6 @@ export const handler: Handler = async (event) => {
   <OutputSelector>Item.ItemID</OutputSelector>
   <OutputSelector>Item.Title</OutputSelector>
   <OutputSelector>Item.SKU</OutputSelector>
-  <OutputSelector>Item.SellerInventoryID</OutputSelector>
   <OutputSelector>Item.SellingStatus.ListingStatus</OutputSelector>
   <OutputSelector>Item.SellingStatus.AdminEnded</OutputSelector>
   <OutputSelector>Item.SellingStatus.CurrentPrice</OutputSelector>
@@ -218,10 +217,6 @@ export const handler: Handler = async (event) => {
           const watchCountMatch = itemXml.match(/<WatchCount>([^<]+)<\/WatchCount>/);
           const hitCountMatch = itemXml.match(/<HitCount>([^<]+)<\/HitCount>/);
           
-          // Check if this is an Inventory API listing (has SellerInventoryID)
-          const sellerInventoryIdMatch = itemXml.match(/<SellerInventoryID>([^<]+)<\/SellerInventoryID>/);
-          const isInventoryListing = !!sellerInventoryIdMatch;
-          
           // Check listing status - skip if ended, deleted, or not active
           // Try multiple patterns since eBay XML structure can vary
           let listingStatus = '';
@@ -302,7 +297,7 @@ export const handler: Handler = async (event) => {
               offerId: itemId,
               listingId: itemId,
               sku: skuMatch ? skuMatch[1] : itemId, // Use itemId as fallback SKU
-              isInventoryListing: isInventoryListing, // Flag to determine which API to use for updates
+              isInventoryListing: false, // Cannot determine from Trading API, assume traditional listing
               title: titleMatch ? titleMatch[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>') : '',
               price: priceMatch ? {
                 value: priceMatch[1],
