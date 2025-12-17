@@ -184,12 +184,22 @@ export const handler: Handler = async (event) => {
           const isInventoryListing = !!sellerInventoryIdMatch;
           
           // Check listing status - skip if ended, deleted, or not active
-          const listingStatusMatch = itemXml.match(/<ListingStatus>([^<]+)<\/ListingStatus>/);
-          const listingStatus = listingStatusMatch ? listingStatusMatch[1] : '';
+          // Try multiple patterns since eBay XML structure can vary
+          let listingStatus = '';
           
-          // Check selling state - skip if listing has ended
-          const sellingStateMatch = itemXml.match(/<SellingStatus>.*?<ListingStatus>([^<]+)<\/ListingStatus>.*?<\/SellingStatus>/s);
-          const sellingStatus = sellingStateMatch ? sellingStateMatch[1] : listingStatus;
+          // Pattern 1: Direct ListingStatus tag
+          const directStatusMatch = itemXml.match(/<ListingStatus>([^<]+)<\/ListingStatus>/);
+          if (directStatusMatch) {
+            listingStatus = directStatusMatch[1];
+          }
+          
+          // Pattern 2: ListingStatus inside SellingStatus
+          const nestedStatusMatch = itemXml.match(/<SellingStatus>.*?<ListingStatus>([^<]+)<\/ListingStatus>.*?<\/SellingStatus>/s);
+          if (nestedStatusMatch) {
+            listingStatus = nestedStatusMatch[1];
+          }
+          
+          const sellingStatus = listingStatus;
           
           // Parse quantities
           const quantityAvailable = quantityAvailMatch ? parseInt(quantityAvailMatch[1]) : (quantityMatch ? parseInt(quantityMatch[1]) : 0);

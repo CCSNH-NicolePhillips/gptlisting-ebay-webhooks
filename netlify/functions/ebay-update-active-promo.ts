@@ -162,11 +162,28 @@ export const handler: Handler = async (event) => {
       };
       
       console.log('[ebay-update-active-promo] Create payload:', JSON.stringify(createPayload));
-      const created = await createAds(sub!, campaignId, createPayload);
-      console.log('[ebay-update-active-promo] Create result:', JSON.stringify(created));
-      const firstAd: any = (created as any).ads?.[0];
-      adId = firstAd?.adId || firstAd?.id || null;
-      action = 'created';
+      try {
+        const created = await createAds(sub!, campaignId, createPayload);
+        console.log('[ebay-update-active-promo] Create result:', JSON.stringify(created));
+        const firstAd: any = (created as any).ads?.[0];
+        adId = firstAd?.adId || firstAd?.id || null;
+        action = 'created';
+      } catch (createError: any) {
+        // Check if it's error 35048 (listing invalid/ended)
+        if (createError.message?.includes('35048') || createError.message?.includes('invalid or has ended')) {
+          console.error('[ebay-update-active-promo] Listing not eligible for promotion:', listingId);
+          return {
+            statusCode: 400,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              error: 'This listing cannot be promoted. It may have ended, be ineligible, or eBay\'s systems may need time to sync. Try again in a few minutes or promote it directly on eBay.',
+              ebayError: createError.message 
+            }),
+          };
+        }
+        // Re-throw other errors
+        throw createError;
+      }
     }
 
     console.log('[ebay-update-active-promo] Success:', { action, campaignId, adId, rate: normalizedRate });
