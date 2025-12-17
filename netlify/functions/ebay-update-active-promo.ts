@@ -169,6 +169,21 @@ export const handler: Handler = async (event) => {
         adId = firstAd?.adId || firstAd?.id || null;
         action = 'created';
       } catch (createError: any) {
+        console.error('[ebay-update-active-promo] Create error:', createError.message);
+        
+        // Check if it's a JSON parse error (empty/malformed response)
+        if (createError.message?.includes('JSON') || createError.message?.includes('SyntaxError')) {
+          console.error('[ebay-update-active-promo] eBay returned empty/invalid response - listing may not be synced yet:', listingId);
+          return {
+            statusCode: 400,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              error: 'eBay\'s systems are still processing this listing. Please wait 1-2 minutes and try again.',
+              hint: 'Newly created listings need time to sync across eBay\'s systems before they can be promoted.'
+            }),
+          };
+        }
+        
         // Check if it's error 35048 (listing invalid/ended)
         if (createError.message?.includes('35048') || createError.message?.includes('invalid or has ended')) {
           console.error('[ebay-update-active-promo] Listing not eligible for promotion:', listingId);
@@ -181,6 +196,7 @@ export const handler: Handler = async (event) => {
             }),
           };
         }
+        
         // Re-throw other errors
         throw createError;
       }
