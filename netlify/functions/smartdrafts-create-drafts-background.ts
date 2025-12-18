@@ -8,6 +8,8 @@ import { pickCategoryForGroup } from "../../src/lib/taxonomy-select.js";
 import { listCategories } from "../../src/lib/taxonomy-store.js";
 import { lookupPrice, type PriceLookupInput, type PriceDecision } from "../../src/lib/price-lookup.js";
 import { getBrandMetadata } from "../../src/lib/brand-map.js";
+import { getDefaultPricingSettings, type PricingSettings } from "../../src/lib/pricing-config.js";
+import { tokensStore } from "../../src/lib/_blobs.js";
 
 const GPT_TIMEOUT_MS = 30_000;
 const GPT_RETRY_ATTEMPTS = 2;
@@ -104,28 +106,8 @@ function timeoutPromise<T>(promise: Promise<T>, ms: number): Promise<T> {
   ]);
 }
 
-/**
- * Compute eBay price with category-specific caps and discount formula
- * Simple 10% discount off retail for competitive new item pricing
- */
-function computeEbayPrice(retailPrice: number, categoryPath: string): number {
-  if (!retailPrice || retailPrice <= 0) return 0;
-  
-  const lowerCat = categoryPath.toLowerCase();
-  let cappedPrice = retailPrice;
-  
-  // Apply category-specific caps for items that tend to have inflated MSRPs
-  if (lowerCat.includes('book')) {
-    cappedPrice = Math.min(retailPrice, 35);
-  } else if (lowerCat.includes('dvd') || lowerCat.includes('media') || lowerCat.includes('cd')) {
-    cappedPrice = Math.min(retailPrice, 25);
-  }
-  
-  // Apply 10% discount for competitive new item pricing
-  const price = cappedPrice * 0.9;
-  
-  return Math.round(price * 100) / 100;
-}
+// Phase 3: Removed legacy computeEbayPrice function
+// Pricing is now handled by computeEbayItemPrice in price-lookup.ts
 
 async function callOpenAI(prompt: string): Promise<string> {
   if (!process.env.OPENAI_API_KEY) {
@@ -624,6 +606,7 @@ function normalizeAspects(aspects: any, product: PairedProduct): Record<string, 
 async function createDraftForProduct(
   product: PairedProduct, 
   promotion: { enabled: boolean; rate: number | null }, 
+  pricingSettings: PricingSettings,
   retryAttempt: number = 0
 ): Promise<Draft> {
   const startTime = Date.now();
@@ -667,6 +650,7 @@ async function createDraftForProduct(
       categoryPath: product.categoryPath, // Pass Vision API category
       photoQuantity: product.photoQuantity || 1, // CHUNK 4: Pass photo quantity from vision analysis
       amazonPackSize: undefined, // TODO: Extract from Amazon product detection in extractPriceFromHtml
+      pricingSettings, // Phase 3: Pass user pricing settings
     };
 
     pricingDecision = await lookupPrice(priceInput);
@@ -795,7 +779,7 @@ async function createDraftForProduct(
     console.warn(`[Draft] ⚠️ Incomplete draft for ${product.productId}: category=${hasCategory}, brand=${hasBrand}, aspectsCount=${aspectsCount}`);
     console.warn(`[Draft] 🔄 Retrying draft creation (attempt ${retryAttempt + 1}/2)...`);
     await sleep(1000); // Brief delay before retry
-    return createDraftForProduct(product, promotion, retryAttempt + 1);
+    return createDraftForProduct(product, promotion, pricingSettings, retryAttempt + 1);
   }
   
   if (isIncomplete && retryAttempt >= 2) {
@@ -854,6 +838,28 @@ export const handler: Handler = async (event) => {
     return { statusCode: 200 };
   }
 
+  // Phase 3: Load user pricing settings
+  let pricingSettings: PricingSettings = getDefaultPricingSettings();
+  if (userId) {
+    try {
+      const store = tokensStore();
+      const settingsKey = `users/${userId}/settings.json`;
+      const settingsBlob = await store.get(settingsKey);
+      if (settingsBlob) {
+        const settingsData = JSON.parse(settingsBlob);
+        if (settingsData.pricing) {
+          pricingSettings = {
+            ...getDefaultPricingSettings(),
+            ...settingsData.pricing,
+          };
+          console.log(`[pricing] Loaded user settings: ${pricingSettings.discountPercent}% discount, ${pricingSettings.shippingStrategy} strategy`);
+        }
+      }
+    } catch (err) {
+      console.warn(`[pricing] Failed to load user settings, using defaults:`, err);
+    }
+  }
+
   try {
     const writeJobStart = Date.now();
     await writeJob(jobId, userId, {
@@ -900,7 +906,7 @@ export const handler: Handler = async (event) => {
           console.log(`[PERF] Product ID: ${product.productId}`);
           
           try {
-            const draft = await createDraftForProduct(product, promotion);
+            const draft = await createDraftForProduct(product, promotion, pricingSettings);
             
             const productTotalTime = Date.now() - productStartTime;
             console.log(`[PERF] Product ${absoluteIndex + 1}/${products.length} TOTAL time: ${productTotalTime}ms`);

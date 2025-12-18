@@ -6,81 +6,96 @@
  * DESIGN PRINCIPLES:
  * - Explicit types prevent Copilot from freestyling
  * - Centralized config for easy tuning
- * - No behavior change in Phase 1 (structure only)
+ * - User-configurable settings stored per user
  * 
  * PRICING MODEL:
  * 1. Calculate Amazon total: amazonItemPrice + amazonShippingPrice
  * 2. Apply discount: ebayTargetTotal = amazonTotal × (1 - discountPercent/100)
  * 3. Split eBay total using shippingStrategy
+ * 
+ * IMPORTANT: This system never modifies eBay shipping templates/policies; it only computes item price.
  */
 
 /**
  * Shipping strategy for eBay listings
  * 
- * FREE_IF_AMAZON_FREE: Match Amazon's shipping model
- *   - If Amazon has free shipping → eBay free shipping
- *   - If Amazon charges shipping → eBay charges similar shipping
+ * ALGO_COMPETITIVE_TOTAL: Algorithmic split - absorb shipping intelligently
+ *   - Analyze Amazon item/shipping breakdown
+ *   - Keep eBay item price competitive
+ *   - Absorb shipping by reducing item price (buyer still pays template shipping)
  * 
- * MATCH_AMAZON: Exactly replicate Amazon's shipping cost
- *   - eBay shipping = Amazon shipping
- *   - eBay item price adjusted to hit target total
- * 
- * SELLER_PAYS_UP_TO: Absorb shipping costs up to a threshold
- *   - Seller covers shipping up to sellerPaysUpTo amount
- *   - Buyer pays remainder if Amazon shipping exceeds threshold
+ * DISCOUNT_ITEM_ONLY: Simplest strategy - discount item price only
+ *   - Apply discount only to Amazon item price
+ *   - Use templateShippingEstimateCents for eBay shipping
+ *   - Predictable, conservative approach
  */
 export type ShippingStrategy =
-  | 'FREE_IF_AMAZON_FREE'
-  | 'MATCH_AMAZON'
-  | 'SELLER_PAYS_UP_TO';
+  | 'ALGO_COMPETITIVE_TOTAL'
+  | 'DISCOUNT_ITEM_ONLY';
 
 /**
- * Competitive pricing rules configuration
+ * User pricing settings (stored per user, configurable in UI)
  */
-export interface CompetitivePricingRules {
+export interface PricingSettings {
   /**
    * Discount percentage applied to Amazon total-to-door price
    * Example: 10 means eBay price = Amazon total × 0.90
+   * Default: 10
    */
   discountPercent: number;
 
   /**
    * Strategy for handling eBay shipping costs
+   * Default: 'ALGO_COMPETITIVE_TOTAL'
    */
   shippingStrategy: ShippingStrategy;
 
   /**
-   * Maximum shipping cost seller will absorb (cents)
-   * Only used when shippingStrategy = 'SELLER_PAYS_UP_TO'
-   * Example: 500 = seller covers up to $5.00 shipping
+   * Estimated shipping charged by the template (used for competitiveness calculations)
+   * Example: 600 = $6.00 flat shipping
+   * Default: 600
    */
-  sellerPaysUpTo?: number;
+  templateShippingEstimateCents: number;
 
   /**
-   * Safety constraint: never price eBay listing above Amazon total
-   * Prevents accidentally pricing higher than competition
-   * Default: true (recommended)
+   * Maximum shipping subsidy seller will absorb (cents)
+   * Optional cap on how much shipping to absorb when strategy is ALGO_COMPETITIVE_TOTAL
+   * Example: 500 = seller covers up to $5.00 shipping
+   * Default: null (no cap)
    */
-  neverExceedAmazonTotal: boolean;
+  shippingSubsidyCapCents: number | null;
+
+  /**
+   * Minimum eBay item price floor (cents)
+   * Prevents pricing from going negative or unreasonably low
+   * Example: 199 = $1.99 minimum item price
+   * Default: 199
+   */
+  minItemPriceCents: number;
 }
 
 /**
- * Get default competitive pricing rules
+ * Get default pricing settings for new users
  * 
  * DEFAULT STRATEGY:
  * - 10% discount vs Amazon total-to-door
- * - Free eBay shipping when Amazon has free shipping
- * - Never exceed Amazon's total price
+ * - ALGO_COMPETITIVE_TOTAL: Smart pricing that accounts for shipping
+ * - $6.00 template shipping (common USPS Priority Mail cost)
+ * - No subsidy cap
+ * - $1.99 minimum item price floor
  * 
  * RATIONALE:
  * - 10% discount: Competitive advantage without race to bottom
- * - FREE_IF_AMAZON_FREE: Matches customer expectations (Prime = free shipping)
- * - neverExceedAmazonTotal: Safety net prevents pricing errors
+ * - ALGO_COMPETITIVE_TOTAL: Accounts for competitor shipping in pricing
+ * - $6.00 shipping: Typical small package cost, conservative estimate
+ * - $1.99 floor: Prevents negative or unrealistic pricing
  */
-export function getDefaultCompetitivePricingRules(): CompetitivePricingRules {
+export function getDefaultPricingSettings(): PricingSettings {
   return {
     discountPercent: 10,
-    shippingStrategy: 'FREE_IF_AMAZON_FREE',
-    neverExceedAmazonTotal: true,
+    shippingStrategy: 'ALGO_COMPETITIVE_TOTAL',
+    templateShippingEstimateCents: 600,
+    shippingSubsidyCapCents: null,
+    minItemPriceCents: 199,
   };
 }

@@ -11,7 +11,26 @@
  * - Not wired into production pipeline yet (Phase 4 is logic only)
  */
 
-import type { CompetitivePricingRules } from './pricing-config.js';
+import type { PricingSettings, ShippingStrategy } from './pricing-config.js';
+
+/**
+ * Legacy type alias for backward compatibility
+ * @deprecated Use PricingSettings from pricing-config.js
+ * 
+ * NOTE: This file (pricing-split.ts) is legacy code from pre-Phase 2.
+ * New code should use computeEbayItemPrice() from pricing-compute.ts instead.
+ */
+export type CompetitivePricingRules = PricingSettings & {
+  // Legacy fields for backward compatibility with old pricing-split logic
+  neverExceedAmazonTotal?: boolean;
+  sellerPaysUpTo?: number;
+};
+
+/**
+ * Extended ShippingStrategy with legacy values
+ * @deprecated
+ */
+type LegacyShippingStrategy = ShippingStrategy | 'FREE_IF_AMAZON_FREE' | 'MATCH_AMAZON' | 'SELLER_PAYS_UP_TO';
 
 /**
  * Result of splitting eBay target total into item and shipping components
@@ -93,8 +112,8 @@ export function splitEbayPrice(input: {
   let ebayShippingPrice: number;
   let ebayItemPrice: number;
   
-  // Apply strategy
-  switch (rules.shippingStrategy) {
+  // Apply strategy (cast to legacy type for backward compatibility)
+  switch (rules.shippingStrategy as LegacyShippingStrategy) {
     case 'FREE_IF_AMAZON_FREE': {
       if (amazonShippingPrice === 0) {
         // Amazon has free shipping → eBay has free shipping
@@ -146,7 +165,7 @@ export function splitEbayPrice(input: {
     }
   }
   
-  // Apply guardrail: neverExceedAmazonTotal
+  // Apply guardrail: neverExceedAmazonTotal (legacy field)
   if (rules.neverExceedAmazonTotal && amazonTotal !== undefined) {
     const ebayTotal = ebayItemPrice + ebayShippingPrice;
     

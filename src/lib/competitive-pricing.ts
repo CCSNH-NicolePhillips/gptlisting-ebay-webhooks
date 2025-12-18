@@ -14,8 +14,8 @@
 import { extractPriceWithShipping } from './html-price.js';
 import { computeAmazonTotals } from './pricing-compute.js';
 import { splitEbayPrice } from './pricing-split.js';
-import { getDefaultCompetitivePricingRules } from './pricing-config.js';
-import type { CompetitivePricingRules } from './pricing-config.js';
+import { getDefaultPricingSettings } from './pricing-config.js';
+import type { PricingSettings } from './pricing-config.js';
 
 /**
  * Feature flag for competitive pricing v2
@@ -24,6 +24,12 @@ import type { CompetitivePricingRules } from './pricing-config.js';
 export function isCompetitivePricingEnabled(): boolean {
   return process.env.DP_COMPETITIVE_PRICING_V2 === 'true';
 }
+
+/**
+ * Legacy type alias for backward compatibility
+ * @deprecated Use PricingSettings from pricing-config.js
+ */
+export type CompetitivePricingRules = PricingSettings;
 
 /**
  * Result from competitive pricing calculation
@@ -76,7 +82,7 @@ export function calculateCompetitivePricing(
   rules?: CompetitivePricingRules
 ): CompetitivePricingResult | null {
   // Use default rules if not provided
-  const pricingRules = rules || getDefaultCompetitivePricingRules();
+  const pricingRules = rules || getDefaultPricingSettings();
 
   console.log('[competitive-pricing] Starting calculation with rules:', {
     discountPercent: pricingRules.discountPercent,

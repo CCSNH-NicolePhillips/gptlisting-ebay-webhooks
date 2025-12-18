@@ -1,9 +1,11 @@
-import { extractPriceFromHtml } from "./html-price.js";
+import { extractPriceFromHtml, extractPriceWithShipping } from "./html-price.js";
 import { braveFirstUrlForBrandSite, braveFirstUrl } from "./search.js";
 import { getBrandUrls, setBrandUrls } from "./brand-map.js";
 import { fetchSoldPriceStats, type SoldPriceStats } from "./pricing/ebay-sold-prices.js";
 import { openai } from "./openai.js";
 import { getCachedPrice, setCachedPrice, makePriceSig } from "./price-cache.js";
+import { computeEbayItemPrice } from "./pricing-compute.js";
+import type { PricingSettings } from "./pricing-config.js";
 
 // ============================================================================
 // URL VARIATION HELPERS
@@ -84,6 +86,7 @@ export interface PriceLookupInput {
   categoryPath?: string; // Category from Vision API (e.g., "Dietary Supplement")
   photoQuantity?: number; // How many physical products visible in photo (from vision analysis)
   amazonPackSize?: number; // Pack size detected from Amazon product page (e.g., 2 for "2-pack")
+  pricingSettings?: PricingSettings; // Phase 3: User-configurable pricing settings
 }
 
 export type PriceSource = 'ebay-sold' | 'brand-msrp' | 'brave-fallback' | 'estimate';
@@ -94,6 +97,7 @@ export interface PriceSourceDetail {
   currency: string;
   url?: string;
   notes?: string;
+  shippingCents?: number; // Phase 3: Amazon shipping cost in cents (0 for free shipping)
 }
 
 export interface PriceDecision {
@@ -305,11 +309,14 @@ RECENT SOLD PRICES (last 30 days):
 ` : ''}
 
 PRICING RULES:
-1. **ALWAYS prefer brand MSRP if available** - apply 10% discount to compete with retail
+1. **ALWAYS prefer brand MSRP if available** - this is the retail price we'll discount
 2. Only use eBay sold prices if NO brand MSRP is available
-3. If using eBay sold price, use it as-is (p35 already represents competitive pricing)
-4. Never price below 50% of brand MSRP (prevents undervaluing new products)
+3. If using eBay sold price, return it as basePrice (already competitive)
+4. Never pick a price below 50% of brand MSRP (prevents undervaluing new products)
 5. For used items, eBay sold data is more reliable than MSRP
+
+IMPORTANT: Return the BASE/RETAIL price as both basePrice and recommendedListingPrice.
+Do NOT apply discounts yourself - the system will apply competitive pricing automatically.
 
 RESPONSE FORMAT (JSON only):
 {
@@ -340,29 +347,47 @@ RESPONSE FORMAT (JSON only):
     const content = response.choices[0]?.message?.content;
     if (!content) {
       console.error('[price] AI returned empty response');
-      return fallbackDecision(candidates);
+      return fallbackDecision(input, candidates);
     }
 
     const parsed = JSON.parse(content);
     const chosenSource = parsed.chosenSource as PriceSource;
     const basePrice = parseFloat(parsed.basePrice);
-    const recommendedListingPrice = parseFloat(parsed.recommendedListingPrice);
     const reasoning = parsed.reasoning || 'AI decision';
 
     // Find the chosen candidate
     const chosen = candidates.find(c => c.source === chosenSource) || candidates[0];
 
+    // Phase 3: Use computeEbayItemPrice with user settings
+    const settings = input.pricingSettings || {
+      discountPercent: 10,
+      shippingStrategy: 'DISCOUNT_ITEM_ONLY',
+      templateShippingEstimateCents: 600,
+      shippingSubsidyCapCents: null,
+    };
+    
     // CHUNK 4: Apply photoQuantity and amazonPackSize
-    // Step 1: Calculate per-unit Amazon price if pack size detected
+    // Step 1: Calculate per-unit price if pack size detected
     const amazonPackSize = input.amazonPackSize || 1;
-    const perUnitAmazonPrice = basePrice / amazonPackSize;
+    const perUnitPrice = basePrice / amazonPackSize;
     
-    // Step 2: Multiply by photoQuantity to get lot price before discount
+    // Step 2: Multiply by photoQuantity to get lot retail price
     const photoQty = input.photoQuantity || 1;
-    const lotPriceBeforeDiscount = perUnitAmazonPrice * photoQty;
+    const lotRetailPriceCents = Math.round(perUnitPrice * photoQty * 100);
     
-    // Step 3: Apply AI-recommended discount once
-    const finalListingPrice = recommendedListingPrice / basePrice * lotPriceBeforeDiscount;
+    // Step 3: Apply competitive pricing via Phase 2 function
+    const shippingCents = chosen.shippingCents || 0;
+    
+    const pricingResult = computeEbayItemPrice({
+      amazonItemPriceCents: lotRetailPriceCents,
+      amazonShippingCents: shippingCents,
+      discountPercent: settings.discountPercent,
+      shippingStrategy: settings.shippingStrategy,
+      templateShippingEstimateCents: settings.templateShippingEstimateCents,
+      shippingSubsidyCapCents: settings.shippingSubsidyCapCents,
+    });
+    
+    const finalListingPrice = pricingResult.ebayItemPriceCents / 100;
     
     // CHUNK 5: Pricing evidence logging (always log, makes regressions obvious)
     const packEvidence = amazonPackSize > 1 
@@ -374,12 +399,15 @@ RESPONSE FORMAT (JSON only):
     
     console.log(
       `[price] 💰 PRICING EVIDENCE: ` +
-      `rawAmazon=$${basePrice.toFixed(2)} | ` +
+      `retail=$${basePrice.toFixed(2)} | ` +
       `packSize=${amazonPackSize} (${packEvidence}) | ` +
       `photoQty=${photoQty} (${photoEvidence}) | ` +
-      `perUnit=$${perUnitAmazonPrice.toFixed(2)} | ` +
-      `lotBeforeDiscount=$${lotPriceBeforeDiscount.toFixed(2)} | ` +
-      `finalAfterDiscount=$${finalListingPrice.toFixed(2)} | ` +
+      `perUnit=$${perUnitPrice.toFixed(2)} | ` +
+      `lotRetail=$${(lotRetailPriceCents / 100).toFixed(2)} | ` +
+      `shipping=$${(shippingCents / 100).toFixed(2)} | ` +
+      `strategy=${settings.shippingStrategy} | ` +
+      `discount=${settings.discountPercent}% | ` +
+      `final=$${finalListingPrice.toFixed(2)} | ` +
       `source=${chosen.source}`
     );
 
@@ -395,14 +423,14 @@ RESPONSE FORMAT (JSON only):
 
   } catch (error) {
     console.error('[price] AI arbitration failed:', error);
-    return fallbackDecision(candidates);
+    return fallbackDecision(input, candidates);
   }
 }
 
 /**
- * Fallback decision when AI fails: prefer ebay-sold p35, then brand MSRP with 10% discount
+ * Fallback decision when AI fails: prefer ebay-sold p35, then brand MSRP with discount
  */
-function fallbackDecision(candidates: PriceSourceDetail[]): PriceDecision {
+function fallbackDecision(input: PriceLookupInput, candidates: PriceSourceDetail[]): PriceDecision {
   // Prefer ebay-sold first
   const ebaySold = candidates.find(c => c.source === 'ebay-sold');
   if (ebaySold) {
@@ -416,16 +444,37 @@ function fallbackDecision(candidates: PriceSourceDetail[]): PriceDecision {
     };
   }
 
-  // Then try brand MSRP with 10% discount
+  // Then try brand MSRP with pricing settings (Phase 3)
   const brandMsrp = candidates.find(c => c.source === 'brand-msrp');
   if (brandMsrp) {
-    const discountedPrice = Math.round(brandMsrp.price * 0.90 * 100) / 100;
-    console.log(`[price] Fallback decision: using brand-msrp $${brandMsrp.price.toFixed(2)} with 10% discount = $${discountedPrice.toFixed(2)}`);
+    // Phase 3: Use computeEbayItemPrice with user settings
+    const settings = input.pricingSettings || {
+      discountPercent: 10,
+      shippingStrategy: 'DISCOUNT_ITEM_ONLY',
+      templateShippingEstimateCents: 600,
+      shippingSubsidyCapCents: null,
+    };
+    
+    const priceCents = Math.round(brandMsrp.price * 100);
+    const shippingCents = brandMsrp.shippingCents || 0;
+    
+    const result = computeEbayItemPrice({
+      amazonItemPriceCents: priceCents,
+      amazonShippingCents: shippingCents,
+      discountPercent: settings.discountPercent,
+      shippingStrategy: settings.shippingStrategy,
+      templateShippingEstimateCents: settings.templateShippingEstimateCents,
+      shippingSubsidyCapCents: settings.shippingSubsidyCapCents,
+    });
+    
+    const finalPrice = result.ebayItemPriceCents / 100;
+    
+    console.log(`[price] Fallback decision: brand-msrp $${brandMsrp.price.toFixed(2)} → $${finalPrice.toFixed(2)} (${settings.shippingStrategy}, ${settings.discountPercent}% off)`);
     return {
       ok: true,
       chosen: brandMsrp,
       candidates,
-      recommendedListingPrice: discountedPrice,
+      recommendedListingPrice: finalPrice,
       reason: 'fallback-to-brand-msrp-with-discount'
     };
   }
@@ -649,25 +698,31 @@ export async function lookupPrice(
     if (amazonUrlFound) {
       console.log(`[price] Amazon URL found: ${amazonUrlFound}`);
       
-      // Fetch HTML and extract price (already normalized by extractPriceFromHtml)
+      // Phase 3: Extract price WITH shipping for competitive pricing
       const { html, isDnsFailure } = await fetchHtml(amazonUrlFound);
       if (html) {
-        const normalizedPrice = extractPriceFromHtml(html, input.title);
+        const priceData = extractPriceWithShipping(html, input.title);
         
-        if (normalizedPrice && normalizedPrice > 0) {
-          // CHUNK 3: extractPriceFromHtml now returns already-normalized price
-          // No need to detect pack quantity or divide again
-          amazonPrice = normalizedPrice;
+        if (priceData.amazonItemPrice && priceData.amazonItemPrice > 0) {
+          amazonPrice = priceData.amazonItemPrice;
           amazonUrl = amazonUrlFound;
           
-          console.log(`[price] ✓ Amazon marketplace price: $${amazonPrice.toFixed(2)} per unit (normalized)`);
+          const shippingCents = Math.round(priceData.amazonShippingPrice * 100);
+          const shippingNote = priceData.shippingEvidence === 'free' 
+            ? 'free shipping' 
+            : priceData.shippingEvidence === 'paid' 
+              ? `$${priceData.amazonShippingPrice.toFixed(2)} shipping` 
+              : 'shipping unknown';
+          
+          console.log(`[price] ✓ Amazon: item=$${amazonPrice.toFixed(2)}, ${shippingNote}`);
           
           candidates.push({
             source: 'brand-msrp',
             price: amazonPrice,
             currency: 'USD',
             url: amazonUrl,
-            notes: 'Amazon marketplace price (normalized)',
+            notes: `Amazon marketplace price (${shippingNote})`,
+            shippingCents,
           });
         }
       }

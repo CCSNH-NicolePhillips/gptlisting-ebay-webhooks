@@ -202,7 +202,7 @@ export async function mapGroupToDraft(group: Record<string, any>, opts?: MapOpti
     allKeys: Object.keys(group)
   }, null, 2));
   
-  const base = await mapGroupToDraftWithTaxonomy(group);
+  const base = await mapGroupToDraftWithTaxonomy(group, options.userId);
   
   console.log('[mapGroupToDraft] Base from taxonomy:', JSON.stringify({
     sku: base.sku,
