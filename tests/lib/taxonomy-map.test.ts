@@ -1025,6 +1025,35 @@ describe('taxonomy-map', () => {
         // eBay item price: would be $0, but clamped to minItemPriceCents (199 cents = $1.99)
         expect(result.offer.price).toBe(1.99);
       });
+
+      it('should use pre-computed price when publishing draft (both price and priceMeta exist)', async () => {
+        // PUBLISH SCENARIO: Draft already has computed price + original priceMeta
+        // This happens when create-ebay-draft-user calls mapGroupToDraft with a draft object
+        const group = {
+          brand: 'TestBrand',
+          product: 'TestProduct',
+          images: ['https://example.com/img1.jpg'],
+          price: 45.30, // Pre-computed draft price (already discounted)
+          priceMeta: {
+            chosenSource: 'brand-msrp',
+            basePrice: 57.00, // Original retail price
+            candidates: [
+              {
+                source: 'brand-msrp',
+                price: 57.00,
+                shippingCents: 0,
+              },
+            ],
+          },
+        };
+        
+        const result = await mapGroupToDraftWithTaxonomy(group);
+        
+        // Should use pre-computed price as-is, NOT recalculate from basePrice
+        // If it recalculated: $57 * 0.9 = $51.30 - $6 = $45.30 (then again = $34.77)
+        // Correct: use 45.30 directly without re-calculation
+        expect(result.offer.price).toBe(45.30);
+      });
     });
   });
 });
