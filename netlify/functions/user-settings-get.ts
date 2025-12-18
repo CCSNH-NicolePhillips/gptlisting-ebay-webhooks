@@ -1,10 +1,15 @@
 import type { Handler } from '@netlify/functions';
 import { tokensStore } from '../../src/lib/_blobs.js';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
+import { getDefaultPricingSettings } from '../../src/lib/pricing-config.js';
 
 /**
- * Get user settings (promotion preferences, etc.)
- * Returns: { autoPromoteEnabled: boolean, defaultPromotionRate: number | null }
+ * Get user settings (promotion preferences, pricing config, etc.)
+ * Returns: { 
+ *   autoPromoteEnabled: boolean, 
+ *   defaultPromotionRate: number | null,
+ *   pricing: PricingSettings
+ * }
  */
 export const handler: Handler = async (event) => {
   try {
@@ -23,13 +28,23 @@ export const handler: Handler = async (event) => {
     } catch {}
     if (!settings || typeof settings !== 'object') settings = {};
 
+    // Get pricing defaults
+    const defaultPricing = getDefaultPricingSettings();
+
     // Return with defaults
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         autoPromoteEnabled: settings.autoPromoteEnabled || false,
-        defaultPromotionRate: settings.defaultPromotionRate || null
+        defaultPromotionRate: settings.defaultPromotionRate || null,
+        pricing: {
+          discountPercent: settings.pricing?.discountPercent ?? defaultPricing.discountPercent,
+          shippingStrategy: settings.pricing?.shippingStrategy ?? defaultPricing.shippingStrategy,
+          templateShippingEstimateCents: settings.pricing?.templateShippingEstimateCents ?? defaultPricing.templateShippingEstimateCents,
+          shippingSubsidyCapCents: settings.pricing?.shippingSubsidyCapCents ?? defaultPricing.shippingSubsidyCapCents,
+          minItemPriceCents: settings.pricing?.minItemPriceCents ?? defaultPricing.minItemPriceCents,
+        }
       })
     };
   } catch (e: any) {

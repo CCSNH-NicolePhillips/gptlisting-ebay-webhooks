@@ -296,6 +296,77 @@
               </div>
             </section>
             
+            <!-- Pricing Settings Card -->
+            <section class="dp-card">
+              <div class="dp-card__header">
+                <h3 class="dp-card__title">💰 Competitive Pricing</h3>
+                <p class="dp-card__subtitle">Configure how your eBay prices are calculated from retail sources</p>
+              </div>
+              
+              <div class="dp-card__content">
+                <label class="dp-form-label">Discount Percentage</label>
+                <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1.5rem;">
+                  <input type="number" id="discountPercent" class="dp-input" placeholder="10" min="0" max="50" step="1" style="width: 120px;" />
+                  <span style="color: var(--text-muted);">% off retail</span>
+                </div>
+                <p style="font-size: 0.875rem; color: var(--text-muted); margin-top: -0.5rem; margin-bottom: 1.5rem;">
+                  Discount applied to retail/MSRP prices (0-50%). Recommended: 10% for competitive new item pricing.
+                </p>
+                
+                <label class="dp-form-label">Pricing Strategy</label>
+                <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1.5rem;">
+                  <label style="display: flex; align-items: start; cursor: pointer;">
+                    <input type="radio" name="shippingStrategy" value="DISCOUNT_ITEM_ONLY" id="strategyItemOnly" style="margin-top: 2px; margin-right: 8px;" />
+                    <div>
+                      <span style="font-weight: 500;">Item-Only Discount</span>
+                      <p style="font-size: 0.8125rem; color: var(--text-muted); margin: 4px 0 0 0;">
+                        Simple strategy: applies discount to item price only. Ignores competitor shipping costs.
+                      </p>
+                    </div>
+                  </label>
+                  <label style="display: flex; align-items: start; cursor: pointer;">
+                    <input type="radio" name="shippingStrategy" value="ALGO_COMPETITIVE_TOTAL" id="strategyAlgoTotal" style="margin-top: 2px; margin-right: 8px;" />
+                    <div>
+                      <span style="font-weight: 500;">Total-Competitive Algorithm</span>
+                      <p style="font-size: 0.8125rem; color: var(--text-muted); margin: 4px 0 0 0;">
+                        Advanced: accounts for competitor shipping when calculating item price to maintain competitive total-to-door cost.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+                
+                <label class="dp-form-label">Template Shipping Estimate</label>
+                <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1.5rem;">
+                  <span style="color: var(--text-muted);">$</span>
+                  <input type="number" id="templateShippingEstimate" class="dp-input" placeholder="6.00" min="0" max="30" step="0.50" style="width: 120px;" />
+                </div>
+                <p style="font-size: 0.875rem; color: var(--text-muted); margin-top: -0.5rem; margin-bottom: 1.5rem;">
+                  Your typical shipping cost in dollars. Used by ALGO strategy to calculate item price. Default: $6.00 (USPS Priority Mail).
+                </p>
+                
+                <label class="dp-form-label">Shipping Subsidy Cap (Optional)</label>
+                <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem;">
+                  <span style="color: var(--text-muted);">$</span>
+                  <input type="number" id="shippingSubsidyCap" class="dp-input" placeholder="None" min="0" max="20" step="0.50" style="width: 120px;" />
+                </div>
+                <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1.5rem;">
+                  Maximum amount you'll subsidize shipping (leave empty for no cap). Prevents offering unrealistically cheap shipping.
+                </p>
+                
+                <label class="dp-form-label">Minimum Item Price</label>
+                <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem;">
+                  <span style="color: var(--text-muted);">$</span>
+                  <input type="number" id="minItemPrice" class="dp-input" placeholder="1.99" min="0" max="10" step="0.50" style="width: 120px;" />
+                </div>
+                <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1.5rem;">
+                  Minimum item price floor (default: $1.99). Prevents negative or unrealistically low pricing.
+                </p>
+                
+                <button id="pricingSaveButton" class="dp-btn dp-btn-primary" style="margin-top: 12px;">Save pricing settings</button>
+                <p id="pricingSaveMessage" class="dp-muted" style="text-align: center; margin-top: 12px; min-height: 20px;"></p>
+              </div>
+            </section>
+            
             <!-- Connections Card -->
             <section class="dp-card">
               <div class="dp-card__header">
@@ -504,6 +575,141 @@
         }
       }
       
+      // Save pricing settings
+      const pricingSaveBtn = document.getElementById('pricingSaveButton');
+      if (pricingSaveBtn) {
+        pricingSaveBtn.onclick = async () => {
+          const msg = document.getElementById('pricingSaveMessage');
+          const discountPercent = parseFloat(document.getElementById('discountPercent')?.value || '10');
+          const strategyItemOnly = document.getElementById('strategyItemOnly')?.checked;
+          const strategyAlgoTotal = document.getElementById('strategyAlgoTotal')?.checked;
+          const templateShippingEstimate = parseFloat(document.getElementById('templateShippingEstimate')?.value || '6.00');
+          const shippingSubsidyCapInput = document.getElementById('shippingSubsidyCap')?.value;
+          const minItemPrice = parseFloat(document.getElementById('minItemPrice')?.value || '1.99');
+          
+          // Validation
+          if (discountPercent < 0 || discountPercent > 50) {
+            if (msg) {
+              msg.textContent = 'Discount must be between 0% and 50%';
+              msg.style.color = '#ef4444';
+              setTimeout(() => { msg.textContent = ''; msg.style.color = ''; }, 3000);
+            }
+            return;
+          }
+          
+          if (!strategyItemOnly && !strategyAlgoTotal) {
+            if (msg) {
+              msg.textContent = 'Please select a pricing strategy';
+              msg.style.color = '#ef4444';
+              setTimeout(() => { msg.textContent = ''; msg.style.color = ''; }, 3000);
+            }
+            return;
+          }
+          
+          if (templateShippingEstimate < 0) {
+            if (msg) {
+              msg.textContent = 'Shipping estimate cannot be negative';
+              msg.style.color = '#ef4444';
+              setTimeout(() => { msg.textContent = ''; msg.style.color = ''; }, 3000);
+            }
+            return;
+          }
+          
+          if (minItemPrice < 0) {
+            if (msg) {
+              msg.textContent = 'Minimum item price cannot be negative';
+              msg.style.color = '#ef4444';
+              setTimeout(() => { msg.textContent = ''; msg.style.color = ''; }, 3000);
+            }
+            return;
+          }
+          
+          if (msg) msg.textContent = 'Saving...';
+          
+          try {
+            const shippingStrategy = strategyAlgoTotal ? 'ALGO_COMPETITIVE_TOTAL' : 'DISCOUNT_ITEM_ONLY';
+            const shippingSubsidyCap = shippingSubsidyCapInput && shippingSubsidyCapInput.trim() !== '' 
+              ? Math.round(parseFloat(shippingSubsidyCapInput) * 100)
+              : null;
+            
+            const response = await authClient.authFetch('/.netlify/functions/user-settings-save', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                pricing: {
+                  discountPercent,
+                  shippingStrategy,
+                  templateShippingEstimateCents: Math.round(templateShippingEstimate * 100),
+                  shippingSubsidyCapCents: shippingSubsidyCap,
+                  minItemPriceCents: Math.round(minItemPrice * 100)
+                }
+              })
+            });
+            
+            if (response.ok) {
+              if (msg) {
+                msg.textContent = '✓ Pricing settings saved!';
+                msg.style.color = '#10b981';
+                setTimeout(() => { msg.textContent = ''; msg.style.color = ''; }, 3000);
+              }
+            } else {
+              throw new Error('Failed to save');
+            }
+          } catch (err) {
+            console.error('[Settings] Failed to save pricing settings:', err);
+            if (msg) {
+              msg.textContent = 'Failed to save settings';
+              msg.style.color = '#ef4444';
+              setTimeout(() => { msg.textContent = ''; msg.style.color = ''; }, 3000);
+            }
+          }
+        };
+      }
+      
+      // Load pricing settings
+      async function loadPricingSettings() {
+        try {
+          const response = await authClient.authFetch('/.netlify/functions/user-settings-get');
+          if (response.ok) {
+            const settings = await response.json();
+            const pricing = settings.pricing || {};
+            
+            const discountInput = document.getElementById('discountPercent');
+            const strategyItemOnly = document.getElementById('strategyItemOnly');
+            const strategyAlgoTotal = document.getElementById('strategyAlgoTotal');
+            const shippingEstimateInput = document.getElementById('templateShippingEstimate');
+            const subsidyCapInput = document.getElementById('shippingSubsidyCap');
+            const minItemPriceInput = document.getElementById('minItemPrice');
+            
+            if (discountInput && pricing.discountPercent !== undefined) {
+              discountInput.value = pricing.discountPercent;
+            }
+            
+            if (strategyItemOnly && strategyAlgoTotal) {
+              if (pricing.shippingStrategy === 'ALGO_COMPETITIVE_TOTAL') {
+                strategyAlgoTotal.checked = true;
+              } else {
+                strategyItemOnly.checked = true;
+              }
+            }
+            
+            if (shippingEstimateInput && pricing.templateShippingEstimateCents !== undefined) {
+              shippingEstimateInput.value = (pricing.templateShippingEstimateCents / 100).toFixed(2);
+            }
+            
+            if (subsidyCapInput && pricing.shippingSubsidyCapCents !== undefined && pricing.shippingSubsidyCapCents !== null) {
+              subsidyCapInput.value = (pricing.shippingSubsidyCapCents / 100).toFixed(2);
+            }
+            
+            if (minItemPriceInput && pricing.minItemPriceCents !== undefined) {
+              minItemPriceInput.value = (pricing.minItemPriceCents / 100).toFixed(2);
+            }
+          }
+        } catch (err) {
+          console.error('[Settings] Failed to load pricing settings:', err);
+        }
+      }
+      
       const bannerLoginBtn = document.getElementById('bannerLogin');
       if (bannerLoginBtn) bannerLoginBtn.onclick = () => {
         try { sessionStorage.setItem('returnTo', '/settings.html'); } catch {}
@@ -536,6 +742,7 @@
         initUserMenu();
         await authClient.updateUserCard().catch(() => {});
         await loadPromotionSettings().catch(() => {});
+        await loadPricingSettings().catch(() => {});
         const lc = document.getElementById('loadingCard');
         const mc = document.getElementById('mainCard');
         if (lc) lc.style.display = 'none';

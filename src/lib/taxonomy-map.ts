@@ -1,6 +1,9 @@
 import { buildItemSpecifics } from "./taxonomy-autofill.js";
 import type { CategoryDef } from "./taxonomy-schema.js";
 import { pickCategoryForGroup } from "./taxonomy-select.js";
+import { computeEbayItemPriceCents } from "./pricing-compute.js";
+import { getDefaultPricingSettings, type PricingSettings } from "./pricing-config.js";
+import { tokensStore } from "./_blobs.js";
 
 const MAX_TITLE_LENGTH = 80;
 const DEFAULT_MARKETPLACE = process.env.DEFAULT_MARKETPLACE_ID || "EBAY_US";
@@ -172,15 +175,82 @@ export type TaxonomyMappedDraft = {
   autoPromoteAdRate?: number;   // default from promotion defaults, e.g. 5
 };
 
-export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>): Promise<TaxonomyMappedDraft> {
+export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>, userId?: string): Promise<TaxonomyMappedDraft> {
   if (!group) throw new Error("Invalid group payload");
 
-  const price = extractPrice(group);
   const title = buildTitle(group);
   if (!title) throw new Error("Unable to derive title");
 
   const images = ensureImages(group);
   const sku = generateSku(group);
+
+  // PHASE 3: Load user pricing settings
+  let pricingSettings: PricingSettings = getDefaultPricingSettings();
+  if (userId) {
+    try {
+      const store = tokensStore();
+      const settingsKey = `users/${userId}/settings.json`;
+      const settingsBlob = await store.get(settingsKey);
+      if (settingsBlob) {
+        const settingsData = JSON.parse(settingsBlob);
+        if (settingsData.pricing) {
+          pricingSettings = { ...pricingSettings, ...settingsData.pricing };
+        }
+      }
+    } catch (settingsErr) {
+      console.warn(`[taxonomy-map] Failed to load user settings, using defaults:`, settingsErr);
+    }
+  }
+
+  // PHASE 3: Extract Amazon pricing data from group
+  const priceMeta = group.priceMeta as any;
+  let amazonItemPriceCents = 0;
+  let amazonShippingCents = 0;
+  let amazonShippingAssumedZero = true;
+
+  // Try to extract from priceMeta first (set by price-lookup.ts)
+  if (priceMeta?.chosenSource && priceMeta?.basePrice) {
+    amazonItemPriceCents = Math.round(priceMeta.basePrice * 100);
+    
+    // Check if shipping data is available in candidates
+    const chosenCandidate = priceMeta.candidates?.find((c: any) => c.source === priceMeta.chosenSource);
+    if (chosenCandidate && typeof chosenCandidate.shippingCents === 'number') {
+      amazonShippingCents = chosenCandidate.shippingCents;
+      amazonShippingAssumedZero = false;
+    }
+  } else {
+    // Fallback: extract from legacy group.pricing.ebay or group.price
+    const legacyPrice = Number(group?.pricing?.ebay ?? group?.price ?? 0);
+    if (Number.isFinite(legacyPrice) && legacyPrice > 0) {
+      amazonItemPriceCents = Math.round(legacyPrice * 100);
+    } else {
+      throw new Error("Group missing pricing data (no priceMeta and no legacy price)");
+    }
+  }
+
+  // PHASE 3: Compute eBay offer price using Phase 2 function
+  const pricingResult = computeEbayItemPriceCents({
+    amazonItemPriceCents,
+    amazonShippingCents,
+    settings: pricingSettings,
+  });
+
+  const price = pricingResult.ebayItemPriceCents / 100; // Convert cents to dollars
+
+  // PHASE 3: Log PRICING_EVIDENCE (CRITICAL: Do not log tokens/PII)
+  console.log(`[taxonomy-map] PRICING_EVIDENCE for SKU ${sku}:`, {
+    sku,
+    amazonItemPriceCents,
+    amazonShippingCents,
+    amazonShippingAssumedZero,
+    discountPercent: pricingSettings.discountPercent,
+    shippingStrategy: pricingSettings.shippingStrategy,
+    templateShippingEstimateCents: pricingSettings.templateShippingEstimateCents,
+    targetDeliveredTotalCents: pricingResult.targetDeliveredTotalCents,
+    ebayItemPriceCents: pricingResult.ebayItemPriceCents,
+    shippingSubsidyAppliedCents: pricingResult.evidence.shippingSubsidyAppliedCents,
+    finalOfferPriceDollars: price,
+  });
 
   const matched = await pickCategoryForGroup(group);
   console.log('[mapGroupToDraftWithTaxonomy] pickCategoryForGroup result:', {
@@ -275,6 +345,7 @@ export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>): P
       sku,
       marketplaceId,
       categoryId,
+      // CRITICAL: Pricing is computed only here. Do not compute elsewhere. Guardrail test enforces this.
       price,
       quantity,
       condition: offerCondition,
