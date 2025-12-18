@@ -509,13 +509,17 @@ function extractFromJsonLd($: cheerio.CheerioAPI, requestedSize?: string | null)
   })));
   
   // Filter out subscription offers (we want one-time purchase prices)
+  // ONLY check offer name (not product description which may have "Subscribe & Save" marketing text)
   const nonSubscriptionCandidates = allCandidates.filter(c => {
     const nameText = (c.nameText || '').toLowerCase();
-    const descText = (c.descriptionText || '').toLowerCase();
+    // Check if the offer's rawOffer explicitly has subscription fields
+    const rawOffer = c.rawOffer || {};
+    const offerName = String((rawOffer as any).name || '').toLowerCase();
+    
     const isSubscription = nameText.includes('subscription') || 
-                          nameText.includes('subscribe') || 
-                          descText.includes('subscription') || 
-                          descText.includes('subscribe');
+                          nameText.includes('subscribe') ||
+                          offerName.includes('subscription') ||
+                          offerName.includes('subscribe');
     return !isSubscription;
   });
   

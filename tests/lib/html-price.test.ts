@@ -1120,6 +1120,106 @@ describe('html-price.ts', () => {
         const price = extractPriceFromHtml(html);
         expect(price).toBe(30.00);
       });
+
+      it('should extract price from priceSpecification array (ROOT Sculpt case)', () => {
+        const html = `
+          <html>
+            <script type="application/ld+json">
+            {
+              "@context": "https://schema.org/",
+              "@type": "Product",
+              "name": "Sculpt",
+              "description": "$99 Subscribe & Save with RPS",
+              "offers": [{
+                "@type": "Offer",
+                "priceSpecification": [{
+                  "@type": "UnitPriceSpecification",
+                  "price": "109.00",
+                  "priceCurrency": "USD"
+                }],
+                "availability": "http://schema.org/InStock"
+              }]
+            }
+            </script>
+          </html>
+        `;
+
+        const price = extractPriceFromHtml(html);
+        expect(price).toBe(109.00);
+      });
+
+      it('should NOT reject offers with "Subscribe & Save" in product description', () => {
+        // Regression test: Previously rejected valid offers if product description
+        // contained subscription marketing text, even when offer itself was one-time purchase
+        const html = `
+          <html>
+            <script type="application/ld+json">
+            {
+              "@type": "Product",
+              "name": "Premium Wellness Product",
+              "description": "Great product! Subscribe & Save 10% on recurring orders",
+              "offers": {
+                "@type": "Offer",
+                "name": "One-time purchase",
+                "price": "57.00",
+                "priceCurrency": "USD"
+              }
+            }
+            </script>
+          </html>
+        `;
+
+        const price = extractPriceFromHtml(html);
+        expect(price).toBe(57.00); // Should return price, not fall back to body scraping
+      });
+
+      it('should reject offers with "subscription" in offer name', () => {
+        const html = `
+          <html>
+            <script type="application/ld+json">
+            {
+              "@type": "Product",
+              "offers": [
+                {
+                  "@type": "Offer",
+                  "name": "Monthly subscription",
+                  "price": "25.00"
+                },
+                {
+                  "@type": "Offer", 
+                  "name": "One-time purchase",
+                  "price": "30.00"
+                }
+              ]
+            }
+            </script>
+          </html>
+        `;
+
+        const price = extractPriceFromHtml(html);
+        expect(price).toBe(30.00); // Should pick non-subscription offer
+      });
+
+      it('should handle priceSpecification with multiple prices (bulk/retail)', () => {
+        const html = `
+          <html>
+            <script type="application/ld+json">
+            {
+              "@type": "Product",
+              "offers": {
+                "priceSpecification": [
+                  { "price": "899.00", "name": "Wholesale 12-pack" },
+                  { "price": "45.00", "name": "Retail" }
+                ]
+              }
+            }
+            </script>
+          </html>
+        `;
+
+        const price = extractPriceFromHtml(html);
+        expect(price).toBe(45.00); // Should pick retail price, reject >$500 bulk
+      });
     });
   });
 });
