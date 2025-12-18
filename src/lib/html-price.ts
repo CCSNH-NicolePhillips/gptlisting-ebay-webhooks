@@ -579,6 +579,45 @@ function extractFromOpenGraph($: cheerio.CheerioAPI): number | null {
   return price;
 }
 
+/**
+ * Check if a price match appears in non-product context (shipping, rewards, etc.)
+ * @param bodyText - Full page text
+ * @param matchIndex - Index of the $ match in bodyText
+ * @param price - The extracted price value
+ * @returns true if this price should be rejected (is not a product price)
+ */
+function isNonProductPrice(bodyText: string, matchIndex: number, price: number): boolean {
+  // Get context window around the match (80 chars before and after to avoid false positives)
+  const contextStart = Math.max(0, matchIndex - 80);
+  const contextEnd = Math.min(bodyText.length, matchIndex + 80);
+  const context = bodyText.substring(contextStart, contextEnd).toLowerCase();
+  
+  // Keywords that indicate this is NOT a product price
+  const nonPriceKeywords = [
+    'token', 'tokens',
+    'points',
+    'reward', 'rewards',
+    'credit', 'credits',
+    'coupon', 'coupons',
+    'save', 'saved',
+    'off', // "$10 off"
+    'discount',
+    'shipping', 'delivery',
+    'free shipping',
+    'shipping will be',
+    'subscription', 'subscribe',
+  ];
+  
+  for (const keyword of nonPriceKeywords) {
+    if (context.includes(keyword)) {
+      console.log(`[HTML Parser] ❌ Rejecting $${price} - found keyword "${keyword}" in context: "${context.slice(0, 80)}..."`);
+      return true;
+    }
+  }
+  
+  return false;
+}
+
 function extractFromBody($: cheerio.CheerioAPI, packInfo?: { isMultiPack: boolean; packSize?: number }, productTitle?: string): number | null {
   const bodyText = $.root().text().replace(/\s+/g, " ");
   
@@ -594,10 +633,15 @@ function extractFromBody($: cheerio.CheerioAPI, packInfo?: { isMultiPack: boolea
   const targeted = bodyText.match(/(?:price|buy|order)[^$]{0,60}\$\s?(\d{1,4}(?:\.\d{2})?)/i);
   if (targeted) {
     const price = toNumber(targeted[1]);
+    const matchIndex = targeted.index || 0;
     console.log(`[HTML Parser] Targeted match found: $${price} (full match: "${targeted[0].slice(0, 80)}...")`);
-    if (price && price >= 15) {
+    
+    // Check if this is a non-product price (shipping, rewards, etc.)
+    if (price && price >= 15 && !isNonProductPrice(bodyText, matchIndex, price)) {
       // CHUNK 3: No division here - normalization happens in extractPriceFromHtml
       return price;
+    } else if (price && price >= 15) {
+      console.log(`[HTML Parser] Targeted match rejected due to non-product context`);
     }
   }
   
@@ -656,20 +700,32 @@ function extractFromBody($: cheerio.CheerioAPI, packInfo?: { isMultiPack: boolea
   }
   
   // Second try: Extract all dollar amounts and filter
-  const allMatches = bodyText.match(/\$\s?(\d{1,4}(?:\.\d{2})?)/g);
+  const pricePattern = /\$\s?(\d{1,4}(?:\.\d{2})?)/g;
+  const allMatches = [...bodyText.matchAll(pricePattern)];
   console.log(`[HTML Parser] Looking for all $ amounts in body text...`);
-  if (allMatches) {
+  if (allMatches.length > 0) {
     console.log(`[HTML Parser] Found ${allMatches.length} $-prefixed prices in body`);
-    const allPrices = allMatches
-      .map(m => m.replace(/\$/g, '').trim())
-      .map(m => toNumber(m))
-      .filter((p): p is number => p !== null && p >= 15 && p <= 500); // Filter out discounts/fees (<$15)
     
-    console.log(`[HTML Parser] After filtering (>=$15, <=$500): ${allPrices.length} prices - [${allPrices.slice(0, 10).join(', ')}${allPrices.length > 10 ? '...' : ''}]`);
+    // Filter prices and check context
+    const validPrices: number[] = [];
+    for (const match of allMatches) {
+      const priceStr = match[1];
+      const price = toNumber(priceStr);
+      const matchIndex = match.index || 0;
+      
+      if (price && price >= 15 && price <= 500) {
+        // Check if this is a non-product price
+        if (!isNonProductPrice(bodyText, matchIndex, price)) {
+          validPrices.push(price);
+        }
+      }
+    }
     
-    if (allPrices.length > 0) {
+    console.log(`[HTML Parser] After filtering (>=$15, <=$500, not shipping/rewards): ${validPrices.length} prices - [${validPrices.slice(0, 10).join(', ')}${validPrices.length > 10 ? '...' : ''}]`);
+    
+    if (validPrices.length > 0) {
       // Prefer retail-formatted prices (.95 or .99) over round numbers
-      const retailPrices = allPrices.filter(p => {
+      const retailPrices = validPrices.filter(p => {
         const cents = Math.round((p % 1) * 100);
         return cents === 95 || cents === 99;
       });
@@ -678,12 +734,12 @@ function extractFromBody($: cheerio.CheerioAPI, packInfo?: { isMultiPack: boolea
       
       const extractedPrice: number = retailPrices.length > 0 
         ? Math.min(...retailPrices)
-        : Math.min(...allPrices);
+        : Math.min(...validPrices);
       
       if (retailPrices.length > 0) {
-        console.log(`[HTML Parser] Found ${allPrices.length} prices (>=$15), using lowest retail-formatted (.95/.99): $${extractedPrice}`);
+        console.log(`[HTML Parser] Found ${validPrices.length} prices (>=$15), using lowest retail-formatted (.95/.99): $${extractedPrice}`);
       } else {
-        console.log(`[HTML Parser] Found ${allPrices.length} prices (>=$15), no retail formatting found, using lowest: $${extractedPrice}`);
+        console.log(`[HTML Parser] Found ${validPrices.length} prices (>=$15), no retail formatting found, using lowest: $${extractedPrice}`);
       }
       
       // CHUNK 3: No division here - normalization happens in extractPriceFromHtml
@@ -691,6 +747,7 @@ function extractFromBody($: cheerio.CheerioAPI, packInfo?: { isMultiPack: boolea
     }
   }
   
+  console.log(`[HTML Parser] No valid product prices found in body text`);
   return null;
 }
 

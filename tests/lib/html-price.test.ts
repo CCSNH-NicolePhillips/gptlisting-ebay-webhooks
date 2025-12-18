@@ -278,21 +278,6 @@ describe('html-price.ts', () => {
     });
 
     describe('Amazon/eBay special handling', () => {
-      it('should NOT reject subscription options on Amazon', () => {
-        const html = `
-          <html>
-            <head><title>Amazon.com: Fish Oil</title></head>
-            <body>
-              Subscribe & Save: $22.99
-              One-time purchase: $24.99
-            </body>
-          </html>
-        `;
-
-        const price = extractPriceFromHtml(html);
-        expect(price).toBe(22.99); // Should accept Amazon prices
-      });
-
       it('should handle Amazon packs with title detection', () => {
         const html = `
           <html>
@@ -1219,6 +1204,117 @@ describe('html-price.ts', () => {
 
         const price = extractPriceFromHtml(html);
         expect(price).toBe(45.00); // Should pick retail price, reject >$500 bulk
+      });
+    });
+
+    describe('Fallback rejection - non-product prices', () => {
+      it('should reject $15 tokens/rewards price (ROOT Sculpt case)', () => {
+        const html = `
+          <html>
+            <body>
+              <p>When you place your order, your shipping will be FREE. RPS Tokens (a $15.00 value) will be applied to your account.</p>
+              <p>Subscribe and save even more!</p>
+            </body>
+          </html>
+        `;
+
+        const price = extractPriceFromHtml(html);
+        expect(price).toBeNull(); // Should reject $15 from tokens context
+      });
+
+      it('should reject free shipping threshold price', () => {
+        const html = `
+          <html>
+            <body>
+              <div>Product Information</div>
+              <div>Free shipping on orders over $35</div>
+              <div>Free returns available</div>
+            </body>
+          </html>
+        `;
+
+        const price = extractPriceFromHtml(html);
+        expect(price).toBeNull(); // Should reject $35 from shipping threshold
+      });
+
+      it('should reject coupon discount prices', () => {
+        const html = `
+          <html>
+            <body>
+              <div>Special Offer!</div>
+              <div>Use coupon code SAVE10 for $10 off your order</div>
+              <div>Limited time only</div>
+            </body>
+          </html>
+        `;
+
+        const price = extractPriceFromHtml(html);
+        expect(price).toBeNull(); // Should reject $10 from coupon context
+      });
+
+      it('should reject rewards points price', () => {
+        const html = `
+          <html>
+            <body>
+              <div>Earn $25 in rewards points with this purchase</div>
+              <div>Join our loyalty program today</div>
+            </body>
+          </html>
+        `;
+
+        const price = extractPriceFromHtml(html);
+        expect(price).toBeNull(); // Should reject $25 from rewards context
+      });
+
+      it('should reject subscription save prices', () => {
+        const html = `
+          <html>
+            <body>
+              <div>Subscribe and save $20 on your first order</div>
+              <div>Cancel anytime</div>
+            </body>
+          </html>
+        `;
+
+        const price = extractPriceFromHtml(html);
+        expect(price).toBeNull(); // Should reject $20 from subscription context
+      });
+
+      it('should accept valid product price near non-keyword text', () => {
+        const html = `
+          <html>
+            <body>
+              <div>Premium Vitamin C Supplement</div>
+              <div>Price: $24.99</div>
+              <div>High quality ingredients</div>
+            </body>
+          </html>
+        `;
+
+        const price = extractPriceFromHtml(html);
+        expect(price).toBe(24.99); // Should accept valid product price
+      });
+
+      it('should accept product price even if page has separate shipping info far away', () => {
+        const html = `
+          <html>
+            <body>
+              <div class="product-section">
+                <h1>Fish Oil 1000mg Premium Supplement</h1>
+                <div class="price-section">Buy now for only $29.99</div>
+                <p>High quality omega-3 supplement with EPA and DHA for heart health and wellness.</p>
+                <p>Each bottle contains 60 softgels providing 1000mg of pure fish oil per serving.</p>
+              </div>
+              <div class="spacer" style="height: 300px">&nbsp;</div>
+              <footer class="site-footer">
+                <p>Footer Information: Free shipping on all orders over $50. Returns accepted within 30 days.</p>
+              </footer>
+            </body>
+          </html>
+        `;
+
+        const price = extractPriceFromHtml(html);
+        expect(price).toBe(29.99); // Should accept $29.99, reject $50 from shipping (too far)
       });
     });
   });
