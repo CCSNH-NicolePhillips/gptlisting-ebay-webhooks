@@ -51,7 +51,7 @@ describe('taxonomy-map', () => {
           images: ['https://example.com/img1.jpg'],
         };
         
-        await expect(mapGroupToDraftWithTaxonomy(group)).rejects.toThrow('Group missing eBay price');
+        await expect(mapGroupToDraftWithTaxonomy(group)).rejects.toThrow('Group missing pricing data');
       });
 
       it('should throw error for invalid price', async () => {
@@ -62,7 +62,7 @@ describe('taxonomy-map', () => {
           images: ['https://example.com/img1.jpg'],
         };
         
-        await expect(mapGroupToDraftWithTaxonomy(group)).rejects.toThrow('Group missing eBay price');
+        await expect(mapGroupToDraftWithTaxonomy(group)).rejects.toThrow('Group missing pricing data');
       });
 
       it('should throw error for missing images', async () => {
@@ -369,7 +369,7 @@ describe('taxonomy-map', () => {
     });
 
     describe('Price handling', () => {
-      it('should extract price from pricing.ebay', async () => {
+      it('should extract price from pricing.ebay and compute eBay price', async () => {
         const group = {
           brand: 'TestBrand',
           product: 'TestProduct',
@@ -379,11 +379,16 @@ describe('taxonomy-map', () => {
         
         const result = await mapGroupToDraftWithTaxonomy(group);
         
-        expect(result.offer.price).toBe(29.99);
-        expect(result._meta.price).toBe(29.99);
+        // Legacy pricing.ebay extracted as amazonItemPriceCents = 2999
+        // Default settings: 10% discount, ALGO, templateShipping 600 cents
+        // Target: $29.99 * 0.9 = $26.99
+        // Subsidy: $6.00
+        // eBay item price: $26.99 - $6.00 = $20.99
+        expect(result.offer.price).toBe(20.99);
+        expect(result._meta.price).toBe(20.99);
       });
 
-      it('should fallback to price field', async () => {
+      it('should fallback to price field and compute eBay price', async () => {
         const group = {
           brand: 'TestBrand',
           product: 'TestProduct',
@@ -393,7 +398,11 @@ describe('taxonomy-map', () => {
         
         const result = await mapGroupToDraftWithTaxonomy(group);
         
-        expect(result.offer.price).toBe(35.50);
+        // Legacy price extracted as amazonItemPriceCents = 3550
+        // Target: $35.50 * 0.9 = $31.95
+        // Subsidy: $6.00
+        // eBay item price: $31.95 - $6.00 = $25.95
+        expect(result.offer.price).toBe(25.95);
       });
 
       it('should round price to 2 decimal places', async () => {
@@ -406,7 +415,11 @@ describe('taxonomy-map', () => {
         
         const result = await mapGroupToDraftWithTaxonomy(group);
         
-        expect(result.offer.price).toBe(30.00);
+        // price = 29.999 → rounds to 30.00 on extraction
+        // Target: $30.00 * 0.9 = $27.00
+        // Subsidy: $6.00
+        // eBay item price: $27.00 - $6.00 = $21.00
+        expect(result.offer.price).toBe(21.00);
       });
     });
 
@@ -886,6 +899,131 @@ describe('taxonomy-map', () => {
         
         expect(result.sku).toBe(result.offer.sku);
         expect(result.sku).toBeTruthy();
+      });
+    });
+
+    describe('Phase 3: Pricing with computeEbayItemPriceCents', () => {
+      it('should compute offer.price using ALGO_COMPETITIVE_TOTAL strategy', async () => {
+        const group = {
+          brand: 'TestBrand',
+          product: 'TestProduct',
+          images: ['https://example.com/img1.jpg'],
+          priceMeta: {
+            chosenSource: 'brand-msrp',
+            basePrice: 57.00,
+            candidates: [
+              {
+                source: 'brand-msrp',
+                price: 57.00,
+                shippingCents: 0,
+              },
+            ],
+          },
+        };
+        
+        const result = await mapGroupToDraftWithTaxonomy(group);
+        
+        // Default settings: 10% discount, ALGO, templateShipping 600 cents
+        // Target: $57 * 0.9 = $51.30
+        // Subsidy: $6.00
+        // eBay item price: $51.30 - $6.00 = $45.30
+        expect(result.offer.price).toBe(45.30);
+        expect(result._meta.price).toBe(45.30);
+      });
+
+      it('should compute offer.price using default ALGO_COMPETITIVE_TOTAL strategy', async () => {
+        const group = {
+          brand: 'TestBrand',
+          product: 'TestProduct',
+          images: ['https://example.com/img1.jpg'],
+          priceMeta: {
+            chosenSource: 'brand-msrp',
+            basePrice: 57.00,
+            candidates: [
+              {
+                source: 'brand-msrp',
+                price: 57.00,
+                shippingCents: 0,
+              },
+            ],
+          },
+        };
+        
+        const result = await mapGroupToDraftWithTaxonomy(group);
+        
+        // Default ALGO_COMPETITIVE_TOTAL: $57 * 0.9 = $51.30
+        // Subsidy: $6.00
+        // eBay item price: $51.30 - $6.00 = $45.30
+        expect(result.offer.price).toBe(45.30);
+      });
+
+      it('should compute offer.price with Amazon shipping cost', async () => {
+        const group = {
+          brand: 'TestBrand',
+          product: 'TestProduct',
+          images: ['https://example.com/img1.jpg'],
+          priceMeta: {
+            chosenSource: 'brand-msrp',
+            basePrice: 57.00,
+            candidates: [
+              {
+                source: 'brand-msrp',
+                price: 57.00,
+                shippingCents: 599, // $5.99 shipping
+              },
+            ],
+          },
+        };
+        
+        const result = await mapGroupToDraftWithTaxonomy(group);
+        
+        // Target: ($57 + $5.99) * 0.9 = $56.69
+        // Subsidy: $6.00
+        // eBay item price: $56.69 - $6.00 = $50.69
+        expect(result.offer.price).toBe(50.69);
+      });
+
+      it('should fallback to legacy price field when priceMeta missing', async () => {
+        const group = {
+          brand: 'TestBrand',
+          product: 'TestProduct',
+          price: 57.00,
+          images: ['https://example.com/img1.jpg'],
+        };
+        
+        const result = await mapGroupToDraftWithTaxonomy(group);
+        
+        // Fallback uses price as amazonItemPriceCents with free shipping
+        // Target: $57 * 0.9 = $51.30
+        // Subsidy: $6.00
+        // eBay item price: $51.30 - $6.00 = $45.30
+        expect(result.offer.price).toBe(45.30);
+      });
+
+      it('should apply minimum item price floor', async () => {
+        const group = {
+          brand: 'TestBrand',
+          product: 'TestProduct',
+          images: ['https://example.com/img1.jpg'],
+          priceMeta: {
+            chosenSource: 'brand-msrp',
+            basePrice: 1.00, // Very low price
+            candidates: [
+              {
+                source: 'brand-msrp',
+                price: 1.00,
+                shippingCents: 0,
+              },
+            ],
+          },
+        };
+        
+        const result = await mapGroupToDraftWithTaxonomy(group);
+        
+        // Target: $1.00 * 0.9 = $0.90
+        // Subsidy: $0.90 (capped at target)
+        // eBay item price: would be $0, but clamped to minItemPriceCents (199 cents = $1.99)
+        expect(result.offer.price).toBe(1.99);
       });
     });
   });

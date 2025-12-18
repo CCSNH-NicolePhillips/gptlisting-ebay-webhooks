@@ -1,15 +1,24 @@
 // tests/services/listing-enrichment.test.ts
 import { enrichListingWithAI } from '../../src/services/listing-enrichment';
 import type { ProductGroup } from '../../src/services/listing-enrichment';
+import OpenAI from 'openai';
+
+// Mock OpenAI
+jest.mock('openai');
 
 describe('enrichListingWithAI', () => {
+  const originalEnv = process.env;
+
   beforeEach(() => {
     jest.spyOn(console, 'warn').mockImplementation();
     jest.spyOn(console, 'error').mockImplementation();
+    jest.clearAllMocks();
+    process.env = { ...originalEnv };
   });
 
   afterEach(() => {
     jest.restoreAllMocks();
+    process.env = originalEnv;
   });
 
   it('should generate fallback listing with full product data', async () => {

@@ -90,7 +90,7 @@ describe("map-group-to-draft", () => {
 
       const result = await mapGroupToDraft(group);
 
-      expect(mapGroupToDraftWithTaxonomy).toHaveBeenCalledWith(group);
+      expect(mapGroupToDraftWithTaxonomy).toHaveBeenCalledWith(group, undefined);
       expect(result.sku).toBe("BASE-SKU-123");
       expect(result.inventory.product.title).toBe("Base Product Title");
     });
@@ -123,7 +123,7 @@ describe("map-group-to-draft", () => {
       const group = { id: "g456", brand: "TestBrand" };
       const result = await mapGroupToDraft(group, { userId: "u1", jobId: "j1" });
 
-      expect(mapGroupToDraftWithTaxonomy).toHaveBeenCalledWith(group);
+      expect(mapGroupToDraftWithTaxonomy).toHaveBeenCalledWith(group, "u1");
     });
 
     it("should handle missing groupId gracefully", async () => {

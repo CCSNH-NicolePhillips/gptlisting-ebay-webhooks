@@ -11,37 +11,42 @@
 
 import {
   type ShippingStrategy,
-  type CompetitivePricingRules,
-  getDefaultCompetitivePricingRules,
+  type PricingSettings,
+  getDefaultPricingSettings,
 } from '../../../src/lib/pricing-config';
 
+// Legacy alias for backward compatibility
+type CompetitivePricingRules = PricingSettings;
+const getDefaultCompetitivePricingRules = getDefaultPricingSettings;
+
 describe('Competitive Pricing Configuration - Phase 1', () => {
-  describe('getDefaultCompetitivePricingRules', () => {
+  describe('getDefaultPricingSettings', () => {
     it('should return default configuration', () => {
-      const config = getDefaultCompetitivePricingRules();
+      const config = getDefaultPricingSettings();
 
       expect(config).toBeDefined();
       expect(config.discountPercent).toBe(10);
-      expect(config.shippingStrategy).toBe('FREE_IF_AMAZON_FREE');
-      expect(config.neverExceedAmazonTotal).toBe(true);
-      expect(config.sellerPaysUpTo).toBeUndefined();
+      expect(config.shippingStrategy).toBe('DISCOUNT_ITEM_ONLY');
+      expect(config.templateShippingEstimateCents).toBe(600);
+      expect(config.shippingSubsidyCapCents).toBeNull();
     });
 
     it('should return new object on each call (not singleton)', () => {
-      const config1 = getDefaultCompetitivePricingRules();
-      const config2 = getDefaultCompetitivePricingRules();
+      const config1 = getDefaultPricingSettings();
+      const config2 = getDefaultPricingSettings();
 
       expect(config1).not.toBe(config2); // Different object references
       expect(config1).toEqual(config2);  // Same values
     });
 
     it('should return immutable-safe config', () => {
-      const config = getDefaultCompetitivePricingRules();
+      const config = getDefaultPricingSettings();
       
       // Verify structure matches interface
       expect(typeof config.discountPercent).toBe('number');
       expect(typeof config.shippingStrategy).toBe('string');
-      expect(typeof config.neverExceedAmazonTotal).toBe('boolean');
+      expect(typeof config.templateShippingEstimateCents).toBe('number');
+      expect(config.shippingSubsidyCapCents === null || typeof config.shippingSubsidyCapCents === 'number').toBe(true);
     });
   });
 
@@ -159,31 +164,31 @@ describe('Competitive Pricing Configuration - Phase 1', () => {
 
   describe('Default Configuration Values', () => {
     it('should use 10% discount by default', () => {
-      const config = getDefaultCompetitivePricingRules();
+      const config = getDefaultPricingSettings();
       expect(config.discountPercent).toBe(10);
       
       // Rationale: 10% provides competitive advantage without race to bottom
     });
 
-    it('should use FREE_IF_AMAZON_FREE strategy by default', () => {
-      const config = getDefaultCompetitivePricingRules();
-      expect(config.shippingStrategy).toBe('FREE_IF_AMAZON_FREE');
+    it('should use ALGO_COMPETITIVE_TOTAL strategy by default', () => {
+      const config = getDefaultPricingSettings();
+      expect(config.shippingStrategy).toBe('ALGO_COMPETITIVE_TOTAL');
       
-      // Rationale: Matches customer expectations (Prime = free shipping)
+      // Rationale: More sophisticated strategy that includes shipping subsidy for better competitiveness
     });
 
-    it('should enable neverExceedAmazonTotal safety constraint by default', () => {
-      const config = getDefaultCompetitivePricingRules();
-      expect(config.neverExceedAmazonTotal).toBe(true);
+    it('should set template shipping estimate to $6.00 by default', () => {
+      const config = getDefaultPricingSettings();
+      expect(config.templateShippingEstimateCents).toBe(600);
       
-      // Rationale: Safety net prevents pricing errors
+      // Rationale: $6 is typical USPS Priority Mail cost
     });
 
-    it('should not set sellerPaysUpTo by default', () => {
-      const config = getDefaultCompetitivePricingRules();
-      expect(config.sellerPaysUpTo).toBeUndefined();
+    it('should not set shipping subsidy cap by default', () => {
+      const config = getDefaultPricingSettings();
+      expect(config.shippingSubsidyCapCents).toBeNull();
       
-      // Rationale: Only needed for SELLER_PAYS_UP_TO strategy
+      // Rationale: No cap provides maximum flexibility
     });
   });
 
@@ -192,7 +197,7 @@ describe('Competitive Pricing Configuration - Phase 1', () => {
       // Phase 1 only introduces types and config structure
       // No existing pricing logic should change
       
-      const config = getDefaultCompetitivePricingRules();
+      const config = getDefaultPricingSettings();
       
       // This config exists but is not used yet
       expect(config).toBeDefined();
@@ -203,42 +208,45 @@ describe('Competitive Pricing Configuration - Phase 1', () => {
 
     it('should allow import without circular dependencies', () => {
       // Simply importing the module should not cause issues
-      expect(getDefaultCompetitivePricingRules).toBeDefined();
-      expect(typeof getDefaultCompetitivePricingRules).toBe('function');
+      expect(getDefaultPricingSettings).toBeDefined();
+      expect(typeof getDefaultPricingSettings).toBe('function');
     });
   });
 
   describe('Configuration Examples', () => {
     it('should support aggressive discount strategy', () => {
-      const aggressive: CompetitivePricingRules = {
+      const aggressive: PricingSettings = {
         discountPercent: 20, // 20% off Amazon
-        shippingStrategy: 'FREE_IF_AMAZON_FREE',
-        neverExceedAmazonTotal: true,
+        shippingStrategy: 'ALGO_COMPETITIVE_TOTAL',
+        templateShippingEstimateCents: 600,
+        shippingSubsidyCapCents: null,
       };
 
       expect(aggressive.discountPercent).toBe(20);
+      expect(aggressive.shippingStrategy).toBe('ALGO_COMPETITIVE_TOTAL');
     });
 
-    it('should support matching Amazon exactly', () => {
-      const exact: CompetitivePricingRules = {
-        discountPercent: 0, // No discount
-        shippingStrategy: 'MATCH_AMAZON',
-        neverExceedAmazonTotal: true,
+    it('should support item-only discount strategy', () => {
+      const itemOnly: PricingSettings = {
+        discountPercent: 15, // 15% off item price
+        shippingStrategy: 'DISCOUNT_ITEM_ONLY',
+        templateShippingEstimateCents: 700,
+        shippingSubsidyCapCents: null,
       };
 
-      expect(exact.discountPercent).toBe(0);
-      expect(exact.shippingStrategy).toBe('MATCH_AMAZON');
+      expect(itemOnly.discountPercent).toBe(15);
+      expect(itemOnly.shippingStrategy).toBe('DISCOUNT_ITEM_ONLY');
     });
 
-    it('should support seller-paid shipping with threshold', () => {
-      const sellerPays: CompetitivePricingRules = {
+    it('should support shipping subsidy cap', () => {
+      const withCap: PricingSettings = {
         discountPercent: 10,
-        shippingStrategy: 'SELLER_PAYS_UP_TO',
-        sellerPaysUpTo: 700, // Seller covers up to $7.00
-        neverExceedAmazonTotal: true,
+        shippingStrategy: 'ALGO_COMPETITIVE_TOTAL',
+        templateShippingEstimateCents: 600,
+        shippingSubsidyCapCents: 500, // Cap at $5.00
       };
 
-      expect(sellerPays.sellerPaysUpTo).toBe(700);
+      expect(withCap.shippingSubsidyCapCents).toBe(500);
     });
   });
 });
