@@ -207,50 +207,65 @@ export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>, us
   let amazonItemPriceCents = 0;
   let amazonShippingCents = 0;
   let amazonShippingAssumedZero = true;
+  let price = 0;
+  let pricingResult: any = null;
+  let priceAlreadyComputed = false;
 
-  // Try to extract from priceMeta first (set by price-lookup.ts)
-  if (priceMeta?.chosenSource && priceMeta?.basePrice) {
-    amazonItemPriceCents = Math.round(priceMeta.basePrice * 100);
-    
-    // Check if shipping data is available in candidates
-    const chosenCandidate = priceMeta.candidates?.find((c: any) => c.source === priceMeta.chosenSource);
-    if (chosenCandidate && typeof chosenCandidate.shippingCents === 'number') {
-      amazonShippingCents = chosenCandidate.shippingCents;
-      amazonShippingAssumedZero = false;
-    }
+  // CRITICAL: If group.price exists AND group.priceMeta exists, this is a PUBLISH operation
+  // The price was already computed during draft creation - use it as-is to avoid double pricing
+  if (typeof group.price === 'number' && group.price > 0 && priceMeta) {
+    price = group.price;
+    priceAlreadyComputed = true;
+    console.log(`[taxonomy-map] Using pre-computed price from draft: $${price.toFixed(2)} (skipping re-calculation)`);
   } else {
-    // Fallback: extract from legacy group.pricing.ebay or group.price
-    const legacyPrice = Number(group?.pricing?.ebay ?? group?.price ?? 0);
-    if (Number.isFinite(legacyPrice) && legacyPrice > 0) {
-      amazonItemPriceCents = Math.round(legacyPrice * 100);
+    // Try to extract from priceMeta first (set by price-lookup.ts)
+    if (priceMeta?.chosenSource && priceMeta?.basePrice) {
+      amazonItemPriceCents = Math.round(priceMeta.basePrice * 100);
+      
+      // Check if shipping data is available in candidates
+      const chosenCandidate = priceMeta.candidates?.find((c: any) => c.source === priceMeta.chosenSource);
+      if (chosenCandidate && typeof chosenCandidate.shippingCents === 'number') {
+        amazonShippingCents = chosenCandidate.shippingCents;
+        amazonShippingAssumedZero = false;
+      }
     } else {
-      throw new Error("Group missing pricing data (no priceMeta and no legacy price)");
+      // Fallback: extract from legacy group.pricing.ebay or group.price
+      const legacyPrice = Number(group?.pricing?.ebay ?? group?.price ?? 0);
+      if (Number.isFinite(legacyPrice) && legacyPrice > 0) {
+        amazonItemPriceCents = Math.round(legacyPrice * 100);
+      } else {
+        throw new Error("Group missing pricing data (no priceMeta and no legacy price)");
+      }
     }
+
+    // PHASE 3: Compute eBay offer price using Phase 2 function
+    pricingResult = computeEbayItemPriceCents({
+      amazonItemPriceCents,
+      amazonShippingCents,
+      settings: pricingSettings,
+    });
+
+    price = pricingResult.ebayItemPriceCents / 100; // Convert cents to dollars
   }
 
-  // PHASE 3: Compute eBay offer price using Phase 2 function
-  const pricingResult = computeEbayItemPriceCents({
-    amazonItemPriceCents,
-    amazonShippingCents,
-    settings: pricingSettings,
-  });
-
-  const price = pricingResult.ebayItemPriceCents / 100; // Convert cents to dollars
-
   // PHASE 3: Log PRICING_EVIDENCE (CRITICAL: Do not log tokens/PII)
-  console.log(`[taxonomy-map] PRICING_EVIDENCE for SKU ${sku}:`, {
-    sku,
-    amazonItemPriceCents,
-    amazonShippingCents,
-    amazonShippingAssumedZero,
-    discountPercent: pricingSettings.discountPercent,
-    shippingStrategy: pricingSettings.shippingStrategy,
-    templateShippingEstimateCents: pricingSettings.templateShippingEstimateCents,
-    targetDeliveredTotalCents: pricingResult.targetDeliveredTotalCents,
-    ebayItemPriceCents: pricingResult.ebayItemPriceCents,
-    shippingSubsidyAppliedCents: pricingResult.evidence.shippingSubsidyAppliedCents,
-    finalOfferPriceDollars: price,
-  });
+  if (priceAlreadyComputed) {
+    console.log(`[taxonomy-map] PRICING_EVIDENCE for SKU ${sku}: Using pre-computed price $${price.toFixed(2)} (publish mode, no re-calculation)`);
+  } else {
+    console.log(`[taxonomy-map] PRICING_EVIDENCE for SKU ${sku}:`, {
+      sku,
+      amazonItemPriceCents,
+      amazonShippingCents,
+      amazonShippingAssumedZero,
+      discountPercent: pricingSettings.discountPercent,
+      shippingStrategy: pricingSettings.shippingStrategy,
+      templateShippingEstimateCents: pricingSettings.templateShippingEstimateCents,
+      targetDeliveredTotalCents: pricingResult.targetDeliveredTotalCents,
+      ebayItemPriceCents: pricingResult.ebayItemPriceCents,
+      shippingSubsidyAppliedCents: pricingResult.evidence.shippingSubsidyAppliedCents,
+      finalOfferPriceDollars: price,
+    });
+  }
 
   const matched = await pickCategoryForGroup(group);
   console.log('[mapGroupToDraftWithTaxonomy] pickCategoryForGroup result:', {
