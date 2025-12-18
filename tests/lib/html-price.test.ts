@@ -1317,5 +1317,129 @@ describe('html-price.ts', () => {
         expect(price).toBe(29.99); // Should accept $29.99, reject $50 from shipping (too far)
       });
     });
+
+    describe('Priority enforcement and sanity checks', () => {
+      it('should use JSON-LD price and never fallback when JSON-LD exists (ROOT Sculpt case)', () => {
+        const html = `
+          <html>
+            <body>
+              <p>When you place your order, your shipping will be FREE. RPS Tokens (a $15.00 value) will be applied.</p>
+              <script type="application/ld+json">
+              {
+                "@type": "Product",
+                "name": "Sculpt",
+                "description": "$99 Subscribe & Save with RPS",
+                "offers": [{
+                  "@type": "Offer",
+                  "priceSpecification": [{
+                    "@type": "UnitPriceSpecification",
+                    "price": "109.00",
+                    "priceCurrency": "USD"
+                  }]
+                }]
+              }
+              </script>
+            </body>
+          </html>
+        `;
+
+        const price = extractPriceFromHtml(html);
+        expect(price).toBe(109.00); // Must use JSON-LD $109, never fallback to $15
+      });
+
+      it('should reject fallback price if < 40% of JSON-LD highest price', () => {
+        const html = `
+          <html>
+            <body>
+              <p>Save $20 with coupon code SAVE20!</p>
+              <script type="application/ld+json">
+              {
+                "@type": "Product",
+                "name": "Premium Supplement",
+                "offers": [{
+                  "@type": "Offer",
+                  "name": "Subscribe & Save",
+                  "price": "80.00"
+                }]
+              }
+              </script>
+            </body>
+          </html>
+        `;
+
+        const price = extractPriceFromHtml(html);
+        // JSON-LD subscription-only → falls back to body
+        // But $20 is 25% of $80 (< 40% threshold) → should be rejected
+        expect(price).toBeNull();
+      });
+
+      it('should accept fallback price if >= 40% of JSON-LD highest price', () => {
+        const html = `
+          <html>
+            <body>
+              <div class="product-info">
+                <h1>Premium Wellness Supplement</h1>
+                <p>High quality ingredients for optimal health and wellness support. Each bottle contains 60 capsules.</p>
+              </div>
+              <div class="pricing-section">
+                <div class="price-container">
+                  <span class="label">Regular purchase</span>
+                  <span class="amount">Buy now for $45.00</span>
+                </div>
+              </div>
+              <div class="product-details">
+                <p>Made with natural ingredients. Third-party tested for quality and purity.</p>
+              </div>
+              <script type="application/ld+json">
+              {
+                "@type": "Product",
+                "offers": [{
+                  "@type": "Offer",
+                  "name": "Monthly Subscription",
+                  "price": "100.00"
+                }]
+              }
+              </script>
+            </body>
+          </html>
+        `;
+
+        const price = extractPriceFromHtml(html);
+        // JSON-LD subscription-only → falls back to body
+        // $45 is 45% of $100 (>= 40% threshold) → should be accepted
+        expect(price).toBe(45);
+      });
+
+      it('should prioritize JSON-LD over OpenGraph', () => {
+        const html = `
+          <html>
+            <meta property="og:price:amount" content="50.00">
+            <script type="application/ld+json">
+            {
+              "@type": "Product",
+              "offers": { "price": "35.00" }
+            }
+            </script>
+          </html>
+        `;
+
+        const price = extractPriceFromHtml(html);
+        expect(price).toBe(35.00); // JSON-LD wins
+      });
+
+      it('should prioritize OpenGraph over body fallback', () => {
+        const html = `
+          <html>
+            <meta property="og:price:amount" content="29.99">
+            <body>
+              <div>Price $25.00</div>
+            </body>
+          </html>
+        `;
+
+        const price = extractPriceFromHtml(html);
+        expect(price).toBe(29.99); // OpenGraph wins
+      });
+    });
   });
 });

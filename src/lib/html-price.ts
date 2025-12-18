@@ -347,11 +347,11 @@ function pickBestOffer(candidates: OfferCandidate[], requestedSize?: string | nu
  * No retailer-specific logic - just try to find Product schema and extract price
  * 
  * Returns:
- * - { price: number } if valid price found
+ * - { price: number, highestPrice?: number } if valid price found
  * - { price: -1, skipOpenGraph: true } if all prices rejected (bulk/subscription only)
- * - { price: null } if no prices found
+ * - { price: null, highestPrice?: number } if no prices found (highestPrice for sanity check)
  */
-function extractFromJsonLd($: cheerio.CheerioAPI, requestedSize?: string | null): ExtractedData & { skipOpenGraph?: boolean } {
+function extractFromJsonLd($: cheerio.CheerioAPI, requestedSize?: string | null): ExtractedData & { skipOpenGraph?: boolean; highestPrice?: number } {
   const scripts = $('script[type="application/ld+json"]').toArray();
   
   if (scripts.length === 0) {
@@ -495,6 +495,11 @@ function extractFromJsonLd($: cheerio.CheerioAPI, requestedSize?: string | null)
     }
   }
   
+  // Track highest price for sanity checking fallback extraction
+  const highestPrice = allCandidates.length > 0 
+    ? Math.max(...allCandidates.map(c => c.price))
+    : undefined;
+  
   if (allCandidates.length === 0) {
     console.log(`[HTML Parser] No price found in JSON-LD`);
     return { price: null };
@@ -525,7 +530,7 @@ function extractFromJsonLd($: cheerio.CheerioAPI, requestedSize?: string | null)
   
   if (allCandidates.length > 0 && nonSubscriptionCandidates.length === 0) {
     console.log(`[HTML Parser] All ${allCandidates.length} offer(s) are subscription-only, falling back to other methods`);
-    return { price: null, skipOpenGraph: true }; // Skip OpenGraph (likely has subscription price) and go to body parsing
+    return { price: null, skipOpenGraph: true, highestPrice }; // Skip OpenGraph (likely has subscription price) and go to body parsing
   }
   
   if (nonSubscriptionCandidates.length > 0 && nonSubscriptionCandidates.length < allCandidates.length) {
@@ -541,14 +546,14 @@ function extractFromJsonLd($: cheerio.CheerioAPI, requestedSize?: string | null)
   if (retailCandidates.length === 0) {
     const prices = allCandidates.map(c => c.price).join(', ');
     console.log(`[HTML Parser] All prices rejected as bulk/wholesale (>$500): ${prices}`);
-    return { price: -1, skipOpenGraph: true }; // -1 signals rejection (don't fallback)
+    return { price: -1, skipOpenGraph: true, highestPrice }; // -1 signals rejection (don't fallback)
   }
   
   // Pick the best offer (prefer size match, then single-unit, else lowest unit price)
   const best = pickBestOffer(retailCandidates, requestedSize);
   
   if (!best) {
-    return { price: null };
+    return { price: null, highestPrice };
   }
   
   console.log('[HTML Parser] Chosen offer:', {
@@ -562,7 +567,7 @@ function extractFromJsonLd($: cheerio.CheerioAPI, requestedSize?: string | null)
   const sizeMsg = best.size ? ` size: ${best.size},` : '';
   console.log(`[HTML Parser] ✓ Extracted price $${best.price} from JSON-LD Product (${best.packQty}-pack,${sizeMsg} unit price: $${best.unitPrice.toFixed(2)})`);
   
-  return { price: best.price };
+  return { price: best.price, highestPrice };
 }
 
 function extractFromOpenGraph($: cheerio.CheerioAPI): number | null {
@@ -1027,14 +1032,43 @@ export function extractPriceWithShipping(html: string, productTitle?: string): P
       };
     }
     
-    // If JSON-LD says to skip OpenGraph (e.g., subscription-only), skip it
-    const openGraphPrice = data.skipOpenGraph ? null : extractFromOpenGraph($);
+    // Strict priority order: JSON-LD → OpenGraph → Body fallback
+    let rawPrice: number | null = null;
+    let priceSource: 'jsonld' | 'opengraph' | 'fallback' | null = null;
     
-    // Pass pack info and product title to body extraction
-    const rawPrice = data.price ?? openGraphPrice ?? extractFromBody($, packInfo, productTitle);
+    if (data.price !== null) {
+      rawPrice = data.price;
+      priceSource = 'jsonld';
+      console.log(`[HTML Parser] 🎯 Price source: JSON-LD`);
+    } else if (!data.skipOpenGraph) {
+      const openGraphPrice = extractFromOpenGraph($);
+      if (openGraphPrice !== null) {
+        rawPrice = openGraphPrice;
+        priceSource = 'opengraph';
+        console.log(`[HTML Parser] 🎯 Price source: OpenGraph`);
+      }
+    }
+    
+    // Only fallback if no structured data found
+    if (rawPrice === null) {
+      rawPrice = extractFromBody($, packInfo, productTitle);
+      if (rawPrice !== null) {
+        priceSource = 'fallback';
+        console.log(`[HTML Parser] 🎯 Price source: Body text fallback`);
+        
+        // Sanity check: If we have JSON-LD candidates but fell back to body scraping,
+        // reject if body price is < 40% of highest JSON-LD price (likely a coupon/token)
+        if (data.highestPrice && rawPrice < data.highestPrice * 0.4) {
+          console.log(`[HTML Parser] ⚠️ REJECTING fallback price $${rawPrice} - too low compared to JSON-LD highest price $${data.highestPrice} (${((rawPrice / data.highestPrice) * 100).toFixed(0)}% ratio, threshold 40%)`);
+          rawPrice = null;
+          priceSource = null;
+        }
+      }
+    }
     
     // If no price found, return null for item price
     if (rawPrice === null) {
+      console.log(`[HTML Parser] ❌ No valid price found from any source`);
       return {
         amazonItemPrice: null,
         amazonShippingPrice: shippingPrice,
