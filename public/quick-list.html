@@ -1132,7 +1132,9 @@
           chunk.map((batch, idx) => uploadBatch(batch, i + idx))
         );
         
-        results.forEach(res => allUploadedFiles.push(...res.files));
+        results.forEach(res => {
+          if (res?.files?.length) allUploadedFiles.push(...res.files);
+        });
       }
 
       return allUploadedFiles;
