@@ -68,14 +68,16 @@ describe('Policy Defaults Persistence', () => {
 			};
 
 			const response = await handler(event as HandlerEvent, {} as any);
+			if (!response) throw new Error('No response');
+			const typedResponse = response as import('@netlify/functions').HandlerResponse;
 
-			expect(response.statusCode).toBe(200);
+			expect(typedResponse.statusCode).toBe(200);
 			expect(mockStore.set).toHaveBeenCalledWith(
 				'user:user123:policy-defaults.json',
 				JSON.stringify({ fulfillment: 'policy-123' })
 			);
 
-			const body = JSON.parse(response.body);
+			const body = JSON.parse(typedResponse.body);
 			expect(body.ok).toBe(true);
 			expect(body.defaults.fulfillment).toBe('policy-123');
 		});
@@ -92,14 +94,16 @@ describe('Policy Defaults Persistence', () => {
 			};
 
 			const response = await handler(event as HandlerEvent, {} as any);
+			if (!response) throw new Error('No response');
+			const typedResponse = response as import('@netlify/functions').HandlerResponse;
 
-			expect(response.statusCode).toBe(200);
+			expect(typedResponse.statusCode).toBe(200);
 			expect(mockStore.set).toHaveBeenCalledWith(
 				'user:user123:policy-defaults.json',
 				JSON.stringify({ payment: 'payment-456' })
 			);
 
-			const body = JSON.parse(response.body);
+			const body = JSON.parse(typedResponse.body);
 			expect(body.ok).toBe(true);
 			expect(body.defaults.payment).toBe('payment-456');
 		});
@@ -116,14 +120,16 @@ describe('Policy Defaults Persistence', () => {
 			};
 
 			const response = await handler(event as HandlerEvent, {} as any);
+			if (!response) throw new Error('No response');
+			const typedResponse = response as import('@netlify/functions').HandlerResponse;
 
-			expect(response.statusCode).toBe(200);
+			expect(typedResponse.statusCode).toBe(200);
 			expect(mockStore.set).toHaveBeenCalledWith(
 				'user:user123:policy-defaults.json',
 				JSON.stringify({ return: 'return-789' })
 			);
 
-			const body = JSON.parse(response.body);
+			const body = JSON.parse(typedResponse.body);
 			expect(body.ok).toBe(true);
 			expect(body.defaults.return).toBe('return-789');
 		});
@@ -143,8 +149,10 @@ describe('Policy Defaults Persistence', () => {
 			};
 
 			const response = await handler(event as HandlerEvent, {} as any);
+			if (!response) throw new Error('No response');
+			const typedResponse = response as import('@netlify/functions').HandlerResponse;
 
-			expect(response.statusCode).toBe(200);
+			expect(typedResponse.statusCode).toBe(200);
 			expect(mockStore.set).toHaveBeenCalledWith(
 				'user:user123:policy-defaults.json',
 				JSON.stringify({
@@ -169,7 +177,7 @@ describe('Policy Defaults Persistence', () => {
 			const response = await handler(event as HandlerEvent, {} as any);
 
 			// Should still succeed by creating new defaults object
-			expect(response.statusCode).toBe(200);
+			expect(typedResponse.statusCode).toBe(200);
 			expect(mockStore.set).toHaveBeenCalledWith(
 				'user:user123:policy-defaults.json',
 				JSON.stringify({ fulfillment: 'policy-123' })
@@ -188,9 +196,11 @@ describe('Policy Defaults Persistence', () => {
 			};
 
 			const response = await handler(event as HandlerEvent, {} as any);
+			if (!response) throw new Error('No response');
+			const typedResponse = response as import('@netlify/functions').HandlerResponse;
 
-			expect(response.statusCode).toBe(200);
-			const body = JSON.parse(response.body);
+			expect(typedResponse.statusCode).toBe(200);
+			const body = JSON.parse(typedResponse.body);
 			expect(body.defaults.payment).toBeUndefined();
 			expect(body.defaults.fulfillment).toBe('existing');
 		});
@@ -207,9 +217,11 @@ describe('Policy Defaults Persistence', () => {
 			};
 
 			const response = await handler(event as HandlerEvent, {} as any);
+			if (!response) throw new Error('No response');
+			const typedResponse = response as import('@netlify/functions').HandlerResponse;
 
-			expect(response.statusCode).toBe(200);
-			const body = JSON.parse(response.body);
+			expect(typedResponse.statusCode).toBe(200);
+			const body = JSON.parse(typedResponse.body);
 			expect(body.defaults.promoCampaignId).toBe('campaign-123');
 		});
 
@@ -225,9 +237,11 @@ describe('Policy Defaults Persistence', () => {
 			};
 
 			const response = await handler(event as HandlerEvent, {} as any);
+			if (!response) throw new Error('No response');
+			const typedResponse = response as import('@netlify/functions').HandlerResponse;
 
-			expect(response.statusCode).toBe(200);
-			const body = JSON.parse(response.body);
+			expect(typedResponse.statusCode).toBe(200);
+			const body = JSON.parse(typedResponse.body);
 			expect(body.defaults.promoCampaignId).toBeUndefined();
 		});
 	});
@@ -238,7 +252,7 @@ describe('Policy Defaults Persistence', () => {
 				fulfillment: 'fulfillment-123',
 				payment: 'payment-456',
 				return: 'return-789',
-			});
+			} as any);
 
 			const { handler } = await import('../../netlify/functions/ebay-get-policy-defaults.js');
 
@@ -247,9 +261,11 @@ describe('Policy Defaults Persistence', () => {
 			};
 
 			const response = await handler(event as HandlerEvent, {} as any);
+			if (!response) throw new Error('No response');
+			const typedResponse = response as import('@netlify/functions').HandlerResponse;
 
-			expect(response.statusCode).toBe(200);
-			const body = JSON.parse(response.body);
+			expect(typedResponse.statusCode).toBe(200);
+			const body = JSON.parse(typedResponse.body);
 			expect(body.ok).toBe(true);
 			expect(body.defaults).toEqual({
 				fulfillment: 'fulfillment-123',
@@ -268,9 +284,11 @@ describe('Policy Defaults Persistence', () => {
 			};
 
 			const response = await handler(event as HandlerEvent, {} as any);
+			if (!response) throw new Error('No response');
+			const typedResponse = response as import('@netlify/functions').HandlerResponse;
 
-			expect(response.statusCode).toBe(200);
-			const body = JSON.parse(response.body);
+			expect(typedResponse.statusCode).toBe(200);
+			const body = JSON.parse(typedResponse.body);
 			expect(body.ok).toBe(true);
 			expect(body.defaults).toEqual({});
 		});
@@ -285,8 +303,10 @@ describe('Policy Defaults Persistence', () => {
 			};
 
 			const response = await handler(event as HandlerEvent, {} as any);
+			if (!response) throw new Error('No response');
+			const typedResponse = response as import('@netlify/functions').HandlerResponse;
 
-			expect(response.statusCode).toBe(401);
+			expect(typedResponse.statusCode).toBe(401);
 		});
 	});
 
@@ -301,7 +321,7 @@ describe('Policy Defaults Persistence', () => {
 					fulfillmentPolicyId: 'new-policy-123',
 					name: 'Test Policy',
 				}),
-			});
+			} as any);
 		});
 
 		it('should set fulfillment policy as default when creating with setDefault=true', async () => {
@@ -322,9 +342,11 @@ describe('Policy Defaults Persistence', () => {
 			};
 
 			const response = await handler(event as HandlerEvent, {} as any);
+			if (!response) throw new Error('No response');
+			const typedResponse = response as import('@netlify/functions').HandlerResponse;
 
-			expect(response.statusCode).toBe(200);
-			const body = JSON.parse(response.body);
+			expect(typedResponse.statusCode).toBe(200);
+			const body = JSON.parse(typedResponse.body);
 			expect(body.ok).toBe(true);
 			expect(body.defaults).toBeDefined();
 			expect(body.defaults.fulfillment).toBe('new-policy-123');
@@ -348,7 +370,7 @@ describe('Policy Defaults Persistence', () => {
 					paymentPolicyId: 'payment-policy-456',
 					name: 'Test Payment Policy',
 				}),
-			});
+			} as any);
 
 			const { handler } = await import('../../netlify/functions/ebay-create-policy.js');
 
@@ -363,9 +385,11 @@ describe('Policy Defaults Persistence', () => {
 			};
 
 			const response = await handler(event as HandlerEvent, {} as any);
+			if (!response) throw new Error('No response');
+			const typedResponse = response as import('@netlify/functions').HandlerResponse;
 
-			expect(response.statusCode).toBe(200);
-			const body = JSON.parse(response.body);
+			expect(typedResponse.statusCode).toBe(200);
+			const body = JSON.parse(typedResponse.body);
 			expect(body.ok).toBe(true);
 			expect(body.defaults.payment).toBe('payment-policy-456');
 		});
@@ -382,7 +406,7 @@ describe('Policy Defaults Persistence', () => {
 					returnPolicyId: 'return-policy-789',
 					name: 'Test Return Policy',
 				}),
-			});
+			} as any);
 
 			const { handler } = await import('../../netlify/functions/ebay-create-policy.js');
 
@@ -398,9 +422,11 @@ describe('Policy Defaults Persistence', () => {
 			};
 
 			const response = await handler(event as HandlerEvent, {} as any);
+			if (!response) throw new Error('No response');
+			const typedResponse = response as import('@netlify/functions').HandlerResponse;
 
-			expect(response.statusCode).toBe(200);
-			const body = JSON.parse(response.body);
+			expect(typedResponse.statusCode).toBe(200);
+			const body = JSON.parse(typedResponse.body);
 			expect(body.ok).toBe(true);
 			expect(body.defaults.return).toBe('return-policy-789');
 		});
@@ -423,9 +449,11 @@ describe('Policy Defaults Persistence', () => {
 			};
 
 			const response = await handler(event as HandlerEvent, {} as any);
+			if (!response) throw new Error('No response');
+			const typedResponse = response as import('@netlify/functions').HandlerResponse;
 
-			expect(response.statusCode).toBe(200);
-			const body = JSON.parse(response.body);
+			expect(typedResponse.statusCode).toBe(200);
+			const body = JSON.parse(typedResponse.body);
 			expect(body.ok).toBe(true);
 			expect(body.defaults).toBeNull();
 
@@ -454,8 +482,10 @@ describe('Policy Defaults Persistence', () => {
 			};
 
 			const response = await handler(event as HandlerEvent, {} as any);
+			if (!response) throw new Error('No response');
+			const typedResponse = response as import('@netlify/functions').HandlerResponse;
 
-			expect(response.statusCode).toBe(200);
+			expect(typedResponse.statusCode).toBe(200);
 			const setCall = mockStore.set.mock.calls[0];
 			const savedData = JSON.parse(setCall[1]);
 			expect(savedData).toEqual({
@@ -485,8 +515,8 @@ describe('Policy Defaults Persistence', () => {
 			const response = await handler(event as HandlerEvent, {} as any);
 
 			// Should still succeed - policy was created on eBay
-			expect(response.statusCode).toBe(200);
-			const body = JSON.parse(response.body);
+			expect(typedResponse.statusCode).toBe(200);
+			const body = JSON.parse(typedResponse.body);
 			expect(body.ok).toBe(true);
 			expect(body.id).toBe('new-policy-123');
 			// defaults will be null due to storage failure

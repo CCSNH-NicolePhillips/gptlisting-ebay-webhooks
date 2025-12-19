@@ -147,23 +147,26 @@ export const handler: Handler = async (event) => {
     let imagePaths: string[] = [];
     let folder = "";
 
-    // ONLY use stagedUrls - these are guaranteed to be full S3 URLs
+    // Both local and Dropbox modes should have stagedUrls from the scan job
     if (scanJob.stagedUrls && scanJob.stagedUrls.length > 0) {
-      // Files are already staged in R2/S3 (local uploads)
+      // Files are already staged in R2/S3
       imagePaths = scanJob.stagedUrls;
       folder = scanJob.folder || "local-upload";
       console.log("[pairing-v2-start-from-scan] Using staged URLs from scan job", { 
         imageCount: imagePaths.length,
         folder,
       });
-    } else if (scanJob.folder && scanJob.folder.startsWith("/")) {
-      // Dropbox scan - but files aren't staged, need to return error
-      return json(400, { 
-        error: "Dropbox scans do not support pairing yet. Dropbox files must be staged to S3 first. Please use local file upload instead.",
-        hint: "Download your Dropbox folder and use local file upload in Quick List"
-      }, originHdr);
+    } else if (scanJob.groups && scanJob.groups.length > 0) {
+      // Fallback: extract stagedUrls from groups (older scan format)
+      const groups = scanJob.groups || [];
+      imagePaths = groups.flatMap((g: any) => g.images || []);
+      folder = scanJob.folder || "extracted-from-groups";
+      console.log("[pairing-v2-start-from-scan] Extracted staged URLs from groups", { 
+        imageCount: imagePaths.length,
+        folder,
+      });
     } else {
-      return json(400, { error: "Scan job has no stagedUrls. Only local file uploads support pairing." }, originHdr);
+      return json(400, { error: "Scan job has no image data (missing stagedUrls and groups)" }, originHdr);
     }
 
     if (imagePaths.length === 0) {

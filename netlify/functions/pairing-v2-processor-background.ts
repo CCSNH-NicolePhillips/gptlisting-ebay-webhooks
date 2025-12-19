@@ -160,7 +160,25 @@ export const handler: Handler = async (event) => {
         const imageSources = job.stagedUrls || job.dropboxPaths || [];
         
         for (const imageUrl of imageSources) {
-          const filename = path.basename(new URL(imageUrl).pathname);
+          let filename: string;
+          let isValidUrl = false;
+          
+          // Check if this is a valid URL (S3, Dropbox temp link, etc.)
+          try {
+            new URL(imageUrl);
+            filename = path.basename(new URL(imageUrl).pathname);
+            isValidUrl = true;
+          } catch {
+            // Not a valid URL - likely a bare filename from old scan format
+            filename = path.basename(imageUrl);
+            isValidUrl = false;
+          }
+
+          if (!isValidUrl) {
+            console.warn(`[pairing-v2-processor] Skipping invalid image source (not a URL): ${imageUrl}`);
+            continue;
+          }
+
           const localPath = path.join(workDir, filename);
 
           const response = await fetch(imageUrl);
@@ -172,6 +190,10 @@ export const handler: Handler = async (event) => {
           const buffer = Buffer.from(await response.arrayBuffer());
           fs.writeFileSync(localPath, buffer);
           localPaths.push(localPath);
+        }
+
+        if (localPaths.length === 0) {
+          throw new Error(`No valid image URLs found. Check that scan job contains proper stagedUrls or Dropbox temp links.`);
         }
 
         console.log(`[pairing-v2-processor] Downloaded ${localPaths.length} images, running pipeline...`);
