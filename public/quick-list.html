@@ -1045,7 +1045,7 @@
 
     // Upload files in batches to avoid payload limits
     async function uploadFilesInBatches(files) {
-      const MAX_BATCH_SIZE_BYTES = 5 * 1024 * 1024; // 5MB per batch (Netlify limit is 6MB)
+      const MAX_BATCH_SIZE_BYTES = 3 * 1024 * 1024; // 3MB per batch (reduced to prevent 500s)
       const allUploadedFiles = [];
 
       // Prepare file data with base64 encoding
@@ -1095,7 +1095,7 @@
       }
 
       // Upload batches with concurrency control and retry logic
-      const MAX_CONCURRENT = 5; // Limit to 5 concurrent uploads to avoid Netlify rate limits
+      const MAX_CONCURRENT = 2; // Limit to 2 concurrent uploads to avoid Netlify rate limits
       const uploadBatch = async (batch, batchIndex) => {
         let uploadRes = null;
         let retries = 0;
