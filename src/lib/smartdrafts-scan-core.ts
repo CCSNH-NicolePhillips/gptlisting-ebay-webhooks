@@ -1620,6 +1620,7 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
     
     // Use DropboxAdapter to list and stage files to R2/S3
     const ingestedFiles = await DropboxAdapter.list({
+      source: 'dropbox',
       userId,
       payload: {
         folderPath: folder,
