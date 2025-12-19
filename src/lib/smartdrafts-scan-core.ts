@@ -13,6 +13,7 @@ import { runAnalysis } from "./analyze-core.js";
 import { clipImageEmbedding, clipProviderInfo, clipTextEmbedding, cosine } from "./clip-client-split.js";
 import type { ImageInsight } from "./image-insight.js";
 import { sanitizeUrls, toDirectDropbox } from "./merge.js";
+import { DropboxAdapter } from "../ingestion/dropbox.js";
 import { canConsumeImages, consumeImages } from "./quota.js";
 import {
     getCachedSmartDraftGroups,
@@ -1606,18 +1607,28 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
     });
   }
 
-  // EXISTING: Handle Dropbox folder
+  // EXISTING: Handle Dropbox folder - now using DropboxAdapter for R2/S3 staging
   try {
     const store = tokensStore();
-  const saved = (await store.get(userScopedKey(userId, "dropbox.json"), { type: "json" })) as any;
+    const saved = (await store.get(userScopedKey(userId, "dropbox.json"), { type: "json" })) as any;
     const refresh = typeof saved?.refresh_token === "string" ? saved.refresh_token.trim() : "";
     if (!refresh) {
-  return jsonEnvelope(400, { ok: false, error: "Connect Dropbox first" });
+      return jsonEnvelope(400, { ok: false, error: "Connect Dropbox first" });
     }
 
-    const access = await dropboxAccessToken(refresh);
-    const files = (await listFolder(access, folder)).sort((a, b) => (a.path_lower || "").localeCompare(b.path_lower || ""));
-    if (!files.length) {
+    console.log(`[smartdrafts-scan-core] Using DropboxAdapter to stage files from folder: ${folder}`);
+    
+    // Use DropboxAdapter to list and stage files to R2/S3
+    const ingestedFiles = await DropboxAdapter.list({
+      userId,
+      payload: {
+        folderPath: folder,
+        refreshToken: refresh,
+        skipStaging: false,  // Always stage to R2/S3 for pairing compatibility
+      },
+    });
+
+    if (!ingestedFiles.length) {
       return jsonEnvelope(200, {
         ok: true,
         folder,
@@ -1629,8 +1640,21 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       });
     }
 
-    const limitedFiles = files.slice(0, limit);
-    const signature = makeSignature(limitedFiles);
+    // Sort by source path for consistency
+    ingestedFiles.sort((a, b) => {
+      const pathA = a.meta?.sourcePath || a.name;
+      const pathB = b.meta?.sourcePath || b.name;
+      return pathA.localeCompare(pathB);
+    });
+
+    const limitedFiles = ingestedFiles.slice(0, limit);
+    
+    // Create a simpler signature based on file IDs and names
+    const signature = createHash("sha256")
+      .update(JSON.stringify(limitedFiles.map(f => ({ id: f.id, name: f.name }))))
+      .digest("hex")
+      .slice(0, 16);
+    
     const cacheKey = makeCacheKey(userId, folder);
     const cached = await getCachedSmartDraftGroups(cacheKey);
     if (!force && !debugEnabled && cached && cached.signature === signature && Array.isArray(cached.groups) && cached.groups.length) {
@@ -1649,98 +1673,31 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       });
     }
 
-    const cachedLinks = cached?.links && typeof cached.links === "object" ? cached.links : undefined;
-    const linkLookup = new Map<string, string>();
+    // Map ingested files to scan format with stagedUrl (R2/S3 URLs)
+    const fileTuples = limitedFiles.map((file) => ({
+      entry: {
+        ".tag": "file" as const,
+        id: file.id,
+        name: file.name,
+        path_lower: file.meta?.dropboxPath || file.meta?.sourcePath,
+        path_display: file.meta?.sourcePath,
+        size: file.bytes,
+      },
+      url: file.stagedUrl, // This is the R2/S3 URL from DropboxAdapter
+    }));
+
+    // Create linkPersist map for caching stagedUrls
     const linkPersist = new Map<string, string>();
-    if (cachedLinks) {
-      for (const [key, value] of Object.entries(cachedLinks)) {
-        if (typeof key === "string" && typeof value === "string" && key && value) {
-          try {
-            const direct = toDirectDropbox(value);
-            linkLookup.set(key, direct);
-            linkPersist.set(key, direct);
-          } catch {
-            // ignore malformed cached link
-          }
-        }
+    limitedFiles.forEach((file) => {
+      if (file.id) {
+        linkPersist.set(file.id, file.stagedUrl);
       }
-    }
-
-    const missingEntries: Array<{ entry: DropboxEntry; key: string }> = [];
-
-    const resolveKey = (entry: DropboxEntry): string => entry.id || entry.path_lower || entry.path_display || entry.name || "";
-
-    for (const entry of limitedFiles) {
-      const key = resolveKey(entry);
-      if (!key) {
-        missingEntries.push({ entry, key: entry.id || entry.path_lower || entry.path_display || entry.name || "" });
-        continue;
+      if (file.meta?.sourcePath) {
+        linkPersist.set(file.meta.sourcePath, file.stagedUrl);
       }
-      if (linkLookup.has(key)) {
-        const cachedUrl = linkLookup.get(key)!;
-        if (entry.id) {
-          linkPersist.set(entry.id, cachedUrl);
-        } else if (key) {
-          linkPersist.set(key, cachedUrl);
-        }
-        continue;
+      if (file.meta?.dropboxPath) {
+        linkPersist.set(file.meta.dropboxPath, file.stagedUrl);
       }
-      missingEntries.push({ entry, key });
-    }
-
-    const fetchedTuples = await mapLimit(missingEntries, 5, async ({ entry, key }) => {
-      if (key && linkLookup.has(key)) {
-        const cachedUrl = linkLookup.get(key)!;
-        if (entry.id) {
-          linkPersist.set(entry.id, cachedUrl);
-        } else if (key) {
-          linkPersist.set(key, cachedUrl);
-        }
-        return { entry, url: cachedUrl };
-      }
-      const path = entry.path_lower || entry.path_display || entry.id;
-      if (!path) throw new Error("Missing Dropbox path for image");
-      const url = await dbxSharedRawLink(access, path);
-      const direct = toDirectDropbox(url);
-      if (key) linkLookup.set(key, direct);
-      if (entry.id) {
-        linkLookup.set(entry.id, direct);
-        linkPersist.set(entry.id, direct);
-      } else if (key) {
-        linkPersist.set(key, direct);
-      }
-      if (entry.path_lower && entry.path_lower !== key) linkLookup.set(entry.path_lower, direct);
-      if (entry.path_display && entry.path_display !== key) linkLookup.set(entry.path_display, direct);
-      return { entry, url: direct };
-    });
-
-    const fetchedByKey = new Map<string, string>();
-    fetchedTuples.forEach(({ entry, url }) => {
-      const key = resolveKey(entry);
-      if (key && !linkLookup.has(key)) linkLookup.set(key, url);
-      fetchedByKey.set(key, url);
-    });
-
-    const fileTuples = limitedFiles.map((entry) => {
-      const key = resolveKey(entry);
-      let url = (key && linkLookup.get(key)) || null;
-      if (!url && entry.id) url = linkLookup.get(entry.id) || null;
-      if (!url && entry.path_lower) url = linkLookup.get(entry.path_lower) || null;
-      if (!url && entry.path_display) url = linkLookup.get(entry.path_display) || null;
-      if (!url) {
-        const fallback =
-          fetchedByKey.get(key) || fetchedByKey.get(entry.id || "") || fetchedByKey.get(entry.path_lower || "");
-        if (fallback) {
-          url = fallback;
-        }
-      }
-      if (!url) throw new Error(`Unable to resolve Dropbox share link for ${entry.name || entry.id || "image"}`);
-      if (entry.id) {
-        linkPersist.set(entry.id, url);
-      } else if (key) {
-        linkPersist.set(key, url);
-      }
-      return { entry, url };
     });
 
     const tupleByUrl = new Map<string, { entry: DropboxEntry; url: string }>();
@@ -3801,6 +3758,7 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
       groups: payloadGroups,
       orphans,
       imageInsights: imageInsightsRecord,
+      stagedUrls: limitedFiles.map(f => f.stagedUrl), // Include stagedUrls for pairing compatibility
       // Phase 4: Include metrics for telemetry
       _metrics: analysis?._metrics,
     };
