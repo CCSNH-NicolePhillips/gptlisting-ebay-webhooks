@@ -1086,16 +1086,35 @@
         batches.push(currentBatch);
       }
 
-      // Upload batches
+      // Upload batches with retry logic
       for (let i = 0; i < batches.length; i++) {
         const batch = batches[i];
         $('status1').innerHTML = `<span class="spinner"></span>Uploading batch ${i + 1}/${batches.length}...`;
 
-        const uploadRes = await fetchJSON('/.netlify/functions/ingest-local-upload', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ files: batch }),
-        });
+        let uploadRes = null;
+        let retries = 0;
+        const maxRetries = 3;
+
+        while (retries <= maxRetries) {
+          try {
+            uploadRes = await fetchJSON('/.netlify/functions/ingest-local-upload', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ files: batch }),
+            });
+            break; // Success - exit retry loop
+          } catch (err) {
+            retries++;
+            if (retries > maxRetries) {
+              console.error(`[Quick List] Upload batch ${i + 1} failed after ${maxRetries} retries:`, err);
+              throw new Error(`Failed to upload batch ${i + 1}/${batches.length}. Please try again.`);
+            }
+            // Exponential backoff: 1s, 2s, 4s
+            const delay = Math.pow(2, retries - 1) * 1000;
+            console.warn(`[Quick List] Upload batch ${i + 1} failed, retrying in ${delay}ms (attempt ${retries}/${maxRetries})`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+          }
+        }
 
         allUploadedFiles.push(...uploadRes.files);
       }
