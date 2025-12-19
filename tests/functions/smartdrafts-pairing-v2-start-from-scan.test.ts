@@ -11,13 +11,14 @@
  */
 
 import { jest } from '@jest/globals';
+import type { HandlerEvent, HandlerContext, HandlerResponse } from '@netlify/functions';
 
-// Mock dependencies
-const mockRequireUserAuth = jest.fn();
-const mockSchedulePairingV2Job = jest.fn();
-const mockGetJob = jest.fn();
-const mockTokensStore = jest.fn();
-const mockFetch = jest.fn();
+// Mock dependencies with proper typing
+const mockRequireUserAuth = jest.fn<() => Promise<{ userId: string; email: string }>>();
+const mockSchedulePairingV2Job = jest.fn<(...args: any[]) => Promise<string>>();
+const mockGetJob = jest.fn<() => Promise<any>>();
+const mockTokensStore = jest.fn<() => any>();
+const mockFetch = jest.fn<() => Promise<any>>();
 
 jest.mock('../../src/lib/auth-user.js', () => ({
   requireUserAuth: mockRequireUserAuth,
@@ -36,7 +37,7 @@ jest.mock('../../src/lib/_blobs.js', () => ({
 }));
 
 jest.mock('../../src/lib/_auth.js', () => ({
-  userScopedKey: jest.fn((userId: string, key: string) => `${userId}:${key}`),
+  userScopedKey: jest.fn<(userId: string, key: string) => string>((userId: string, key: string) => `${userId}:${key}`),
 }));
 
 jest.mock('node-fetch', () => ({
@@ -55,7 +56,7 @@ describe('smartdrafts-pairing-v2-start-from-scan', () => {
     mockRequireUserAuth.mockResolvedValue(mockUserAuth);
     mockSchedulePairingV2Job.mockResolvedValue('pairing-job-456');
     mockTokensStore.mockReturnValue({
-      get: jest.fn().mockResolvedValue({ refresh_token: 'mock_refresh' }),
+      get: jest.fn<() => Promise<any>>().mockResolvedValue({ refresh_token: 'mock_refresh' }),
     });
     
     // Set up env vars for Redis
@@ -88,18 +89,20 @@ describe('smartdrafts-pairing-v2-start-from-scan', () => {
 
       // Act
       const { handler } = await import('../../netlify/functions/smartdrafts-pairing-v2-start-from-scan.js');
-      const result = await handler({
+      const event = {
         httpMethod: 'POST',
         headers: {
           authorization: 'Bearer mock-token',
           'content-type': 'application/json',
         },
         body: JSON.stringify({ scanJobId: 'scan-job-123' }),
-      } as any);
+      } as Partial<HandlerEvent>;
+      const context = {} as HandlerContext;
+      const result = await handler(event as any, context) as HandlerResponse;
 
       // Assert
       expect(result.statusCode).toBe(200);
-      const body = JSON.parse(result.body);
+      const body = JSON.parse(result.body!);
       expect(body.jobId).toBe(null);
       expect(body.message).toContain('No images to pair');
       expect(body.pairs).toEqual([]);
@@ -124,18 +127,20 @@ describe('smartdrafts-pairing-v2-start-from-scan', () => {
 
       // Act
       const { handler } = await import('../../netlify/functions/smartdrafts-pairing-v2-start-from-scan.js');
-      const result = await handler({
+      const event = {
         httpMethod: 'POST',
         headers: {
           authorization: 'Bearer mock-token',
           'content-type': 'application/json',
         },
         body: JSON.stringify({ scanJobId: 'scan-job-empty' }),
-      } as any);
+      } as Partial<HandlerEvent>;
+      const context = {} as HandlerContext;
+      const result = await handler(event as any, context) as HandlerResponse;
 
       // Assert
       expect(result.statusCode).toBe(200);
-      const body = JSON.parse(result.body);
+      const body = JSON.parse(result.body!);
       expect(body.jobId).toBe(null);
       expect(mockSchedulePairingV2Job).not.toHaveBeenCalled();
     });
@@ -164,18 +169,20 @@ describe('smartdrafts-pairing-v2-start-from-scan', () => {
 
       // Act
       const { handler } = await import('../../netlify/functions/smartdrafts-pairing-v2-start-from-scan.js');
-      const result = await handler({
+      const event = {
         httpMethod: 'POST',
         headers: {
           authorization: 'Bearer mock-token',
           'content-type': 'application/json',
         },
         body: JSON.stringify({ scanJobId: 'scan-job-dropbox' }),
-      } as any);
+      } as Partial<HandlerEvent>;
+      const context = {} as HandlerContext;
+      const result = await handler(event as any, context) as HandlerResponse;
 
       // Assert
       expect(result.statusCode).toBe(202); // Accepted
-      const body = JSON.parse(result.body);
+      const body = JSON.parse(result.body!);
       expect(body.ok).toBe(true);
       expect(body.jobId).toBe('pairing-job-456');
       expect(body.imageCount).toBe(3);
@@ -210,14 +217,16 @@ describe('smartdrafts-pairing-v2-start-from-scan', () => {
 
       // Act
       const { handler } = await import('../../netlify/functions/smartdrafts-pairing-v2-start-from-scan.js');
-      await handler({
+      const event = {
         httpMethod: 'POST',
         headers: {
           authorization: 'Bearer token',
           'content-type': 'application/json',
         },
         body: JSON.stringify({ scanJobId: 'scan-789' }),
-      } as any);
+      } as Partial<HandlerEvent>;
+      const context = {} as HandlerContext;
+      await handler(event as any, context);
 
       // Assert
       expect(mockSchedulePairingV2Job).toHaveBeenCalledTimes(1);
@@ -249,14 +258,16 @@ describe('smartdrafts-pairing-v2-start-from-scan', () => {
 
       // Act
       const { handler } = await import('../../netlify/functions/smartdrafts-pairing-v2-start-from-scan.js');
-      const result = await handler({
+      const event = {
         httpMethod: 'POST',
         headers: {
           authorization: 'Bearer token',
           'content-type': 'application/json',
         },
         body: JSON.stringify({ scanJobId: 'scan-legacy' }),
-      } as any);
+      } as Partial<HandlerEvent>;
+      const context = {} as HandlerContext;
+      const result = await handler(event as any, context) as HandlerResponse;
 
       // Assert
       expect(result.statusCode).toBe(202);
@@ -289,11 +300,13 @@ describe('smartdrafts-pairing-v2-start-from-scan', () => {
 
       // Act
       const { handler } = await import('../../netlify/functions/smartdrafts-pairing-v2-start-from-scan.js');
-      await handler({
+      const event = {
         httpMethod: 'POST',
         headers: { authorization: 'Bearer token', 'content-type': 'application/json' },
         body: JSON.stringify({ scanJobId: 'scan-multi' }),
-      } as any);
+      } as Partial<HandlerEvent>;
+      const context = {} as HandlerContext;
+      await handler(event as any, context);
 
       // Assert
       expect(mockSchedulePairingV2Job).toHaveBeenCalledWith(
@@ -320,15 +333,17 @@ describe('smartdrafts-pairing-v2-start-from-scan', () => {
 
       // Act
       const { handler } = await import('../../netlify/functions/smartdrafts-pairing-v2-start-from-scan.js');
-      const result = await handler({
+      const event = {
         httpMethod: 'POST',
         headers: { authorization: 'Bearer token', 'content-type': 'application/json' },
         body: JSON.stringify({ scanJobId: 'scan-broken' }),
-      } as any);
+      } as Partial<HandlerEvent>;
+      const context = {} as HandlerContext;
+      const result = await handler(event as any, context) as HandlerResponse;
 
       // Assert
       expect(result.statusCode).toBe(400);
-      const body = JSON.parse(result.body);
+      const body = JSON.parse(result.body!);
       expect(body.error).toContain('no image data');
       expect(mockSchedulePairingV2Job).not.toHaveBeenCalled();
     });
@@ -340,30 +355,34 @@ describe('smartdrafts-pairing-v2-start-from-scan', () => {
 
       // Act
       const { handler } = await import('../../netlify/functions/smartdrafts-pairing-v2-start-from-scan.js');
-      const result = await handler({
+      const event = {
         httpMethod: 'POST',
         headers: { authorization: 'Bearer token', 'content-type': 'application/json' },
         body: JSON.stringify({ scanJobId: 'nonexistent' }),
-      } as any);
+      } as Partial<HandlerEvent>;
+      const context = {} as HandlerContext;
+      const result = await handler(event as any, context) as HandlerResponse;
 
       // Assert
       expect(result.statusCode).toBe(404);
-      const body = JSON.parse(result.body);
+      const body = JSON.parse(result.body!);
       expect(body.error).toContain('Scan job not found');
     });
 
     test('should return 400 when scanJobId missing', async () => {
       // Act
       const { handler } = await import('../../netlify/functions/smartdrafts-pairing-v2-start-from-scan.js');
-      const result = await handler({
+      const event = {
         httpMethod: 'POST',
         headers: { authorization: 'Bearer token', 'content-type': 'application/json' },
         body: JSON.stringify({}), // No scanJobId
-      } as any);
+      } as Partial<HandlerEvent>;
+      const context = {} as HandlerContext;
+      const result = await handler(event as any, context) as HandlerResponse;
 
       // Assert
       expect(result.statusCode).toBe(400);
-      const body = JSON.parse(result.body);
+      const body = JSON.parse(result.body!);
       expect(body.error).toContain('scanJobId');
     });
 
@@ -373,15 +392,17 @@ describe('smartdrafts-pairing-v2-start-from-scan', () => {
 
       // Act
       const { handler } = await import('../../netlify/functions/smartdrafts-pairing-v2-start-from-scan.js');
-      const result = await handler({
+      const event = {
         httpMethod: 'POST',
         headers: { authorization: 'Bearer invalid', 'content-type': 'application/json' },
         body: JSON.stringify({ scanJobId: 'scan-123' }),
-      } as any);
+      } as Partial<HandlerEvent>;
+      const context = {} as HandlerContext;
+      const result = await handler(event as any, context) as HandlerResponse;
 
       // Assert
       expect(result.statusCode).toBe(401);
-      const body = JSON.parse(result.body);
+      const body = JSON.parse(result.body!);
       expect(body.error).toContain('Unauthorized');
     });
 
@@ -400,15 +421,17 @@ describe('smartdrafts-pairing-v2-start-from-scan', () => {
 
       // Act
       const { handler } = await import('../../netlify/functions/smartdrafts-pairing-v2-start-from-scan.js');
-      const result = await handler({
+      const event = {
         httpMethod: 'POST',
         headers: { authorization: 'Bearer token', 'content-type': 'application/json' },
         body: JSON.stringify({ scanJobId: 'scan-will-fail' }),
-      } as any);
+      } as Partial<HandlerEvent>;
+      const context = {} as HandlerContext;
+      const result = await handler(event as any, context) as HandlerResponse;
 
       // Assert
       expect(result.statusCode).toBe(500);
-      const body = JSON.parse(result.body);
+      const body = JSON.parse(result.body!);
       expect(body.error).toContain('Redis connection failed');
     });
   });
@@ -417,10 +440,12 @@ describe('smartdrafts-pairing-v2-start-from-scan', () => {
     test('should return 200 for OPTIONS preflight', async () => {
       // Act
       const { handler } = await import('../../netlify/functions/smartdrafts-pairing-v2-start-from-scan.js');
-      const result = await handler({
+      const event = {
         httpMethod: 'OPTIONS',
         headers: {},
-      } as any);
+      } as Partial<HandlerEvent>;
+      const context = {} as HandlerContext;
+      const result = await handler(event as any, context) as HandlerResponse;
 
       // Assert
       expect(result.statusCode).toBe(200);
@@ -446,14 +471,16 @@ describe('smartdrafts-pairing-v2-start-from-scan', () => {
 
       // Act
       const { handler } = await import('../../netlify/functions/smartdrafts-pairing-v2-start-from-scan.js');
-      const result = await handler({
+      const event = {
         httpMethod: 'POST',
         headers: { authorization: 'Bearer token', 'content-type': 'application/json' },
         body: JSON.stringify({ scanJobId: 'scan-local' }),
-      } as any);
+      } as Partial<HandlerEvent>;
+      const context = {} as HandlerContext;
+      const result = await handler(event as any, context) as HandlerResponse;
 
       // Assert
-      const body = JSON.parse(result.body);
+      const body = JSON.parse(result.body!);
       expect(body.uploadMethod).toBe('local');
     });
 
@@ -470,14 +497,16 @@ describe('smartdrafts-pairing-v2-start-from-scan', () => {
 
       // Act
       const { handler } = await import('../../netlify/functions/smartdrafts-pairing-v2-start-from-scan.js');
-      const result = await handler({
+      const event = {
         httpMethod: 'POST',
         headers: { authorization: 'Bearer token', 'content-type': 'application/json' },
         body: JSON.stringify({ scanJobId: 'scan-dbx' }),
-      } as any);
+      } as Partial<HandlerEvent>;
+      const context = {} as HandlerContext;
+      const result = await handler(event as any, context) as HandlerResponse;
 
       // Assert
-      const body = JSON.parse(result.body);
+      const body = JSON.parse(result.body!);
       expect(body.uploadMethod).toBe('dropbox');
     });
   });
@@ -504,11 +533,13 @@ describe('smartdrafts-pairing-v2-start-from-scan', () => {
 
       // Act
       const { handler } = await import('../../netlify/functions/smartdrafts-pairing-v2-start-from-scan.js');
-      await handler({
+      const event = {
         httpMethod: 'POST',
         headers: { authorization: 'Bearer token', 'content-type': 'application/json' },
         body: JSON.stringify({ scanJobId: 'scan-regression' }),
-      } as any);
+      } as Partial<HandlerEvent>;
+      const context = {} as HandlerContext;
+      await handler(event as any, context);
 
       // Assert - Should use stagedUrls (full URLs), NOT groups.images (bare filenames)
       expect(mockSchedulePairingV2Job).toHaveBeenCalledWith(
@@ -519,7 +550,7 @@ describe('smartdrafts-pairing-v2-start-from-scan', () => {
       );
 
       // Verify it did NOT use bare filenames
-      const calledWith = mockSchedulePairingV2Job.mock.calls[0][2];
+      const calledWith = (mockSchedulePairingV2Job.mock.calls[0] as any[])[2];
       expect(calledWith).not.toContain('img1.jpg');
       expect(calledWith).not.toContain('img2.jpg');
     });
@@ -539,15 +570,17 @@ describe('smartdrafts-pairing-v2-start-from-scan', () => {
 
       // Act
       const { handler } = await import('../../netlify/functions/smartdrafts-pairing-v2-start-from-scan.js');
-      const result = await handler({
+      const event = {
         httpMethod: 'POST',
         headers: { authorization: 'Bearer token', 'content-type': 'application/json' },
         body: JSON.stringify({ scanJobId: 'scan-empty-regression' }),
-      } as any);
+      } as Partial<HandlerEvent>;
+      const context = {} as HandlerContext;
+      const result = await handler(event as any, context) as HandlerResponse;
 
       // Assert - Should NOT throw, should return graceful response
       expect(result.statusCode).toBe(200);
-      const body = JSON.parse(result.body);
+      const body = JSON.parse(result.body!);
       expect(body.jobId).toBe(null);
       expect(body.message).toBeTruthy();
       expect(body).toHaveProperty('pairs');
