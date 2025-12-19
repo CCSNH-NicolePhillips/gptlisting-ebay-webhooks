@@ -62,18 +62,30 @@ describe('smartdrafts-scan-core: Dropbox staging', () => {
     test('should call DropboxAdapter.list() with required source property', async () => {
       // Arrange
       const mockIngestedFiles: IngestedFile[] = [
-        { id: 'file' + (Get-Random), {
-          name: 'product1-front.jpg',
-          bytes: 1024000,
-          mime: 'image/jpeg',
+        {
+          originalName: 'product1-front.jpg',
+          size: 1024000,
+          mimeType: 'image/jpeg',
           stagedUrl: 'https://r2.example.com/staged/user123/job456/product1-front.jpg?signature=abc123',
-                                      },
-        { id: 'file' + (Get-Random), {
-          name: 'product1-back.jpg',
-          bytes: 980000,
-          mime: 'image/jpeg',
+          stagingKey: 'staged/user123/job456/product1-front.jpg',
+          source: 'dropbox',
+          sourceMetadata: {
+            path: '/photos/product1-front.jpg',
+            id: 'id:abc123',
+          },
+        },
+        {
+          originalName: 'product1-back.jpg',
+          size: 980000,
+          mimeType: 'image/jpeg',
           stagedUrl: 'https://r2.example.com/staged/user123/job456/product1-back.jpg?signature=def456',
-                                      },
+          stagingKey: 'staged/user123/job456/product1-back.jpg',
+          source: 'dropbox',
+          sourceMetadata: {
+            path: '/photos/product1-back.jpg',
+            id: 'id:def456',
+          },
+        },
       ];
 
       mockDropboxAdapter.list.mockResolvedValue(mockIngestedFiles);
@@ -86,7 +98,8 @@ describe('smartdrafts-scan-core: Dropbox staging', () => {
       // This would normally be called within handleSmartDraftsScan
       // We're testing the DropboxAdapter.list() call pattern
       const result = await DropboxAdapter.list({
-                userId,
+        source: 'dropbox',  // CRITICAL: Must include source property
+        userId,
         payload: {
           folderPath,
           refreshToken,
@@ -96,7 +109,8 @@ describe('smartdrafts-scan-core: Dropbox staging', () => {
 
       // Assert
       expect(mockDropboxAdapter.list).toHaveBeenCalledWith({
-                userId: 'user123',
+        source: 'dropbox',  // Verify source property is present
+        userId: 'user123',
         payload: {
           folderPath: '/photos',
           refreshToken: 'mock_refresh_token',
@@ -111,19 +125,26 @@ describe('smartdrafts-scan-core: Dropbox staging', () => {
     test('should return IngestedFile objects with stagedUrl, not bare filenames', async () => {
       // Arrange
       const mockIngestedFiles: IngestedFile[] = [
-        { id: 'file' + (Get-Random), {
-          name: 'product2-front.jpg',
-          bytes: 1500000,
-          mime: 'image/jpeg',
+        {
+          originalName: 'product2-front.jpg',
+          size: 1500000,
+          mimeType: 'image/jpeg',
           stagedUrl: 'https://r2.example.com/staged/user456/job789/product2-front.jpg?signature=xyz789',
-                                      },
+          stagingKey: 'staged/user456/job789/product2-front.jpg',
+          source: 'dropbox',
+          sourceMetadata: {
+            path: '/dropbox/product2-front.jpg',
+            id: 'id:xyz789',
+          },
+        },
       ];
 
       mockDropboxAdapter.list.mockResolvedValue(mockIngestedFiles);
 
       // Act
       const result = await DropboxAdapter.list({
-                userId: 'user456',
+        source: 'dropbox',
+        userId: 'user456',
         payload: {
           folderPath: '/dropbox',
           refreshToken: 'token',
@@ -136,7 +157,7 @@ describe('smartdrafts-scan-core: Dropbox staging', () => {
         expect(file.stagedUrl).toBeDefined();
         expect(file.stagedUrl).toMatch(/^https:\/\//);  // Must be full URL
         expect(file.stagedUrl).toContain('r2.example.com');  // Must be R2/S3
-        expect(file.stagedUrl).not.toEqual(file.name);  // Not bare filename
+        expect(file.stagedUrl).not.toEqual(file.originalName);  // Not bare filename
         
         // Verify URL structure
         const url = new URL(file.stagedUrl);
@@ -149,19 +170,26 @@ describe('smartdrafts-scan-core: Dropbox staging', () => {
     test('should never return Dropbox temporary links', async () => {
       // Arrange
       const mockIngestedFiles: IngestedFile[] = [
-        { id: 'file' + (Get-Random), {
-          name: 'book-cover.jpg',
-          bytes: 800000,
-          mime: 'image/jpeg',
+        {
+          originalName: 'book-cover.jpg',
+          size: 800000,
+          mimeType: 'image/jpeg',
           stagedUrl: 'https://r2.example.com/staged/user789/job111/book-cover.jpg?signature=book123',
-                                      },
+          stagingKey: 'staged/user789/job111/book-cover.jpg',
+          source: 'dropbox',
+          sourceMetadata: {
+            path: '/books/book-cover.jpg',
+            id: 'id:book123',
+          },
+        },
       ];
 
       mockDropboxAdapter.list.mockResolvedValue(mockIngestedFiles);
 
       // Act
       const result = await DropboxAdapter.list({
-                userId: 'user789',
+        source: 'dropbox',
+        userId: 'user789',
         payload: {
           folderPath: '/books',
           refreshToken: 'token',
@@ -184,7 +212,8 @@ describe('smartdrafts-scan-core: Dropbox staging', () => {
 
       // Act
       await DropboxAdapter.list({
-                userId: 'user999',
+        source: 'dropbox',
+        userId: 'user999',
         payload: {
           folderPath: '/test',
           refreshToken: 'token',
@@ -239,18 +268,24 @@ describe('smartdrafts-scan-core: Dropbox staging', () => {
 
     test('stagedUrls should map to images in groups', () => {
       const mockIngestedFiles: IngestedFile[] = [
-        { id: 'file' + (Get-Random), {
-          name: 'img1.jpg',
-          bytes: 1000,
-          mime: 'image/jpeg',
+        {
+          originalName: 'img1.jpg',
+          size: 1000,
+          mimeType: 'image/jpeg',
           stagedUrl: 'https://r2.example.com/staged/user/job/img1.jpg?sig=a',
-                                      },
-        { id: 'file' + (Get-Random), {
-          name: 'img2.jpg',
-          bytes: 1000,
-          mime: 'image/jpeg',
+          stagingKey: 'staged/user/job/img1.jpg',
+          source: 'dropbox',
+          sourceMetadata: { path: '/img1.jpg', id: 'id:a' },
+        },
+        {
+          originalName: 'img2.jpg',
+          size: 1000,
+          mimeType: 'image/jpeg',
           stagedUrl: 'https://r2.example.com/staged/user/job/img2.jpg?sig=b',
-                                      },
+          stagingKey: 'staged/user/job/img2.jpg',
+          source: 'dropbox',
+          sourceMetadata: { path: '/img2.jpg', id: 'id:b' },
+        },
       ];
 
       // Simulate mapping IngestedFiles to stagedUrls
@@ -322,19 +357,23 @@ describe('smartdrafts-scan-core: Dropbox staging', () => {
       // listFolder() and dbxSharedRawLink() directly instead of using DropboxAdapter
 
       const mockIngestedFiles: IngestedFile[] = [
-        { id: 'file' + (Get-Random), {
-          name: 'test.jpg',
-          bytes: 1000,
-          mime: 'image/jpeg',
+        {
+          originalName: 'test.jpg',
+          size: 1000,
+          mimeType: 'image/jpeg',
           stagedUrl: 'https://r2.example.com/staged/user/job/test.jpg?sig=x',
-                                      },
+          stagingKey: 'staged/user/job/test.jpg',
+          source: 'dropbox',
+          sourceMetadata: { path: '/test.jpg', id: 'id:x' },
+        },
       ];
 
       mockDropboxAdapter.list.mockResolvedValue(mockIngestedFiles);
 
       // Act - Use DropboxAdapter (correct pattern)
       await DropboxAdapter.list({
-                userId: 'user',
+        source: 'dropbox',
+        userId: 'user',
         payload: {
           folderPath: '/test',
           refreshToken: 'token',
@@ -376,9 +415,11 @@ describe('smartdrafts-scan-core: Dropbox staging', () => {
 
     test('REGRESSION: IngestRequest must include source property', () => {
       // The build error was: Missing 'source' property in IngestRequest
-      // This test ensures we always pass 
+      // This test ensures we always pass source: 'dropbox'
+
       const validRequest = {
-                userId: 'user123',
+        source: 'dropbox' as const,  // MUST be present
+        userId: 'user123',
         payload: {
           folderPath: '/folder',
           refreshToken: 'token',
