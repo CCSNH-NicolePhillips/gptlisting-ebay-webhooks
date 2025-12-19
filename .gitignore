@@ -15,6 +15,7 @@ backups/
 .netlify
 tmp/
 coverage
+copilot/
 
 # Logs
 logs.txt

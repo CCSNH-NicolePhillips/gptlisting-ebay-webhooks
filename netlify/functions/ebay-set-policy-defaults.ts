@@ -18,7 +18,11 @@ export const handler: Handler = async (event) => {
 		const store = tokensStore();
 		const key = userScopedKey(sub, 'policy-defaults.json');
 		let prefs: any = {};
-		try { prefs = (await store.get(key, { type: 'json' })) as any; } catch {}
+		try { 
+			prefs = (await store.get(key, { type: 'json' })) as any; 
+		} catch (e: any) {
+			console.warn(`[ebay-set-policy-defaults] Failed to load existing defaults:`, e?.message);
+		}
 		if (!prefs || typeof prefs !== 'object') prefs = {};
 		if (fulfillment != null) prefs.fulfillment = String(fulfillment || '').trim() || undefined;
 		if (payment != null) prefs.payment = String(payment || '').trim() || undefined;
@@ -27,6 +31,7 @@ export const handler: Handler = async (event) => {
 		// Clean undefined keys
 		Object.keys(prefs).forEach((k) => { if (prefs[k] == null || prefs[k] === '') delete prefs[k]; });
 		await store.set(key, JSON.stringify(prefs));
+		console.log(`[ebay-set-policy-defaults] Updated defaults for user ${sub}:`, prefs);
 		return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ok: true, defaults: prefs }) };
 	} catch (e: any) {
 		return { statusCode: 500, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: e?.message || String(e) }) };

@@ -283,7 +283,11 @@ export const handler: Handler = async (event) => {
 				else if (path === 'return_policy') cur.return = id;
 				await store.set(key, JSON.stringify(cur));
 				defaultsUpdated = cur;
-			} catch {}
+				console.log(`[ebay-create-policy] Set default ${type} policy:`, id);
+			} catch (e: any) {
+				console.error(`[ebay-create-policy] Failed to set default policy:`, e);
+				// Don't fail the entire request, but log the error
+			}
 		}
 
 		return json({ ok: true, id, policy: j, defaults: defaultsUpdated });
