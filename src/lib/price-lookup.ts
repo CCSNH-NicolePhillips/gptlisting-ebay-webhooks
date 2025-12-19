@@ -738,7 +738,8 @@ export async function lookupPrice(
       url: brandUrl,
       notes: 'Official brand site MSRP',
     });
-  } else {
+  } else if (input.brand) {
+    // Only log if we actually attempted brand lookup
     console.log('[price] ✗ No brand MSRP found');
   }
 
