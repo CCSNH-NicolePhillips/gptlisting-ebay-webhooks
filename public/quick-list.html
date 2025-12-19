@@ -1099,6 +1099,11 @@
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ files: batch }),
             });
+
+            if (!Array.isArray(uploadRes?.files) || uploadRes.files.length === 0) {
+              console.error('[Quick List] Upload batch returned no files:', uploadRes);
+              throw new Error('Upload response missing staged URLs. Please try again.');
+            }
             return uploadRes;
           } catch (err) {
             retries++;
