@@ -124,8 +124,8 @@ export const handler: Handler = async (event) => {
       await redisSet(key, JSON.stringify(job), JOB_TTL);
     }
 
-    const uploadMethod = job.uploadMethod || "dropbox"; // Default to dropbox for backward compat
-    const totalImages = (job.dropboxPaths || job.stagedUrls || []).length;
+    const uploadMethod = job.uploadMethod || "local"; // Changed default to local since we use stagedUrls
+    const totalImages = (job.stagedUrls || job.dropboxPaths || []).length;
     const processedCount = job.processedCount || 0;
     
     // Check if already processed
@@ -155,47 +155,23 @@ export const handler: Handler = async (event) => {
       const workDir = fs.mkdtempSync(path.join(os.tmpdir(), `pairing-v2-${jobId}-`));
 
       try {
-        // Download all images based on upload method
+        // Download all images from staged URLs (works for both local and Dropbox modes)
         const localPaths: string[] = [];
+        const imageSources = job.stagedUrls || job.dropboxPaths || [];
         
-        if (uploadMethod === "dropbox") {
-          // Dropbox mode: Download from Dropbox API
-          for (const dropboxPath of job.dropboxPaths) {
-            const filename = path.basename(dropboxPath);
-            const localPath = path.join(workDir, filename);
+        for (const imageUrl of imageSources) {
+          const filename = path.basename(new URL(imageUrl).pathname);
+          const localPath = path.join(workDir, filename);
 
-            const response = await fetch("https://content.dropboxapi.com/2/files/download", {
-              method: "POST",
-              headers: {
-                "Authorization": `Bearer ${job.accessToken}`,
-                "Dropbox-API-Arg": JSON.stringify({ path: dropboxPath }),
-              },
-            });
+          const response = await fetch(imageUrl);
 
-            if (!response.ok) {
-              throw new Error(`Failed to download ${dropboxPath}: ${response.status}`);
-            }
-
-            const buffer = Buffer.from(await response.arrayBuffer());
-            fs.writeFileSync(localPath, buffer);
-            localPaths.push(localPath);
+          if (!response.ok) {
+            throw new Error(`Failed to download ${filename}: ${response.status}`);
           }
-        } else {
-          // Local mode: Download from staged URLs
-          for (const stagedUrl of job.stagedUrls) {
-            const filename = path.basename(new URL(stagedUrl).pathname);
-            const localPath = path.join(workDir, filename);
 
-            const response = await fetch(stagedUrl);
-
-            if (!response.ok) {
-              throw new Error(`Failed to download ${stagedUrl}: ${response.status}`);
-            }
-
-            const buffer = Buffer.from(await response.arrayBuffer());
-            fs.writeFileSync(localPath, buffer);
-            localPaths.push(localPath);
-          }
+          const buffer = Buffer.from(await response.arrayBuffer());
+          fs.writeFileSync(localPath, buffer);
+          localPaths.push(localPath);
         }
 
         console.log(`[pairing-v2-processor] Downloaded ${localPaths.length} images, running pipeline...`);

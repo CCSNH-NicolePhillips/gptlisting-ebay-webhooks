@@ -146,32 +146,27 @@ export const handler: Handler = async (event) => {
     // Determine upload method and extract image paths
     let imagePaths: string[] = [];
     let folder = "";
-    let accessToken: string | undefined;
 
+    // Both local and Dropbox modes should have stagedUrls from the scan job
     if (scanJob.stagedUrls && scanJob.stagedUrls.length > 0) {
-      // Local upload mode - use stagedUrls
+      // Files are already staged in R2/S3
       imagePaths = scanJob.stagedUrls;
-      folder = "local-upload";
-      console.log("[pairing-v2-start-from-scan] Local upload mode", { imageCount: imagePaths.length });
-    } else if (scanJob.folder) {
-      // Dropbox mode - extract paths from groups
-      folder = scanJob.folder;
+      folder = scanJob.folder || "local-upload";
+      console.log("[pairing-v2-start-from-scan] Using staged URLs from scan job", { 
+        imageCount: imagePaths.length,
+        folder,
+      });
+    } else if (scanJob.groups && scanJob.groups.length > 0) {
+      // Fallback: extract stagedUrls from groups (older scan format)
       const groups = scanJob.groups || [];
       imagePaths = groups.flatMap((g: any) => g.images || []);
-
-      // Get Dropbox access token
-      const dropboxData = await tokensStore().get(userScopedKey(userAuth.userId, "dropbox.json"), {
-        type: "json",
-      }) as any;
-
-      if (!dropboxData?.refresh_token) {
-        return json(400, { error: "Dropbox not connected. Please connect your Dropbox account first." }, originHdr);
-      }
-
-      accessToken = await dropboxAccessToken(dropboxData.refresh_token);
-      console.log("[pairing-v2-start-from-scan] Dropbox mode", { folder, imageCount: imagePaths.length });
+      folder = scanJob.folder || "extracted-from-groups";
+      console.log("[pairing-v2-start-from-scan] Extracted staged URLs from groups", { 
+        imageCount: imagePaths.length,
+        folder,
+      });
     } else {
-      return json(400, { error: "Scan job has no image data (missing stagedUrls and folder)" }, originHdr);
+      return json(400, { error: "Scan job has no image data (missing stagedUrls and groups)" }, originHdr);
     }
 
     if (imagePaths.length === 0) {
@@ -183,8 +178,8 @@ export const handler: Handler = async (event) => {
       samplePaths: imagePaths.slice(0, 3),
     });
 
-    // Schedule the pairing-v2 job
-    const jobId = await schedulePairingV2Job(userAuth.userId, folder, imagePaths, accessToken);
+    // Schedule the pairing-v2 job (no accessToken needed - using staged URLs)
+    const jobId = await schedulePairingV2Job(userAuth.userId, folder, imagePaths, undefined);
 
     console.log("[pairing-v2-start-from-scan] Job scheduled:", jobId);
 
