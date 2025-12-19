@@ -48,8 +48,8 @@ jest.mock('../../src/config/smartdrafts.js', () => ({
 describe('smartdrafts-scan-background: stagedUrls handling', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockPutJob.mockResolvedValue(undefined);
-    mockDecRunning.mockResolvedValue(undefined);
+    (mockPutJob as any).mockResolvedValue(undefined);
+    (mockDecRunning as any).mockResolvedValue(undefined);
   });
 
   test('CRITICAL: must store stagedUrls from scan RESPONSE, not input', async () => {
@@ -86,15 +86,15 @@ describe('smartdrafts-scan-background: stagedUrls handling', () => {
       },
     };
 
-    mockRunSmartDraftScan.mockResolvedValue(scanResponse);
+    (mockRunSmartDraftScan as any).mockResolvedValue(scanResponse);
 
     // Act - Import and run handler
     const { handler } = await import('../../netlify/functions/smartdrafts-scan-background.js');
-    await handler({
+    const result = await handler({
       body: JSON.stringify(inputPayload),
       headers: {},
       httpMethod: 'POST',
-    } as any);
+    } as any, {} as any);
 
     // Assert - Verify putJob was called with stagedUrls from RESPONSE
     expect(mockPutJob).toHaveBeenCalledWith(
@@ -146,7 +146,7 @@ describe('smartdrafts-scan-background: stagedUrls handling', () => {
       },
     };
 
-    mockRunSmartDraftScan.mockResolvedValue(scanResponse);
+    (mockRunSmartDraftScan as any).mockResolvedValue(scanResponse);
 
     // Act
     const { handler } = await import('../../netlify/functions/smartdrafts-scan-background.js');
@@ -154,7 +154,7 @@ describe('smartdrafts-scan-background: stagedUrls handling', () => {
       body: JSON.stringify(inputPayload),
       headers: {},
       httpMethod: 'POST',
-    } as any);
+    } as any, {} as any);
 
     // Assert - stagedUrls should be empty array, not undefined
     const actualCall = mockPutJob.mock.calls.find((call: any) => 
@@ -197,7 +197,7 @@ describe('smartdrafts-scan-background: stagedUrls handling', () => {
       },
     };
 
-    mockRunSmartDraftScan.mockResolvedValue(scanResponse);
+    (mockRunSmartDraftScan as any).mockResolvedValue(scanResponse);
 
     // Act
     const { handler } = await import('../../netlify/functions/smartdrafts-scan-background.js');
@@ -205,7 +205,7 @@ describe('smartdrafts-scan-background: stagedUrls handling', () => {
       body: JSON.stringify(inputPayload),
       headers: {},
       httpMethod: 'POST',
-    } as any);
+    } as any, {} as any);
 
     // Assert - Should use response stagedUrls, not input
     const actualCall = mockPutJob.mock.calls.find((call: any) => 
@@ -234,7 +234,7 @@ describe('smartdrafts-scan-background: stagedUrls handling', () => {
       },
     };
 
-    mockRunSmartDraftScan.mockResolvedValue(scanResponse);
+    (mockRunSmartDraftScan as any).mockResolvedValue(scanResponse);
 
     // Act
     const { handler } = await import('../../netlify/functions/smartdrafts-scan-background.js');
@@ -242,7 +242,7 @@ describe('smartdrafts-scan-background: stagedUrls handling', () => {
       body: JSON.stringify(inputPayload),
       headers: {},
       httpMethod: 'POST',
-    } as any);
+    } as any, {} as any);
 
     // Assert - Error state should not have stagedUrls
     const errorCall = mockPutJob.mock.calls.find((call: any) => 
@@ -278,7 +278,7 @@ describe('smartdrafts-scan-background: stagedUrls handling', () => {
       },
     };
 
-    mockRunSmartDraftScan.mockResolvedValue(scanResponse);
+    (mockRunSmartDraftScan as any).mockResolvedValue(scanResponse);
 
     // Act
     const { handler } = await import('../../netlify/functions/smartdrafts-scan-background.js');
@@ -286,7 +286,7 @@ describe('smartdrafts-scan-background: stagedUrls handling', () => {
       body: JSON.stringify(inputPayload),
       headers: {},
       httpMethod: 'POST',
-    } as any);
+    } as any, {} as any);
 
     // Assert - decRunning should be called to release quota
     expect(mockDecRunning).toHaveBeenCalledWith('user-quota');

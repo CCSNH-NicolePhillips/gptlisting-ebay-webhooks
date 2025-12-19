@@ -63,27 +63,25 @@ describe('smartdrafts-scan-core: Dropbox staging', () => {
       // Arrange
       const mockIngestedFiles: IngestedFile[] = [
         {
-          originalName: 'product1-front.jpg',
-          size: 1024000,
-          mimeType: 'image/jpeg',
+          id: 'file-1',
+          name: 'product1-front.jpg',
+          mime: 'image/jpeg',
+          bytes: 1024000,
           stagedUrl: 'https://r2.example.com/staged/user123/job456/product1-front.jpg?signature=abc123',
-          stagingKey: 'staged/user123/job456/product1-front.jpg',
-          source: 'dropbox',
-          sourceMetadata: {
-            path: '/photos/product1-front.jpg',
-            id: 'id:abc123',
+          meta: {
+            sourcePath: '/photos/product1-front.jpg',
+            sourceId: 'id:abc123',
           },
         },
         {
-          originalName: 'product1-back.jpg',
-          size: 980000,
-          mimeType: 'image/jpeg',
+          id: 'file-2',
+          name: 'product1-back.jpg',
+          mime: 'image/jpeg',
+          bytes: 980000,
           stagedUrl: 'https://r2.example.com/staged/user123/job456/product1-back.jpg?signature=def456',
-          stagingKey: 'staged/user123/job456/product1-back.jpg',
-          source: 'dropbox',
-          sourceMetadata: {
-            path: '/photos/product1-back.jpg',
-            id: 'id:def456',
+          meta: {
+            sourcePath: '/photos/product1-back.jpg',
+            sourceId: 'id:def456',
           },
         },
       ];
@@ -126,15 +124,14 @@ describe('smartdrafts-scan-core: Dropbox staging', () => {
       // Arrange
       const mockIngestedFiles: IngestedFile[] = [
         {
-          originalName: 'product2-front.jpg',
-          size: 1500000,
-          mimeType: 'image/jpeg',
+          id: 'file-3',
+          name: 'product2-front.jpg',
+          mime: 'image/jpeg',
+          bytes: 1500000,
           stagedUrl: 'https://r2.example.com/staged/user456/job789/product2-front.jpg?signature=xyz789',
-          stagingKey: 'staged/user456/job789/product2-front.jpg',
-          source: 'dropbox',
-          sourceMetadata: {
-            path: '/dropbox/product2-front.jpg',
-            id: 'id:xyz789',
+          meta: {
+            sourcePath: '/dropbox/product2-front.jpg',
+            sourceId: 'id:xyz789',
           },
         },
       ];
@@ -157,7 +154,7 @@ describe('smartdrafts-scan-core: Dropbox staging', () => {
         expect(file.stagedUrl).toBeDefined();
         expect(file.stagedUrl).toMatch(/^https:\/\//);  // Must be full URL
         expect(file.stagedUrl).toContain('r2.example.com');  // Must be R2/S3
-        expect(file.stagedUrl).not.toEqual(file.originalName);  // Not bare filename
+        expect(file.stagedUrl).not.toEqual(file.name);  // Not bare filename
         
         // Verify URL structure
         const url = new URL(file.stagedUrl);
@@ -171,15 +168,14 @@ describe('smartdrafts-scan-core: Dropbox staging', () => {
       // Arrange
       const mockIngestedFiles: IngestedFile[] = [
         {
-          originalName: 'book-cover.jpg',
-          size: 800000,
-          mimeType: 'image/jpeg',
+          id: 'file-4',
+          name: 'book-cover.jpg',
+          mime: 'image/jpeg',
+          bytes: 800000,
           stagedUrl: 'https://r2.example.com/staged/user789/job111/book-cover.jpg?signature=book123',
-          stagingKey: 'staged/user789/job111/book-cover.jpg',
-          source: 'dropbox',
-          sourceMetadata: {
-            path: '/books/book-cover.jpg',
-            id: 'id:book123',
+          meta: {
+            sourcePath: '/books/book-cover.jpg',
+            sourceId: 'id:book123',
           },
         },
       ];
@@ -197,6 +193,7 @@ describe('smartdrafts-scan-core: Dropbox staging', () => {
         },
       });
 
+      // Assert - Verify NO Dropbox links returned
       // Assert - Verify NO Dropbox links returned
       result.forEach(file => {
         expect(file.stagedUrl).not.toContain('dl.dropboxusercontent.com');
@@ -269,22 +266,26 @@ describe('smartdrafts-scan-core: Dropbox staging', () => {
     test('stagedUrls should map to images in groups', () => {
       const mockIngestedFiles: IngestedFile[] = [
         {
-          originalName: 'img1.jpg',
-          size: 1000,
-          mimeType: 'image/jpeg',
+          id: 'file-5',
+          name: 'img1.jpg',
+          mime: 'image/jpeg',
+          bytes: 1000,
           stagedUrl: 'https://r2.example.com/staged/user/job/img1.jpg?sig=a',
-          stagingKey: 'staged/user/job/img1.jpg',
-          source: 'dropbox',
-          sourceMetadata: { path: '/img1.jpg', id: 'id:a' },
+          meta: {
+            sourcePath: '/img1.jpg',
+            sourceId: 'id:a',
+          },
         },
         {
-          originalName: 'img2.jpg',
-          size: 1000,
-          mimeType: 'image/jpeg',
+          id: 'file-6',
+          name: 'img2.jpg',
+          mime: 'image/jpeg',
+          bytes: 1000,
           stagedUrl: 'https://r2.example.com/staged/user/job/img2.jpg?sig=b',
-          stagingKey: 'staged/user/job/img2.jpg',
-          source: 'dropbox',
-          sourceMetadata: { path: '/img2.jpg', id: 'id:b' },
+          meta: {
+            sourcePath: '/img2.jpg',
+            sourceId: 'id:b',
+          },
         },
       ];
 
@@ -296,6 +297,8 @@ describe('smartdrafts-scan-core: Dropbox staging', () => {
         'https://r2.example.com/staged/user/job/img2.jpg?sig=b',
       ]);
 
+      // Verify no bare filenames
+      expect(stagedUrls).not.toContain('img1.jpg');
       // Verify no bare filenames
       expect(stagedUrls).not.toContain('img1.jpg');
       expect(stagedUrls).not.toContain('img2.jpg');
@@ -358,13 +361,15 @@ describe('smartdrafts-scan-core: Dropbox staging', () => {
 
       const mockIngestedFiles: IngestedFile[] = [
         {
-          originalName: 'test.jpg',
-          size: 1000,
-          mimeType: 'image/jpeg',
+          id: 'file-7',
+          name: 'test.jpg',
+          mime: 'image/jpeg',
+          bytes: 1000,
           stagedUrl: 'https://r2.example.com/staged/user/job/test.jpg?sig=x',
-          stagingKey: 'staged/user/job/test.jpg',
-          source: 'dropbox',
-          sourceMetadata: { path: '/test.jpg', id: 'id:x' },
+          meta: {
+            sourcePath: '/test.jpg',
+            sourceId: 'id:x',
+          },
         },
       ];
 

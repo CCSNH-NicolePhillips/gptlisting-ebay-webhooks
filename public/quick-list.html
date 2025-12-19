@@ -1303,6 +1303,18 @@
           body: JSON.stringify({ scanJobId: currentJobId })
         });
 
+        // Handle empty folder case (jobId is null)
+        if (pairStartRes.jobId === null) {
+          console.log('[Quick List] Empty folder - no images to pair');
+          updateStep(2, 'complete');
+          updateStep(3, 'complete');
+          $('totalProducts').textContent = '0';
+          $('status2').textContent = '✓ No images to pair';
+          $('status3').textContent = '✓ No drafts to create';
+          showToast('No images found in selected folder');
+          return; // Exit early, no pairing or drafting needed
+        }
+
         if (!pairStartRes.ok || !pairStartRes.jobId) {
           throw new Error(pairStartRes.error || 'Failed to start pairing');
         }
