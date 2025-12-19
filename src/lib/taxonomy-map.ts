@@ -217,6 +217,12 @@ export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>, us
     price = group.price;
     priceAlreadyComputed = true;
     console.log(`[taxonomy-map] Using pre-computed price from draft: $${price.toFixed(2)} (skipping re-calculation)`);
+  } else if (typeof group.price === 'number' && group.price > 0) {
+    // CRITICAL: If group.price exists but no priceMeta, this is likely a PUBLISH with incomplete data
+    // Use the price as-is (it's already been discounted) - DO NOT apply minItemPrice floor
+    price = group.price;
+    priceAlreadyComputed = true;
+    console.log(`[taxonomy-map] Using pre-computed price (no priceMeta): $${price.toFixed(2)} (publish mode detected via price-only)`);
   } else {
     // Try to extract from priceMeta first (set by price-lookup.ts)
     if (priceMeta?.chosenSource && priceMeta?.basePrice) {
@@ -229,12 +235,12 @@ export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>, us
         amazonShippingAssumedZero = false;
       }
     } else {
-      // Fallback: extract from legacy group.pricing.ebay or group.price
-      const legacyPrice = Number(group?.pricing?.ebay ?? group?.price ?? 0);
+      // Fallback: extract from legacy group.pricing.ebay only (NOT group.price)
+      const legacyPrice = Number(group?.pricing?.ebay ?? 0);
       if (Number.isFinite(legacyPrice) && legacyPrice > 0) {
         amazonItemPriceCents = Math.round(legacyPrice * 100);
       } else {
-        throw new Error("Group missing pricing data (no priceMeta and no legacy price)");
+        throw new Error("Group missing pricing data (no priceMeta, no price, and no legacy pricing.ebay)");
       }
     }
 
