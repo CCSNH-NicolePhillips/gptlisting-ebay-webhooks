@@ -504,7 +504,9 @@ export async function lookupPrice(
   console.log(`[price] Starting lookup for: "${input.title}"${input.brand ? ` (${input.brand})` : ''}${input.upc ? ` [${input.upc}]` : ''}`);
 
   // Check cache first
-  const cacheKey = makePriceSig(input.brand, input.title);
+  // Include shipping cost in cache key so free vs paid shipping policies get separate caches
+  const shippingCents = input.pricingSettings?.templateShippingEstimateCents;
+  const cacheKey = makePriceSig(input.brand, input.title, undefined, shippingCents);
   try {
     const cached = await getCachedPrice(cacheKey);
     
