@@ -80,21 +80,25 @@ export const handler: Handler = async (event) => {
       return jsonResponse(400, { error: 'Invalid JSON', message: parseError.message });
     }
     
-    const files = body.files as UploadFile[] | undefined;
+    const filesInput = body.files;
     
-    console.log('[ingest-local-upload] Files received:', files?.length || 0);
+    console.log('[ingest-local-upload] Files received:', Array.isArray(filesInput) ? filesInput.length : 0);
     
-    if (!Array.isArray(files) || files.length === 0) {
+    if (!Array.isArray(filesInput)) {
       return jsonResponse(400, { error: 'files array required' });
     }
+    if (filesInput.length === 0) {
+      return jsonResponse(400, { error: 'files array required' });
+    }
+    const uploadFiles = filesInput as UploadFile[];
     
     // Enforce max files
     const MAX_FILES = 200;
-    if (files.length > MAX_FILES) {
+    if (uploadFiles.length > MAX_FILES) {
       return jsonResponse(429, {
         error: `Maximum ${MAX_FILES} files per batch`,
         maxFiles: MAX_FILES,
-        requested: files.length,
+        requested: uploadFiles.length,
       });
     }
     
@@ -125,9 +129,9 @@ export const handler: Handler = async (event) => {
     const uploadedFiles: Array<{ key: string; name: string; stagedUrl: string }> = [];
     
     // Upload each file
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      console.log(`[ingest-local-upload] [${i + 1}/${files.length}] Uploading ${file.name}`);
+    for (let i = 0; i < uploadFiles.length; i++) {
+      const file = uploadFiles[i];
+      console.log(`[ingest-local-upload] [${i + 1}/${uploadFiles.length}] Uploading ${file.name}`);
       
       // Generate staging key: staging/{userId}/{jobId}/{hash}-{filename}
       const hash = createHash('md5').update(`${userId}-${file.name}-${Date.now()}`).digest('hex').substring(0, 16);
@@ -162,10 +166,10 @@ export const handler: Handler = async (event) => {
           stagedUrl: signedUrl,
         });
         
-        console.log(`[ingest-local-upload] [${i + 1}/${files.length}] ✓ Success - ${signedUrl.substring(0, 80)}...`);
+        console.log(`[ingest-local-upload] [${i + 1}/${uploadFiles.length}] ✓ Success - ${signedUrl.substring(0, 80)}...`);
         
       } catch (uploadError: any) {
-        console.error(`[ingest-local-upload] [${i + 1}/${files.length}] ✗ Failed:`, uploadError.message);
+        console.error(`[ingest-local-upload] [${i + 1}/${uploadFiles.length}] ✗ Failed:`, uploadError.message);
         throw uploadError;
       }
     }
