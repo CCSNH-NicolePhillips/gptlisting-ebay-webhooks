@@ -37,22 +37,21 @@ interface UploadFile {
 }
 
 export const handler: Handler = async (event) => {
-  console.log('[ingest-local-upload] Handler invoked');
-  console.log('[ingest-local-upload] HTTP method:', event.httpMethod);
-  console.log('[ingest-local-upload] Headers:', JSON.stringify(event.headers));
-  
-  // Handle preflight
-  if (event.httpMethod === 'OPTIONS') {
-    console.log('[ingest-local-upload] Returning OPTIONS response');
-    return { statusCode: 204, headers: CORS_HEADERS, body: '' };
-  }
-  
-  if (event.httpMethod !== 'POST') {
-    console.log('[ingest-local-upload] Invalid method');
-    return jsonResponse(405, { error: 'Method not allowed' });
-  }
-  
   try {
+    console.log('[ingest-local-upload] Handler invoked');
+    console.log('[ingest-local-upload] HTTP method:', event.httpMethod);
+    console.log('[ingest-local-upload] Headers:', JSON.stringify(event.headers));
+    
+    // Handle preflight
+    if (event.httpMethod === 'OPTIONS') {
+      console.log('[ingest-local-upload] Returning OPTIONS response');
+      return { statusCode: 204, headers: CORS_HEADERS, body: '' };
+    }
+    
+    if (event.httpMethod !== 'POST') {
+      console.log('[ingest-local-upload] Invalid method');
+      return jsonResponse(405, { error: 'Method not allowed' });
+    }
     console.log('[ingest-local-upload] Starting upload process');
     
     // Auth check
@@ -180,7 +179,7 @@ export const handler: Handler = async (event) => {
     console.error('[ingest-local-upload] Error stack:', error.stack);
     
     // Build detail string with max 500 chars
-    let detail = error.message || 'Unknown error';
+    let detail = error.message || String(error) || 'Unknown error';
     if (error.stack && process.env.NODE_ENV === 'development') {
       detail = `${detail}\n${error.stack}`;
     }
