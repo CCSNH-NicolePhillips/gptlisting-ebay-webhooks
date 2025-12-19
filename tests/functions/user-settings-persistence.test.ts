@@ -69,8 +69,10 @@ describe('User Settings Persistence', () => {
       };
       
       const result = await saveHandler(event as HandlerEvent, {} as any);
-      
-      expect(result.statusCode).toBe(200);
+      	if (!result) throw new Error('No response');
+      	const typedResult = result as import('@netlify/functions').HandlerResponse;
+
+      expect(typedResult.statusCode).toBe(200);
       expect(mockSet).toHaveBeenCalledWith(
         'users/user-123/settings.json',
         expect.stringContaining('"pricing"')
@@ -109,8 +111,10 @@ describe('User Settings Persistence', () => {
       };
       
       const result = await saveHandler(event as HandlerEvent, {} as any);
-      
-      expect(result.statusCode).toBe(200);
+      	if (!result) throw new Error('No response');
+      	const typedResult = result as import('@netlify/functions').HandlerResponse;
+
+      expect(typedResult.statusCode).toBe(200);
       const savedData = JSON.parse(mockSet.mock.calls[0][1]);
       
       // Promotion settings preserved
@@ -139,8 +143,10 @@ describe('User Settings Persistence', () => {
       };
       
       const result = await saveHandler(event as HandlerEvent, {} as any);
-      
-      expect(result.statusCode).toBe(200);
+      	if (!result) throw new Error('No response');
+      	const typedResult = result as import('@netlify/functions').HandlerResponse;
+
+      expect(typedResult.statusCode).toBe(200);
       const savedData = JSON.parse(mockSet.mock.calls[0][1]);
       
       expect(savedData.pricing.templateShippingEstimateCents).toBe(600);
@@ -161,8 +167,10 @@ describe('User Settings Persistence', () => {
       };
       
       const result = await saveHandler(event as HandlerEvent, {} as any);
-      
-      expect(result.statusCode).toBe(200);
+      	if (!result) throw new Error('No response');
+      	const typedResult = result as import('@netlify/functions').HandlerResponse;
+
+      expect(typedResult.statusCode).toBe(200);
       const savedData = JSON.parse(mockSet.mock.calls[0][1]);
       
       expect(savedData.pricing.shippingSubsidyCapCents).toBeNull();
@@ -181,9 +189,11 @@ describe('User Settings Persistence', () => {
       };
       
       const result = await saveHandler(event as HandlerEvent, {} as any);
-      
-      expect(result.statusCode).toBe(400);
-      expect(result.body).toContain('discountPercent must be between 0 and 50');
+      	if (!result) throw new Error('No response');
+      	const typedResult = result as import('@netlify/functions').HandlerResponse;
+
+      expect(typedResult.statusCode).toBe(400);
+      expect(typedResult.body).toContain('discountPercent must be between 0 and 50');
     });
 
     it('6) validates shippingStrategy enum values', async () => {
@@ -199,9 +209,11 @@ describe('User Settings Persistence', () => {
       };
       
       const result = await saveHandler(event as HandlerEvent, {} as any);
-      
-      expect(result.statusCode).toBe(400);
-      expect(result.body).toContain('shippingStrategy must be one of');
+      	if (!result) throw new Error('No response');
+      	const typedResult = result as import('@netlify/functions').HandlerResponse;
+
+      expect(typedResult.statusCode).toBe(400);
+      expect(typedResult.body).toContain('shippingStrategy must be one of');
     });
 
     it('7) validates non-negative values', async () => {
@@ -220,7 +232,10 @@ describe('User Settings Persistence', () => {
         };
         
         const result = await saveHandler(event as HandlerEvent, {} as any);
-        expect(result.statusCode).toBe(400);
+        	if (!result) throw new Error('No response');
+        	const typedResult = result as import('@netlify/functions').HandlerResponse;
+
+        expect(typedResult.statusCode).toBe(400);
       }
     });
   });
@@ -242,8 +257,10 @@ describe('User Settings Persistence', () => {
       };
       
       const result = await getHandler(event as HandlerEvent, {} as any);
-      
-      expect(result.statusCode).toBe(200);
+      	if (!result) throw new Error('No response');
+      	const typedResult = result as import('@netlify/functions').HandlerResponse;
+
+      expect(typedResult.statusCode).toBe(200);
       const data = JSON.parse(result.body as string);
       
       expect(data.pricing).toEqual({
@@ -263,8 +280,10 @@ describe('User Settings Persistence', () => {
       };
       
       const result = await getHandler(event as HandlerEvent, {} as any);
-      
-      expect(result.statusCode).toBe(200);
+      	if (!result) throw new Error('No response');
+      	const typedResult = result as import('@netlify/functions').HandlerResponse;
+
+      expect(typedResult.statusCode).toBe(200);
       const data = JSON.parse(result.body as string);
       
       // Should match defaults from getDefaultPricingSettings()
@@ -287,8 +306,10 @@ describe('User Settings Persistence', () => {
       };
       
       const result = await getHandler(event as HandlerEvent, {} as any);
-      
-      expect(result.statusCode).toBe(200);
+      	if (!result) throw new Error('No response');
+      	const typedResult = result as import('@netlify/functions').HandlerResponse;
+
+      expect(typedResult.statusCode).toBe(200);
       const data = JSON.parse(result.body as string);
       
       expect(data.pricing.discountPercent).toBe(20); // Saved value
@@ -310,8 +331,10 @@ describe('User Settings Persistence', () => {
       };
       
       const result = await getHandler(event as HandlerEvent, {} as any);
-      
-      expect(result.statusCode).toBe(200);
+      	if (!result) throw new Error('No response');
+      	const typedResult = result as import('@netlify/functions').HandlerResponse;
+
+      expect(typedResult.statusCode).toBe(200);
       const data = JSON.parse(result.body as string);
       
       // UI should divide by 100 to show dollars
@@ -332,8 +355,10 @@ describe('User Settings Persistence', () => {
       };
       
       const result = await getHandler(event as HandlerEvent, {} as any);
-      
-      expect(result.statusCode).toBe(200);
+      	if (!result) throw new Error('No response');
+      	const typedResult = result as import('@netlify/functions').HandlerResponse;
+
+      expect(typedResult.statusCode).toBe(200);
       const data = JSON.parse(result.body as string);
       
       // Null should be preserved (UI shows blank input)
@@ -360,7 +385,9 @@ describe('User Settings Persistence', () => {
       };
       
       const saveResult = await saveHandler(saveEvent as HandlerEvent, {} as any);
-      expect(saveResult.statusCode).toBe(200);
+      if (!saveResult) throw new Error('No response');
+      const typedSaveResult = saveResult as import('@netlify/functions').HandlerResponse;
+      expect(typedSaveResult.statusCode).toBe(200);
       
       // Simulate loading saved data
       const savedData = JSON.parse(mockSet.mock.calls[0][1]);
@@ -372,9 +399,11 @@ describe('User Settings Persistence', () => {
       };
       
       const loadResult = await getHandler(loadEvent as HandlerEvent, {} as any);
-      expect(loadResult.statusCode).toBe(200);
+      if (!loadResult) throw new Error('No response');
+      const typedLoadResult = loadResult as import('@netlify/functions').HandlerResponse;
+      expect(typedLoadResult.statusCode).toBe(200);
       
-      const loadedData = JSON.parse(loadResult.body as string);
+      const loadedData = JSON.parse(typedLoadResult.body!);
       expect(loadedData.pricing).toEqual(originalSettings);
     });
 
@@ -396,7 +425,9 @@ describe('User Settings Persistence', () => {
       };
       
       const saveResult = await saveHandler(saveEvent as HandlerEvent, {} as any);
-      expect(saveResult.statusCode).toBe(200);
+      if (!saveResult) throw new Error('No response');
+      const typedSaveResult = saveResult as import('@netlify/functions').HandlerResponse;
+      expect(typedSaveResult.statusCode).toBe(200);
       
       // Storage has cents
       const savedData = JSON.parse(mockSet.mock.calls[0][1]);
@@ -409,7 +440,9 @@ describe('User Settings Persistence', () => {
       };
       
       const loadResult = await getHandler(loadEvent as HandlerEvent, {} as any);
-      const loadedData = JSON.parse(loadResult.body as string);
+      if (!loadResult) throw new Error('No response');
+      const typedLoadResult = loadResult as import('@netlify/functions').HandlerResponse;
+      const loadedData = JSON.parse(typedLoadResult.body!);
       
       // UI converts back to dollars
       const displayDollars = loadedData.pricing.templateShippingEstimateCents / 100;

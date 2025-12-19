@@ -148,8 +148,8 @@ export const handler: Handler = async (event) => {
     let folder = "";
 
     // Both local and Dropbox modes should have stagedUrls from the scan job
-    if (scanJob.stagedUrls && scanJob.stagedUrls.length > 0) {
-      // Files are already staged in R2/S3
+    if (scanJob.stagedUrls) {
+      // Files are already staged in R2/S3 (or empty array if no images)
       imagePaths = scanJob.stagedUrls;
       folder = scanJob.folder || "local-upload";
       console.log("[pairing-v2-start-from-scan] Using staged URLs from scan job", { 
@@ -170,7 +170,13 @@ export const handler: Handler = async (event) => {
     }
 
     if (imagePaths.length === 0) {
-      return json(400, { error: "No images found in scan job" }, originHdr);
+      // Return success with empty result instead of error - this is a valid case
+      return json(200, { 
+        jobId: null,
+        message: "No images to pair (empty folder or all files filtered out)",
+        pairs: [],
+        unpaired: [],
+      }, originHdr);
     }
 
     console.log("[pairing-v2-start-from-scan] Found images", {

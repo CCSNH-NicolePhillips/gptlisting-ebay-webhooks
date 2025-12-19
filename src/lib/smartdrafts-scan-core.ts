@@ -115,6 +115,7 @@ export type SmartDraftScanBody = {
   orphans?: any[];
   debug?: unknown;
   imageInsights?: Record<string, ImageInsight>;
+  stagedUrls?: string[]; // R2/S3 URLs for pairing compatibility
   // Phase 4: Metrics for telemetry
   _metrics?: {
     visionMs?: number;
@@ -1638,6 +1639,7 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
         warnings: ["No images found in folder."],
         groups: [],
         imageInsights: {},
+        stagedUrls: [], // Include empty array for pairing compatibility
       });
     }
 

@@ -63,9 +63,9 @@ describe('smartdrafts-scan-core: Dropbox staging', () => {
       // Arrange
       const mockIngestedFiles: IngestedFile[] = [
         {
-          originalName: 'product1-front.jpg',
-          size: 1024000,
-          mimeType: 'image/jpeg',
+          name: 'product1-front.jpg',
+          bytes: 1024000,
+          mime: 'image/jpeg',
           stagedUrl: 'https://r2.example.com/staged/user123/job456/product1-front.jpg?signature=abc123',
           stagingKey: 'staged/user123/job456/product1-front.jpg',
           source: 'dropbox',
@@ -75,9 +75,9 @@ describe('smartdrafts-scan-core: Dropbox staging', () => {
           },
         },
         {
-          originalName: 'product1-back.jpg',
-          size: 980000,
-          mimeType: 'image/jpeg',
+          name: 'product1-back.jpg',
+          bytes: 980000,
+          mime: 'image/jpeg',
           stagedUrl: 'https://r2.example.com/staged/user123/job456/product1-back.jpg?signature=def456',
           stagingKey: 'staged/user123/job456/product1-back.jpg',
           source: 'dropbox',
@@ -126,9 +126,9 @@ describe('smartdrafts-scan-core: Dropbox staging', () => {
       // Arrange
       const mockIngestedFiles: IngestedFile[] = [
         {
-          originalName: 'product2-front.jpg',
-          size: 1500000,
-          mimeType: 'image/jpeg',
+          name: 'product2-front.jpg',
+          bytes: 1500000,
+          mime: 'image/jpeg',
           stagedUrl: 'https://r2.example.com/staged/user456/job789/product2-front.jpg?signature=xyz789',
           stagingKey: 'staged/user456/job789/product2-front.jpg',
           source: 'dropbox',
@@ -157,7 +157,7 @@ describe('smartdrafts-scan-core: Dropbox staging', () => {
         expect(file.stagedUrl).toBeDefined();
         expect(file.stagedUrl).toMatch(/^https:\/\//);  // Must be full URL
         expect(file.stagedUrl).toContain('r2.example.com');  // Must be R2/S3
-        expect(file.stagedUrl).not.toEqual(file.originalName);  // Not bare filename
+        expect(file.stagedUrl).not.toEqual(file.name);  // Not bare filename
         
         // Verify URL structure
         const url = new URL(file.stagedUrl);
@@ -171,9 +171,9 @@ describe('smartdrafts-scan-core: Dropbox staging', () => {
       // Arrange
       const mockIngestedFiles: IngestedFile[] = [
         {
-          originalName: 'book-cover.jpg',
-          size: 800000,
-          mimeType: 'image/jpeg',
+          name: 'book-cover.jpg',
+          bytes: 800000,
+          mime: 'image/jpeg',
           stagedUrl: 'https://r2.example.com/staged/user789/job111/book-cover.jpg?signature=book123',
           stagingKey: 'staged/user789/job111/book-cover.jpg',
           source: 'dropbox',
@@ -269,18 +269,18 @@ describe('smartdrafts-scan-core: Dropbox staging', () => {
     test('stagedUrls should map to images in groups', () => {
       const mockIngestedFiles: IngestedFile[] = [
         {
-          originalName: 'img1.jpg',
-          size: 1000,
-          mimeType: 'image/jpeg',
+          name: 'img1.jpg',
+          bytes: 1000,
+          mime: 'image/jpeg',
           stagedUrl: 'https://r2.example.com/staged/user/job/img1.jpg?sig=a',
           stagingKey: 'staged/user/job/img1.jpg',
           source: 'dropbox',
           sourceMetadata: { path: '/img1.jpg', id: 'id:a' },
         },
         {
-          originalName: 'img2.jpg',
-          size: 1000,
-          mimeType: 'image/jpeg',
+          name: 'img2.jpg',
+          bytes: 1000,
+          mime: 'image/jpeg',
           stagedUrl: 'https://r2.example.com/staged/user/job/img2.jpg?sig=b',
           stagingKey: 'staged/user/job/img2.jpg',
           source: 'dropbox',
@@ -358,9 +358,9 @@ describe('smartdrafts-scan-core: Dropbox staging', () => {
 
       const mockIngestedFiles: IngestedFile[] = [
         {
-          originalName: 'test.jpg',
-          size: 1000,
-          mimeType: 'image/jpeg',
+          name: 'test.jpg',
+          bytes: 1000,
+          mime: 'image/jpeg',
           stagedUrl: 'https://r2.example.com/staged/user/job/test.jpg?sig=x',
           stagingKey: 'staged/user/job/test.jpg',
           source: 'dropbox',
