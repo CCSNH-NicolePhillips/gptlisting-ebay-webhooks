@@ -21,11 +21,11 @@ export default {
   testPathIgnorePatterns: [
     '/node_modules/',
     'smartdrafts-scan-core.test.ts',
-    'pairing-v2-core.test.ts'
+    '\\.d\\.ts$'
   ],
   collectCoverage: true,
-  collectCoverageFrom: ['src/**/*.ts'],
-  coveragePathIgnorePatterns: ['/node_modules/', '/dist/'],
+  collectCoverageFrom: ['src/**/*.ts', '!src/**/*.d.ts'],
+  coveragePathIgnorePatterns: ['/node_modules/', '/dist/', '\\.d\\.ts$'],
   coverageThreshold: {
     global: {
       branches: 80,
