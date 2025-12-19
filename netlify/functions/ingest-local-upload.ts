@@ -37,6 +37,11 @@ interface UploadFile {
 }
 
 export const handler: Handler = async (event) => {
+  return {
+    statusCode: 200,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ok: true, stage: 'early-return' }),
+  };
   try {
     console.log('[ingest-local-upload] Handler invoked');
     console.log('[ingest-local-upload] HTTP method:', event.httpMethod);
