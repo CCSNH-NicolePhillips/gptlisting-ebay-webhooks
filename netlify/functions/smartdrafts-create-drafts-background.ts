@@ -858,6 +858,49 @@ export const handler: Handler = async (event) => {
     } catch (err) {
       console.warn(`[pricing] Failed to load user settings, using defaults:`, err);
     }
+
+    // Phase 3.5: Check default fulfillment policy for free shipping
+    try {
+      const store = tokensStore();
+      const { hasFreeShipping, extractShippingCost } = await import("../../src/lib/policy-helpers.js");
+      const { getUserAccessToken, apiHost, headers: ebayHeaders } = await import("../../src/lib/_ebay.js");
+      const { userScopedKey } = await import("../../src/lib/_auth.js");
+
+      // Load policy defaults
+      const policyDefaultsKey = userScopedKey(userId, 'policy-defaults.json');
+      const policyDefaults = await store.get(policyDefaultsKey, { type: 'json' }) as any;
+
+      if (policyDefaults?.fulfillment) {
+        const fulfillmentPolicyId = policyDefaults.fulfillment;
+        console.log(`[pricing] Checking fulfillment policy ${fulfillmentPolicyId} for free shipping...`);
+
+        // Fetch the policy from eBay
+        const token = await getUserAccessToken(userId);
+        const host = apiHost();
+        const h = ebayHeaders(token);
+        const policyUrl = `${host}/sell/account/v1/fulfillment_policy/${encodeURIComponent(fulfillmentPolicyId)}`;
+        const policyRes = await fetch(policyUrl, { headers: h });
+
+        if (policyRes.ok) {
+          const policy = await policyRes.json();
+
+          if (hasFreeShipping(policy)) {
+            pricingSettings.templateShippingEstimateCents = 0;
+            console.log(`[pricing] ✓ Free shipping policy detected - setting templateShippingEstimateCents to 0`);
+          } else {
+            const extractedCost = extractShippingCost(policy);
+            if (extractedCost !== null && extractedCost !== pricingSettings.templateShippingEstimateCents) {
+              pricingSettings.templateShippingEstimateCents = extractedCost;
+              console.log(`[pricing] ✓ Extracted shipping cost from policy: ${extractedCost} cents`);
+            }
+          }
+        } else {
+          console.warn(`[pricing] Failed to fetch fulfillment policy ${fulfillmentPolicyId}: ${policyRes.status}`);
+        }
+      }
+    } catch (err) {
+      console.warn(`[pricing] Failed to check fulfillment policy for free shipping:`, err);
+    }
   }
 
   try {
