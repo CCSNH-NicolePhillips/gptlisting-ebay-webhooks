@@ -1036,7 +1036,8 @@
 
     // Upload files in batches to avoid payload limits
     async function uploadFilesInBatches(files) {
-      const MAX_BATCH_SIZE_BYTES = 3 * 1024 * 1024; // 3MB per batch (reduced to prevent 500s)
+      // Keep each POST well under Netlify's 6MB limit (base64 payload grows quickly)
+      const MAX_BATCH_SIZE_BYTES = 2 * 1024 * 1024; // 2MB per batch caps requests around ~2.7MB
       const allUploadedFiles = [];
 
       // Prepare file data with base64 encoding
