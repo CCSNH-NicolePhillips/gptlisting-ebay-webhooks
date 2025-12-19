@@ -942,13 +942,21 @@
           throw new Error('No response received from server');
         }
 
-        // Safe JSON parsing - handle empty responses
+        // Read response text first
+        const text = await r.text();
+        
+        // Safe JSON parsing - handle non-JSON responses
         let data;
+        let rawText = text;
         try {
-          const text = await r.text();
           data = text ? JSON.parse(text) : {};
         } catch (parseErr) {
           console.error('[fetchJSON] JSON parse error:', parseErr);
+          // If response failed and we got non-JSON, throw descriptive error
+          if (!r.ok) {
+            const preview = rawText.substring(0, 300);
+            throw new Error(`HTTP ${r.status}: ${preview}`);
+          }
           throw new Error('Invalid JSON response from server');
         }
 
