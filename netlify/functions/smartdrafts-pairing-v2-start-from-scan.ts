@@ -80,6 +80,10 @@ async function getScanJobData(userId: string, jobId: string): Promise<any> {
   const jsonData = (await res.json()) as { result: unknown };
   const val = jsonData.result;
 
+  if (val === null || val === undefined) {
+    return null; // Return null for missing keys
+  }
+
   if (typeof val !== "string" || !val) {
     throw new Error(`Scan job data invalid: ${jobId}`);
   }
@@ -128,6 +132,10 @@ export const handler: Handler = async (event) => {
 
     // Get scan job data
     const scanJob = await getScanJobData(userAuth.userId, scanJobId);
+
+    if (!scanJob) {
+      return json(404, { error: `Scan job not found: ${scanJobId}` }, originHdr);
+    }
 
     console.log("[pairing-v2-start-from-scan] Scan job data:", {
       state: scanJob.state,

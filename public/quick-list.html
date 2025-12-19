@@ -1308,9 +1308,10 @@
           console.log('[Quick List] Empty folder - no images to pair');
           updateStep(2, 'complete');
           updateStep(3, 'complete');
-          $('totalProducts').textContent = '0';
+          updateStep(4, 'complete');
           $('status2').textContent = '✓ No images to pair';
           $('status3').textContent = '✓ No drafts to create';
+          $('status4').textContent = '✓ Complete';
           showToast('No images found in selected folder');
           return; // Exit early, no pairing or drafting needed
         }

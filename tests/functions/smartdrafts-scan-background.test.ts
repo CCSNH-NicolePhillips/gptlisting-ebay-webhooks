@@ -111,9 +111,9 @@ describe('smartdrafts-scan-background: stagedUrls handling', () => {
     // Verify stagedUrls is the array from scan response
     const actualCall = mockPutJob.mock.calls.find((call: any) => 
       call[1]?.state === 'complete'
-    );
+    ) as any;
     expect(actualCall).toBeDefined();
-    expect(actualCall![1].stagedUrls).toEqual([
+    expect(actualCall[1].stagedUrls).toEqual([
       'https://r2.example.com/staged/user-456/test-job-123/img1.jpg?sig=x',
       'https://r2.example.com/staged/user-456/test-job-123/img2.jpg?sig=y',
     ]);
@@ -159,10 +159,10 @@ describe('smartdrafts-scan-background: stagedUrls handling', () => {
     // Assert - stagedUrls should be empty array, not undefined
     const actualCall = mockPutJob.mock.calls.find((call: any) => 
       call[1]?.state === 'complete'
-    );
+    ) as any;
     expect(actualCall).toBeDefined();
-    expect(actualCall![1].stagedUrls).toEqual([]); // Empty array
-    expect(Array.isArray(actualCall![1].stagedUrls)).toBe(true);
+    expect(actualCall[1].stagedUrls).toEqual([]); // Empty array
+    expect(Array.isArray(actualCall[1].stagedUrls)).toBe(true);
   });
 
   test('REGRESSION: local upload with input stagedUrls should use response stagedUrls', async () => {
@@ -210,9 +210,9 @@ describe('smartdrafts-scan-background: stagedUrls handling', () => {
     // Assert - Should use response stagedUrls, not input
     const actualCall = mockPutJob.mock.calls.find((call: any) => 
       call[1]?.state === 'complete'
-    );
+    ) as any;
     expect(actualCall).toBeDefined();
-    expect(actualCall![1].stagedUrls).toBe(scanResponse.body.stagedUrls);
+    expect(actualCall[1].stagedUrls).toBe(scanResponse.body.stagedUrls);
   });
 
   test('scan failure should not store stagedUrls', async () => {
@@ -247,10 +247,10 @@ describe('smartdrafts-scan-background: stagedUrls handling', () => {
     // Assert - Error state should not have stagedUrls
     const errorCall = mockPutJob.mock.calls.find((call: any) => 
       call[1]?.state === 'error'
-    );
+    ) as any;
     expect(errorCall).toBeDefined();
-    expect(errorCall![1].error).toContain('Scan failed');
-    expect(errorCall![1].stagedUrls).toBeUndefined();
+    expect(errorCall[1].error).toContain('Scan failed');
+    expect(errorCall[1].stagedUrls).toBeUndefined();
   });
 
   test('worker should call decRunning after completion', async () => {
