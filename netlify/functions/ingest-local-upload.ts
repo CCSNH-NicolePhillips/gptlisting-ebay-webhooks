@@ -179,10 +179,18 @@ export const handler: Handler = async (event) => {
     console.error('[ingest-local-upload] Error:', error);
     console.error('[ingest-local-upload] Error stack:', error.stack);
     
+    // Build detail string with max 500 chars
+    let detail = error.message || 'Unknown error';
+    if (error.stack && process.env.NODE_ENV === 'development') {
+      detail = `${detail}\n${error.stack}`;
+    }
+    if (detail.length > 500) {
+      detail = detail.substring(0, 500) + '...';
+    }
+    
     return jsonResponse(500, {
-      error: 'Failed to upload files',
-      message: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+      error: 'ingest-local-upload failed',
+      detail,
     });
   }
 };
