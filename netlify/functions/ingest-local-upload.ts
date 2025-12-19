@@ -37,12 +37,18 @@ interface UploadFile {
 }
 
 export const handler: Handler = async (event) => {
+  console.log('[ingest-local-upload] Handler invoked');
+  console.log('[ingest-local-upload] HTTP method:', event.httpMethod);
+  console.log('[ingest-local-upload] Headers:', JSON.stringify(event.headers));
+  
   // Handle preflight
   if (event.httpMethod === 'OPTIONS') {
+    console.log('[ingest-local-upload] Returning OPTIONS response');
     return { statusCode: 204, headers: CORS_HEADERS, body: '' };
   }
   
   if (event.httpMethod !== 'POST') {
+    console.log('[ingest-local-upload] Invalid method');
     return jsonResponse(405, { error: 'Method not allowed' });
   }
   
@@ -54,13 +60,22 @@ export const handler: Handler = async (event) => {
     const userId = getJwtSubUnverified(event);
     
     console.log('[ingest-local-upload] User ID:', userId);
+    console.log('[ingest-local-upload] Has bearer token:', !!bearer);
     
     if (!bearer || !userId) {
+      console.log('[ingest-local-upload] Auth failed');
       return jsonResponse(401, { error: 'Unauthorized' });
     }
     
     // Parse request
-    const body = JSON.parse(event.body || '{}');
+    let body;
+    try {
+      body = JSON.parse(event.body || '{}');
+    } catch (parseError: any) {
+      console.error('[ingest-local-upload] JSON parse error:', parseError.message);
+      return jsonResponse(400, { error: 'Invalid JSON', message: parseError.message });
+    }
+    
     const files = body.files as UploadFile[] | undefined;
     
     console.log('[ingest-local-upload] Files received:', files?.length || 0);
