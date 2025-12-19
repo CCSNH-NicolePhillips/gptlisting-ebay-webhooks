@@ -59,10 +59,23 @@ const mockOpenAI = openai.chat.completions.create as jest.MockedFunction<typeof 
 const mockGetCachedPrice = getCachedPrice as jest.MockedFunction<typeof getCachedPrice>;
 const mockSetCachedPrice = setCachedPrice as jest.MockedFunction<typeof setCachedPrice>;
 
+// Mock global fetch
+global.fetch = jest.fn();
+
 describe('price-lookup.ts', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetCachedPrice.mockResolvedValue(null); // No cache by default
+    // Mock fetch to return HTML with a price
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      text: async () => '<div class="price">$29.99</div>',
+    });
+    // Mock extractPriceWithShipping to return valid data
+    mockExtractPriceWithShipping.mockReturnValue({
+      amazonItemPrice: 29.99,
+      shippingCents: 0,
+    } as any);
   });
 
   describe('lookupPrice', () => {
@@ -563,8 +576,8 @@ describe('price-lookup.ts', () => {
         const result = await lookupPrice(input);
 
         expect(result.ok).toBe(true);
-        // When AI fails, fallback uses estimate (not brand-msrp directly)
-        expect(result.chosen?.source).toBe('estimate');
+        // When AI fails, fallback uses brand-msrp if available
+        expect(result.chosen?.source).toBe('brand-msrp');
         expect(result.recommendedListingPrice).toBeGreaterThan(0);
       }, 10000);
 

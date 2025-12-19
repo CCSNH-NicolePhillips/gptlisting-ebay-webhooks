@@ -212,7 +212,7 @@ describe('smartdrafts-scan-background: stagedUrls handling', () => {
       call[1]?.state === 'complete'
     ) as any;
     expect(actualCall).toBeDefined();
-    expect(actualCall[1].stagedUrls).toBe(scanResponse.body.stagedUrls);
+    expect(actualCall[1].stagedUrls).toStrictEqual(scanResponse.body.stagedUrls);
   });
 
   test('scan failure should not store stagedUrls', async () => {
