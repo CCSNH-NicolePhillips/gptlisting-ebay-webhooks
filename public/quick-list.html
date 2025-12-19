@@ -934,63 +934,54 @@
     window.clearFiles = clearFiles;
 
     async function fetchJSON(url, opts = {}) {
-      try {
-        const r = await exec(url, opts);
+      const r = await exec(url, opts);
 
-        // Check if response is valid
-        if (!r) {
-          throw new Error('No response received from server');
-        }
+      if (!r) throw new Error('No response received from server');
 
-        // Read response text first
-        const text = await r.text();
-        
-        // Safe JSON parsing - handle non-JSON responses
-        let data;
-        let rawText = text;
+      // Always read text first so we can handle non-JSON error pages
+      const rawText = await r.text();
+
+      // Try JSON only when it looks like JSON (content-type) OR rawText starts like JSON
+      const ct = (r.headers.get('content-type') || '').toLowerCase();
+      const looksJson = ct.includes('application/json') || /^[\s\r\n]*[\[{]/.test(rawText);
+
+      let data = {};
+      if (rawText && looksJson) {
         try {
-          data = text ? JSON.parse(text) : {};
-        } catch (parseErr) {
-          console.error('[fetchJSON] JSON parse error:', parseErr);
-          // If response failed and we got non-JSON, throw descriptive error
-          if (!r.ok) {
-            const preview = rawText.substring(0, 300);
-            throw new Error(`HTTP ${r.status}: ${preview}`);
-          }
-          throw new Error('Invalid JSON response from server');
+          data = JSON.parse(rawText);
+        } catch (e) {
+          // If backend lied about JSON, keep the raw text
+          data = { error: rawText };
         }
+      } else if (rawText) {
+        // Non-JSON response (Netlify "Internal Error", HTML, etc.)
+        data = { error: rawText };
+      }
 
-        if (!r.ok) {
-          // Check for auth errors
-          if (r.status === 401 || r.status === 403) {
-            console.error('[Auth] Unauthorized request, redirecting to login...');
-            sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
-            window.location.replace('/login.html');
-            throw new Error('Authentication required');
-          }
-          // More descriptive error for 502
-          if (r.status === 502) {
-            const errorMsg = data.error || 'Backend service unavailable';
-            console.error('[API] 502 Error:', errorMsg, 'URL:', url);
-            throw new Error(`Service Error: ${errorMsg}`);
-          }
-          // Include detail field for better debugging
-          const errorMsg = data.error || `HTTP ${r.status}`;
-          const fullError = data.detail ? `${errorMsg}: ${data.detail}` : errorMsg;
-          console.error('[API] Error response:', { status: r.status, error: data.error, detail: data.detail, groupId: data.groupId });
-          throw new Error(fullError);
-        }
-        return data;
-      } catch (err) {
-        // Check if it's an auth-related error
-        if (err.message?.includes('Authentication expired') ||
-            err.message?.includes('AUTH_EXPIRED')) {
-          console.error('[Auth] Token expired, redirecting to login...');
+      if (!r.ok) {
+        // Auth redirects
+        if (r.status === 401 || r.status === 403) {
           sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
           window.location.replace('/login.html');
+          throw new Error('Authentication required');
         }
-        throw err;
+
+        // Make the thrown message actually useful
+        const msg =
+          data?.detail ? `${data.error || `HTTP ${r.status}`}: ${data.detail}`
+          : (data?.error || `HTTP ${r.status}`);
+
+        console.error('[API] Non-OK response:', {
+          url,
+          status: r.status,
+          contentType: ct,
+          bodyPreview: rawText?.slice?.(0, 300)
+        });
+
+        throw new Error(msg);
       }
+
+      return data;
     }
 
     async function loadFolders() {
@@ -1095,7 +1086,7 @@
       }
 
       // Upload batches with concurrency control and retry logic
-      const MAX_CONCURRENT = 2; // Limit to 2 concurrent uploads to avoid Netlify rate limits
+      const MAX_CONCURRENT = 3; // Limit to 3 concurrent uploads to avoid Netlify rate limits
       const uploadBatch = async (batch, batchIndex) => {
         let uploadRes = null;
         let retries = 0;
