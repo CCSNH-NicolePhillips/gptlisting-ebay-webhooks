@@ -315,7 +315,7 @@ describe('Policy Defaults Persistence', () => {
 	describe('ebay-create-policy with setDefault', () => {
 		beforeEach(() => {
 			// Mock successful eBay API response
-			(global.fetch as jest.Mock).mockResolvedValue({
+			(global.fetch as any).mockResolvedValue({
 				ok: true,
 				status: 200,
 				headers: new Map(),
@@ -364,7 +364,7 @@ describe('Policy Defaults Persistence', () => {
 			mockStore.get.mockResolvedValue({});
 			mockStore.set.mockResolvedValue(undefined);
 
-			(global.fetch as jest.Mock).mockResolvedValue({
+			(global.fetch as any).mockResolvedValue({
 				ok: true,
 				status: 200,
 				headers: new Map(),
@@ -400,7 +400,7 @@ describe('Policy Defaults Persistence', () => {
 			mockStore.get.mockResolvedValue({});
 			mockStore.set.mockResolvedValue(undefined);
 
-			(global.fetch as jest.Mock).mockResolvedValue({
+			(global.fetch as any).mockResolvedValue({
 				ok: true,
 				status: 200,
 				headers: new Map(),
