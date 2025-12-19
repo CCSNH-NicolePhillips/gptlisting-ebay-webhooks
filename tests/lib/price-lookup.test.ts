@@ -8,6 +8,7 @@ import { lookupPrice, type PriceLookupInput } from '../../src/lib/price-lookup';
 // Mock dependencies
 jest.mock('../../src/lib/html-price', () => ({
   extractPriceFromHtml: jest.fn(),
+  extractPriceWithShipping: jest.fn(),
 }));
 
 jest.mock('../../src/lib/search', () => ({
@@ -40,7 +41,7 @@ jest.mock('../../src/lib/price-cache', () => ({
   makePriceSig: jest.fn((brand, title) => `${brand || 'no-brand'}:${title}`),
 }));
 
-import { extractPriceFromHtml } from '../../src/lib/html-price';
+import { extractPriceFromHtml, extractPriceWithShipping } from '../../src/lib/html-price';
 import { braveFirstUrlForBrandSite, braveFirstUrl } from '../../src/lib/search';
 import { getBrandUrls, setBrandUrls } from '../../src/lib/brand-map';
 import { fetchSoldPriceStats } from '../../src/lib/pricing/ebay-sold-prices';
@@ -48,6 +49,7 @@ import { openai } from '../../src/lib/openai';
 import { getCachedPrice, setCachedPrice } from '../../src/lib/price-cache';
 
 const mockExtractPrice = extractPriceFromHtml as jest.MockedFunction<typeof extractPriceFromHtml>;
+const mockExtractPriceWithShipping = extractPriceWithShipping as jest.MockedFunction<typeof extractPriceWithShipping>;
 const mockBrandUrlForBrandSite = braveFirstUrlForBrandSite as jest.MockedFunction<typeof braveFirstUrlForBrandSite>;
 const mockBraveSearch = braveFirstUrl as jest.MockedFunction<typeof braveFirstUrl>;
 const mockGetBrandUrls = getBrandUrls as jest.MockedFunction<typeof getBrandUrls>;
@@ -397,12 +399,12 @@ describe('price-lookup.ts', () => {
         );
 
         expect(pricingLog).toBeDefined();
-        expect(pricingLog?.[0]).toContain('rawAmazon=$25.00');
+        expect(pricingLog?.[0]).toContain('retail=$25.00');
         expect(pricingLog?.[0]).toContain('packSize=1 (single unit)');
         expect(pricingLog?.[0]).toContain('photoQty=2 (photo shows 2 bottles)');
         expect(pricingLog?.[0]).toContain('perUnit=$25.00');
-        expect(pricingLog?.[0]).toContain('lotBeforeDiscount=$50.00');
-        expect(pricingLog?.[0]).toContain('finalAfterDiscount=');
+        expect(pricingLog?.[0]).toContain('lotRetail=$50.00');
+        expect(pricingLog?.[0]).toContain('final=$');
 
         consoleSpy.mockRestore();
       });
@@ -607,7 +609,7 @@ describe('price-lookup.ts', () => {
         expect(result).toHaveProperty('walmart');
         expect(result).toHaveProperty('brand');
         expect(result).toHaveProperty('avg');
-        expect(result.avg).toBe(24.99);
+        expect(result.avg).toBe(22.49); // 24.99 * 0.9 (10% default discount applied)
       }, 15000); // Increase timeout for this test
     });
 
@@ -938,6 +940,7 @@ describe('price-lookup.ts', () => {
         }) as any;
 
         mockExtractPrice.mockReturnValue(null); // HTML extraction fails
+        mockExtractPriceWithShipping.mockReturnValue({ amazonItemPrice: 0, amazonShippingPrice: 0, amazonTotalPrice: 0 }); // Also fails
 
         mockOpenAI.mockResolvedValue({
           choices: [{
@@ -1021,6 +1024,7 @@ describe('price-lookup.ts', () => {
         mockExtractPrice
           .mockReturnValueOnce(100) // Brand price
           .mockReturnValueOnce(35);  // Amazon price (much lower)
+        mockExtractPriceWithShipping.mockReturnValue({ amazonItemPrice: 35, amazonShippingPrice: 0, amazonTotalPrice: 35 });
 
         mockOpenAI.mockResolvedValue({
           choices: [{
@@ -1093,6 +1097,7 @@ describe('price-lookup.ts', () => {
         }) as any;
 
         mockExtractPrice.mockReturnValue(29.99);
+        mockExtractPriceWithShipping.mockReturnValue({ amazonItemPrice: 29.99, amazonShippingPrice: 0, amazonTotalPrice: 29.99 });
         mockOpenAI.mockResolvedValue({
           choices: [{
             message: {
@@ -1151,6 +1156,7 @@ describe('price-lookup.ts', () => {
         }) as any;
 
         mockExtractPrice.mockReturnValue(49.99);
+        mockExtractPriceWithShipping.mockReturnValue({ amazonItemPrice: 49.99, amazonShippingPrice: 0, amazonTotalPrice: 49.99 });
         
         // Mock AI failure
         mockOpenAI.mockRejectedValue(new Error('AI timeout'));

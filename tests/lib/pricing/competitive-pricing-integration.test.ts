@@ -94,9 +94,9 @@ describe('Competitive Pricing Integration - Phase 5', () => {
       expect(result!.amazonData.shippingEvidence).toBe('paid');
 
       // Default 10% discount on total: 39.49 × 0.9 = 35.541 → 35.54
-      // FREE_IF_AMAZON_FREE strategy: match Amazon shipping
-      expect(result!.ebayItemPrice).toBe(28.55); // 35.54 - 6.99
-      expect(result!.ebayShippingPrice).toBe(6.99);
+      // ALGO_COMPETITIVE_TOTAL strategy: apply discount to total, eBay free shipping
+      expect(result!.ebayItemPrice).toBe(35.54); // Discounted total becomes item price
+      expect(result!.ebayShippingPrice).toBe(0); // Free shipping on eBay
 
       expect(result!.evidence).toContain('Amazon: $32.50 + $6.99 shipping (paid)');
     });
@@ -222,8 +222,8 @@ describe('Competitive Pricing Integration - Phase 5', () => {
         productTitle: 'Heavy Equipment Parts',
       });
 
-      expect(result.ebayItemPrice).toBe(28.55); // (32.50 + 6.99) × 0.9 - 6.99
-      expect(result.ebayShippingPrice).toBe(6.99);
+      expect(result.ebayItemPrice).toBe(35.54); // (32.50 + 6.99) × 0.9 = 35.54
+      expect(result.ebayShippingPrice).toBe(0); // Free shipping on eBay
     });
 
     it('should include evidence in CompetitivePricingResult', () => {
@@ -350,9 +350,9 @@ describe('Competitive Pricing Integration - Phase 5', () => {
       });
 
       // New logic: (32.50 + 6.99) × 0.9 = 35.541 → 35.54 total
-      // Split: item 28.55 + ship 6.99 = 35.54
-      expect(result.ebayItemPrice).toBe(28.55);
-      expect(result.ebayShippingPrice).toBe(6.99);
+      // ALGO_COMPETITIVE_TOTAL: eBay has free shipping, item price = discounted total
+      expect(result.ebayItemPrice).toBe(35.54);
+      expect(result.ebayShippingPrice).toBe(0);
 
       // Compare to legacy: 32.50 × 0.9 - 5 = 24.25 (ignores shipping)
       // New logic is ~$11.29 higher total due to accounting for Amazon shipping!

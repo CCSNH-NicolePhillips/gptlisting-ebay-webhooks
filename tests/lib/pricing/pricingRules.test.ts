@@ -26,9 +26,9 @@ describe('Competitive Pricing Configuration - Phase 1', () => {
 
       expect(config).toBeDefined();
       expect(config.discountPercent).toBe(10);
-      expect(config.shippingStrategy).toBe('DISCOUNT_ITEM_ONLY');
+      expect(config.shippingStrategy).toBe('ALGO_COMPETITIVE_TOTAL');
       expect(config.templateShippingEstimateCents).toBe(600);
-      expect(config.shippingSubsidyCapCents).toBeNull();
+      expect(config.shippingSubsidyCapCents).toBeNull(); // No cap by default
     });
 
     it('should return new object on each call (not singleton)', () => {
