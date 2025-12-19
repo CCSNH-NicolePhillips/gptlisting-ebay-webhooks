@@ -347,27 +347,23 @@ describe('taxonomy-map: Pricing Settings Merge', () => {
       expect(result.offer.price).toBe(51.30); // 5130 cents / 100
     });
 
-    it('3) priceMeta missing: falls back to legacy group.price', async () => {
+    it('3) priceMeta missing: treats group.price as pre-computed (publish mode)', async () => {
       mockStoreGet.mockResolvedValue(null);
       
       const group = {
         brand: 'TestBrand',
         product: 'TestProduct',
-        price: 35.50, // Legacy price field
+        price: 35.50, // Pre-computed eBay price (publish mode)
         images: ['https://example.com/img1.jpg'],
       };
       
       const result = await mapGroupToDraftWithTaxonomy(group);
       
-      // Should extract from legacy price field
-      expect(mockComputeEbayItemPriceCents).toHaveBeenCalledWith({
-        amazonItemPriceCents: 3550, // 35.50 * 100
-        amazonShippingCents: 0, // Assumed zero for legacy
-        settings: expect.any(Object),
-      });
+      // Should NOT call compute function - price already computed
+      expect(mockComputeEbayItemPriceCents).not.toHaveBeenCalled();
       
       expect(result).toBeDefined();
-      expect(result.offer.price).toBeDefined();
+      expect(result.offer.price).toBe(35.50);
     });
 
     it('3b) priceMeta missing: falls back to group.pricing.ebay', async () => {

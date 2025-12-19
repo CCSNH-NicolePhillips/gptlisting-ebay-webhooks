@@ -388,38 +388,33 @@ describe('taxonomy-map', () => {
         expect(result._meta.price).toBe(20.99);
       });
 
-      it('should fallback to price field and compute eBay price', async () => {
+      it('should use group.price as pre-computed eBay price when no priceMeta', async () => {
         const group = {
           brand: 'TestBrand',
           product: 'TestProduct',
-          price: 35.50,
+          price: 35.50, // Pre-computed eBay price (publish mode)
           images: ['https://example.com/img1.jpg'],
         };
         
         const result = await mapGroupToDraftWithTaxonomy(group);
         
-        // Legacy price extracted as amazonItemPriceCents = 3550
-        // Target: $35.50 * 0.9 = $31.95
-        // Subsidy: $6.00
-        // eBay item price: $31.95 - $6.00 = $25.95
-        expect(result.offer.price).toBe(25.95);
+        // Should use price as-is (already computed during draft creation)
+        // No discount or computation applied
+        expect(result.offer.price).toBe(35.50);
       });
 
-      it('should round price to 2 decimal places', async () => {
+      it('should use pre-computed price as-is (no rounding)', async () => {
         const group = {
           brand: 'TestBrand',
           product: 'TestProduct',
-          price: 29.999,
+          price: 29.999, // Pre-computed eBay price (publish mode)
           images: ['https://example.com/img1.jpg'],
         };
         
         const result = await mapGroupToDraftWithTaxonomy(group);
         
-        // price = 29.999 → rounds to 30.00 on extraction
-        // Target: $30.00 * 0.9 = $27.00
-        // Subsidy: $6.00
-        // eBay item price: $27.00 - $6.00 = $21.00
-        expect(result.offer.price).toBe(21.00);
+        // Should use price as-is (already computed during draft creation)
+        expect(result.offer.price).toBe(29.999);
       });
     });
 
@@ -983,21 +978,19 @@ describe('taxonomy-map', () => {
         expect(result.offer.price).toBe(50.69);
       });
 
-      it('should fallback to legacy price field when priceMeta missing', async () => {
+      it('should use group.price as pre-computed when priceMeta missing', async () => {
         const group = {
           brand: 'TestBrand',
           product: 'TestProduct',
-          price: 57.00,
+          price: 57.00, // Pre-computed eBay price (publish mode)
           images: ['https://example.com/img1.jpg'],
         };
         
         const result = await mapGroupToDraftWithTaxonomy(group);
         
-        // Fallback uses price as amazonItemPriceCents with free shipping
-        // Target: $57 * 0.9 = $51.30
-        // Subsidy: $6.00
-        // eBay item price: $51.30 - $6.00 = $45.30
-        expect(result.offer.price).toBe(45.30);
+        // Should use price as-is (already computed during draft creation)
+        // No discount or computation applied
+        expect(result.offer.price).toBe(57.00);
       });
 
       it('should apply minimum item price floor', async () => {

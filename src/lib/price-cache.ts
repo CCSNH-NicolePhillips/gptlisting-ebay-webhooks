@@ -35,14 +35,8 @@ function sanitizeSigPart(part: string | undefined | null): string {
     .trim();
 }
 
-export function makePriceSig(brand?: string, product?: string, variant?: string, shippingCents?: number): string {
+export function makePriceSig(brand?: string, product?: string, variant?: string): string {
   const pieces = [sanitizeSigPart(brand), sanitizeSigPart(product), sanitizeSigPart(variant)];
-  
-  // Include shipping cost in cache key to avoid stale prices when policy changes
-  if (typeof shippingCents === 'number') {
-    pieces.push(`ship${shippingCents}`);
-  }
-  
   const joined = pieces.join("|").replace(/\|{2,}/g, "|");
   return joined.replace(/^\|+|\|+$/g, "").trim();
 }

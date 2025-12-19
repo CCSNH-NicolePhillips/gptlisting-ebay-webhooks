@@ -68,18 +68,19 @@ describe('price-lookup.ts', () => {
   describe('lookupPrice', () => {
     describe('Cache behavior', () => {
       it('should return cached price if available', async () => {
-        const cachedDecision = {
-          ok: true,
+        const cachedData = {
+          msrpCents: 2599, // $25.99 MSRP
           chosen: {
             source: 'brand-msrp' as const,
             price: 25.99,
             currency: 'USD',
+            shippingCents: 600,
           },
           candidates: [],
-          recommendedListingPrice: 23.39,
+          cachedAt: Date.now(),
         };
 
-        mockGetCachedPrice.mockResolvedValue(cachedDecision);
+        mockGetCachedPrice.mockResolvedValue(cachedData);
 
         const input: PriceLookupInput = {
           title: 'Test Product',
@@ -88,7 +89,12 @@ describe('price-lookup.ts', () => {
 
         const result = await lookupPrice(input);
 
-        expect(result).toEqual(cachedDecision);
+        // Should compute price from cached MSRP with default settings (10% discount, $6 shipping)
+        // ALGO_COMPETITIVE_TOTAL: Target = ($25.99 + $6.00) × 0.9 = $28.79
+        // eBay item price = $28.79 - $6.00 = $22.79
+        expect(result.ok).toBe(true);
+        expect(result.chosen).toEqual(cachedData.chosen);
+        expect(result.recommendedListingPrice).toBeCloseTo(22.79, 2);
         expect(mockGetCachedPrice).toHaveBeenCalledWith('Test Brand:Test Product');
         expect(mockFetchSoldStats).not.toHaveBeenCalled(); // Should not make API calls
       });
@@ -440,11 +446,14 @@ describe('price-lookup.ts', () => {
 
         await lookupPrice(input);
 
+        // Should cache MSRP (not computed price)
         expect(mockSetCachedPrice).toHaveBeenCalledWith(
           'Test Brand:Test Product',
           expect.objectContaining({
-            ok: true,
-            recommendedListingPrice: expect.any(Number),
+            msrpCents: expect.any(Number),
+            chosen: expect.any(Object),
+            candidates: expect.any(Array),
+            cachedAt: expect.any(Number),
           })
         );
       });

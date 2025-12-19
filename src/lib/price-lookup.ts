@@ -5,7 +5,7 @@ import { fetchSoldPriceStats, type SoldPriceStats } from "./pricing/ebay-sold-pr
 import { openai } from "./openai.js";
 import { getCachedPrice, setCachedPrice, makePriceSig } from "./price-cache.js";
 import { computeEbayItemPrice } from "./pricing-compute.js";
-import type { PricingSettings } from "./pricing-config.js";
+import { getDefaultPricingSettings, type PricingSettings } from "./pricing-config.js";
 
 // ============================================================================
 // URL VARIATION HELPERS
@@ -106,6 +106,9 @@ export interface PriceDecision {
   candidates: PriceSourceDetail[];
   recommendedListingPrice?: number;
   reason?: string;
+  // Cached MSRP data (not computed price)
+  msrpCents?: number;
+  cachedAt?: number;
 }
 
 // ============================================================================
@@ -503,16 +506,37 @@ export async function lookupPrice(
 ): Promise<PriceDecision> {
   console.log(`[price] Starting lookup for: "${input.title}"${input.brand ? ` (${input.brand})` : ''}${input.upc ? ` [${input.upc}]` : ''}`);
 
-  // Check cache first
-  // Include shipping cost in cache key so free vs paid shipping policies get separate caches
-  const shippingCents = input.pricingSettings?.templateShippingEstimateCents;
-  const cacheKey = makePriceSig(input.brand, input.title, undefined, shippingCents);
+  // Check cache first - cache stores MSRP data, we compute price with current user settings
+  const cacheKey = makePriceSig(input.brand, input.title);
+  
   try {
     const cached = await getCachedPrice(cacheKey);
     
-    if (cached?.recommendedListingPrice) {
-      console.log(`[price] ✓ Using cached price: $${cached.recommendedListingPrice.toFixed(2)} (source: ${cached.chosen?.source || 'unknown'})`);
-      return cached as PriceDecision;
+    if (cached?.msrpCents && cached?.chosen) {
+      console.log(`[price] ✓ Using cached MSRP: $${(cached.msrpCents / 100).toFixed(2)} (source: ${cached.chosen.source})`);
+      
+      // Compute final price using current user settings
+      const settings = input.pricingSettings || getDefaultPricingSettings();
+      const shippingCents = cached.chosen.shippingCents ?? settings.templateShippingEstimateCents ?? 600;
+      
+      const pricingResult = computeEbayItemPrice({
+        amazonItemPriceCents: cached.msrpCents,
+        amazonShippingCents: shippingCents,
+        discountPercent: settings.discountPercent,
+        shippingStrategy: settings.shippingStrategy,
+        templateShippingEstimateCents: settings.templateShippingEstimateCents,
+        shippingSubsidyCapCents: settings.shippingSubsidyCapCents,
+      });
+      
+      const finalPrice = pricingResult.ebayItemPriceCents / 100;
+      console.log(`[price] ✓ Computed from cached MSRP: $${finalPrice.toFixed(2)} with current user settings`);
+      
+      return {
+        ok: true,
+        chosen: cached.chosen,
+        candidates: cached.candidates || [],
+        recommendedListingPrice: finalPrice,
+      } as PriceDecision;
     }
   } catch (error) {
     console.warn('[price] Cache read error, proceeding without cache:', error);
@@ -830,9 +854,21 @@ export async function lookupPrice(
   if (decision.ok && decision.chosen && decision.recommendedListingPrice) {
     console.log(`[price] ✓ Final decision: source=${decision.chosen.source} base=$${decision.chosen.price.toFixed(2)} final=$${decision.recommendedListingPrice.toFixed(2)}`);
     
-    // Cache the successful result
-    await setCachedPrice(cacheKey, decision);
-    console.log(`[price] ✓ Cached result for future lookups (30-day TTL)`);
+    // Cache MSRP data (not computed price) so pricing logic can be applied with any user settings
+    try {
+      const msrpCents = Math.round(decision.chosen.price * 100);
+      
+      await setCachedPrice(cacheKey, {
+        msrpCents,
+        chosen: decision.chosen,
+        candidates: decision.candidates,
+        cachedAt: Date.now(),
+      });
+      
+      console.log(`[price] ✓ Cached MSRP ($${decision.chosen.price.toFixed(2)}) for future lookups (30-day TTL)`);
+    } catch (err) {
+      console.warn(`[price] Failed to cache MSRP:`, err);
+    }
   }
 
   return decision;
