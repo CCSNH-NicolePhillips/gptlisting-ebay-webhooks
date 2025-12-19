@@ -773,6 +773,12 @@
     const $ = (id) => document.getElementById(id);
     const exec = window.authClient?.authFetch || fetch;
 
+    const MAX_UPLOAD_FILE_BYTES = 3 * 1024 * 1024; // ~3MB file ≈ 4MB base64
+    const MAX_UPLOAD_BASE64_BYTES = 4 * 1024 * 1024; // keep requests <6MB once wrapped in JSON
+    const MAX_IMAGE_DIMENSION = 3000; // cap mega-photos from Dropbox camera without losing detail
+    const MIN_JPEG_QUALITY = 0.6;
+    const JPEG_QUALITY_STEP = 0.1;
+
     let currentJobId = null;
     let selectedFolder = null;
     let selectedFiles = [];
@@ -984,6 +990,106 @@
       return data;
     }
 
+    function blobToBase64(blob) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result;
+          if (typeof result !== 'string') {
+            reject(new Error('Failed to read file as data URL'));
+            return;
+          }
+          const commaIdx = result.indexOf(',');
+          resolve(commaIdx >= 0 ? result.slice(commaIdx + 1) : result);
+        };
+        reader.onerror = () => reject(reader.error || new Error('File read failed'));
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    function loadImageElement(blob) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(blob);
+        img.onload = () => {
+          URL.revokeObjectURL(url);
+          resolve(img);
+        };
+        img.onerror = (err) => {
+          URL.revokeObjectURL(url);
+          reject(err || new Error('Image load failed'));
+        };
+        img.src = url;
+      });
+    }
+
+    function canvasToBase64(canvas, quality) {
+      return new Promise((resolve, reject) => {
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            reject(new Error('Canvas toBlob() returned null'));
+            return;
+          }
+          blobToBase64(blob).then(resolve).catch(reject);
+        }, 'image/jpeg', quality);
+      });
+    }
+
+    async function compressImageFile(file) {
+      const img = await loadImageElement(file);
+      const longestSide = Math.max(img.width, img.height);
+      const scale = longestSide > MAX_IMAGE_DIMENSION ? MAX_IMAGE_DIMENSION / longestSide : 1;
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas context unavailable');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      let quality = 0.9;
+      let lastBase64 = '';
+      while (quality >= MIN_JPEG_QUALITY - 0.001) {
+        const base64 = await canvasToBase64(canvas, quality);
+        lastBase64 = base64;
+        if (base64.length <= MAX_UPLOAD_BASE64_BYTES) {
+          console.info('[Quick List] Compressed %s to %s MB (quality=%s, scale=%s)', file.name, (base64.length / 1_048_576).toFixed(2), quality.toFixed(2), scale.toFixed(2));
+          return { base64, mime: 'image/jpeg' };
+        }
+        quality -= JPEG_QUALITY_STEP;
+      }
+
+      if (lastBase64 && lastBase64.length <= MAX_UPLOAD_BASE64_BYTES) {
+        return { base64: lastBase64, mime: 'image/jpeg' };
+      }
+
+      throw new Error(`${file.name} is too large even after compression. Please resize or split the file and try again.`);
+    }
+
+    async function prepareFileForUpload(file) {
+      const mime = file.type || 'application/octet-stream';
+      const isImage = mime.startsWith('image/');
+      const isJpeg = /jpe?g$/i.test(mime);
+
+      if (!isImage) {
+        const base64 = await blobToBase64(file);
+        if (base64.length > MAX_UPLOAD_BASE64_BYTES) {
+          throw new Error(`${file.name} is too large (${(base64.length / 1_048_576).toFixed(1)} MB). Please use a smaller file.`);
+        }
+        return { base64, mime };
+      }
+
+      if (isJpeg && file.size <= MAX_UPLOAD_FILE_BYTES) {
+        const base64 = await blobToBase64(file);
+        if (base64.length <= MAX_UPLOAD_BASE64_BYTES) {
+          return { base64, mime };
+        }
+      }
+
+      return compressImageFile(file);
+    }
+
     async function loadFolders() {
       try {
         const data = await fetchJSON('/.netlify/functions/dropbox-list-folders');
@@ -1037,20 +1143,16 @@
     // Upload files in batches to avoid payload limits
     async function uploadFilesInBatches(files) {
       // Keep each POST well under Netlify's 6MB limit (base64 payload grows quickly)
-      const MAX_BATCH_SIZE_BYTES = 2 * 1024 * 1024; // 2MB per batch caps requests around ~2.7MB
+      const MAX_BATCH_SIZE_BYTES = 2 * 1024 * 1024; // ≈2MB raw data → <3MB JSON payload
       const allUploadedFiles = [];
 
-      // Prepare file data with base64 encoding
+      // Prepare file data with base64 encoding + adaptive compression for mega-photos
       const fileData = await Promise.all(files.map(async (file) => {
-        const base64 = await new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result.split(',')[1]);
-          reader.readAsDataURL(file);
-        });
+        const { base64, mime } = await prepareFileForUpload(file);
 
         return {
           name: file.name,
-          mime: file.type,
+          mime,
           data: base64,
           base64Size: base64.length,
         };
