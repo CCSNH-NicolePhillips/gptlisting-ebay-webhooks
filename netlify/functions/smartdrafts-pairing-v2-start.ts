@@ -88,6 +88,47 @@ async function listDropboxImages(accessToken: string, folder: string): Promise<s
     .map((entry: any) => entry.path_display || entry.path_lower);
 }
 
+/**
+ * Get temporary download links for Dropbox files
+ */
+async function getDropboxTemporaryLinks(accessToken: string, paths: string[]): Promise<string[]> {
+  const links: string[] = [];
+  
+  // Get temp links in parallel (batch of 25 at a time to avoid rate limits)
+  for (let i = 0; i < paths.length; i += 25) {
+    const batch = paths.slice(i, i + 25);
+    const batchPromises = batch.map(async (path) => {
+      try {
+        const response = await fetch("https://api.dropboxapi.com/2/files/get_temporary_link", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ path }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`Failed to get temp link for ${path}: ${response.status} ${errorText}`);
+          return null;
+        }
+
+        const data: any = await response.json();
+        return data.link;
+      } catch (err) {
+        console.error(`Error getting temp link for ${path}:`, err);
+        return null;
+      }
+    });
+
+    const batchLinks = await Promise.all(batchPromises);
+    links.push(...batchLinks.filter((link): link is string => link !== null));
+  }
+
+  return links;
+}
+
 export const handler: Handler = async (event) => {
   const originHdr = {};
 
@@ -150,9 +191,21 @@ export const handler: Handler = async (event) => {
       samplePaths: imagePaths.slice(0, 3),
     });
 
+    // Get temporary download links for all images
+    const tempLinks = await getDropboxTemporaryLinks(accessToken, imagePaths);
+
+    if (tempLinks.length === 0) {
+      return json(500, { error: "Failed to get temporary links for any images" }, originHdr);
+    }
+
+    console.log("[smartdrafts-pairing-v2-start] Got temporary links", {
+      count: tempLinks.length,
+      sampleLinks: tempLinks.slice(0, 2).map(link => link.substring(0, 80) + "..."),
+    });
+
     // Schedule the job (returns immediately with job ID)
-    // Pass Dropbox paths and access token for background download
-    const jobId = await schedulePairingV2Job(userAuth.userId, folder, imagePaths, accessToken);
+    // Pass temp links as dropboxPaths for background download
+    const jobId = await schedulePairingV2Job(userAuth.userId, folder, tempLinks, accessToken);
 
     console.log("[smartdrafts-pairing-v2-start] Job scheduled:", jobId);
 
@@ -162,7 +215,7 @@ export const handler: Handler = async (event) => {
         ok: true,
         jobId,
         message: "Pairing-v2 job started",
-        imageCount: imagePaths.length,
+        imageCount: tempLinks.length,
       },
       originHdr
     );

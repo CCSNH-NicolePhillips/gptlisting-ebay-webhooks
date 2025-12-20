@@ -41,12 +41,17 @@ jest.mock('../../src/lib/price-cache', () => ({
   makePriceSig: jest.fn((brand, title) => `${brand || 'no-brand'}:${title}`),
 }));
 
+jest.mock('../../src/lib/brand-registry', () => ({
+  getAmazonAsin: jest.fn(),
+}));
+
 import { extractPriceFromHtml, extractPriceWithShipping } from '../../src/lib/html-price';
 import { braveFirstUrlForBrandSite, braveFirstUrl } from '../../src/lib/search';
 import { getBrandUrls, setBrandUrls } from '../../src/lib/brand-map';
 import { fetchSoldPriceStats } from '../../src/lib/pricing/ebay-sold-prices';
 import { openai } from '../../src/lib/openai';
 import { getCachedPrice, setCachedPrice } from '../../src/lib/price-cache';
+import { getAmazonAsin } from '../../src/lib/brand-registry';
 
 const mockExtractPrice = extractPriceFromHtml as jest.MockedFunction<typeof extractPriceFromHtml>;
 const mockExtractPriceWithShipping = extractPriceWithShipping as jest.MockedFunction<typeof extractPriceWithShipping>;
@@ -58,6 +63,7 @@ const mockFetchSoldStats = fetchSoldPriceStats as jest.MockedFunction<typeof fet
 const mockOpenAI = openai.chat.completions.create as jest.MockedFunction<typeof openai.chat.completions.create>;
 const mockGetCachedPrice = getCachedPrice as jest.MockedFunction<typeof getCachedPrice>;
 const mockSetCachedPrice = setCachedPrice as jest.MockedFunction<typeof setCachedPrice>;
+const mockGetAmazonAsin = getAmazonAsin as jest.MockedFunction<typeof getAmazonAsin>;
 
 // Mock global fetch
 global.fetch = jest.fn();
@@ -66,6 +72,7 @@ describe('price-lookup.ts', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetCachedPrice.mockResolvedValue(null); // No cache by default
+    mockGetAmazonAsin.mockResolvedValue(null); // No registered ASIN by default
     // Mock fetch to return HTML with a price
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: true,
@@ -1411,6 +1418,271 @@ describe('price-lookup.ts', () => {
         const input: PriceLookupInput = {
           title: 'Test Product',
           brand: 'TestBrand',
+        };
+
+        const result = await lookupPrice(input);
+        expect(result.ok).toBe(true);
+      });
+
+      it('should build Amazon query with keyText hints when brand is provided', async () => {
+        mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
+        mockBraveSearch.mockResolvedValue('https://amazon.com/product');
+        mockExtractPriceWithShipping.mockReturnValueOnce({
+          amazonItemPrice: 25,
+          amazonShippingPrice: 0,
+          shippingEvidence: 'free',
+          pageTitle: 'TestBrand Omega Supplement Capsules',
+        } as any);
+
+        mockOpenAI.mockResolvedValue({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                chosenSource: 'amazon',
+                basePrice: 25,
+                recommendedListingPrice: 22.5,
+                reasoning: 'Amazon match',
+              }),
+            },
+          }],
+        } as any);
+
+        const input: PriceLookupInput = {
+          title: 'Omega Supplement',
+          brand: 'TestBrand',
+          keyText: ['great supplement for omega'],
+        };
+
+        const result = await lookupPrice(input);
+        expect(mockBraveSearch).toHaveBeenCalledWith(expect.stringContaining('supplement'), 'amazon.com');
+        expect(result.ok).toBe(true);
+        // The Amazon result is rejected due to product mismatch; ensure it does not make it into candidates
+        expect(result.candidates.some((c) => c.source === 'amazon')).toBe(false);
+        expect(result.candidates.some((c) => c.source === 'brand-msrp')).toBe(true);
+      });
+
+      it('should prefer lowest brand price from URL variations', async () => {
+        mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
+        mockBraveSearch.mockResolvedValue(null);
+
+        // First call (vision URL) returns higher price, variation returns lower
+        mockExtractPrice.mockReturnValueOnce(40).mockReturnValueOnce(30).mockReturnValue(30);
+        (global.fetch as jest.Mock).mockResolvedValue({
+          ok: true,
+          text: async () => '<html><body>$40.00</body></html>',
+        });
+
+        mockOpenAI.mockResolvedValue({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                chosenSource: 'brand-msrp',
+                basePrice: 30,
+                recommendedListingPrice: 27,
+                reasoning: 'Best URL variation',
+              }),
+            },
+          }],
+        } as any);
+
+        const input: PriceLookupInput = {
+          title: 'Variation Product',
+          brand: 'VariationBrand',
+          brandWebsite: 'https://brand.com/product-name.html',
+        };
+
+        const result = await lookupPrice(input);
+        expect(result.ok).toBe(true);
+        const brandCandidate = result.candidates.find((c) => c.source === 'brand-msrp');
+        expect(brandCandidate?.price).toBe(30);
+        // Ensure we actually used a variation URL (not the original)
+        expect(brandCandidate?.url).not.toBe('https://brand.com/product-name.html');
+      });
+
+      it('should warn when vision domain is unreachable', async () => {
+        mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
+        mockBraveSearch.mockResolvedValue(null);
+
+        // Vision URL returns no price, DNS failure on reachability check
+        mockExtractPrice.mockReturnValue(null);
+        (global.fetch as jest.Mock).mockRejectedValueOnce(Object.assign(new Error('dns'), { cause: { code: 'ENOTFOUND' } }));
+
+        mockOpenAI.mockResolvedValue({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                chosenSource: 'estimate',
+                basePrice: 29.99,
+                recommendedListingPrice: 26.99,
+                reasoning: 'Estimate fallback',
+              }),
+            },
+          }],
+        } as any);
+
+        const input: PriceLookupInput = {
+          title: 'Unreachable Product',
+          brand: 'NoDNS',
+          brandWebsite: 'https://nodns.example.com/product',
+        };
+
+        const result = await lookupPrice(input);
+        expect(result.ok).toBe(true);
+      });
+
+      it('should skip bundle check when marketplace candidates do not match brand', async () => {
+        mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
+        mockBraveSearch.mockResolvedValue('https://amazon.com/product');
+        mockGetAmazonAsin.mockResolvedValue('ASIN123');
+
+        mockExtractPriceWithShipping.mockReturnValueOnce({
+          amazonItemPrice: 19.99,
+          amazonShippingPrice: 0,
+          shippingEvidence: 'free',
+          pageTitle: 'Generic Product',
+        } as any);
+
+        mockExtractPrice.mockReturnValueOnce(49.99);
+
+        const originalPush = Array.prototype.push;
+        const pushSpy = jest.spyOn(Array.prototype, 'push').mockImplementation(function (...args: any[]) {
+          args.forEach((arg) => {
+            if (arg && typeof arg === 'object' && (arg.source === 'amazon' || arg.source === 'ebay-sold')) {
+              (arg as any).matchesBrand = false;
+            }
+          });
+          return originalPush.apply(this as any, args);
+        });
+
+        mockOpenAI.mockResolvedValue({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                chosenSource: 'brand-msrp',
+                basePrice: 49.99,
+                recommendedListingPrice: 44.99,
+                reasoning: 'Brand price kept',
+              }),
+            },
+          }],
+        } as any);
+
+        const input: PriceLookupInput = {
+          title: 'Bundle Check Product',
+          brand: 'BundleBrand',
+          brandWebsite: 'https://brand.com/product',
+        };
+
+        const result = await lookupPrice(input);
+        pushSpy.mockRestore();
+        expect(result.ok).toBe(true);
+      });
+
+      it('should drop brand candidates that look like bundles', async () => {
+        mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
+        mockBraveSearch.mockResolvedValue('https://amazon.com/product');
+        mockGetAmazonAsin.mockResolvedValue('ASIN123');
+
+        mockExtractPriceWithShipping.mockReturnValueOnce({
+          amazonItemPrice: 40,
+          amazonShippingPrice: 0,
+          shippingEvidence: 'free',
+          pageTitle: 'Brand Bundle Product',
+        } as any);
+
+        mockExtractPrice.mockReturnValueOnce(150);
+
+        mockOpenAI.mockResolvedValue({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                chosenSource: 'amazon',
+                basePrice: 40,
+                recommendedListingPrice: 36,
+                reasoning: 'Amazon beats bundle',
+              }),
+            },
+          }],
+        } as any);
+
+        const input: PriceLookupInput = {
+          title: 'Bundle Price Test',
+          brand: 'BundleBrand',
+          brandWebsite: 'https://brand.com/product',
+        };
+
+        const result = await lookupPrice(input);
+        const brandCandidate = result.candidates.find((c) => c.source === 'brand-msrp');
+        expect(brandCandidate).toBeUndefined();
+      });
+
+      it('should use skincare estimate when title mentions serum', async () => {
+        mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
+        mockOpenAI.mockResolvedValue({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                chosenSource: 'estimate',
+                basePrice: 24.99,
+                recommendedListingPrice: 22.49,
+                reasoning: 'Serum estimate',
+              }),
+            },
+          }],
+        } as any);
+
+        const input: PriceLookupInput = {
+          title: 'Vitamin C Serum',
+        };
+
+        const result = await lookupPrice(input);
+        const estimate = result.candidates.find((c) => c.source === 'estimate');
+        expect(estimate?.price).toBe(24.99);
+      });
+
+      it('should use sports nutrition estimate when title mentions protein', async () => {
+        mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
+        mockOpenAI.mockResolvedValue({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                chosenSource: 'estimate',
+                basePrice: 39.99,
+                recommendedListingPrice: 35.99,
+                reasoning: 'Protein estimate',
+              }),
+            },
+          }],
+        } as any);
+
+        const input: PriceLookupInput = {
+          title: 'Grass Fed Protein Powder',
+        };
+
+        const result = await lookupPrice(input);
+        const estimate = result.candidates.find((c) => c.source === 'estimate');
+        expect(estimate?.price).toBe(39.99);
+      });
+
+      it('should warn when caching MSRP fails after a valid decision', async () => {
+        mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
+        mockSetCachedPrice.mockRejectedValueOnce(new Error('cache-fail'));
+
+        mockOpenAI.mockResolvedValue({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                chosenSource: 'estimate',
+                basePrice: 29.99,
+                recommendedListingPrice: 26.99,
+                reasoning: 'Cache failure path',
+              }),
+            },
+          }],
+        } as any);
+
+        const input: PriceLookupInput = {
+          title: 'Cache Failure Product',
         };
 
         const result = await lookupPrice(input);

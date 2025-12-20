@@ -3,7 +3,7 @@
  * Target: 100% code coverage for price extraction logic
  */
 
-import { extractPriceFromHtml } from '../../src/lib/html-price';
+import { extractPriceFromHtml, extractPriceWithShipping } from '../../src/lib/html-price';
 
 describe('html-price.ts', () => {
   describe('extractPriceFromHtml', () => {
@@ -364,6 +364,58 @@ describe('html-price.ts', () => {
         // Title says "2pk" but body shows "Pack of 4"
         // Should use "Pack of 4" from body: $43.00 ÷ 4 = $10.75
         expect(price).toBeCloseTo(10.75, 1);
+      });
+    });
+
+    describe('extractPriceWithShipping', () => {
+      it('should flag free shipping when detected in body text', () => {
+        const html = `
+          <html>
+            <body>FREE Shipping on orders over $25</body>
+            <script type="application/ld+json">{
+              "@type": "Product",
+              "offers": { "price": "20.00", "priceCurrency": "USD" }
+            }</script>
+          </html>
+        `;
+
+        const result = extractPriceWithShipping(html);
+        expect(result.amazonItemPrice).toBe(20);
+        expect(result.amazonShippingPrice).toBe(0);
+        expect(result.shippingEvidence).toBe('free');
+      });
+
+      it('should parse paid shipping from common selectors', () => {
+        const html = `
+          <html>
+            <div id="ourprice_shippingmessage">$5.99 shipping</div>
+            <script type="application/ld+json">{
+              "@type": "Product",
+              "offers": { "price": "18.00", "priceCurrency": "USD" }
+            }</script>
+          </html>
+        `;
+
+        const result = extractPriceWithShipping(html);
+        expect(result.amazonItemPrice).toBe(18);
+        expect(result.amazonShippingPrice).toBe(5.99);
+        expect(result.shippingEvidence).toBe('paid');
+      });
+
+      it('should default shippingEvidence to unknown when no signals found', () => {
+        const html = `
+          <html>
+            <script type="application/ld+json">{
+              "@type": "Product",
+              "offers": { "price": "15.00", "priceCurrency": "USD" }
+            }</script>
+          </html>
+        `;
+
+        const result = extractPriceWithShipping(html);
+        expect(result.amazonItemPrice).toBe(15);
+        expect(result.amazonShippingPrice).toBe(0);
+        expect(result.shippingEvidence).toBe('unknown');
       });
     });
 

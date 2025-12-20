@@ -155,9 +155,10 @@ function normalizeBrand(str?: string | null): string | null {
  */
 async function fetchHtml(url: string | null | undefined, timeoutMs = 10000): Promise<{ html: string | null; isDnsFailure: boolean }> {
   if (!url) return { html: null, isDnsFailure: false };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
     const res = await fetch(url, {
       signal: controller.signal,
       headers: {
@@ -165,7 +166,6 @@ async function fetchHtml(url: string | null | undefined, timeoutMs = 10000): Pro
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
       },
     });
-    clearTimeout(timer);
     if (!res.ok) {
       console.warn(`[fetchHtml] HTTP ${res.status} ${res.statusText} for ${url}`);
       return { html: null, isDnsFailure: false };
@@ -176,6 +176,8 @@ async function fetchHtml(url: string | null | undefined, timeoutMs = 10000): Pro
     const isDnsFailure = err?.cause?.code === 'ENOTFOUND';
     console.warn("fetchHtml failed", { url, err });
     return { html: null, isDnsFailure };
+  } finally {
+    clearTimeout(timer);
   }
 }
 
