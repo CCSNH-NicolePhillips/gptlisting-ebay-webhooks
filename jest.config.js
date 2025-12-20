@@ -20,7 +20,6 @@ export default {
   testMatch: ['**/tests/**/*.test.ts'],
   testPathIgnorePatterns: [
     '/node_modules/',
-    'smartdrafts-scan-core.test.ts',
     '\\.d\\.ts$'
   ],
   collectCoverage: true,

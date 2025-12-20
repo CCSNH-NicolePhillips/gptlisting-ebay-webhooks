@@ -791,6 +791,7 @@
     let currentJobId = null;
     let selectedFolder = null;
     let selectedFiles = [];
+    let selectedDropboxFiles = [];
     let uploadMethod = 'local'; // 'local' or 'dropbox'
     let uploadMode = 'files'; // 'files' or 'folder' (for local uploads)
 
@@ -1160,23 +1161,28 @@
         // Update UI with file count
         $('dropboxFileCount').textContent = imageFiles.length;
         
+        // Store the selected files
+        selectedDropboxFiles = imageFiles;
+        
         // Display file list (no thumbnails needed for Dropbox)
         const fileList = $('dropboxFileList');
         $('dropboxPreview').style.display = 'block';
 
-        // Render file list matching local upload style
-        fileList.innerHTML = imageFiles.map((file, idx) => {
+        // Get thumbnail URLs and render file list
+        const filesWithThumbnails = await getDropboxThumbnails(imageFiles);
+        
+        fileList.innerHTML = filesWithThumbnails.map((file, idx) => {
           // Parse size from bytes to MB
-          const sizeMB = file.size ? (file.size / 1024 / 1024).toFixed(2) : '?';
+          const sizeMB = imageFiles[idx].size ? (imageFiles[idx].size / 1024 / 1024).toFixed(2) : '?';
           
           return `
             <div class="file-item">
-              <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='50' height='50'%3E%3Crect fill='%234a5568' width='50' height='50' rx='4'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='white' font-size='24'%3E📷%3C/text%3E%3C/svg%3E" class="file-thumbnail" alt="">
+              <img src="${file.thumbnailUrl || 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'50\' height=\'50\'%3E%3Crect fill=\'%234a5568\' width=\'50\' height=\'50\' rx=\'4\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'white\' font-size=\'24\'%3E📷%3C/text%3E%3C/svg%3E'}" class="file-thumbnail" alt="">
               <div class="file-info">
                 <div class="file-name">${file.name}</div>
                 <div class="file-size">${sizeMB} MB</div>
               </div>
-              <button class="file-remove" onclick="removeDropboxFile(${idx})" style="visibility: hidden;">Remove</button>
+              <button class="file-remove" onclick="removeDropboxFile(${idx})">Remove</button>
             </div>
           `;
         }).join('');
@@ -1190,11 +1196,55 @@
       }
     }
 
+    async function getDropboxThumbnails(files) {
+      try {
+        // Request temporary links for thumbnails in batch
+        const response = await fetch('/.netlify/functions/dropbox-get-thumbnails', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ files: files.map(f => f.path_lower) })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to get thumbnails');
+        }
+
+        const data = await response.json();
+        
+        // Map thumbnail URLs to files
+        return files.map((file, index) => ({
+          name: file.name,
+          path: file.path_lower,
+          thumbnailUrl: data.thumbnails?.[index]?.link || null
+        }));
+
+      } catch (err) {
+        console.error('Error getting thumbnails:', err);
+        // Return files without thumbnails
+        return files.map(file => ({
+          name: file.name,
+          path: file.path_lower,
+          thumbnailUrl: null
+        }));
+      }
+    }
+
+    function removeDropboxFile(index) {
+      selectedDropboxFiles.splice(index, 1);
+      if (selectedDropboxFiles.length === 0) {
+        clearDropboxSelection();
+      } else {
+        // Re-render the file list
+        loadDropboxFolderPreview();
+      }
+    }
+
     function clearDropboxSelection() {
       $('folderSelect').value = '';
       $('dropboxPreview').style.display = 'none';
       $('btnStart').disabled = true;
       selectedFolder = null;
+      selectedDropboxFiles = [];
     }
 
     function updateStep(num, status) {

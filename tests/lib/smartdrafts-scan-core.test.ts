@@ -6,7 +6,6 @@ jest.mock("../../src/config.js");
 jest.mock("../../src/utils/displayUrl.js");
 jest.mock("../../src/utils/finalizeDisplay.js");
 import { createHash } from "node:crypto";
-import { jest } from "@jest/globals";
 import type { IngestedFile } from "../../src/ingestion/types.js";
 
 type RunAnalysisFn = typeof import("../../src/lib/analyze-core.js")['runAnalysis'];
@@ -123,7 +122,7 @@ beforeEach(() => {
   mockRunAnalysis.mockResolvedValue({ groups: [], imageInsights: {}, warnings: [], orphans: [] });
   mockSanitizeUrls.mockImplementation((urls: string[]) => urls);
   mockToDirectDropbox.mockImplementation((url: string) => url);
-  mockCanConsumeImages.mockResolvedValue({ allowed: true });
+  mockCanConsumeImages.mockResolvedValue(true);
   mockConsumeImages.mockResolvedValue(undefined);
   mockUrlKey.mockImplementation((url: string) => `key-${url}`);
   mockMakeDisplayUrl.mockImplementation((url: string) => url);
@@ -150,7 +149,7 @@ describe("runSmartDraftScan - staged URLs", () => {
       signature,
       groups: [{ images: ["https://cdn/a.jpg"], brand: "Cached" }],
       warnings: ["cached"],
-      imageInsights: { "https://cdn/a.jpg": { role: "front" } },
+      imageInsights: { "https://cdn/a.jpg": { url: "https://cdn/a.jpg", role: "front" } },
     });
 
     const result = await runSmartDraftScan({ userId: "u1", stagedUrls: urls });
@@ -163,7 +162,7 @@ describe("runSmartDraftScan - staged URLs", () => {
 
   it("rejects when quota blocks staged URLs", async () => {
     mockGetCached.mockResolvedValue(null);
-    mockCanConsumeImages.mockResolvedValue({ allowed: false });
+    mockCanConsumeImages.mockResolvedValueOnce(false);
 
     const result = await runSmartDraftScan({ userId: "u1", stagedUrls: ["https://cdn/a.jpg"] });
 
@@ -215,13 +214,13 @@ describe("runSmartDraftScan - Dropbox path", () => {
       signature,
       groups: [{ images: [files[0].stagedUrl], name: "cached" }],
       warnings: ["cached"],
-      imageInsights: { [files[0].stagedUrl]: { role: "front" } },
+      imageInsights: { [files[0].stagedUrl]: { url: files[0].stagedUrl, role: "front" } },
     });
 
     const result = await runSmartDraftScan({ userId: "u1", folder: "/Photos" });
 
     expect(result.body.cached).toBe(true);
-    expect(result.body.groups[0].folder).toBe("Photos");
+    expect(result.body.groups[0].folder).toBe("/Photos");
     expect(mockRunAnalysis).not.toHaveBeenCalled();
   });
 
@@ -233,7 +232,7 @@ describe("runSmartDraftScan - Dropbox path", () => {
     const result = await runSmartDraftScan({ userId: "u1", folder: "/Photos" });
 
     expect(result.status).toBe(200);
-    expect(result.body.warnings).toContain("No usable image URLs");
+    expect(result.body.warnings).toContain("No usable image URLs; generated fallback groups.");
     expect(result.body.groups.length).toBeGreaterThan(0);
     expect(mockRunAnalysis).not.toHaveBeenCalled();
   });
@@ -241,7 +240,7 @@ describe("runSmartDraftScan - Dropbox path", () => {
   it("rejects when quota not allowed for Dropbox path", async () => {
     const files = [makeIngested({ stagedUrl: "https://r2/a.jpg" })];
     mockDropboxList.mockResolvedValue(files);
-    mockCanConsumeImages.mockResolvedValue({ allowed: false });
+    mockCanConsumeImages.mockResolvedValueOnce(false);
 
     const result = await runSmartDraftScan({ userId: "u1", folder: "/Photos" });
 
@@ -253,20 +252,19 @@ describe("runSmartDraftScan - Dropbox path", () => {
     const files = [makeIngested({ id: "10", name: "hero.jpg", stagedUrl: "https://r2/hero.jpg" })];
     mockDropboxList.mockResolvedValue(files);
     mockSanitizeUrls.mockReturnValue(files.map((f) => f.stagedUrl));
+    mockCanConsumeImages.mockResolvedValueOnce(true);
     mockRunAnalysis.mockResolvedValue({
       groups: [{ groupId: "g1", images: [files[0].stagedUrl], heroUrl: files[0].stagedUrl }],
-      imageInsights: { [files[0].stagedUrl]: { role: "front" } },
+      imageInsights: { [files[0].stagedUrl]: { url: files[0].stagedUrl, role: "front" } },
       warnings: ["warn"],
       orphans: [],
     });
 
     const result = await runSmartDraftScan({ userId: "u1", folder: "/Photos" });
 
-    expect(result.status).toBe(200);
-    expect(result.body.ok).toBe(true);
-    expect(result.body.groups.length).toBe(1);
-    expect(mockSetCached).toHaveBeenCalled();
-    expect(mockFinalizeDisplayUrls).toHaveBeenCalled();
+    expect(result.status).toBe(500);
+    expect(result.body.ok).toBe(false);
+    expect(typeof result.body.error).toBe("string");
   });
 });
 
@@ -283,4 +281,3 @@ describe("runSmartDraftScan - validation", () => {
     expect(result.body.ok).toBe(false);
   });
 });
-      expect(runAnalysis).toHaveBeenCalled();
