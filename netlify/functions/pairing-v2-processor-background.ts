@@ -229,11 +229,15 @@ export const handler: Handler = async (event) => {
         const pairsWithUrls = await Promise.all(result.pairs.map(async (p) => {
           let frontUrl: string;
           let backUrl: string;
+          let side1Url: string | undefined;
+          let side2Url: string | undefined;
           
           if (uploadMethod === "dropbox") {
             // Dropbox mode: Create Dropbox shared links
             const frontPath = `${job.folder}/${path.basename(p.front)}`;
             const backPath = `${job.folder}/${path.basename(p.back)}`;
+            const side1Path = p.side1 ? `${job.folder}/${path.basename(p.side1)}` : null;
+            const side2Path = p.side2 ? `${job.folder}/${path.basename(p.side2)}` : null;
             
             // Helper to get or create share link
             const getShareLink = async (dropboxPath: string): Promise<string> => {
@@ -287,18 +291,36 @@ export const handler: Handler = async (event) => {
               }
             };
             
+            // Get URLs for front and back (required)
             [frontUrl, backUrl] = await Promise.all([
               getShareLink(frontPath),
               getShareLink(backPath)
             ]);
+            
+            // Get URLs for side images (optional)
+            if (side1Path) {
+              side1Url = await getShareLink(side1Path);
+            }
+            if (side2Path) {
+              side2Url = await getShareLink(side2Path);
+            }
           } else {
             // Local mode: Use the staged URLs directly
             const frontFilename = path.basename(p.front);
             const backFilename = path.basename(p.back);
+            const side1Filename = p.side1 ? path.basename(p.side1) : null;
+            const side2Filename = p.side2 ? path.basename(p.side2) : null;
             
             // Find the corresponding staged URLs
             frontUrl = job.stagedUrls.find((url: string) => url.includes(frontFilename)) || '';
             backUrl = job.stagedUrls.find((url: string) => url.includes(backFilename)) || '';
+            
+            if (side1Filename) {
+              side1Url = job.stagedUrls.find((url: string) => url.includes(side1Filename)) || undefined;
+            }
+            if (side2Filename) {
+              side2Url = job.stagedUrls.find((url: string) => url.includes(side2Filename)) || undefined;
+            }
             
             if (!frontUrl || !backUrl) {
               console.warn(`[pairing-v2-processor] Could not find staged URLs for ${frontFilename} or ${backFilename}`);
@@ -308,17 +330,22 @@ export const handler: Handler = async (event) => {
           return {
             ...p,
             frontUrl,
-            backUrl
+            backUrl,
+            side1Url,
+            side2Url
           };
         }));
 
         // Convert full paths to basenames for storage
         const basenamePairs = pairsWithUrls.map(p => {
           const photoQty = p.photoQuantity || 1;
-          console.log(`[pairing-v2-processor] Storing pair: brand=${p.brand}, photoQuantity=${photoQty}`);
+          const imageCount = 2 + (p.side1 ? 1 : 0) + (p.side2 ? 1 : 0);
+          console.log(`[pairing-v2-processor] Storing pair: brand=${p.brand}, photoQuantity=${photoQty}, images=${imageCount}`);
           return {
             front: path.basename(p.front),
             back: path.basename(p.back),
+            side1: p.side1 ? path.basename(p.side1) : undefined,
+            side2: p.side2 ? path.basename(p.side2) : undefined,
             confidence: p.confidence,
             brand: p.brand,
             brandWebsite: p.brandWebsite,
@@ -327,8 +354,10 @@ export const handler: Handler = async (event) => {
             keyText: p.keyText || [], // Key text from product packaging
             categoryPath: p.categoryPath || null, // Vision category path (e.g., "Health & Personal Care > Vitamins & Dietary Supplements")
             photoQuantity: photoQty, // CHUNK 3: How many physical products visible in photo
-            frontUrl: p.frontUrl,  // Dropbox shareable link for front image
-            backUrl: p.backUrl,    // Dropbox shareable link for back image
+            frontUrl: p.frontUrl,  // Shareable link for front image
+            backUrl: p.backUrl,    // Shareable link for back image
+            side1Url: p.side1Url,  // Shareable link for side1 image (optional)
+            side2Url: p.side2Url,  // Shareable link for side2 image (optional)
           };
         });
 

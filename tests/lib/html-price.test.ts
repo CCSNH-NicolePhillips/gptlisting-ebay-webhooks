@@ -3,6 +3,7 @@
  * Target: 100% code coverage for price extraction logic
  */
 
+import * as cheerio from 'cheerio';
 import { extractPriceFromHtml, extractPriceWithShipping } from '../../src/lib/html-price';
 
 describe('html-price.ts', () => {
@@ -1566,6 +1567,107 @@ describe('html-price.ts', () => {
 
         const price = extractPriceFromHtml(html);
         expect(price).toBe(29.99); // OpenGraph wins
+      });
+    });
+
+    describe('Additional coverage scenarios', () => {
+      it('handles ProductGroup JSON-LD variants', () => {
+        const html = `
+          <html>
+            <title>Variant Product</title>
+            <script type="application/ld+json">
+            {
+              "@type": "ProductGroup",
+              "name": "Variant Product",
+              "hasVariant": [
+                { "@type": "Product", "name": "Variant Product Single", "offers": { "price": 15, "priceCurrency": "USD" } },
+                { "@type": "Product", "name": "Variant Product (Pack of 3)", "offers": { "price": 40, "priceCurrency": "USD" } }
+              ]
+            }
+            </script>
+          </html>
+        `;
+
+        const result = extractPriceWithShipping(html, 'Variant Product');
+        expect(result.amazonItemPrice).toBe(15);
+        expect(result.shippingEvidence).toBe('unknown');
+      });
+
+      it('uses highest JSON-style price when title words are absent', () => {
+        const html = `
+          <html>
+            <body>
+              <script>{"price": "39.95"}</script>
+              <script>{"price": "49.95"}</script>
+            </body>
+          </html>
+        `;
+
+        const result = extractPriceWithShipping(html, 'Unrelated Name');
+        expect(result.amazonItemPrice).toBe(49.95);
+      });
+
+      it('detects Amazon pack size from body text when selectors are missing', () => {
+        const html = `
+          <html>
+            <body>
+              <div>16 Fl Oz (Pack of 3)</div>
+            </body>
+            <script type="application/ld+json">
+            {
+              "@type": "Product",
+              "offers": { "price": "30.00" }
+            }
+            </script>
+          </html>
+        `;
+
+        const result = extractPriceWithShipping(html, 'Body Text Pack');
+        expect(result.amazonItemPrice).toBe(10); // 30 / 3-pack
+      });
+
+      it('rejects fallback price when below JSON-LD highest price threshold', () => {
+        const html = `
+          <html>
+            <body>
+              <div>Buy now for $10.00</div>
+              <script type="application/ld+json">
+              {
+                "@type": "Product",
+                "offers": [{ "@type": "Offer", "name": "Subscription", "price": 100 }]
+              }
+              </script>
+            </body>
+          </html>
+        `;
+
+        const result = extractPriceWithShipping(html, 'Threshold Check');
+        expect(result.amazonItemPrice).toBeNull();
+        expect(result.shippingEvidence).toBe('unknown');
+      });
+
+      it('returns safe defaults when cheerio.load throws', async () => {
+        jest.resetModules();
+
+        jest.doMock('cheerio', () => {
+          const actual = jest.requireActual<typeof import('cheerio')>('cheerio');
+          return {
+            ...actual,
+            load: () => {
+              throw new Error('boom');
+            }
+          };
+        });
+
+        const { extractPriceWithShipping: isolatedExtract } = await import('../../src/lib/html-price');
+
+        const result = isolatedExtract('<html></html>', 'Broken HTML');
+
+        expect(result.amazonItemPrice).toBeNull();
+        expect(result.amazonShippingPrice).toBe(0);
+        expect(result.shippingEvidence).toBe('unknown');
+
+        jest.dontMock('cheerio');
       });
     });
   });

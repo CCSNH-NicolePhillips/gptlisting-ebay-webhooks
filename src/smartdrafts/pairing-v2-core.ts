@@ -21,6 +21,8 @@ export interface PairingResult {
   pairs: Array<{
     front: string;
     back: string;
+    side1?: string;  // Optional third image (side panel)
+    side2?: string;  // Optional fourth image (additional side/angle)
     confidence: number;
     brand?: string | null;
     brandWebsite?: string | null;
@@ -101,6 +103,8 @@ interface PairingOutput {
   pairs: Array<{
     front: string;
     back: string;
+    side1?: string;  // Optional third image
+    side2?: string;  // Optional fourth image
     reasoning: string;
     confidence: number;
   }>;
@@ -114,6 +118,8 @@ interface PairingOutput {
 interface VerifiedPair {
   front: string;
   back: string;
+  side1?: string;  // Optional third image
+  side2?: string;  // Optional fourth image
   reasoning: string;
   confidence: number;
   status: 'accepted' | 'rejected';
@@ -601,6 +607,8 @@ Respond ONLY with valid JSON:
     {
       "front": "filename.jpg",
       "back": "filename.jpg",
+      "side1": "filename.jpg",
+      "side2": "filename.jpg",
       "reasoning": "Matching brand 'X' and product 'Y' with same package type" OR "Soft match: same brand, package, colors, and layout",
       "confidence": 0.95
     }
@@ -613,6 +621,15 @@ Respond ONLY with valid JSON:
     }
   ]
 }
+
+GROUPING RULES (up to 4 images per product):
+- Every group MUST have a "front" image (required - the hero/main image)
+- "back" is optional but highly recommended for products with ingredient lists
+- "side1" is optional - attach side panels that match the same product
+- "side2" is optional - attach additional side/angle images that match
+- IMPORTANT: Only attach side images if they clearly belong to the same product (same brand, colors, package type)
+- When a side image matches multiple products, leave it unpaired rather than guessing
+- Prioritize front+back pairing first, then attach matching sides
 
 For unpaired items, set needsReview: true if:
 - It's a clear product (kind=product, panel=front or back) but has no match
@@ -799,11 +816,15 @@ export async function verifyPairs(
     const payload = pairing.pairs.map(pair => {
       const frontClass = classMap.get(pair.front);
       const backClass = classMap.get(pair.back);
+      const side1Class = pair.side1 ? classMap.get(pair.side1) : null;
+      const side2Class = pair.side2 ? classMap.get(pair.side2) : null;
       
       return {
         pair: {
           front: pair.front,
           back: pair.back,
+          side1: pair.side1,
+          side2: pair.side2,
           reasoning: pair.reasoning,
           confidence: pair.confidence,
         },
@@ -823,6 +844,22 @@ export async function verifyPairs(
           packageType: backClass.packageType,
           confidence: backClass.confidence,
         } : null,
+        side1Metadata: side1Class ? {
+          panel: side1Class.panel,
+          brand: side1Class.brand,
+          productName: side1Class.productName,
+          title: side1Class.title,
+          packageType: side1Class.packageType,
+          confidence: side1Class.confidence,
+        } : null,
+        side2Metadata: side2Class ? {
+          panel: side2Class.panel,
+          brand: side2Class.brand,
+          productName: side2Class.productName,
+          title: side2Class.title,
+          packageType: side2Class.packageType,
+          confidence: side2Class.confidence,
+        } : null,
       };
     });
     
@@ -830,9 +867,12 @@ export async function verifyPairs(
     
     // Log each pair being verified with key details
     payload.forEach((p, idx) => {
-      console.log(`[pairing-v2] Pair ${idx + 1}: ${p.pair.front} + ${p.pair.back}`);
+      const sideInfo = [p.pair.side1, p.pair.side2].filter(Boolean).join(', ');
+      console.log(`[pairing-v2] Pair ${idx + 1}: ${p.pair.front} + ${p.pair.back}${sideInfo ? ` + [${sideInfo}]` : ''}`);
       console.log(`  Front: panel=${p.frontMetadata?.panel}, brand="${p.frontMetadata?.brand}", product="${p.frontMetadata?.productName}", pkg=${p.frontMetadata?.packageType}`);
       console.log(`  Back:  panel=${p.backMetadata?.panel}, brand="${p.backMetadata?.brand}", product="${p.backMetadata?.productName}", pkg=${p.backMetadata?.packageType}`);
+      if (p.side1Metadata) console.log(`  Side1: panel=${p.side1Metadata.panel}, brand="${p.side1Metadata.brand}", product="${p.side1Metadata.productName}"`);
+      if (p.side2Metadata) console.log(`  Side2: panel=${p.side2Metadata.panel}, brand="${p.side2Metadata.brand}", product="${p.side2Metadata.productName}"`);
       console.log(`  Reasoning: ${p.pair.reasoning}`);
     });
     
@@ -1019,18 +1059,24 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
   const pairs = acceptedPairs.map(p => {
     const frontClass = classMap.get(p.front);
     const backClass = classMap.get(p.back);
+    const side1Class = p.side1 ? classMap.get(p.side1) : null;
+    const side2Class = p.side2 ? classMap.get(p.side2) : null;
     
-    // CHUNK 3: Calculate photoQuantity as max across front/back images
+    // CHUNK 3: Calculate photoQuantity as max across all images in the group
     // Reason: some angles hide duplicates; max is safer than min
     const frontQty = frontClass?.quantityInPhoto || 1;
     const backQty = backClass?.quantityInPhoto || 1;
-    const photoQuantity = Math.max(frontQty, backQty);
+    const side1Qty = side1Class?.quantityInPhoto || 1;
+    const side2Qty = side2Class?.quantityInPhoto || 1;
+    const photoQuantity = Math.max(frontQty, backQty, side1Qty, side2Qty);
     
-    console.log(`[pairing-v2] photoQuantity calculation: front=${frontQty}, back=${backQty}, max=${photoQuantity} (brand: ${frontClass?.brand})`);
+    console.log(`[pairing-v2] photoQuantity calculation: front=${frontQty}, back=${backQty}, side1=${side1Qty}, side2=${side2Qty}, max=${photoQuantity} (brand: ${frontClass?.brand})`);
     
     return {
       front: p.front,
       back: p.back,
+      side1: p.side1,
+      side2: p.side2,
       confidence: p.confidence,
       brand: frontClass?.brand || null,
       brandWebsite: frontClass?.brandWebsite || null,
@@ -1047,6 +1093,8 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
   pairs.forEach(p => {
     pairedFilenames.add(p.front);
     pairedFilenames.add(p.back);
+    if (p.side1) pairedFilenames.add(p.side1);
+    if (p.side2) pairedFilenames.add(p.side2);
   });
   
   const unpaired = [

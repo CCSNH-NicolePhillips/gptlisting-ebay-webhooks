@@ -1761,6 +1761,112 @@ describe('price-lookup.ts', () => {
           expect(result.ok).toBe(true);
         });
 
+        it('should append categoryPath when building Amazon search query', async () => {
+          mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
+          mockBraveSearch.mockResolvedValue('https://www.amazon.com/dp/mock-product');
+
+          mockOpenAI.mockResolvedValue({
+            choices: [{
+              message: {
+                content: JSON.stringify({
+                  chosenSource: 'amazon',
+                  basePrice: 29.99,
+                  recommendedListingPrice: 29.99,
+                  reasoning: 'Amazon price',
+                }),
+              },
+            }],
+          } as any);
+
+          const input: PriceLookupInput = {
+            title: 'Category Query Product',
+            brand: 'CategoryBrand',
+            categoryPath: 'Supplements > Vitamins',
+          };
+
+          const result = await lookupPrice(input);
+
+          expect(result.ok).toBe(true);
+          expect(mockBraveSearch).toHaveBeenCalledWith(expect.stringContaining('Supplements > Vitamins'), 'amazon.com');
+        });
+
+        it('should warn and mark domain unreachable when Vision URL DNS fails', async () => {
+          const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+          mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
+          mockBraveSearch.mockResolvedValue(null);
+          mockExtractPrice.mockReturnValue(null);
+
+          const dnsError = Object.assign(new Error('DNS fail'), { cause: { code: 'ENOTFOUND' } });
+          (global.fetch as jest.Mock).mockRejectedValue(dnsError);
+
+          mockOpenAI.mockResolvedValue({
+            choices: [{
+              message: {
+                content: JSON.stringify({
+                  chosenSource: 'estimate',
+                  basePrice: 19.99,
+                  recommendedListingPrice: 19.99,
+                  reasoning: 'estimate',
+                }),
+              },
+            }],
+          } as any);
+
+          const input: PriceLookupInput = {
+            title: 'Vision DNS Failure',
+            brand: 'DeadBrand',
+            brandWebsite: 'https://deadbrand.com/product',
+          };
+
+          const result = await lookupPrice(input);
+
+          expect(result.ok).toBe(true);
+          expect(warnSpy).toHaveBeenCalledWith('[price] Vision domain unreachable (DNS lookup failed), skipping URL variations');
+          warnSpy.mockRestore();
+        });
+
+        it('should use URL variation price when base Vision URL has no price', async () => {
+          mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
+          mockBraveSearch.mockResolvedValue(null);
+
+          // Base URL returns empty HTML so price extraction fails, variations will be tried
+          (global.fetch as jest.Mock)
+            .mockResolvedValueOnce({ ok: true, text: async () => '' })
+            .mockResolvedValue({ ok: true, text: async () => '<div class="price">$55.00</div>' });
+
+          mockExtractPrice.mockImplementation((html: string) => {
+            if (html.includes('55.00')) {
+              return 55;
+            }
+            return null;
+          });
+
+          mockOpenAI.mockResolvedValue({
+            choices: [{
+              message: {
+                content: JSON.stringify({
+                  chosenSource: 'brand-msrp',
+                  basePrice: 55.0,
+                  recommendedListingPrice: 55.0,
+                  reasoning: 'variation price',
+                }),
+              },
+            }],
+          } as any);
+
+          const input: PriceLookupInput = {
+            title: 'Variation Product',
+            brand: 'VariationBrand',
+            brandWebsite: 'https://variationbrand.com/product/zero-in.html',
+          };
+
+          const result = await lookupPrice(input);
+
+          expect(result.ok).toBe(true);
+          expect(result.chosen?.source).toBe('brand-msrp');
+          expect(result.candidates.find((c) => c.source === 'brand-msrp')?.price).toBe(55);
+        });
+
         it('should attempt URL variations even when Vision URL is invalid', async () => {
           mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
           mockBraveSearch.mockResolvedValue(null);

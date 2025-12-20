@@ -44,6 +44,8 @@ type PairedProduct = {
   photoQuantity?: number; // CHUNK 4: How many physical products visible in photo (from vision analysis)
   heroDisplayUrl?: string;
   backDisplayUrl?: string;
+  side1DisplayUrl?: string;  // Optional 3rd image (side panel)
+  side2DisplayUrl?: string;  // Optional 4th image (additional angle)
   extras?: string[];
   evidence?: string[];
 };
@@ -729,7 +731,14 @@ async function createDraftForProduct(
   }
   
   const aspects = normalizeAspects(parsed.aspects, product);
-  const images = [product.heroDisplayUrl, product.backDisplayUrl, ...(product.extras || [])].filter((x): x is string => Boolean(x));
+  // Collect all product images: front (hero), back, side1, side2, then extras
+  const images = [
+    product.heroDisplayUrl,
+    product.backDisplayUrl,
+    product.side1DisplayUrl,
+    product.side2DisplayUrl,
+    ...(product.extras || [])
+  ].filter((x): x is string => Boolean(x));
   
   // Use AI-powered pricing decision (already computed above)
   const draft: Draft = {

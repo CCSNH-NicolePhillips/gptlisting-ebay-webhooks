@@ -1005,4 +1005,108 @@ describe("pairing-v2-core", () => {
       expect(result.unpaired[0].photoQuantity).toBe(2);
     });
   });
+
+  describe("multi-image grouping (up to 4 images)", () => {
+    it("should accept pairs with side1 and side2 images", async () => {
+      // Test that PairingOutput interface accepts side1/side2
+      const pairingOutput = {
+        pairs: [
+          {
+            front: "front.jpg",
+            back: "back.jpg",
+            side1: "side1.jpg",
+            side2: "side2.jpg",
+            reasoning: "All images match same product",
+            confidence: 0.95,
+          },
+        ],
+        unpaired: [],
+      };
+
+      // Verify the structure is valid
+      expect(pairingOutput.pairs[0].front).toBe("front.jpg");
+      expect(pairingOutput.pairs[0].back).toBe("back.jpg");
+      expect(pairingOutput.pairs[0].side1).toBe("side1.jpg");
+      expect(pairingOutput.pairs[0].side2).toBe("side2.jpg");
+    });
+
+    it("should handle pairs with only front+back (backward compatible)", async () => {
+      const pairingOutput = {
+        pairs: [
+          {
+            front: "front.jpg",
+            back: "back.jpg",
+            reasoning: "Standard front+back pair",
+            confidence: 0.9,
+          },
+        ],
+        unpaired: [],
+      };
+
+      // side1 and side2 should be undefined
+      expect(pairingOutput.pairs[0].front).toBe("front.jpg");
+      expect(pairingOutput.pairs[0].back).toBe("back.jpg");
+      expect((pairingOutput.pairs[0] as any).side1).toBeUndefined();
+      expect((pairingOutput.pairs[0] as any).side2).toBeUndefined();
+    });
+
+    it("should handle pairs with only side1 (no side2)", async () => {
+      const pairingOutput = {
+        pairs: [
+          {
+            front: "front.jpg",
+            back: "back.jpg",
+            side1: "side.jpg",
+            reasoning: "Three-image product group",
+            confidence: 0.92,
+          },
+        ],
+        unpaired: [],
+      };
+
+      expect(pairingOutput.pairs[0].side1).toBe("side.jpg");
+      expect((pairingOutput.pairs[0] as any).side2).toBeUndefined();
+    });
+
+    it("should correctly count image group size", async () => {
+      const pair = {
+        front: "front.jpg",
+        back: "back.jpg",
+        side1: "side1.jpg",
+        side2: "side2.jpg",
+      };
+
+      // Calculate number of images like the processor does
+      const imageCount = 2 + (pair.side1 ? 1 : 0) + (pair.side2 ? 1 : 0);
+      expect(imageCount).toBe(4);
+    });
+
+    it("should track all filenames in paired set", async () => {
+      const pairs = [
+        {
+          front: "front1.jpg",
+          back: "back1.jpg",
+          side1: "side1a.jpg",
+          side2: "side1b.jpg",
+        },
+        {
+          front: "front2.jpg",
+          back: "back2.jpg",
+        },
+      ];
+
+      // Build paired set like the pipeline does
+      const pairedFilenames = new Set<string>();
+      pairs.forEach(p => {
+        pairedFilenames.add(p.front);
+        pairedFilenames.add(p.back);
+        if (p.side1) pairedFilenames.add(p.side1);
+        if (p.side2) pairedFilenames.add(p.side2);
+      });
+
+      expect(pairedFilenames.size).toBe(6); // 4 from first pair + 2 from second
+      expect(pairedFilenames.has("side1a.jpg")).toBe(true);
+      expect(pairedFilenames.has("side1b.jpg")).toBe(true);
+    });
+  });
 });

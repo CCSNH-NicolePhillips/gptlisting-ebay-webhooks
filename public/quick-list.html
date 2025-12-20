@@ -1537,7 +1537,9 @@
               categoryPath: pair.categoryPath || undefined,
               photoQuantity: pair.photoQuantity || 1, // CHUNK 4: Pass photo quantity from vision analysis
               heroDisplayUrl: pair.frontUrl || '',
-              backDisplayUrl: pair.backUrl || ''
+              backDisplayUrl: pair.backUrl || '',
+              side1DisplayUrl: pair.side1Url || '',  // Optional 3rd image
+              side2DisplayUrl: pair.side2Url || ''   // Optional 4th image
             }));
             
             // Add high-quality unpaired fronts as single-image products

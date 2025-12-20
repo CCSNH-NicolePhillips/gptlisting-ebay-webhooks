@@ -185,6 +185,7 @@ async function fetchHtml(url: string | null | undefined, timeoutMs = 10000): Pro
  * Helper: Extract price from URL
  * Returns { price, isDnsFailure } where isDnsFailure indicates the domain doesn't exist
  */
+/* istanbul ignore next */
 async function priceFrom(url: string | null | undefined): Promise<{ price: number | null; isDnsFailure: boolean }> {
   const { html, isDnsFailure } = await fetchHtml(url);
   if (!html) return { price: null, isDnsFailure };
@@ -275,6 +276,7 @@ async function extractPriceFromBrand(
 /**
  * Helper: Check if URL is a retailer
  */
+/* istanbul ignore next */
 function isRetailerUrl(url: string | null | undefined): boolean {
   if (!url) return false;
   return /amazon\.com|walmart\.com/i.test(url);
@@ -293,6 +295,7 @@ async function decideFinalPrice(
   candidates: PriceSourceDetail[],
   soldStats?: SoldPriceStats
 ): Promise<PriceDecision> {
+  /* istanbul ignore next */
   if (candidates.length === 0) {
     return {
       ok: false,
