@@ -20,6 +20,23 @@
       align-items: center;
       margin-bottom: 1rem;
     }
+    .search-input {
+      padding: 0.55rem 0.85rem;
+      border-radius: 10px;
+      background: #0f1529;
+      border: 1px solid #2a335c;
+      color: #f4f6fb;
+      font-size: 0.9rem;
+      min-width: 250px;
+      transition: border-color 0.2s ease;
+    }
+    .search-input:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+    .search-input::placeholder {
+      color: var(--muted);
+    }
     .btn {
       background: var(--primary);
       color: #fff;
@@ -196,6 +213,12 @@
       
       <div class="toolbar">
         <button class="btn secondary" id="btnRefresh">↻ Refresh</button>
+        <input 
+          type="text" 
+          id="searchInput" 
+          class="search-input" 
+          placeholder="🔍 Search by title or SKU..."
+        />
         <select id="sortSelect" style="padding: 0.5rem 0.8rem; border-radius: 6px; background: #0f1529; border: 1px solid #2a335c; color: #f4f6fb; font-size: 0.9rem; cursor: pointer;">
           <option value="newest">Newest First</option>
           <option value="oldest">Oldest First</option>
@@ -246,13 +269,26 @@
     const counts = document.getElementById('counts');
     const emptyState = document.getElementById('emptyState');
     const sortSelect = document.getElementById('sortSelect');
+    const searchInput = document.getElementById('searchInput');
 
     let allOffers = []; // Store all offers for sorting
+    let filteredOffers = []; // Store filtered offers for display
     
     function getAuthFetch() {
       return (window.authClient && typeof window.authClient.authFetch === 'function') 
         ? window.authClient.authFetch 
         : fetch;
+    }
+
+    function updateCounts() {
+      const totalCount = allOffers.length;
+      const filteredCount = filteredOffers.length;
+      
+      if (searchInput.value.trim() && filteredCount < totalCount) {
+        counts.textContent = `Showing ${filteredCount} of ${totalCount} listing${totalCount === 1 ? '' : 's'}`;
+      } else {
+        counts.textContent = `${totalCount} active listing${totalCount === 1 ? '' : 's'}`;
+      }
     }
 
     function sortOffers(offers, sortBy) {
@@ -294,15 +330,45 @@
       return sorted;
     }
 
+    function filterOffers(offers, searchTerm) {
+      if (!searchTerm || searchTerm.trim() === '') {
+        return offers;
+      }
+      
+      const term = searchTerm.toLowerCase().trim();
+      return offers.filter(o => {
+        const title = (o.title || '').toLowerCase();
+        const sku = (o.sku || '').toLowerCase();
+        return title.includes(term) || sku.includes(term);
+      });
+    }
+
     function renderGrid(offers) {
       grid.innerHTML = '';
-      const sorted = sortOffers(offers, sortSelect.value);
+      const filtered = filterOffers(offers, searchInput.value);
+      filteredOffers = filtered;
+      const sorted = sortOffers(filtered, sortSelect.value);
+      
+      // Update counts to show filtered/total
+      updateCounts();
+      
+      if (sorted.length === 0 && offers.length > 0) {
+        grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--muted);">No listings match your search</div>';
+        return;
+      }
+      
       sorted.forEach(o => {
         grid.appendChild(renderCard(o));
       });
     }
 
     sortSelect.addEventListener('change', () => {
+      if (allOffers.length > 0) {
+        renderGrid(allOffers);
+      }
+    });
+
+    searchInput.addEventListener('input', () => {
       if (allOffers.length > 0) {
         renderGrid(allOffers);
       }
@@ -723,7 +789,8 @@
 
         const offers = Array.isArray(data.offers) ? data.offers : [];
         allOffers = offers; // Store for sorting
-        counts.textContent = `${offers.length} active listing${offers.length === 1 ? '' : 's'}`;
+        filteredOffers = offers; // Initially all offers are visible
+        updateCounts();
         
         if (!offers.length) {
           emptyState.style.display = 'block';
