@@ -322,7 +322,7 @@ describe('price-lookup.ts', () => {
 
         const result = await lookupPrice(input);
 
-        const amazonCandidate = result.candidates.find((c) => c.source === 'brave-fallback');
+        const amazonCandidate = result.candidates.find((c) => c.source === 'amazon');
         expect(amazonCandidate).toBeDefined();
         expect(amazonCandidate?.matchesBrand).toBe(true);
       });

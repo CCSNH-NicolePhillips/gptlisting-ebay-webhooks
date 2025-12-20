@@ -166,7 +166,10 @@ async function fetchHtml(url: string | null | undefined, timeoutMs = 10000): Pro
       },
     });
     clearTimeout(timer);
-    if (!res.ok) return { html: null, isDnsFailure: false };
+    if (!res.ok) {
+      console.warn(`[fetchHtml] HTTP ${res.status} ${res.statusText} for ${url}`);
+      return { html: null, isDnsFailure: false };
+    }
     const html = await res.text();
     return { html, isDnsFailure: false };
   } catch (err: any) {
@@ -589,50 +592,69 @@ export async function lookupPrice(
   
   if (input.brand) {
     const { braveFirstUrl } = await import('./search.js');
+    const { getAmazonAsin } = await import('./brand-registry.js');
     
-    // Build search query with category context
-    console.log('[price-debug] Building Amazon search query...');
-    console.log(`[price-debug] input.keyText =`, input.keyText);
-    console.log(`[price-debug] input.categoryPath =`, input.categoryPath);
+    // FIRST: Check brand registry for known ASIN
+    const registeredAsin = await getAmazonAsin(input.brand, input.title);
+    let amazonUrlFound: string | null = null;
     
-    let searchQuery = `${input.brand} ${input.title}`;
-    if (input.categoryPath) {
-      searchQuery += ` ${input.categoryPath}`;
-      console.log(`[price-debug] Added categoryPath to query: "${input.categoryPath}"`);
-    } else if (input.keyText && input.keyText.length > 0) {
-      const categoryHint = input.keyText.find(text => 
-        text.toLowerCase().includes('supplement') ||
-        text.toLowerCase().includes('vitamin') ||
-        text.toLowerCase().includes('capsule') ||
-        text.toLowerCase().includes('serum') ||
-        text.toLowerCase().includes('cream') ||
-        text.toLowerCase().includes('hair') ||
-        text.toLowerCase().includes('skin')
-      );
-      if (categoryHint) {
-        searchQuery += ` ${categoryHint}`;
-        console.log(`[price-debug] Added keyText hint to query: "${categoryHint}"`);
+    if (registeredAsin) {
+      amazonUrlFound = `https://www.amazon.com/dp/${registeredAsin}`;
+      console.log(`[price] Using registered ASIN: ${registeredAsin}`);
+    } else {
+      // FALLBACK: Search via Brave
+      console.log('[price-debug] No registered ASIN, falling back to search');
+      console.log('[price-debug] Building Amazon search query...');
+      console.log(`[price-debug] input.keyText =`, input.keyText);
+      console.log(`[price-debug] input.categoryPath =`, input.categoryPath);
+      
+      let searchQuery = `${input.brand} ${input.title}`;
+      if (input.categoryPath) {
+        searchQuery += ` ${input.categoryPath}`;
+        console.log(`[price-debug] Added categoryPath to query: "${input.categoryPath}"`);
+      } else if (input.keyText && input.keyText.length > 0) {
+        const categoryHint = input.keyText.find(text => 
+          text.toLowerCase().includes('supplement') ||
+          text.toLowerCase().includes('vitamin') ||
+          text.toLowerCase().includes('capsule') ||
+          text.toLowerCase().includes('serum') ||
+          text.toLowerCase().includes('cream') ||
+          text.toLowerCase().includes('hair') ||
+          text.toLowerCase().includes('skin')
+        );
+        if (categoryHint) {
+          searchQuery += ` ${categoryHint}`;
+          console.log(`[price-debug] Added keyText hint to query: "${categoryHint}"`);
+        }
       }
+      
+      console.log(`[price-debug] Final search query: "${searchQuery}"`);
+      amazonUrlFound = await braveFirstUrl(
+        searchQuery,
+        'amazon.com'
+      );
     }
-    
-    console.log(`[price-debug] Final search query: "${searchQuery}"`);
-    const amazonUrlFound = await braveFirstUrl(
-      searchQuery,
-      'amazon.com'
-    );
     
     if (amazonUrlFound) {
       console.log(`[price] Amazon URL found: ${amazonUrlFound}`);
       
       const { html, isDnsFailure } = await fetchHtml(amazonUrlFound);
+      if (!html) {
+        console.log(`[price-debug] Failed to fetch Amazon HTML (DNS failure: ${isDnsFailure})`);
+      }
       if (html) {
+        console.log(`[price-debug] Fetched HTML (${html.length} bytes), extracting price...`);
         const priceData = extractPriceWithShipping(html, input.title);
+        console.log(`[price-debug] Extraction result: itemPrice=${priceData.amazonItemPrice}, pageTitle="${priceData.pageTitle}"`);
         
         if (priceData.amazonItemPrice && priceData.amazonItemPrice > 0) {
-          // STRICT VALIDATION: Must match brand AND key product terms
+          // STRICT VALIDATION: Must match brand AND key product terms (unless using registered ASIN)
           const normalizedBrand = normalizeBrand(input.brand);
           const normalizedTitle = normalizeBrand(priceData.pageTitle);
           const brandMatches = Boolean(normalizedBrand && normalizedTitle && normalizedTitle.includes(normalizedBrand));
+          
+          // Skip validation if we used a registered ASIN (already trusted)
+          const skipValidation = Boolean(registeredAsin);
           
           // Check if at least one key product term appears in Amazon title
           let productMatches = false;
@@ -649,7 +671,7 @@ export async function lookupPrice(
             productMatches = true;
           }
 
-          if (brandMatches && productMatches) {
+          if (skipValidation || (brandMatches && productMatches)) {
             amazonPrice = priceData.amazonItemPrice;
             amazonUrl = amazonUrlFound;
             
