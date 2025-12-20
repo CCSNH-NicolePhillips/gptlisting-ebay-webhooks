@@ -175,9 +175,10 @@ For each image, provide:
      * Example: "RKMD Glutathione Rapid Boost" → "https://robkellermd.com/glutathione-rapid-boost.html"
    - Prefer the storefront domain actually used for checkout, even if it's different from the marketing site.
      * Example: "bettr. Morning Strawberry Mango" tubs are sold at https://performbettr.com/products/morning-strawberry-mango.html — return that performbettr.com URL (not bettr.com)
+     * Example: "BetterAlt TESTO PRO" is sold at https://thebetteralt.com/pages/boost-testosterone-naturally-with-testo-pro — return that thebetteralt.com URL (not betteralt.com)
    - If a specific product URL is visible on packaging (QR code, printed URL), use that exact URL INCLUDING query/variant parameters (do not truncate ?variant=...)
    - If you cannot confidently construct a product URL, return just the domain: "https://domainname.com"
-   - Common URL patterns: lowercase, hyphens for spaces, .html extension (but also try without)
+   - Common URL patterns: lowercase, hyphens for spaces, .html extension (but also try without), /pages/ or /products/ paths
    - null if brand is unknown or you cannot confidently infer any URL
 7. packageType: bottle/jar/tub/pouch/box/sachet/book/unknown
 8. keyText: array of 3-5 short readable text snippets from the label
