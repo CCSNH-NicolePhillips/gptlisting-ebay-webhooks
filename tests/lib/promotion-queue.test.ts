@@ -62,6 +62,20 @@ describe('promotion-queue', () => {
       expect(setCall).toContain('campaign-123');
     });
 
+    it('should include sku when provided', async () => {
+      (global.fetch as jest.Mock)
+        .mockImplementationOnce(() => mockRedisResponse('OK'))
+        .mockImplementationOnce(() => mockRedisResponse(1));
+
+      await queuePromotionJob('user123', '177681098666', 5, {
+        sku: 'SKU-123',
+      });
+
+      const setCall = (global.fetch as jest.Mock).mock.calls[0][0];
+      const jobData = decodeURIComponent(setCall.split('/SET/')[1].split('/')[1]);
+      expect(jobData).toContain('"sku":"SKU-123"');
+    });
+
     it('should use custom maxAttempts when provided', async () => {
       (global.fetch as jest.Mock)
         .mockImplementationOnce(() => mockRedisResponse('OK'))
@@ -127,6 +141,25 @@ describe('promotion-queue', () => {
       
       expect(setCalls[0]).toContain('camp1');
       expect(setCalls[1]).toContain('camp2');
+    });
+
+    it('should include sku values when present in batch', async () => {
+      (global.fetch as jest.Mock).mockImplementation(() => mockRedisResponse('OK'));
+
+      const jobs = [
+        { userId: 'user123', listingId: '111', adRate: 5, sku: 'SKU-1' },
+        { userId: 'user123', listingId: '222', adRate: 7, sku: 'SKU-2' },
+      ];
+
+      await queuePromotionBatch(jobs);
+
+      const calls = (global.fetch as jest.Mock).mock.calls
+        .map(c => c[0])
+        .filter((c: string) => c.includes('/SET/'));
+
+      const jobPayloads = calls.map((url) => decodeURIComponent(url.split('/SET/')[1].split('/')[1]));
+      expect(jobPayloads[0]).toContain('"sku":"SKU-1"');
+      expect(jobPayloads[1]).toContain('"sku":"SKU-2"');
     });
 
     it('should handle empty batch', async () => {

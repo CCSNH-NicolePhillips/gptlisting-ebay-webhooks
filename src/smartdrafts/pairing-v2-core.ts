@@ -169,11 +169,13 @@ For each image, provide:
    - If packageType is NOT "book", title MUST be null
    - null if unreadable
 6. brandWebsite:
-   - The official brand website URL - try to infer the SPECIFIC PRODUCT PAGE if possible
+   - Return the official ecommerce URL where this exact product can be purchased (ideally the specific product page with variant parameters if present)
    - If you can see the product name and brand, construct the likely product URL using common patterns:
      * Brand domain + slugified product name: "https://brandname.com/product-name.html"
      * Example: "RKMD Glutathione Rapid Boost" → "https://robkellermd.com/glutathione-rapid-boost.html"
-   - If a specific product URL is visible on packaging (QR code, printed URL), use that exact URL
+   - Prefer the storefront domain actually used for checkout, even if it's different from the marketing site.
+     * Example: "bettr. Morning Strawberry Mango" tubs are sold at https://performbettr.com/products/morning-strawberry-mango.html — return that performbettr.com URL (not bettr.com)
+   - If a specific product URL is visible on packaging (QR code, printed URL), use that exact URL INCLUDING query/variant parameters (do not truncate ?variant=...)
    - If you cannot confidently construct a product URL, return just the domain: "https://domainname.com"
    - Common URL patterns: lowercase, hyphens for spaces, .html extension (but also try without)
    - null if brand is unknown or you cannot confidently infer any URL

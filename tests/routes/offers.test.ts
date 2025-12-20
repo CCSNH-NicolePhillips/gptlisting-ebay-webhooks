@@ -2,12 +2,21 @@ import { jest } from '@jest/globals';
 import express from 'express';
 import request from 'supertest';
 
+type GetAccessTokenFn = typeof import('../../src/services/ebay.js')['getAccessToken'];
+type CreateOfferFn = typeof import('../../src/services/ebay.js')['createOffer'];
+type PublishOfferFn = typeof import('../../src/services/ebay.js')['publishOffer'];
+type EnsureInventoryItemFn = typeof import('../../src/services/ebay.js')['ensureInventoryItem'];
+type FetchFn = typeof fetch;
+
 // Mock dependencies before importing router
-const mockGetAccessToken = jest.fn();
-const mockCreateOffer = jest.fn();
-const mockPublishOffer = jest.fn();
-const mockEnsureInventoryItem = jest.fn();
-const mockFetch = jest.fn();
+const mockGetAccessToken: jest.MockedFunction<GetAccessTokenFn> = jest.fn();
+const mockCreateOffer: jest.MockedFunction<CreateOfferFn> = jest.fn();
+const mockPublishOffer: jest.MockedFunction<PublishOfferFn> = jest.fn();
+const mockEnsureInventoryItem: jest.MockedFunction<EnsureInventoryItemFn> = jest.fn();
+const mockFetch: jest.MockedFunction<FetchFn> = jest.fn();
+
+const makeResponse = (status: number, textFn: () => Promise<string>): Response =>
+  ({ status, text: textFn } as unknown as Response);
 
 // Mock global fetch
 global.fetch = mockFetch as any;
@@ -50,10 +59,7 @@ describe('offersRouter', () => {
         pricingSummary: { price: { currency: 'USD', value: '29.99' } },
       };
       mockGetAccessToken.mockResolvedValue('test-token');
-      mockFetch.mockResolvedValue({
-        status: 200,
-        text: async () => JSON.stringify(mockOffer),
-      });
+      mockFetch.mockResolvedValue(makeResponse(200, async () => JSON.stringify(mockOffer)));
 
       const response = await request(app).get('/me/ebay/offer/123456');
 
@@ -73,10 +79,7 @@ describe('offersRouter', () => {
 
     it('should handle non-JSON responses', async () => {
       mockGetAccessToken.mockResolvedValue('test-token');
-      mockFetch.mockResolvedValue({
-        status: 400,
-        text: async () => 'Invalid offer ID',
-      });
+      mockFetch.mockResolvedValue(makeResponse(400, async () => 'Invalid offer ID'));
 
       const response = await request(app).get('/me/ebay/offer/invalid');
 
@@ -86,10 +89,7 @@ describe('offersRouter', () => {
 
     it('should handle eBay API errors', async () => {
       mockGetAccessToken.mockResolvedValue('test-token');
-      mockFetch.mockResolvedValue({
-        status: 404,
-        text: async () => JSON.stringify({ error: 'Offer not found' }),
-      });
+      mockFetch.mockResolvedValue(makeResponse(404, async () => JSON.stringify({ error: 'Offer not found' })));
 
       const response = await request(app).get('/me/ebay/offer/nonexistent');
 
@@ -193,14 +193,8 @@ describe('offersRouter', () => {
       };
       mockGetAccessToken.mockResolvedValue('test-token');
       mockFetch
-        .mockResolvedValueOnce({
-          status: 200,
-          text: async () => JSON.stringify(existingOffer),
-        })
-        .mockResolvedValueOnce({
-          status: 200,
-          text: async () => JSON.stringify({ ok: true }),
-        });
+        .mockResolvedValueOnce(makeResponse(200, async () => JSON.stringify(existingOffer)))
+        .mockResolvedValueOnce(makeResponse(200, async () => JSON.stringify({ ok: true })));
 
       const response = await request(app)
         .put('/me/ebay/offer/123456')
@@ -224,10 +218,7 @@ describe('offersRouter', () => {
 
     it('should handle offer not found', async () => {
       mockGetAccessToken.mockResolvedValue('test-token');
-      mockFetch.mockResolvedValue({
-        status: 404,
-        text: async () => JSON.stringify({ error: 'Offer not found' }),
-      });
+      mockFetch.mockResolvedValue(makeResponse(404, async () => JSON.stringify({ error: 'Offer not found' })));
 
       const response = await request(app)
         .put('/me/ebay/offer/nonexistent')
@@ -238,10 +229,7 @@ describe('offersRouter', () => {
 
     it('should handle JSON parse errors', async () => {
       mockGetAccessToken.mockResolvedValue('test-token');
-      mockFetch.mockResolvedValue({
-        status: 200,
-        text: async () => 'Invalid JSON',
-      });
+      mockFetch.mockResolvedValue(makeResponse(200, async () => 'Invalid JSON'));
 
       const response = await request(app)
         .put('/me/ebay/offer/123456')
@@ -255,14 +243,8 @@ describe('offersRouter', () => {
       const existingOffer = { offerId: '123456', sku: 'TEST-SKU' };
       mockGetAccessToken.mockResolvedValue('test-token');
       mockFetch
-        .mockResolvedValueOnce({
-          status: 200,
-          text: async () => JSON.stringify(existingOffer),
-        })
-        .mockResolvedValueOnce({
-          status: 400,
-          text: async () => JSON.stringify({ error: 'Invalid price' }),
-        });
+        .mockResolvedValueOnce(makeResponse(200, async () => JSON.stringify(existingOffer)))
+        .mockResolvedValueOnce(makeResponse(400, async () => JSON.stringify({ error: 'Invalid price' })));
 
       const response = await request(app)
         .put('/me/ebay/offer/123456')

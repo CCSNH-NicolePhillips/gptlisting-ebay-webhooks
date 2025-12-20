@@ -34,8 +34,8 @@ describe('setupRouter', () => {
       const response = await request(app).post('/setup/ebay/bootstrap');
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual(mockResult);
-      expect(mockEnsureEbayPrereqs).toHaveBeenCalledWith('demo');
+      expect(response.body).toEqual({ ok: true, ...mockResult });
+      expect(mockEnsureEbayPrereqs).toHaveBeenCalledWith('demo', {});
     });
 
     it('should handle bootstrap errors', async () => {
@@ -46,7 +46,7 @@ describe('setupRouter', () => {
       const response = await request(app).post('/setup/ebay/bootstrap');
 
       expect(response.status).toBe(500);
-      expect(response.body).toEqual({ error: 'eBay API authentication failed' });
+      expect(response.body).toEqual({ ok: false, error: 'eBay API authentication failed' });
     });
 
     it('should handle policy creation failures', async () => {
@@ -57,7 +57,7 @@ describe('setupRouter', () => {
       const response = await request(app).post('/setup/ebay/bootstrap');
 
       expect(response.status).toBe(500);
-      expect(response.body).toEqual({ error: 'Failed to create payment policy' });
+      expect(response.body).toEqual({ ok: false, error: 'Failed to create payment policy' });
     });
 
     it('should handle location validation errors', async () => {
@@ -68,7 +68,7 @@ describe('setupRouter', () => {
       const response = await request(app).post('/setup/ebay/bootstrap');
 
       expect(response.status).toBe(500);
-      expect(response.body).toEqual({ error: 'Invalid merchant location' });
+      expect(response.body).toEqual({ ok: false, error: 'Invalid merchant location' });
     });
 
     it('should handle network timeouts', async () => {
@@ -79,7 +79,7 @@ describe('setupRouter', () => {
       const response = await request(app).post('/setup/ebay/bootstrap');
 
       expect(response.status).toBe(500);
-      expect(response.body).toEqual({ error: 'Request timeout after 30s' });
+      expect(response.body).toEqual({ ok: false, error: 'Request timeout after 30s' });
     });
 
     it('should handle eBay API rate limiting', async () => {
@@ -90,7 +90,7 @@ describe('setupRouter', () => {
       const response = await request(app).post('/setup/ebay/bootstrap');
 
       expect(response.status).toBe(500);
-      expect(response.body).toEqual({ error: 'Rate limit exceeded' });
+      expect(response.body).toEqual({ ok: false, error: 'Rate limit exceeded' });
     });
 
     it('should handle non-Error exceptions', async () => {
@@ -99,7 +99,7 @@ describe('setupRouter', () => {
       const response = await request(app).post('/setup/ebay/bootstrap');
 
       expect(response.status).toBe(500);
-      expect(response.body).toEqual({ error: 'String error' });
+      expect(response.body).toEqual({ ok: false, error: 'String error' });
     });
   });
 });

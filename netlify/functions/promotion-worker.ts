@@ -7,10 +7,64 @@
 
 import type { Handler, HandlerEvent } from '@netlify/functions';
 import { getReadyJobs, updateJob, getQueueStats } from '../../src/lib/promotion-queue.js';
-import { createAds, getCampaigns, createCampaign } from '../../src/lib/ebay-promote.js';
+import {
+  createAds,
+  getCampaigns,
+  createCampaign,
+  promoteSingleListing,
+  type EbayTokenCache,
+} from '../../src/lib/ebay-promote.js';
 
 // Maximum concurrent promotions to process per invocation
 const MAX_CONCURRENT = 10;
+
+const tokenCacheStore = new Map<string, { token: string; expiresAt: number }>();
+
+const workerTokenCache: EbayTokenCache = {
+  async get(userId: string) {
+    const record = tokenCacheStore.get(userId);
+    if (record && record.expiresAt > Date.now()) {
+      return record.token;
+    }
+    return null;
+  },
+  async set(userId: string, token: string, expiresIn: number) {
+    const ttlMs = Math.max(0, (expiresIn || 3600) * 1000 - 5000);
+    tokenCacheStore.set(userId, { token, expiresAt: Date.now() + ttlMs });
+  },
+};
+
+function isRetryableError(message: string): boolean {
+  if (!message) return false;
+  return /35048|listing not synced|listing not ready|publish the listing first|Temporarily unavailable/i.test(message);
+}
+
+async function tryPromoteViaSku(job: any) {
+  if (!job.sku) {
+    return { outcome: 'fallback' as const };
+  }
+
+  try {
+    await promoteSingleListing({
+      tokenCache: workerTokenCache,
+      userId: job.userId,
+      ebayAccountId: job.userId,
+      inventoryReferenceId: job.sku,
+      adRate: job.adRate,
+      campaignIdOverride: job.campaignId,
+    });
+    console.log(`[promotion-worker] ✓ Job ${job.id} succeeded via SKU ${job.sku}`);
+    return { outcome: 'success' as const };
+  } catch (error: any) {
+    const message = error?.message || String(error);
+    if (isRetryableError(message)) {
+      console.warn(`[promotion-worker] SKU promotion pending for job ${job.id}: ${message}`);
+      return { outcome: 'retry' as const, error: message };
+    }
+    console.warn(`[promotion-worker] SKU promotion failed for job ${job.id}, falling back to listingId: ${message}`);
+    return { outcome: 'fallback' as const, error: message };
+  }
+}
 
 /**
  * Get or create campaign for a user
@@ -58,10 +112,19 @@ async function processJob(job: any): Promise<{ success: boolean; error?: string 
   try {
     console.log(`[promotion-worker] Processing job ${job.id}: listing ${job.listingId}, attempt ${job.attempts + 1}/${job.maxAttempts}`);
 
-    // Get or create campaign
-    const campaignId = await getOrCreateCampaign(job.userId, job.campaignId);
+    const skuResult = await tryPromoteViaSku(job);
+    if (skuResult.outcome === 'success') {
+      return { success: true };
+    }
+    if (skuResult.outcome === 'retry') {
+      return { success: false, error: skuResult.error };
+    }
 
-    // Attempt to create ad
+    if (!job.listingId) {
+      return { success: false, error: 'Missing listingId for fallback promotion' };
+    }
+
+    const campaignId = await getOrCreateCampaign(job.userId, job.campaignId);
     const payload = {
       listingId: job.listingId,
       bidPercentage: String(job.adRate),
@@ -69,24 +132,19 @@ async function processJob(job: any): Promise<{ success: boolean; error?: string 
 
     const result = await createAds(job.userId, campaignId, payload);
 
-    // Check result
     if (result.ads && result.ads.length > 0) {
       console.log(`[promotion-worker] ✓ Job ${job.id} succeeded - ad created: ${result.ads[0].adId}`);
       return { success: true };
-    } else {
-      // Empty response - eBay accepted but no details yet (this is actually success)
-      console.log(`[promotion-worker] ✓ Job ${job.id} succeeded - empty response (eBay accepted)`);
-      return { success: true };
     }
 
+    console.log(`[promotion-worker] ✓ Job ${job.id} succeeded - empty response (eBay accepted)`);
+    return { success: true };
   } catch (error: any) {
     const errorMsg = error.message || String(error);
     console.error(`[promotion-worker] ✗ Job ${job.id} failed:`, errorMsg);
 
-    // Check for specific errors
-    if (errorMsg.includes('35048') || errorMsg.includes('invalid or has ended')) {
-      // Listing not ready yet - retry
-      return { success: false, error: 'Listing not synced yet' };
+    if (isRetryableError(errorMsg) || errorMsg.includes('invalid or has ended')) {
+      return { success: false, error: errorMsg };
     }
 
     if (errorMsg.includes('35001') || errorMsg.includes('already exists')) {

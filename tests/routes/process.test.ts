@@ -1,22 +1,27 @@
 import { jest } from '@jest/globals';
 import express from 'express';
 import request from 'supertest';
+type ListFolderFn = typeof import('../../src/services/dropbox.js')['listFolder'];
+type GetRawLinkFn = typeof import('../../src/services/dropbox.js')['getRawLink'];
+type EnsureInventoryItemFn = typeof import('../../src/services/ebay.js')['ensureInventoryItem'];
+type CreateOfferFn = typeof import('../../src/services/ebay.js')['createOffer'];
+type PublishOfferFn = typeof import('../../src/services/ebay.js')['publishOffer'];
+type EnsureEbayPrereqsFn = typeof import('../../src/services/ebay.js')['ensureEbayPrereqs'];
+type GroupProductsFromDropboxFn = typeof import('../../src/utils/grouping.js')['groupProductsFromDropbox'];
+type ComputeEbayPriceFn = typeof import('../../src/utils/pricing.js')['computeEbayPrice'];
+type ComputeFloorPriceFn = typeof import('../../src/utils/pricing.js')['computeFloorPrice'];
+type Entry = { name: string; path_lower: string };
 
 // Mock dependencies before importing router
-const mockListFolder = jest.fn();
-const mockGetRawLink = jest.fn();
-const mockEnsureInventoryItem = jest.fn();
-const mockCreateOffer = jest.fn();
-const mockPublishOffer = jest.fn();
-const mockEnsureEbayPrereqs = jest.fn();
-const mockGroupProductsFromDropbox = jest.fn();
-const mockComputeEbayPrice = jest.fn();
-const mockComputeFloorPrice = jest.fn();
-const mockFs = {
-  existsSync: jest.fn(),
-  readFileSync: jest.fn(),
-};
-
+const mockListFolder: jest.MockedFunction<ListFolderFn> = jest.fn();
+const mockGetRawLink: jest.MockedFunction<GetRawLinkFn> = jest.fn();
+const mockEnsureInventoryItem: jest.MockedFunction<EnsureInventoryItemFn> = jest.fn();
+const mockCreateOffer: jest.MockedFunction<CreateOfferFn> = jest.fn();
+const mockPublishOffer: jest.MockedFunction<PublishOfferFn> = jest.fn();
+const mockEnsureEbayPrereqs: jest.MockedFunction<EnsureEbayPrereqsFn> = jest.fn();
+const mockGroupProductsFromDropbox: jest.MockedFunction<GroupProductsFromDropboxFn> = jest.fn();
+const mockComputeEbayPrice: jest.MockedFunction<ComputeEbayPriceFn> = jest.fn();
+const mockComputeFloorPrice: jest.MockedFunction<ComputeFloorPriceFn> = jest.fn();
 jest.mock('../../src/services/dropbox.js', () => ({
   listFolder: mockListFolder,
   getRawLink: mockGetRawLink,
@@ -38,7 +43,14 @@ jest.mock('../../src/utils/pricing.js', () => ({
   computeFloorPrice: mockComputeFloorPrice,
 }));
 
-jest.mock('fs', () => mockFs);
+jest.mock('fs', () => {
+  const actual = jest.requireActual('fs');
+  return {
+    ...actual,
+    existsSync: jest.fn(),
+    readFileSync: jest.fn(),
+  };
+});
 
 jest.mock('../../src/config.js', () => ({
   cfg: {
@@ -56,7 +68,9 @@ jest.mock('../../src/config.js', () => ({
   },
 }));
 
+import fs from 'fs';
 import { processRouter } from '../../src/routes/process.js';
+const mockFs = fs as jest.Mocked<typeof fs>;
 
 describe('processRouter', () => {
   let app: express.Application;
@@ -80,8 +94,8 @@ describe('processRouter', () => {
         {
           sku: 'SKU-001',
           priceImageName: 'price-29.99.jpg',
-          main: { path_lower: '/ebay/product1-front.jpg' },
-          gallery: [{ path_lower: '/ebay/product1-back.jpg' }],
+          main: { name: 'product1-front.jpg', path_lower: '/ebay/product1-front.jpg' } as Entry,
+          gallery: [{ name: 'product1-back.jpg', path_lower: '/ebay/product1-back.jpg' } as Entry],
         },
       ];
       mockListFolder.mockResolvedValue(mockEntries);
@@ -120,8 +134,8 @@ describe('processRouter', () => {
         {
           sku: 'SKU-002',
           priceImageName: '15.00',
-          main: { path_lower: '/ebay/item.jpg' },
-          gallery: [],
+          main: { name: 'item.jpg', path_lower: '/ebay/item.jpg' } as Entry,
+          gallery: [] as Entry[],
         },
       ];
       mockListFolder.mockResolvedValue(mockEntries);
@@ -149,8 +163,8 @@ describe('processRouter', () => {
         {
           sku: 'BOOK-001',
           priceImageName: '12.99',
-          main: { path_lower: '/ebay/book.jpg' },
-          gallery: [],
+          main: { name: 'book.jpg', path_lower: '/ebay/book.jpg' } as Entry,
+          gallery: [] as Entry[],
         },
       ];
       mockListFolder.mockResolvedValue(mockEntries);
@@ -203,7 +217,7 @@ describe('processRouter', () => {
     it('should skip groups with no images', async () => {
       const mockEntries = { entries: [] };
       const mockGroups = [
-        { sku: 'NO-IMAGES', priceImageName: '0', main: null, gallery: [] },
+        { sku: 'NO-IMAGES', priceImageName: '0', main: null, gallery: [] as Entry[] },
       ];
       mockListFolder.mockResolvedValue(mockEntries);
       mockGroupProductsFromDropbox.mockReturnValue(mockGroups);
@@ -225,8 +239,8 @@ describe('processRouter', () => {
         {
           sku: 'ERROR-SKU',
           priceImageName: '10',
-          main: { path_lower: '/ebay/error.jpg' },
-          gallery: [],
+          main: { name: 'error.jpg', path_lower: '/ebay/error.jpg' } as Entry,
+          gallery: [] as Entry[],
         },
       ];
       mockListFolder.mockResolvedValue(mockEntries);
@@ -253,8 +267,8 @@ describe('processRouter', () => {
         {
           sku: 'JSON-ERROR',
           priceImageName: '10',
-          main: { path_lower: '/ebay/test.jpg' },
-          gallery: [],
+          main: { name: 'test.jpg', path_lower: '/ebay/test.jpg' } as Entry,
+          gallery: [] as Entry[],
         },
       ];
       const ebayError = { errors: [{ message: 'Invalid category' }] };
@@ -287,8 +301,8 @@ describe('processRouter', () => {
       const mockGroups = Array(20).fill({
         sku: 'SKU-MANY',
         priceImageName: '10',
-        main: { path_lower: '/ebay/item.jpg' },
-        gallery: [],
+        main: { name: 'item.jpg', path_lower: '/ebay/item.jpg' } as Entry,
+        gallery: [] as Entry[],
       });
       mockListFolder.mockResolvedValue(mockEntries);
       mockGroupProductsFromDropbox.mockReturnValue(mockGroups);
@@ -323,8 +337,8 @@ describe('processRouter', () => {
         {
           sku: 'BAD-MAP',
           priceImageName: '10',
-          main: { path_lower: '/ebay/test.jpg' },
-          gallery: [],
+          main: { name: 'test.jpg', path_lower: '/ebay/test.jpg' } as Entry,
+          gallery: [] as Entry[],
         },
       ];
       mockListFolder.mockResolvedValue(mockEntries);

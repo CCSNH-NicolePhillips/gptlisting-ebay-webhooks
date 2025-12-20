@@ -102,6 +102,11 @@ export interface PriceExtractionResult {
    * - 'unknown': Could not determine shipping (defaults to 0)
    */
   shippingEvidence: 'free' | 'paid' | 'unknown';
+
+  /**
+   * Page title text (used for brand matching heuristics)
+   */
+  pageTitle?: string;
 }
 
 interface OfferCandidate {
@@ -999,9 +1004,10 @@ export function extractPriceWithShipping(html: string, productTitle?: string): P
     const amazonVariant = detectAmazonSelectedVariant($);
     
     // Extract title/h1 text for unitsSold detection
-    const pageTitle = $('title').text();
+    const pageTitleTag = $('title').text();
     const h1Text = $('h1').first().text();
-    const titleForUnitsSold = pageTitle || h1Text || productTitle;
+    const resolvedPageTitle = (pageTitleTag || h1Text || '').trim() || undefined;
+    const titleForUnitsSold = resolvedPageTitle || productTitle;
     
     // Extract requested size from product title if provided
     const requestedSize = productTitle ? detectSize(productTitle) : null;
@@ -1029,6 +1035,7 @@ export function extractPriceWithShipping(html: string, productTitle?: string): P
         amazonItemPrice: null,
         amazonShippingPrice: shippingPrice,
         shippingEvidence: evidence,
+        pageTitle: resolvedPageTitle,
       };
     }
     
@@ -1073,6 +1080,7 @@ export function extractPriceWithShipping(html: string, productTitle?: string): P
         amazonItemPrice: null,
         amazonShippingPrice: shippingPrice,
         shippingEvidence: evidence,
+        pageTitle: resolvedPageTitle,
       };
     }
     
@@ -1102,6 +1110,7 @@ export function extractPriceWithShipping(html: string, productTitle?: string): P
       amazonItemPrice: normalizedPrice,
       amazonShippingPrice: shippingPrice,
       shippingEvidence: evidence,
+      pageTitle: resolvedPageTitle,
     };
   } catch (error) {
     console.error('[HTML Parser] Error extracting price with shipping:', error);

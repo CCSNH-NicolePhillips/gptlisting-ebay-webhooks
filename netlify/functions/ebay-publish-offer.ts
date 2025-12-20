@@ -202,9 +202,14 @@ export const handler: Handler = async (event) => {
 				const autoPromoteAdRate = typeof merchantData.autoPromoteAdRate === 'number' 
 					? merchantData.autoPromoteAdRate 
 					: null;
+				const offerSku = typeof offer?.sku === 'string'
+					? offer.sku
+					: typeof offer?.offer?.sku === 'string'
+						? offer.offer.sku
+						: undefined;
 				
-				if (autoPromote && offer.sku) {
-					console.log(`[ebay-publish-offer] Auto-promotion enabled for SKU ${offer.sku}, offerId ${offerId}`);
+				if (autoPromote && offerSku) {
+					console.log(`[ebay-publish-offer] Auto-promotion enabled for SKU ${offerSku}, offerId ${offerId}`);
 					console.log(`[ebay-publish-offer] Ad rate: ${autoPromoteAdRate || 'default from policy'}`);
 					
 					// Determine ad rate: use draft-specific rate or fall back to user's default
@@ -228,7 +233,9 @@ export const handler: Handler = async (event) => {
 					if (listingId) {
 						// Queue promotion job for background processing
 						try {
-							const jobId = await queuePromotionJob(sub!, listingId, adRate);
+							const jobId = await queuePromotionJob(sub!, listingId, adRate, {
+								sku: offerSku,
+							});
 							
 							console.log(`[ebay-publish-offer] Queued promotion job ${jobId} for listing ${listingId}`);
 							

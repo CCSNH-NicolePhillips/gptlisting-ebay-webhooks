@@ -98,6 +98,7 @@ export interface PriceSourceDetail {
   url?: string;
   notes?: string;
   shippingCents?: number; // Phase 3: Amazon shipping cost in cents (0 for free shipping)
+  matchesBrand?: boolean; // Whether this price signal matches the requested brand (helps bundle checks)
 }
 
 export interface PriceDecision {
@@ -140,6 +141,12 @@ function isProbablyBundlePrice(brandPrice: number, comparisonPrice: number): boo
   // Tunable: > 2.5x seems very likely to be a bundle or multi-pack
   // Lowered from 3.0x to catch MLM brands like Root (2.90x ratio)
   return ratio > 2.5;
+}
+
+function normalizeBrand(str?: string | null): string | null {
+  if (!str) return null;
+  const cleaned = str.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  return cleaned || null;
 }
 
 /**
@@ -732,24 +739,37 @@ export async function lookupPrice(
         if (priceData.amazonItemPrice && priceData.amazonItemPrice > 0) {
           amazonPrice = priceData.amazonItemPrice;
           amazonUrl = amazonUrlFound;
+
+          const normalizedBrand = normalizeBrand(input.brand);
+          const normalizedTitle = normalizeBrand(priceData.pageTitle);
+          const amazonMatchesBrand = Boolean(normalizedBrand && normalizedTitle && normalizedTitle.includes(normalizedBrand));
+
+          if (!amazonMatchesBrand) {
+            console.log(`[price] ⚠️ Amazon result skipped due to brand mismatch (title: ${priceData.pageTitle || 'unknown'})`);
+            amazonPrice = null;
+            amazonUrl = undefined;
+          }
           
-          const shippingCents = Math.round(priceData.amazonShippingPrice * 100);
-          const shippingNote = priceData.shippingEvidence === 'free' 
-            ? 'free shipping' 
-            : priceData.shippingEvidence === 'paid' 
-              ? `$${priceData.amazonShippingPrice.toFixed(2)} shipping` 
-              : 'shipping unknown';
-          
-          console.log(`[price] ✓ Amazon: item=$${amazonPrice.toFixed(2)}, ${shippingNote}`);
-          
-          candidates.push({
-            source: 'brand-msrp',
-            price: amazonPrice,
-            currency: 'USD',
-            url: amazonUrl,
-            notes: `Amazon marketplace price (${shippingNote})`,
-            shippingCents,
-          });
+          if (amazonPrice && amazonUrl) {
+            const shippingCents = Math.round(priceData.amazonShippingPrice * 100);
+            const shippingNote = priceData.shippingEvidence === 'free' 
+              ? 'free shipping' 
+              : priceData.shippingEvidence === 'paid' 
+                ? `$${priceData.amazonShippingPrice.toFixed(2)} shipping` 
+                : 'shipping unknown';
+            
+            console.log(`[price] ✓ Amazon: item=$${amazonPrice.toFixed(2)}, ${shippingNote}`);
+            
+            candidates.push({
+              source: 'brave-fallback',
+              price: amazonPrice,
+              currency: 'USD',
+              url: amazonUrl,
+              notes: `Amazon marketplace price (${shippingNote})`,
+              shippingCents,
+              matchesBrand: true,
+            });
+          }
         }
       }
     }
@@ -781,26 +801,32 @@ export async function lookupPrice(
   );
 
   if (brandCandidates.length > 0 && marketCandidates.length > 0) {
-    // Find the lowest marketplace price for comparison
-    const bestMarket = marketCandidates.reduce((best, c) =>
-      c.price < best.price ? c : best,
-      marketCandidates[0]
-    );
+    const comparableMarketCandidates = marketCandidates.filter(c => c.matchesBrand !== false);
+    if (comparableMarketCandidates.length === 0) {
+      console.log('[price] ⚠️ Skipping bundle check: no marketplace signals match brand');
+    } else {
+      // Find the lowest marketplace price among comparable signals
+      const bestMarket = comparableMarketCandidates.reduce((best, c) =>
+        c.price < best.price ? c : best,
+        comparableMarketCandidates[0]
+      );
 
-    // Check each brand candidate
-    for (const brand of brandCandidates) {
-      if (isProbablyBundlePrice(brand.price, bestMarket.price)) {
-        console.log(`[price] ⚠️ Brand price looks like bundle (>3x market). Dropping brand candidate`, {
-          brandPrice: brand.price,
-          comparisonPrice: bestMarket.price,
-          ratio: (brand.price / bestMarket.price).toFixed(2) + 'x',
-          brandUrl: brand.url,
-        });
+      // Check each brand candidate
+      for (const brand of brandCandidates) {
+        if (isProbablyBundlePrice(brand.price, bestMarket.price)) {
+          console.log(`[price] ⚠️ Brand price looks like bundle (>3x market). Dropping brand candidate`, {
+            brandPrice: brand.price,
+            comparisonPrice: bestMarket.price,
+            ratio: (brand.price / bestMarket.price).toFixed(2) + 'x',
+            brandUrl: brand.url,
+            marketUrl: bestMarket.url,
+          });
 
-        // Remove it from candidates
-        const idx = candidates.indexOf(brand);
-        if (idx >= 0) {
-          candidates.splice(idx, 1);
+          // Remove it from candidates
+          const idx = candidates.indexOf(brand);
+          if (idx >= 0) {
+            candidates.splice(idx, 1);
+          }
         }
       }
     }

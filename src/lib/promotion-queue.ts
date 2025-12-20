@@ -12,6 +12,7 @@ export interface PromotionJob {
   id: string;
   userId: string;
   listingId: string;
+  sku?: string;
   campaignId?: string;
   adRate: number;
   attempts: number;
@@ -72,6 +73,7 @@ export async function queuePromotionJob(
   options: {
     campaignId?: string;
     maxAttempts?: number;
+    sku?: string;
   } = {}
 ): Promise<string> {
   const jobId = `${listingId}_${Date.now()}`;
@@ -81,6 +83,7 @@ export async function queuePromotionJob(
     id: jobId,
     userId,
     listingId,
+    sku: options.sku,
     campaignId: options.campaignId,
     adRate,
     attempts: 0,
@@ -109,6 +112,7 @@ export async function queuePromotionBatch(
     listingId: string;
     adRate: number;
     campaignId?: string;
+    sku?: string;
   }>
 ): Promise<string[]> {
   const jobIds: string[] = [];
@@ -126,6 +130,7 @@ export async function queuePromotionBatch(
       id: jobId,
       userId: job.userId,
       listingId: job.listingId,
+      sku: job.sku,
       campaignId: job.campaignId,
       adRate: job.adRate,
       attempts: 0,

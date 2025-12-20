@@ -10,9 +10,13 @@ jest.mock('fs', () => ({
   mkdirSync: jest.fn(),
 }));
 
-jest.mock('path', () => ({
-  join: jest.fn((...args: string[]) => args.join('/')),
-}));
+jest.mock('path', () => {
+  const actualPath = jest.requireActual<typeof import('path')>('path');
+  return {
+    ...actualPath,
+    join: jest.fn((...args: string[]) => actualPath.join(...args)),
+  };
+});
 
 jest.mock('../../src/config.js', () => ({
   cfg: {
@@ -22,8 +26,10 @@ jest.mock('../../src/config.js', () => ({
 
 import fs from 'fs';
 import { adminRouter } from '../../src/routes/admin.js';
+const actualPath = jest.requireActual<typeof import('path')>('path');
 
 const mockFs = fs as jest.Mocked<typeof fs>;
+const CATEGORY_MAP_PATH = actualPath.join('/test/data', 'category_map.json');
 
 describe('adminRouter', () => {
   let app: express.Application;
@@ -55,7 +61,7 @@ describe('adminRouter', () => {
       expect(response.status).toBe(200);
       expect(response.body).toEqual(mockData);
       expect(mockFs.readFileSync).toHaveBeenCalledWith(
-        '/test/data/category_map.json',
+        CATEGORY_MAP_PATH,
         'utf8'
       );
     });
@@ -96,7 +102,7 @@ describe('adminRouter', () => {
       expect(response.body).toEqual(newData);
       expect(mockFs.mkdirSync).toHaveBeenCalledWith('/test/data', { recursive: true });
       expect(mockFs.writeFileSync).toHaveBeenCalledWith(
-        '/test/data/category_map.json',
+        CATEGORY_MAP_PATH,
         JSON.stringify(newData, null, 2)
       );
     });
@@ -116,7 +122,7 @@ describe('adminRouter', () => {
       expect(response.status).toBe(200);
       expect(response.body).toEqual(expectedMerged);
       expect(mockFs.writeFileSync).toHaveBeenCalledWith(
-        '/test/data/category_map.json',
+        CATEGORY_MAP_PATH,
         JSON.stringify(expectedMerged, null, 2)
       );
     });

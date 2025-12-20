@@ -74,6 +74,7 @@ export const handler: Handler = async (event: HandlerEvent) => {
         listingId: item.listingId,
         adRate: item.adRate,
         campaignId: item.campaignId,
+        sku: item.sku,
       }));
 
       const jobIds = await queuePromotionBatch(jobs);
@@ -93,7 +94,7 @@ export const handler: Handler = async (event: HandlerEvent) => {
 
     } else {
       // Single job mode
-      const { listingId, adRate, campaignId } = body;
+      const { listingId, adRate, campaignId, sku } = body;
 
       if (!listingId || typeof adRate !== 'number') {
         return {
@@ -112,7 +113,7 @@ export const handler: Handler = async (event: HandlerEvent) => {
       }
 
       // Queue single job
-      const jobId = await queuePromotionJob(userId, listingId, adRate, { campaignId });
+      const jobId = await queuePromotionJob(userId, listingId, adRate, { campaignId, sku });
 
       console.log(`[queue-promotion] Queued job ${jobId} for user ${userId}, listing ${listingId}`);
 
