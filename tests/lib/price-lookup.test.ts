@@ -74,7 +74,9 @@ describe('price-lookup.ts', () => {
     // Mock extractPriceWithShipping to return valid data
     mockExtractPriceWithShipping.mockReturnValue({
       amazonItemPrice: 29.99,
-      shippingCents: 0,
+      amazonShippingPrice: 0,
+      shippingEvidence: 'free',
+      pageTitle: 'Mock Product Title',
     } as any);
   });
 
@@ -247,6 +249,82 @@ describe('price-lookup.ts', () => {
 
         expect(result.ok).toBe(true);
         // Should not try to extract price from homepage
+      });
+    });
+
+    describe('Amazon marketplace brand filtering', () => {
+      beforeEach(() => {
+        mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
+      });
+
+      it('should skip Amazon candidates that do not match the requested brand', async () => {
+        mockBraveSearch.mockResolvedValue('https://www.amazon.com/example-product');
+        mockExtractPriceWithShipping.mockReturnValueOnce({
+          amazonItemPrice: 19.99,
+          amazonShippingPrice: 0,
+          shippingEvidence: 'free',
+          pageTitle: 'Amazon.com: Drinkwel Better Mornings',
+        } as any);
+        mockExtractPrice.mockReturnValue(69.99);
+        mockOpenAI.mockResolvedValue({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                chosenSource: 'brand-msrp',
+                basePrice: 69.99,
+                recommendedListingPrice: 62.99,
+                reasoning: 'Brand MSRP retained after filtering Amazon mismatch',
+              }),
+            },
+          }],
+        } as any);
+
+        const input: PriceLookupInput = {
+          title: 'Morning Strawberry Mango 296.7g',
+          brand: 'bettr.',
+          brandWebsite: 'https://performbettr.com/products/morning-strawberry-mango.html',
+        };
+
+        const result = await lookupPrice(input);
+
+        const amazonCandidate = result.candidates.find((c) => c.source === 'brave-fallback');
+        expect(amazonCandidate).toBeUndefined();
+        expect(result.candidates.some((c) => c.source === 'brand-msrp')).toBe(true);
+      });
+
+      it('should keep Amazon candidates and set matchesBrand when the title contains the brand', async () => {
+        mockBraveSearch.mockResolvedValue('https://www.amazon.com/example-product');
+        mockExtractPriceWithShipping.mockReturnValueOnce({
+          amazonItemPrice: 64.99,
+          amazonShippingPrice: 0,
+          shippingEvidence: 'free',
+          pageTitle: 'Amazon.com: Bettr. Morning Strawberry Mango Supplement',
+        } as any);
+        mockExtractPrice.mockReturnValue(69.99);
+        mockOpenAI.mockResolvedValue({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                chosenSource: 'brand-msrp',
+                basePrice: 69.99,
+                recommendedListingPrice: 62.99,
+                reasoning: 'Brand MSRP baseline',
+              }),
+            },
+          }],
+        } as any);
+
+        const input: PriceLookupInput = {
+          title: 'Morning Strawberry Mango 296.7g',
+          brand: 'bettr.',
+          brandWebsite: 'https://performbettr.com/products/morning-strawberry-mango.html',
+        };
+
+        const result = await lookupPrice(input);
+
+        const amazonCandidate = result.candidates.find((c) => c.source === 'brave-fallback');
+        expect(amazonCandidate).toBeDefined();
+        expect(amazonCandidate?.matchesBrand).toBe(true);
       });
     });
 
