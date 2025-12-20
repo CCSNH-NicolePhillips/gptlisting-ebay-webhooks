@@ -1323,114 +1323,61 @@
           const uploadedFiles = await uploadFilesInBatches(selectedFiles);
           const stagedUrls = uploadedFiles.map(f => f.stagedUrl);
 
-          // Step 1b: Start scan with stagedUrls
-          $('status1').innerHTML = '<span class="spinner"></span>Starting analysis...';
+          // Step 1b: Start pairing-v2 directly with stagedUrls (skip Vision scan)
+          updateStep(2, 'active');
+          $('status1').innerHTML = '✓ Upload complete';
+          $('status2').innerHTML = '<span class="spinner"></span>Starting pairing-v2...';
 
-          const scanRes = await fetchJSON('/.netlify/functions/smartdrafts-scan-bg', {
+          const pairStartRes = await fetchJSON('/.netlify/functions/smartdrafts-pairing-v2-start-local', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ stagedUrls })
           });
 
-          console.log('[Quick List] Scan start response:', scanRes);
+          console.log('[Quick List] Pairing-v2 start response:', pairStartRes);
 
-          if (!scanRes.ok || !scanRes.jobId) {
-            const errorDetail = scanRes.error || scanRes.message || 'Scan failed to start';
-            console.error('[Quick List] Scan failed:', scanRes);
+          if (!pairStartRes.ok || !pairStartRes.jobId) {
+            const errorDetail = pairStartRes.error || pairStartRes.message || 'Pairing-v2 failed to start';
+            console.error('[Quick List] Pairing-v2 failed:', pairStartRes);
             throw new Error(errorDetail);
           }
 
-          scanJobId = scanRes.jobId;
+          currentJobId = pairStartRes.jobId;
+          console.log('[Quick List] Local upload pairing-v2 job started:', currentJobId);
 
         } else {
-          // DROPBOX FLOW
+          // DROPBOX FLOW - still uses Dropbox-specific pairing-v2 endpoint
           if (!selectedFolder) {
             alert('Please select a Dropbox folder first');
             return;
           }
 
-          // Step 1: Scan/Analyze (enqueue background job)
           updateStep(1, 'active');
-          const scanRes = await fetchJSON('/.netlify/functions/smartdrafts-scan-bg', {
+          updateStep(2, 'active');
+          $('status1').innerHTML = '<span class="spinner"></span>Starting Dropbox pairing-v2...';
+
+          const pairStartRes = await fetchJSON('/.netlify/functions/smartdrafts-pairing-v2-start', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              path: selectedFolder,
-              force: false
-            })
+            body: JSON.stringify({ folder: selectedFolder })
           });
 
-          console.log('[Quick List] Dropbox scan start response:', scanRes);
+          console.log('[Quick List] Dropbox pairing-v2 start response:', pairStartRes);
 
-          if (!scanRes.ok || !scanRes.jobId) {
-            const errorDetail = scanRes.error || scanRes.message || 'Scan failed to start';
-            console.error('[Quick List] Dropbox scan failed:', scanRes);
+          if (!pairStartRes.ok || !pairStartRes.jobId) {
+            const errorDetail = pairStartRes.error || pairStartRes.message || 'Pairing-v2 failed to start';
+            console.error('[Quick List] Dropbox pairing-v2 failed:', pairStartRes);
             throw new Error(errorDetail);
           }
 
-          scanJobId = scanRes.jobId;
+          currentJobId = pairStartRes.jobId;
+          console.log('[Quick List] Dropbox pairing-v2 job started:', currentJobId);
         }
 
-        currentJobId = scanJobId;
-        console.log('[Quick List] Scan job started:', currentJobId);
-
-        // Poll for scan completion
-        let scanComplete = false;
-        let attempts = 0;
-        const maxAttempts = 200; // 5 minutes max (1.5s intervals) - increased for large batches
-
-        while (!scanComplete && attempts < maxAttempts) {
-          await new Promise(resolve => setTimeout(resolve, 1500));
-          attempts++;
-
-          const statusRes = await fetchJSON(`/.netlify/functions/smartdrafts-scan-status?jobId=${currentJobId}`);
-
-          if (statusRes.state === 'complete') {
-            scanComplete = true;
-            updateStep(1, 'complete');
-            $('totalImages').textContent = (statusRes.groups || []).length || 0;
-            console.log('[Quick List] Scan complete:', statusRes.groups?.length, 'groups');
-          } else if (statusRes.state === 'error') {
-            throw new Error(statusRes.error || 'Scan failed');
-          } else {
-            const progress = Math.min(95, Math.round((attempts / maxAttempts) * 100));
-            $('status1').innerHTML = `<span class="spinner"></span>Analyzing... ${progress}%`;
-          }
-        }
-
-        if (!scanComplete) {
-          throw new Error('Scan timeout after 5 minutes');
-        }
-
-        // Step 2: Pair using pairing-v2 (existing working endpoint)
-        updateStep(2, 'active');
-        $('status2').innerHTML = '<span class="spinner"></span>Starting pairing...';
-        
-        const pairStartRes = await fetchJSON('/.netlify/functions/smartdrafts-pairing-v2-start-from-scan', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ scanJobId: currentJobId })
-        });
-
-        // Handle empty folder case (jobId is null)
-        if (pairStartRes.jobId === null) {
-          console.log('[Quick List] Empty folder - no images to pair');
-          updateStep(2, 'complete');
-          updateStep(3, 'complete');
-          updateStep(4, 'complete');
-          $('status2').textContent = '✓ No images to pair';
-          $('status3').textContent = '✓ No drafts to create';
-          $('status4').textContent = '✓ Complete';
-          alert('No images found in selected folder');
-          return; // Exit early, no pairing or drafting needed
-        }
-
-        if (!pairStartRes.ok || !pairStartRes.jobId) {
-          throw new Error(pairStartRes.error || 'Failed to start pairing');
-        }
-
-        const pairingJobId = pairStartRes.jobId;
-        console.log('[Quick List] Pairing job started:', pairingJobId);
+        // Step 2: Poll for pairing-v2 completion (unified polling for both local and Dropbox)
+        console.log('[Quick List] Polling pairing-v2 job:', currentJobId);
+        updateStep(1, 'complete');
+        $('status2').innerHTML = '<span class="spinner"></span>Pairing images...';
 
         // Poll for pairing completion (max 10 minutes, check every 10 seconds)
         let pairingComplete = false;
@@ -1443,7 +1390,7 @@
           const pollDelay = pairAttempts <= 20 ? 3000 : pairAttempts <= 44 ? 5000 : 10000;
           await new Promise(resolve => setTimeout(resolve, pollDelay));
 
-          const statusRes = await fetchJSON(`/.netlify/functions/smartdrafts-pairing-v2-status?jobId=${pairingJobId}`);
+          const statusRes = await fetchJSON(`/.netlify/functions/smartdrafts-pairing-v2-status?jobId=${currentJobId}`);
 
           if (statusRes.status === 'completed') {
             pairingComplete = true;
