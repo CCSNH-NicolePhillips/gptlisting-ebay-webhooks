@@ -611,6 +611,21 @@ describe('html-price.ts', () => {
     });
 
     describe('Body extraction edge cases', () => {
+      it('should return JSON-style price near product title', () => {
+        const html = `
+          <html>
+            <body>
+              <div class="product-card">Omega 3 Fish Oil premium blend only "price":"19.95" today</div>
+              <script>window.__data = { "price": "29.95" };</script>
+            </body>
+          </html>
+        `;
+
+        const price = extractPriceFromHtml(html, 'Omega 3 Fish Oil Premium');
+        // Near-title JSON price should be selected over other candidates
+        expect(price).toBe(19.95);
+      });
+
       it('should extract from JSON-style price attributes', () => {
         const html = `
           <html>
@@ -689,6 +704,45 @@ describe('html-price.ts', () => {
 
         const price = extractPriceFromHtml(html);
         expect(price).toBeNull(); // Should reject starter kits
+      });
+
+      it('should parse pack size from price element siblings', () => {
+        const html = `
+          <html>
+            <body>
+              <div class="price-row">
+                <span class="a-price">$60.00 (Pack of 3)</span>
+              </div>
+              <script type="application/ld+json">
+              {
+                "@type": "Product",
+                "offers": { "price": "60.00" }
+              }
+              </script>
+            </body>
+          </html>
+        `;
+
+        const result = extractPriceWithShipping(html, 'Price Element Pack');
+        expect(result.amazonItemPrice).toBe(20); // 60 / 3-pack
+      });
+
+      it('should parse shipping price from Amazon shipping selectors when body is inconclusive', () => {
+        const html = `
+          <html>
+            <div id="price-shipping-message">Ships for $4.99 via standard mail</div>
+            <script type="application/ld+json">
+            {
+              "@type": "Product",
+              "offers": { "price": "19.99" }
+            }
+            </script>
+          </html>
+        `;
+
+        const result = extractPriceWithShipping(html, 'Shipping Selector Product');
+        expect(result.amazonShippingPrice).toBe(4.99);
+        expect(result.shippingEvidence).toBe('paid');
       });
     });
 
@@ -1423,6 +1477,27 @@ describe('html-price.ts', () => {
         // JSON-LD subscription-only → falls back to body
         // But $20 is 25% of $80 (< 40% threshold) → should be rejected
         expect(price).toBeNull();
+      });
+
+      it('should normalize Amazon pack size from dropdown and parse paid shipping', () => {
+        const html = `
+          <html>
+            <title>Super Supplement</title>
+            <span id="native_dropdown_selected_size_name">2 Fl Oz (Pack of 4)</span>
+            <div id="price-shipping-message">+$7.50 Shipping</div>
+            <script type="application/ld+json">
+            {
+              "@type": "Product",
+              "offers": { "price": "40.00" }
+            }
+            </script>
+          </html>
+        `;
+
+        const result = extractPriceWithShipping(html, 'Super Supplement 2 Fl Oz');
+        expect(result.amazonItemPrice).toBe(10); // 40 / 4-pack
+        expect(result.amazonShippingPrice).toBe(7.5);
+        expect(result.shippingEvidence).toBe('paid');
       });
 
       it('should accept fallback price if >= 40% of JSON-LD highest price', () => {

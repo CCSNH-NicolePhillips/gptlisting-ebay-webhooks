@@ -198,14 +198,18 @@ export const handler: Handler = async (event) => {
       return json(500, { error: "Failed to get temporary links for any images" }, originHdr);
     }
 
+    // Extract original filenames from paths
+    const originalFilenames = imagePaths.map(p => p.split('/').pop() || 'unknown.jpg');
+
     console.log("[smartdrafts-pairing-v2-start] Got temporary links", {
       count: tempLinks.length,
       sampleLinks: tempLinks.slice(0, 2).map(link => link.substring(0, 80) + "..."),
+      sampleFilenames: originalFilenames.slice(0, 3),
     });
 
     // Schedule the job (returns immediately with job ID)
-    // Pass temp links as dropboxPaths for background download
-    const jobId = await schedulePairingV2Job(userAuth.userId, folder, tempLinks, accessToken);
+    // Pass temp links as dropboxPaths and original filenames for proper identification
+    const jobId = await schedulePairingV2Job(userAuth.userId, folder, tempLinks, accessToken, originalFilenames);
 
     console.log("[smartdrafts-pairing-v2-start] Job scheduled:", jobId);
 

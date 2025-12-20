@@ -158,15 +158,22 @@ export const handler: Handler = async (event) => {
         // Download all images from staged URLs (works for both local and Dropbox modes)
         const localPaths: string[] = [];
         const imageSources = job.stagedUrls || job.dropboxPaths || [];
+        const filenameHints = job.dropboxFilenames || []; // Original filenames for Dropbox
         
-        for (const imageUrl of imageSources) {
+        for (let i = 0; i < imageSources.length; i++) {
+          const imageUrl = imageSources[i];
           let filename: string;
           let isValidUrl = false;
           
           // Check if this is a valid URL (S3, Dropbox temp link, etc.)
           try {
             new URL(imageUrl);
-            filename = path.basename(new URL(imageUrl).pathname);
+            // For Dropbox, use the original filename from the hint array
+            if (uploadMethod === "dropbox" && filenameHints[i]) {
+              filename = filenameHints[i];
+            } else {
+              filename = path.basename(new URL(imageUrl).pathname);
+            }
             isValidUrl = true;
           } catch {
             // Not a valid URL - likely a bare filename from old scan format

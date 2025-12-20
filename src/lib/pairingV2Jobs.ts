@@ -53,6 +53,7 @@ export interface PairingV2Job {
   
   // Dropbox-specific fields
   dropboxPaths?: string[];
+  dropboxFilenames?: string[]; // Original filenames (parallel to dropboxPaths)
   accessToken?: string; // Store access token for background download
   
   // Local upload fields
@@ -80,7 +81,8 @@ export async function schedulePairingV2Job(
   userId: string,
   folder: string,
   imagePaths: string[],
-  accessToken?: string
+  accessToken?: string,
+  originalFilenames?: string[]
 ): Promise<string> {
   const jobId = randomUUID();
 
@@ -102,6 +104,7 @@ export async function schedulePairingV2Job(
   // Add method-specific fields
   if (uploadMethod === "dropbox") {
     job.dropboxPaths = imagePaths;
+    job.dropboxFilenames = originalFilenames; // Store original filenames
     job.accessToken = accessToken;
   } else {
     job.stagedUrls = imagePaths;

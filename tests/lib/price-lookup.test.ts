@@ -1688,6 +1688,136 @@ describe('price-lookup.ts', () => {
         const result = await lookupPrice(input);
         expect(result.ok).toBe(true);
       });
+
+      describe('Additional edge coverage', () => {
+        it('should mark brand as requiresJs when price is JS-rendered', async () => {
+          mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
+          mockBraveSearch.mockResolvedValue(null);
+          mockExtractPrice.mockReturnValue(null);
+          mockGetBrandUrls.mockResolvedValue({});
+          (global.fetch as jest.Mock).mockResolvedValue({
+            ok: true,
+            text: async () => '<div data-app="react">price: 42.00</div>',
+          });
+
+          mockOpenAI.mockResolvedValue({
+            choices: [{
+              message: {
+                content: JSON.stringify({
+                  chosenSource: 'estimate',
+                  basePrice: 29.99,
+                  recommendedListingPrice: 29.99,
+                  reasoning: 'fallback',
+                }),
+              },
+            }],
+          } as any);
+
+          const input: PriceLookupInput = {
+            title: 'React Powered Product',
+            brand: 'JSBrand',
+            brandWebsite: 'https://example.com/products/react-powered',
+          };
+
+          const result = await lookupPrice(input);
+
+          expect(result.ok).toBe(true);
+          expect(mockSetBrandUrls).toHaveBeenCalledWith(
+            expect.stringContaining('JSBrand'),
+            expect.objectContaining({ requiresJs: true, brand: input.brandWebsite })
+          );
+        });
+
+        it('should handle DNS failure when fetching Amazon HTML', async () => {
+          mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
+          mockBraveSearch.mockResolvedValueOnce('https://www.amazon.com/dp/mock');
+          mockBraveSearch.mockResolvedValue(null);
+
+          const dnsError = Object.assign(new Error('DNS fail'), { cause: { code: 'ENOTFOUND' } });
+          (global.fetch as jest.Mock)
+            .mockRejectedValueOnce(dnsError)
+            .mockResolvedValue({ ok: true, text: async () => '<div>Brand page</div>' });
+
+          mockOpenAI.mockResolvedValue({
+            choices: [{
+              message: {
+                content: JSON.stringify({
+                  chosenSource: 'estimate',
+                  basePrice: 24.99,
+                  recommendedListingPrice: 24.99,
+                  reasoning: 'estimate',
+                }),
+              },
+            }],
+          } as any);
+
+          const input: PriceLookupInput = {
+            title: 'DNS Failure Product',
+            brand: 'NoDNS',
+          };
+
+          const result = await lookupPrice(input);
+
+          expect(result.ok).toBe(true);
+        });
+
+        it('should attempt URL variations even when Vision URL is invalid', async () => {
+          mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
+          mockBraveSearch.mockResolvedValue(null);
+          mockExtractPrice.mockReturnValue(null);
+
+          (global.fetch as jest.Mock).mockRejectedValue(new TypeError('Invalid URL'));
+
+          mockOpenAI.mockResolvedValue({
+            choices: [{
+              message: {
+                content: JSON.stringify({
+                  chosenSource: 'estimate',
+                  basePrice: 31.99,
+                  recommendedListingPrice: 31.99,
+                  reasoning: 'estimate',
+                }),
+              },
+            }],
+          } as any);
+
+          const input: PriceLookupInput = {
+            title: 'Broken Brand URL',
+            brand: 'Broken',
+            brandWebsite: 'not-a-valid-url/path',
+          };
+
+          const result = await lookupPrice(input);
+
+          expect(result.ok).toBe(true);
+        });
+
+        it('should fallback when OpenAI returns empty content', async () => {
+          mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
+          mockBraveSearch.mockResolvedValue(null);
+          mockExtractPrice.mockReturnValue(30.0);
+          (global.fetch as jest.Mock).mockResolvedValue({ ok: true, text: async () => '<div class="price">$30.00</div>' });
+
+          mockOpenAI.mockResolvedValue({
+            choices: [{
+              message: {
+                content: null,
+              },
+            }],
+          } as any);
+
+          const input: PriceLookupInput = {
+            title: 'Empty Content Product',
+            brand: 'FallbackBrand',
+            brandWebsite: 'https://fallbackbrand.com/product',
+          };
+
+          const result = await lookupPrice(input);
+
+          expect(result.ok).toBe(true);
+          expect(result.recommendedListingPrice).toBeCloseTo(27.0, 2);
+        });
+      });
     });
   });
 });
