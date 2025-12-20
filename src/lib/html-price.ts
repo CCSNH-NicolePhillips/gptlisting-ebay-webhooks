@@ -615,6 +615,9 @@ function isNonProductPrice(bodyText: string, matchIndex: number, price: number):
     'shipping', 'delivery',
     'free shipping',
     'shipping will be',
+    'orders over', // "orders over $75"
+    'order over', // "order over $50"
+    'minimum', // "minimum purchase"
     'subscription', 'subscribe',
   ];
   

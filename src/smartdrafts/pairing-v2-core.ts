@@ -154,6 +154,8 @@ For each image, provide:
 2. panel: "front", "back", "side", or "unknown"
 3. brand: 
    - For supplements/cosmetics/food packaging: the brand name (e.g., "Root", "Jocko", "Natural Stacks")
+   - The brand is the MARKETING/SELLING brand name (the name consumers search for), which may differ from manufacturer names on the label
+   - Example: "Gashee" products may show "Dr. U Gro" as manufacturer, but the brand is "Gashee" (use the product line name as the brand)
    - For books: MUST be null (books don't have brands in our system)
    - null if unreadable
 4. productName: 
@@ -176,6 +178,7 @@ For each image, provide:
    - Prefer the storefront domain actually used for checkout, even if it's different from the marketing site.
      * Example: "bettr. Morning Strawberry Mango" tubs are sold at https://performbettr.com/products/morning-strawberry-mango.html — return that performbettr.com URL (not bettr.com)
      * Example: "BetterAlt TESTO PRO" is sold at https://thebetteralt.com/pages/boost-testosterone-naturally-with-testo-pro — return that thebetteralt.com URL (not betteralt.com)
+     * Example: "Gashee Natural Botanical Hair Serum" (brand: Gashee, may show "Dr. U Gro" on label) is sold at https://gashee.com/products/gashee-botanical-hair-serum-rapunzel — return that gashee.com URL
    - If a specific product URL is visible on packaging (QR code, printed URL), use that exact URL INCLUDING query/variant parameters (do not truncate ?variant=...)
    - If you cannot confidently construct a product URL, return just the domain: "https://domainname.com"
    - Common URL patterns: lowercase, hyphens for spaces, .html extension (but also try without), /pages/ or /products/ paths
