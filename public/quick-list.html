@@ -1160,29 +1160,26 @@
         // Update UI with file count
         $('dropboxFileCount').textContent = imageFiles.length;
         
-        // Display thumbnails
+        // Display file list (no thumbnails needed for Dropbox)
         const fileList = $('dropboxFileList');
-        fileList.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--muted);">Loading thumbnails...</div>';
         $('dropboxPreview').style.display = 'block';
 
-        // Get thumbnail URLs
-        const thumbnails = await getDropboxThumbnails(imageFiles);
-        
-        // Render thumbnails
-        fileList.innerHTML = '';
-        thumbnails.forEach((item, index) => {
-          const fileItem = document.createElement('div');
-          fileItem.className = 'file-item';
-          fileItem.innerHTML = `
-            <img src="${item.thumbnailUrl || 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22%3E%3Crect fill=%22%23ddd%22 width=%22100%22 height=%22100%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23999%22%3E${index + 1}%3C/text%3E%3C/svg%3E'}" 
-                 alt="${item.name}" 
-                 onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22%3E%3Crect fill=%22%23ddd%22 width=%22100%22 height=%22100%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23999%22%3EError%3C/text%3E%3C/svg%3E'">
-            <div class="file-info">
-              <div class="file-name">${item.name}</div>
+        // Render file list matching local upload style
+        fileList.innerHTML = imageFiles.map((file, idx) => {
+          // Parse size from bytes to MB
+          const sizeMB = file.size ? (file.size / 1024 / 1024).toFixed(2) : '?';
+          
+          return `
+            <div class="file-item">
+              <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='50' height='50'%3E%3Crect fill='%234a5568' width='50' height='50' rx='4'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='white' font-size='24'%3E📷%3C/text%3E%3C/svg%3E" class="file-thumbnail" alt="">
+              <div class="file-info">
+                <div class="file-name">${file.name}</div>
+                <div class="file-size">${sizeMB} MB</div>
+              </div>
+              <button class="file-remove" onclick="removeDropboxFile(${idx})" style="visibility: hidden;">Remove</button>
             </div>
           `;
-          fileList.appendChild(fileItem);
-        });
+        }).join('');
 
         $('btnStart').disabled = false;
 
@@ -1190,39 +1187,6 @@
         console.error('Failed to load folder preview:', err);
         alert('Error loading folder contents: ' + err.message);
         clearDropboxSelection();
-      }
-    }
-
-    async function getDropboxThumbnails(files) {
-      try {
-        // Request temporary links for thumbnails in batch
-        const response = await fetch('/.netlify/functions/dropbox-get-thumbnails', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ files: files.map(f => f.path_lower) })
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to get thumbnails');
-        }
-
-        const data = await response.json();
-        
-        // Map thumbnail URLs to files
-        return files.map((file, index) => ({
-          name: file.name,
-          path: file.path_lower,
-          thumbnailUrl: data.thumbnails?.[index]?.link || null
-        }));
-
-      } catch (err) {
-        console.error('Error getting thumbnails:', err);
-        // Return files without thumbnails
-        return files.map(file => ({
-          name: file.name,
-          path: file.path_lower,
-          thumbnailUrl: null
-        }));
       }
     }
 
