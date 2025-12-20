@@ -22,6 +22,9 @@ type MakeDisplayUrlFn = typeof import("../../src/utils/displayUrl.js")['makeDisp
 type FinalizeDisplayUrlsFn = typeof import("../../src/utils/finalizeDisplay.js")['finalizeDisplayUrls'];
 type SanitizeInsightUrlFn = typeof import("../../src/utils/urlSanitize.js")['sanitizeInsightUrl'];
 type DropboxListFn = typeof import("../../src/ingestion/dropbox.js")['DropboxAdapter']['list'];
+type ReassignOrphansFn = typeof import("../../src/lib/orphan-reassignment.js")['reassignOrphans'];
+type ComputeRoleConfidenceBatchFn = typeof import("../../src/lib/role-confidence.js")['computeRoleConfidenceBatch'];
+type CrossCheckGroupRolesFn = typeof import("../../src/lib/role-confidence.js")['crossCheckGroupRoles'];
 
 const mockRunAnalysis: jest.MockedFunction<RunAnalysisFn> = jest.fn();
 const mockTokensStore: jest.MockedFunction<TokensStoreFn> = jest.fn();
@@ -38,6 +41,9 @@ const mockMakeDisplayUrl: jest.MockedFunction<MakeDisplayUrlFn> = jest.fn();
 const mockFinalizeDisplayUrls: jest.MockedFunction<FinalizeDisplayUrlsFn> = jest.fn();
 const mockSanitizeInsightUrl: jest.MockedFunction<SanitizeInsightUrlFn> = jest.fn();
 const mockDropboxList: jest.MockedFunction<DropboxListFn> = jest.fn();
+const mockReassignOrphans: jest.MockedFunction<ReassignOrphansFn> = jest.fn();
+const mockComputeRoleConfidenceBatch: jest.MockedFunction<ComputeRoleConfidenceBatchFn> = jest.fn();
+const mockCrossCheckGroupRoles: jest.MockedFunction<CrossCheckGroupRolesFn> = jest.fn();
 
 jest.mock("../../src/config.js", () => ({
   STRICT_TWO_ONLY: false,
@@ -66,8 +72,8 @@ jest.mock("../../src/utils/roles.js", () => ({
 }));
 
 jest.mock("../../src/lib/role-confidence.js", () => ({
-  computeRoleConfidenceBatch: jest.fn(() => []),
-  crossCheckGroupRoles: jest.fn(() => []),
+  computeRoleConfidenceBatch: mockComputeRoleConfidenceBatch,
+  crossCheckGroupRoles: mockCrossCheckGroupRoles,
 }));
 
 jest.mock("../../src/utils/urlKey.js", () => ({ urlKey: mockUrlKey }));
@@ -102,6 +108,9 @@ jest.mock("../../src/lib/sorter/frontBackStrict.js", () => ({
 jest.mock("../../src/ingestion/dropbox.js", () => ({
   DropboxAdapter: { list: mockDropboxList },
 }));
+jest.mock("../../src/lib/orphan-reassignment.js", () => ({
+  reassignOrphans: mockReassignOrphans,
+}));
 
 let runSmartDraftScan: (opts: any) => Promise<any>;
 
@@ -129,6 +138,9 @@ beforeEach(() => {
   mockFinalizeDisplayUrls.mockReturnValue(undefined as any);
   mockSanitizeInsightUrl.mockImplementation((url: string, fallback?: string) => url || fallback || "");
   mockDropboxList.mockResolvedValue([]);
+  mockReassignOrphans.mockReturnValue([]);
+  mockComputeRoleConfidenceBatch.mockReturnValue(new Map());
+  mockCrossCheckGroupRoles.mockReturnValue({ groupId: "", corrections: [] });
 });
 
 const makeIngested = (overrides: Partial<IngestedFile> = {}): IngestedFile => ({
@@ -253,6 +265,7 @@ describe("runSmartDraftScan - Dropbox path", () => {
     mockDropboxList.mockResolvedValue(files);
     mockSanitizeUrls.mockReturnValue(files.map((f) => f.stagedUrl));
     mockCanConsumeImages.mockResolvedValueOnce(true);
+    mockUrlKey.mockImplementation((url: string) => url);
     mockRunAnalysis.mockResolvedValue({
       groups: [{ groupId: "g1", images: [files[0].stagedUrl], heroUrl: files[0].stagedUrl }],
       imageInsights: { [files[0].stagedUrl]: { url: files[0].stagedUrl, role: "front" } },
@@ -262,9 +275,9 @@ describe("runSmartDraftScan - Dropbox path", () => {
 
     const result = await runSmartDraftScan({ userId: "u1", folder: "/Photos" });
 
-    expect(result.status).toBe(500);
-    expect(result.body.ok).toBe(false);
-    expect(typeof result.body.error).toBe("string");
+    expect(result.status).toBe(200);
+    expect(result.body.ok).toBe(true);
+    expect(result.body.groups?.[0]?.images).toEqual([files[0].stagedUrl]);
   });
 });
 
@@ -279,5 +292,89 @@ describe("runSmartDraftScan - validation", () => {
     const result = await runSmartDraftScan({ userId: "u1", folder: "/a", stagedUrls: ["https://x"] });
     expect(result.status).toBe(400);
     expect(result.body.ok).toBe(false);
+  });
+});
+
+describe("runSmartDraftScan - role reconciliation", () => {
+  it("reassigns orphans, hydrates display URLs, and reconciles roles", async () => {
+    const files = [
+      makeIngested({ id: "front", name: "front.jpg", stagedUrl: "https://cdn/front.jpg" }),
+      makeIngested({ id: "back", name: "back.jpg", stagedUrl: "https://cdn/back.jpg" }),
+    ];
+
+    mockDropboxList.mockResolvedValue(files);
+    mockSanitizeUrls.mockReturnValue(files.map((f) => f.stagedUrl));
+
+    // Use stable url keys so displayUrl hydration succeeds
+    mockUrlKey.mockImplementation((url: string) => url);
+
+    mockRunAnalysis.mockResolvedValue({
+      groups: [
+        {
+          groupId: "g1",
+          images: [files[0].stagedUrl],
+          heroUrl: files[0].stagedUrl,
+        },
+      ],
+      imageInsights: {
+        [files[0].stagedUrl]: {
+          url: files[0].stagedUrl,
+          role: "front",
+          hasVisibleText: true,
+          visualDescription: "Front panel with centered brand text",
+          evidenceTriggers: ["brand logo"],
+        },
+        [files[1].stagedUrl]: {
+          url: files[1].stagedUrl,
+          role: "back",
+          hasVisibleText: false,
+          visualDescription: "Nutrition facts and barcode on pouch back",
+          evidenceTriggers: ["nutrition facts"],
+        },
+      },
+      warnings: [],
+      orphans: [],
+    });
+
+    mockReassignOrphans.mockReturnValue([
+      {
+        orphanKey: files[1].stagedUrl,
+        matchedGroupId: "g1",
+        confidence: 0.92,
+        reason: "back panel matches pouch color and triggers",
+      },
+    ]);
+
+    mockComputeRoleConfidenceBatch.mockReturnValue(
+      new Map<string, any>([
+        [files[0].stagedUrl, { role: "front", confidence: 0.91, flags: [] }],
+        [files[1].stagedUrl, { role: "back", confidence: 0.72, flags: [] }],
+      ])
+    );
+
+    mockCrossCheckGroupRoles.mockReturnValue({
+      groupId: "g1",
+      corrections: [
+        {
+          imageKey: files[1].stagedUrl,
+          originalRole: "back",
+          correctedRole: "front",
+          reason: "role confidence mismatch",
+        },
+      ],
+    });
+
+    const result = await runSmartDraftScan({ userId: "u1", folder: "/Photos" });
+
+    expect(result.status).toBe(200);
+    expect(result.body.groups?.[0]?.images).toContain(files[0].stagedUrl);
+    expect(mockReassignOrphans).toHaveBeenCalled();
+    expect(mockCrossCheckGroupRoles).toHaveBeenCalled();
+    expect(mockFinalizeDisplayUrls).toHaveBeenCalled();
+
+    const insights = result.body.imageInsights || {};
+    expect(insights[files[0].stagedUrl]?.displayUrl).toBe(files[0].stagedUrl);
+    expect(insights[files[1].stagedUrl]?.role).toBe("front");
+    expect((result.body.orphans || []).length).toBe(0);
   });
 });

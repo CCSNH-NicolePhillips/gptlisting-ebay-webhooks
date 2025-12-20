@@ -768,7 +768,8 @@ OUTPUT FORMAT (same as before):
   ]
 }`;
 
-    const userMessage = `Pair these leftover images using VISUAL MATCHING ONLY:
+    const userMessage = `Pair these leftover images using VISUAL MATCHING ONLY.
+Return your response as valid JSON matching the OUTPUT FORMAT.
 
 ${JSON.stringify(payload, null, 2)}`;
 
