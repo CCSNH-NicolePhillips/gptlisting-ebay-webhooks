@@ -6,6 +6,8 @@
 import { Handler } from "@netlify/functions";
 import { getPairingV2JobStatus } from "../../src/lib/pairingV2Jobs.js";
 import { runNewTwoStagePipeline, type PairingResult } from "../../src/smartdrafts/pairing-v2-core.js";
+import { copyToStaging, getStagedUrl } from "../../src/lib/storage.js";
+import { guessMime } from "../../src/lib/mime.js";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
@@ -233,76 +235,71 @@ export const handler: Handler = async (event) => {
           let side2Url: string | undefined;
           
           if (uploadMethod === "dropbox") {
-            // Dropbox mode: Create Dropbox shared links
-            const frontPath = `${job.folder}/${path.basename(p.front)}`;
-            const backPath = `${job.folder}/${path.basename(p.back)}`;
-            const side1Path = p.side1 ? `${job.folder}/${path.basename(p.side1)}` : null;
-            const side2Path = p.side2 ? `${job.folder}/${path.basename(p.side2)}` : null;
+            // Dropbox mode: Stage images to R2/S3 for full quality and stable URLs
+            // (Dropbox shared links have quality issues and are temporary)
+            const frontFilename = path.basename(p.front);
+            const backFilename = path.basename(p.back);
+            const side1Filename = p.side1 ? path.basename(p.side1) : null;
+            const side2Filename = p.side2 ? path.basename(p.side2) : null;
             
-            // Helper to get or create share link
-            const getShareLink = async (dropboxPath: string): Promise<string> => {
-              try {
-                // Try to create a new shared link
-                const createResponse = await fetch('https://api.dropboxapi.com/2/sharing/create_shared_link_with_settings', {
-                  method: 'POST',
-                  headers: {
-                    'Authorization': `Bearer ${job.accessToken}`,
-                    'Content-Type': 'application/json'
-                  },
-                  body: JSON.stringify({
-                    path: dropboxPath,
-                    settings: {
-                      requested_visibility: 'public'
-                    }
-                  })
-                });
-                
-                if (createResponse.ok) {
-                  const data = await createResponse.json();
-                  return data.url.replace('?dl=0', '?dl=1');
+            // Find the original Dropbox temp link for each image
+            const imageSources = job.stagedUrls || job.dropboxPaths || [];
+            const filenameHints = job.dropboxFilenames || [];
+            
+            // Helper to find the source URL for a filename
+            const findSourceUrl = (targetFilename: string): string | null => {
+              for (let i = 0; i < imageSources.length; i++) {
+                const hint = filenameHints[i] || '';
+                if (hint === targetFilename) {
+                  return imageSources[i];
                 }
-                
-                // Link might already exist, try to list existing links
-                const listResponse = await fetch('https://api.dropboxapi.com/2/sharing/list_shared_links', {
-                  method: 'POST',
-                  headers: {
-                    'Authorization': `Bearer ${job.accessToken}`,
-                    'Content-Type': 'application/json'
-                  },
-                  body: JSON.stringify({
-                    path: dropboxPath,
-                    direct_only: true
-                  })
-                });
-                
-                if (listResponse.ok) {
-                  const listData = await listResponse.json();
-                  if (listData.links && listData.links.length > 0) {
-                    return listData.links[0].url.replace('?dl=0', '?dl=1');
+                // Also check URL path for filename
+                try {
+                  const urlFilename = path.basename(new URL(imageSources[i]).pathname);
+                  if (urlFilename === targetFilename) {
+                    return imageSources[i];
                   }
-                }
-                
-                // Fallback: return a constructed URL (may not work but better than nothing)
-                console.warn(`[pairing-v2-processor] Could not create share link for ${dropboxPath}`);
-                return `https://www.dropbox.com/home${dropboxPath}?dl=1`;
+                } catch {}
+              }
+              return null;
+            };
+            
+            // Helper to stage image to R2/S3
+            const stageToR2 = async (filename: string): Promise<string> => {
+              const sourceUrl = findSourceUrl(filename);
+              if (!sourceUrl) {
+                console.warn(`[pairing-v2-processor] Could not find source URL for ${filename}`);
+                return '';
+              }
+              
+              try {
+                const mime = guessMime(filename);
+                const stagingKey = await copyToStaging(sourceUrl, job.userId, filename, mime, jobId);
+                const stagedUrl = await getStagedUrl(stagingKey);
+                console.log(`[pairing-v2-processor] Staged ${filename} to R2: ${stagedUrl.substring(0, 60)}...`);
+                return stagedUrl;
               } catch (err) {
-                console.error(`[pairing-v2-processor] Error creating share link for ${dropboxPath}:`, err);
-                return `https://www.dropbox.com/home${dropboxPath}?dl=1`;
+                console.error(`[pairing-v2-processor] Failed to stage ${filename} to R2:`, err);
+                return '';
               }
             };
             
-            // Get URLs for front and back (required)
+            // Stage front and back images (required)
             [frontUrl, backUrl] = await Promise.all([
-              getShareLink(frontPath),
-              getShareLink(backPath)
+              stageToR2(frontFilename),
+              stageToR2(backFilename)
             ]);
             
-            // Get URLs for side images (optional)
-            if (side1Path) {
-              side1Url = await getShareLink(side1Path);
+            // Stage side images (optional)
+            if (side1Filename) {
+              side1Url = await stageToR2(side1Filename) || undefined;
             }
-            if (side2Path) {
-              side2Url = await getShareLink(side2Path);
+            if (side2Filename) {
+              side2Url = await stageToR2(side2Filename) || undefined;
+            }
+            
+            if (!frontUrl || !backUrl) {
+              console.warn(`[pairing-v2-processor] Could not stage images for pair: ${frontFilename}, ${backFilename}`);
             }
           } else {
             // Local mode: Use the staged URLs directly
