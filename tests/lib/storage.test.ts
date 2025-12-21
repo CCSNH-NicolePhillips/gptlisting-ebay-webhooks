@@ -341,7 +341,7 @@ describe('storage', () => {
       const expires = new Date(call.Metadata.expiresAt).getTime();
       const diffHours = (expires - uploaded) / (1000 * 60 * 60);
       
-      expect(diffHours).toBe(48); // STAGING_RETENTION_HOURS
+      expect(diffHours).toBeCloseTo(48, 5); // STAGING_RETENTION_HOURS with float precision
     });
   });
 

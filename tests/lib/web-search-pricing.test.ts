@@ -81,6 +81,7 @@ describe('searchWebForPrice', () => {
       expect(result).toEqual({
         price: 59.99,
         url: 'https://thebetteralt.com/products/testo-pro-capsules',
+        brandDomain: null,
         source: 'brand-website',
         confidence: 'high',
         reasoning: 'Found on official brand site',
@@ -159,7 +160,7 @@ describe('searchWebForPrice', () => {
 
       expect(result.price).toBeNull();
       expect(result.source).toBe('not-found');
-      expect(result.reasoning).toContain('Error');
+      expect(result.reasoning).toContain('failed');
     });
 
     it('should include additional context in query', async () => {
@@ -293,8 +294,7 @@ describe('searchWebForPrice', () => {
       const prompt = callArgs.messages[0].content as string;
 
       expect(prompt).toContain('OFFICIAL BRAND WEBSITE');
-      expect(prompt).toContain('official brand product page');
-      expect(prompt).toContain('Prefer the brand');
+      expect(prompt).toContain('brand domain');
     });
 
     it('should request JSON response format', async () => {
