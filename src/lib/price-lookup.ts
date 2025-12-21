@@ -474,13 +474,20 @@ RESPONSE FORMAT (JSON only):
 }
 
 /**
- * Fallback decision when AI fails: prefer ebay-sold p35, then brand MSRP with discount
+ * Fallback decision when AI fails: prefer ebay-sold, then Amazon (trusted), then brand MSRP
+ * 
+ * TRUST SCORES:
+ * - ebay-sold: 95% (actual sales data)
+ * - amazon (with product match): 90% (verified product match on major marketplace)
+ * - brand-msrp: 70% (may find wrong variant)
+ * - brave-fallback: 60% (web search, may be outdated)
+ * - estimate: 30% (category-based guess)
  */
 function fallbackDecision(input: PriceLookupInput, candidates: PriceSourceDetail[]): PriceDecision {
-  // Prefer ebay-sold first
+  // Prefer ebay-sold first (95% trust - actual sales)
   const ebaySold = candidates.find(c => c.source === 'ebay-sold');
   if (ebaySold) {
-    console.log(`[price] Fallback decision: using ebay-sold $${ebaySold.price.toFixed(2)}`);
+    console.log(`[price] Fallback decision: using ebay-sold $${ebaySold.price.toFixed(2)} (trust: 95%)`);
     return {
       ok: true,
       chosen: ebaySold,
@@ -490,7 +497,41 @@ function fallbackDecision(input: PriceLookupInput, candidates: PriceSourceDetail
     };
   }
 
-  // Then try brand MSRP with pricing settings (Phase 3)
+  // SECOND: Amazon with product match (90% trust - verified match on major marketplace)
+  const amazon = candidates.find(c => c.source === 'amazon' && c.matchesBrand);
+  if (amazon) {
+    const settings = input.pricingSettings || {
+      discountPercent: 10,
+      shippingStrategy: 'DISCOUNT_ITEM_ONLY',
+      templateShippingEstimateCents: 600,
+      shippingSubsidyCapCents: null,
+    };
+    
+    const priceCents = Math.round(amazon.price * 100);
+    const shippingCents = amazon.shippingCents || 0;
+    
+    const result = computeEbayItemPrice({
+      amazonItemPriceCents: priceCents,
+      amazonShippingCents: shippingCents,
+      discountPercent: settings.discountPercent,
+      shippingStrategy: settings.shippingStrategy,
+      templateShippingEstimateCents: settings.templateShippingEstimateCents,
+      shippingSubsidyCapCents: settings.shippingSubsidyCapCents,
+    });
+    
+    const finalPrice = result.ebayItemPriceCents / 100;
+    
+    console.log(`[price] Fallback decision: using amazon $${amazon.price.toFixed(2)} → $${finalPrice.toFixed(2)} (trust: 90%, ${settings.shippingStrategy}, ${settings.discountPercent}% off)`);
+    return {
+      ok: true,
+      chosen: amazon,
+      candidates,
+      recommendedListingPrice: finalPrice,
+      reason: 'fallback-to-amazon-trusted'
+    };
+  }
+
+  // THIRD: Brand MSRP with pricing settings (70% trust - may find wrong variant)
   const brandMsrp = candidates.find(c => c.source === 'brand-msrp');
   if (brandMsrp) {
     // Phase 3: Use computeEbayItemPrice with user settings
@@ -762,6 +803,37 @@ export async function lookupPrice(
       console.log(`[price]   Reasoning: ${webResult.reasoning}`);
       webSearchUrl = webResult.url;
       // Will try to scrape this URL in Tier 3
+    } else if (webResult.brandDomain) {
+      // Perplexity found the brand domain but not the specific product page
+      // Generate likely product URLs from brand domain + product name
+      // Strip numbers and common suffixes that usually don't appear in URLs
+      const productSlug = input.title
+        .toLowerCase()
+        .replace(/\d+\s*(capsules?|tablets?|oz|ml|g|mg|count|pack|ct|bottle|softgels?)/gi, '') // Remove quantity specs
+        .replace(/\s+(capsules?|tablets?|softgels?|powder|liquid)$/i, '') // Remove trailing form factors
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+        .replace(/-+/g, '-'); // Collapse multiple dashes
+      
+      // Create multiple slug variations
+      const slugParts = productSlug.split('-').filter(Boolean);
+      const shortSlug = slugParts.slice(0, 2).join('-'); // First 2 words: "testo-pro"
+      
+      const likelyUrls = [
+        `https://${webResult.brandDomain}/products/${shortSlug}`,
+        `https://${webResult.brandDomain}/products/${shortSlug}-capsules`,
+        `https://${webResult.brandDomain}/products/${productSlug}`,
+        `https://${webResult.brandDomain}/product/${shortSlug}`,
+        `https://${webResult.brandDomain}/shop/${shortSlug}`,
+        `https://www.${webResult.brandDomain}/products/${shortSlug}`,
+      ];
+      
+      console.log(`[price] ✓ Web search found brand domain: ${webResult.brandDomain}`);
+      console.log(`[price]   Will try product URL patterns: ${likelyUrls[0]}, ${likelyUrls[1]}...`);
+      console.log(`[price]   Reasoning: ${webResult.reasoning}`);
+      
+      // Set webSearchUrl to first guess, variations will try others
+      webSearchUrl = likelyUrls[0];
     } else if (webResult.price && webResult.price > 0) {
       console.log(`[price] ✓ Web search found: $${webResult.price.toFixed(2)} (${webResult.source}, ${webResult.confidence} confidence)`);
       console.log(`[price]   URL: ${webResult.url}`);

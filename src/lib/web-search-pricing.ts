@@ -3,6 +3,7 @@ import { perplexity, PERPLEXITY_MODELS } from "./perplexity.js";
 export interface WebSearchPriceResult {
   price: number | null;
   url: string | null;
+  brandDomain: string | null; // Brand website domain for fallback URL generation
   source: string; // "brand-website" | "amazon" | "retailer" | "not-found"
   confidence: "high" | "medium" | "low";
   reasoning: string;
@@ -39,15 +40,17 @@ export async function searchWebForPrice(
     additionalContext ? `Context: ${additionalContext}` : '',
     '',
     'Instructions:',
-    '1. Search the web for the OFFICIAL BRAND WEBSITE product page',
-    '2. Find the specific product page URL (e.g., example.com/products/product-name)',
-    '3. Prefer the brand\'s official website over third-party retailers',
-    '4. Also tell me what price you see on that page (for verification)',
+    '1. Search the web for the OFFICIAL BRAND WEBSITE',
+    '2. Find the brand\'s main website domain first',
+    '3. Then find the specific product page URL (usually /products/product-name or /shop/product-name)',
+    '4. If you cannot find the exact product page, still return the brand domain so we can try common URL patterns',
+    '5. Also tell me what price you see on that page (for verification)',
     '',
     'Respond in JSON format:',
     '{',
     '  "price": <number or null>,',
-    '  "url": "<official brand product page URL>",',
+    '  "url": "<product page URL or empty string>",',
+    '  "brandDomain": "<brand website domain, e.g., thebetteralt.com>",',
     '  "source": "brand-website" | "amazon" | "retailer" | "not-found",',
     '  "confidence": "high" | "medium" | "low",',
     '  "reasoning": "<brief explanation>"',
@@ -81,6 +84,7 @@ export async function searchWebForPrice(
       return {
         price: null,
         url: null,
+        brandDomain: null,
         source: 'not-found',
         confidence: 'low',
         reasoning: 'Failed to parse response',
@@ -93,6 +97,7 @@ export async function searchWebForPrice(
     console.log('[web-search] Parsed result:', {
       price: parsed.price,
       url: parsed.url?.substring(0, 60),
+      brandDomain: parsed.brandDomain,
       source: parsed.source,
       confidence: parsed.confidence,
     });
@@ -100,6 +105,7 @@ export async function searchWebForPrice(
     return {
       price: typeof parsed.price === 'number' ? parsed.price : null,
       url: parsed.url || null,
+      brandDomain: parsed.brandDomain || null,
       source: parsed.source || 'not-found',
       confidence: parsed.confidence || 'low',
       reasoning: parsed.reasoning || '',
@@ -110,6 +116,7 @@ export async function searchWebForPrice(
     return {
       price: null,
       url: null,
+      brandDomain: null,
       source: 'not-found',
       confidence: 'low',
       reasoning: `Search failed: ${error.message}`,
