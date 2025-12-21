@@ -31,6 +31,34 @@ function generateUrlVariations(url: string): string[] {
     const ext = dotIndex > 0 ? filename.substring(dotIndex) : '';
     const base = dotIndex > 0 ? filename.substring(0, dotIndex) : filename;
     
+    // Pattern 0: Fix common Vision AI mistakes - /pages/ → /products/
+    // Vision often returns marketing pages instead of product pages
+    if (path.includes('/pages/')) {
+      // Try replacing /pages/ with /products/ and extracting product name
+      // Example: /pages/boost-testosterone-naturally-with-testo-pro → /products/testo-pro-capsules
+      const pageName = filename || base;
+      
+      // Extract the core product name (after the last "with-" if present)
+      const afterWith = pageName.includes('-with-') ? pageName.split('-with-').pop() : pageName;
+      
+      // Try common product naming patterns
+      const productPatterns = [
+        pageName, // Original name
+        afterWith, // Name after "with-"
+        afterWith + '-capsules', // Product + capsules
+        afterWith + '-supplement', // Product + supplement  
+        afterWith + '-bottle', // Product + bottle
+        pageName.replace(/^(boost|naturally|with|get|buy|shop)-/g, ''), // Remove marketing prefixes
+      ].filter((p): p is string => Boolean(p));
+      
+      // Deduplicate patterns
+      const uniquePatterns = [...new Set(productPatterns)];
+      
+      for (const pattern of uniquePatterns) {
+        variations.push(`${urlObj.origin}/products/${pattern}`);
+      }
+    }
+    
     // Pattern 1: If URL is /product-name.html, try /product/product-name/ and /products/product-name/
     if (ext === '.html') {
       variations.push(`${urlObj.origin}/product/${base}/`);
@@ -705,6 +733,42 @@ export async function lookupPrice(
       }
     } else {
       console.log('[price] ✗ No Amazon URL found for this product');
+    }
+  }
+
+  // ========================================
+  // TIER 2.5: Web Search AI (Experimental - when Amazon fails)
+  // ========================================
+  // Only use web search if Amazon didn't return anything
+  if (!amazonPrice && input.brand && input.title) {
+    console.log('[price] Tier 2.5: Trying web-search AI...');
+    
+    const { searchWebForPrice } = await import('./web-search-pricing.js');
+    const additionalContext = [
+      input.categoryPath,
+      input.keyText?.slice(0, 3).join(', '),
+    ].filter(Boolean).join(' | ');
+    
+    const webResult = await searchWebForPrice(
+      input.brand,
+      input.title,
+      additionalContext
+    );
+    
+    if (webResult.price && webResult.price > 0) {
+      console.log(`[price] ✓ Web search found: $${webResult.price.toFixed(2)} (${webResult.source}, ${webResult.confidence} confidence)`);
+      console.log(`[price]   URL: ${webResult.url}`);
+      console.log(`[price]   Reasoning: ${webResult.reasoning}`);
+      
+      candidates.push({
+        source: 'brave-fallback', // Map to existing source type
+        price: webResult.price,
+        currency: 'USD',
+        url: webResult.url || undefined,
+        notes: `Web search: ${webResult.source} (${webResult.confidence} confidence) - ${webResult.reasoning}`,
+      });
+    } else {
+      console.log('[price] ✗ Web search did not find price');
     }
   }
 
