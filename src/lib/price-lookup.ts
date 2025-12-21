@@ -740,6 +740,7 @@ export async function lookupPrice(
   // TIER 2.5: Web Search AI (Experimental - when Amazon fails)
   // ========================================
   // Only use web search if Amazon didn't return anything
+  let webSearchUrl: string | null = null;
   if (!amazonPrice && input.brand && input.title) {
     console.log('[price] Tier 2.5: Trying web-search AI...');
     
@@ -755,13 +756,19 @@ export async function lookupPrice(
       additionalContext
     );
     
-    if (webResult.price && webResult.price > 0) {
+    if (webResult.url && webResult.source === 'brand-website') {
+      console.log(`[price] ✓ Web search found brand URL: ${webResult.url}`);
+      console.log(`[price]   Perplexity saw price: $${webResult.price?.toFixed(2) || 'N/A'} (${webResult.confidence} confidence)`);
+      console.log(`[price]   Reasoning: ${webResult.reasoning}`);
+      webSearchUrl = webResult.url;
+      // Will try to scrape this URL in Tier 3
+    } else if (webResult.price && webResult.price > 0) {
       console.log(`[price] ✓ Web search found: $${webResult.price.toFixed(2)} (${webResult.source}, ${webResult.confidence} confidence)`);
       console.log(`[price]   URL: ${webResult.url}`);
       console.log(`[price]   Reasoning: ${webResult.reasoning}`);
       
       candidates.push({
-        source: 'brave-fallback', // Map to existing source type
+        source: 'brave-fallback',
         price: webResult.price,
         currency: 'USD',
         url: webResult.url || undefined,
@@ -780,9 +787,53 @@ export async function lookupPrice(
   let brandPrice: number | null = null;
   let brandUrl: string | undefined;
 
-  // FIRST: Try Vision API-provided brand website (most accurate!)
+  // PRIORITY: Try web-search AI URL first (most accurate product page)
   let domainReachable = true;
-  if (input.brandWebsite) {
+  if (webSearchUrl) {
+    console.log(`[price] Trying web-search AI URL: ${webSearchUrl}`);
+    brandPrice = await extractPriceFromBrand(webSearchUrl, input.brand, input.title);
+    
+    if (brandPrice) {
+      brandUrl = webSearchUrl;
+      console.log(`[price] ✓ Brand MSRP from web-search URL: $${brandPrice.toFixed(2)}`);
+      
+      // Try variations to find better price
+      const variations = generateUrlVariations(webSearchUrl);
+      let lowestPrice = brandPrice;
+      let bestUrl = brandUrl;
+      
+      for (const variant of variations) {
+        const variantPrice = await extractPriceFromBrand(variant, input.brand, input.title);
+        if (variantPrice && variantPrice < lowestPrice) {
+          lowestPrice = variantPrice;
+          bestUrl = variant;
+          console.log(`[price] ✓ Found better price via URL variation: $${variantPrice.toFixed(2)} (${variant})`);
+        }
+      }
+      
+      if (lowestPrice < brandPrice) {
+        brandPrice = lowestPrice;
+        brandUrl = bestUrl;
+        console.log(`[price] ✓ Using lowest price $${brandPrice.toFixed(2)} from ${brandUrl}`);
+      }
+    } else {
+      console.log(`[price] ✗ Could not extract price from web-search URL, trying variations...`);
+      const variations = generateUrlVariations(webSearchUrl);
+      for (const variant of variations) {
+        console.log(`[price] Trying URL variation: ${variant}`);
+        const variantPrice = await extractPriceFromBrand(variant, input.brand, input.title);
+        if (variantPrice) {
+          brandPrice = variantPrice;
+          brandUrl = variant;
+          console.log(`[price] ✓ Brand MSRP from URL variation: $${brandPrice.toFixed(2)}`);
+          break;
+        }
+      }
+    }
+  }
+
+  // SECOND: Try Vision API-provided brand website (most accurate!)
+  if (!brandPrice && input.brandWebsite) {
     // Skip homepage URLs - they often show bundle/subscription prices, not individual products
     // Match: http://example.com, https://example.com, https://example.com/, http://example.com/
     const isHomepage = /^https?:\/\/[^\/]+\/?$/.test(input.brandWebsite);

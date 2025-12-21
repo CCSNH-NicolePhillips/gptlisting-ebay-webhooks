@@ -35,19 +35,19 @@ export async function searchWebForPrice(
   }
 
   const query = [
-    `Find the current retail price for: ${brand} ${productName}`,
+    `Find the official product webpage for: ${brand} ${productName}`,
     additionalContext ? `Context: ${additionalContext}` : '',
     '',
     'Instructions:',
-    '1. Search for the official brand website or major retailers (Amazon, Walmart)',
-    '2. Find the CURRENT retail price (not sale/subscription prices)',
-    '3. Return the price in USD',
-    '4. Provide the URL where you found the price',
+    '1. Search the web for the OFFICIAL BRAND WEBSITE product page',
+    '2. Find the specific product page URL (e.g., example.com/products/product-name)',
+    '3. Prefer the brand\'s official website over third-party retailers',
+    '4. Also tell me what price you see on that page (for verification)',
     '',
     'Respond in JSON format:',
     '{',
     '  "price": <number or null>,',
-    '  "url": "<source URL>",',
+    '  "url": "<official brand product page URL>",',
     '  "source": "brand-website" | "amazon" | "retailer" | "not-found",',
     '  "confidence": "high" | "medium" | "low",',
     '  "reasoning": "<brief explanation>"',
@@ -70,7 +70,9 @@ export async function searchWebForPrice(
     });
 
     const content = response.choices[0]?.message?.content?.trim() || '';
-    console.log('[web-search] Raw response:', content.substring(0, 200));
+    console.log('[web-search] ===== FULL PERPLEXITY RESPONSE =====');
+    console.log(content);
+    console.log('[web-search] ===== END RESPONSE =====');
 
     // Try to extract JSON from response
     const jsonMatch = content.match(/\{[\s\S]*\}/);
