@@ -1012,7 +1012,7 @@ function extractAmazonShipping($: cheerio.CheerioAPI): { shippingPrice: number; 
  * Extract price from HTML with shipping information - Phase 3 Enhanced
  * Returns enhanced result with shipping data
  */
-export function extractPriceWithShipping(html: string, productTitle?: string): PriceExtractionResult {
+export function extractPriceWithShipping(html: string, productTitle?: string, overridePackQty?: number | null): PriceExtractionResult {
   try {
     // Check for bundle/subscription page FIRST before parsing
     if (isProbablyBundlePage(html)) {
@@ -1044,8 +1044,11 @@ export function extractPriceWithShipping(html: string, productTitle?: string): P
       console.log(`[HTML Parser] Looking for variant with size: ${requestedSize}`);
     }
     
-    // Extract requested pack quantity from product title (for variant matching)
-    const requestedPackQty = productTitle ? detectPackQty(productTitle) : null;
+    // Extract requested pack quantity: prefer explicit override (from vision packCount),
+    // then detect from product title, then default to null
+    let requestedPackQty = overridePackQty ?? (productTitle ? detectPackQty(productTitle) : null);
+    // Convert 1 to null (1 means single unit, not a specific pack count request)
+    if (requestedPackQty === 1) requestedPackQty = null;
     if (requestedPackQty && requestedPackQty > 1) {
       console.log(`[HTML Parser] Looking for variant with pack count: ${requestedPackQty}`);
     }
@@ -1163,9 +1166,9 @@ export function extractPriceWithShipping(html: string, productTitle?: string): P
  * 
  * @deprecated Consider using extractPriceWithShipping for enhanced data
  */
-export function extractPriceFromHtml(html: string, productTitle?: string): number | null {
+export function extractPriceFromHtml(html: string, productTitle?: string, packCount?: number | null): number | null {
   // Delegate to new function and return only the item price for backward compatibility
-  const result = extractPriceWithShipping(html, productTitle);
+  const result = extractPriceWithShipping(html, productTitle, packCount);
   return result.amazonItemPrice;
 }
 

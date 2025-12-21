@@ -31,6 +31,7 @@ export interface PairingResult {
     keyText?: string[];
     categoryPath?: string | null;
     photoQuantity?: number; // Max quantityInPhoto across front/back images
+    packCount?: number | null; // Number of units inside package (from label, e.g., "24 packets")
   }>;
   unpaired: Array<{
     imagePath: string;
@@ -44,6 +45,7 @@ export interface PairingResult {
     keyText?: string[];
     categoryPath?: string | null;
     photoQuantity?: number; // quantityInPhoto from vision (for single-image products)
+    packCount?: number | null; // Number of units inside package (from label)
   }>;
   metrics: {
     totals: {
@@ -83,6 +85,7 @@ interface ImageClassificationV2 {
   layoutSignature: string;
   confidence: number;
   quantityInPhoto: number; // How many of this product are visible in the photo (1-10)
+  packCount: number | null; // Number of units inside the package (e.g., 24 for a 24-pack box, null if single unit or unknown)
 }
 
 interface PairingInputItem {
@@ -211,6 +214,16 @@ For each image, provide:
    - If the photo shows back panel of a bottle → that's still 1 bottle (same bottle, different angle)
    - Only count as 2+ if you see multiple DISTINCT physical products in the same photo
    - Range: 1-10 (if more than 10, use 10)
+15. packCount: How many individual units are INSIDE the package (based on label text)
+   - Look for text on packaging like: "24 packets", "6-pack", "12 count", "Pack of 24", "24 Shots"
+   - This is about what's PRINTED ON THE LABEL, not what you see physically
+   - Examples:
+     * Box says "24 Packets" → packCount: 24
+     * Box says "6-Pack" or "Pack of 6" → packCount: 6
+     * Bottle says "60 Capsules" → packCount: null (capsules are contents, not saleable units)
+     * Single bottle with no pack info → packCount: null
+   - Use null if no pack count is visible or if the product is a single unit (not a multi-pack)
+   - ONLY set for multi-pack boxes/cases containing multiple saleable units (packets, bottles, pouches)
 
 DEFINITIONS:
 - PRODUCT: Clear consumer product packaging (supplement, cosmetic, food, book, etc.)
@@ -295,7 +308,8 @@ Respond ONLY with valid JSON:
       "layoutSignature": "layout description",
       "confidence": 0.95,
       "rationale": "Brief explanation of classification choices",
-      "quantityInPhoto": 1
+      "quantityInPhoto": 1,
+      "packCount": 24 or null
     }
   ]
 }
@@ -1073,6 +1087,13 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
     
     console.log(`[pairing-v2] photoQuantity calculation: front=${frontQty}, back=${backQty}, side1=${side1Qty}, side2=${side2Qty}, max=${photoQuantity} (brand: ${frontClass?.brand})`);
     
+    // CHUNK 4: Extract packCount - take first non-null value across images
+    // (pack count is typically visible on front, but may be clearer on back)
+    const packCount = frontClass?.packCount ?? backClass?.packCount ?? side1Class?.packCount ?? side2Class?.packCount ?? null;
+    if (packCount) {
+      console.log(`[pairing-v2] packCount detected: ${packCount} units (brand: ${frontClass?.brand})`);
+    }
+    
     return {
       front: p.front,
       back: p.back,
@@ -1086,6 +1107,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
       keyText: frontClass?.keyText || [],
       categoryPath: frontClass?.categoryPath || null,
       photoQuantity,
+      packCount,
     };
   });
   
@@ -1113,6 +1135,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
         keyText: classification?.keyText || [],
         categoryPath: classification?.categoryPath || null,
         photoQuantity: classification?.quantityInPhoto || 1, // CHUNK 3: Single image products
+        packCount: classification?.packCount ?? null,
       };
     }),
     ...rejectedPairs.flatMap(p => {
@@ -1131,6 +1154,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
           keyText: frontClass?.keyText || [],
           categoryPath: frontClass?.categoryPath || null,
           photoQuantity: frontClass?.quantityInPhoto || 1, // CHUNK 3
+          packCount: frontClass?.packCount ?? null,
         },
         {
           imagePath: p.back,
@@ -1144,6 +1168,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
           keyText: backClass?.keyText || [],
           categoryPath: backClass?.categoryPath || null,
           photoQuantity: backClass?.quantityInPhoto || 1, // CHUNK 3
+          packCount: backClass?.packCount ?? null,
         },
       ];
     }),
