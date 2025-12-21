@@ -3861,3 +3861,35 @@ export async function runSmartDraftScan(options: SmartDraftScanOptions): Promise
     return jsonEnvelope(500, { ok: false, error: err?.message || String(err) });
   }
 }
+
+// ============================================================================
+// TEST EXPORTS - Internal functions exported for unit testing
+// ============================================================================
+export const _testExports = {
+  // Helper functions
+  jsonEnvelope,
+  basenameFrom,
+  isImage,
+  folderPath,
+  makeSignature,
+  buildFallbackGroups,
+  hydrateGroups,
+  hydrateOrphans,
+  
+  // Async helpers
+  mapLimit,
+  
+  // Grouping logic
+  buildClipGroups,
+  buildHybridGroups,
+  buildPairwiseGroups,
+  
+  // Dropbox API (for mocked tests)
+  dropboxAccessToken,
+  dropboxApi,
+  listFolder,
+  dbxSharedRawLink,
+  
+  // Internal scan function
+  runSmartDraftScanFromStagedUrls,
+};
