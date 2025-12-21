@@ -1751,7 +1751,8 @@
               quantity: 1,
               condition: draft.condition,
               category: draft.category,
-              categoryPath: draft.category?.title || product.categoryPath
+              categoryPath: draft.category?.title || product.categoryPath,
+              promotion: promotionSettings // Pass promotion settings to each group
             };
           })
           .filter(g => g !== null); // Remove nulls

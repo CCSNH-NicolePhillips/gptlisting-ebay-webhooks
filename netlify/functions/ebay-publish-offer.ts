@@ -188,91 +188,84 @@ export const handler: Handler = async (event) => {
 		}
 
 		// Step 3: Check for auto-promotion after successful publish
+		// Load user's promotion settings from policy defaults (not from eBay's non-existent merchantData)
 		let promotionResult: any = null;
 		try {
-			// Fetch the offer to check merchantData.autoPromote
+			const policyDefaultsKey = userScopedKey(sub!, 'policy-defaults.json');
+			let policyDefaults: any = {};
+			try {
+				policyDefaults = (await store.get(policyDefaultsKey, { type: 'json' })) || {};
+			} catch {
+				// No policy defaults saved, promotions disabled
+			}
+			
+			// Check if user has auto-promote enabled in their settings
+			const autoPromote = policyDefaults.autoPromote === true;
+			const defaultAdRate = typeof policyDefaults.defaultAdRate === 'number' ? policyDefaults.defaultAdRate : 5;
+			
+			// Fetch the offer to get SKU and listingId
 			const getOfferUrl = `${apiHost}/sell/inventory/v1/offer/${encodeURIComponent(offerId)}`;
 			const getOfferRes = await fetch(getOfferUrl, { headers });
 			
-			if (getOfferRes.ok) {
+			if (getOfferRes.ok && autoPromote) {
 				const offerText = await getOfferRes.text();
 				const offer = JSON.parse(offerText);
-				const merchantData = offer?.merchantData || {};
-				const autoPromote = merchantData.autoPromote === true;
-				const autoPromoteAdRate = typeof merchantData.autoPromoteAdRate === 'number' 
-					? merchantData.autoPromoteAdRate 
-					: null;
 				const offerSku = typeof offer?.sku === 'string'
 					? offer.sku
 					: typeof offer?.offer?.sku === 'string'
 						? offer.offer.sku
 						: undefined;
 				
-				if (autoPromote && offerSku) {
-					console.log(`[ebay-publish-offer] Auto-promotion enabled for SKU ${offerSku}, offerId ${offerId}`);
-					console.log(`[ebay-publish-offer] Ad rate: ${autoPromoteAdRate || 'default from policy'}`);
-					
-					// Determine ad rate: use draft-specific rate or fall back to user's default
-					let adRate = autoPromoteAdRate;
-					if (!adRate) {
-						// Load promotion defaults to get default ad rate
-						const policyDefaultsKey = userScopedKey(sub!, 'policy-defaults.json');
-						try {
-							const policyDefaults = (await store.get(policyDefaultsKey, { type: 'json' })) || {};
-							adRate = policyDefaults.defaultAdRate || 5; // Fall back to 5% if not set
-							console.log(`[ebay-publish-offer] Using default ad rate from policy: ${adRate}%`);
-						} catch (e) {
-							adRate = 5; // Ultimate fallback
-							console.log(`[ebay-publish-offer] Using hardcoded fallback ad rate: ${adRate}%`);
-						}
-					}
-					
-					// Get listingId from publish response
-					const listingId = pub.body?.listingId || offer.listing?.listingId;
-					
-					if (listingId) {
-						// Queue promotion job for background processing
-						try {
-							const jobId = await queuePromotionJob(sub!, listingId, adRate, {
-								sku: offerSku,
-							});
-							
-							console.log(`[ebay-publish-offer] Queued promotion job ${jobId} for listing ${listingId}`);
-							
-							promotionResult = {
-								queued: true,
-								listingId: listingId,
-								jobId: jobId,
-								adRate: adRate,
-								message: 'Promotion queued for background processing',
-							};
-						} catch (promoErr: any) {
-							console.error(`[ebay-publish-offer] Failed to queue promotion for listing ${listingId}:`, {
-								error: promoErr.message,
-								listingId: listingId,
-								offerId: offerId,
-							});
-							
-							promotionResult = {
-								queued: false,
-								listingId: listingId,
-								error: promoErr.message,
-								reason: 'Failed to queue promotion job',
-							};
-						}
-					} else {
-						console.warn(`[ebay-publish-offer] Cannot queue promotion - listingId not found in response`);
+				console.log(`[ebay-publish-offer] Auto-promotion enabled for user, SKU ${offerSku}, offerId ${offerId}`);
+				console.log(`[ebay-publish-offer] Using ad rate from policy defaults: ${defaultAdRate}%`);
+				
+				const adRate = defaultAdRate;
+				
+				// Get listingId from publish response
+				const listingId = pub.body?.listingId || offer.listing?.listingId;
+				
+				if (listingId) {
+					// Queue promotion job for background processing
+					try {
+						const jobId = await queuePromotionJob(sub!, listingId, adRate, {
+							sku: offerSku,
+						});
+						
+						console.log(`[ebay-publish-offer] Queued promotion job ${jobId} for listing ${listingId}`);
+						
+						promotionResult = {
+							queued: true,
+							listingId: listingId,
+							jobId: jobId,
+							adRate: adRate,
+							message: 'Promotion queued for background processing',
+						};
+					} catch (promoErr: any) {
+						console.error(`[ebay-publish-offer] Failed to queue promotion for listing ${listingId}:`, {
+							error: promoErr.message,
+							listingId: listingId,
+							offerId: offerId,
+						});
+						
 						promotionResult = {
 							queued: false,
-							error: 'listingId not available',
-							reason: 'Listing ID not found in eBay publish response',
+							listingId: listingId,
+							error: promoErr.message,
+							reason: 'Failed to queue promotion job',
 						};
 					}
-				} else if (autoPromote && !offer.sku) {
-					console.log(`[ebay-publish-offer] Auto-promotion enabled but SKU missing for offerId ${offerId}`);
 				} else {
-					console.log(`[ebay-publish-offer] Auto-promotion not enabled for offerId ${offerId}`);
+					console.warn(`[ebay-publish-offer] Cannot queue promotion - listingId not found in response`);
+					promotionResult = {
+						queued: false,
+						error: 'listingId not available',
+						reason: 'Listing ID not found in eBay publish response',
+					};
 				}
+			} else if (!getOfferRes.ok) {
+				console.log(`[ebay-publish-offer] Could not fetch offer details for offerId ${offerId}`);
+			} else if (!autoPromote) {
+				console.log(`[ebay-publish-offer] Auto-promotion not enabled for user, skipping for offerId ${offerId}`);
 			}
 		} catch (err: any) {
 			// Log error but don't fail the publish
