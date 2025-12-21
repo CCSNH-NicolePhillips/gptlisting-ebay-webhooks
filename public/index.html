@@ -54,14 +54,8 @@
         } catch {}
       })();
     </script>
-    <!-- Lightweight loading state to avoid flashes while auth/status loads -->
-    <div class="dp-card" id="loadingCard" style="display:block; text-align:center; max-width: 400px; margin: 100px auto; padding: 40px;">
-      <h1 style="margin-bottom: 16px;">Loading…</h1>
-      <p class="dp-muted">Preparing your workspace</p>
-    </div>
-    
-    <!-- Main Dashboard Shell -->
-    <div class="dp-shell" id="mainCard" style="display:none;">
+    <!-- Main Dashboard Shell - Show immediately for fast perceived load -->
+    <div class="dp-shell" id="mainCard">
       <!-- Sidebar -->
       <aside class="dp-sidebar">
         <!-- Brand Area -->
@@ -1469,16 +1463,16 @@ function updateUIFromCache(data) {
         });
       }
 
-      // Single boot: load auth/status first, then reveal main UI to avoid flashes
+      // Single boot: show UI immediately, load data progressively
       async function boot() {
-        try { await evaluatePrereqs(); } catch {}
+        // Initialize UI immediately (no blocking)
         initMobileNav();
         initUserMenu();
-        const lc = document.getElementById('loadingCard');
-        const mc = document.getElementById('mainCard');
-        if (lc) lc.style.display = 'none';
-        if (mc) mc.style.display = 'block';
-        // Load recent drafts after main UI is visible
+        
+        // Load data in background - don't block UI
+        evaluatePrereqs().catch(() => {});
+        
+        // Load recent drafts after a brief delay
         setTimeout(() => { 
           try { loadRecentDrafts(); } catch {}
         }, 300);

@@ -79,15 +79,8 @@
       })();
     </script>
     
-    <!-- Lightweight loading state to avoid flashes while auth/status loads -->
-    <div class="dp-card" id="loadingCard" style="display:block; text-align:center; max-width: 400px; margin: 100px auto; padding: 40px;">
-      <div class="dp-spinner" style="margin: 0 auto 24px;"></div>
-      <h1 style="margin-bottom: 16px;">Loading…</h1>
-      <p class="dp-muted">Preparing your workspace</p>
-    </div>
-    
-    <!-- Main Settings Shell -->
-    <div class="dp-shell" id="mainCard" style="display:none;">
+    <!-- Main Settings Shell - Show immediately for fast perceived load -->
+    <div class="dp-shell" id="mainCard">
       <!-- Sidebar -->
       <aside class="dp-sidebar">
         <!-- Brand Area -->
@@ -738,15 +731,17 @@
 
       // Single boot: load auth/status first, then reveal main UI to avoid flashes
       async function boot() {
-        try { await refreshStatus(); } catch {}
+        // Initialize UI immediately (no blocking)
         initUserMenu();
-        await authClient.updateUserCard().catch(() => {});
-        await loadPromotionSettings().catch(() => {});
-        await loadPricingSettings().catch(() => {});
-        const lc = document.getElementById('loadingCard');
-        const mc = document.getElementById('mainCard');
-        if (lc) lc.style.display = 'none';
-        if (mc) mc.style.display = 'block';
+        
+        // Load data in parallel for faster perceived performance
+        const loads = [
+          refreshStatus().catch(() => {}),
+          authClient.updateUserCard().catch(() => {}),
+          loadPromotionSettings().catch(() => {}),
+          loadPricingSettings().catch(() => {}),
+        ];
+        await Promise.all(loads);
         
         // Setup disconnect button handlers
         const dropboxDisconnectBtn = document.getElementById('dropboxDisconnectBtn');
