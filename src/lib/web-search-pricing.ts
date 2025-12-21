@@ -28,6 +28,7 @@ export async function searchWebForPrice(
     return {
       price: null,
       url: null,
+      brandDomain: null,
       source: 'not-found',
       confidence: 'low',
       reasoning: 'Web search disabled (no API key)',
