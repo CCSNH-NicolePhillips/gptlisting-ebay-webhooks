@@ -18,6 +18,7 @@ const BRAND_DOMAINS: Record<string, string> = {
   'jocko': 'jockofuel.com',
   'ryse': 'rysesupps.com',
   'barbie': 'ever-eden.com', // Barbie x Evereden collaboration
+  'betteralt': 'thebetteralt.com',
   // Add more brands as discovered
   // Note: Removed brand-specific hardcoding (Root, etc.) - relying on generic bundle detection instead
 };
