@@ -590,6 +590,32 @@ export async function lookupPrice(
 ): Promise<PriceDecision> {
   console.log(`[price] Starting lookup for: "${input.title}"${input.brand ? ` (${input.brand})` : ''}${input.upc ? ` [${input.upc}]` : ''}`);
 
+  // Build enriched title that includes pack/size info from keyText
+  // This helps with variant matching on brand sites
+  let enrichedTitle = input.title;
+  if (Array.isArray(input.keyText) && input.keyText.length > 0) {
+    // Look for pack indicators in keyText that aren't in the title
+    const packPatterns = [
+      /\b(\d+)\s*pack\b/i,
+      /\b(\d+)\s*ct\b/i,
+      /\b(\d+)\s*count\b/i,
+      /\b(\d+)\s*packets?\b/i,
+      /\b(\d+)\s*oz\b/i,
+    ];
+    
+    for (const keyItem of input.keyText) {
+      if (typeof keyItem !== 'string') continue;
+      for (const pattern of packPatterns) {
+        const match = keyItem.match(pattern);
+        if (match && !enrichedTitle.toLowerCase().includes(match[0].toLowerCase())) {
+          enrichedTitle = `${enrichedTitle}, ${keyItem}`;
+          console.log(`[price] Enriched title with keyText: "${keyItem}"`);
+          break;
+        }
+      }
+    }
+  }
+
   // Check cache first - cache stores MSRP data, we compute price with current user settings
   const cacheKey = makePriceSig(input.brand, input.title);
   
@@ -863,7 +889,7 @@ export async function lookupPrice(
   let domainReachable = true;
   if (webSearchUrl) {
     console.log(`[price] Trying web-search AI URL: ${webSearchUrl}`);
-    brandPrice = await extractPriceFromBrand(webSearchUrl, input.brand, input.title);
+    brandPrice = await extractPriceFromBrand(webSearchUrl, input.brand, enrichedTitle);
     
     if (brandPrice) {
       brandUrl = webSearchUrl;
@@ -875,7 +901,7 @@ export async function lookupPrice(
       let bestUrl = brandUrl;
       
       for (const variant of variations) {
-        const variantPrice = await extractPriceFromBrand(variant, input.brand, input.title);
+        const variantPrice = await extractPriceFromBrand(variant, input.brand, enrichedTitle);
         if (variantPrice && variantPrice < lowestPrice) {
           lowestPrice = variantPrice;
           bestUrl = variant;
@@ -893,7 +919,7 @@ export async function lookupPrice(
       const variations = generateUrlVariations(webSearchUrl);
       for (const variant of variations) {
         console.log(`[price] Trying URL variation: ${variant}`);
-        const variantPrice = await extractPriceFromBrand(variant, input.brand, input.title);
+        const variantPrice = await extractPriceFromBrand(variant, input.brand, enrichedTitle);
         if (variantPrice) {
           brandPrice = variantPrice;
           brandUrl = variant;
@@ -916,7 +942,7 @@ export async function lookupPrice(
       console.log(`[price] Trying Vision API brand website: ${input.brandWebsite}`);
       
       // Use extractPriceFromBrand which handles JS detection
-      brandPrice = await extractPriceFromBrand(input.brandWebsite, input.brand, input.title);
+      brandPrice = await extractPriceFromBrand(input.brandWebsite, input.brand, enrichedTitle);
       
       if (brandPrice) {
         brandUrl = input.brandWebsite;
@@ -929,7 +955,7 @@ export async function lookupPrice(
         let bestUrl = brandUrl;
         
         for (const variant of variations) {
-          const variantPrice = await extractPriceFromBrand(variant, input.brand, input.title);
+          const variantPrice = await extractPriceFromBrand(variant, input.brand, enrichedTitle);
           if (variantPrice && variantPrice < lowestPrice) {
             lowestPrice = variantPrice;
             bestUrl = variant;
@@ -953,7 +979,7 @@ export async function lookupPrice(
           const variations = generateUrlVariations(input.brandWebsite);
           for (const variant of variations) {
             console.log(`[price] Trying URL variation: ${variant}`);
-            const variantPrice = await extractPriceFromBrand(variant, input.brand, input.title);
+            const variantPrice = await extractPriceFromBrand(variant, input.brand, enrichedTitle);
             if (variantPrice) {
               brandPrice = variantPrice;
               brandUrl = variant;
@@ -972,7 +998,7 @@ export async function lookupPrice(
     if (signature) {
       const mapped = await getBrandUrls(signature);
       if (mapped?.brand) {
-        const mappedPrice = await extractPriceFromBrand(mapped.brand, input.brand, input.title);
+        const mappedPrice = await extractPriceFromBrand(mapped.brand, input.brand, enrichedTitle);
         if (mappedPrice) {
           brandPrice = mappedPrice;
           brandUrl = mapped.brand;
@@ -991,7 +1017,7 @@ export async function lookupPrice(
     );
     
     if (braveUrl) {
-      const bravePrice = await extractPriceFromBrand(braveUrl, input.brand, input.title);
+      const bravePrice = await extractPriceFromBrand(braveUrl, input.brand, enrichedTitle);
       if (bravePrice && bravePrice > 0) { // Check for valid price (not -1 rejection)
         brandPrice = bravePrice;
         brandUrl = braveUrl;

@@ -378,3 +378,328 @@ describe("runSmartDraftScan - role reconciliation", () => {
     expect((result.body.orphans || []).length).toBe(0);
   });
 });
+
+describe("runSmartDraftScan - force refresh", () => {
+  it("bypasses cache when force=true for Dropbox path", async () => {
+    const files = [makeIngested({ id: "1", name: "a.jpg", stagedUrl: "https://r2/a.jpg" })];
+    mockDropboxList.mockResolvedValue(files);
+    
+    // Set up cache that would normally be hit
+    const signature = createHash("sha256")
+      .update(JSON.stringify(files.map(f => ({ id: f.id, name: f.name }))))
+      .digest("hex")
+      .slice(0, 16);
+    mockGetCached.mockResolvedValue({
+      signature,
+      groups: [{ images: [files[0].stagedUrl], brand: "CachedBrand" }],
+      warnings: [],
+      imageInsights: {},
+    });
+
+    mockSanitizeUrls.mockReturnValue(files.map((f) => f.stagedUrl));
+    mockUrlKey.mockImplementation((url: string) => url);
+    mockRunAnalysis.mockResolvedValue({
+      groups: [{ groupId: "g1", images: [files[0].stagedUrl], heroUrl: files[0].stagedUrl, brand: "FreshBrand" }],
+      imageInsights: { [files[0].stagedUrl]: { url: files[0].stagedUrl, role: "front" } },
+      warnings: [],
+      orphans: [],
+    });
+
+    const result = await runSmartDraftScan({ userId: "u1", folder: "/Photos", force: true });
+
+    expect(result.status).toBe(200);
+    expect(result.body.cached).toBeFalsy();
+    expect(mockRunAnalysis).toHaveBeenCalled();
+    expect(mockSetCached).toHaveBeenCalled();
+  });
+
+  it("bypasses cache when force=true for staged URLs", async () => {
+    const urls = ["https://cdn/a.jpg", "https://cdn/b.jpg"];
+    const signature = createHash("sha256").update(JSON.stringify(urls.sort())).digest("hex").slice(0, 16);
+    
+    mockGetCached.mockResolvedValue({
+      signature,
+      groups: [{ images: ["https://cdn/a.jpg"], brand: "Cached" }],
+      warnings: [],
+      imageInsights: {},
+    });
+
+    mockSanitizeUrls.mockReturnValue(urls);
+    mockUrlKey.mockImplementation((url: string) => url);
+    mockRunAnalysis.mockResolvedValue({
+      groups: [{ groupId: "g1", images: urls, heroUrl: urls[0] }],
+      imageInsights: {},
+      warnings: [],
+      orphans: [],
+    });
+
+    const result = await runSmartDraftScan({ userId: "u1", stagedUrls: urls, force: true });
+
+    expect(result.status).toBe(200);
+    expect(result.body.cached).toBeFalsy();
+    expect(mockRunAnalysis).toHaveBeenCalled();
+  });
+});
+
+describe("runSmartDraftScan - debug mode", () => {
+  it("bypasses cache when debug=true (Dropbox)", async () => {
+    const files = [makeIngested({ id: "1", name: "a.jpg", stagedUrl: "https://r2/a.jpg" })];
+    mockDropboxList.mockResolvedValue(files);
+    
+    const signature = createHash("sha256")
+      .update(JSON.stringify(files.map(f => ({ id: f.id, name: f.name }))))
+      .digest("hex")
+      .slice(0, 16);
+    mockGetCached.mockResolvedValue({
+      signature,
+      groups: [{ images: [files[0].stagedUrl], brand: "CachedBrand" }],
+      warnings: [],
+      imageInsights: {},
+    });
+
+    mockSanitizeUrls.mockReturnValue(files.map((f) => f.stagedUrl));
+    mockUrlKey.mockImplementation((url: string) => url);
+    mockRunAnalysis.mockResolvedValue({
+      groups: [{ groupId: "g1", images: [files[0].stagedUrl], heroUrl: files[0].stagedUrl }],
+      imageInsights: {},
+      warnings: [],
+      orphans: [],
+    });
+
+    const result = await runSmartDraftScan({ userId: "u1", folder: "/Photos", debug: true });
+
+    expect(result.status).toBe(200);
+    expect(result.body.cached).toBeFalsy();
+    expect(mockRunAnalysis).toHaveBeenCalled();
+    // Debug mode should skip quota check
+    expect(mockCanConsumeImages).not.toHaveBeenCalled();
+    expect(mockConsumeImages).not.toHaveBeenCalled();
+  });
+
+  it("bypasses cache when debug='1' string (staged URLs)", async () => {
+    const urls = ["https://cdn/a.jpg"];
+    const signature = createHash("sha256").update(JSON.stringify(urls.sort())).digest("hex").slice(0, 16);
+    
+    mockGetCached.mockResolvedValue({
+      signature,
+      groups: [{ images: urls, brand: "Cached" }],
+      warnings: [],
+      imageInsights: {},
+    });
+
+    mockSanitizeUrls.mockReturnValue(urls);
+    mockUrlKey.mockImplementation((url: string) => url);
+    mockRunAnalysis.mockResolvedValue({
+      groups: [{ groupId: "g1", images: urls, heroUrl: urls[0] }],
+      imageInsights: {},
+      warnings: [],
+      orphans: [],
+    });
+
+    const result = await runSmartDraftScan({ userId: "u1", stagedUrls: urls, debug: "1" });
+
+    expect(result.status).toBe(200);
+    expect(mockRunAnalysis).toHaveBeenCalled();
+    expect(mockCanConsumeImages).not.toHaveBeenCalled();
+  });
+});
+
+describe("runSmartDraftScan - limit handling", () => {
+  it("respects limit parameter for Dropbox files", async () => {
+    const files = Array.from({ length: 50 }, (_, i) =>
+      makeIngested({ id: `${i}`, name: `img${i}.jpg`, stagedUrl: `https://r2/img${i}.jpg` })
+    );
+    mockDropboxList.mockResolvedValue(files);
+    mockSanitizeUrls.mockImplementation((urls: string[]) => urls);
+    mockUrlKey.mockImplementation((url: string) => url);
+    mockRunAnalysis.mockResolvedValue({
+      groups: [],
+      imageInsights: {},
+      warnings: [],
+      orphans: [],
+    });
+
+    await runSmartDraftScan({ userId: "u1", folder: "/Photos", limit: 10 });
+
+    // The sanitizeUrls should receive at most 10 URLs
+    const sanitizeCall = mockSanitizeUrls.mock.calls[0]?.[0] as string[];
+    expect(sanitizeCall?.length).toBeLessThanOrEqual(10);
+  });
+
+  it("respects limit parameter for staged URLs", async () => {
+    const urls = Array.from({ length: 50 }, (_, i) => `https://cdn/img${i}.jpg`);
+    mockSanitizeUrls.mockImplementation((u: string[]) => u);
+    mockUrlKey.mockImplementation((url: string) => url);
+    mockRunAnalysis.mockResolvedValue({
+      groups: [],
+      imageInsights: {},
+      warnings: [],
+      orphans: [],
+    });
+
+    await runSmartDraftScan({ userId: "u1", stagedUrls: urls, limit: 5 });
+
+    // Should limit to 5 URLs
+    const sanitizeCall = mockSanitizeUrls.mock.calls[0]?.[0] as string[];
+    expect(sanitizeCall?.length).toBe(5);
+  });
+
+  it("uses MAX_IMAGES when limit is invalid", async () => {
+    const urls = Array.from({ length: 5 }, (_, i) => `https://cdn/img${i}.jpg`);
+    mockSanitizeUrls.mockImplementation((u: string[]) => u);
+    mockUrlKey.mockImplementation((url: string) => url);
+    mockRunAnalysis.mockResolvedValue({
+      groups: [],
+      imageInsights: {},
+      warnings: [],
+      orphans: [],
+    });
+
+    await runSmartDraftScan({ userId: "u1", stagedUrls: urls, limit: -5 });
+
+    // Should process all URLs when limit is invalid
+    const sanitizeCall = mockSanitizeUrls.mock.calls[0]?.[0] as string[];
+    expect(sanitizeCall?.length).toBe(5);
+  });
+});
+
+describe("runSmartDraftScan - skipQuota handling", () => {
+  it("skips quota check when skipQuota=true (Dropbox)", async () => {
+    const files = [makeIngested({ id: "1", name: "a.jpg", stagedUrl: "https://r2/a.jpg" })];
+    mockDropboxList.mockResolvedValue(files);
+    mockSanitizeUrls.mockReturnValue(files.map((f) => f.stagedUrl));
+    mockUrlKey.mockImplementation((url: string) => url);
+    mockRunAnalysis.mockResolvedValue({
+      groups: [{ groupId: "g1", images: [files[0].stagedUrl], heroUrl: files[0].stagedUrl }],
+      imageInsights: {},
+      warnings: [],
+      orphans: [],
+    });
+
+    const result = await runSmartDraftScan({ userId: "u1", folder: "/Photos", skipQuota: true });
+
+    expect(result.status).toBe(200);
+    // canConsumeImages may be called but consumeImages should be skipped
+    expect(mockConsumeImages).not.toHaveBeenCalled();
+  });
+});
+
+describe("runSmartDraftScan - error handling", () => {
+  it("returns 500 when Dropbox list throws", async () => {
+    mockDropboxList.mockRejectedValue(new Error("Dropbox API failure"));
+
+    const result = await runSmartDraftScan({ userId: "u1", folder: "/Photos" });
+
+    expect(result.status).toBe(500);
+    expect(result.body.ok).toBe(false);
+    expect(result.body.error).toContain("Dropbox API failure");
+  });
+
+  it("returns 500 when analysis throws", async () => {
+    const files = [makeIngested({ id: "1", name: "a.jpg", stagedUrl: "https://r2/a.jpg" })];
+    mockDropboxList.mockResolvedValue(files);
+    mockSanitizeUrls.mockReturnValue(files.map((f) => f.stagedUrl));
+    mockRunAnalysis.mockRejectedValue(new Error("Vision API failure"));
+
+    const result = await runSmartDraftScan({ userId: "u1", folder: "/Photos" });
+
+    expect(result.status).toBe(500);
+    expect(result.body.ok).toBe(false);
+    expect(result.body.error).toContain("Vision API failure");
+  });
+});
+
+describe("runSmartDraftScan - imageInsights processing", () => {
+  it("processes array-style imageInsights from analysis", async () => {
+    const files = [makeIngested({ id: "1", name: "a.jpg", stagedUrl: "https://r2/a.jpg" })];
+    mockDropboxList.mockResolvedValue(files);
+    mockSanitizeUrls.mockReturnValue(files.map((f) => f.stagedUrl));
+    mockUrlKey.mockImplementation((url: string) => url);
+    
+    // Return imageInsights as array (alternative format)
+    mockRunAnalysis.mockResolvedValue({
+      groups: [{ groupId: "g1", images: [files[0].stagedUrl], heroUrl: files[0].stagedUrl }],
+      imageInsights: [
+        { url: files[0].stagedUrl, role: "front", hasVisibleText: true },
+      ],
+      warnings: [],
+      orphans: [],
+    });
+
+    const result = await runSmartDraftScan({ userId: "u1", folder: "/Photos" });
+
+    expect(result.status).toBe(200);
+    expect(result.body.ok).toBe(true);
+  });
+
+  it("handles missing imageInsights gracefully", async () => {
+    const files = [makeIngested({ id: "1", name: "a.jpg", stagedUrl: "https://r2/a.jpg" })];
+    mockDropboxList.mockResolvedValue(files);
+    mockSanitizeUrls.mockReturnValue(files.map((f) => f.stagedUrl));
+    mockUrlKey.mockImplementation((url: string) => url);
+    
+    mockRunAnalysis.mockResolvedValue({
+      groups: [{ groupId: "g1", images: [files[0].stagedUrl], heroUrl: files[0].stagedUrl }],
+      imageInsights: undefined,
+      warnings: [],
+      orphans: [],
+    });
+
+    const result = await runSmartDraftScan({ userId: "u1", folder: "/Photos" });
+
+    expect(result.status).toBe(200);
+    expect(result.body.ok).toBe(true);
+  });
+});
+
+describe("runSmartDraftScan - vision groups processing", () => {
+  it("deduplicates images within groups", async () => {
+    const urls = ["https://cdn/a.jpg", "https://cdn/b.jpg"];
+    mockSanitizeUrls.mockReturnValue(urls);
+    mockUrlKey.mockImplementation((url: string) => url);
+    
+    // Return group with duplicate images
+    mockRunAnalysis.mockResolvedValue({
+      groups: [{ 
+        groupId: "g1", 
+        images: [urls[0], urls[0], urls[1], urls[1]], // Duplicates
+        heroUrl: urls[0] 
+      }],
+      imageInsights: {},
+      warnings: [],
+      orphans: [],
+    });
+
+    const result = await runSmartDraftScan({ userId: "u1", stagedUrls: urls });
+
+    expect(result.status).toBe(200);
+    // Images should be deduplicated
+    const groupImages = result.body.groups?.[0]?.images || [];
+    expect(groupImages.length).toBe(2);
+  });
+
+  it("hydrates heroDisplayUrl and backDisplayUrl from httpsByKey", async () => {
+    const urls = ["https://cdn/front.jpg", "https://cdn/back.jpg"];
+    mockSanitizeUrls.mockReturnValue(urls);
+    mockUrlKey.mockImplementation((url: string) => url);
+    
+    mockRunAnalysis.mockResolvedValue({
+      groups: [{ 
+        groupId: "g1", 
+        images: urls,
+        heroUrl: urls[0],
+        backUrl: urls[1]
+      }],
+      imageInsights: {},
+      warnings: [],
+      orphans: [],
+    });
+
+    const result = await runSmartDraftScan({ userId: "u1", stagedUrls: urls });
+
+    expect(result.status).toBe(200);
+    const group = result.body.groups?.[0];
+    expect(group?.heroDisplayUrl).toBe(urls[0]);
+    expect(group?.backDisplayUrl).toBe(urls[1]);
+  });
+});

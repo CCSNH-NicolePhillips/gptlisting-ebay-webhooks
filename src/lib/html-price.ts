@@ -127,12 +127,28 @@ function detectPackQty(text: string | undefined): number {
   if (!text) return 1;
   const t = text.toLowerCase();
 
-  // Strong signals: "pack of 2", "pk of 3"
+  // Strong signals: "pack of 2", "pk of 3", "pack of 24"
   const m1 = t.match(/\b(?:pack|pk)\s*of\s*(\d+)\b/);
   if (m1) return parseInt(m1[1], 10);
 
-  // "2 pack", "3 bottles", "4 count", "60 capsules"
-  const m2 = t.match(/\b(\d+)\s*(?:pack|pk|count|ct|bottles?|capsules?|softgels?|units?)\b/);
+  // "24 pack", "24 count", "24 ct" - explicit pack language (allow higher counts)
+  const packExplicit = t.match(/\b(\d+)\s*(?:pack|pk|ct)\b/);
+  if (packExplicit) {
+    const qty = parseInt(packExplicit[1], 10);
+    // Allow packs up to 48 for explicit pack language
+    if (qty >= 2 && qty <= 48) return qty;
+  }
+
+  // "24 1oz packets", "12 packets", "6 pouches" - small unit containers
+  const smallUnitMatch = t.match(/\b(\d+)\s*(?:\d*\s*(?:fl\s*)?oz\s*)?(?:packets?|pouches?|sachets?|tubes?|shots?|sticks?)\b/);
+  if (smallUnitMatch) {
+    const qty = parseInt(smallUnitMatch[1], 10);
+    // These are typically sold in packs of 6-48
+    if (qty >= 4 && qty <= 48) return qty;
+  }
+
+  // "2 bottles", "3 bottles", "4 count" - lower threshold for bottles/count
+  const m2 = t.match(/\b(\d+)\s*(?:bottles?|capsules?|softgels?|units?)\b/);
   if (m2) {
     const qty = parseInt(m2[1], 10);
     // Ignore high counts that are likely product contents, not pack qty
@@ -145,7 +161,7 @@ function detectPackQty(text: string | undefined): number {
   const n = m3 && (m3[1] || m3[2] || m3[3]);
   if (n) {
     const qty = parseInt(n, 10);
-    if (qty <= 10) return qty;
+    if (qty <= 48) return qty;
   }
 
   return 1;
@@ -317,9 +333,9 @@ function detectSize(text: string | undefined): string | null {
 }
 
 /**
- * Pick best offer: prefer size match, then single-unit, else lowest unit price
+ * Pick best offer: prefer size match, then pack count match, then single-unit, else lowest unit price
  */
-function pickBestOffer(candidates: OfferCandidate[], requestedSize?: string | null): OfferCandidate | null {
+function pickBestOffer(candidates: OfferCandidate[], requestedSize?: string | null, requestedPackQty?: number | null): OfferCandidate | null {
   if (!candidates.length) return null;
 
   // If we have a requested size, strongly prefer offers that match it
@@ -334,7 +350,17 @@ function pickBestOffer(candidates: OfferCandidate[], requestedSize?: string | nu
       }
       return sizeMatches.reduce((best, c) => (c.unitPrice < best.unitPrice ? c : best), sizeMatches[0]);
     }
-    console.log(`[HTML Parser] ⚠️  No offers match requested size "${requestedSize}", falling back to best available`);
+    console.log(`[HTML Parser] ⚠️  No offers match requested size "${requestedSize}", trying pack count match...`);
+  }
+
+  // Try pack count matching (e.g., for "24 pack" products)
+  if (requestedPackQty && requestedPackQty > 1) {
+    const packMatches = candidates.filter(c => c.packQty === requestedPackQty);
+    if (packMatches.length) {
+      console.log(`[HTML Parser] Found ${packMatches.length} offer(s) matching pack count ${requestedPackQty}`);
+      return packMatches.reduce((best, c) => (c.price < best.price ? c : best), packMatches[0]);
+    }
+    console.log(`[HTML Parser] ⚠️  No offers match pack count ${requestedPackQty}, falling back to best available`);
   }
 
   const singles = candidates.filter(c => c.packQty === 1);
@@ -356,7 +382,7 @@ function pickBestOffer(candidates: OfferCandidate[], requestedSize?: string | nu
  * - { price: -1, skipOpenGraph: true } if all prices rejected (bulk/subscription only)
  * - { price: null, highestPrice?: number } if no prices found (highestPrice for sanity check)
  */
-function extractFromJsonLd($: cheerio.CheerioAPI, requestedSize?: string | null): ExtractedData & { skipOpenGraph?: boolean; highestPrice?: number } {
+function extractFromJsonLd($: cheerio.CheerioAPI, requestedSize?: string | null, requestedPackQty?: number | null): ExtractedData & { skipOpenGraph?: boolean; highestPrice?: number } {
   const scripts = $('script[type="application/ld+json"]').toArray();
   
   if (scripts.length === 0) {
@@ -554,8 +580,8 @@ function extractFromJsonLd($: cheerio.CheerioAPI, requestedSize?: string | null)
     return { price: -1, skipOpenGraph: true, highestPrice }; // -1 signals rejection (don't fallback)
   }
   
-  // Pick the best offer (prefer size match, then single-unit, else lowest unit price)
-  const best = pickBestOffer(retailCandidates, requestedSize);
+  // Pick the best offer (prefer size match, then pack count, then single-unit, else lowest unit price)
+  const best = pickBestOffer(retailCandidates, requestedSize, requestedPackQty);
   
   if (!best) {
     return { price: null, highestPrice };
@@ -1018,6 +1044,12 @@ export function extractPriceWithShipping(html: string, productTitle?: string): P
       console.log(`[HTML Parser] Looking for variant with size: ${requestedSize}`);
     }
     
+    // Extract requested pack quantity from product title (for variant matching)
+    const requestedPackQty = productTitle ? detectPackQty(productTitle) : null;
+    if (requestedPackQty && requestedPackQty > 1) {
+      console.log(`[HTML Parser] Looking for variant with pack count: ${requestedPackQty}`);
+    }
+    
     // Check for multi-pack products (prefer Amazon variant data if available)
     const packInfo = amazonVariant?.packSize 
       ? { isMultiPack: amazonVariant.packSize > 1, packSize: amazonVariant.packSize }
@@ -1030,7 +1062,7 @@ export function extractPriceWithShipping(html: string, productTitle?: string): P
       console.log(`[HTML Parser] ⚠️ WARNING: Detected ${packMsg} product - price may not be for single unit!`);
     }
     
-    const data = extractFromJsonLd($, requestedSize);
+    const data = extractFromJsonLd($, requestedSize, requestedPackQty);
     
     // If JSON-LD explicitly rejected prices (returned -1), don't fallback
     if (data.price === -1) {
