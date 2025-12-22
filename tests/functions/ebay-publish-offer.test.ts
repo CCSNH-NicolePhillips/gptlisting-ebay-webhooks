@@ -36,6 +36,12 @@ jest.mock('../../src/lib/promotion-queue.js', () => ({
   queuePromotionJob: jest.fn(async () => 'job-123'),
 }));
 
+jest.mock('../../src/lib/price-store.js', () => ({
+  bindListing: jest.fn(async () => ({ ok: true })),
+  getBindings: jest.fn(async () => []),
+  removeBinding: jest.fn(async () => ({ ok: true })),
+}));
+
 // Mock global fetch
 const mockFetch = jest.fn() as jest.MockedFunction<typeof fetch>;
 global.fetch = mockFetch as any;

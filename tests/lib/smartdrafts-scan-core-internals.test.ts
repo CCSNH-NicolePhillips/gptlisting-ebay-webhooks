@@ -84,6 +84,20 @@ beforeAll(async () => {
   _testExports = module._testExports;
 });
 
+// Helper functions that access _testExports (must be called after beforeAll runs)
+const basenameFrom = (url: string) => _testExports.basenameFrom(url);
+const isImage = (filename: string) => _testExports.isImage(filename);
+const folderPath = (entry: any) => _testExports.folderPath(entry);
+const makeSignature = (files: any[]) => _testExports.makeSignature(files);
+const buildFallbackGroups = (files: any[]) => _testExports.buildFallbackGroups(files);
+const mapLimit = async <T, R>(items: T[], limit: number, fn: (item: T, index: number) => Promise<R>) => 
+  _testExports.mapLimit(items, limit, fn);
+const hydrateGroups = (groups: any[], folder: string) => 
+  _testExports.hydrateGroups(groups, folder);
+const hydrateOrphans = (unused: any[], folder: string) => 
+  _testExports.hydrateOrphans(unused, folder);
+const buildPairwiseGroups = (files: any[]) => _testExports.buildPairwiseGroups(files);
+
 
 // =============================================================================
 // jsonEnvelope tests
@@ -505,65 +519,48 @@ describe('mapLimit', () => {
 // hydrateGroups tests
 // =============================================================================
 describe('hydrateGroups', () => {
-  it('should add imageInsights to groups', () => {
+  it('should create display name from brand and product', () => {
     const groups = [
-      { groupId: 'g1', images: ['http://example.com/1.jpg', 'http://example.com/2.jpg'] },
+      { brand: 'TestBrand', product: 'TestProduct', images: ['http://example.com/1.jpg'] },
     ] as any[];
-    const insightMap = new Map([
-      ['http://example.com/1.jpg', { role: 'front', brand: 'TestBrand' }],
-      ['http://example.com/2.jpg', { role: 'back', brand: 'TestBrand' }],
-    ]);
 
-    hydrateGroups(groups, insightMap);
+    const result = hydrateGroups(groups, 'TestFolder');
 
-    expect(groups[0].imageInsights).toHaveLength(2);
-    expect(groups[0].imageInsights[0].role).toBe('front');
-    expect(groups[0].imageInsights[1].role).toBe('back');
+    expect(result[0].name).toBe('TestBrand — TestProduct');
+    expect(result[0].folder).toBe('TestFolder');
   });
 
-  it('should handle missing insights gracefully', () => {
+  it('should handle missing brand gracefully', () => {
     const groups = [
-      { groupId: 'g1', images: ['http://example.com/1.jpg', 'http://example.com/missing.jpg'] },
+      { product: 'TestProduct', images: ['http://example.com/1.jpg'] },
     ] as any[];
-    const insightMap = new Map([
-      ['http://example.com/1.jpg', { role: 'front' }],
-    ]);
 
-    hydrateGroups(groups, insightMap);
+    const result = hydrateGroups(groups, 'TestFolder');
 
-    expect(groups[0].imageInsights).toHaveLength(2);
-    expect(groups[0].imageInsights[0].role).toBe('front');
-    expect(groups[0].imageInsights[1]).toEqual({ url: 'http://example.com/missing.jpg' });
+    expect(result[0].name).toBe('TestProduct');
   });
 
   it('should handle empty groups array', () => {
     const groups: any[] = [];
-    const insightMap = new Map();
     
-    expect(() => hydrateGroups(groups, insightMap)).not.toThrow();
+    expect(() => hydrateGroups(groups, 'TestFolder')).not.toThrow();
+    expect(hydrateGroups(groups, 'TestFolder')).toEqual([]);
   });
 
-  it('should handle groups with no images', () => {
-    const groups = [{ groupId: 'g1', images: [] }] as any[];
-    const insightMap = new Map();
+  it('should limit images to 12 per group', () => {
+    const images = Array.from({ length: 20 }, (_, i) => `http://example.com/${i}.jpg`);
+    const groups = [{ brand: 'Brand', product: 'Product', images }] as any[];
     
-    hydrateGroups(groups, insightMap);
-    expect(groups[0].imageInsights).toEqual([]);
+    const result = hydrateGroups(groups, 'TestFolder');
+    expect(result[0].images).toHaveLength(12);
   });
 
-  it('should preserve existing insight properties', () => {
-    const groups = [
-      { groupId: 'g1', images: ['http://example.com/1.jpg'] },
-    ] as any[];
-    const insightMap = new Map([
-      ['http://example.com/1.jpg', { role: 'front', brand: 'TestBrand', product: 'TestProduct', confidence: 0.95 }],
-    ]);
-
-    hydrateGroups(groups, insightMap);
-
-    expect(groups[0].imageInsights[0].brand).toBe('TestBrand');
-    expect(groups[0].imageInsights[0].product).toBe('TestProduct');
-    expect(groups[0].imageInsights[0].confidence).toBe(0.95);
+  it('should limit claims to 8 per group', () => {
+    const claims = Array.from({ length: 15 }, (_, i) => `Claim ${i}`);
+    const groups = [{ brand: 'Brand', product: 'Product', images: [], claims }] as any[];
+    
+    const result = hydrateGroups(groups, 'TestFolder');
+    expect(result[0].claims).toHaveLength(8);
   });
 });
 
@@ -571,58 +568,45 @@ describe('hydrateGroups', () => {
 // hydrateOrphans tests
 // =============================================================================
 describe('hydrateOrphans', () => {
-  it('should add insight data to orphan objects', () => {
-    const orphans = [
-      { url: 'http://example.com/orphan1.jpg' },
-      { url: 'http://example.com/orphan2.jpg' },
+  it('should create orphan objects with url, name, and folder', () => {
+    const unused = [
+      { entry: { name: 'orphan1.jpg', path_display: '/TestFolder/orphan1.jpg' }, url: 'http://example.com/orphan1.jpg' },
+      { entry: { name: 'orphan2.jpg', path_display: '/TestFolder/orphan2.jpg' }, url: 'http://example.com/orphan2.jpg' },
     ] as any[];
-    const insightMap = new Map([
-      ['http://example.com/orphan1.jpg', { role: 'front', category: 'product' }],
-      ['http://example.com/orphan2.jpg', { role: 'back', category: 'non-product' }],
-    ]);
 
-    hydrateOrphans(orphans, insightMap);
+    const result = hydrateOrphans(unused, 'DefaultFolder');
 
-    expect(orphans[0].role).toBe('front');
-    expect(orphans[0].category).toBe('product');
-    expect(orphans[1].role).toBe('back');
-    expect(orphans[1].category).toBe('non-product');
+    expect(result[0].url).toBe('http://example.com/orphan1.jpg');
+    expect(result[0].name).toBe('orphan1.jpg');
+    expect(result[0].folder).toBe('TestFolder');
+    expect(result[1].url).toBe('http://example.com/orphan2.jpg');
+    expect(result[1].name).toBe('orphan2.jpg');
   });
 
-  it('should handle missing insights', () => {
-    const orphans = [{ url: 'http://example.com/unknown.jpg' }] as any[];
-    const insightMap = new Map();
+  it('should use default folder when entry has no path', () => {
+    const unused = [
+      { entry: { name: 'orphan.jpg' }, url: 'http://example.com/orphan.jpg' },
+    ] as any[];
 
-    hydrateOrphans(orphans, insightMap);
+    const result = hydrateOrphans(unused, 'DefaultFolder');
 
-    expect(orphans[0].url).toBe('http://example.com/unknown.jpg');
-    // Should not add undefined properties
+    expect(result[0].folder).toBe('DefaultFolder');
   });
 
   it('should handle empty orphans array', () => {
-    const orphans: any[] = [];
-    const insightMap = new Map();
+    const unused: any[] = [];
     
-    expect(() => hydrateOrphans(orphans, insightMap)).not.toThrow();
+    const result = hydrateOrphans(unused, 'TestFolder');
+    expect(result).toEqual([]);
   });
 
-  it('should spread all insight properties onto orphan', () => {
-    const orphans = [{ url: 'http://example.com/item.jpg' }] as any[];
-    const insightMap = new Map([
-      ['http://example.com/item.jpg', {
-        role: 'front',
-        brand: 'TestBrand',
-        product: 'Widget',
-        confidence: 0.8,
-        claims: ['organic'],
-      }],
-    ]);
+  it('should extract entry name correctly', () => {
+    const unused = [
+      { entry: { name: 'my-image.jpg', path_display: '/Products/my-image.jpg' }, url: 'http://example.com/item.jpg' },
+    ] as any[];
 
-    hydrateOrphans(orphans, insightMap);
-
-    expect(orphans[0].brand).toBe('TestBrand');
-    expect(orphans[0].product).toBe('Widget');
-    expect(orphans[0].claims).toEqual(['organic']);
+    const result = hydrateOrphans(unused, 'Fallback');
+    expect(result[0].name).toBe('my-image.jpg');
   });
 });
 
