@@ -55,6 +55,7 @@ export interface PairingV2Job {
   dropboxPaths?: string[];
   dropboxFilenames?: string[]; // Original filenames (parallel to dropboxPaths)
   accessToken?: string; // Store access token for background download
+  needsTempLinks?: boolean; // If true, dropboxPaths are file paths, not temp links
   
   // Local upload fields
   stagedUrls?: string[]; // URLs of uploaded files
@@ -82,7 +83,8 @@ export async function schedulePairingV2Job(
   folder: string,
   imagePaths: string[],
   accessToken?: string,
-  originalFilenames?: string[]
+  originalFilenames?: string[],
+  needsTempLinks?: boolean
 ): Promise<string> {
   const jobId = randomUUID();
 
@@ -106,6 +108,7 @@ export async function schedulePairingV2Job(
     job.dropboxPaths = imagePaths;
     job.dropboxFilenames = originalFilenames; // Store original filenames
     job.accessToken = accessToken;
+    job.needsTempLinks = needsTempLinks || false;
   } else {
     job.stagedUrls = imagePaths;
   }

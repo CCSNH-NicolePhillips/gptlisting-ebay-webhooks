@@ -191,25 +191,39 @@ export const handler: Handler = async (event) => {
       samplePaths: imagePaths.slice(0, 3),
     });
 
-    // Get temporary download links for all images
-    const tempLinks = await getDropboxTemporaryLinks(accessToken, imagePaths);
-
-    if (tempLinks.length === 0) {
-      return json(500, { error: "Failed to get temporary links for any images" }, originHdr);
-    }
-
     // Extract original filenames from paths
     const originalFilenames = imagePaths.map(p => p.split('/').pop() || 'unknown.jpg');
 
-    console.log("[smartdrafts-pairing-v2-start] Got temporary links", {
-      count: tempLinks.length,
-      sampleLinks: tempLinks.slice(0, 2).map(link => link.substring(0, 80) + "..."),
-      sampleFilenames: originalFilenames.slice(0, 3),
-    });
+    // DEFER temp link fetching to background processor to avoid timeout
+    // For small batches (<=25 images), fetch links now for faster startup
+    // For larger batches, pass Dropbox paths and let processor fetch links
+    let linksOrPaths: string[];
+    let needsTempLinks = false;
+    
+    if (imagePaths.length <= 25) {
+      // Small batch - get temp links now
+      const tempLinks = await getDropboxTemporaryLinks(accessToken, imagePaths);
+      if (tempLinks.length === 0) {
+        return json(500, { error: "Failed to get temporary links for any images" }, originHdr);
+      }
+      linksOrPaths = tempLinks;
+      console.log("[smartdrafts-pairing-v2-start] Got temporary links for small batch:", tempLinks.length);
+    } else {
+      // Large batch - pass Dropbox paths, processor will fetch temp links
+      linksOrPaths = imagePaths;
+      needsTempLinks = true;
+      console.log("[smartdrafts-pairing-v2-start] Deferring temp link fetch for large batch:", imagePaths.length);
+    }
 
     // Schedule the job (returns immediately with job ID)
-    // Pass temp links as dropboxPaths and original filenames for proper identification
-    const jobId = await schedulePairingV2Job(userAuth.userId, folder, tempLinks, accessToken, originalFilenames);
+    const jobId = await schedulePairingV2Job(
+      userAuth.userId, 
+      folder, 
+      linksOrPaths, 
+      accessToken, 
+      originalFilenames,
+      needsTempLinks
+    );
 
     console.log("[smartdrafts-pairing-v2-start] Job scheduled:", jobId);
 
@@ -219,7 +233,7 @@ export const handler: Handler = async (event) => {
         ok: true,
         jobId,
         message: "Pairing-v2 job started",
-        imageCount: tempLinks.length,
+        imageCount: linksOrPaths.length,
       },
       originHdr
     );

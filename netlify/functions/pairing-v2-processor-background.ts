@@ -26,6 +26,47 @@ interface ImageClassificationV2 {
   confidence: number;
 }
 
+/**
+ * Get temporary download links for Dropbox files (used when needsTempLinks is true)
+ */
+async function getDropboxTemporaryLinks(accessToken: string, paths: string[]): Promise<string[]> {
+  const links: string[] = [];
+  
+  // Get temp links in parallel (batch of 50 at a time - background function has more time)
+  for (let i = 0; i < paths.length; i += 50) {
+    const batch = paths.slice(i, i + 50);
+    const batchPromises = batch.map(async (filePath) => {
+      try {
+        const response = await fetch("https://api.dropboxapi.com/2/files/get_temporary_link", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ path: filePath }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`Failed to get temp link for ${filePath}: ${response.status} ${errorText}`);
+          return null;
+        }
+
+        const data: any = await response.json();
+        return data.link;
+      } catch (err) {
+        console.error(`Error getting temp link for ${filePath}:`, err);
+        return null;
+      }
+    });
+
+    const batchLinks = await Promise.all(batchPromises);
+    links.push(...batchLinks.filter((link): link is string => link !== null));
+  }
+
+  return links;
+}
+
 // Redis helpers
 async function redisSet(key: string, value: string, exSeconds: number): Promise<void> {
   const url = process.env.UPSTASH_REDIS_REST_URL;
@@ -153,13 +194,25 @@ export const handler: Handler = async (event) => {
     try {
       console.log(`[pairing-v2-processor] Downloading all ${totalImages} images (${uploadMethod} mode)...`);
       
+      // If needsTempLinks is true, we need to fetch temp links from Dropbox paths
+      let imageSources = job.stagedUrls || job.dropboxPaths || [];
+      
+      if (job.needsTempLinks && uploadMethod === "dropbox" && job.accessToken) {
+        console.log(`[pairing-v2-processor] Fetching ${imageSources.length} temp links from Dropbox...`);
+        const tempLinks = await getDropboxTemporaryLinks(job.accessToken, imageSources);
+        if (tempLinks.length === 0) {
+          throw new Error("Failed to get temporary links from Dropbox");
+        }
+        imageSources = tempLinks;
+        console.log(`[pairing-v2-processor] Got ${tempLinks.length} temp links`);
+      }
+      
       // Create temp directory
       const workDir = fs.mkdtempSync(path.join(os.tmpdir(), `pairing-v2-${jobId}-`));
 
       try {
         // Download all images from staged URLs (works for both local and Dropbox modes)
         const localPaths: string[] = [];
-        const imageSources = job.stagedUrls || job.dropboxPaths || [];
         const filenameHints = job.dropboxFilenames || []; // Original filenames for Dropbox
         
         for (let i = 0; i < imageSources.length; i++) {

@@ -38,6 +38,10 @@
 [functions."smartdrafts-pairing"]
   timeout = 26  # Max for Pro tier, handles GPT API calls for ambiguous pairs
 
+# Pairing V2 start needs extended timeout - fetches Dropbox temp links for all images
+[functions."smartdrafts-pairing-v2-start"]
+  timeout = 26  # Max for Pro tier, handles Dropbox API calls for temp links
+
 # Pairing V2 processor runs as background function with 10-minute timeout
 [functions."pairing-v2-processor-background"]
   timeout = 600  # 10 minutes for background function
