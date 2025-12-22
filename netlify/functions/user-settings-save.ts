@@ -4,11 +4,22 @@ import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey
 import type { PricingSettings, ShippingStrategy } from '../../src/lib/pricing-config.js';
 
 /**
- * Save user settings (promotion preferences, pricing config, etc.)
+ * Auto-price reduction settings
+ */
+interface AutoPriceSettings {
+  enabled: boolean;
+  reduceBy?: number;  // cents
+  everyDays?: number;
+  minPrice?: number;  // cents
+}
+
+/**
+ * Save user settings (promotion preferences, pricing config, auto-price reduction, etc.)
  * POST body: { 
  *   autoPromoteEnabled?: boolean, 
  *   defaultPromotionRate?: number,
- *   pricing?: Partial<PricingSettings>
+ *   pricing?: Partial<PricingSettings>,
+ *   autoPrice?: AutoPriceSettings
  * }
  */
 export const handler: Handler = async (event) => {
@@ -22,6 +33,7 @@ export const handler: Handler = async (event) => {
     const autoPromoteEnabled = body.autoPromoteEnabled as boolean | undefined;
     const defaultPromotionRate = body.defaultPromotionRate as number | undefined;
     const pricing = body.pricing as Partial<PricingSettings> | undefined;
+    const autoPrice = body.autoPrice as AutoPriceSettings | undefined;
 
     // Validate promotion rate if provided
     if (defaultPromotionRate !== undefined && defaultPromotionRate !== null) {
@@ -84,6 +96,37 @@ export const handler: Handler = async (event) => {
       }
     }
 
+    // Validate auto-price settings if provided
+    if (autoPrice && autoPrice.enabled) {
+      if (autoPrice.reduceBy !== undefined) {
+        if (typeof autoPrice.reduceBy !== 'number' || autoPrice.reduceBy < 25 || autoPrice.reduceBy > 1000) {
+          return {
+            statusCode: 400,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'reduceBy must be between 25 and 1000 cents ($0.25 - $10.00)' })
+          };
+        }
+      }
+      if (autoPrice.everyDays !== undefined) {
+        if (typeof autoPrice.everyDays !== 'number' || autoPrice.everyDays < 1 || autoPrice.everyDays > 30) {
+          return {
+            statusCode: 400,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'everyDays must be between 1 and 30' })
+          };
+        }
+      }
+      if (autoPrice.minPrice !== undefined) {
+        if (typeof autoPrice.minPrice !== 'number' || autoPrice.minPrice < 99) {
+          return {
+            statusCode: 400,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'minPrice must be at least 99 cents ($0.99)' })
+          };
+        }
+      }
+    }
+
     const store = tokensStore();
     const key = userScopedKey(sub, 'settings.json');
     
@@ -106,6 +149,16 @@ export const handler: Handler = async (event) => {
       if (pricing.templateShippingEstimateCents !== undefined) settings.pricing.templateShippingEstimateCents = pricing.templateShippingEstimateCents;
       if (pricing.shippingSubsidyCapCents !== undefined) settings.pricing.shippingSubsidyCapCents = pricing.shippingSubsidyCapCents;
       if (pricing.minItemPriceCents !== undefined) settings.pricing.minItemPriceCents = pricing.minItemPriceCents;
+    }
+
+    // Update auto-price reduction settings
+    if (autoPrice !== undefined) {
+      settings.autoPrice = {
+        enabled: autoPrice.enabled ?? false,
+        reduceBy: autoPrice.reduceBy ?? 100,  // default $1.00
+        everyDays: autoPrice.everyDays ?? 7,  // default 7 days
+        minPrice: autoPrice.minPrice ?? 199   // default $1.99
+      };
     }
 
     // Save to blob store

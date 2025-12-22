@@ -4,11 +4,12 @@ import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey
 import { getDefaultPricingSettings } from '../../src/lib/pricing-config.js';
 
 /**
- * Get user settings (promotion preferences, pricing config, etc.)
+ * Get user settings (promotion preferences, pricing config, auto-price reduction, etc.)
  * Returns: { 
  *   autoPromoteEnabled: boolean, 
  *   defaultPromotionRate: number | null,
- *   pricing: PricingSettings
+ *   pricing: PricingSettings,
+ *   autoPrice: { enabled, reduceBy, everyDays, minPrice }
  * }
  */
 export const handler: Handler = async (event) => {
@@ -31,6 +32,14 @@ export const handler: Handler = async (event) => {
     // Get pricing defaults
     const defaultPricing = getDefaultPricingSettings();
 
+    // Default auto-price settings
+    const defaultAutoPrice = {
+      enabled: false,
+      reduceBy: 100,    // $1.00 in cents
+      everyDays: 7,
+      minPrice: 199     // $1.99 in cents
+    };
+
     // Return with defaults
     return {
       statusCode: 200,
@@ -44,6 +53,12 @@ export const handler: Handler = async (event) => {
           templateShippingEstimateCents: settings.pricing?.templateShippingEstimateCents ?? defaultPricing.templateShippingEstimateCents,
           shippingSubsidyCapCents: settings.pricing?.shippingSubsidyCapCents ?? defaultPricing.shippingSubsidyCapCents,
           minItemPriceCents: settings.pricing?.minItemPriceCents ?? defaultPricing.minItemPriceCents,
+        },
+        autoPrice: {
+          enabled: settings.autoPrice?.enabled ?? defaultAutoPrice.enabled,
+          reduceBy: settings.autoPrice?.reduceBy ?? defaultAutoPrice.reduceBy,
+          everyDays: settings.autoPrice?.everyDays ?? defaultAutoPrice.everyDays,
+          minPrice: settings.autoPrice?.minPrice ?? defaultAutoPrice.minPrice,
         }
       })
     };

@@ -365,6 +365,55 @@
               </div>
             </section>
             
+            <!-- Auto Price Reduction Card -->
+            <section class="dp-card">
+              <div class="dp-card__header">
+                <h3 class="dp-card__title">📉 Auto Price Reduction</h3>
+                <p class="dp-card__subtitle">Automatically reduce prices over time to help items sell faster</p>
+              </div>
+              
+              <div class="dp-card__content">
+                <label class="dp-form-label">
+                  <input type="checkbox" id="autoPriceEnabled" style="margin-right: 8px; vertical-align: middle;" />
+                  <span>Enable automatic price reduction for new listings</span>
+                </label>
+                
+                <div id="autoPriceOptions" style="margin-top: 1.5rem; padding-left: 1.5rem; opacity: 0.5; pointer-events: none;">
+                  <label class="dp-form-label">Reduce Price By</label>
+                  <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1.5rem;">
+                    <span style="color: var(--text-muted);">$</span>
+                    <input type="number" id="autoPriceReduceBy" class="dp-input" placeholder="1.00" min="0.25" max="10" step="0.25" style="width: 120px;" />
+                    <span style="color: var(--text-muted);">per reduction</span>
+                  </div>
+                  <p style="font-size: 0.875rem; color: var(--text-muted); margin-top: -0.5rem; margin-bottom: 1.5rem;">
+                    Amount to reduce the price by each cycle. Recommended: $0.50-$2.00.
+                  </p>
+                  
+                  <label class="dp-form-label">Reduction Frequency</label>
+                  <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1.5rem;">
+                    <span style="color: var(--text-muted);">Every</span>
+                    <input type="number" id="autoPriceEveryDays" class="dp-input" placeholder="7" min="1" max="30" step="1" style="width: 100px;" />
+                    <span style="color: var(--text-muted);">days</span>
+                  </div>
+                  <p style="font-size: 0.875rem; color: var(--text-muted); margin-top: -0.5rem; margin-bottom: 1.5rem;">
+                    How often to apply the price reduction. Default: 7 days.
+                  </p>
+                  
+                  <label class="dp-form-label">Minimum Price Floor</label>
+                  <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem;">
+                    <span style="color: var(--text-muted);">$</span>
+                    <input type="number" id="autoPriceMinPrice" class="dp-input" placeholder="1.99" min="0.99" max="100" step="0.50" style="width: 120px;" />
+                  </div>
+                  <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1.5rem;">
+                    Price will never drop below this amount. Protects your margins.
+                  </p>
+                </div>
+                
+                <button id="autoPriceSaveButton" class="dp-btn dp-btn-primary" style="margin-top: 12px;">Save auto-pricing settings</button>
+                <p id="autoPriceSaveMessage" class="dp-muted" style="text-align: center; margin-top: 12px; min-height: 20px;"></p>
+              </div>
+            </section>
+            
             <!-- Connections Card -->
             <section class="dp-card">
               <div class="dp-card__header">
@@ -708,6 +757,138 @@
         }
       }
       
+      // Auto-price reduction checkbox toggle
+      const autoPriceCheckbox = document.getElementById('autoPriceEnabled');
+      const autoPriceOptions = document.getElementById('autoPriceOptions');
+      
+      if (autoPriceCheckbox && autoPriceOptions) {
+        autoPriceCheckbox.addEventListener('change', () => {
+          if (autoPriceCheckbox.checked) {
+            autoPriceOptions.style.opacity = '1';
+            autoPriceOptions.style.pointerEvents = 'auto';
+          } else {
+            autoPriceOptions.style.opacity = '0.5';
+            autoPriceOptions.style.pointerEvents = 'none';
+          }
+        });
+      }
+      
+      // Save auto-price settings
+      const autoPriceSaveBtn = document.getElementById('autoPriceSaveButton');
+      if (autoPriceSaveBtn) {
+        autoPriceSaveBtn.onclick = async () => {
+          const msg = document.getElementById('autoPriceSaveMessage');
+          const enabled = document.getElementById('autoPriceEnabled')?.checked || false;
+          const reduceBy = parseFloat(document.getElementById('autoPriceReduceBy')?.value || '1.00');
+          const everyDays = parseInt(document.getElementById('autoPriceEveryDays')?.value || '7', 10);
+          const minPrice = parseFloat(document.getElementById('autoPriceMinPrice')?.value || '1.99');
+          
+          // Validation
+          if (enabled) {
+            if (reduceBy < 0.25 || reduceBy > 10) {
+              if (msg) {
+                msg.textContent = 'Reduction amount must be between $0.25 and $10.00';
+                msg.style.color = '#ef4444';
+                setTimeout(() => { msg.textContent = ''; msg.style.color = ''; }, 3000);
+              }
+              return;
+            }
+            
+            if (everyDays < 1 || everyDays > 30) {
+              if (msg) {
+                msg.textContent = 'Frequency must be between 1 and 30 days';
+                msg.style.color = '#ef4444';
+                setTimeout(() => { msg.textContent = ''; msg.style.color = ''; }, 3000);
+              }
+              return;
+            }
+            
+            if (minPrice < 0.99) {
+              if (msg) {
+                msg.textContent = 'Minimum price must be at least $0.99';
+                msg.style.color = '#ef4444';
+                setTimeout(() => { msg.textContent = ''; msg.style.color = ''; }, 3000);
+              }
+              return;
+            }
+          }
+          
+          if (msg) msg.textContent = 'Saving...';
+          
+          try {
+            const response = await authClient.authFetch('/.netlify/functions/user-settings-save', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                autoPrice: enabled ? {
+                  enabled: true,
+                  reduceBy: Math.round(reduceBy * 100), // cents
+                  everyDays,
+                  minPrice: Math.round(minPrice * 100) // cents
+                } : { enabled: false }
+              })
+            });
+            
+            if (response.ok) {
+              if (msg) {
+                msg.textContent = '✓ Auto-pricing settings saved!';
+                msg.style.color = '#10b981';
+                setTimeout(() => { msg.textContent = ''; msg.style.color = ''; }, 3000);
+              }
+            } else {
+              throw new Error('Failed to save');
+            }
+          } catch (err) {
+            console.error('[Settings] Failed to save auto-price settings:', err);
+            if (msg) {
+              msg.textContent = 'Failed to save settings';
+              msg.style.color = '#ef4444';
+              setTimeout(() => { msg.textContent = ''; msg.style.color = ''; }, 3000);
+            }
+          }
+        };
+      }
+      
+      // Load auto-price settings
+      async function loadAutoPriceSettings() {
+        try {
+          const response = await authClient.authFetch('/.netlify/functions/user-settings-get');
+          if (response.ok) {
+            const settings = await response.json();
+            const autoPrice = settings.autoPrice || {};
+            
+            const enabledCheckbox = document.getElementById('autoPriceEnabled');
+            const reduceByInput = document.getElementById('autoPriceReduceBy');
+            const everyDaysInput = document.getElementById('autoPriceEveryDays');
+            const minPriceInput = document.getElementById('autoPriceMinPrice');
+            const autoPriceOptions = document.getElementById('autoPriceOptions');
+            
+            if (enabledCheckbox && autoPrice.enabled !== undefined) {
+              enabledCheckbox.checked = autoPrice.enabled;
+              
+              if (autoPrice.enabled && autoPriceOptions) {
+                autoPriceOptions.style.opacity = '1';
+                autoPriceOptions.style.pointerEvents = 'auto';
+              }
+            }
+            
+            if (reduceByInput && autoPrice.reduceBy) {
+              reduceByInput.value = (autoPrice.reduceBy / 100).toFixed(2);
+            }
+            
+            if (everyDaysInput && autoPrice.everyDays) {
+              everyDaysInput.value = autoPrice.everyDays;
+            }
+            
+            if (minPriceInput && autoPrice.minPrice) {
+              minPriceInput.value = (autoPrice.minPrice / 100).toFixed(2);
+            }
+          }
+        } catch (err) {
+          console.error('[Settings] Failed to load auto-price settings:', err);
+        }
+      }
+      
       const bannerLoginBtn = document.getElementById('bannerLogin');
       if (bannerLoginBtn) bannerLoginBtn.onclick = () => {
         try { sessionStorage.setItem('returnTo', '/settings.html'); } catch {}
@@ -745,6 +926,7 @@
           authClient.updateUserCard().catch(() => {}),
           loadPromotionSettings().catch(() => {}),
           loadPricingSettings().catch(() => {}),
+          loadAutoPriceSettings().catch(() => {}),
         ];
         await Promise.all(loads);
         
