@@ -391,8 +391,75 @@
               </div>
             </div>
             
-            <!-- Setup Checklist Card -->
-            <section class="dp-card dp-card--checklist" id="setupChecklistSection">
+            <!-- Active Listings Summary Card -->
+            <section class="dp-card dp-card--listings" id="activeListingsSection">
+              <div class="dp-card__header">
+                <h3 class="dp-card__title">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; margin-right: 6px; vertical-align: text-bottom;">
+                    <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                    <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+                  </svg>
+                  Active Listings
+                </h3>
+                <p class="dp-card__subtitle">Your eBay store at a glance</p>
+              </div>
+              
+              <div class="dp-card__content">
+                <!-- Loading State -->
+                <div class="dp-loading-state" id="activeListingsLoading">
+                  <div class="dp-spinner"></div>
+                  <p class="dp-loading-text">Loading listings...</p>
+                </div>
+                
+                <!-- Stats Grid (hidden until loaded) -->
+                <div id="activeListingsStats" style="display: none;">
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div style="background: rgba(56, 189, 248, 0.08); border-radius: 12px; padding: 20px; text-align: center;">
+                      <div id="metricActiveCount" style="font-size: 2rem; font-weight: 700; color: var(--accent);">0</div>
+                      <div style="font-size: 0.875rem; color: var(--text-muted); margin-top: 4px;">Active Listings</div>
+                    </div>
+                    <div style="background: rgba(16, 185, 129, 0.08); border-radius: 12px; padding: 20px; text-align: center;">
+                      <div id="metricTotalValue" style="font-size: 2rem; font-weight: 700; color: #10b981;">$0</div>
+                      <div style="font-size: 0.875rem; color: var(--text-muted); margin-top: 4px;">Inventory Value</div>
+                    </div>
+                  </div>
+                  
+                  <!-- Pending Drafts Alert -->
+                  <div id="pendingDraftsAlert" style="display: none; margin-top: 16px; padding: 12px 16px; background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.3); border-radius: 8px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                      </svg>
+                      <span style="color: #fbbf24; font-weight: 500;"><span id="pendingDraftsCount">0</span> drafts awaiting review</span>
+                      <a href="/drafts.html" style="margin-left: auto; color: #fbbf24; font-size: 0.875rem; text-decoration: underline;">Review →</a>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- Empty State (shown when no listings) -->
+                <div class="dp-empty-state" id="activeListingsEmpty" style="display: none;">
+                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--text-muted); margin-bottom: 16px;">
+                    <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                    <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+                  </svg>
+                  <h4 class="dp-empty-state__title">No active listings yet</h4>
+                  <p class="dp-empty-state__description">Publish your drafts to see them here.</p>
+                </div>
+              </div>
+              
+              <div class="dp-card__footer">
+                <a href="/active-listings.html" class="dp-link-button">
+                  View all listings
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; margin-left: 4px; vertical-align: middle;">
+                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                  </svg>
+                </a>
+              </div>
+            </section>
+            
+            <!-- Setup Checklist Card (hidden for connected users) -->
+            <section class="dp-card dp-card--checklist" id="setupChecklistSection" style="display: none;">
               <header class="dp-card__header">
                 <h3 class="dp-card__title">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; margin-right: 6px; vertical-align: text-bottom;">
@@ -1412,6 +1479,90 @@ function updateUIFromCache(data) {
         div.textContent = str;
         return div.innerHTML;
       }
+      
+      // Load active listings summary
+      async function loadActiveListingsSummary() {
+        const loadingEl = document.getElementById('activeListingsLoading');
+        const statsEl = document.getElementById('activeListingsStats');
+        const emptyEl = document.getElementById('activeListingsEmpty');
+        
+        try {
+          const exec = authClient && typeof authClient.authFetch === 'function' ? authClient.authFetch : fetch;
+          const response = await exec('/.netlify/functions/ebay-list-active');
+          
+          if (loadingEl) loadingEl.style.display = 'none';
+          
+          if (!response.ok) {
+            console.warn('[Active Listings] Failed to load:', response.status);
+            if (emptyEl) emptyEl.style.display = 'block';
+            return;
+          }
+          
+          const data = await response.json();
+          const offers = Array.isArray(data?.offers) ? data.offers : [];
+          
+          // Filter only PUBLISHED/active listings
+          const activeOffers = offers.filter(o => 
+            o.listingStatus === 'ACTIVE' || o.status === 'PUBLISHED'
+          );
+          
+          console.log('[Active Listings] Loaded', activeOffers.length, 'active listings');
+          
+          if (activeOffers.length === 0) {
+            if (emptyEl) emptyEl.style.display = 'block';
+            if (statsEl) statsEl.style.display = 'none';
+            return;
+          }
+          
+          // Calculate total value
+          let totalValue = 0;
+          activeOffers.forEach(offer => {
+            const price = parseFloat(offer.price?.value || offer.pricingSummary?.price?.value || 0);
+            const qty = offer.availableQuantity || 1;
+            totalValue += price * qty;
+          });
+          
+          // Update UI
+          const countEl = document.getElementById('metricActiveCount');
+          const valueEl = document.getElementById('metricTotalValue');
+          
+          if (countEl) countEl.textContent = activeOffers.length.toLocaleString();
+          if (valueEl) valueEl.textContent = '$' + totalValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+          
+          if (statsEl) statsEl.style.display = 'block';
+          if (emptyEl) emptyEl.style.display = 'none';
+          
+        } catch (error) {
+          console.error('[Active Listings] Error:', error);
+          if (loadingEl) loadingEl.style.display = 'none';
+          if (emptyEl) emptyEl.style.display = 'block';
+        }
+      }
+      
+      // Load pending drafts count
+      async function loadPendingDraftsCount() {
+        try {
+          const exec = authClient && typeof authClient.authFetch === 'function' ? authClient.authFetch : fetch;
+          const base = '/.netlify/functions/ebay-list-offers?limit=200&status=' + encodeURIComponent('UNPUBLISHED,DRAFT,INACTIVE');
+          const response = await exec(base);
+          
+          if (!response.ok) return;
+          
+          const data = await response.json();
+          const offers = Array.isArray(data?.offers) ? data.offers : [];
+          
+          if (offers.length > 0) {
+            const alertEl = document.getElementById('pendingDraftsAlert');
+            const countEl = document.getElementById('pendingDraftsCount');
+            
+            if (countEl) countEl.textContent = offers.length;
+            if (alertEl) alertEl.style.display = 'block';
+          }
+          
+        } catch (error) {
+          console.warn('[Pending Drafts] Error:', error);
+        }
+      }
 
       // ===== MOBILE NAV (HAMBURGER + BACKDROP) =====
       function initMobileNav() {
@@ -1472,9 +1623,11 @@ function updateUIFromCache(data) {
         // Load data in background - don't block UI
         evaluatePrereqs().catch(() => {});
         
-        // Load recent drafts after a brief delay
+        // Load dashboard widgets after a brief delay
         setTimeout(() => { 
           try { loadRecentDrafts(); } catch {}
+          try { loadActiveListingsSummary(); } catch {}
+          try { loadPendingDraftsCount(); } catch {}
         }, 300);
       }
       if (document.readyState === 'loading') {
