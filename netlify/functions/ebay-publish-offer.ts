@@ -3,6 +3,7 @@ import { accessTokenFromRefresh, tokenHosts } from '../../src/lib/_common.js';
 import { tokensStore } from '../../src/lib/_blobs.js';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
 import { queuePromotionJob } from '../../src/lib/promotion-queue.js';
+import { bindListing } from '../../src/lib/price-store.js';
 
 export const handler: Handler = async (event) => {
 	try {
@@ -272,6 +273,85 @@ export const handler: Handler = async (event) => {
 			console.error(`[ebay-publish-offer] Error checking auto-promotion:`, err.message);
 		}
 
+		// Step 4: Check for auto-price reduction and create binding
+		let autoPriceResult: any = null;
+		try {
+			// Load user's settings for auto-price reduction
+			const settingsKey = userScopedKey(sub!, 'settings.json');
+			let userSettings: any = {};
+			try {
+				userSettings = (await store.get(settingsKey, { type: 'json' })) || {};
+			} catch {
+				// No settings saved
+			}
+			
+			const autoPrice = userSettings.autoPrice;
+			const autoPriceEnabled = autoPrice?.enabled === true;
+			
+			if (autoPriceEnabled) {
+				// Fetch the offer to get SKU, price, and listingId
+				const getOfferUrl = `${apiHost}/sell/inventory/v1/offer/${encodeURIComponent(offerId)}`;
+				const getOfferRes = await fetch(getOfferUrl, { headers });
+				
+				if (getOfferRes.ok) {
+					const offerText = await getOfferRes.text();
+					const offer = JSON.parse(offerText);
+					const offerSku = offer?.sku || offer?.offer?.sku;
+					const listingId = pub.body?.listingId || offer?.listing?.listingId;
+					const currentPrice = offer?.pricingSummary?.price?.value 
+						? parseFloat(offer.pricingSummary.price.value)
+						: null;
+					
+					if (currentPrice && currentPrice > 0) {
+						// Create a price binding with auto-reduction settings
+						const binding = await bindListing({
+							jobId: `publish-${Date.now()}`, // Generate a job ID for tracking
+							groupId: offerId,
+							userId: sub!,
+							offerId: offerId,
+							listingId: listingId,
+							sku: offerSku,
+							currentPrice: currentPrice,
+							auto: {
+								reduceBy: (autoPrice.reduceBy || 100) / 100, // Convert cents to dollars
+								everyDays: autoPrice.everyDays || 7,
+								minPrice: (autoPrice.minPrice || 199) / 100, // Convert cents to dollars
+							},
+						});
+						
+						console.log(`[ebay-publish-offer] Created auto-price binding for offerId ${offerId}, price $${currentPrice}`);
+						
+						autoPriceResult = {
+							enabled: true,
+							offerId: offerId,
+							currentPrice: currentPrice,
+							reduceBy: (autoPrice.reduceBy || 100) / 100,
+							everyDays: autoPrice.everyDays || 7,
+							minPrice: (autoPrice.minPrice || 199) / 100,
+							message: 'Auto price reduction enabled',
+						};
+					} else {
+						console.warn(`[ebay-publish-offer] Cannot create auto-price binding - price not found for offerId ${offerId}`);
+						autoPriceResult = {
+							enabled: false,
+							reason: 'Could not determine current price',
+						};
+					}
+				} else {
+					console.warn(`[ebay-publish-offer] Could not fetch offer for auto-price binding, offerId ${offerId}`);
+				}
+			} else {
+				console.log(`[ebay-publish-offer] Auto-price not enabled for user, skipping for offerId ${offerId}`);
+			}
+		} catch (err: any) {
+			// Log error but don't fail the publish
+			console.error(`[ebay-publish-offer] Error setting up auto-price:`, err.message);
+			autoPriceResult = {
+				enabled: false,
+				error: err.message,
+			};
+		}
+
 		return {
 			statusCode: 200,
 			headers: { 'Content-Type': 'application/json' },
@@ -279,6 +359,7 @@ export const handler: Handler = async (event) => {
 				ok: true, 
 				result: pub.body,
 				promotion: promotionResult, // Include promotion result in response
+				autoPrice: autoPriceResult, // Include auto-price result in response
 			}),
 		};
 	} catch (e: any) {
