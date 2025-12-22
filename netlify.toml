@@ -46,6 +46,10 @@
 [functions."pairing-v2-processor-background"]
   timeout = 600  # 10 minutes for background function
 
+# Draft creation background processor needs extended timeout for GPT + eBay API calls
+[functions."smartdrafts-create-drafts-background"]
+  timeout = 600  # 10 minutes for background function
+
 # eBay list offers may need extended timeout for multiple API retry attempts
 [functions."ebay-list-offers"]
   timeout = 26  # Max for Pro tier, handles multiple eBay API calls with retries
