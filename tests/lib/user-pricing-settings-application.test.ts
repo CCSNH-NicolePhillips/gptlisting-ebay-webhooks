@@ -63,6 +63,28 @@ describe('User Pricing Settings Application', () => {
       expect(result.ebayItemPriceCents).toBe(3720); // Correct: $37.20
     });
 
+    it('should NOT produce $42.60 (the buggy result from double-counted shipping)', () => {
+      // Another bug: passing templateShippingEstimate as amazonShippingCents
+      // caused the shipping to be counted twice:
+      // Amazon total = $48 + $6 = $54
+      // Target = $54 * 0.9 = $48.60
+      // eBay price = $48.60 - $6 = $42.60 (WRONG!)
+      // 
+      // Correct calculation with amazonShippingCents = 0:
+      // Amazon total = $48 + $0 = $48
+      // Target = $48 * 0.9 = $43.20
+      // eBay price = $43.20 - $6 = $37.20 (CORRECT!)
+      
+      const result = computeEbayItemPriceCents({
+        amazonItemPriceCents: 4800,
+        amazonShippingCents: 0, // Brand MSRP has no shipping info!
+        settings: userSettings,
+      });
+
+      expect(result.ebayItemPriceCents).not.toBe(4260);
+      expect(result.ebayItemPriceCents).toBe(3720);
+    });
+
     it('should correctly apply shipping subsidy with Amazon shipping included', () => {
       const result = computeEbayItemPriceCents({
         amazonItemPriceCents: 4800,

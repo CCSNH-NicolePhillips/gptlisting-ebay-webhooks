@@ -614,11 +614,13 @@ export async function lookupPrice(
       
       // Compute final price using current user settings
       const settings = input.pricingSettings || getDefaultPricingSettings();
-      const shippingCents = cached.chosen.shippingCents ?? settings.templateShippingEstimateCents ?? 600;
+      // Use cached shipping if available, otherwise 0 (brand-msrp has no shipping info)
+      // Don't fall back to templateShippingEstimateCents - that's for eBay, not Amazon
+      const amazonShippingCents = cached.chosen.shippingCents ?? 0;
       
       const pricingResult = computeEbayItemPrice({
         amazonItemPriceCents: cached.msrpCents,
-        amazonShippingCents: shippingCents,
+        amazonShippingCents: amazonShippingCents,
         discountPercent: settings.discountPercent,
         shippingStrategy: settings.shippingStrategy,
         templateShippingEstimateCents: settings.templateShippingEstimateCents,
