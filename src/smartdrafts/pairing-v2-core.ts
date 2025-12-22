@@ -555,23 +555,27 @@ async function classifyAllImagesStage1(imagePaths: string[]): Promise<ImageClass
 // Stage 2: Text-Only Pairing (no images sent)
 // ============================================================
 
-export async function pairFromClassifications(items: ImageClassificationV2[]): Promise<PairingOutput> {
-  try {
-    const payload: PairingInputItem[] = items.map(x => ({
-      filename: x.filename,
-      kind: x.kind,
-      panel: x.panel,
-      brand: x.brand,
-      productName: x.productName,
-      title: x.title,
-      brandWebsite: x.brandWebsite,
-      packageType: x.packageType,
-      colorSignature: x.colorSignature,
-      layoutSignature: x.layoutSignature,
-      confidence: x.confidence,
-    }));
-    
-    const systemMessage = `You are an expert at pairing product package images based on their metadata.
+// Max items per pairing API call to avoid output token truncation
+// Each pair takes ~150-200 tokens in output, so 24 items = ~12 pairs = ~2000 tokens (safe buffer)
+const PAIRING_CHUNK_SIZE = 24;
+
+// Core pairing function for a single chunk
+async function pairChunk(items: ImageClassificationV2[], chunkLabel = ''): Promise<PairingOutput> {
+  const payload: PairingInputItem[] = items.map(x => ({
+    filename: x.filename,
+    kind: x.kind,
+    panel: x.panel,
+    brand: x.brand,
+    productName: x.productName,
+    title: x.title,
+    brandWebsite: x.brandWebsite,
+    packageType: x.packageType,
+    colorSignature: x.colorSignature,
+    layoutSignature: x.layoutSignature,
+    confidence: x.confidence,
+  }));
+  
+  const systemMessage = `You are an expert at pairing product package images based on their metadata.
 
 You will receive a list of classified images with metadata about each:
 - filename
@@ -666,56 +670,168 @@ Pairing strategy:
 - Be AGGRESSIVE about pairing - aim for 80%+ pair rate
 - Only reject when there's clear evidence of a mismatch`;
 
-    const userMessage = `Here is the classification data for all images. Pair the fronts and backs that match.
+  const userMessage = `Here is the classification data for all images. Pair the fronts and backs that match.
 
 Classification data:
 ${JSON.stringify(payload, null, 2)}`;
 
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        {
-          role: 'system',
-          content: systemMessage,
-        },
-        {
-          role: 'user',
-          content: userMessage,
-        },
-      ],
-      max_tokens: 4000,
-      response_format: { type: 'json_object' },
-      temperature: 0,
-    });
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [
+      { role: 'system', content: systemMessage },
+      { role: 'user', content: userMessage },
+    ],
+    max_tokens: 8000, // Increased to handle more pairs
+    response_format: { type: 'json_object' },
+    temperature: 0,
+  });
 
-    const result = response.choices[0]?.message?.content?.trim() || '{}';
-    const parsed: PairingOutput = JSON.parse(result);
+  const result = response.choices[0]?.message?.content?.trim() || '{}';
+  const parsed: PairingOutput = JSON.parse(result);
+  
+  console.log(`[pairing-v2] ${chunkLabel} results: ${parsed.pairs.length} pairs, ${parsed.unpaired.length} unpaired`);
+  
+  return parsed;
+}
+
+export async function pairFromClassifications(items: ImageClassificationV2[]): Promise<PairingOutput> {
+  try {
+    console.log(`[pairing-v2] Starting pairing for ${items.length} items...`);
     
-    console.log('[pairing-v2] Pass 1 (strict) results:', JSON.stringify(parsed, null, 2));
-    
-    // PASS 2: Lenient visual matching for leftovers
-    // If we still have unpaired items, try aggressive visual matching
-    if (parsed.unpaired.length > 0) {
-      console.log(`[pairing-v2] Running Pass 2 (lenient visual matching) on ${parsed.unpaired.length} unpaired items...`);
+    // If small enough, process in one go
+    if (items.length <= PAIRING_CHUNK_SIZE) {
+      console.log(`[pairing-v2] Processing all ${items.length} items in single chunk`);
+      const parsed = await pairChunk(items, 'Single chunk');
       
-      const unpairedItems = items.filter(item => 
-        parsed.unpaired.some(u => u.filename === item.filename)
-      );
-      
-      if (unpairedItems.length >= 2) {
+      // PASS 2: Lenient visual matching for leftovers
+      if (parsed.unpaired.length >= 2) {
+        console.log(`[pairing-v2] Running Pass 2 on ${parsed.unpaired.length} unpaired items...`);
+        const unpairedItems = items.filter(item => 
+          parsed.unpaired.some(u => u.filename === item.filename)
+        );
         const pass2Result = await pairVisuallyAggressive(unpairedItems);
-        
-        // Merge pass 2 results into pass 1
         parsed.pairs.push(...pass2Result.pairs);
         parsed.unpaired = pass2Result.unpaired;
-        
         console.log(`[pairing-v2] Pass 2 created ${pass2Result.pairs.length} additional pairs`);
+      }
+      
+      return parsed;
+    }
+    
+    // CHUNKED PAIRING: Group by brand first, then chunk
+    console.log(`[pairing-v2] Large batch (${items.length} items), using chunked pairing...`);
+    
+    // Group items by brand (null brand goes to a separate bucket)
+    const brandGroups = new Map<string, ImageClassificationV2[]>();
+    const nullBrandItems: ImageClassificationV2[] = [];
+    
+    for (const item of items) {
+      const brandKey = item.brand?.toLowerCase().trim() || '';
+      if (!brandKey) {
+        nullBrandItems.push(item);
+      } else {
+        if (!brandGroups.has(brandKey)) {
+          brandGroups.set(brandKey, []);
+        }
+        brandGroups.get(brandKey)!.push(item);
       }
     }
     
-    console.log('[pairing-v2] Final pairing results:', JSON.stringify(parsed, null, 2));
+    console.log(`[pairing-v2] Found ${brandGroups.size} brand groups + ${nullBrandItems.length} items with no brand`);
     
-    return parsed;
+    // Process each brand group (or chunk if group is too large)
+    const allPairs: PairingOutput['pairs'] = [];
+    const allUnpaired: PairingOutput['unpaired'] = [];
+    
+    // Process brand groups
+    for (const [brand, brandItems] of brandGroups.entries()) {
+      console.log(`[pairing-v2] Processing brand "${brand}" (${brandItems.length} items)...`);
+      
+      if (brandItems.length <= PAIRING_CHUNK_SIZE) {
+        // Small group - process directly
+        const result = await pairChunk(brandItems, `Brand "${brand}"`);
+        allPairs.push(...result.pairs);
+        allUnpaired.push(...result.unpaired);
+      } else {
+        // Large group - split into chunks
+        for (let i = 0; i < brandItems.length; i += PAIRING_CHUNK_SIZE) {
+          const chunk = brandItems.slice(i, i + PAIRING_CHUNK_SIZE);
+          const chunkNum = Math.floor(i / PAIRING_CHUNK_SIZE) + 1;
+          const result = await pairChunk(chunk, `Brand "${brand}" chunk ${chunkNum}`);
+          allPairs.push(...result.pairs);
+          allUnpaired.push(...result.unpaired);
+        }
+      }
+    }
+    
+    // Process null-brand items in chunks
+    if (nullBrandItems.length > 0) {
+      console.log(`[pairing-v2] Processing ${nullBrandItems.length} items with no brand...`);
+      for (let i = 0; i < nullBrandItems.length; i += PAIRING_CHUNK_SIZE) {
+        const chunk = nullBrandItems.slice(i, i + PAIRING_CHUNK_SIZE);
+        const chunkNum = Math.floor(i / PAIRING_CHUNK_SIZE) + 1;
+        const result = await pairChunk(chunk, `No-brand chunk ${chunkNum}`);
+        allPairs.push(...result.pairs);
+        allUnpaired.push(...result.unpaired);
+      }
+    }
+    
+    console.log(`[pairing-v2] After brand-based pairing: ${allPairs.length} pairs, ${allUnpaired.length} unpaired`);
+    
+    // PASS 2: Cross-brand visual matching for remaining unpaired items
+    if (allUnpaired.length >= 2) {
+      console.log(`[pairing-v2] Running Pass 2 (cross-brand visual matching) on ${allUnpaired.length} unpaired items...`);
+      
+      const unpairedItems = items.filter(item => 
+        allUnpaired.some(u => u.filename === item.filename)
+      );
+      
+      // Process in chunks if needed
+      if (unpairedItems.length <= PAIRING_CHUNK_SIZE) {
+        const pass2Result = await pairVisuallyAggressive(unpairedItems);
+        allPairs.push(...pass2Result.pairs);
+        // Replace unpaired with pass2 results
+        allUnpaired.length = 0;
+        allUnpaired.push(...pass2Result.unpaired);
+        console.log(`[pairing-v2] Pass 2 created ${pass2Result.pairs.length} additional pairs`);
+      } else {
+        // For very large unpaired sets, chunk the aggressive matching too
+        const pass2Pairs: PairingOutput['pairs'] = [];
+        let remainingUnpaired = [...unpairedItems];
+        
+        for (let i = 0; i < unpairedItems.length; i += PAIRING_CHUNK_SIZE) {
+          const chunk = remainingUnpaired.slice(0, Math.min(PAIRING_CHUNK_SIZE, remainingUnpaired.length));
+          if (chunk.length < 2) break;
+          
+          const pass2Result = await pairVisuallyAggressive(chunk);
+          pass2Pairs.push(...pass2Result.pairs);
+          
+          // Remove paired items from remaining
+          const pairedFilenames = new Set(
+            pass2Result.pairs.flatMap(p => [p.front, p.back, p.side1, p.side2].filter(Boolean))
+          );
+          remainingUnpaired = remainingUnpaired.filter(item => !pairedFilenames.has(item.filename));
+        }
+        
+        allPairs.push(...pass2Pairs);
+        // Update unpaired list
+        allUnpaired.length = 0;
+        allUnpaired.push(...remainingUnpaired.map(item => ({
+          filename: item.filename,
+          reason: 'No visual match found after aggressive pairing',
+          needsReview: true,
+        })));
+        
+        console.log(`[pairing-v2] Pass 2 created ${pass2Pairs.length} additional pairs, ${remainingUnpaired.length} still unpaired`);
+      }
+    }
+    
+    console.log(`[pairing-v2] Final results: ${allPairs.length} pairs, ${allUnpaired.length} unpaired`);
+    
+    return {
+      pairs: allPairs,
+      unpaired: allUnpaired,
+    };
   } catch (error) {
     console.error('[pairing-v2] Error in pairFromClassifications:', error);
     // Return empty pairing on error
