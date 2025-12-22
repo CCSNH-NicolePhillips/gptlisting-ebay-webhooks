@@ -287,110 +287,6 @@
               </div>
             </section>
             
-            <!-- Connections Section -->
-            <section class="dp-card" id="connectionsSection">
-              <div class="dp-card__header">
-                <h3 class="dp-card__title">Connections</h3>
-                <p class="dp-card__subtitle">Your connected services</p>
-              </div>
-              
-              <div class="dp-card__content">
-                <!-- Simple list view -->
-                <div style="display: flex; flex-direction: column; gap: 12px;">
-                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                    <span style="font-weight: 500;">Dropbox</span>
-                    <span id="dbxStatus" style="color: #10b981; font-size: 14px;">Loading…</span>
-                  </div>
-                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0;">
-                    <span style="font-weight: 500;">eBay</span>
-                    <span id="ebayStatus" style="color: #10b981; font-size: 14px;">Loading…</span>
-                  </div>
-                  <div id="policyWarning" style="display: none; padding: 12px; margin-top: 8px; background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.3); border-radius: 8px;">
-                    <div style="font-size: 13px; color: #fbbf24; margin-bottom: 6px;">⚠️ Action Required</div>
-                    <div style="font-size: 12px; color: #cbd5e1; margin-bottom: 8px;">Set default eBay policies to create listings</div>
-                    <a href="/policies-manage.html" style="display: inline-block; padding: 6px 12px; background: #fbbf24; color: #0b1020; border-radius: 6px; font-size: 12px; font-weight: 600; text-decoration: none;">Configure Policies</a>
-                  </div>
-                </div>
-              </div>
-
-              <div class="dp-card__footer">
-                <a href="/onboarding.html" style="display: block; text-align: center; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 6px; color: inherit; text-decoration: none; font-size: 14px; font-weight: 500;">Complete Setup</a>
-              </div>
-
-              <!-- Hidden elements for JS compatibility -->
-              <div style="display:none">
-                <p class="dp-muted" id="setupMsg">Connect your accounts to get started with DraftPilot.</p>
-                <span id="dbxWho"></span>
-                <span id="ebayWho"></span>
-                <div id="dbxFolderBox">
-                  <select id="dbxFolderSelect"><option>Loading folders…</option></select>
-                  <div id="dbxFolderMsg"></div>
-                </div>
-                <a id="dbxConnect" href="/.netlify/functions/dropbox-oauth-start">Connect</a>
-                <button id="dbxDisconnect">Disconnect</button>
-                <a id="ebayConnect" href="/.netlify/functions/ebay-oauth-start">Connect</a>
-                <button id="ebayDisconnect">Disconnect</button>
-                <button id="process" disabled>Process folder → Drafts</button>
-                <span id="processMsg" class="small"></span>
-                <button id="claimLegacy" class="secondary">Claim legacy connections</button>
-                <span id="claimMsg" class="small"></span>
-              </div>
-            </section>
-            
-            <!-- Recent Drafts Card -->
-            <div class="dp-card dp-card--recent-drafts">
-              <div class="dp-card__header">
-                <h3 class="dp-card__title">Recent Drafts</h3>
-                <p class="dp-card__subtitle">Your latest eBay listings</p>
-              </div>
-              
-              <div class="dp-card__content">
-                <!-- Loading State -->
-                <div class="dp-loading-state" id="recentDraftsLoading">
-                  <div class="dp-spinner"></div>
-                  <p class="dp-loading-text">Loading drafts...</p>
-                </div>
-                
-                <!-- Empty State (shown when no drafts) -->
-                <div class="dp-empty-state" id="recentDraftsEmpty" style="display: none;">
-                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--text-muted); margin-bottom: 16px;">
-                    <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                  </svg>
-                  <h4 class="dp-empty-state__title">No recent drafts</h4>
-                  <p class="dp-empty-state__description">Upload product images to create your first AI-powered eBay listing drafts.</p>
-                </div>
-                
-                <!-- Drafts Table (hidden until drafts exist, will be populated by JS) -->
-                <div class="dp-drafts-table" id="recentDraftsTable" style="display: none;">
-                  <!-- Table Header -->
-                  <div class="dp-drafts-table__header">
-                    <div class="dp-drafts-table__col dp-drafts-table__col--title">Title</div>
-                    <div class="dp-drafts-table__col dp-drafts-table__col--status">Status</div>
-                    <div class="dp-drafts-table__col dp-drafts-table__col--source">Source</div>
-                    <div class="dp-drafts-table__col dp-drafts-table__col--updated">Updated</div>
-                  </div>
-                  
-                  <!-- Rows will be populated dynamically by JavaScript -->
-                  <div id="recentDraftsRows"></div>
-                </div>
-              </div>
-              
-              <div class="dp-card__footer" id="recentDraftsFooter" style="display: none;">
-                <a href="/quick-list.html" class="dp-hero-cta" id="recentDraftsCTA" style="display: none;">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-                  </svg>
-                  Create Drafts
-                </a>
-                <a href="/drafts.html" class="dp-link-button" id="recentDraftsViewAll" style="display: none;">
-                  View all drafts
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; margin-left: 4px; vertical-align: middle;">
-                    <path d="M5 12h14M12 5l7 7-7 7"/>
-                  </svg>
-                </a>
-              </div>
-            </div>
-            
             <!-- Active Listings Summary Card -->
             <section class="dp-card dp-card--listings" id="activeListingsSection">
               <div class="dp-card__header">
@@ -455,6 +351,110 @@
                     <path d="M5 12h14M12 5l7 7-7 7"/>
                   </svg>
                 </a>
+              </div>
+            </section>
+            
+            <!-- Recent Drafts Card -->
+            <div class="dp-card dp-card--recent-drafts">
+              <div class="dp-card__header">
+                <h3 class="dp-card__title">Recent Drafts</h3>
+                <p class="dp-card__subtitle">Your latest eBay listings</p>
+              </div>
+              
+              <div class="dp-card__content">
+                <!-- Loading State -->
+                <div class="dp-loading-state" id="recentDraftsLoading">
+                  <div class="dp-spinner"></div>
+                  <p class="dp-loading-text">Loading drafts...</p>
+                </div>
+                
+                <!-- Empty State (shown when no drafts) -->
+                <div class="dp-empty-state" id="recentDraftsEmpty" style="display: none;">
+                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--text-muted); margin-bottom: 16px;">
+                    <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                  </svg>
+                  <h4 class="dp-empty-state__title">No recent drafts</h4>
+                  <p class="dp-empty-state__description">Upload product images to create your first AI-powered eBay listing drafts.</p>
+                </div>
+                
+                <!-- Drafts Table (hidden until drafts exist, will be populated by JS) -->
+                <div class="dp-drafts-table" id="recentDraftsTable" style="display: none;">
+                  <!-- Table Header -->
+                  <div class="dp-drafts-table__header">
+                    <div class="dp-drafts-table__col dp-drafts-table__col--title">Title</div>
+                    <div class="dp-drafts-table__col dp-drafts-table__col--status">Status</div>
+                    <div class="dp-drafts-table__col dp-drafts-table__col--source">Source</div>
+                    <div class="dp-drafts-table__col dp-drafts-table__col--updated">Updated</div>
+                  </div>
+                  
+                  <!-- Rows will be populated dynamically by JavaScript -->
+                  <div id="recentDraftsRows"></div>
+                </div>
+              </div>
+              
+              <div class="dp-card__footer" id="recentDraftsFooter" style="display: none;">
+                <a href="/quick-list.html" class="dp-hero-cta" id="recentDraftsCTA" style="display: none;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                  </svg>
+                  Create Drafts
+                </a>
+                <a href="/drafts.html" class="dp-link-button" id="recentDraftsViewAll" style="display: none;">
+                  View all drafts
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; margin-left: 4px; vertical-align: middle;">
+                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                  </svg>
+                </a>
+              </div>
+            </div>
+            
+            <!-- Connections Section -->
+            <section class="dp-card" id="connectionsSection">
+              <div class="dp-card__header">
+                <h3 class="dp-card__title">Connections</h3>
+                <p class="dp-card__subtitle">Your connected services</p>
+              </div>
+              
+              <div class="dp-card__content">
+                <!-- Simple list view -->
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                    <span style="font-weight: 500;">Dropbox</span>
+                    <span id="dbxStatus" style="color: #10b981; font-size: 14px;">Loading…</span>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0;">
+                    <span style="font-weight: 500;">eBay</span>
+                    <span id="ebayStatus" style="color: #10b981; font-size: 14px;">Loading…</span>
+                  </div>
+                  <div id="policyWarning" style="display: none; padding: 12px; margin-top: 8px; background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.3); border-radius: 8px;">
+                    <div style="font-size: 13px; color: #fbbf24; margin-bottom: 6px;">⚠️ Action Required</div>
+                    <div style="font-size: 12px; color: #cbd5e1; margin-bottom: 8px;">Set default eBay policies to create listings</div>
+                    <a href="/policies-manage.html" style="display: inline-block; padding: 6px 12px; background: #fbbf24; color: #0b1020; border-radius: 6px; font-size: 12px; font-weight: 600; text-decoration: none;">Configure Policies</a>
+                  </div>
+                </div>
+              </div>
+
+              <div class="dp-card__footer">
+                <a href="/onboarding.html" style="display: block; text-align: center; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 6px; color: inherit; text-decoration: none; font-size: 14px; font-weight: 500;">Complete Setup</a>
+              </div>
+
+              <!-- Hidden elements for JS compatibility -->
+              <div style="display:none">
+                <p class="dp-muted" id="setupMsg">Connect your accounts to get started with DraftPilot.</p>
+                <span id="dbxWho"></span>
+                <span id="ebayWho"></span>
+                <div id="dbxFolderBox">
+                  <select id="dbxFolderSelect"><option>Loading folders…</option></select>
+                  <div id="dbxFolderMsg"></div>
+                </div>
+                <a id="dbxConnect" href="/.netlify/functions/dropbox-oauth-start">Connect</a>
+                <button id="dbxDisconnect">Disconnect</button>
+                <a id="ebayConnect" href="/.netlify/functions/ebay-oauth-start">Connect</a>
+                <button id="ebayDisconnect">Disconnect</button>
+                <button id="process" disabled>Process folder → Drafts</button>
+                <span id="processMsg" class="small"></span>
+                <button id="claimLegacy" class="secondary">Claim legacy connections</button>
+                <span id="claimMsg" class="small"></span>
               </div>
             </section>
             
@@ -1501,9 +1501,10 @@ function updateUIFromCache(data) {
           const data = await response.json();
           const offers = Array.isArray(data?.offers) ? data.offers : [];
           
-          // Filter only PUBLISHED/active listings
+          // Backend already filters for PUBLISHED - accept all returned offers
+          // listingStatus can be 'PUBLISHED' or 'ACTIVE' depending on eBay API version
           const activeOffers = offers.filter(o => 
-            o.listingStatus === 'ACTIVE' || o.status === 'PUBLISHED'
+            o.listingStatus === 'ACTIVE' || o.listingStatus === 'PUBLISHED'
           );
           
           console.log('[Active Listings] Loaded', activeOffers.length, 'active listings');
