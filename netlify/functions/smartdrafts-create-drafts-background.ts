@@ -1,6 +1,7 @@
 import type { Handler } from "@netlify/functions";
 import { putJob } from "../../src/lib/job-store.js";
 import { k } from "../../src/lib/user-keys.js";
+import { recordDraftsCreated } from "../../src/lib/user-stats.js";
 
 // Import the draft creation logic from the existing function
 import OpenAI from "openai";
@@ -1015,6 +1016,11 @@ export const handler: Handler = async (event) => {
     console.log(`[PERF] BATCHED PROCESSING COMPLETE: ${loopTotalTime}ms for ${products.length} products`);
     console.log(`[PERF] Wall-clock time per product: ${Math.round(loopTotalTime / products.length)}ms (batched with concurrency ${CONCURRENCY_LIMIT})`);
     console.log(`[PERF] Speed improvement vs sequential: ~${Math.round(products.length * 45000 / loopTotalTime)}x faster`);
+    
+    // Track user stats (drafts created this week)
+    if (drafts.length > 0) {
+      await recordDraftsCreated(userId, drafts.length);
+    }
     
     await writeJob(jobId, userId, {
       state: "completed",

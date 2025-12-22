@@ -6,6 +6,7 @@
 
 import { Handler } from "@netlify/functions";
 import { runNewTwoStagePipeline } from "../../src/smartdrafts/pairing-v2-core.js";
+import { recordDraftsCreated } from "../../src/lib/user-stats.js";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
@@ -304,6 +305,11 @@ export const handler: Handler = async (event) => {
         }
 
         console.log(`[quick-list-processor] Created ${drafts.length} drafts`);
+
+        // Track user stats (drafts created this week)
+        if (drafts.length > 0 && job.userId) {
+          await recordDraftsCreated(job.userId, drafts.length);
+        }
 
         // Update job: complete
         job.status = "completed";

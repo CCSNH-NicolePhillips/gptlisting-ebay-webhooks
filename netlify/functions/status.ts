@@ -1,6 +1,7 @@
 import type { Handler } from '@netlify/functions';
 import { tokensStore } from '../../src/lib/_blobs.js';
 import { getJwtSubUnverified, userScopedKey, getBearerToken, requireAuthVerified } from '../../src/lib/_auth.js';
+import { getUserStats } from '../../src/lib/user-stats.js';
 
 export const handler: Handler = async (event) => {
 	try {
@@ -37,16 +38,11 @@ export const handler: Handler = async (event) => {
 			}
 		}
 
-		const [dbx, ebay] = await Promise.all([
+		const [dbx, ebay, stats] = await Promise.all([
 			tokens.get(userScopedKey(sub, 'dropbox.json'), { type: 'json' }) as Promise<any>,
 			tokens.get(userScopedKey(sub, 'ebay.json'), { type: 'json' }) as Promise<any>,
+			getUserStats(sub),
 		]);
-
-		// Placeholder stats - replace with actual metrics when available
-		const stats = {
-			draftsWeek: 0,
-			timeSavedMinutes: 0,
-		};
 
 		return {
 			statusCode: 200,
