@@ -43,6 +43,7 @@ type PairedProduct = {
   categoryPath?: string;
   keyText?: string[]; // Key text snippets from product packaging (from Vision API)
   photoQuantity?: number; // CHUNK 4: How many physical products visible in photo (from vision analysis)
+  packCount?: number | null; // Number of units in package (e.g., 24 for 24-pack) - CRITICAL for variant pricing
   heroDisplayUrl?: string;
   backDisplayUrl?: string;
   side1DisplayUrl?: string;  // Optional 3rd image (side panel)
@@ -652,6 +653,7 @@ async function createDraftForProduct(
       keyText: product.keyText, // Pass extracted text from packaging (e.g., "DIETARY SUPPLEMENT")
       categoryPath: product.categoryPath, // Pass Vision API category
       photoQuantity: product.photoQuantity || 1, // CHUNK 4: Pass photo quantity from vision analysis
+      packCount: product.packCount, // CRITICAL: Pass pack count for variant matching (e.g., 24-pack → $48)
       amazonPackSize: undefined, // TODO: Extract from Amazon product detection in extractPriceFromHtml
       pricingSettings, // Phase 3: Pass user pricing settings
     };

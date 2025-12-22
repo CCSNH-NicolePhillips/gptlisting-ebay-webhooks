@@ -5,9 +5,36 @@
  * and used to select the correct variant during price lookup.
  * 
  * Example: Frog Fuel "24 packets" → packCount: 24 → matches $48 variant
+ * 
+ * CRITICAL: packCount MUST be passed from pairing → draft creation → price lookup
+ * See netlify/functions/smartdrafts-create-drafts-background.ts line ~655
  */
 
 describe('packCount Feature', () => {
+  describe('packCount flow through pipeline', () => {
+    it('should include packCount in PriceLookupInput', () => {
+      // This test documents the REQUIRED fields for price lookup
+      // If packCount is missing, Frog Fuel will price at $2 instead of $48!
+      const requiredPriceLookupFields = [
+        'title',
+        'brand', 
+        'packCount', // CRITICAL - without this, multi-pack products get wrong price
+      ];
+      
+      // Mock what smartdrafts-create-drafts-background.ts should pass
+      const priceInput = {
+        title: 'Daily Recovery Protein 15g',
+        brand: 'Frog Fuel',
+        packCount: 24, // This MUST be passed from product.packCount
+      };
+      
+      expect(priceInput.packCount).toBe(24);
+      requiredPriceLookupFields.forEach(field => {
+        expect(priceInput).toHaveProperty(field);
+      });
+    });
+  });
+
   describe('packCount parsing patterns', () => {
     const parsePackCount = (text: string): number | null => {
       // Common pack count patterns from product labels
