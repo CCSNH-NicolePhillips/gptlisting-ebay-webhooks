@@ -189,7 +189,8 @@ export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>, us
   if (userId) {
     try {
       const store = tokensStore();
-      const settingsKey = `users/${userId}/settings.json`;
+      // CRITICAL: Use encodeURIComponent to match userScopedKey() used in user-settings-save
+      const settingsKey = `users/${encodeURIComponent(userId)}/settings.json`;
       const settingsBlob = await store.get(settingsKey);
       if (settingsBlob) {
         const settingsData = JSON.parse(settingsBlob);

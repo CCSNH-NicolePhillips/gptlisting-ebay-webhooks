@@ -407,12 +407,7 @@ RESPONSE FORMAT (JSON only):
     const chosen = candidates.find(c => c.source === chosenSource) || candidates[0];
 
     // Phase 3: Use computeEbayItemPrice with user settings
-    const settings = input.pricingSettings || {
-      discountPercent: 10,
-      shippingStrategy: 'DISCOUNT_ITEM_ONLY',
-      templateShippingEstimateCents: 600,
-      shippingSubsidyCapCents: null,
-    };
+    const settings = input.pricingSettings || getDefaultPricingSettings();
     
     // CHUNK 4: Apply photoQuantity and amazonPackSize
     // Step 1: Calculate per-unit price if pack size detected
@@ -502,12 +497,7 @@ function fallbackDecision(input: PriceLookupInput, candidates: PriceSourceDetail
   // SECOND: Amazon with product match (90% trust - verified match on major marketplace)
   const amazon = candidates.find(c => c.source === 'amazon' && c.matchesBrand);
   if (amazon) {
-    const settings = input.pricingSettings || {
-      discountPercent: 10,
-      shippingStrategy: 'DISCOUNT_ITEM_ONLY',
-      templateShippingEstimateCents: 600,
-      shippingSubsidyCapCents: null,
-    };
+    const settings = input.pricingSettings || getDefaultPricingSettings();
     
     const priceCents = Math.round(amazon.price * 100);
     const shippingCents = amazon.shippingCents || 0;
@@ -537,12 +527,7 @@ function fallbackDecision(input: PriceLookupInput, candidates: PriceSourceDetail
   const brandMsrp = candidates.find(c => c.source === 'brand-msrp');
   if (brandMsrp) {
     // Phase 3: Use computeEbayItemPrice with user settings
-    const settings = input.pricingSettings || {
-      discountPercent: 10,
-      shippingStrategy: 'DISCOUNT_ITEM_ONLY',
-      templateShippingEstimateCents: 600,
-      shippingSubsidyCapCents: null,
-    };
+    const settings = input.pricingSettings || getDefaultPricingSettings();
     
     const priceCents = Math.round(brandMsrp.price * 100);
     const shippingCents = brandMsrp.shippingCents || 0;

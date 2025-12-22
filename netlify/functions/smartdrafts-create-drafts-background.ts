@@ -853,7 +853,8 @@ export const handler: Handler = async (event) => {
   if (userId) {
     try {
       const store = tokensStore();
-      const settingsKey = `users/${userId}/settings.json`;
+      // CRITICAL: Use encodeURIComponent to match userScopedKey() used in user-settings-save
+      const settingsKey = `users/${encodeURIComponent(userId)}/settings.json`;
       const settingsBlob = await store.get(settingsKey);
       if (settingsBlob) {
         const settingsData = JSON.parse(settingsBlob);
@@ -862,8 +863,10 @@ export const handler: Handler = async (event) => {
             ...getDefaultPricingSettings(),
             ...settingsData.pricing,
           };
-          console.log(`[pricing] Loaded user settings: ${pricingSettings.discountPercent}% discount, ${pricingSettings.shippingStrategy} strategy`);
+          console.log(`[pricing] ✓ Loaded user settings: discount=${pricingSettings.discountPercent}%, strategy=${pricingSettings.shippingStrategy}, shippingCents=${pricingSettings.templateShippingEstimateCents}`);
         }
+      } else {
+        console.log(`[pricing] No user settings found at ${settingsKey}, using defaults`);
       }
     } catch (err) {
       console.warn(`[pricing] Failed to load user settings, using defaults:`, err);
