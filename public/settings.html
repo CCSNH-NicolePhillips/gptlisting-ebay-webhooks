@@ -400,12 +400,24 @@
                   </p>
                   
                   <label class="dp-form-label">Minimum Price Floor</label>
-                  <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem;">
-                    <span style="color: var(--text-muted);">$</span>
-                    <input type="number" id="autoPriceMinPrice" class="dp-input" placeholder="1.99" min="0.99" max="100" step="0.50" style="width: 120px;" />
+                  <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 0.5rem;">
+                    <!-- Fixed Amount Option -->
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                      <input type="radio" name="minPriceType" id="minPriceTypeFixed" value="fixed" checked style="accent-color: var(--accent-primary);" />
+                      <span style="color: var(--text-secondary);">Fixed amount:</span>
+                      <span style="color: var(--text-muted);">$</span>
+                      <input type="number" id="autoPriceMinPrice" class="dp-input" placeholder="1.99" min="0.99" max="100" step="0.50" style="width: 100px;" />
+                    </label>
+                    <!-- Percentage Option -->
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                      <input type="radio" name="minPriceType" id="minPriceTypePercent" value="percent" style="accent-color: var(--accent-primary);" />
+                      <span style="color: var(--text-secondary);">Percentage of listing price:</span>
+                      <input type="number" id="autoPriceMinPercent" class="dp-input" placeholder="50" min="10" max="90" step="5" style="width: 80px;" />
+                      <span style="color: var(--text-muted);">%</span>
+                    </label>
                   </div>
                   <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1.5rem;">
-                    Price will never drop below this amount. Protects your margins.
+                    Price will never drop below this floor. Protects your margins.
                   </p>
                 </div>
                 
@@ -781,7 +793,9 @@
           const enabled = document.getElementById('autoPriceEnabled')?.checked || false;
           const reduceBy = parseFloat(document.getElementById('autoPriceReduceBy')?.value || '1.00');
           const everyDays = parseInt(document.getElementById('autoPriceEveryDays')?.value || '7', 10);
+          const minPriceType = document.querySelector('input[name="minPriceType"]:checked')?.value || 'fixed';
           const minPrice = parseFloat(document.getElementById('autoPriceMinPrice')?.value || '1.99');
+          const minPercent = parseInt(document.getElementById('autoPriceMinPercent')?.value || '50', 10);
           
           // Validation
           if (enabled) {
@@ -803,9 +817,18 @@
               return;
             }
             
-            if (minPrice < 0.99) {
+            if (minPriceType === 'fixed' && minPrice < 0.99) {
               if (msg) {
                 msg.textContent = 'Minimum price must be at least $0.99';
+                msg.style.color = '#ef4444';
+                setTimeout(() => { msg.textContent = ''; msg.style.color = ''; }, 3000);
+              }
+              return;
+            }
+            
+            if (minPriceType === 'percent' && (minPercent < 10 || minPercent > 90)) {
+              if (msg) {
+                msg.textContent = 'Minimum percentage must be between 10% and 90%';
                 msg.style.color = '#ef4444';
                 setTimeout(() => { msg.textContent = ''; msg.style.color = ''; }, 3000);
               }
@@ -824,7 +847,9 @@
                   enabled: true,
                   reduceBy: Math.round(reduceBy * 100), // cents
                   everyDays,
-                  minPrice: Math.round(minPrice * 100) // cents
+                  minPriceType, // 'fixed' or 'percent'
+                  minPrice: Math.round(minPrice * 100), // cents (used when minPriceType='fixed')
+                  minPercent // percentage of listing price (used when minPriceType='percent')
                 } : { enabled: false }
               })
             });
@@ -882,6 +907,22 @@
             
             if (minPriceInput && autoPrice.minPrice) {
               minPriceInput.value = (autoPrice.minPrice / 100).toFixed(2);
+            }
+            
+            // Restore minPriceType radio selection
+            const minPriceType = autoPrice.minPriceType || 'fixed';
+            const fixedRadio = document.getElementById('minPriceTypeFixed');
+            const percentRadio = document.getElementById('minPriceTypePercent');
+            if (minPriceType === 'percent' && percentRadio) {
+              percentRadio.checked = true;
+            } else if (fixedRadio) {
+              fixedRadio.checked = true;
+            }
+            
+            // Restore minPercent value
+            const minPercentInput = document.getElementById('autoPriceMinPercent');
+            if (minPercentInput && autoPrice.minPercent) {
+              minPercentInput.value = autoPrice.minPercent;
             }
           }
         } catch (err) {

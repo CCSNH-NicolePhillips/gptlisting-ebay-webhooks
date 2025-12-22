@@ -303,6 +303,16 @@ export const handler: Handler = async (event) => {
 						: null;
 					
 					if (currentPrice && currentPrice > 0) {
+						// Calculate minPrice based on type: fixed amount or percentage of listing price
+						let calculatedMinPrice: number;
+						if (autoPrice.minPriceType === 'percent') {
+							const percent = autoPrice.minPercent || 50;
+							calculatedMinPrice = Math.max(0.99, currentPrice * (percent / 100));
+						} else {
+							// Fixed amount (default)
+							calculatedMinPrice = (autoPrice.minPrice || 199) / 100;
+						}
+						
 						// Create a price binding with auto-reduction settings
 						const binding = await bindListing({
 							jobId: `publish-${Date.now()}`, // Generate a job ID for tracking
@@ -315,11 +325,11 @@ export const handler: Handler = async (event) => {
 							auto: {
 								reduceBy: (autoPrice.reduceBy || 100) / 100, // Convert cents to dollars
 								everyDays: autoPrice.everyDays || 7,
-								minPrice: (autoPrice.minPrice || 199) / 100, // Convert cents to dollars
+								minPrice: calculatedMinPrice,
 							},
 						});
 						
-						console.log(`[ebay-publish-offer] Created auto-price binding for offerId ${offerId}, price $${currentPrice}`);
+						console.log(`[ebay-publish-offer] Created auto-price binding for offerId ${offerId}, price $${currentPrice}, minPrice $${calculatedMinPrice.toFixed(2)} (${autoPrice.minPriceType || 'fixed'})`);
 						
 						autoPriceResult = {
 							enabled: true,
@@ -327,7 +337,8 @@ export const handler: Handler = async (event) => {
 							currentPrice: currentPrice,
 							reduceBy: (autoPrice.reduceBy || 100) / 100,
 							everyDays: autoPrice.everyDays || 7,
-							minPrice: (autoPrice.minPrice || 199) / 100,
+							minPrice: calculatedMinPrice,
+							minPriceType: autoPrice.minPriceType || 'fixed',
 							message: 'Auto price reduction enabled',
 						};
 					} else {

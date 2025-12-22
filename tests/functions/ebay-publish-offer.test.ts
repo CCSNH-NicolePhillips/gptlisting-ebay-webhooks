@@ -491,3 +491,425 @@ describe('ebay-publish-offer auto-promotion', () => {
     });
   });
 });
+
+// Import bindListing for auto-price tests
+import { bindListing } from '../../src/lib/price-store.js';
+
+describe('ebay-publish-offer auto-price reduction', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFetch.mockReset();
+  });
+
+  describe('minPriceType=fixed', () => {
+    it('should create binding with fixed minPrice in dollars', async () => {
+      const mockStore = getMockStore();
+      const mockBindListing = bindListing as jest.MockedFunction<typeof bindListing>;
+      
+      mockStore.get.mockImplementation(async (key: string) => {
+        if (key === 'user123:ebay.json') {
+          return { refresh_token: 'mock-refresh-token' };
+        }
+        if (key === 'user123:settings.json') {
+          return {
+            autoPrice: {
+              enabled: true,
+              reduceBy: 100, // cents
+              everyDays: 7,
+              minPriceType: 'fixed',
+              minPrice: 499, // $4.99 in cents
+            }
+          };
+        }
+        if (key === 'user123:policy-defaults.json') {
+          return { autoPromote: false }; // Disable promotion to simplify test
+        }
+        return null;
+      });
+
+      // 1. Publish offer response
+      // 2. Get offer for auto-promote check (even if autoPromote=false, it fetches)
+      // 3. Get offer for auto-price
+      const offerData = { 
+        sku: 'SKU-001', 
+        pricingSummary: { price: { value: '19.99' } },
+        listing: { listingId: '12345' }
+      };
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ listingId: '12345' }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify(offerData),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify(offerData),
+        } as Response);
+
+      const { handler } = await import('../../netlify/functions/ebay-publish-offer.js');
+      
+      const event = {
+        body: JSON.stringify({ offerId: 'offer-fixed-price' }),
+        queryStringParameters: {},
+        headers: { authorization: 'Bearer mock-token' },
+      } as any;
+
+      const result = await handler(event, {} as any);
+      const body = JSON.parse(result?.body || '{}');
+
+      // Should create binding with fixed $4.99 minPrice
+      expect(mockBindListing).toHaveBeenCalledWith(
+        expect.objectContaining({
+          offerId: 'offer-fixed-price',
+          currentPrice: 19.99,
+          auto: expect.objectContaining({
+            reduceBy: 1, // $1.00
+            everyDays: 7,
+            minPrice: 4.99, // Fixed $4.99
+          }),
+        })
+      );
+      
+      expect(body.autoPrice).toMatchObject({
+        enabled: true,
+        currentPrice: 19.99,
+        minPrice: 4.99,
+        minPriceType: 'fixed',
+      });
+    });
+  });
+
+  describe('minPriceType=percent', () => {
+    it('should calculate minPrice as percentage of listing price', async () => {
+      const mockStore = getMockStore();
+      const mockBindListing = bindListing as jest.MockedFunction<typeof bindListing>;
+      
+      mockStore.get.mockImplementation(async (key: string) => {
+        if (key === 'user123:ebay.json') {
+          return { refresh_token: 'mock-refresh-token' };
+        }
+        if (key === 'user123:settings.json') {
+          return {
+            autoPrice: {
+              enabled: true,
+              reduceBy: 100, // cents
+              everyDays: 7,
+              minPriceType: 'percent',
+              minPercent: 50, // 50% of listing price
+            }
+          };
+        }
+        if (key === 'user123:policy-defaults.json') {
+          return { autoPromote: false }; // Disable promotion to simplify test
+        }
+        return null;
+      });
+
+      const offerData24 = { 
+        sku: 'SKU-002', 
+        pricingSummary: { price: { value: '24.00' } },
+        listing: { listingId: '12345' }
+      };
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ listingId: '12345' }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify(offerData24),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify(offerData24),
+        } as Response);
+
+      const { handler } = await import('../../netlify/functions/ebay-publish-offer.js');
+      
+      const event = {
+        body: JSON.stringify({ offerId: 'offer-percent-price' }),
+        queryStringParameters: {},
+        headers: { authorization: 'Bearer mock-token' },
+      } as any;
+
+      const result = await handler(event, {} as any);
+      const body = JSON.parse(result?.body || '{}');
+
+      // 50% of $24.00 = $12.00
+      expect(mockBindListing).toHaveBeenCalledWith(
+        expect.objectContaining({
+          offerId: 'offer-percent-price',
+          currentPrice: 24.00,
+          auto: expect.objectContaining({
+            minPrice: 12.00, // 50% of $24.00
+          }),
+        })
+      );
+      
+      expect(body.autoPrice).toMatchObject({
+        enabled: true,
+        currentPrice: 24.00,
+        minPrice: 12.00,
+        minPriceType: 'percent',
+      });
+    });
+
+    it('should enforce $0.99 minimum floor when percentage is too low', async () => {
+      const mockStore = getMockStore();
+      const mockBindListing = bindListing as jest.MockedFunction<typeof bindListing>;
+      
+      mockStore.get.mockImplementation(async (key: string) => {
+        if (key === 'user123:ebay.json') {
+          return { refresh_token: 'mock-refresh-token' };
+        }
+        if (key === 'user123:settings.json') {
+          return {
+            autoPrice: {
+              enabled: true,
+              reduceBy: 50,
+              everyDays: 3,
+              minPriceType: 'percent',
+              minPercent: 10, // 10% of $1.50 = $0.15 (too low!)
+            }
+          };
+        }
+        if (key === 'user123:policy-defaults.json') {
+          return { autoPromote: false };
+        }
+        return null;
+      });
+
+      const offerDataLow = { 
+        sku: 'SKU-LOW', 
+        pricingSummary: { price: { value: '1.50' } },
+        listing: { listingId: '12345' }
+      };
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ listingId: '12345' }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify(offerDataLow),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify(offerDataLow),
+        } as Response);
+
+      const { handler } = await import('../../netlify/functions/ebay-publish-offer.js');
+      
+      const event = {
+        body: JSON.stringify({ offerId: 'offer-low-percent' }),
+        queryStringParameters: {},
+        headers: { authorization: 'Bearer mock-token' },
+      } as any;
+
+      const result = await handler(event, {} as any);
+      const body = JSON.parse(result?.body || '{}');
+
+      // 10% of $1.50 = $0.15, but min floor is $0.99
+      expect(mockBindListing).toHaveBeenCalledWith(
+        expect.objectContaining({
+          auto: expect.objectContaining({
+            minPrice: 0.99, // Enforced minimum
+          }),
+        })
+      );
+      
+      expect(body.autoPrice?.minPrice).toBe(0.99);
+    });
+
+    it('should use default 50% if minPercent is not specified', async () => {
+      const mockStore = getMockStore();
+      const mockBindListing = bindListing as jest.MockedFunction<typeof bindListing>;
+      
+      mockStore.get.mockImplementation(async (key: string) => {
+        if (key === 'user123:ebay.json') {
+          return { refresh_token: 'mock-refresh-token' };
+        }
+        if (key === 'user123:settings.json') {
+          return {
+            autoPrice: {
+              enabled: true,
+              reduceBy: 100,
+              everyDays: 7,
+              minPriceType: 'percent',
+              // minPercent not specified - should default to 50
+            }
+          };
+        }
+        if (key === 'user123:policy-defaults.json') {
+          return { autoPromote: false };
+        }
+        return null;
+      });
+
+      const offerDataDefault = { 
+        sku: 'SKU-DEFAULT', 
+        pricingSummary: { price: { value: '30.00' } },
+        listing: { listingId: '12345' }
+      };
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ listingId: '12345' }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify(offerDataDefault),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify(offerDataDefault),
+        } as Response);
+
+      const { handler } = await import('../../netlify/functions/ebay-publish-offer.js');
+      
+      const event = {
+        body: JSON.stringify({ offerId: 'offer-default-percent' }),
+        queryStringParameters: {},
+        headers: { authorization: 'Bearer mock-token' },
+      } as any;
+
+      await handler(event, {} as any);
+
+      // Default 50% of $30.00 = $15.00
+      expect(mockBindListing).toHaveBeenCalledWith(
+        expect.objectContaining({
+          auto: expect.objectContaining({
+            minPrice: 15.00,
+          }),
+        })
+      );
+    });
+  });
+
+  describe('default behavior', () => {
+    it('should default to fixed minPrice when minPriceType not specified', async () => {
+      const mockStore = getMockStore();
+      const mockBindListing = bindListing as jest.MockedFunction<typeof bindListing>;
+      
+      mockStore.get.mockImplementation(async (key: string) => {
+        if (key === 'user123:ebay.json') {
+          return { refresh_token: 'mock-refresh-token' };
+        }
+        if (key === 'user123:settings.json') {
+          return {
+            autoPrice: {
+              enabled: true,
+              reduceBy: 100,
+              everyDays: 7,
+              minPrice: 299, // $2.99 in cents
+              // minPriceType not specified - should default to 'fixed'
+            }
+          };
+        }
+        if (key === 'user123:policy-defaults.json') {
+          return { autoPromote: false };
+        }
+        return null;
+      });
+
+      const offerDataLegacy = { 
+        sku: 'SKU-LEGACY', 
+        pricingSummary: { price: { value: '15.00' } },
+        listing: { listingId: '12345' }
+      };
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ listingId: '12345' }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify(offerDataLegacy),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify(offerDataLegacy),
+        } as Response);
+
+      const { handler } = await import('../../netlify/functions/ebay-publish-offer.js');
+      
+      const event = {
+        body: JSON.stringify({ offerId: 'offer-legacy' }),
+        queryStringParameters: {},
+        headers: { authorization: 'Bearer mock-token' },
+      } as any;
+
+      const result = await handler(event, {} as any);
+      const body = JSON.parse(result?.body || '{}');
+
+      // Should use fixed $2.99 (legacy behavior)
+      expect(mockBindListing).toHaveBeenCalledWith(
+        expect.objectContaining({
+          auto: expect.objectContaining({
+            minPrice: 2.99,
+          }),
+        })
+      );
+      
+      expect(body.autoPrice?.minPriceType).toBe('fixed');
+    });
+
+    it('should NOT create binding when autoPrice is disabled', async () => {
+      const mockStore = getMockStore();
+      const mockBindListing = bindListing as jest.MockedFunction<typeof bindListing>;
+      
+      mockStore.get.mockImplementation(async (key: string) => {
+        if (key === 'user123:ebay.json') {
+          return { refresh_token: 'mock-refresh-token' };
+        }
+        if (key === 'user123:settings.json') {
+          return {
+            autoPrice: {
+              enabled: false,
+            }
+          };
+        }
+        return null;
+      });
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ listingId: '12345' }),
+      } as Response);
+
+      const { handler } = await import('../../netlify/functions/ebay-publish-offer.js');
+      
+      const event = {
+        body: JSON.stringify({ offerId: 'offer-disabled' }),
+        queryStringParameters: {},
+        headers: { authorization: 'Bearer mock-token' },
+      } as any;
+
+      const result = await handler(event, {} as any);
+      const body = JSON.parse(result?.body || '{}');
+
+      // Should NOT create binding
+      expect(mockBindListing).not.toHaveBeenCalled();
+      expect(body.autoPrice).toBeNull();
+    });
+  });
+});
