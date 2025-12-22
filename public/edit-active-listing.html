@@ -29,25 +29,31 @@
     .form-field textarea, 
     .form-field select {
       width: 100%;
-      background: #0f1529;
-      border: 1px solid #2a335c;
-      border-radius: 6px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
       padding: 0.75rem;
-      color: #f4f6fb;
+      color: var(--text-primary);
       font-family: inherit;
       font-size: 0.9375rem;
       box-sizing: border-box;
-      transition: border-color 0.2s, box-shadow 0.2s;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
     }
     .form-field input[type="number"] {
       max-width: 150px;
+    }
+    .form-field select {
+      cursor: pointer;
+    }
+    .form-field select:hover {
+      border-color: var(--accent);
     }
     .form-field input:focus, 
     .form-field textarea:focus, 
     .form-field select:focus {
       outline: none;
-      border-color: #5b7cff;
-      box-shadow: 0 0 0 3px rgba(91, 124, 255, 0.1);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
     }
     #price {
       max-width: 200px;
@@ -82,13 +88,20 @@
     .aspect-item input,
     .aspect-item select {
       width: 100%;
-      background: #0f1529;
-      border: 1px solid #2a335c;
-      border-radius: 6px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
       padding: 0.75rem;
-      color: #f4f6fb;
+      color: var(--text-primary);
       font-size: 0.9375rem;
       box-sizing: border-box;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .aspect-item select {
+      cursor: pointer;
+    }
+    .aspect-item select:hover {
+      border-color: var(--accent);
     }
     @media (max-width: 768px) {
       .aspect-item {
@@ -98,8 +111,8 @@
     .aspect-item input:focus,
     .aspect-item select:focus {
       outline: none;
-      border-color: #5b7cff;
-      box-shadow: 0 0 0 3px rgba(91, 124, 255, 0.1);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
     }
     .aspect-item button {
       padding: 0.4rem 0.8rem;
@@ -175,21 +188,27 @@
     .dp-form-col input,
     .dp-form-col select {
       width: 100%;
-      background: #0f1529;
-      border: 1px solid #2a335c;
-      border-radius: 6px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
       padding: 0.75rem;
-      color: #f4f6fb;
+      color: var(--text-primary);
       font-family: inherit;
       font-size: 0.9375rem;
       box-sizing: border-box;
-      transition: border-color 0.2s, box-shadow 0.2s;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .dp-form-col select {
+      cursor: pointer;
+    }
+    .dp-form-col select:hover {
+      border-color: var(--accent);
     }
     .dp-form-col input:focus,
     .dp-form-col select:focus {
       outline: none;
-      border-color: #5b7cff;
-      box-shadow: 0 0 0 3px rgba(91, 124, 255, 0.1);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
     }
   </style>
 </head>

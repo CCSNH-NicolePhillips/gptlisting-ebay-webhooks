@@ -160,18 +160,23 @@
         width: 100%;
         padding: 0.75rem;
         font-size: 0.9375rem;
-        background: #0f1529;
-        border: 1px solid #2a335c;
-        border-radius: 6px;
-        color: #f4f6fb;
+        background: var(--bg-card);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        color: var(--text-primary);
         font-family: inherit;
         box-sizing: border-box;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      }
+      
+      .form-input:hover {
+        border-color: var(--accent);
       }
       
       .form-input:focus {
         outline: none;
-        border-color: #5b7cff;
-        box-shadow: 0 0 0 3px rgba(91, 124, 255, 0.1);
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-soft);
       }
       
       .step-actions {

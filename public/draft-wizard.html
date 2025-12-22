@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Create draft · Wizard</title>
+    <link rel="stylesheet" href="/draftpilot.css">
     <style>
       body {
         font-family:
@@ -91,8 +92,11 @@
       textarea { min-height: 110px; }
       input:focus, textarea:focus, select:focus {
         outline: none;
-        border-color: #4f7cff;
-        box-shadow: 0 0 0 2px rgba(79, 124, 255, 0.2);
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-soft);
+      }
+      select:hover {
+        border-color: var(--accent);
       }
       button { background: #4f7cff; color: white; border: none; border-radius: 8px; padding: 0.7rem 1rem; cursor: pointer; font-weight: 600; }
       button.secondary { background: transparent; color: #cbd5ff; border: 1px solid #3d4a86; }
@@ -229,12 +233,15 @@
         <div class="form-field wide">
           <label>Images</label>
           <input id="images" type="hidden" />
-          <div id="imgPicker" style="margin-top:.25rem">
-            <div id="imgDropdown" style="border:1px solid #2a335c;border-radius:8px;padding:.55rem .7rem;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:#0f1530">
-              <span id="imgPlaceholder" class="muted"><span id="imgPhText">Choose images…</span><span id="imgSpinner" style="display:none;margin-left:8px" aria-hidden="true">⏳</span></span><span>▾</span>
+          <div id="imgPicker" class="dp-dropdown" style="margin-top:.25rem">
+            <div id="imgDropdown" class="dp-dropdown__trigger">
+              <span id="imgPlaceholder" class="dp-dropdown__trigger-text placeholder"><span id="imgPhText">Choose images…</span><span id="imgSpinner" style="display:none;margin-left:8px" aria-hidden="true">⏳</span></span>
+              <svg class="dp-dropdown__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
             </div>
-            <div id="imgOptions" style="display:none;position:relative;border:1px solid #2a335c;border-top:none;border-radius:0 0 8px 8px;max-height:360px;overflow:auto;background:#0f1530"></div>
-            <div id="imgChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:.5rem"></div>
+            <div id="imgOptions" class="dp-dropdown__panel"></div>
+            <div id="imgChips" class="dp-dropdown__chips"></div>
             <div id="imgGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-top:.5rem"></div>
           </div>
           <small class="muted" id="imgTip"></small>
@@ -1036,6 +1043,7 @@
         const chips = byId('imgChips');
         const grid = byId('imgGrid');
         const imagesInput = byId('images');
+        const picker = byId('imgPicker');
         const pageLoader = document.getElementById('pageLoader');
         let items = [];
         const selected = new Map(); // proxiedUrl -> item
@@ -1055,31 +1063,34 @@
           }
           // Provide a loading placeholder inside the dropdown options
           if (v) {
-            ddOpts.style.display = 'none';
+            picker.classList.remove('open');
             ddOpts.innerHTML = '<div style="padding:.75rem" class="muted">Loading images…</div>';
           } else if (!items.length) {
             // If nothing loaded, keep it empty but hide to reduce confusion
-            ddOpts.style.display = 'none';
+            picker.classList.remove('open');
             ddOpts.innerHTML = '';
           }
         }
 
         function optionRow(it) {
           const row = document.createElement('div');
-          row.style.display = 'flex';
-          row.style.alignItems = 'center';
-          row.style.gap = '10px';
-          row.style.padding = '.55rem .7rem';
-          row.style.borderTop = '1px solid #2a335c';
+          row.className = 'dp-dropdown__option';
+          row.dataset.url = it.proxiedUrl;
           const img = document.createElement('img');
+          img.className = 'dp-dropdown__option-thumb';
           img.src = it.proxiedUrl; img.alt = it.name; img.width = 48; img.height = 48; img.loading = 'lazy';
-          img.style.objectFit = 'cover'; img.style.borderRadius = '6px';
           const meta = document.createElement('div');
-          meta.innerHTML = `<div style="font-size:12px;font-weight:600">${it.name}</div><div class="muted" style="font-size:11px">${it.path}</div>`;
+          meta.className = 'dp-dropdown__option-content';
+          meta.innerHTML = `<div class="dp-dropdown__option-title">${it.name}</div><div class="dp-dropdown__option-subtitle">${it.path}</div>`;
           const cb = document.createElement('input');
-          cb.type = 'checkbox'; cb.style.marginLeft = 'auto';
+          cb.type = 'checkbox'; cb.style.marginLeft = 'auto'; cb.style.accentColor = 'var(--accent)';
           cb.checked = selected.has(it.proxiedUrl);
-          cb.onchange = () => { if (cb.checked) selected.set(it.proxiedUrl, it); else selected.delete(it.proxiedUrl); refresh(); };
+          if (cb.checked) row.classList.add('selected');
+          cb.onchange = () => { 
+            if (cb.checked) { selected.set(it.proxiedUrl, it); row.classList.add('selected'); } 
+            else { selected.delete(it.proxiedUrl); row.classList.remove('selected'); } 
+            refresh(); 
+          };
           row.append(img, meta, cb);
           row.onclick = (e) => { if (e.target !== cb) { cb.checked = !cb.checked; cb.onchange(); } };
           return row;
@@ -1087,9 +1098,8 @@
 
         function chip(it) {
           const c = document.createElement('span');
-          c.style.display = 'inline-flex'; c.style.alignItems = 'center'; c.style.gap = '6px';
-          c.style.background = '#1c254d'; c.style.border = '1px solid #2a335c'; c.style.borderRadius = '999px'; c.style.padding = '4px 8px'; c.style.fontSize = '12px';
-          const img = document.createElement('img'); img.src = it.proxiedUrl; img.width = 16; img.height = 16; img.style.objectFit = 'cover'; img.style.borderRadius = '3px';
+          c.className = 'dp-dropdown__chip';
+          const img = document.createElement('img'); img.src = it.proxiedUrl; img.width = 16; img.height = 16;
           const txt = document.createElement('span'); txt.textContent = it.name;
           c.append(img, txt);
           return c;
@@ -1097,7 +1107,7 @@
 
         function card(it) {
           const wrap = document.createElement('div');
-          wrap.style.border = '1px solid #2a335c'; wrap.style.borderRadius = '8px'; wrap.style.overflow = 'hidden';
+          wrap.style.border = '1px solid var(--border-subtle)'; wrap.style.borderRadius = '8px'; wrap.style.overflow = 'hidden'; wrap.style.background = 'var(--bg-card)';
           const img = document.createElement('img'); img.src = it.proxiedUrl; img.alt = it.name; img.style.width = '100%'; img.style.height = '140px'; img.style.objectFit = 'cover'; img.loading = 'lazy';
           const cap = document.createElement('div'); cap.textContent = it.name; cap.style.fontSize = '12px'; cap.style.padding = '.5rem';
           wrap.append(img, cap);
@@ -1145,16 +1155,15 @@
             ddPh.textContent = 'Failed to load images';
           }
           setLoading(false);
-          ddOpts.style.display = 'none';
+          picker.classList.remove('open');
         }
 
         // dropdown open/close
         dd.addEventListener('click', () => {
-          const open = ddOpts.style.display !== 'none';
-          ddOpts.style.display = open ? 'none' : 'block';
+          picker.classList.toggle('open');
         });
         document.addEventListener('click', (e) => {
-          if (!dd.contains(e.target) && !ddOpts.contains(e.target)) ddOpts.style.display = 'none';
+          if (!picker.contains(e.target)) picker.classList.remove('open');
         });
 
         return {

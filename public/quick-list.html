@@ -345,25 +345,25 @@
       margin-bottom: 0.75rem;
     }
     
-    /* Promotion dropdown styles */
+    /* Promotion dropdown styles - uses standard glow effect */
     .promo-select {
       width: 100%;
       padding: 0.75rem;
-      background: var(--bg-secondary);
-      border: 1px solid var(--line);
-      border-radius: 8px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
       color: var(--text-primary);
       font-size: 0.9375rem;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: all 0.2s ease;
     }
     .promo-select:hover {
-      border-color: var(--primary);
+      border-color: var(--accent);
     }
     .promo-select:focus {
       outline: none;
-      border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(91, 124, 255, 0.1);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
     }
   </style>
 </head>
