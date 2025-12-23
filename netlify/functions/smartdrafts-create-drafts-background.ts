@@ -641,10 +641,20 @@ async function createDraftForProduct(
 
   try {
     const priceStart = Date.now();
-    console.log(`[smartdrafts-price] Looking up price for: ${product.brand || '(no brand)'} ${product.product}`);
+    
+    // Build price lookup title - fallback to keyText if product name is missing
+    // This handles cases where Vision API didn't extract productName but did get keyText
+    let priceLookupTitle = [product.product, product.variant].filter(Boolean).join(' ').trim();
+    if (!priceLookupTitle && product.keyText && product.keyText.length > 0) {
+      // Use first 4 keyText terms as fallback (e.g., "Hydrolyzed Collagen Protein Powder")
+      priceLookupTitle = product.keyText.slice(0, 4).join(' ').trim();
+      console.log(`[smartdrafts-price] Using keyText fallback for title: "${priceLookupTitle}"`);
+    }
+    
+    console.log(`[smartdrafts-price] Looking up price for: ${product.brand || '(no brand)'} ${priceLookupTitle || '(no product name)'}`);
     
     const priceInput: PriceLookupInput = {
-      title: [product.product, product.variant].filter(Boolean).join(' ').trim(),
+      title: priceLookupTitle,
       brand: product.brand || undefined,
       brandWebsite: product.brandWebsite || undefined, // Pass Vision API brand website
       upc: undefined, // TODO: Add UPC to PairedProduct type if available from pairing
