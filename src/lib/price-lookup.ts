@@ -773,7 +773,7 @@ export async function lookupPrice(
             
             console.log(`[price] ✓ Amazon: item=$${amazonPrice.toFixed(2)}, ${shippingNote}`);
             
-            candidates.push({
+            const amazonCandidate: PriceSourceDetail = {
               source: 'amazon',
               price: amazonPrice,
               currency: 'USD',
@@ -781,7 +781,45 @@ export async function lookupPrice(
               notes: `Amazon marketplace price (${shippingNote})`,
               shippingCents,
               matchesBrand: true,
+            };
+            
+            candidates.push(amazonCandidate);
+            
+            // SHORT-CIRCUIT: Amazon is the preferred source - skip Brave/brand-msrp tiers
+            // Apply user pricing settings and return immediately
+            console.log(`[price] ✓ Amazon price found - using as preferred source (skipping brand-msrp tier)`);
+            
+            const settings = input.pricingSettings || getDefaultPricingSettings();
+            const priceCents = Math.round(amazonPrice * 100);
+            
+            const pricingResult = computeEbayItemPrice({
+              amazonItemPriceCents: priceCents,
+              amazonShippingCents: shippingCents,
+              discountPercent: settings.discountPercent,
+              shippingStrategy: settings.shippingStrategy,
+              templateShippingEstimateCents: settings.templateShippingEstimateCents,
+              shippingSubsidyCapCents: settings.shippingSubsidyCapCents,
             });
+            
+            const finalPrice = pricingResult.ebayItemPriceCents / 100;
+            console.log(`[price] 💰 AMAZON PREFERRED: retail=$${amazonPrice.toFixed(2)} | discount=${settings.discountPercent}% | final=$${finalPrice.toFixed(2)}`);
+            
+            // Cache the Amazon price for future lookups
+            const cacheKey = makePriceSig(input.brand, input.title);
+            await setCachedPrice(cacheKey, {
+              msrpCents: priceCents,
+              chosen: amazonCandidate,
+              candidates: [amazonCandidate],
+            });
+            console.log(`[price] ✓ Cached Amazon MSRP ($${amazonPrice.toFixed(2)}) for future lookups (30-day TTL)`);
+            
+            return {
+              ok: true,
+              chosen: amazonCandidate,
+              candidates: [amazonCandidate],
+              recommendedListingPrice: finalPrice,
+              reason: 'Amazon price found and preferred',
+            };
           } else {
             console.log(`[price] ✗ Amazon result rejected - brand match: ${brandMatches}, product match: ${productMatches} (title: ${priceData.pageTitle || 'unknown'})`);
           }

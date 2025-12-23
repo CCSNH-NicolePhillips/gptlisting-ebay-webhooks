@@ -390,7 +390,7 @@ export const handler: Handler = async (event) => {
         const basenamePairs = pairsWithUrls.map(p => {
           const photoQty = p.photoQuantity || 1;
           const imageCount = 2 + (p.side1 ? 1 : 0) + (p.side2 ? 1 : 0);
-          console.log(`[pairing-v2-processor] Storing pair: brand=${p.brand}, photoQuantity=${photoQty}, images=${imageCount}`);
+          console.log(`[pairing-v2-processor] Storing pair: brand=${p.brand}, photoQuantity=${photoQty}, packCount=${p.packCount ?? 'null'}, images=${imageCount}`);
           return {
             front: path.basename(p.front),
             back: path.basename(p.back),
@@ -404,6 +404,7 @@ export const handler: Handler = async (event) => {
             keyText: p.keyText || [], // Key text from product packaging
             categoryPath: p.categoryPath || null, // Vision category path (e.g., "Health & Personal Care > Vitamins & Dietary Supplements")
             photoQuantity: photoQty, // CHUNK 3: How many physical products visible in photo
+            packCount: p.packCount ?? null, // CRITICAL: Number of units in package (e.g., 24 for 24-pack) - used for variant pricing
             frontUrl: p.frontUrl,  // Shareable link for front image
             backUrl: p.backUrl,    // Shareable link for back image
             side1Url: p.side1Url,  // Shareable link for side1 image (optional)
@@ -441,6 +442,7 @@ export const handler: Handler = async (event) => {
               keyText: u.keyText || [],
               categoryPath: u.categoryPath || null,
               photoQuantity: u.photoQuantity || 1, // CHUNK 3: How many physical products visible in photo
+              packCount: u.packCount ?? null, // CRITICAL: Number of units in package for variant pricing
             };
           });
         } else {
