@@ -189,20 +189,35 @@ export const handler: Handler = async (event) => {
 		}
 
 		// Step 3: Check for auto-promotion after successful publish
-		// Load user's promotion settings from policy defaults (not from eBay's non-existent merchantData)
+		// Load user's promotion settings from BOTH settings.json (new) AND policy-defaults.json (legacy)
 		let promotionResult: any = null;
 		try {
+			// Check settings.json first (Settings page saves here)
+			const settingsKey = userScopedKey(sub!, 'settings.json');
+			let userSettings: any = {};
+			try {
+				userSettings = (await store.get(settingsKey, { type: 'json' })) || {};
+			} catch {
+				// No settings saved
+			}
+			
+			// Also check policy-defaults.json (legacy location)
 			const policyDefaultsKey = userScopedKey(sub!, 'policy-defaults.json');
 			let policyDefaults: any = {};
 			try {
 				policyDefaults = (await store.get(policyDefaultsKey, { type: 'json' })) || {};
 			} catch {
-				// No policy defaults saved, promotions disabled
+				// No policy defaults saved
 			}
 			
-			// Check if user has auto-promote enabled in their settings
-			const autoPromote = policyDefaults.autoPromote === true;
-			const defaultAdRate = typeof policyDefaults.defaultAdRate === 'number' ? policyDefaults.defaultAdRate : 5;
+			// Check if user has auto-promote enabled (settings.json uses autoPromoteEnabled, policy-defaults uses autoPromote)
+			const autoPromote = userSettings.autoPromoteEnabled === true || policyDefaults.autoPromote === true;
+			// Settings uses defaultPromotionRate, policy-defaults uses defaultAdRate
+			const defaultAdRate = typeof userSettings.defaultPromotionRate === 'number' 
+				? userSettings.defaultPromotionRate 
+				: typeof policyDefaults.defaultAdRate === 'number' 
+					? policyDefaults.defaultAdRate 
+					: 5;
 			
 			// Fetch the offer to get SKU and listingId
 			const getOfferUrl = `${apiHost}/sell/inventory/v1/offer/${encodeURIComponent(offerId)}`;
@@ -218,7 +233,7 @@ export const handler: Handler = async (event) => {
 						: undefined;
 				
 				console.log(`[ebay-publish-offer] Auto-promotion enabled for user, SKU ${offerSku}, offerId ${offerId}`);
-				console.log(`[ebay-publish-offer] Using ad rate from policy defaults: ${defaultAdRate}%`);
+				console.log(`[ebay-publish-offer] Using ad rate: ${defaultAdRate}% (from ${userSettings.autoPromoteEnabled ? 'settings.json' : 'policy-defaults.json'})`);
 				
 				const adRate = defaultAdRate;
 				
