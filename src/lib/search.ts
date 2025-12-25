@@ -1,4 +1,9 @@
 import { canUseBrave, incBrave } from "./price-quota.js";
+import { getBrandDomainFromRegistry, resolveAuthoritativeBrandDomain } from "./brand-map.js";
+
+// Re-export for backward compatibility
+export { resolveAuthoritativeBrandDomain } from "./brand-map.js";
+export type { BrandDomainResolution } from "./brand-map.js";
 
 // ============================================================================
 // MINIMAL BRAVE SEARCH - BRAND SITES ONLY
@@ -8,27 +13,14 @@ import { canUseBrave, incBrave } from "./price-quota.js";
 // ============================================================================
 
 /**
- * Known brand domain mappings to improve search accuracy
- * Maps brand name variations to their official domain
+ * @deprecated Use resolveAuthoritativeBrandDomain from brand-map.ts instead
  */
-const BRAND_DOMAINS: Record<string, string> = {
-  'prequel': 'prequelskin.com',
-  'maude': 'getmaude.com',
-  'naked': 'nakednutrition.com',
-  'jocko': 'jockofuel.com',
-  'ryse': 'rysesupps.com',
-  'barbie': 'ever-eden.com', // Barbie x Evereden collaboration
-  'betteralt': 'thebetteralt.com',
-  // Add more brands as discovered
-  // Note: Removed brand-specific hardcoding (Root, etc.) - relying on generic bundle detection instead
-};
-
-/**
- * Get the known domain for a brand, if available
- */
-function getBrandDomain(brandName: string): string | undefined {
-  const normalized = brandName.toLowerCase().trim();
-  return BRAND_DOMAINS[normalized];
+export async function resolveBrandDomainAuthoritative(
+  brandName: string | undefined,
+  suggestedDomain?: string | null
+): Promise<{ domain?: string; source: 'registry' | 'suggested' | 'none' }> {
+  const result = await resolveAuthoritativeBrandDomain(brandName || '', suggestedDomain);
+  return { domain: result.domain ?? undefined, source: result.source };
 }
 
 /**
@@ -47,13 +39,26 @@ async function simpleRateLimit(): Promise<void> {
 
 /**
  * Helper: Extract first URL from Brave search results
+ * Filters out Amazon/Walmart search result pages - only accepts product pages
  */
-function pickFirstUrl(results: any): string | null {
+function pickFirstUrl(results: any, site?: string): string | null {
   if (!results) return null;
   const arr = Array.isArray(results) ? results : [];
   for (const entry of arr) {
     const value = entry?.url;
     if (typeof value === "string" && value) {
+      // For Amazon, reject search result pages (/s?k=) - only accept product pages (/dp/, /gp/product/)
+      if (site === 'amazon.com' || value.includes('amazon.com')) {
+        if (value.includes('/s?') || value.includes('/s/') || value.includes('?k=')) {
+          console.log(`[Brave] Skipping Amazon search page: ${value}`);
+          continue;
+        }
+        // Must contain a product page pattern
+        if (!value.includes('/dp/') && !value.includes('/gp/product/')) {
+          console.log(`[Brave] Skipping non-product Amazon URL: ${value}`);
+          continue;
+        }
+      }
       return value;
     }
   }
@@ -121,7 +126,7 @@ export async function braveFirstUrl(query: string, site?: string): Promise<strin
       }
       await incBrave();
       const data: any = await res.json();
-      const found = pickFirstUrl(data?.web?.results);
+      const found = pickFirstUrl(data?.web?.results, site);
       console.log(`[Brave] Query: "${targetQuery}" → ${found || "(no results)"}`);
       return found ?? null;
     } catch (err) {
@@ -155,8 +160,8 @@ export async function braveFirstUrlForBrandSite(
 
   await simpleRateLimit();
 
-  // Auto-detect brand domain from known mappings if not provided
-  const knownDomain = brandDomain || getBrandDomain(brandName);
+  // Auto-detect brand domain from Redis registry if not provided
+  const knownDomain = brandDomain || await getBrandDomainFromRegistry(brandName);
 
   // Prefer site-specific search if brand domain known
   const query = knownDomain

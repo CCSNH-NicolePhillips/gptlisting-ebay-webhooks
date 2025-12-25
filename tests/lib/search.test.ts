@@ -9,11 +9,17 @@ jest.mock('../../src/lib/price-quota.js', () => ({
   incBrave: jest.fn(),
 }));
 
+// Mock brand-map for Redis-backed brand domain lookup
+jest.mock('../../src/lib/brand-map.js', () => ({
+  getBrandDomainFromRegistry: jest.fn(),
+}));
+
 describe('search', () => {
   let braveFirstUrl: any;
   let braveFirstUrlForBrandSite: any;
   let mockCanUseBrave: jest.Mock;
   let mockIncBrave: jest.Mock;
+  let mockGetBrandDomainFromRegistry: jest.Mock;
   let originalFetch: typeof global.fetch;
   let mockFetch: jest.Mock;
 
@@ -24,9 +30,12 @@ describe('search', () => {
     // Setup mocks
     mockCanUseBrave = require('../../src/lib/price-quota.js').canUseBrave;
     mockIncBrave = require('../../src/lib/price-quota.js').incBrave;
+    mockGetBrandDomainFromRegistry = require('../../src/lib/brand-map.js').getBrandDomainFromRegistry;
     
     mockCanUseBrave.mockResolvedValue(true);
     mockIncBrave.mockResolvedValue(undefined);
+    // Default: no brand domain in registry (will use suggested or generic query)
+    mockGetBrandDomainFromRegistry.mockResolvedValue(null);
     
     // Mock fetch
     originalFetch = global.fetch;
@@ -367,6 +376,9 @@ describe('search', () => {
       });
 
       it('should use site-specific search with known brand domain', async () => {
+        // Mock Redis registry to return known domain for 'prequel'
+        mockGetBrandDomainFromRegistry.mockResolvedValue('prequelskin.com');
+        
         mockFetch.mockResolvedValue({
           ok: true,
           status: 200,
@@ -704,6 +716,9 @@ describe('search', () => {
 
     describe('Known brand mappings', () => {
       it('should use prequel brand mapping', async () => {
+        // Mock Redis registry to return known domain
+        mockGetBrandDomainFromRegistry.mockResolvedValue('prequelskin.com');
+        
         mockFetch.mockResolvedValue({
           ok: true,
           status: 200,
@@ -717,6 +732,9 @@ describe('search', () => {
       });
 
       it('should use maude brand mapping', async () => {
+        // Mock Redis registry to return known domain
+        mockGetBrandDomainFromRegistry.mockResolvedValue('getmaude.com');
+        
         mockFetch.mockResolvedValue({
           ok: true,
           status: 200,
@@ -730,6 +748,9 @@ describe('search', () => {
       });
 
       it('should handle case-insensitive brand lookup', async () => {
+        // Mock Redis registry to return known domain (registry normalizes to lowercase)
+        mockGetBrandDomainFromRegistry.mockResolvedValue('prequelskin.com');
+        
         mockFetch.mockResolvedValue({
           ok: true,
           status: 200,

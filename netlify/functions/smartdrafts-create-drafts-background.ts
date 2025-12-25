@@ -72,7 +72,9 @@ type Draft = {
   price: number | null;
   condition: string;
   keyText?: string[]; // Key text from Vision API - helps determine formulation
-  pricingStatus?: 'OK' | 'NEEDS_REVIEW';
+  pricingStatus?: 'OK' | 'ESTIMATED' | 'NEEDS_REVIEW';
+  priceWarning?: string; // Explains why price needs review
+  needsPriceReview?: boolean; // Frontend flag for red glow/warning
   priceMeta?: {
     chosenSource?: string;
     basePrice?: number;
@@ -636,8 +638,9 @@ async function createDraftForProduct(
   
   let pricingDecision: PriceDecision | null = null;
   let finalPrice: number | null = null;
-  let pricingStatus: 'OK' | 'NEEDS_REVIEW' = 'NEEDS_REVIEW';
+  let pricingStatus: 'OK' | 'ESTIMATED' | 'NEEDS_REVIEW' = 'NEEDS_REVIEW';
   let priceMeta: any = undefined;
+  let priceWarning: string | undefined = undefined;
 
   try {
     const priceStart = Date.now();
@@ -675,6 +678,22 @@ async function createDraftForProduct(
       console.warn(`[smartdrafts-price] ⚠️ No price found for "${priceInput.title}"`);
       pricingStatus = 'NEEDS_REVIEW';
       finalPrice = null;
+      priceWarning = 'Could not determine price from any source. Please set price manually.';
+    } else if (pricingDecision.needsManualReview) {
+      // Estimate-based price - not confident
+      console.warn(`[smartdrafts-price] ⚠️ Estimated price for "${priceInput.title}" - needs review`);
+      finalPrice = pricingDecision.recommendedListingPrice;
+      pricingStatus = 'ESTIMATED';
+      priceWarning = pricingDecision.manualReviewReason || 'Price is an estimate based on category. Please verify.';
+      priceMeta = {
+        chosenSource: pricingDecision.chosen?.source,
+        basePrice: pricingDecision.chosen?.price,
+        candidates: pricingDecision.candidates.map(c => ({
+          source: c.source,
+          price: c.price,
+          notes: c.notes,
+        })),
+      };
     } else {
       finalPrice = pricingDecision.recommendedListingPrice;
       pricingStatus = 'OK';
@@ -769,6 +788,8 @@ async function createDraftForProduct(
     condition: parsed.condition,
     keyText: product.keyText, // Pass through Vision API key text for formulation detection
     pricingStatus,
+    priceWarning,
+    needsPriceReview: pricingStatus !== 'OK',
     priceMeta,
     promotion, // Include promotion settings in draft
   };
