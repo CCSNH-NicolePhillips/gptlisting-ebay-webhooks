@@ -11,6 +11,7 @@ import { lookupPrice, type PriceLookupInput, type PriceDecision } from "../../sr
 import { getBrandMetadata } from "../../src/lib/brand-map.js";
 import { getDefaultPricingSettings, type PricingSettings } from "../../src/lib/pricing-config.js";
 import { tokensStore } from "../../src/lib/_blobs.js";
+import { fetchCategoryAspects, formatAspectsForPrompt, type CategoryAspectsResult } from "../../src/lib/ebay-category-aspects.js";
 
 const GPT_TIMEOUT_MS = 30_000;
 const GPT_RETRY_ATTEMPTS = 2;
@@ -131,11 +132,11 @@ async function callOpenAI(prompt: string): Promise<string> {
           messages: [
             {
               role: "system",
-              content: "You are an eBay listing expert. Create SEO-optimized, conversion-focused listings with detailed descriptions and complete item specifics. Respond only with valid JSON matching the requested format.",
+              content: "You are an eBay listing expert. Create SEO-optimized, conversion-focused listings with detailed descriptions and complete item specifics. Fill in as many eBay category aspects as possible - the more complete, the better the search ranking. Respond only with valid JSON matching the requested format.",
             },
             { role: "user", content: prompt },
           ],
-          max_tokens: 2500, // Increased to allow for detailed 200-500 word descriptions + all aspects
+          max_tokens: 4000, // Increased to allow for complete aspects (40-50 fields) + detailed description
         }),
         GPT_TIMEOUT_MS
       );
@@ -315,7 +316,8 @@ function buildPrompt(
   product: PairedProduct, 
   categoryHint: CategoryHint | null, 
   categories: string,
-  competitorPrices?: { amazon: number | null; walmart: number | null; brand: number | null; avg: number }
+  competitorPrices?: { amazon: number | null; walmart: number | null; brand: number | null; avg: number },
+  categoryAspects?: CategoryAspectsResult | null
 ): string {
   const lines: string[] = [];
   
@@ -482,12 +484,33 @@ function buildPrompt(
   lines.push("  'Specifications: [size, count, ingredients, certifications]...'");
   lines.push("- DO NOT write one-sentence descriptions! Expand with details, benefits, and selling points.");
   lines.push("");
-  lines.push("CRITICAL REQUIREMENT: You MUST fill out ALL relevant item specifics (aspects) shown in parentheses for your chosen category above.");
-  lines.push("Example: If category shows (aspects: Formulation, Main Purpose, Ingredients, Features, Active Ingredients)");
-  lines.push("then your aspects object MUST include those fields with appropriate values.");
-  lines.push("The more complete and accurate the aspects, the better the eBay search ranking.");
-  lines.push("DO NOT just fill Brand and Type - include ALL relevant aspects listed for the category!");
-  lines.push("");
+  
+  // Add full category aspects from eBay Taxonomy API if available
+  if (categoryAspects && (categoryAspects.required.length > 0 || categoryAspects.optional.length > 0)) {
+    lines.push("=== COMPLETE CATEGORY ASPECTS FROM EBAY ===");
+    lines.push("You MUST fill as many of these aspects as possible based on the product information.");
+    lines.push("eBay ranks listings higher when more aspects are filled out accurately.");
+    lines.push("");
+    const aspectsFormatted = formatAspectsForPrompt(categoryAspects);
+    lines.push(aspectsFormatted);
+    lines.push("");
+    lines.push("INSTRUCTIONS FOR ASPECTS:");
+    lines.push("- Fill ALL required aspects (these are mandatory for listing)");
+    lines.push("- Fill as many optional aspects as you can determine from the product");
+    lines.push("- For aspects with [allowed: ...] values, use ONLY those exact values");
+    lines.push("- For aspects with [suggested: ...] values, prefer those but can use similar values");
+    lines.push("- If an aspect has (multiple) marker, you can provide an array of values");
+    lines.push("- Use 'Does Not Apply' ONLY if truly not applicable, never for missing data");
+    lines.push("- NEVER leave required aspects empty or with placeholder values");
+    lines.push("");
+  } else {
+    lines.push("CRITICAL REQUIREMENT: You MUST fill out ALL relevant item specifics (aspects) for your chosen category.");
+    lines.push("Example aspects for health products: Brand, Type, Formulation, Main Purpose, Ingredients, Features, Active Ingredients, Number of Capsules, etc.");
+    lines.push("The more complete and accurate the aspects, the better the eBay search ranking.");
+    lines.push("DO NOT just fill Brand and Type - include ALL relevant aspects you can determine from the product!");
+    lines.push("");
+  }
+  
   lines.push("Response format (JSON):");
   lines.push("{");
   if (categories && categories.length > 0) {
@@ -729,7 +752,31 @@ async function createDraftForProduct(
   const categoryHint = await pickCategory(product);
   console.log(`[Draft] Category fallback pick took ${Date.now() - catStart}ms`);
   
-  const prompt = buildPrompt(product, categoryHint, relevantCategories, undefined);
+  // Try to get a likely category ID to fetch full aspects from eBay's Taxonomy API
+  // Extract the first category ID from the relevantCategories list as a hint
+  let likelyCategoryId: string | null = null;
+  const categoryIdMatch = relevantCategories.match(/^(\d+):/m);
+  if (categoryIdMatch) {
+    likelyCategoryId = categoryIdMatch[1];
+  } else if (categoryHint?.id) {
+    likelyCategoryId = categoryHint.id;
+  }
+  
+  // Fetch full category aspects from eBay Taxonomy API
+  let categoryAspects: CategoryAspectsResult | null = null;
+  if (likelyCategoryId) {
+    try {
+      const aspectsStart = Date.now();
+      categoryAspects = await fetchCategoryAspects(likelyCategoryId);
+      if (categoryAspects) {
+        console.log(`[Draft] Fetched ${categoryAspects.all.length} aspects for category ${likelyCategoryId} (${categoryAspects.required.length} required, ${categoryAspects.optional.length} optional) in ${Date.now() - aspectsStart}ms`);
+      }
+    } catch (err) {
+      console.warn(`[Draft] Failed to fetch category aspects:`, err);
+    }
+  }
+  
+  const prompt = buildPrompt(product, categoryHint, relevantCategories, undefined, categoryAspects);
   console.log(`[Draft] Prompt length: ${prompt.length} chars`);
   console.log(`[Draft] Prompt preview:`, prompt.slice(0, 500));
   
