@@ -1166,7 +1166,11 @@
       }
       
       // Handle OAuth redirects
-      window.addEventListener('load', () => {
+      window.addEventListener('load', async () => {
+        // Ensure user is authenticated before proceeding
+        const isAuth = await authClient.requireAuth();
+        if (!isAuth) return; // requireAuth will redirect to login if needed
+        
         const params = new URLSearchParams(window.location.search);
         
         if (params.get('ebay_connected') === 'true') {

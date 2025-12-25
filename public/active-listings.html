@@ -733,12 +733,15 @@
 
       card.appendChild(promoControl);
       
+      // Button row container
+      const btnRow = document.createElement('div');
+      btnRow.style.cssText = 'display: flex; gap: 0.5rem; margin-top: 0.75rem;';
+      
       // Edit button
       const editBtn = document.createElement('button');
       editBtn.className = 'btn primary';
-      editBtn.textContent = 'Edit Listing';
-      editBtn.style.marginTop = '0.75rem';
-      editBtn.style.width = '100%';
+      editBtn.textContent = 'Edit';
+      editBtn.style.flex = '1';
       editBtn.addEventListener('click', () => {
         const params = new URLSearchParams({
           itemId: o.itemId,
@@ -747,7 +750,61 @@
         });
         window.location.href = `/edit-active-listing.html?${params.toString()}`;
       });
-      card.appendChild(editBtn);
+      btnRow.appendChild(editBtn);
+      
+      // Delete button
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'btn secondary';
+      deleteBtn.textContent = 'End';
+      deleteBtn.style.flex = '1';
+      deleteBtn.style.color = '#ffb4b4';
+      deleteBtn.style.borderColor = 'rgba(255, 180, 180, 0.3)';
+      deleteBtn.addEventListener('click', async () => {
+        if (!confirm(`End this listing?\n\n"${o.title}"\n\nThis will remove it from eBay. This action cannot be undone.`)) {
+          return;
+        }
+        
+        deleteBtn.disabled = true;
+        deleteBtn.textContent = 'Ending...';
+        localFlash.textContent = '';
+        
+        try {
+          const exec = getAuthFetch();
+          const res = await exec('/.netlify/functions/ebay-end-listing', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              itemId: o.itemId,
+              sku: o.sku || '',
+              offerId: o.offerId || '',
+              isInventoryListing: !!o.isInventoryListing,
+              reason: 'NotAvailable'
+            }),
+          });
+          
+          const data = await res.json();
+          
+          if (!res.ok || !data.ok) {
+            localFlash.textContent = data?.error || `Failed to end listing (${res.status})`;
+            localFlash.className = 'card-flash error';
+            deleteBtn.disabled = false;
+            deleteBtn.textContent = 'End';
+            return;
+          }
+          
+          localFlash.textContent = '✓ Listing ended - refreshing...';
+          localFlash.className = 'card-flash success';
+          setTimeout(() => load(), 1500);
+        } catch (e) {
+          localFlash.textContent = e?.message || String(e);
+          localFlash.className = 'card-flash error';
+          deleteBtn.disabled = false;
+          deleteBtn.textContent = 'End';
+        }
+      });
+      btnRow.appendChild(deleteBtn);
+      
+      card.appendChild(btnRow);
       
       return card;
     }

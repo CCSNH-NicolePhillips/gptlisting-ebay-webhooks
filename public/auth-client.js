@@ -313,7 +313,10 @@
     if (state.mode === 'auth0') {
       await initAuth0();
       const params = { appState: {} };
-      if (opts?.connection) params.authorizationParams = { connection: opts.connection };
+      const authParams = {};
+      if (opts?.connection) authParams.connection = opts.connection;
+      if (opts?.screen_hint) authParams.screen_hint = opts.screen_hint;
+      if (Object.keys(authParams).length) params.authorizationParams = authParams;
       sessionStorage.setItem('returnTo', opts?.returnTo || '/');
       await state.auth0.loginWithRedirect(params);
       return;

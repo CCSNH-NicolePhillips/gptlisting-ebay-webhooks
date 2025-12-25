@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Sign in</title>
+    <title>Sign in to DraftPilot</title>
     <style>
       :root {
         --bg: #0b1020;
@@ -12,6 +12,7 @@
         --text: #f4f6fb;
         --muted: #a2a9c8;
         --primary: #4f7cff;
+        --accent: #38bdf8;
       }
       * { box-sizing: border-box; }
       body {
@@ -19,18 +20,27 @@
         font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       }
       .wrap { max-width: 520px; margin: 6vh auto; padding: 1.25rem; }
-      .card { background: linear-gradient(180deg, #141a33, #0f1530); border: 1px solid var(--line); border-radius: 14px; padding: 1.25rem; }
+      .card { background: linear-gradient(180deg, #141a33, #0f1530); border: 1px solid var(--line); border-radius: 14px; padding: 1.5rem; }
+      .logo { font-weight: 800; letter-spacing: .2px; font-size: 1.1rem; color: var(--accent); margin-bottom: 0.5rem; }
       h1 { margin: 0 0 .25rem; font-size: 1.4rem; }
       p.muted { margin: 0 0 1rem; color: var(--muted); }
-      .btn { width: 100%; background: #1a2347; border: 1px solid var(--line); color: #e1e7ff; border-radius: 10px; padding: .7rem .9rem; font-weight: 700; cursor: pointer; margin: .4rem 0; display: flex; align-items: center; gap: .6rem; justify-content: center; }
+      .btn { width: 100%; background: #1a2347; border: 1px solid var(--line); color: #e1e7ff; border-radius: 10px; padding: .7rem .9rem; font-weight: 700; cursor: pointer; margin: .4rem 0; display: flex; align-items: center; gap: .6rem; justify-content: center; transition: all 0.2s; }
+      .btn:hover:not(:disabled) { background: #1f2a52; border-color: #3a4578; }
       .btn.primary { background: var(--primary); border-color: #3e66d6; color: #fff; }
+      .btn.primary:hover:not(:disabled) { background: #5d89ff; }
+      .btn:disabled { opacity: 0.5; cursor: not-allowed; }
       .row { display: flex; gap: .6rem; }
       .row .btn { flex: 1; }
-      .mutedSmall { color: var(--muted); font-size: .9rem; text-align: center; margin-top: .75rem; }
+      .mutedSmall { color: var(--muted); font-size: .85rem; text-align: center; margin-top: .75rem; }
       .center { text-align: center; }
       a { color: #9db2ff; text-decoration: none; }
       a:hover { text-decoration: underline; }
-      .logo { font-weight: 800; letter-spacing: .2px; }
+      .divider { display: flex; align-items: center; gap: 1rem; margin: 1rem 0; color: var(--muted); font-size: 0.85rem; }
+      .divider:before, .divider:after { content: ''; flex: 1; height: 1px; background: var(--line); }
+      .mode-tabs { display: flex; gap: 0; margin-bottom: 1.25rem; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 4px; }
+      .mode-tab { flex: 1; padding: 0.6rem 1rem; border: none; background: transparent; color: var(--muted); cursor: pointer; border-radius: 6px; font-weight: 600; transition: all 0.2s; }
+      .mode-tab.active { background: var(--primary); color: #fff; }
+      .mode-tab:hover:not(.active) { color: var(--text); }
       /* Hide auth badge on the login page to avoid confusing Signed in state */
       #auth-badge { display: none !important; }
     </style>
@@ -40,22 +50,58 @@
     <div class="wrap">
       <div class="card">
         <div class="center">
-          <div class="logo">eBay + Dropbox Uploader</div>
-          <h1>Sign in</h1>
-          <p class="muted">Use your email, Google, or Apple account to continue.</p>
+          <div class="logo">DraftPilot</div>
+          <h1 id="pageTitle">Sign in</h1>
+          <p class="muted" id="pageSubtitle">Use your email, Google, or Apple account to continue.</p>
         </div>
+        
+        <!-- Sign In / Sign Up toggle -->
+        <div class="mode-tabs">
+          <button class="mode-tab active" id="tabSignIn" onclick="setMode('signin')">Sign In</button>
+          <button class="mode-tab" id="tabSignUp" onclick="setMode('signup')">Create Account</button>
+        </div>
+        
         <button class="btn primary" id="btnContinue">Continue</button>
+        
+        <div class="divider">or</div>
+        
         <div class="row">
-          <button class="btn" id="btnGoogle">Continue with Google</button>
-          <button class="btn" id="btnApple">Continue with Apple</button>
+          <button class="btn" id="btnGoogle">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+            Google
+          </button>
+          <button class="btn" id="btnApple">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.08-.5-2.06-.52-3.2 0-1.42.65-2.17.47-3.02-.4-4.65-4.87-3.96-12.28 1.3-12.5 1.3.07 2.2.72 2.95.77.9-.18 1.77-.7 2.73-.63 1.16.1 2.03.5 2.6 1.27-2.38 1.43-1.82 4.57.47 5.44-.47 1.25-1.07 2.49-2.05 3.65h.3zm-3.63-14.75c-.74.88-1.97 1.56-3.15 1.45-.16-1.27.46-2.62 1.16-3.42.78-.9 2.08-1.53 3.16-1.56.12 1.36-.38 2.7-1.17 3.53z"/></svg>
+            Apple
+          </button>
         </div>
         <div id="cfgWarning" class="mutedSmall" style="display:none;color:#ffb4b4"></div>
-        <div class="mutedSmall">By continuing, you agree to the Terms and acknowledge the Privacy Policy.</div>
+        <div class="mutedSmall">By continuing, you agree to the <a href="/privacy.html">Terms and Privacy Policy</a>.</div>
       </div>
-      <!-- Back to app intentionally removed for public-computer safety -->
     </div>
 
     <script>
+      let isSignUp = false;
+      
+      function setMode(mode) {
+        isSignUp = mode === 'signup';
+        document.getElementById('tabSignIn').classList.toggle('active', !isSignUp);
+        document.getElementById('tabSignUp').classList.toggle('active', isSignUp);
+        document.getElementById('pageTitle').textContent = isSignUp ? 'Create Account' : 'Sign In';
+        document.getElementById('pageSubtitle').textContent = isSignUp 
+          ? 'Create your DraftPilot account to start selling on eBay.'
+          : 'Use your email, Google, or Apple account to continue.';
+        document.getElementById('btnContinue').textContent = isSignUp ? 'Create Account' : 'Continue';
+      }
+      
+      // Check URL for signup mode (e.g., /login.html?signup=1)
+      try {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('signup') === '1' || params.get('mode') === 'signup') {
+          setMode('signup');
+        }
+      } catch {}
+
       // Decide which auth to use based on server config; buttons trigger provider-specific login when supported
       (async function () {
         // Check auth status but do NOT auto-redirect; keep the login screen visible
@@ -92,7 +138,10 @@
               window.location.assign(returnTo);
               return;
             }
-            await authClient.login({});
+            // Auth0 Universal Login handles both sign-in and sign-up
+            // For sign-up, we can hint to show the sign-up tab
+            const opts = isSignUp ? { screen_hint: 'signup' } : {};
+            await authClient.login(opts);
           } catch (e) {
             const w = document.getElementById('cfgWarning');
             w.style.display = 'block';
@@ -100,12 +149,16 @@
             console.error('Login error', e);
           }
         };
+          }
+        };
 
         // Provider-hinted buttons (Auth0 only). If not supported, fall back to generic.
         document.getElementById('btnGoogle').onclick = async () => {
           try {
-            if (mode === 'auth0') return await authClient.login({ connection: 'google-oauth2' });
-            return await authClient.login({});
+            const opts = { connection: 'google-oauth2' };
+            if (isSignUp) opts.screen_hint = 'signup';
+            if (mode === 'auth0') return await authClient.login(opts);
+            return await authClient.login(isSignUp ? { screen_hint: 'signup' } : {});
           } catch (e) {
             const w = document.getElementById('cfgWarning');
             w.style.display = 'block';
@@ -115,8 +168,10 @@
         };
         document.getElementById('btnApple').onclick = async () => {
           try {
-            if (mode === 'auth0') return await authClient.login({ connection: 'apple' });
-            return await authClient.login({});
+            const opts = { connection: 'apple' };
+            if (isSignUp) opts.screen_hint = 'signup';
+            if (mode === 'auth0') return await authClient.login(opts);
+            return await authClient.login(isSignUp ? { screen_hint: 'signup' } : {});
           } catch (e) {
             const w = document.getElementById('cfgWarning');
             w.style.display = 'block';
