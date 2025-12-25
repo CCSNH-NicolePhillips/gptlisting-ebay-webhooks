@@ -442,9 +442,15 @@
           // Clear stale auth state
           clearLocalAuthState();
           
+          // Save current URL so we can redirect back after re-auth
+          const returnTo = window.location.pathname + window.location.search + window.location.hash;
+          sessionStorage.setItem('returnTo', returnTo);
+          console.log('[Auth] getToken: Saving returnTo before re-auth:', returnTo);
+          
           // Force fresh login to get new session with refresh tokens
           try {
             await state.auth0.loginWithRedirect({
+              appState: { returnTo },
               authorizationParams: {
                 redirect_uri: window.location.origin + '/login.html',
                 audience: state.cfg?.AUTH0_AUDIENCE || undefined,

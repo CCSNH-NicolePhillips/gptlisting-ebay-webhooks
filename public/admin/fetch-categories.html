@@ -578,6 +578,7 @@
 
     // Initialize auth
     window.authClient.requireAuth().catch(() => {
+      sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
       window.location.href = '/login.html';
     });
   </script>
