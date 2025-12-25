@@ -282,14 +282,14 @@ export const handler: Handler = async (event) => {
         // Create shareable URLs for each paired image (method-specific)
         console.log(`[pairing-v2-processor] Creating shareable URLs for ${result.pairs.length} pairs (${uploadMethod} mode)...`);
         const pairsWithUrls = await Promise.all(result.pairs.map(async (p) => {
-          let frontUrl: string;
-          let backUrl: string;
+          let frontUrl: string = '';
+          let backUrl: string = '';
           let side1Url: string | undefined;
           let side2Url: string | undefined;
           
           if (uploadMethod === "dropbox") {
-            // Dropbox mode: Stage images to R2/S3 for full quality and stable URLs
-            // (Dropbox shared links have quality issues and are temporary)
+            // Dropbox mode: Try to stage images to R2/S3 for full quality and stable URLs
+            // If R2/S3 not configured, fall back to Dropbox temp links directly
             const frontFilename = path.basename(p.front);
             const backFilename = path.basename(p.back);
             const side1Filename = p.side1 ? path.basename(p.side1) : null;
@@ -317,42 +317,65 @@ export const handler: Handler = async (event) => {
               return null;
             };
             
-            // Helper to stage image to R2/S3
-            const stageToR2 = async (filename: string): Promise<string> => {
-              const sourceUrl = findSourceUrl(filename);
-              if (!sourceUrl) {
-                console.warn(`[pairing-v2-processor] Could not find source URL for ${filename}`);
-                return '';
-              }
+            // Check if R2/S3 is properly configured
+            const hasR2Config = !!(process.env.R2_BUCKET || process.env.S3_BUCKET) && 
+                               !!(process.env.R2_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID) &&
+                               !!(process.env.R2_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY);
+            
+            if (hasR2Config) {
+              // Helper to stage image to R2/S3
+              const stageToR2 = async (filename: string): Promise<string> => {
+                const sourceUrl = findSourceUrl(filename);
+                if (!sourceUrl) {
+                  console.warn(`[pairing-v2-processor] Could not find source URL for ${filename}`);
+                  return '';
+                }
+                
+                try {
+                  const mime = guessMime(filename);
+                  const stagingKey = await copyToStaging(sourceUrl, job.userId, filename, mime, jobId);
+                  const stagedUrl = await getStagedUrl(stagingKey);
+                  console.log(`[pairing-v2-processor] Staged ${filename} to R2: ${stagedUrl.substring(0, 60)}...`);
+                  return stagedUrl;
+                } catch (err) {
+                  console.error(`[pairing-v2-processor] Failed to stage ${filename} to R2:`, err);
+                  return '';
+                }
+              };
               
-              try {
-                const mime = guessMime(filename);
-                const stagingKey = await copyToStaging(sourceUrl, job.userId, filename, mime, jobId);
-                const stagedUrl = await getStagedUrl(stagingKey);
-                console.log(`[pairing-v2-processor] Staged ${filename} to R2: ${stagedUrl.substring(0, 60)}...`);
-                return stagedUrl;
-              } catch (err) {
-                console.error(`[pairing-v2-processor] Failed to stage ${filename} to R2:`, err);
-                return '';
+              // Stage front and back images (required)
+              [frontUrl, backUrl] = await Promise.all([
+                stageToR2(frontFilename),
+                stageToR2(backFilename)
+              ]);
+              
+              // Stage side images (optional)
+              if (side1Filename) {
+                side1Url = await stageToR2(side1Filename) || undefined;
               }
-            };
-            
-            // Stage front and back images (required)
-            [frontUrl, backUrl] = await Promise.all([
-              stageToR2(frontFilename),
-              stageToR2(backFilename)
-            ]);
-            
-            // Stage side images (optional)
-            if (side1Filename) {
-              side1Url = await stageToR2(side1Filename) || undefined;
+              if (side2Filename) {
+                side2Url = await stageToR2(side2Filename) || undefined;
+              }
             }
-            if (side2Filename) {
-              side2Url = await stageToR2(side2Filename) || undefined;
+            
+            // Fallback: Use Dropbox temp links directly if R2 staging failed or not configured
+            if (!frontUrl) {
+              frontUrl = findSourceUrl(frontFilename) || '';
+              console.log(`[pairing-v2-processor] Using Dropbox temp link for front: ${frontFilename}`);
+            }
+            if (!backUrl) {
+              backUrl = findSourceUrl(backFilename) || '';
+              console.log(`[pairing-v2-processor] Using Dropbox temp link for back: ${backFilename}`);
+            }
+            if (side1Filename && !side1Url) {
+              side1Url = findSourceUrl(side1Filename) || undefined;
+            }
+            if (side2Filename && !side2Url) {
+              side2Url = findSourceUrl(side2Filename) || undefined;
             }
             
             if (!frontUrl || !backUrl) {
-              console.warn(`[pairing-v2-processor] Could not stage images for pair: ${frontFilename}, ${backFilename}`);
+              console.warn(`[pairing-v2-processor] Could not get image URLs for pair: ${frontFilename}, ${backFilename}`);
             }
           } else {
             // Local mode: Use the staged URLs directly
