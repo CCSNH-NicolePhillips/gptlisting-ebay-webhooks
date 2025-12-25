@@ -67,6 +67,81 @@ async function getDropboxTemporaryLinks(accessToken: string, paths: string[]): P
   return links;
 }
 
+/**
+ * Get persistent shared link for a Dropbox file (doesn't expire)
+ * Creates one if it doesn't exist, or returns existing one
+ */
+async function getDropboxSharedLink(accessToken: string, filePath: string): Promise<string | null> {
+  try {
+    // First try to get existing shared link
+    const existingResponse = await fetch("https://api.dropboxapi.com/2/sharing/list_shared_links", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ path: filePath, direct_only: true }),
+    });
+    
+    if (existingResponse.ok) {
+      const existingData: any = await existingResponse.json();
+      if (existingData.links && existingData.links.length > 0) {
+        // Convert shared link to direct download format
+        let url = existingData.links[0].url;
+        url = url.replace('www.dropbox.com', 'dl.dropboxusercontent.com').replace('?dl=0', '?raw=1');
+        console.log(`[pairing-v2-processor] Using existing shared link for ${filePath}`);
+        return url;
+      }
+    }
+    
+    // No existing link, create a new one
+    const createResponse = await fetch("https://api.dropboxapi.com/2/sharing/create_shared_link_with_settings", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        path: filePath,
+        settings: {
+          requested_visibility: "public",
+          audience: "public",
+          access: "viewer"
+        }
+      }),
+    });
+    
+    if (!createResponse.ok) {
+      const errorText = await createResponse.text();
+      // Error 409 means link already exists (race condition)
+      if (createResponse.status === 409 && errorText.includes('shared_link_already_exists')) {
+        // Try to extract the existing link from the error response
+        try {
+          const errorData = JSON.parse(errorText);
+          const existingUrl = errorData?.error?.shared_link_already_exists?.metadata?.url;
+          if (existingUrl) {
+            const url = existingUrl.replace('www.dropbox.com', 'dl.dropboxusercontent.com').replace('?dl=0', '?raw=1');
+            console.log(`[pairing-v2-processor] Using existing shared link (from 409) for ${filePath}`);
+            return url;
+          }
+        } catch {}
+      }
+      console.error(`Failed to create shared link for ${filePath}: ${createResponse.status} ${errorText}`);
+      return null;
+    }
+    
+    const data: any = await createResponse.json();
+    // Convert shared link to direct download format
+    let url = data.url;
+    url = url.replace('www.dropbox.com', 'dl.dropboxusercontent.com').replace('?dl=0', '?raw=1');
+    console.log(`[pairing-v2-processor] Created new shared link for ${filePath}`);
+    return url;
+  } catch (err) {
+    console.error(`Error getting shared link for ${filePath}:`, err);
+    return null;
+  }
+}
+
 // Redis helpers
 async function redisSet(key: string, value: string, exSeconds: number): Promise<void> {
   const url = process.env.UPSTASH_REDIS_REST_URL;
@@ -358,14 +433,48 @@ export const handler: Handler = async (event) => {
               }
             }
             
-            // Fallback: Use Dropbox temp links directly if R2 staging failed or not configured
+            // Fallback: Use Dropbox persistent shared links if R2 staging failed or not configured
+            // We create shared links instead of temp links because temp links expire after 4 hours
+            // and we need persistent URLs for eBay inventory that will be accessed later
+            if (!frontUrl && job.accessToken) {
+              const dropboxPath = job.dropboxPaths?.find((p: string) => p.includes(frontFilename));
+              if (dropboxPath) {
+                frontUrl = await getDropboxSharedLink(job.accessToken, dropboxPath) || '';
+                if (frontUrl) {
+                  console.log(`[pairing-v2-processor] Using Dropbox shared link for front: ${frontFilename}`);
+                }
+              }
+            }
+            if (!backUrl && job.accessToken) {
+              const dropboxPath = job.dropboxPaths?.find((p: string) => p.includes(backFilename));
+              if (dropboxPath) {
+                backUrl = await getDropboxSharedLink(job.accessToken, dropboxPath) || '';
+                if (backUrl) {
+                  console.log(`[pairing-v2-processor] Using Dropbox shared link for back: ${backFilename}`);
+                }
+              }
+            }
+            if (side1Filename && !side1Url && job.accessToken) {
+              const dropboxPath = job.dropboxPaths?.find((p: string) => p.includes(side1Filename));
+              if (dropboxPath) {
+                side1Url = await getDropboxSharedLink(job.accessToken, dropboxPath) || undefined;
+              }
+            }
+            if (side2Filename && !side2Url && job.accessToken) {
+              const dropboxPath = job.dropboxPaths?.find((p: string) => p.includes(side2Filename));
+              if (dropboxPath) {
+                side2Url = await getDropboxSharedLink(job.accessToken, dropboxPath) || undefined;
+              }
+            }
+            
+            // Final fallback: Use temp links as last resort (these expire after 4h but better than nothing)
             if (!frontUrl) {
               frontUrl = findSourceUrl(frontFilename) || '';
-              console.log(`[pairing-v2-processor] Using Dropbox temp link for front: ${frontFilename}`);
+              console.warn(`[pairing-v2-processor] Using temp link (expires 4h) for front: ${frontFilename}`);
             }
             if (!backUrl) {
               backUrl = findSourceUrl(backFilename) || '';
-              console.log(`[pairing-v2-processor] Using Dropbox temp link for back: ${backFilename}`);
+              console.warn(`[pairing-v2-processor] Using temp link (expires 4h) for back: ${backFilename}`);
             }
             if (side1Filename && !side1Url) {
               side1Url = findSourceUrl(side1Filename) || undefined;
