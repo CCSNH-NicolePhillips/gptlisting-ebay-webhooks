@@ -210,6 +210,16 @@ export const handler: Handler = async (event) => {
 				// No policy defaults saved
 			}
 			
+			// DEBUG: Log what we found
+			console.log(`[ebay-publish-offer] DEBUG: User settings loaded`, {
+				settingsAutoPromoteEnabled: userSettings.autoPromoteEnabled,
+				settingsDefaultPromotionRate: userSettings.defaultPromotionRate,
+				policyDefaultsAutoPromote: policyDefaults.autoPromote,
+				policyDefaultsDefaultAdRate: policyDefaults.defaultAdRate,
+				settingsKeys: Object.keys(userSettings),
+				policyKeys: Object.keys(policyDefaults),
+			});
+			
 			// Check if user has auto-promote enabled (settings.json uses autoPromoteEnabled, policy-defaults uses autoPromote)
 			const autoPromote = userSettings.autoPromoteEnabled === true || policyDefaults.autoPromote === true;
 			// Settings uses defaultPromotionRate, policy-defaults uses defaultAdRate
@@ -219,9 +229,13 @@ export const handler: Handler = async (event) => {
 					? policyDefaults.defaultAdRate 
 					: 5;
 			
+			console.log(`[ebay-publish-offer] DEBUG: autoPromote=${autoPromote}, defaultAdRate=${defaultAdRate}`);
+			
 			// Fetch the offer to get SKU and listingId
 			const getOfferUrl = `${apiHost}/sell/inventory/v1/offer/${encodeURIComponent(offerId)}`;
 			const getOfferRes = await fetch(getOfferUrl, { headers });
+			
+			console.log(`[ebay-publish-offer] DEBUG: getOfferRes.ok=${getOfferRes.ok}, status=${getOfferRes.status}`);
 			
 			if (getOfferRes.ok && autoPromote) {
 				const offerText = await getOfferRes.text();
@@ -239,6 +253,7 @@ export const handler: Handler = async (event) => {
 				
 				// Get listingId from publish response
 				const listingId = pub.body?.listingId || offer.listing?.listingId;
+				console.log(`[ebay-publish-offer] DEBUG: pub.body.listingId=${pub.body?.listingId}, offer.listing?.listingId=${offer.listing?.listingId}, final listingId=${listingId}`);
 				
 				if (listingId) {
 					// Queue promotion job for background processing
