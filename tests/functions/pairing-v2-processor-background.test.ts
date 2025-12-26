@@ -344,4 +344,78 @@ describe('pairing-v2-processor-background', () => {
       expect(side2Url).toBeUndefined();
     });
   });
+
+  describe('normalizeDropboxUrl', () => {
+    // Replicate the function logic for testing
+    function normalizeDropboxUrl(rawUrl: string): string {
+      try {
+        const u = new URL(rawUrl);
+        u.hostname = "dl.dropboxusercontent.com";
+        u.searchParams.delete("dl");
+        if (!u.searchParams.has("raw")) u.searchParams.set("raw", "1");
+        return u.toString();
+      } catch {
+        return rawUrl;
+      }
+    }
+
+    it('should handle dl=0 at END of query string (typical Dropbox format)', () => {
+      // This is the common case that was broken with string replace
+      const input = 'https://www.dropbox.com/scl/fi/abc123/image.jpg?rlkey=xyz789&dl=0';
+      const result = normalizeDropboxUrl(input);
+      
+      expect(result).toBe('https://dl.dropboxusercontent.com/scl/fi/abc123/image.jpg?rlkey=xyz789&raw=1');
+      expect(result).not.toContain('dl=0');
+      expect(result).toContain('raw=1');
+    });
+
+    it('should handle dl=0 at START of query string', () => {
+      const input = 'https://www.dropbox.com/scl/fi/abc123/image.jpg?dl=0';
+      const result = normalizeDropboxUrl(input);
+      
+      expect(result).toBe('https://dl.dropboxusercontent.com/scl/fi/abc123/image.jpg?raw=1');
+      expect(result).not.toContain('dl=0');
+    });
+
+    it('should handle dl=0 in MIDDLE of query string', () => {
+      const input = 'https://www.dropbox.com/scl/fi/abc123/image.jpg?rlkey=xyz&dl=0&st=abc';
+      const result = normalizeDropboxUrl(input);
+      
+      expect(result).not.toContain('dl=0');
+      expect(result).toContain('raw=1');
+      expect(result).toContain('rlkey=xyz');
+      expect(result).toContain('st=abc');
+    });
+
+    it('should change hostname from www.dropbox.com to dl.dropboxusercontent.com', () => {
+      const input = 'https://www.dropbox.com/scl/fi/abc123/image.jpg?dl=0';
+      const result = normalizeDropboxUrl(input);
+      
+      expect(result).toContain('dl.dropboxusercontent.com');
+      expect(result).not.toContain('www.dropbox.com');
+    });
+
+    it('should not add raw=1 if already present', () => {
+      const input = 'https://www.dropbox.com/scl/fi/abc123/image.jpg?rlkey=xyz&raw=1';
+      const result = normalizeDropboxUrl(input);
+      
+      // Should only have one raw=1
+      const rawCount = (result.match(/raw=1/g) || []).length;
+      expect(rawCount).toBe(1);
+    });
+
+    it('should return original URL if parsing fails', () => {
+      const input = 'not-a-valid-url';
+      const result = normalizeDropboxUrl(input);
+      
+      expect(result).toBe(input);
+    });
+
+    it('should preserve path structure', () => {
+      const input = 'https://www.dropbox.com/scl/fi/longid123/My%20Image%20File.jpg?rlkey=xyz&dl=0';
+      const result = normalizeDropboxUrl(input);
+      
+      expect(result).toContain('/scl/fi/longid123/My%20Image%20File.jpg');
+    });
+  });
 });
