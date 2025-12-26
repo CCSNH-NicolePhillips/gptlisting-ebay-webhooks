@@ -1116,4 +1116,63 @@ describe("map-group-to-draft", () => {
       expect(result.offer.price).toBe(99.99);
     });
   });
+
+  describe("EmptyImagesError guardrail", () => {
+    it("should throw EmptyImagesError when draft has no images", async () => {
+      // Reset modules to get a fresh import
+      jest.resetModules();
+      
+      // Mock taxonomy to return draft with empty images
+      const draftWithNoImages = JSON.parse(JSON.stringify(baseDraft));
+      draftWithNoImages.inventory.product.imageUrls = [];
+      
+      jest.doMock("../../src/lib/taxonomy-map.js", () => ({
+        mapGroupToDraftWithTaxonomy: jest.fn().mockResolvedValue(draftWithNoImages),
+      }));
+      jest.doMock("../../src/lib/image-utils.js", () => ({
+        proxyImageUrls: jest.fn((urls: string[]) => urls),
+      }));
+
+      const { mapGroupToDraft, EmptyImagesError } = await import("../../src/lib/map-group-to-draft.js");
+
+      const group = {
+        groupId: "test-group-123",
+        images: ["https://www.dropbox.com/s/abc/image.jpg?dl=0"],
+      };
+
+      // Suppress console.error for this test
+      jest.spyOn(console, "error").mockImplementation();
+
+      await expect(mapGroupToDraft(group)).rejects.toThrow(EmptyImagesError);
+    });
+
+    it("should pass when draft has at least 1 valid image", async () => {
+      // Reset modules to get a fresh import
+      jest.resetModules();
+      
+      // Mock taxonomy to return draft with 1 image
+      const draftWithImage = JSON.parse(JSON.stringify(baseDraft));
+      draftWithImage.inventory.product.imageUrls = ["https://example.com/valid-image.jpg"];
+      
+      jest.doMock("../../src/lib/taxonomy-map.js", () => ({
+        mapGroupToDraftWithTaxonomy: jest.fn().mockResolvedValue(draftWithImage),
+      }));
+      jest.doMock("../../src/lib/image-utils.js", () => ({
+        proxyImageUrls: jest.fn((urls: string[]) => urls.map((u: string) => `proxied:${u}`)),
+      }));
+
+      const { mapGroupToDraft } = await import("../../src/lib/map-group-to-draft.js");
+
+      const group = {
+        groupId: "test-group-456",
+        images: ["https://example.com/valid-image.jpg"],
+      };
+
+      const result = await mapGroupToDraft(group);
+
+      // Should complete without throwing
+      expect(result.inventory.product.imageUrls).toHaveLength(1);
+      expect(result.inventory.product.imageUrls[0]).toContain("proxied:");
+    });
+  });
 });

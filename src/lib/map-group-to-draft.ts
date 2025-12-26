@@ -66,6 +66,78 @@ function cloneDraft(draft: TaxonomyMappedDraft): TaxonomyMappedDraft {
   return JSON.parse(JSON.stringify(draft)) as TaxonomyMappedDraft;
 }
 
+/**
+ * Error thrown when a draft would be published with no images.
+ * This is a guardrail to prevent broken listings from being created.
+ */
+export class EmptyImagesError extends Error {
+  constructor(
+    public readonly groupId: string,
+    public readonly candidateUrls: string[],
+    public readonly source: string,
+    message: string
+  ) {
+    super(message);
+    this.name = "EmptyImagesError";
+  }
+}
+
+/**
+ * Guardrail: Assert that draft has at least 1 valid image URL before publishing.
+ * Throws EmptyImagesError with diagnostic info if validation fails.
+ */
+function assertDraftHasImages(
+  draft: TaxonomyMappedDraft,
+  groupId: string,
+  group: Record<string, unknown>
+): void {
+  const imageUrls = draft.inventory?.product?.imageUrls;
+  
+  // Check if images array exists and has at least 1 valid URL
+  const validUrls = Array.isArray(imageUrls)
+    ? imageUrls.filter((url) => typeof url === "string" && url.trim().length > 0)
+    : [];
+  
+  if (validUrls.length >= 1) {
+    return; // Valid - has at least 1 image
+  }
+
+  // Gather diagnostic info
+  const candidateUrls: string[] = [];
+  
+  // Check original group for image sources
+  const groupImages = group?.images ?? group?.imageUrls ?? group?.urls ?? [];
+  if (Array.isArray(groupImages)) {
+    candidateUrls.push(...groupImages.slice(0, 5).map(String));
+  }
+  
+  // Detect source type from URLs
+  let source = "unknown";
+  const sampleUrl = candidateUrls[0] || "";
+  if (sampleUrl.includes("dropbox.com") || sampleUrl.includes("dropboxusercontent.com")) {
+    source = "dropbox";
+  } else if (sampleUrl.includes(".s3.") || sampleUrl.includes("amazonaws.com")) {
+    source = "s3";
+  } else if (sampleUrl.includes("image-proxy")) {
+    source = "proxy";
+  } else if (sampleUrl.startsWith("file://") || sampleUrl.startsWith("/")) {
+    source = "local";
+  } else if (sampleUrl.startsWith("http")) {
+    source = "http";
+  }
+
+  const message = [
+    `[mapGroupToDraft] GUARDRAIL: Draft has 0 valid images - cannot publish`,
+    `  groupId: ${groupId || "(none)"}`,
+    `  source: ${source}`,
+    `  candidateUrls (first 5): ${candidateUrls.length > 0 ? candidateUrls.join(", ") : "(none)"}`,
+    `  draft.imageUrls: ${JSON.stringify(imageUrls)}`,
+  ].join("\n");
+
+  console.error(message);
+  throw new EmptyImagesError(groupId, candidateUrls, source, message);
+}
+
 function sanitizeString(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
@@ -244,6 +316,9 @@ export async function mapGroupToDraft(group: Record<string, any>, opts?: MapOpti
     console.log('[mapGroupToDraft] Proxied images:', { original: imageUrls.length, proxied: proxiedUrls.length, appUrl, sample: proxiedUrls[0]?.substring(0, 100) });
     draft.inventory.product.imageUrls = proxiedUrls;
   }
+
+  // GUARDRAIL: Fail fast if draft would publish with 0 images
+  assertDraftHasImages(draft, groupId, group);
   
   return draft;
 }
