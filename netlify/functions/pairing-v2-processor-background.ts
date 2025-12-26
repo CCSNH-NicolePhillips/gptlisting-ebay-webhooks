@@ -397,6 +397,8 @@ export const handler: Handler = async (event) => {
                                !!(process.env.R2_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID) &&
                                !!(process.env.R2_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY);
             
+            console.log(`[pairing-v2-processor] R2 config check: hasR2Config=${hasR2Config}, hasAccessToken=${!!job.accessToken}, dropboxPathsCount=${job.dropboxPaths?.length || 0}`);
+            
             if (hasR2Config) {
               // Helper to stage image to R2/S3
               const stageToR2 = async (filename: string): Promise<string> => {
@@ -436,12 +438,17 @@ export const handler: Handler = async (event) => {
             // Fallback: Use Dropbox persistent shared links if R2 staging failed or not configured
             // We create shared links instead of temp links because temp links expire after 4 hours
             // and we need persistent URLs for eBay inventory that will be accessed later
+            console.log(`[pairing-v2-processor] Checking shared link fallback: frontUrl="${frontUrl?.substring(0, 50) || ''}", backUrl="${backUrl?.substring(0, 50) || ''}", hasAccessToken=${!!job.accessToken}`);
+            
             if (!frontUrl && job.accessToken) {
               const dropboxPath = job.dropboxPaths?.find((p: string) => p.includes(frontFilename));
+              console.log(`[pairing-v2-processor] Looking for dropbox path for "${frontFilename}": found="${dropboxPath || 'NOT FOUND'}"`);
               if (dropboxPath) {
                 frontUrl = await getDropboxSharedLink(job.accessToken, dropboxPath) || '';
                 if (frontUrl) {
-                  console.log(`[pairing-v2-processor] Using Dropbox shared link for front: ${frontFilename}`);
+                  console.log(`[pairing-v2-processor] ✓ Created shared link for front: ${frontUrl.substring(0, 60)}...`);
+                } else {
+                  console.error(`[pairing-v2-processor] ✗ Failed to create shared link for front: ${frontFilename}`);
                 }
               }
             }
@@ -450,7 +457,9 @@ export const handler: Handler = async (event) => {
               if (dropboxPath) {
                 backUrl = await getDropboxSharedLink(job.accessToken, dropboxPath) || '';
                 if (backUrl) {
-                  console.log(`[pairing-v2-processor] Using Dropbox shared link for back: ${backFilename}`);
+                  console.log(`[pairing-v2-processor] ✓ Created shared link for back: ${backUrl.substring(0, 60)}...`);
+                } else {
+                  console.error(`[pairing-v2-processor] ✗ Failed to create shared link for back: ${backFilename}`);
                 }
               }
             }

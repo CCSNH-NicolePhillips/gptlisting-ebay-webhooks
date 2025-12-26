@@ -216,13 +216,15 @@ export const handler: Handler = async (event) => {
     }
 
     // Schedule the job (returns immediately with job ID)
+    // IMPORTANT: Always pass originalDropboxPaths so processor can create persistent shared links
     const jobId = await schedulePairingV2Job(
       userAuth.userId, 
       folder, 
       linksOrPaths, 
       accessToken, 
       originalFilenames,
-      needsTempLinks
+      needsTempLinks,
+      imagePaths // Always pass original Dropbox file paths for shared link creation
     );
 
     console.log("[smartdrafts-pairing-v2-start] Job scheduled:", jobId);

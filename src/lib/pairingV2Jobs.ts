@@ -84,7 +84,8 @@ export async function schedulePairingV2Job(
   imagePaths: string[],
   accessToken?: string,
   originalFilenames?: string[],
-  needsTempLinks?: boolean
+  needsTempLinks?: boolean,
+  originalDropboxPaths?: string[] // NEW: Always pass original Dropbox file paths
 ): Promise<string> {
   const jobId = randomUUID();
 
@@ -105,7 +106,15 @@ export async function schedulePairingV2Job(
 
   // Add method-specific fields
   if (uploadMethod === "dropbox") {
-    job.dropboxPaths = imagePaths;
+    // If we have pre-fetched temp links, store them in stagedUrls and keep original paths in dropboxPaths
+    if (needsTempLinks === false && originalDropboxPaths) {
+      // imagePaths contains temp links, originalDropboxPaths contains file paths
+      job.stagedUrls = imagePaths; // Temp links for immediate use
+      job.dropboxPaths = originalDropboxPaths; // Original paths for creating shared links
+    } else {
+      // imagePaths contains file paths (need to fetch temp links later)
+      job.dropboxPaths = imagePaths;
+    }
     job.dropboxFilenames = originalFilenames; // Store original filenames
     job.accessToken = accessToken;
     job.needsTempLinks = needsTempLinks || false;
