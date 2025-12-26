@@ -1,18 +1,22 @@
-import { proxyImageUrls } from '../../src/lib/image-utils';
+import { proxyImageUrls, normalizeDropboxUrl } from '../../src/lib/image-utils';
 
 describe('image-utils', () => {
   describe('proxyImageUrls', () => {
     let originalDateNow: () => number;
     const mockTimestamp = 1234567890;
     const mockTimestamp36 = mockTimestamp.toString(36);
+    const testBase = 'https://test.netlify.app';
 
     beforeEach(() => {
       originalDateNow = Date.now;
       Date.now = jest.fn(() => mockTimestamp);
+      // Set URL env var so proxyImageUrls doesn't throw
+      process.env.URL = testBase;
     });
 
     afterEach(() => {
       Date.now = originalDateNow;
+      delete process.env.URL;
     });
 
     describe('S3 URLs', () => {
@@ -40,14 +44,15 @@ describe('image-utils', () => {
     });
 
     describe('Dropbox URLs', () => {
-      it('should convert Dropbox share URLs with dl parameter to direct download', () => {
+      it('should convert Dropbox share URLs with dl=0 to raw=1', () => {
         const dropboxUrl = 'https://www.dropbox.com/file.jpg?dl=0';
 
         const result = proxyImageUrls([dropboxUrl]);
 
         expect(result[0]).toContain('image-proxy');
-        // The dl=1 is URL-encoded within the image-proxy URL parameter
-        expect(decodeURIComponent(result[0])).toContain('dl=1');
+        // The raw=1 is URL-encoded within the image-proxy URL parameter
+        expect(decodeURIComponent(result[0])).toContain('raw=1');
+        expect(decodeURIComponent(result[0])).not.toContain('dl=');
       });
 
       it('should convert Dropbox /s/ URLs to use raw parameter', () => {
@@ -68,6 +73,27 @@ describe('image-utils', () => {
         expect(result[0]).toContain('image-proxy');
       });
     });
+
+  describe('normalizeDropboxUrl', () => {
+    it('should convert dl=0 to raw=1', () => {
+      const url = 'https://www.dropbox.com/scl/fi/abc123/image.jpg?dl=0';
+      const result = normalizeDropboxUrl(url);
+      expect(result).toContain('raw=1');
+      expect(result).not.toContain('dl=');
+    });
+
+    it('should append raw=1 when no dl or raw param exists', () => {
+      const url = 'https://www.dropbox.com/scl/fi/abc123/image.jpg';
+      const result = normalizeDropboxUrl(url);
+      expect(result).toContain('raw=1');
+    });
+
+    it('should leave non-dropbox URLs unchanged', () => {
+      const url = 'https://example.com/image.jpg?param=value';
+      const result = normalizeDropboxUrl(url);
+      expect(result).toBe(url);
+    });
+  });
 
     describe('Already proxied URLs', () => {
       it('should add cache bust to already proxied URLs', () => {
@@ -271,8 +297,9 @@ describe('image-utils', () => {
 
         const result = proxyImageUrls(urls);
 
-        // The parameters are URL-encoded within the image-proxy URL parameter
-        expect(decodeURIComponent(result[0])).toContain('dl=1');
+        // Both should be normalized to raw=1
+        expect(decodeURIComponent(result[0])).toContain('raw=1');
+        expect(decodeURIComponent(result[0])).not.toContain('dl=');
         expect(decodeURIComponent(result[1])).toContain('raw=1');
       });
 
@@ -281,8 +308,8 @@ describe('image-utils', () => {
 
         const result = proxyImageUrls([url]);
 
-        // URL constructor normalizes hostname to lowercase
-        expect(result[0]).toBe(url.toLowerCase());
+        // S3 URL returned as-is (not proxied), case preserved
+        expect(result[0]).toBe(url);
         expect(result[0]).not.toContain('image-proxy');
       });
 
@@ -306,12 +333,12 @@ describe('image-utils', () => {
         expect(result[0]).toContain('https://myapp.netlify.app/subpath/.netlify/functions/image-proxy');
       });
 
-      it('should handle empty base URL', () => {
+      it('should throw when no base URL available', () => {
         const url = 'https://example.com/image.jpg';
+        // Clear env var
+        delete process.env.URL;
 
-        const result = proxyImageUrls([url], '');
-
-        expect(result[0]).toContain('/.netlify/functions/image-proxy');
+        expect(() => proxyImageUrls([url], '')).toThrow('missing base URL');
       });
 
       it('should handle base URL with multiple trailing slashes', () => {

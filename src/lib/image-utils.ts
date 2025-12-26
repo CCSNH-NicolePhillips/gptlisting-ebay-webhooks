@@ -3,22 +3,35 @@
  */
 
 /**
- * Convert Dropbox share URLs to direct download URLs
+ * Normalize Dropbox shared links to return image bytes instead of HTML.
+ * Dropbox share links return HTML unless raw=1 is set.
+ * - Replaces dl=0 with raw=1
+ * - Removes dl=1 and adds raw=1
+ * - Appends raw=1 if no dl/raw param exists
+ * Non-Dropbox URLs are returned unchanged.
  */
-function toDirectDropbox(url: string): string {
+export function normalizeDropboxUrl(url: string): string {
   try {
     const u = new URL(url);
-    if (/(^|\.)dropbox\.com$/i.test(u.hostname)) {
-      if (u.searchParams.has("dl")) {
-        u.searchParams.set("dl", "1");
-      } else if (/\/s\//.test(u.pathname)) {
-        u.searchParams.set("raw", "1");
-      }
+    // Only modify dropbox.com URLs
+    if (!/(^|\.)dropbox\.com$/i.test(u.hostname)) {
+      return url;
     }
+    // Remove dl param (dl=0 or dl=1 both don't reliably return bytes)
+    u.searchParams.delete("dl");
+    // Ensure raw=1 is set for direct image bytes
+    u.searchParams.set("raw", "1");
     return u.toString();
   } catch {
     return url;
   }
+}
+
+/**
+ * @deprecated Use normalizeDropboxUrl instead - this function doesn't reliably return bytes
+ */
+function toDirectDropbox(url: string): string {
+  return normalizeDropboxUrl(url);
 }
 
 /**
