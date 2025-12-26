@@ -1597,6 +1597,10 @@
             const pairs = statusRes.result?.pairs || [];
             unpaired = statusRes.result?.unpaired || [];
             
+            // DEBUG: Log pair data to see if frontUrl is present
+            console.log('[Quick List DEBUG] First pair data:', JSON.stringify(pairs[0], null, 2));
+            console.log('[Quick List DEBUG] All pair frontUrls:', pairs.map(p => ({ front: p.front, frontUrl: p.frontUrl?.substring(0, 80) })));
+            
             // Convert pairs to products
             products = pairs.map((pair, index) => ({
               productId: `product-${index + 1}`,
