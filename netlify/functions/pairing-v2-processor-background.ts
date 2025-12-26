@@ -66,6 +66,25 @@ async function getDropboxTemporaryLinks(accessToken: string, paths: string[]): P
 }
 
 /**
+ * Convert Dropbox shared link to direct download format
+ * Uses URL API for reliable parsing (handles &dl=0 anywhere in query string)
+ */
+function normalizeDropboxUrl(rawUrl: string): string {
+  try {
+    const u = new URL(rawUrl);
+    // Change hostname to direct download host
+    u.hostname = "dl.dropboxusercontent.com";
+    // Remove dl param and add raw=1 for direct binary download
+    u.searchParams.delete("dl");
+    if (!u.searchParams.has("raw")) u.searchParams.set("raw", "1");
+    return u.toString();
+  } catch {
+    // Fallback: return as-is if URL parsing fails
+    return rawUrl;
+  }
+}
+
+/**
  * Get persistent shared link for a Dropbox file (doesn't expire)
  * Creates one if it doesn't exist, or returns existing one
  */
@@ -84,9 +103,7 @@ async function getDropboxSharedLink(accessToken: string, filePath: string): Prom
     if (existingResponse.ok) {
       const existingData: any = await existingResponse.json();
       if (existingData.links && existingData.links.length > 0) {
-        // Convert shared link to direct download format
-        let url = existingData.links[0].url;
-        url = url.replace('www.dropbox.com', 'dl.dropboxusercontent.com').replace('?dl=0', '?raw=1');
+        const url = normalizeDropboxUrl(existingData.links[0].url);
         console.log(`[pairing-v2-processor] Using existing shared link for ${filePath}`);
         return url;
       }
@@ -118,7 +135,7 @@ async function getDropboxSharedLink(accessToken: string, filePath: string): Prom
           const errorData = JSON.parse(errorText);
           const existingUrl = errorData?.error?.shared_link_already_exists?.metadata?.url;
           if (existingUrl) {
-            const url = existingUrl.replace('www.dropbox.com', 'dl.dropboxusercontent.com').replace('?dl=0', '?raw=1');
+            const url = normalizeDropboxUrl(existingUrl);
             console.log(`[pairing-v2-processor] Using existing shared link (from 409) for ${filePath}`);
             return url;
           }
@@ -129,9 +146,7 @@ async function getDropboxSharedLink(accessToken: string, filePath: string): Prom
     }
     
     const data: any = await createResponse.json();
-    // Convert shared link to direct download format
-    let url = data.url;
-    url = url.replace('www.dropbox.com', 'dl.dropboxusercontent.com').replace('?dl=0', '?raw=1');
+    const url = normalizeDropboxUrl(data.url);
     console.log(`[pairing-v2-processor] Created new shared link for ${filePath}`);
     return url;
   } catch (err) {
