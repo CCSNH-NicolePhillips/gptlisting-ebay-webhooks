@@ -52,6 +52,9 @@ describe('storage', () => {
     process.env.R2_ACCOUNT_ID = 'test-account-id';
     process.env.STAGING_RETENTION_HOURS = '48';
     delete process.env.S3_BUCKET;
+    delete process.env.STORAGE_ACCESS_KEY_ID;
+    delete process.env.STORAGE_SECRET_ACCESS_KEY;
+    delete process.env.STORAGE_REGION;
     delete process.env.AWS_ACCESS_KEY_ID;
     delete process.env.AWS_SECRET_ACCESS_KEY;
     delete process.env.AWS_REGION;
@@ -111,16 +114,18 @@ describe('storage', () => {
 
     it('should throw error when access key is not configured', () => {
       delete process.env.R2_ACCESS_KEY_ID;
+      delete process.env.STORAGE_ACCESS_KEY_ID;
       delete process.env.AWS_ACCESS_KEY_ID;
 
-      expect(() => getStagingConfig()).toThrow('R2_ACCESS_KEY_ID/R2_SECRET_ACCESS_KEY or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY required');
+      expect(() => getStagingConfig()).toThrow('Storage credentials required');
     });
 
     it('should throw error when secret key is not configured', () => {
       delete process.env.R2_SECRET_ACCESS_KEY;
+      delete process.env.STORAGE_SECRET_ACCESS_KEY;
       delete process.env.AWS_SECRET_ACCESS_KEY;
 
-      expect(() => getStagingConfig()).toThrow('R2_ACCESS_KEY_ID/R2_SECRET_ACCESS_KEY or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY required');
+      expect(() => getStagingConfig()).toThrow('Storage credentials required');
     });
 
     it('should use default retention hours when not specified', () => {

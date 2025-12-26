@@ -396,8 +396,8 @@ export const handler: Handler = async (event) => {
             // For Dropbox mode, skip R2 entirely and use Dropbox shared links (more reliable)
             const hasR2Config = !job.accessToken && // Only use R2 for local uploads
                                !!(process.env.R2_BUCKET || process.env.S3_BUCKET) && 
-                               !!(process.env.R2_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID) &&
-                               !!(process.env.R2_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY);
+                               !!(process.env.R2_ACCESS_KEY_ID || process.env.STORAGE_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID) &&
+                               !!(process.env.R2_SECRET_ACCESS_KEY || process.env.STORAGE_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY);
             
             console.log(`[pairing-v2-processor] R2 config check: hasR2Config=${hasR2Config}, hasAccessToken=${!!job.accessToken}, dropboxPathsCount=${job.dropboxPaths?.length || 0}`);
             

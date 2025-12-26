@@ -21,16 +21,16 @@ export function getStagingConfig(): StagingConfig {
     throw new Error('R2_BUCKET or S3_BUCKET environment variable required. Please configure Cloudflare R2 or AWS S3 in Netlify environment variables.');
   }
   
-  const accessKeyId = process.env.R2_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID || '';
-  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY || '';
+  const accessKeyId = process.env.R2_ACCESS_KEY_ID || process.env.STORAGE_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID || '';
+  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY || process.env.STORAGE_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY || '';
   
   if (!accessKeyId || !secretAccessKey) {
-    throw new Error('R2_ACCESS_KEY_ID/R2_SECRET_ACCESS_KEY or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY required. Please configure storage credentials in Netlify environment variables.');
+    throw new Error('Storage credentials required. Set R2_ACCESS_KEY_ID/R2_SECRET_ACCESS_KEY, STORAGE_ACCESS_KEY_ID/STORAGE_SECRET_ACCESS_KEY, or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY in environment variables.');
   }
   
   return {
     bucket,
-    accountId: process.env.R2_ACCOUNT_ID || process.env.AWS_REGION,
+    accountId: process.env.R2_ACCOUNT_ID || process.env.STORAGE_REGION || process.env.AWS_REGION,
     accessKeyId,
     secretAccessKey,
     publicUrlBase: process.env.R2_PUBLIC_URL,
