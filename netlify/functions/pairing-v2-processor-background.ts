@@ -398,6 +398,14 @@ export const handler: Handler = async (event) => {
                                !!(process.env.R2_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY);
             
             console.log(`[pairing-v2-processor] R2 config check: hasR2Config=${hasR2Config}, hasAccessToken=${!!job.accessToken}, dropboxPathsCount=${job.dropboxPaths?.length || 0}`);
+            console.log(`[pairing-v2-processor] DEBUG: stagedUrlsCount=${job.stagedUrls?.length || 0}, filenameHintsCount=${filenameHints.length}`);
+            console.log(`[pairing-v2-processor] DEBUG: frontFilename="${frontFilename}", backFilename="${backFilename}"`);
+            console.log(`[pairing-v2-processor] DEBUG: First 3 dropboxPaths=${JSON.stringify((job.dropboxPaths || []).slice(0, 3))}`);
+            console.log(`[pairing-v2-processor] DEBUG: First 3 filenameHints=${JSON.stringify(filenameHints.slice(0, 3))}`);
+            console.log(`[pairing-v2-processor] DEBUG: First 3 imageSources=${JSON.stringify(imageSources.slice(0, 3).map((s: string) => s?.substring(0, 80)))}`);
+            console.log(`[pairing-v2-processor] DEBUG: findSourceUrl(frontFilename)="${findSourceUrl(frontFilename)?.substring(0, 80) || 'NULL'}"`);
+            console.log(`[pairing-v2-processor] DEBUG: findSourceUrl(backFilename)="${findSourceUrl(backFilename)?.substring(0, 80) || 'NULL'}"`);
+            
             
             if (hasR2Config) {
               // Helper to stage image to R2/S3
