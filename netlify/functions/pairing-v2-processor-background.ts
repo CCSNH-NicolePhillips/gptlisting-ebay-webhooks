@@ -6,8 +6,6 @@
 import { Handler } from "@netlify/functions";
 import { getPairingV2JobStatus } from "../../src/lib/pairingV2Jobs.js";
 import { runNewTwoStagePipeline, type PairingResult } from "../../src/smartdrafts/pairing-v2-core.js";
-import { copyToStaging, getStagedUrl } from "../../src/lib/storage.js";
-import { guessMime } from "../../src/lib/mime.js";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
@@ -286,9 +284,16 @@ export const handler: Handler = async (event) => {
       const workDir = fs.mkdtempSync(path.join(os.tmpdir(), `pairing-v2-${jobId}-`));
 
       try {
-        // Download all images from staged URLs (works for both local and Dropbox modes)
+        // ========================================================================
+        // STEP 1: Download all images and create persistent URL map
+        // This map (filename → URL) is used for ALL downstream operations
+        // No more Dropbox vs Local branching after this point!
+        // ========================================================================
         const localPaths: string[] = [];
         const filenameHints = job.dropboxFilenames || []; // Original filenames for Dropbox
+        const persistentUrlMap: Record<string, string> = {}; // filename → persistent URL
+        
+        console.log(`[pairing-v2-processor] Creating persistent URLs for ${imageSources.length} images...`);
         
         for (let i = 0; i < imageSources.length; i++) {
           const imageUrl = imageSources[i];
@@ -327,11 +332,29 @@ export const handler: Handler = async (event) => {
           const buffer = Buffer.from(await response.arrayBuffer());
           fs.writeFileSync(localPath, buffer);
           localPaths.push(localPath);
+          
+          // Create persistent URL for this image NOW, not later
+          // For Dropbox: Create shared link (never expires)
+          // For Local: The stagedUrls are already S3 URLs (persistent)
+          if (uploadMethod === "dropbox" && job.accessToken && job.dropboxPaths?.[i]) {
+            const sharedUrl = await getDropboxSharedLink(job.accessToken, job.dropboxPaths[i]);
+            if (sharedUrl) {
+              persistentUrlMap[filename] = sharedUrl;
+              console.log(`[pairing-v2-processor] ✓ Persistent URL for ${filename}: ${sharedUrl.substring(0, 60)}...`);
+            } else {
+              console.warn(`[pairing-v2-processor] ✗ Failed to create shared link for ${filename}`);
+            }
+          } else {
+            // Local mode: stagedUrls are already S3/R2 URLs
+            persistentUrlMap[filename] = imageUrl;
+          }
         }
 
         if (localPaths.length === 0) {
           throw new Error(`No valid image URLs found. Check that scan job contains proper stagedUrls or Dropbox temp links.`);
         }
+        
+        console.log(`[pairing-v2-processor] Created ${Object.keys(persistentUrlMap).length} persistent URLs`);
 
         console.log(`[pairing-v2-processor] Downloaded ${localPaths.length} images, running pipeline...`);
 
@@ -354,253 +377,72 @@ export const handler: Handler = async (event) => {
 
         console.log(`[pairing-v2-processor] Pipeline complete: ${result.pairs.length} pairs, ${result.unpaired.length} unpaired`);
 
-        // Create shareable URLs for each paired image (method-specific)
-        console.log(`[pairing-v2-processor] Creating shareable URLs for ${result.pairs.length} pairs (${uploadMethod} mode)...`);
-        const pairsWithUrls = await Promise.all(result.pairs.map(async (p) => {
-          let frontUrl: string = '';
-          let backUrl: string = '';
-          let side1Url: string | undefined;
-          let side2Url: string | undefined;
+        // ========================================================================
+        // STEP 2: Map pairing results to persistent URLs
+        // Simple lookup from the map we created above - NO more Dropbox vs Local branching!
+        // ========================================================================
+        console.log(`[pairing-v2-processor] Mapping ${result.pairs.length} pairs to persistent URLs...`);
+        
+        const basenamePairs = result.pairs.map(p => {
+          const frontFilename = path.basename(p.front);
+          const backFilename = path.basename(p.back);
+          const side1Filename = p.side1 ? path.basename(p.side1) : null;
+          const side2Filename = p.side2 ? path.basename(p.side2) : null;
           
-          if (uploadMethod === "dropbox") {
-            // Dropbox mode: Try to stage images to R2/S3 for full quality and stable URLs
-            // If R2/S3 not configured, fall back to Dropbox temp links directly
-            const frontFilename = path.basename(p.front);
-            const backFilename = path.basename(p.back);
-            const side1Filename = p.side1 ? path.basename(p.side1) : null;
-            const side2Filename = p.side2 ? path.basename(p.side2) : null;
-            
-            // Find the original Dropbox temp link for each image
-            const imageSources = job.stagedUrls || job.dropboxPaths || [];
-            const filenameHints = job.dropboxFilenames || [];
-            
-            // Helper to find the source URL for a filename
-            const findSourceUrl = (targetFilename: string): string | null => {
-              for (let i = 0; i < imageSources.length; i++) {
-                const hint = filenameHints[i] || '';
-                if (hint === targetFilename) {
-                  return imageSources[i];
-                }
-                // Also check URL path for filename
-                try {
-                  const urlFilename = path.basename(new URL(imageSources[i]).pathname);
-                  if (urlFilename === targetFilename) {
-                    return imageSources[i];
-                  }
-                } catch {}
-              }
-              return null;
-            };
-            
-            // Check if R2/S3 is properly configured AND we're in local upload mode
-            // For Dropbox mode, skip R2 entirely and use Dropbox shared links (more reliable)
-            const hasR2Config = !job.accessToken && // Only use R2 for local uploads
-                               !!(process.env.R2_BUCKET || process.env.S3_BUCKET) && 
-                               !!(process.env.R2_ACCESS_KEY_ID || process.env.STORAGE_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID) &&
-                               !!(process.env.R2_SECRET_ACCESS_KEY || process.env.STORAGE_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY);
-            
-            console.log(`[pairing-v2-processor] R2 config check: hasR2Config=${hasR2Config}, hasAccessToken=${!!job.accessToken}, dropboxPathsCount=${job.dropboxPaths?.length || 0}`);
-            
-            
-            if (hasR2Config) {
-              // Helper to stage image to R2/S3
-              const stageToR2 = async (filename: string): Promise<string> => {
-                const sourceUrl = findSourceUrl(filename);
-                if (!sourceUrl) {
-                  console.warn(`[pairing-v2-processor] Could not find source URL for ${filename}`);
-                  return '';
-                }
-                
-                try {
-                  const mime = guessMime(filename);
-                  const stagingKey = await copyToStaging(sourceUrl, job.userId, filename, mime, jobId);
-                  const stagedUrl = await getStagedUrl(stagingKey);
-                  console.log(`[pairing-v2-processor] Staged ${filename} to R2: ${stagedUrl.substring(0, 60)}...`);
-                  return stagedUrl;
-                } catch (err) {
-                  console.error(`[pairing-v2-processor] Failed to stage ${filename} to R2:`, err);
-                  return '';
-                }
-              };
-              
-              // Stage front and back images (required)
-              [frontUrl, backUrl] = await Promise.all([
-                stageToR2(frontFilename),
-                stageToR2(backFilename)
-              ]);
-              
-              // Stage side images (optional)
-              if (side1Filename) {
-                side1Url = await stageToR2(side1Filename) || undefined;
-              }
-              if (side2Filename) {
-                side2Url = await stageToR2(side2Filename) || undefined;
-              }
-            }
-            
-            // Fallback: Use Dropbox persistent shared links if R2 staging failed or not configured
-            // We create shared links instead of temp links because temp links expire after 4 hours
-            // and we need persistent URLs for eBay inventory that will be accessed later
-            console.log(`[pairing-v2-processor] Checking shared link fallback: frontUrl="${frontUrl?.substring(0, 50) || ''}", backUrl="${backUrl?.substring(0, 50) || ''}", hasAccessToken=${!!job.accessToken}`);
-            
-            if (!frontUrl && job.accessToken) {
-              const dropboxPath = job.dropboxPaths?.find((p: string) => p.includes(frontFilename));
-              console.log(`[pairing-v2-processor] Looking for dropbox path for "${frontFilename}": found="${dropboxPath || 'NOT FOUND'}"`);
-              if (dropboxPath) {
-                frontUrl = await getDropboxSharedLink(job.accessToken, dropboxPath) || '';
-                if (frontUrl) {
-                  console.log(`[pairing-v2-processor] ✓ Created shared link for front: ${frontUrl.substring(0, 60)}...`);
-                } else {
-                  console.error(`[pairing-v2-processor] ✗ Failed to create shared link for front: ${frontFilename}`);
-                }
-              }
-            }
-            if (!backUrl && job.accessToken) {
-              const dropboxPath = job.dropboxPaths?.find((p: string) => p.includes(backFilename));
-              if (dropboxPath) {
-                backUrl = await getDropboxSharedLink(job.accessToken, dropboxPath) || '';
-                if (backUrl) {
-                  console.log(`[pairing-v2-processor] ✓ Created shared link for back: ${backUrl.substring(0, 60)}...`);
-                } else {
-                  console.error(`[pairing-v2-processor] ✗ Failed to create shared link for back: ${backFilename}`);
-                }
-              }
-            }
-            if (side1Filename && !side1Url && job.accessToken) {
-              const dropboxPath = job.dropboxPaths?.find((p: string) => p.includes(side1Filename));
-              if (dropboxPath) {
-                side1Url = await getDropboxSharedLink(job.accessToken, dropboxPath) || undefined;
-              }
-            }
-            if (side2Filename && !side2Url && job.accessToken) {
-              const dropboxPath = job.dropboxPaths?.find((p: string) => p.includes(side2Filename));
-              if (dropboxPath) {
-                side2Url = await getDropboxSharedLink(job.accessToken, dropboxPath) || undefined;
-              }
-            }
-            
-            // Final fallback: Use temp links as last resort (these expire after 4h but better than nothing)
-            if (!frontUrl) {
-              frontUrl = findSourceUrl(frontFilename) || '';
-              console.warn(`[pairing-v2-processor] Using temp link (expires 4h) for front: ${frontFilename}`);
-            }
-            if (!backUrl) {
-              backUrl = findSourceUrl(backFilename) || '';
-              console.warn(`[pairing-v2-processor] Using temp link (expires 4h) for back: ${backFilename}`);
-            }
-            if (side1Filename && !side1Url) {
-              side1Url = findSourceUrl(side1Filename) || undefined;
-            }
-            if (side2Filename && !side2Url) {
-              side2Url = findSourceUrl(side2Filename) || undefined;
-            }
-            
-            if (!frontUrl || !backUrl) {
-              console.warn(`[pairing-v2-processor] Could not get image URLs for pair: ${frontFilename}, ${backFilename}`);
-            }
-          } else {
-            // Local mode: Use the staged URLs directly
-            const frontFilename = path.basename(p.front);
-            const backFilename = path.basename(p.back);
-            const side1Filename = p.side1 ? path.basename(p.side1) : null;
-            const side2Filename = p.side2 ? path.basename(p.side2) : null;
-            
-            // Find the corresponding staged URLs
-            frontUrl = job.stagedUrls.find((url: string) => url.includes(frontFilename)) || '';
-            backUrl = job.stagedUrls.find((url: string) => url.includes(backFilename)) || '';
-            
-            if (side1Filename) {
-              side1Url = job.stagedUrls.find((url: string) => url.includes(side1Filename)) || undefined;
-            }
-            if (side2Filename) {
-              side2Url = job.stagedUrls.find((url: string) => url.includes(side2Filename)) || undefined;
-            }
-            
-            if (!frontUrl || !backUrl) {
-              console.warn(`[pairing-v2-processor] Could not find staged URLs for ${frontFilename} or ${backFilename}`);
-            }
+          const frontUrl = persistentUrlMap[frontFilename] || '';
+          const backUrl = persistentUrlMap[backFilename] || '';
+          const side1Url = side1Filename ? persistentUrlMap[side1Filename] : undefined;
+          const side2Url = side2Filename ? persistentUrlMap[side2Filename] : undefined;
+          
+          if (!frontUrl || !backUrl) {
+            console.warn(`[pairing-v2-processor] Missing URL for pair: front=${frontFilename} (${frontUrl ? 'OK' : 'MISSING'}), back=${backFilename} (${backUrl ? 'OK' : 'MISSING'})`);
           }
           
-          return {
-            ...p,
-            frontUrl,
-            backUrl,
-            side1Url,
-            side2Url
-          };
-        }));
-
-        // Convert full paths to basenames for storage
-        const basenamePairs = pairsWithUrls.map(p => {
           const photoQty = p.photoQuantity || 1;
-          const imageCount = 2 + (p.side1 ? 1 : 0) + (p.side2 ? 1 : 0);
-          console.log(`[pairing-v2-processor] Storing pair: brand=${p.brand}, photoQuantity=${photoQty}, packCount=${p.packCount ?? 'null'}, images=${imageCount}`);
+          console.log(`[pairing-v2-processor] Storing pair: brand=${p.brand}, photoQuantity=${photoQty}, packCount=${p.packCount ?? 'null'}, frontUrl=${frontUrl ? 'OK' : 'MISSING'}`);
+          
           return {
-            front: path.basename(p.front),
-            back: path.basename(p.back),
-            side1: p.side1 ? path.basename(p.side1) : undefined,
-            side2: p.side2 ? path.basename(p.side2) : undefined,
+            front: frontFilename,
+            back: backFilename,
+            side1: side1Filename || undefined,
+            side2: side2Filename || undefined,
             confidence: p.confidence,
             brand: p.brand,
             brandWebsite: p.brandWebsite,
             product: p.product,
-            title: p.title, // Book title (null for products)
-            keyText: p.keyText || [], // Key text from product packaging
-            categoryPath: p.categoryPath || null, // Vision category path (e.g., "Health & Personal Care > Vitamins & Dietary Supplements")
-            photoQuantity: photoQty, // CHUNK 3: How many physical products visible in photo
-            packCount: p.packCount ?? null, // CRITICAL: Number of units in package (e.g., 24 for 24-pack) - used for variant pricing
-            frontUrl: p.frontUrl,  // Shareable link for front image
-            backUrl: p.backUrl,    // Shareable link for back image
-            side1Url: p.side1Url,  // Shareable link for side1 image (optional)
-            side2Url: p.side2Url,  // Shareable link for side2 image (optional)
+            title: p.title,
+            keyText: p.keyText || [],
+            categoryPath: p.categoryPath || null,
+            photoQuantity: photoQty,
+            packCount: p.packCount ?? null,
+            frontUrl,
+            backUrl,
+            side1Url,
+            side2Url,
           };
         });
 
-        // Create URLs for unpaired items (method-specific)
-        // For Dropbox mode, we skip creating shared links for unpaired items to avoid rate limits
-        // They can be accessed via Dropbox directly if needed for review
-        console.log(`[pairing-v2-processor] Processing ${result.unpaired.length} unpaired items (${uploadMethod} mode)...`);
-        
-        let basenameSingletons: any[];
-        
-        if (uploadMethod === "local") {
-          // Local mode: Include staged URLs for unpaired items
-          basenameSingletons = result.unpaired.map(u => {
-            const filename = path.basename(u.imagePath);
-            const imageUrl = job.stagedUrls.find((url: string) => url.includes(filename));
-            
-            if (!imageUrl) {
-              console.warn(`[pairing-v2-processor] Could not find staged URL for unpaired ${filename}`);
-            }
-            
-            return {
-              imagePath: filename,
-              imageUrl,
-              reason: u.reason,
-              needsReview: u.needsReview,
-              panel: u.panel || 'unknown',
-              brand: u.brand || null,
-              product: u.product || null,
-              title: u.title || null,
-              brandWebsite: u.brandWebsite || null,
-              keyText: u.keyText || [],
-              categoryPath: u.categoryPath || null,
-              photoQuantity: u.photoQuantity || 1, // CHUNK 3: How many physical products visible in photo
-              packCount: u.packCount ?? null, // CRITICAL: Number of units in package for variant pricing
-            };
-          });
-        } else {
-          // Dropbox mode: Skip creating shared links for unpaired items to avoid rate limits
-          // Just include the basename and reason - UI can handle missing images gracefully
-          basenameSingletons = result.unpaired.map(u => ({
-            imagePath: path.basename(u.imagePath),
-            imageUrl: undefined, // Skip Dropbox shared link creation for unpaired items
+        // Map unpaired items to persistent URLs
+        const basenameSingletons = result.unpaired.map(u => {
+          const filename = path.basename(u.imagePath);
+          const imageUrl = persistentUrlMap[filename] || '';
+          
+          return {
+            imagePath: filename,
+            imageUrl,
             reason: u.reason,
             needsReview: u.needsReview,
-          }));
-          
-          console.log(`[pairing-v2-processor] Skipped Dropbox shared link creation for ${result.unpaired.length} unpaired items (rate limit optimization)`);
-        }
+            panel: u.panel,
+            brand: u.brand,
+            brandWebsite: u.brandWebsite,
+            product: u.product,
+            title: u.title,
+            keyText: u.keyText || [],
+            categoryPath: u.categoryPath || null,
+            photoQuantity: u.photoQuantity || 1,
+            packCount: u.packCount ?? null,
+          };
+        });
 
         const finalResult = {
           pairs: basenamePairs,
@@ -613,7 +455,6 @@ export const handler: Handler = async (event) => {
         job.result = finalResult;
         job.processedCount = totalImages;
         job.updatedAt = Date.now();
-        // Keep accessToken for thumbnail fetching in UI
 
         await redisSet(key, JSON.stringify(job), JOB_TTL);
         console.log(`[pairing-v2-processor] ✅ Job complete: ${basenamePairs.length} pairs, ${basenameSingletons.length} unpaired`);
