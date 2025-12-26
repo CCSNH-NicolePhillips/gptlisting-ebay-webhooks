@@ -26,7 +26,8 @@ function toDirectDropbox(url: string): string {
  * and normalize image formats. This prevents rotated images on eBay.
  */
 export function proxyImageUrls(urls: string[], appBase?: string): string[] {
-  const base = appBase ? appBase.replace(/\/$/, "") : "";
+  // Ensure we always have an absolute base URL for eBay to fetch images
+  const base = (appBase || process.env.APP_URL || process.env.URL || "https://draftpilot-ai.netlify.app").replace(/\/$/, "");
   const isProxy = (u: string) => /\/\.netlify\/functions\/image-proxy/i.test(u);
   
   const absolutizeProxy = (u: string) => {

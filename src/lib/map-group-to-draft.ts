@@ -239,9 +239,9 @@ export async function mapGroupToDraft(group: Record<string, any>, opts?: MapOpti
   // Proxy all images through image-proxy to handle EXIF rotation and normalization
   const imageUrls = draft.inventory?.product?.imageUrls;
   if (imageUrls && Array.isArray(imageUrls) && imageUrls.length > 0) {
-    const appUrl = process.env.APP_URL || process.env.URL || process.env.DEPLOY_PRIME_URL || process.env.DEPLOY_URL;
+    const appUrl = process.env.APP_URL || process.env.URL || process.env.DEPLOY_PRIME_URL || process.env.DEPLOY_URL || "https://draftpilot-ai.netlify.app";
     const proxiedUrls = proxyImageUrls(imageUrls, appUrl);
-    console.log('[mapGroupToDraft] Proxied images:', { original: imageUrls.length, proxied: proxiedUrls.length });
+    console.log('[mapGroupToDraft] Proxied images:', { original: imageUrls.length, proxied: proxiedUrls.length, appUrl, sample: proxiedUrls[0]?.substring(0, 100) });
     draft.inventory.product.imageUrls = proxiedUrls;
   }
   

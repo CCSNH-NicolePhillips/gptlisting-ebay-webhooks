@@ -273,8 +273,7 @@ describe("pairing-v2-core", () => {
       expect(result[0].title).toBe("Harry Potter");
     });
 
-                      quantityInPhoto: 1,
-                      packCount: 1,
+    it("should handle multiple products in a photo", async () => {
       const imagePaths = ["multiple.jpg"];
 
       (mockOpenAI.chat.completions.create as jest.Mock<any>).mockResolvedValue({
