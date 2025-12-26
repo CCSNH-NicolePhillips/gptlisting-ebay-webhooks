@@ -166,6 +166,8 @@ export async function putInventoryItem(
   console.log('[putInventoryItem] Sending to eBay:', JSON.stringify({
     sku,
     title: (payload.product as any).title,
+    imageUrlsCount: ((payload.product as any).imageUrls || []).length,
+    firstImageUrl: ((payload.product as any).imageUrls || [])[0]?.substring(0, 120),
     aspectsCount: Object.keys((payload.product as any).aspects || {}).length,
     aspects: (payload.product as any).aspects,
     hasBrand: !!(payload.product as any).aspects?.Brand,
