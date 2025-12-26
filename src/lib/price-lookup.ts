@@ -113,8 +113,8 @@ export interface PriceLookupInput {
   keyText?: string[]; // Text extracted from packaging (helps refine searches)
   categoryPath?: string; // Category from Vision API (e.g., "Dietary Supplement")
   photoQuantity?: number; // How many physical products visible in photo (from vision analysis)
+  packCount?: number | null; // Pack count from vision analysis (e.g., 24 for "24-pack") for variant pricing
   amazonPackSize?: number; // Pack size detected from Amazon product page (e.g., 2 for "2-pack")
-  packCount?: number | null; // Pack count from label (e.g., 24 for "24 packets") - used for variant matching
   pricingSettings?: PricingSettings; // Phase 3: User-configurable pricing settings
 }
 
@@ -139,7 +139,7 @@ export interface PriceDecision {
   // Cached MSRP data (not computed price)
   msrpCents?: number;
   cachedAt?: number;
-  // Phase 5: Flag when estimate is used - alerts user to review pricing
+  // Manual review flags for low-confidence estimates
   needsManualReview?: boolean;
   manualReviewReason?: string;
 }
@@ -265,8 +265,7 @@ function detectJsRenderedPrices(html: string): boolean {
 async function extractPriceFromBrand(
   url: string,
   brandName?: string,
-  productTitle?: string,
-  packCount?: number | null
+  productTitle?: string
 ): Promise<number | null> {
   const { html, isDnsFailure } = await fetchHtml(url);
   
@@ -277,7 +276,7 @@ async function extractPriceFromBrand(
     return null;
   }
   
-  const price = extractPriceFromHtml(html, productTitle, packCount);
+  const price = extractPriceFromHtml(html, productTitle);
   
   // If extraction failed, check if prices are likely JS-rendered
   if (!price && detectJsRenderedPrices(html)) {
@@ -410,7 +409,12 @@ RESPONSE FORMAT (JSON only):
     const chosen = candidates.find(c => c.source === chosenSource) || candidates[0];
 
     // Phase 3: Use computeEbayItemPrice with user settings
-    const settings = input.pricingSettings || getDefaultPricingSettings();
+    const settings = input.pricingSettings || {
+      discountPercent: 10,
+      shippingStrategy: 'DISCOUNT_ITEM_ONLY',
+      templateShippingEstimateCents: 600,
+      shippingSubsidyCapCents: null,
+    };
     
     // CHUNK 4: Apply photoQuantity and amazonPackSize
     // Step 1: Calculate per-unit price if pack size detected
@@ -474,20 +478,13 @@ RESPONSE FORMAT (JSON only):
 }
 
 /**
- * Fallback decision when AI fails: prefer ebay-sold, then Amazon (trusted), then brand MSRP
- * 
- * TRUST SCORES:
- * - ebay-sold: 95% (actual sales data)
- * - amazon (with product match): 90% (verified product match on major marketplace)
- * - brand-msrp: 70% (may find wrong variant)
- * - brave-fallback: 60% (web search, may be outdated)
- * - estimate: 30% (category-based guess)
+ * Fallback decision when AI fails: prefer ebay-sold p35, then brand MSRP with discount
  */
 function fallbackDecision(input: PriceLookupInput, candidates: PriceSourceDetail[]): PriceDecision {
-  // Prefer ebay-sold first (95% trust - actual sales)
+  // Prefer ebay-sold first
   const ebaySold = candidates.find(c => c.source === 'ebay-sold');
   if (ebaySold) {
-    console.log(`[price] Fallback decision: using ebay-sold $${ebaySold.price.toFixed(2)} (trust: 95%)`);
+    console.log(`[price] Fallback decision: using ebay-sold $${ebaySold.price.toFixed(2)}`);
     return {
       ok: true,
       chosen: ebaySold,
@@ -497,40 +494,16 @@ function fallbackDecision(input: PriceLookupInput, candidates: PriceSourceDetail
     };
   }
 
-  // SECOND: Amazon with product match (90% trust - verified match on major marketplace)
-  const amazon = candidates.find(c => c.source === 'amazon' && c.matchesBrand);
-  if (amazon) {
-    const settings = input.pricingSettings || getDefaultPricingSettings();
-    
-    const priceCents = Math.round(amazon.price * 100);
-    const shippingCents = amazon.shippingCents || 0;
-    
-    const result = computeEbayItemPrice({
-      amazonItemPriceCents: priceCents,
-      amazonShippingCents: shippingCents,
-      discountPercent: settings.discountPercent,
-      shippingStrategy: settings.shippingStrategy,
-      templateShippingEstimateCents: settings.templateShippingEstimateCents,
-      shippingSubsidyCapCents: settings.shippingSubsidyCapCents,
-    });
-    
-    const finalPrice = result.ebayItemPriceCents / 100;
-    
-    console.log(`[price] Fallback decision: using amazon $${amazon.price.toFixed(2)} → $${finalPrice.toFixed(2)} (trust: 90%, ${settings.shippingStrategy}, ${settings.discountPercent}% off)`);
-    return {
-      ok: true,
-      chosen: amazon,
-      candidates,
-      recommendedListingPrice: finalPrice,
-      reason: 'fallback-to-amazon-trusted'
-    };
-  }
-
-  // THIRD: Brand MSRP with pricing settings (70% trust - may find wrong variant)
+  // Then try brand MSRP with pricing settings (Phase 3)
   const brandMsrp = candidates.find(c => c.source === 'brand-msrp');
   if (brandMsrp) {
     // Phase 3: Use computeEbayItemPrice with user settings
-    const settings = input.pricingSettings || getDefaultPricingSettings();
+    const settings = input.pricingSettings || {
+      discountPercent: 10,
+      shippingStrategy: 'DISCOUNT_ITEM_ONLY',
+      templateShippingEstimateCents: 600,
+      shippingSubsidyCapCents: null,
+    };
     
     const priceCents = Math.round(brandMsrp.price * 100);
     const shippingCents = brandMsrp.shippingCents || 0;
@@ -571,42 +544,14 @@ function fallbackDecision(input: PriceLookupInput, candidates: PriceSourceDetail
 /**
  * MAIN ENTRY POINT: Tiered price lookup with AI arbitration
  * 
- * Tier 1: Amazon marketplace (retail reference)
- * Tier 2: OpenAI web_search (brand website pricing)
- * Tier 3: Brave + scrape (brand website fallback)
- * Tier 4: eBay sold/suggested (market-based when no retail exists)
- * Tier 5: Category estimate (last resort)
+ * Tier 1: eBay sold/completed prices (most reliable)
+ * Tier 2: Brand MSRP from official sites
+ * Tier 3: AI arbitration to decide final listing price
  */
 export async function lookupPrice(
   input: PriceLookupInput
 ): Promise<PriceDecision> {
   console.log(`[price] Starting lookup for: "${input.title}"${input.brand ? ` (${input.brand})` : ''}${input.upc ? ` [${input.upc}]` : ''}`);
-
-  // Build enriched title that includes pack/size info from keyText
-  // This helps with variant matching on brand sites
-  let enrichedTitle = input.title;
-  if (Array.isArray(input.keyText) && input.keyText.length > 0) {
-    // Look for pack indicators in keyText that aren't in the title
-    const packPatterns = [
-      /\b(\d+)\s*pack\b/i,
-      /\b(\d+)\s*ct\b/i,
-      /\b(\d+)\s*count\b/i,
-      /\b(\d+)\s*packets?\b/i,
-      /\b(\d+)\s*oz\b/i,
-    ];
-    
-    for (const keyItem of input.keyText) {
-      if (typeof keyItem !== 'string') continue;
-      for (const pattern of packPatterns) {
-        const match = keyItem.match(pattern);
-        if (match && !enrichedTitle.toLowerCase().includes(match[0].toLowerCase())) {
-          enrichedTitle = `${enrichedTitle}, ${keyItem}`;
-          console.log(`[price] Enriched title with keyText: "${keyItem}"`);
-          break;
-        }
-      }
-    }
-  }
 
   // Check cache first - cache stores MSRP data, we compute price with current user settings
   const cacheKey = makePriceSig(input.brand, input.title);
@@ -619,13 +564,11 @@ export async function lookupPrice(
       
       // Compute final price using current user settings
       const settings = input.pricingSettings || getDefaultPricingSettings();
-      // Use cached shipping if available, otherwise 0 (brand-msrp has no shipping info)
-      // Don't fall back to templateShippingEstimateCents - that's for eBay, not Amazon
-      const amazonShippingCents = cached.chosen.shippingCents ?? 0;
+      const shippingCents = cached.chosen.shippingCents ?? settings.templateShippingEstimateCents ?? 600;
       
       const pricingResult = computeEbayItemPrice({
         amazonItemPriceCents: cached.msrpCents,
-        amazonShippingCents: amazonShippingCents,
+        amazonShippingCents: shippingCents,
         discountPercent: settings.discountPercent,
         shippingStrategy: settings.shippingStrategy,
         templateShippingEstimateCents: settings.templateShippingEstimateCents,
@@ -650,9 +593,36 @@ export async function lookupPrice(
   const candidates: PriceSourceDetail[] = [];
 
   // ========================================
-  // TIER 1: Amazon Marketplace (Retail Reference)
+  // TIER 1: eBay Sold/Completed Prices
   // ========================================
-  console.log('[price] Tier 1: Checking Amazon marketplace...');
+  console.log('[price] Tier 1: Checking eBay sold prices...');
+  
+  const soldStats = await fetchSoldPriceStats({
+    title: input.title,
+    brand: input.brand,
+    upc: input.upc,
+    condition: input.condition,
+    quantity: input.quantity,
+  });
+
+  if (soldStats.rateLimited) {
+    console.warn('[price] ⚠️  eBay sold prices rate limited - skipping to brand MSRP');
+  } else if (soldStats.ok && soldStats.p35) {
+    candidates.push({
+      source: 'ebay-sold',
+      price: soldStats.p35,
+      currency: 'USD',
+      notes: `35th percentile of ${soldStats.samples.length} recent sold items`,
+    });
+    console.log(`[price] ✓ eBay sold price: $${soldStats.p35.toFixed(2)} (median: $${soldStats.median?.toFixed(2)})`);
+  } else {
+    console.log('[price] ✗ No eBay sold price data available');
+  }
+
+  // ========================================
+  // TIER 2: Amazon Marketplace (Strict Matching)
+  // ========================================
+  console.log('[price] Tier 2: Checking Amazon marketplace...');
   
   let amazonPrice: number | null = null;
   let amazonUrl: string | undefined;
@@ -665,74 +635,6 @@ export async function lookupPrice(
     const registeredAsin = await getAmazonAsin(input.brand, input.title);
     let amazonUrlFound: string | null = null;
     
-    // Helper: Build Amazon search query
-    const buildAmazonSearchQuery = (simplified: boolean = false): string => {
-      if (simplified) {
-        // Simplified query: brand + first 2 words of product + key identifier (like CFU, oz, count)
-        const productWords = input.title?.split(/\s+/).slice(0, 2).join(' ') || '';
-        let simplifiedQuery = `${input.brand} ${productWords}`;
-        
-        // Add the most distinctive identifier from keyText
-        if (input.keyText && input.keyText.length > 0) {
-          const identifierPatterns = [
-            /\d+\s*(billion|million)\s*(cfu)?/i,
-            /\d+\s*(mg|g|oz|ml|fl\s*oz)/i,
-            /\d+\s*(pack|count|ct|capsules?|tablets?|gummies?|patches?|servings?)/i,
-          ];
-          
-          for (const text of input.keyText) {
-            if (!text || text.length < 3) continue;
-            const isIdentifier = identifierPatterns.some(pattern => pattern.test(text));
-            if (isIdentifier) {
-              simplifiedQuery += ` ${text}`;
-              break; // Only add one identifier
-            }
-          }
-        }
-        
-        return simplifiedQuery;
-      }
-      
-      // Full query: brand + full title + key identifiers
-      let searchQuery = `${input.brand} ${input.title}`;
-      
-      if (input.keyText && input.keyText.length > 0) {
-        const normalizedTitle = input.title?.toLowerCase() || '';
-        const normalizedBrand = input.brand?.toLowerCase() || '';
-        
-        const identifierPatterns = [
-          /\d+\s*(billion|million)\s*(cfu)?/i,
-          /\d+\s*(mg|g|oz|ml|fl\s*oz)/i,
-          /\d+\s*(pack|count|ct|capsules?|tablets?|gummies?|patches?|servings?)/i,
-          /\d+x\d+/i,
-        ];
-        
-        const addedTerms: string[] = [];
-        
-        for (const text of input.keyText) {
-          if (!text || text.length < 3) continue;
-          
-          const normalizedText = text.toLowerCase();
-          
-          if (normalizedTitle.includes(normalizedText)) continue;
-          if (normalizedText === normalizedBrand) continue;
-          
-          const isIdentifier = identifierPatterns.some(pattern => pattern.test(text));
-          
-          if (isIdentifier && addedTerms.length < 2) {
-            addedTerms.push(text);
-            console.log(`[price-debug] Adding key identifier from keyText: "${text}"`);
-          }
-        }
-        
-        if (addedTerms.length > 0) {
-          searchQuery += ` ${addedTerms.join(' ')}`;
-        }
-      }
-      
-      return searchQuery;
-    };
-    
     if (registeredAsin) {
       amazonUrlFound = `https://www.amazon.com/dp/${registeredAsin}`;
       console.log(`[price] Using registered ASIN: ${registeredAsin}`);
@@ -743,7 +645,25 @@ export async function lookupPrice(
       console.log(`[price-debug] input.keyText =`, input.keyText);
       console.log(`[price-debug] input.categoryPath =`, input.categoryPath);
       
-      const searchQuery = buildAmazonSearchQuery(false);
+      let searchQuery = `${input.brand} ${input.title}`;
+      if (input.categoryPath) {
+        searchQuery += ` ${input.categoryPath}`;
+        console.log(`[price-debug] Added categoryPath to query: "${input.categoryPath}"`);
+      } else if (input.keyText && input.keyText.length > 0) {
+        const categoryHint = input.keyText.find(text => 
+          text.toLowerCase().includes('supplement') ||
+          text.toLowerCase().includes('vitamin') ||
+          text.toLowerCase().includes('capsule') ||
+          text.toLowerCase().includes('serum') ||
+          text.toLowerCase().includes('cream') ||
+          text.toLowerCase().includes('hair') ||
+          text.toLowerCase().includes('skin')
+        );
+        if (categoryHint) {
+          searchQuery += ` ${categoryHint}`;
+          console.log(`[price-debug] Added keyText hint to query: "${categoryHint}"`);
+        }
+      }
       
       console.log(`[price-debug] Final search query: "${searchQuery}"`);
       amazonUrlFound = await braveFirstUrl(
@@ -752,275 +672,107 @@ export async function lookupPrice(
       );
     }
     
-    // Track if we should try simplified query on rejection
-    let triedSimplified = false;
-    
-    // Amazon search/validation loop - tries full query first, then simplified on rejection
-    amazonSearchLoop: while (amazonUrlFound) {
+    if (amazonUrlFound) {
       console.log(`[price] Amazon URL found: ${amazonUrlFound}`);
       
       const { html, isDnsFailure } = await fetchHtml(amazonUrlFound);
       if (!html) {
         console.log(`[price-debug] Failed to fetch Amazon HTML (DNS failure: ${isDnsFailure})`);
-        break amazonSearchLoop;
       }
-      
-      console.log(`[price-debug] Fetched HTML (${html.length} bytes), extracting price...`);
-      const priceData = extractPriceWithShipping(html, input.title);
-      console.log(`[price-debug] Extraction result: itemPrice=${priceData.amazonItemPrice}, pageTitle="${priceData.pageTitle}"`);
-      
-      if (priceData.amazonItemPrice && priceData.amazonItemPrice > 0) {
-        // STRICT VALIDATION: Must match brand AND key product terms (unless using registered ASIN)
-        const normalizedBrand = normalizeBrand(input.brand);
-        const normalizedTitle = normalizeBrand(priceData.pageTitle);
-        const brandMatches = Boolean(normalizedBrand && normalizedTitle && normalizedTitle.includes(normalizedBrand));
+      if (html) {
+        console.log(`[price-debug] Fetched HTML (${html.length} bytes), extracting price...`);
+        const priceData = extractPriceWithShipping(html, input.title);
+        console.log(`[price-debug] Extraction result: itemPrice=${priceData.amazonItemPrice}, pageTitle="${priceData.pageTitle}"`);
         
-        // Skip validation if we used a registered ASIN (already trusted)
-        const skipValidation = Boolean(registeredAsin);
-        
-        // Check if enough key product terms appear in Amazon title
-        // Require at least 50% of terms (minimum 2) to prevent wrong product matches
-        let productMatches = false;
-        if (input.keyText && input.keyText.length > 0) {
-          const keyTerms = input.keyText
-            .filter(t => t && t.length > 3) // Skip short/generic terms
-            .map(t => normalizeBrand(t))
-            .filter((t): t is string => Boolean(t));
+        if (priceData.amazonItemPrice && priceData.amazonItemPrice > 0) {
+          // STRICT VALIDATION: Must match brand AND key product terms (unless using registered ASIN)
+          const normalizedBrand = normalizeBrand(input.brand);
+          const normalizedTitle = normalizeBrand(priceData.pageTitle);
+          const brandMatches = Boolean(normalizedBrand && normalizedTitle && normalizedTitle.includes(normalizedBrand));
           
-          const matchingTerms = keyTerms.filter(term => normalizedTitle?.includes(term));
-          const matchCount = matchingTerms.length;
-          const matchRatio = keyTerms.length > 0 ? matchCount / keyTerms.length : 0;
+          // Skip validation if we used a registered ASIN (already trusted)
+          const skipValidation = Boolean(registeredAsin);
           
-          // CRITICAL FIX: The FIRST keyText term is typically the product name (e.g., "TestoPro")
-          // It MUST match to avoid wrong-product matches like "Shilajit Gummies" for "TestoPro Testosterone"
-          const firstKeyTerm = keyTerms[0];
-          const firstTermMatches = Boolean(firstKeyTerm && normalizedTitle?.includes(firstKeyTerm));
-          
-          // Require: (1) first/product-name term matches, (2) at least 50% of all terms, (3) minimum 2 matches
-          const minRequired = Math.min(2, keyTerms.length);
-          productMatches = firstTermMatches && matchCount >= minRequired && matchRatio >= 0.5;
-          
-          console.log(`[price-debug] Amazon product match check: keyTerms=${JSON.stringify(keyTerms)}, matched=${matchCount}/${keyTerms.length} (${(matchRatio*100).toFixed(0)}%), firstTerm="${firstKeyTerm}" matches=${firstTermMatches}, passes=${productMatches}`);
-          if (!productMatches && matchCount > 0) {
-            console.log(`[price-debug] Matched terms: ${JSON.stringify(matchingTerms)}, missing: ${JSON.stringify(keyTerms.filter(t => !matchingTerms.includes(t)))}`);
-          }
-        } else {
-          // No keyText - just use brand match
-          productMatches = true;
-        }
-
-        if (skipValidation || (brandMatches && productMatches)) {
-          amazonPrice = priceData.amazonItemPrice;
-          amazonUrl = amazonUrlFound;
-          
-          const shippingCents = Math.round(priceData.amazonShippingPrice * 100);
-          const shippingNote = priceData.shippingEvidence === 'free' 
-            ? 'free shipping' 
-            : priceData.shippingEvidence === 'paid' 
-              ? `$${priceData.amazonShippingPrice.toFixed(2)} shipping` 
-              : 'shipping unknown';
-          
-          console.log(`[price] ✓ Amazon: item=$${amazonPrice.toFixed(2)}, ${shippingNote}`);
-          
-          const amazonCandidate: PriceSourceDetail = {
-            source: 'amazon',
-            price: amazonPrice,
-            currency: 'USD',
-            url: amazonUrl,
-            notes: `Amazon marketplace price (${shippingNote})`,
-            shippingCents,
-            matchesBrand: true,
-          };
-          
-          candidates.push(amazonCandidate);
-          
-          // SHORT-CIRCUIT: Amazon is the preferred source - skip Brave/brand-msrp tiers
-          // Apply user pricing settings and return immediately
-          console.log(`[price] ✓ Amazon price found - using as preferred source (skipping brand-msrp tier)`);
-          
-          const settings = input.pricingSettings || getDefaultPricingSettings();
-          const priceCents = Math.round(amazonPrice * 100);
-          
-          const pricingResult = computeEbayItemPrice({
-            amazonItemPriceCents: priceCents,
-            amazonShippingCents: shippingCents,
-            discountPercent: settings.discountPercent,
-            shippingStrategy: settings.shippingStrategy,
-            templateShippingEstimateCents: settings.templateShippingEstimateCents,
-            shippingSubsidyCapCents: settings.shippingSubsidyCapCents,
-          });
-          
-          const finalPrice = pricingResult.ebayItemPriceCents / 100;
-          console.log(`[price] 💰 AMAZON PREFERRED: retail=$${amazonPrice.toFixed(2)} | discount=${settings.discountPercent}% | final=$${finalPrice.toFixed(2)}`);
-          
-          // Cache the Amazon price for future lookups
-          const cacheKey = makePriceSig(input.brand, input.title);
-          await setCachedPrice(cacheKey, {
-            msrpCents: priceCents,
-            chosen: amazonCandidate,
-            candidates: [amazonCandidate],
-          });
-          console.log(`[price] ✓ Cached Amazon MSRP ($${amazonPrice.toFixed(2)}) for future lookups (30-day TTL)`);
-          
-          return {
-            ok: true,
-            chosen: amazonCandidate,
-            candidates: [amazonCandidate],
-            recommendedListingPrice: finalPrice,
-            reason: 'Amazon price found and preferred',
-          };
-        } else {
-          console.log(`[price] ✗ Amazon result rejected - brand match: ${brandMatches}, product match: ${productMatches} (title: ${priceData.pageTitle || 'unknown'})`);
-          
-          // RETRY WITH SIMPLIFIED QUERY if we haven't tried yet
-          if (!triedSimplified && !registeredAsin) {
-            triedSimplified = true;
-            const simplifiedQuery = buildAmazonSearchQuery(true);
-            console.log(`[price] 🔄 Retrying Amazon with simplified query: "${simplifiedQuery}"`);
+          // Check if at least one key product term appears in Amazon title
+          let productMatches = false;
+          if (input.keyText && input.keyText.length > 0) {
+            const keyTerms = input.keyText
+              .filter(t => t && t.length > 3) // Skip short/generic terms
+              .map(t => normalizeBrand(t))
+              .filter((t): t is string => Boolean(t));
             
-            amazonUrlFound = await braveFirstUrl(simplifiedQuery, 'amazon.com');
-            if (amazonUrlFound) {
-              continue amazonSearchLoop; // Try again with new URL
-            } else {
-              console.log('[price] ✗ Simplified query also found no Amazon URL');
-              break amazonSearchLoop;
-            }
+            productMatches = keyTerms.some(term => normalizedTitle?.includes(term));
+            console.log(`[price-debug] Amazon product match check: keyTerms=${JSON.stringify(keyTerms)}, matches=${productMatches}`);
+          } else {
+            // No keyText - just use brand match
+            productMatches = true;
           }
-          break amazonSearchLoop;
+
+          if (skipValidation || (brandMatches && productMatches)) {
+            amazonPrice = priceData.amazonItemPrice;
+            amazonUrl = amazonUrlFound;
+            
+            const shippingCents = Math.round(priceData.amazonShippingPrice * 100);
+            const shippingNote = priceData.shippingEvidence === 'free' 
+              ? 'free shipping' 
+              : priceData.shippingEvidence === 'paid' 
+                ? `$${priceData.amazonShippingPrice.toFixed(2)} shipping` 
+                : 'shipping unknown';
+            
+            console.log(`[price] ✓ Amazon: item=$${amazonPrice.toFixed(2)}, ${shippingNote}`);
+            
+            candidates.push({
+              source: 'amazon',
+              price: amazonPrice,
+              currency: 'USD',
+              url: amazonUrl,
+              notes: `Amazon marketplace price (${shippingNote})`,
+              shippingCents,
+              matchesBrand: true,
+            });
+          } else {
+            console.log(`[price] ✗ Amazon result rejected - brand match: ${brandMatches}, product match: ${productMatches} (title: ${priceData.pageTitle || 'unknown'})`);
+          }
         }
-      } else {
-        break amazonSearchLoop;
       }
-    }
-    
-    if (!amazonUrlFound) {
+    } else {
       console.log('[price] ✗ No Amazon URL found for this product');
     }
   }
 
   // ========================================
-  // TIER 2: OpenAI Web Search (Brand Website - when Amazon fails)
+  // TIER 2.5: Web Search AI (Experimental - when Amazon fails)
   // ========================================
-  // Use OpenAI Responses API with web_search to find brand website + price
-  let webSearchUrl: string | null = null;
-  let openaiWebSearchPrice: number | null = null;
-  let openaiWebSearchConfidence: 'high' | 'medium' | 'low' = 'low';
-  
+  // Only use web search if Amazon didn't return anything
   if (!amazonPrice && input.brand && input.title) {
-    console.log('[price] Tier 2: Trying OpenAI web_search...');
+    console.log('[price] Tier 2.5: Trying web-search AI...');
     
-    const { searchBrandWebsitePriceText } = await import('./openai-websearch.js');
+    const { searchWebForPrice } = await import('./web-search-pricing.js');
+    const additionalContext = [
+      input.categoryPath,
+      input.keyText?.slice(0, 3).join(', '),
+    ].filter(Boolean).join(' | ');
     
-    const webResult = await searchBrandWebsitePriceText(
+    const webResult = await searchWebForPrice(
       input.brand,
       input.title,
-      input.keyText,
-      input.photoQuantity ?? 1
+      additionalContext
     );
     
     if (webResult.price && webResult.price > 0) {
-      openaiWebSearchPrice = webResult.price;
-      openaiWebSearchConfidence = webResult.confidence;
-      webSearchUrl = webResult.productUrl || webResult.officialWebsite;
-      
-      console.log(`[price] ✓ OpenAI web_search found: $${webResult.price.toFixed(2)} (${webResult.confidence} confidence)`);
-      console.log(`[price]   Brand: ${webResult.brand}`);
-      console.log(`[price]   Website: ${webResult.officialWebsite}`);
-      console.log(`[price]   Product URL: ${webResult.productUrl}`);
-      if (webResult.amazonUrl) {
-        console.log(`[price]   Amazon URL: ${webResult.amazonUrl}`);
-        console.log(`[price]   Amazon Reasoning: ${webResult.amazonReasoning}`);
-      }
+      console.log(`[price] ✓ Web search found: $${webResult.price.toFixed(2)} (${webResult.source}, ${webResult.confidence} confidence)`);
+      console.log(`[price]   URL: ${webResult.url}`);
       console.log(`[price]   Reasoning: ${webResult.reasoning}`);
       
-      // If confidence is high or medium, verify by scraping the productUrl
-      if (webResult.confidence === 'high' || webResult.confidence === 'medium') {
-        let verifiedPrice = webResult.price;
-        let priceSource = 'openai-claimed';
-        let urlVerified = false;
-        
-        // VERIFY: Scrape the productUrl to confirm the price (OpenAI can hallucinate)
-        if (webResult.productUrl) {
-          console.log(`[price] 🔍 Verifying OpenAI price by scraping: ${webResult.productUrl}`);
-          const { html: verifyHtml } = await fetchHtml(webResult.productUrl);
-          if (verifyHtml) {
-            urlVerified = true;
-            const verifyData = extractPriceWithShipping(verifyHtml, input.title);
-            if (verifyData.amazonItemPrice && verifyData.amazonItemPrice > 0) {
-              console.log(`[price] ✓ Scraped price: $${verifyData.amazonItemPrice.toFixed(2)} (OpenAI claimed: $${webResult.price.toFixed(2)})`);
-              // Use scraped price if it differs significantly from OpenAI's claim
-              const priceDiff = Math.abs(verifyData.amazonItemPrice - webResult.price) / webResult.price;
-              if (priceDiff > 0.15) {
-                console.log(`[price] ⚠️ Price mismatch (${(priceDiff * 100).toFixed(0)}% diff) - using scraped price instead`);
-                verifiedPrice = verifyData.amazonItemPrice;
-                priceSource = 'scraped-verified';
-              } else {
-                priceSource = 'openai-verified';
-              }
-            } else {
-              console.log('[price] ⚠️ Could not extract price from productUrl - using OpenAI price');
-            }
-          } else {
-            // URL returned 404 or failed - OpenAI hallucinated the URL
-            console.log('[price] ❌ productUrl returned 404/error - OpenAI hallucinated, falling through to next tier');
-            // Don't use OpenAI's price, continue to Tier 3/4
-          }
-        }
-        
-        // Only use OpenAI price if URL was verified or no URL was provided
-        if (urlVerified || !webResult.productUrl) {
-          const priceCents = Math.round(verifiedPrice * 100);
-          const openaiCandidate: PriceSourceDetail = {
-            source: 'brand-msrp',
-            price: verifiedPrice,
-            currency: 'USD',
-            url: webResult.productUrl || webResult.officialWebsite || undefined,
-            notes: `OpenAI web_search: ${webResult.source} (${webResult.confidence} confidence, ${priceSource})`,
-          };
-          
-          candidates.push(openaiCandidate);
-          
-          // Apply pricing strategy
-          const pricingSettings = input.pricingSettings || getDefaultPricingSettings();
-          const pricingResult = computeEbayItemPrice({
-            amazonItemPriceCents: priceCents,
-            amazonShippingCents: 0,
-            discountPercent: pricingSettings.discountPercent,
-            shippingStrategy: pricingSettings.shippingStrategy,
-            templateShippingEstimateCents: pricingSettings.templateShippingEstimateCents,
-            shippingSubsidyCapCents: pricingSettings.shippingSubsidyCapCents,
-          });
-          
-          const finalPrice = pricingResult.ebayItemPriceCents / 100;
-          console.log(`[price] 💰 OPENAI WEB_SEARCH PRICE: retail=$${verifiedPrice.toFixed(2)} | discount=${pricingSettings.discountPercent}% | final=$${finalPrice.toFixed(2)}`);
-          
-          // Cache the price for future lookups
-          const cacheKey = makePriceSig(input.brand, input.title);
-          await setCachedPrice(cacheKey, {
-            msrpCents: priceCents,
-            chosen: openaiCandidate,
-            candidates: [openaiCandidate],
-          });
-          console.log(`[price] ✓ Cached brand MSRP ($${verifiedPrice.toFixed(2)}) for future lookups (30-day TTL)`);
-          
-          return {
-            ok: true,
-            chosen: openaiCandidate,
-            candidates: [openaiCandidate],
-            recommendedListingPrice: finalPrice,
-            reason: `OpenAI web_search found brand MSRP (${webResult.confidence} confidence)`,
-          };
-        }
-        // If URL was 404, fall through to Tier 3/4
-      } else {
-        console.log('[price] ⚠ OpenAI confidence is low, will try additional verification...');
-      }
-    } else if (webResult.officialWebsite || webResult.productUrl) {
-      // Found website but no price - will try to scrape in Tier 3
-      webSearchUrl = webResult.productUrl || webResult.officialWebsite;
-      console.log(`[price] ✓ OpenAI found website but no price: ${webSearchUrl}`);
+      candidates.push({
+        source: 'brave-fallback', // Map to existing source type
+        price: webResult.price,
+        currency: 'USD',
+        url: webResult.url || undefined,
+        notes: `Web search: ${webResult.source} (${webResult.confidence} confidence) - ${webResult.reasoning}`,
+      });
     } else {
-      console.log('[price] ✗ OpenAI web_search did not find brand website');
+      console.log('[price] ✗ Web search did not find price');
     }
   }
 
@@ -1032,53 +784,9 @@ export async function lookupPrice(
   let brandPrice: number | null = null;
   let brandUrl: string | undefined;
 
-  // PRIORITY: Try web-search AI URL first (most accurate product page)
+  // FIRST: Try Vision API-provided brand website (most accurate!)
   let domainReachable = true;
-  if (webSearchUrl) {
-    console.log(`[price] Trying web-search AI URL: ${webSearchUrl}`);
-    brandPrice = await extractPriceFromBrand(webSearchUrl, input.brand, enrichedTitle, input.packCount);
-    
-    if (brandPrice) {
-      brandUrl = webSearchUrl;
-      console.log(`[price] ✓ Brand MSRP from web-search URL: $${brandPrice.toFixed(2)}`);
-      
-      // Try variations to find better price
-      const variations = generateUrlVariations(webSearchUrl);
-      let lowestPrice = brandPrice;
-      let bestUrl = brandUrl;
-      
-      for (const variant of variations) {
-        const variantPrice = await extractPriceFromBrand(variant, input.brand, enrichedTitle, input.packCount);
-        if (variantPrice && variantPrice < lowestPrice) {
-          lowestPrice = variantPrice;
-          bestUrl = variant;
-          console.log(`[price] ✓ Found better price via URL variation: $${variantPrice.toFixed(2)} (${variant})`);
-        }
-      }
-      
-      if (lowestPrice < brandPrice) {
-        brandPrice = lowestPrice;
-        brandUrl = bestUrl;
-        console.log(`[price] ✓ Using lowest price $${brandPrice.toFixed(2)} from ${brandUrl}`);
-      }
-    } else {
-      console.log(`[price] ✗ Could not extract price from web-search URL, trying variations...`);
-      const variations = generateUrlVariations(webSearchUrl);
-      for (const variant of variations) {
-        console.log(`[price] Trying URL variation: ${variant}`);
-        const variantPrice = await extractPriceFromBrand(variant, input.brand, enrichedTitle, input.packCount);
-        if (variantPrice) {
-          brandPrice = variantPrice;
-          brandUrl = variant;
-          console.log(`[price] ✓ Brand MSRP from URL variation: $${brandPrice.toFixed(2)}`);
-          break;
-        }
-      }
-    }
-  }
-
-  // SECOND: Try Vision API-provided brand website (most accurate!)
-  if (!brandPrice && input.brandWebsite) {
+  if (input.brandWebsite) {
     // Skip homepage URLs - they often show bundle/subscription prices, not individual products
     // Match: http://example.com, https://example.com, https://example.com/, http://example.com/
     const isHomepage = /^https?:\/\/[^\/]+\/?$/.test(input.brandWebsite);
@@ -1089,7 +797,7 @@ export async function lookupPrice(
       console.log(`[price] Trying Vision API brand website: ${input.brandWebsite}`);
       
       // Use extractPriceFromBrand which handles JS detection
-      brandPrice = await extractPriceFromBrand(input.brandWebsite, input.brand, enrichedTitle, input.packCount);
+      brandPrice = await extractPriceFromBrand(input.brandWebsite, input.brand, input.title);
       
       if (brandPrice) {
         brandUrl = input.brandWebsite;
@@ -1102,7 +810,7 @@ export async function lookupPrice(
         let bestUrl = brandUrl;
         
         for (const variant of variations) {
-          const variantPrice = await extractPriceFromBrand(variant, input.brand, enrichedTitle, input.packCount);
+          const variantPrice = await extractPriceFromBrand(variant, input.brand, input.title);
           if (variantPrice && variantPrice < lowestPrice) {
             lowestPrice = variantPrice;
             bestUrl = variant;
@@ -1126,7 +834,7 @@ export async function lookupPrice(
           const variations = generateUrlVariations(input.brandWebsite);
           for (const variant of variations) {
             console.log(`[price] Trying URL variation: ${variant}`);
-            const variantPrice = await extractPriceFromBrand(variant, input.brand, enrichedTitle, input.packCount);
+            const variantPrice = await extractPriceFromBrand(variant, input.brand, input.title);
             if (variantPrice) {
               brandPrice = variantPrice;
               brandUrl = variant;
@@ -1145,7 +853,7 @@ export async function lookupPrice(
     if (signature) {
       const mapped = await getBrandUrls(signature);
       if (mapped?.brand) {
-        const mappedPrice = await extractPriceFromBrand(mapped.brand, input.brand, enrichedTitle, input.packCount);
+        const mappedPrice = await extractPriceFromBrand(mapped.brand, input.brand, input.title);
         if (mappedPrice) {
           brandPrice = mappedPrice;
           brandUrl = mapped.brand;
@@ -1164,7 +872,7 @@ export async function lookupPrice(
     );
     
     if (braveUrl) {
-      const bravePrice = await extractPriceFromBrand(braveUrl, input.brand, enrichedTitle, input.packCount);
+      const bravePrice = await extractPriceFromBrand(braveUrl, input.brand, input.title);
       if (bravePrice && bravePrice > 0) { // Check for valid price (not -1 rejection)
         brandPrice = bravePrice;
         brandUrl = braveUrl;
@@ -1185,66 +893,6 @@ export async function lookupPrice(
   } else if (input.brand && !amazonPrice) {
     // Only log if we actually attempted brand lookup and have no Amazon either
     console.log('[price] ✗ No brand MSRP or Amazon price found');
-  }
-
-  // ========================================
-  // TIER 4: eBay Sold/Suggested (Market-Based Fallback)
-  // ========================================
-  // Only use eBay sold prices when we have NO retail reference (no Amazon, no brand MSRP)
-  // This provides market-based pricing for obscure/discontinued products
-  if (candidates.length === 0) {
-    console.log('[price] Tier 4: Checking eBay sold prices (no retail reference found)...');
-    
-    const soldStats = await fetchSoldPriceStats({
-      title: input.title,
-      brand: input.brand,
-      upc: input.upc,
-      condition: input.condition,
-      quantity: input.quantity,
-    });
-
-    if (soldStats.rateLimited) {
-      console.warn('[price] ⚠️ eBay sold prices rate limited');
-    } else if (soldStats.ok && soldStats.p35) {
-      candidates.push({
-        source: 'ebay-sold',
-        price: soldStats.p35,
-        currency: 'USD',
-        notes: `35th percentile of ${soldStats.samples.length} recent sold items (market-based)`,
-      });
-      console.log(`[price] ✓ eBay sold price: $${soldStats.p35.toFixed(2)} (median: $${soldStats.median?.toFixed(2)})`);
-      
-      // For eBay sold, use the price directly (it's already competitive market price)
-      // No need for discount since this IS the market price
-      const priceCents = Math.round(soldStats.p35 * 100);
-      const settings = input.pricingSettings || getDefaultPricingSettings();
-      
-      // Cache for future lookups
-      const cacheKey = makePriceSig(input.brand, input.title);
-      await setCachedPrice(cacheKey, {
-        msrpCents: priceCents,
-        chosen: {
-          source: 'ebay-sold',
-          price: soldStats.p35,
-          currency: 'USD',
-          notes: `35th percentile of ${soldStats.samples.length} sold items`,
-        },
-        candidates: candidates,
-      });
-      console.log(`[price] ✓ Cached eBay sold price ($${soldStats.p35.toFixed(2)}) for future lookups`);
-      
-      // For eBay sold, we return the p35 directly as the listing price
-      // (it's already competitive - we want to be at or slightly below market)
-      return {
-        ok: true,
-        chosen: candidates[0],
-        candidates: candidates,
-        recommendedListingPrice: soldStats.p35,
-        reason: 'eBay sold price (no retail reference available)',
-      };
-    } else {
-      console.log('[price] ✗ No eBay sold price data available');
-    }
   }
 
   // ========================================
@@ -1292,87 +940,33 @@ export async function lookupPrice(
   }
 
   // ========================================
-  // TIER 5: Category Estimate (Last Resort)
+  // TIER 3: AI Arbitration
   // ========================================
-  // When all tiers fail, provide a category-based estimate with manual review flag
   if (candidates.length === 0) {
-    console.warn('[price] ⚠️ TIER 5: No price signals from any source - using category estimate');
-    console.warn('[price] ⚠️ This listing needs manual price review!');
+    console.warn('[price] No price signals available - using category-based estimate');
     
-    // Category-based estimates with expanded patterns
+    // Last resort: reasonable estimate based on product type
     let estimatedPrice = 29.99; // Default for supplements/beauty
-    let category = 'general';
     
     const titleLower = input.title.toLowerCase();
-    const brandLower = (input.brand || '').toLowerCase();
-    
-    // Skincare
-    if (titleLower.includes('serum') || titleLower.includes('cream') || 
-        titleLower.includes('moisturizer') || titleLower.includes('lotion') ||
-        titleLower.includes('cleanser') || titleLower.includes('toner')) {
-      estimatedPrice = 24.99;
-      category = 'skincare';
-    }
-    // Supplements (general)
-    else if (titleLower.includes('supplement') || titleLower.includes('vitamin') || 
-             titleLower.includes('capsule') || titleLower.includes('tablet') ||
-             titleLower.includes('probiotic')) {
-      estimatedPrice = 29.99;
-      category = 'supplements';
-    }
-    // Sports nutrition (premium)
-    else if (titleLower.includes('protein') || titleLower.includes('pre-workout') || 
-             titleLower.includes('collagen') || titleLower.includes('creatine') ||
-             titleLower.includes('bcaa') || titleLower.includes('whey')) {
-      estimatedPrice = 39.99;
-      category = 'sports-nutrition';
-    }
-    // Fish oil / Omega
-    else if ((titleLower.includes('oil') && titleLower.includes('fish')) ||
-             titleLower.includes('omega') || titleLower.includes('krill')) {
-      estimatedPrice = 24.99;
-      category = 'fish-oil';
-    }
-    // Wellness drinks / powders
-    else if (titleLower.includes('powder') || titleLower.includes('drink mix') ||
-             titleLower.includes('greens') || titleLower.includes('superfood')) {
-      estimatedPrice = 34.99;
-      category = 'wellness-drinks';
-    }
-    // Hair care
-    else if (titleLower.includes('shampoo') || titleLower.includes('conditioner') ||
-             titleLower.includes('hair')) {
-      estimatedPrice = 19.99;
-      category = 'hair-care';
-    }
-    // Baby / Kids
-    else if (titleLower.includes('baby') || titleLower.includes('infant') ||
-             titleLower.includes('kids') || titleLower.includes('children')) {
-      estimatedPrice = 24.99;
-      category = 'baby-kids';
+    if (titleLower.includes('serum') || titleLower.includes('cream') || titleLower.includes('moisturizer')) {
+      estimatedPrice = 24.99; // Skincare
+    } else if (titleLower.includes('supplement') || titleLower.includes('vitamin') || titleLower.includes('capsule')) {
+      estimatedPrice = 29.99; // Supplements
+    } else if (titleLower.includes('protein') || titleLower.includes('pre-workout') || titleLower.includes('collagen')) {
+      estimatedPrice = 39.99; // Sports nutrition
+    } else if (titleLower.includes('oil') && titleLower.includes('fish')) {
+      estimatedPrice = 24.99; // Fish oil
     }
     
-    console.log(`[price] Category detected: ${category} → estimate: $${estimatedPrice.toFixed(2)}`);
+    console.log(`[price] Using category estimate: $${estimatedPrice.toFixed(2)}`);
     
-    const estimateCandidate: PriceSourceDetail = {
+    candidates.push({
       source: 'estimate',
       price: estimatedPrice,
       currency: 'USD',
-      notes: `Category-based estimate (${category}) - NEEDS MANUAL REVIEW`,
-    };
-    
-    candidates.push(estimateCandidate);
-    
-    // Return early with manual review flag
-    return {
-      ok: true,
-      chosen: estimateCandidate,
-      candidates: [estimateCandidate],
-      recommendedListingPrice: estimatedPrice,
-      reason: `No retail pricing found. Using ${category} category estimate. Please verify pricing manually.`,
-      needsManualReview: true,
-      manualReviewReason: `Could not find pricing on Amazon, brand website (${input.brand || 'unknown'}), or eBay sold listings. Category estimate used.`,
-    };
+      notes: 'Category-based estimate (no market data available)',
+    });
   }
 
   // Debug log for troubleshooting pricing issues without brand-specific hardcoding
@@ -1387,8 +981,8 @@ export async function lookupPrice(
     }))
   });
   
-  console.log(`[price] Tier 5: AI arbitration with ${candidates.length} candidate(s)...`);
-  const decision = await decideFinalPrice(input, candidates);
+  console.log(`[price] Tier 3: AI arbitration with ${candidates.length} candidate(s)...`);
+  const decision = await decideFinalPrice(input, candidates, soldStats);
 
   if (decision.ok && decision.chosen && decision.recommendedListingPrice) {
     console.log(`[price] ✓ Final decision: source=${decision.chosen.source} base=$${decision.chosen.price.toFixed(2)} final=$${decision.recommendedListingPrice.toFixed(2)}`);

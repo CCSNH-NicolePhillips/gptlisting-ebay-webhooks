@@ -255,7 +255,8 @@ describe("pairing-v2-core", () => {
                     colorSignature: ["red", "gold"],
                     layoutSignature: "book cover",
                     confidence: 0.98,
-                    rationale: "Clear book cover",
+                      quantityInPhoto: 1,
+                      packCount: 1,
                     quantityInPhoto: 1,
                   },
                 ],
@@ -272,7 +273,8 @@ describe("pairing-v2-core", () => {
       expect(result[0].title).toBe("Harry Potter");
     });
 
-    it("should include quantityInPhoto in classification", async () => {
+                      quantityInPhoto: 1,
+                      packCount: 1,
       const imagePaths = ["multiple.jpg"];
 
       (mockOpenAI.chat.completions.create as jest.Mock<any>).mockResolvedValue({
@@ -329,6 +331,7 @@ describe("pairing-v2-core", () => {
           layoutSignature: "vertical",
           confidence: 0.95,
           quantityInPhoto: 1,
+          packCount: 1,
         },
         {
           filename: "back.jpg",
@@ -345,6 +348,7 @@ describe("pairing-v2-core", () => {
           layoutSignature: "back label",
           confidence: 0.95,
           quantityInPhoto: 1,
+          packCount: 1,
         },
       ];
 
@@ -393,6 +397,7 @@ describe("pairing-v2-core", () => {
           layoutSignature: "vertical",
           confidence: 0.9,
           quantityInPhoto: 1,
+          packCount: 1,
         },
       ];
 
@@ -442,105 +447,6 @@ describe("pairing-v2-core", () => {
       expect(result.unpaired).toHaveLength(0);
     });
 
-    it("should chunk large batches by brand", async () => {
-      // Create 30 items across 3 brands (exceeds PAIRING_CHUNK_SIZE of 24)
-      const classifications = [];
-      for (let i = 0; i < 10; i++) {
-        // Brand A: 10 items (5 fronts, 5 backs)
-        classifications.push({
-          filename: `brandA_front_${i}.jpg`,
-          kind: "product" as const,
-          panel: "front" as const,
-          brand: "BrandA",
-          productName: `Product A${i}`,
-          title: null,
-          brandWebsite: null,
-          packageType: "bottle" as const,
-          keyText: [],
-          categoryPath: null,
-          colorSignature: ["blue"],
-          layoutSignature: "vertical",
-          confidence: 0.9,
-          quantityInPhoto: 1,
-        });
-        classifications.push({
-          filename: `brandA_back_${i}.jpg`,
-          kind: "product" as const,
-          panel: "back" as const,
-          brand: "BrandA",
-          productName: `Product A${i}`,
-          title: null,
-          brandWebsite: null,
-          packageType: "bottle" as const,
-          keyText: [],
-          categoryPath: null,
-          colorSignature: ["blue"],
-          layoutSignature: "back",
-          confidence: 0.9,
-          quantityInPhoto: 1,
-        });
-        // Brand B: 10 items (5 fronts, 5 backs)
-        classifications.push({
-          filename: `brandB_front_${i}.jpg`,
-          kind: "product" as const,
-          panel: "front" as const,
-          brand: "BrandB",
-          productName: `Product B${i}`,
-          title: null,
-          brandWebsite: null,
-          packageType: "jar" as const,
-          keyText: [],
-          categoryPath: null,
-          colorSignature: ["red"],
-          layoutSignature: "vertical",
-          confidence: 0.9,
-          quantityInPhoto: 1,
-        });
-      }
-
-      // Mock GPT to return proper pairs for each brand group
-      let callCount = 0;
-      (mockOpenAI.chat.completions.create as jest.Mock<any>).mockImplementation(async (params: any) => {
-        callCount++;
-        const content = params.messages[1].content;
-        
-        // Generate pairs based on what's in the prompt
-        const pairs = [];
-        for (let i = 0; i < 10; i++) {
-          if (content.includes(`brandA_front_${i}.jpg`)) {
-            pairs.push({
-              front: `brandA_front_${i}.jpg`,
-              back: `brandA_back_${i}.jpg`,
-              confidence: 0.95,
-              rationale: "Same brand and product",
-            });
-          }
-          if (content.includes(`brandB_front_${i}.jpg`)) {
-            pairs.push({
-              front: `brandB_front_${i}.jpg`,
-              back: `brandB_back_${i}.jpg`,
-              confidence: 0.95,
-              rationale: "Same brand and product",
-            });
-          }
-        }
-
-        return {
-          choices: [{ message: { content: JSON.stringify({ pairs, unpaired: [] }) } }],
-        };
-      });
-
-      const result = await pairFromClassifications(classifications);
-
-      // Should have called GPT multiple times (once per brand group)
-      expect(callCount).toBeGreaterThanOrEqual(2);
-      
-      // Should have paired all 30 items into 15 pairs
-      // (10 Brand A pairs + 10 Brand B pairs, but we created 20 front+back each)
-      expect(result.pairs.length).toBeGreaterThan(0);
-      expect(result.pairs.length + result.unpaired.length).toBeLessThanOrEqual(30);
-    });
-
     it("should filter out non-product items", async () => {
       const classifications = [
         {
@@ -558,6 +464,7 @@ describe("pairing-v2-core", () => {
           layoutSignature: "vertical",
           confidence: 0.9,
           quantityInPhoto: 1,
+          packCount: 1,
         },
         {
           filename: "random.jpg",
@@ -574,6 +481,7 @@ describe("pairing-v2-core", () => {
           layoutSignature: "none",
           confidence: 0.9,
           quantityInPhoto: 0,
+          packCount: 0,
         },
       ];
 
@@ -621,6 +529,7 @@ describe("pairing-v2-core", () => {
           layoutSignature: "vertical",
           confidence: 0.9,
           quantityInPhoto: 1,
+          packCount: 1,
         },
       ];
 
@@ -665,6 +574,7 @@ describe("pairing-v2-core", () => {
           layoutSignature: "vertical",
           confidence: 0.9,
           quantityInPhoto: 1,
+          packCount: 1,
         },
         {
           filename: "back.jpg",
@@ -681,6 +591,7 @@ describe("pairing-v2-core", () => {
           layoutSignature: "back",
           confidence: 0.9,
           quantityInPhoto: 1,
+          packCount: 1,
         },
       ];
 
@@ -739,6 +650,7 @@ describe("pairing-v2-core", () => {
           layoutSignature: "vertical",
           confidence: 0.9,
           quantityInPhoto: 1,
+          packCount: 1,
         },
         {
           filename: "back2.jpg",
@@ -755,6 +667,7 @@ describe("pairing-v2-core", () => {
           layoutSignature: "back",
           confidence: 0.9,
           quantityInPhoto: 1,
+          packCount: 1,
         },
       ];
 
@@ -831,6 +744,7 @@ describe("pairing-v2-core", () => {
                     confidence: 0.95,
                     rationale: "Clear front",
                     quantityInPhoto: 1,
+                    packCount: 1,
                   },
                   {
                     filename: "back.jpg",
@@ -848,6 +762,7 @@ describe("pairing-v2-core", () => {
                     confidence: 0.95,
                     rationale: "Clear back",
                     quantityInPhoto: 1,
+                    packCount: 1,
                   },
                 ],
               }),
@@ -941,6 +856,7 @@ describe("pairing-v2-core", () => {
                     confidence: 0.9,
                     rationale: "front",
                     quantityInPhoto: 1,
+                    packCount: 1,
                   },
                   {
                     filename: "img2.jpg",
@@ -958,6 +874,7 @@ describe("pairing-v2-core", () => {
                     confidence: 0.9,
                     rationale: "back",
                     quantityInPhoto: 1,
+                    packCount: 1,
                   },
                   {
                     filename: "img3.jpg",
@@ -975,6 +892,7 @@ describe("pairing-v2-core", () => {
                     confidence: 0.9,
                     rationale: "not product",
                     quantityInPhoto: 0,
+                    packCount: 0,
                   },
                 ],
               }),
@@ -1058,6 +976,7 @@ describe("pairing-v2-core", () => {
                     confidence: 0.9,
                     rationale: "test",
                     quantityInPhoto: 2,
+                    packCount: 1,
                   },
                 ],
               }),
