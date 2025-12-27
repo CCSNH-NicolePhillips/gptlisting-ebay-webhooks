@@ -26,6 +26,7 @@ interface ImageClassificationV2 {
 
 /**
  * Get temporary download links for Dropbox files (used when needsTempLinks is true)
+ * IMPORTANT: Returns same-length array with empty strings for failed links to preserve index alignment
  */
 async function getDropboxTemporaryLinks(accessToken: string, paths: string[]): Promise<string[]> {
   const links: string[] = [];
@@ -47,19 +48,20 @@ async function getDropboxTemporaryLinks(accessToken: string, paths: string[]): P
         if (!response.ok) {
           const errorText = await response.text();
           console.error(`Failed to get temp link for ${filePath}: ${response.status} ${errorText}`);
-          return null;
+          return ""; // Return empty string to preserve index alignment
         }
 
         const data: any = await response.json();
-        return data.link;
+        return data.link || "";
       } catch (err) {
         console.error(`Error getting temp link for ${filePath}:`, err);
-        return null;
+        return ""; // Return empty string to preserve index alignment
       }
     });
 
     const batchLinks = await Promise.all(batchPromises);
-    links.push(...batchLinks.filter((link): link is string => link !== null));
+    // Push all results (including empty strings) to preserve index alignment
+    links.push(...batchLinks);
   }
 
   return links;
@@ -288,11 +290,12 @@ export const handler: Handler = async (event) => {
       if (job.needsTempLinks && uploadMethod === "dropbox" && job.accessToken) {
         console.log(`[pairing-v2-processor] Fetching ${imageSources.length} temp links from Dropbox...`);
         const tempLinks = await getDropboxTemporaryLinks(job.accessToken, imageSources);
-        if (tempLinks.length === 0) {
+        const validLinkCount = tempLinks.filter(link => link).length;
+        if (validLinkCount === 0) {
           throw new Error("Failed to get temporary links from Dropbox");
         }
         imageSources = tempLinks;
-        console.log(`[pairing-v2-processor] Got ${tempLinks.length} temp links`);
+        console.log(`[pairing-v2-processor] Got ${validLinkCount} valid temp links of ${tempLinks.length} total`);
       }
       
       // Create temp directory
@@ -312,6 +315,13 @@ export const handler: Handler = async (event) => {
         
         for (let i = 0; i < imageSources.length; i++) {
           const imageUrl = imageSources[i];
+          
+          // Skip empty URLs (failed temp link fetches) - preserves index alignment
+          if (!imageUrl) {
+            console.warn(`[pairing-v2-processor] Skipping empty image source at index ${i} (temp link fetch may have failed)`);
+            continue;
+          }
+          
           let filename: string;
           let isValidUrl = false;
           

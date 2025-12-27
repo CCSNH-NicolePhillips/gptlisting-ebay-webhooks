@@ -90,6 +90,7 @@ async function listDropboxImages(accessToken: string, folder: string): Promise<s
 
 /**
  * Get temporary download links for Dropbox files
+ * IMPORTANT: Returns same-length array with empty strings for failed links to preserve index alignment
  */
 async function getDropboxTemporaryLinks(accessToken: string, paths: string[]): Promise<string[]> {
   const links: string[] = [];
@@ -111,19 +112,20 @@ async function getDropboxTemporaryLinks(accessToken: string, paths: string[]): P
         if (!response.ok) {
           const errorText = await response.text();
           console.error(`Failed to get temp link for ${path}: ${response.status} ${errorText}`);
-          return null;
+          return ""; // Return empty string to preserve index alignment
         }
 
         const data: any = await response.json();
-        return data.link;
+        return data.link || "";
       } catch (err) {
         console.error(`Error getting temp link for ${path}:`, err);
-        return null;
+        return ""; // Return empty string to preserve index alignment
       }
     });
 
     const batchLinks = await Promise.all(batchPromises);
-    links.push(...batchLinks.filter((link): link is string => link !== null));
+    // Push all results (including empty strings) to preserve index alignment
+    links.push(...batchLinks);
   }
 
   return links;
@@ -203,11 +205,12 @@ export const handler: Handler = async (event) => {
     if (imagePaths.length <= 25) {
       // Small batch - get temp links now
       const tempLinks = await getDropboxTemporaryLinks(accessToken, imagePaths);
-      if (tempLinks.length === 0) {
+      const validLinkCount = tempLinks.filter(link => link).length;
+      if (validLinkCount === 0) {
         return json(500, { error: "Failed to get temporary links for any images" }, originHdr);
       }
       linksOrPaths = tempLinks;
-      console.log("[smartdrafts-pairing-v2-start] Got temporary links for small batch:", tempLinks.length);
+      console.log("[smartdrafts-pairing-v2-start] Got temporary links for small batch:", validLinkCount, "of", imagePaths.length);
     } else {
       // Large batch - pass Dropbox paths, processor will fetch temp links
       linksOrPaths = imagePaths;
