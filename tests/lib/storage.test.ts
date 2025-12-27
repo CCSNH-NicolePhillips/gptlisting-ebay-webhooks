@@ -291,6 +291,99 @@ describe('storage', () => {
       expect(key).toContain('staging/user123/job456/');
       expect(key).toMatch(/\.jpg$/);
     });
+
+    // UserId sanitization tests - fixes for S3 presigned URL signature issues
+    describe('userId sanitization', () => {
+      it('should sanitize pipe character in OAuth userIds', () => {
+        const userId = 'google-oauth2|108767599998494531403';
+        const key = generateStagingKey(userId, 'test-image.jpg', 'job123');
+
+        // Should NOT contain pipe character (breaks presigned URL signatures)
+        expect(key).not.toContain('|');
+        expect(key).not.toContain('%7C');
+        
+        // Should contain underscore-replaced userId
+        expect(key).toContain('google-oauth2_108767599998494531403');
+      });
+
+      it('should sanitize Auth0 format userIds', () => {
+        const userId = 'auth0|abc123def456';
+        const key = generateStagingKey(userId, 'product.jpg', 'job123');
+
+        expect(key).toContain('auth0_abc123def456');
+        expect(key).not.toContain('|');
+      });
+
+      it('should sanitize email-based userIds', () => {
+        const userId = 'email|user@example.com';
+        const key = generateStagingKey(userId, 'photo.png', 'job123');
+
+        // @ and | should be replaced
+        expect(key).not.toContain('@');
+        expect(key).not.toContain('|');
+      });
+
+      it('should sanitize multiple special characters', () => {
+        const userId = 'auth0|user@email.com:special!char';
+        const key = generateStagingKey(userId, 'photo.png', 'job123');
+
+        // Extract the userId segment from the key
+        const userIdPart = key.split('/')[1]; // staging/{userId}/...
+        
+        // Should only contain safe characters: a-zA-Z0-9-_.
+        expect(userIdPart).toMatch(/^[a-zA-Z0-9\-_.]+$/);
+        
+        // Should not contain any of: | @ : !
+        expect(key).not.toContain('|');
+        expect(key).not.toContain('@');
+        expect(key).not.toContain(':');
+        expect(key).not.toContain('!');
+      });
+
+      it('should preserve already-safe userIds unchanged', () => {
+        const userId = 'simple-user-123';
+        const key = generateStagingKey(userId, 'image.jpg', 'job456');
+
+        // Should contain the original userId unchanged
+        expect(key).toContain('staging/simple-user-123/job456/');
+      });
+
+      it('should handle real-world Dropbox upload userId', () => {
+        // This is the exact format that was causing issues
+        const userId = 'google-oauth2|108767599998494531403';
+        const filename = 'IMG_20251225_160607.jpg';
+        const jobId = '11b7ae84-d4e3-4a96-8d6d-45c2d5e5d2ab';
+
+        const key = generateStagingKey(userId, filename, jobId);
+
+        // Key should be S3-safe (no characters that break presigned URLs)
+        expect(key).not.toContain('|');
+        
+        // Should still identify the user uniquely
+        expect(key).toContain('google-oauth2_108767599998494531403');
+        
+        // Should contain the job ID
+        expect(key).toContain('11b7ae84-d4e3-4a96-8d6d-45c2d5e5d2ab');
+      });
+
+      it('should handle empty userId gracefully', () => {
+        const userId = '';
+        const filename = 'test.jpg';
+
+        // Should not throw
+        expect(() => generateStagingKey(userId, filename)).not.toThrow();
+      });
+
+      it('should handle anonymous fallback', () => {
+        const userId = 'anonymous';
+        const filename = 'dropbox-image.jpg';
+        const jobId = 'dropbox-job-789';
+
+        const key = generateStagingKey(userId, filename, jobId);
+
+        expect(key).toContain('staging/anonymous/dropbox-job-789/');
+      });
+    });
   });
 
   describe('generatePresignedPutUrl', () => {
