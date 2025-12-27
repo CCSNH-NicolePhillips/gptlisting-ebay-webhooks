@@ -376,6 +376,13 @@ export const handler: Handler = async (event) => {
       console.log(`[create-ebay-draft-user] About to create inventory for SKU: ${mapped.sku}`);
       console.log(`[create-ebay-draft-user] Inventory aspects:`, JSON.stringify(mapped.inventory?.product?.aspects, null, 2));
       console.log(`[create-ebay-draft-user] Has Brand? ${!!mapped.inventory?.product?.aspects?.Brand}, Brand value:`, mapped.inventory?.product?.aspects?.Brand);
+      
+      // DEBUG: Log imageUrls being sent to eBay
+      const inventoryImages = mapped.inventory?.product?.imageUrls || [];
+      console.log(`[create-ebay-draft-user] 📷 Images for SKU ${mapped.sku}:`, {
+        count: inventoryImages.length,
+        urls: inventoryImages.map((u: string) => u?.substring(0, 100)),
+      });
 
   await putInventoryItem(access.token, access.apiHost, mapped.sku, mapped.inventory, mapped.offer.quantity, marketplaceId);
 
