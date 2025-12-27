@@ -89,6 +89,7 @@ export function generateStagingKey(
   // Sanitize userId to avoid special characters in S3 keys (e.g., | in google-oauth2|123)
   // This prevents presigned URL signature mismatches
   const safeUserId = userId.replace(/[^a-zA-Z0-9-_.]/g, '_');
+  console.log(`[storage] generateStagingKey: userId="${userId}" → safeUserId="${safeUserId}"`);
   return `staging/${safeUserId}/${job}/${hash}-${sanitized}`;
 }
 
