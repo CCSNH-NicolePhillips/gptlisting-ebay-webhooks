@@ -242,9 +242,15 @@ export async function uploadBufferToStaging(
   mime: string,
   jobId?: string
 ): Promise<string> {
+  console.log(`[storage] uploadBufferToStaging: userId="${userId}", filename="${filename}", mime="${mime}", jobId="${jobId}"`);
+  
   const key = generateStagingKey(userId, filename, jobId);
+  console.log(`[storage] Generated key: ${key}`);
+  
   const client = createStorageClient();
   const config = getStagingConfig();
+  
+  console.log(`[storage] Uploading to bucket: ${config.bucket}`);
   
   const command = new PutObjectCommand({
     Bucket: config.bucket,
@@ -258,9 +264,15 @@ export async function uploadBufferToStaging(
   });
   
   await client.send(command);
+  console.log(`[storage] ✓ Upload complete`);
   
   // Return public or signed URL
-  return await getStagedUrl(key);
+  const url = await getStagedUrl(key);
+  console.log(`[storage] Generated URL: ${url}`);
+  console.log(`[storage] URL contains pipe: ${url.includes('|')}`);
+  console.log(`[storage] URL contains %7C: ${url.includes('%7C')}`);
+  
+  return url;
 }
 
 /**

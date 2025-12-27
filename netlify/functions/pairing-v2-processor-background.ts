@@ -375,9 +375,13 @@ export const handler: Handler = async (event) => {
               };
               const mime = mimeMap[ext] || 'image/jpeg';
               
+              console.log(`[pairing-v2-processor] 📤 Uploading to R2: userId="${userId}", filename="${filename}", mime="${mime}", jobId="${jobId}"`);
               const r2Url = await uploadBufferToStaging(buffer, userId, filename, mime, jobId);
               persistentUrlMap[filename] = r2Url;
-              console.log(`[pairing-v2-processor] ✓ Uploaded to R2: ${filename} → ${r2Url.substring(0, 80)}...`);
+              console.log(`[pairing-v2-processor] ✓ Uploaded to R2: ${filename}`);
+              console.log(`[pairing-v2-processor]   Full URL: ${r2Url}`);
+              console.log(`[pairing-v2-processor]   URL contains pipe: ${r2Url.includes('|')}`);
+              console.log(`[pairing-v2-processor]   URL contains %7C: ${r2Url.includes('%7C')}`);
             } catch (uploadErr: any) {
               console.error(`[pairing-v2-processor] ✗ R2 upload failed for ${filename}, falling back to Dropbox shared link:`, uploadErr?.message);
               // Fallback to Dropbox shared link if R2 fails
@@ -400,6 +404,10 @@ export const handler: Handler = async (event) => {
         }
         
         console.log(`[pairing-v2-processor] Created ${Object.keys(persistentUrlMap).length} persistent URLs`);
+        console.log(`[pairing-v2-processor] 📋 URL Map summary:`);
+        for (const [fname, url] of Object.entries(persistentUrlMap)) {
+          console.log(`[pairing-v2-processor]   ${fname} → ${url.substring(0, 100)}...`);
+        }
 
         console.log(`[pairing-v2-processor] Downloaded ${localPaths.length} images, running pipeline...`);
 
@@ -427,6 +435,7 @@ export const handler: Handler = async (event) => {
         // Simple lookup from the map we created above - NO more Dropbox vs Local branching!
         // ========================================================================
         console.log(`[pairing-v2-processor] Mapping ${result.pairs.length} pairs to persistent URLs...`);
+        console.log(`[pairing-v2-processor] Available filenames in URL map: ${Object.keys(persistentUrlMap).join(', ')}`);
         
         const basenamePairs = result.pairs.map(p => {
           const frontFilename = path.basename(p.front);
@@ -439,8 +448,13 @@ export const handler: Handler = async (event) => {
           const side1Url = side1Filename ? persistentUrlMap[side1Filename] : undefined;
           const side2Url = side2Filename ? persistentUrlMap[side2Filename] : undefined;
           
+          console.log(`[pairing-v2-processor] Pair mapping: front="${frontFilename}" → ${frontUrl ? frontUrl.substring(0, 80) + '...' : 'MISSING'}`);
+          console.log(`[pairing-v2-processor] Pair mapping: back="${backFilename}" → ${backUrl ? backUrl.substring(0, 80) + '...' : 'MISSING'}`);
+          if (side1Filename) console.log(`[pairing-v2-processor] Pair mapping: side1="${side1Filename}" → ${side1Url ? side1Url.substring(0, 80) + '...' : 'MISSING'}`);
+          if (side2Filename) console.log(`[pairing-v2-processor] Pair mapping: side2="${side2Filename}" → ${side2Url ? side2Url.substring(0, 80) + '...' : 'MISSING'}`);
+          
           if (!frontUrl || !backUrl) {
-            console.warn(`[pairing-v2-processor] Missing URL for pair: front=${frontFilename} (${frontUrl ? 'OK' : 'MISSING'}), back=${backFilename} (${backUrl ? 'OK' : 'MISSING'})`);
+            console.warn(`[pairing-v2-processor] ⚠️ Missing URL for pair: front=${frontFilename} (${frontUrl ? 'OK' : 'MISSING'}), back=${backFilename} (${backUrl ? 'OK' : 'MISSING'})`);
           }
           
           const photoQty = p.photoQuantity || 1;
@@ -494,6 +508,14 @@ export const handler: Handler = async (event) => {
           unpaired: basenameSingletons,
           metrics: result.metrics,
         };
+
+        // Log final pairs for debugging
+        console.log(`[pairing-v2-processor] 📦 Final pairs to store:`);
+        for (const pair of basenamePairs) {
+          console.log(`[pairing-v2-processor]   Pair: brand=${pair.brand}, product=${pair.product}`);
+          console.log(`[pairing-v2-processor]     frontUrl: ${pair.frontUrl || 'MISSING'}`);
+          console.log(`[pairing-v2-processor]     backUrl: ${pair.backUrl || 'MISSING'}`);
+        }
 
         // Update job with result
         job.status = "completed";

@@ -220,6 +220,10 @@ export const handler: Handler = async (event) => {
 
     // Schedule the job (returns immediately with job ID)
     // IMPORTANT: Always pass originalDropboxPaths so processor can create persistent shared links
+    console.log("[smartdrafts-pairing-v2-start] 🔑 userId for job:", userAuth.userId);
+    console.log("[smartdrafts-pairing-v2-start]   Contains pipe: " + userAuth.userId.includes('|'));
+    console.log("[smartdrafts-pairing-v2-start]   Original filenames:", originalFilenames.slice(0, 5));
+    
     const jobId = await schedulePairingV2Job(
       userAuth.userId, 
       folder, 
@@ -230,7 +234,7 @@ export const handler: Handler = async (event) => {
       imagePaths // Always pass original Dropbox file paths for shared link creation
     );
 
-    console.log("[smartdrafts-pairing-v2-start] Job scheduled:", jobId);
+    console.log("[smartdrafts-pairing-v2-start] ✓ Job scheduled:", jobId);
 
     return json(
       202, // Accepted

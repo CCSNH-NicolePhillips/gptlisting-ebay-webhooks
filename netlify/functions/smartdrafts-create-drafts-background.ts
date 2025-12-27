@@ -819,6 +819,19 @@ async function createDraftForProduct(
     ...(product.extras || [])
   ].filter((x): x is string => Boolean(x));
   
+  // 🔍 DEBUG: Log images being added to draft
+  console.log(`[Draft] 🖼️ Images for ${product.productId}:`);
+  console.log(`[Draft]   heroDisplayUrl: ${product.heroDisplayUrl || 'MISSING'}`);
+  console.log(`[Draft]   backDisplayUrl: ${product.backDisplayUrl || 'MISSING'}`);
+  console.log(`[Draft]   side1DisplayUrl: ${product.side1DisplayUrl || 'MISSING'}`);
+  console.log(`[Draft]   side2DisplayUrl: ${product.side2DisplayUrl || 'MISSING'}`);
+  console.log(`[Draft]   extras: ${(product.extras || []).length} items`);
+  console.log(`[Draft]   Total images after filter: ${images.length}`);
+  images.forEach((url, i) => {
+    console.log(`[Draft]   [${i}] ${url.substring(0, 100)}...`);
+    console.log(`[Draft]       Contains pipe: ${url.includes('|')}, Contains %7C: ${url.includes('%7C')}`);
+  });
+  
   // Use AI-powered pricing decision (already computed above)
   const draft: Draft = {
     productId: product.productId,

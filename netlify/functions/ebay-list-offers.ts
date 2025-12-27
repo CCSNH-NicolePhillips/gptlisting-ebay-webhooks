@@ -535,6 +535,16 @@ export const handler: Handler = async (event) => {
 			console.log('[ebay-list-offers] Title enrichment took', Date.now() - enrichStart, 'ms');
 		}
 		
+		// 🔍 DEBUG: Log image URLs in offers for debugging
+		console.log('[ebay-list-offers] 🖼️ Image data in offers:');
+		for (const offer of final.slice(0, 10)) {
+			const offerId = offer?.offerId || 'unknown';
+			const sku = offer?.sku || 'unknown';
+			const listingPhotos = offer?.listing?.photoUrls || offer?.listing?.imageUrls || [];
+			console.log(`[ebay-list-offers]   Offer ${offerId} (SKU: ${sku}):`);
+			console.log(`[ebay-list-offers]     listing.photoUrls: ${JSON.stringify(listingPhotos)}`);
+		}
+		
 		if (String(status || '') && res?.url?.includes('offer_status=')) {
 			// Already filtered by server; return upstream shape
 			return {

@@ -455,6 +455,17 @@ async function createDraftForProduct(product: PairedProduct): Promise<Draft> {
   // Step 8: Collect images (filter removes nulls for front-only products)
   const images = [product.heroDisplayUrl, product.backDisplayUrl, ...(product.extras || [])].filter((url): url is string => Boolean(url));
   
+  // 🔍 DEBUG: Log images being added to draft
+  console.log(`[Draft] 🖼️ Images for ${product.productId}:`);
+  console.log(`[Draft]   heroDisplayUrl: ${product.heroDisplayUrl || 'MISSING'}`);
+  console.log(`[Draft]   backDisplayUrl: ${product.backDisplayUrl || 'MISSING'}`);
+  console.log(`[Draft]   extras: ${(product.extras || []).length} items`);
+  console.log(`[Draft]   Total images after filter: ${images.length}`);
+  images.forEach((url, i) => {
+    console.log(`[Draft]   [${i}] ${url.substring(0, 100)}...`);
+    console.log(`[Draft]       Contains pipe: ${url.includes('|')}, Contains %7C: ${url.includes('%7C')}`);
+  });
+  
   // Step 9: Build final draft
   // Apply pricing formula: ChatGPT provides retail price, we apply our discount formula with category caps
   const retailPrice = typeof parsed.price === 'number' && parsed.price > 0 ? parsed.price : 0;
