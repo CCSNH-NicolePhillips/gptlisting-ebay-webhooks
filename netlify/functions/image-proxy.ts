@@ -2,9 +2,9 @@ import type { Handler } from '@netlify/functions';
 import sharp from 'sharp';
 
 // Netlify Functions have a 6MB response limit, base64 encoding adds ~33% overhead
-// So we target ~4MB max image size to be safe
-const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // 4MB
-const MAX_DIMENSION = 2000; // Max width/height for eBay images
+// So we target ~4.5MB max image size to be safe (leaves room for base64)
+const MAX_IMAGE_BYTES = 4.5 * 1024 * 1024; // 4.5MB
+const MAX_DIMENSION = 4000; // eBay accepts up to 4000px, keep high for quality
 
 export const handler: Handler = async (event) => {
 	try {
@@ -72,7 +72,7 @@ export const handler: Handler = async (event) => {
 					pipeline = pipeline.rotate();
 				}
 				
-				// Resize if dimensions too large
+				// Resize only if dimensions exceed limit
 				if (needsResize) {
 					pipeline = pipeline.resize(MAX_DIMENSION, MAX_DIMENSION, {
 						fit: 'inside',
@@ -80,21 +80,30 @@ export const handler: Handler = async (event) => {
 					});
 				}
 				
-				// Choose quality based on size - aim for <4MB output
-				// Start with high quality, reduce if image is very large
-				let quality = 90;
-				if (buf.length > 8 * 1024 * 1024) quality = 75; // >8MB original
-				else if (buf.length > 6 * 1024 * 1024) quality = 80; // >6MB original
-				else if (buf.length > 4 * 1024 * 1024) quality = 85; // >4MB original
+				// QUALITY FIRST: Only compress if truly needed
+				// Most phone photos are 3-8MB, we can usually keep quality 95+
+				let quality = 95; // Start with near-lossless
+				if (buf.length > 12 * 1024 * 1024) quality = 85; // >12MB original
+				else if (buf.length > 10 * 1024 * 1024) quality = 88; // >10MB original
+				else if (buf.length > 8 * 1024 * 1024) quality = 90; // >8MB original
 				
-				outBuf = await pipeline.jpeg({ quality, mozjpeg: true }).toBuffer();
+				outBuf = await pipeline.jpeg({ quality, mozjpeg: false }).toBuffer();
 				
-				// If still too large, compress more aggressively
+				// If still too large, progressively reduce quality
 				if (outBuf.length > MAX_IMAGE_BYTES) {
 					outBuf = await sharp(buf, { failOnError: false })
 						.rotate()
-						.resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
-						.jpeg({ quality: 70, mozjpeg: true })
+						.resize(3000, 3000, { fit: 'inside', withoutEnlargement: true })
+						.jpeg({ quality: 88, mozjpeg: false })
+						.toBuffer();
+				}
+				
+				// Last resort: more aggressive but still decent quality
+				if (outBuf.length > MAX_IMAGE_BYTES) {
+					outBuf = await sharp(buf, { failOnError: false })
+						.rotate()
+						.resize(2400, 2400, { fit: 'inside', withoutEnlargement: true })
+						.jpeg({ quality: 85, mozjpeg: true })
 						.toBuffer();
 				}
 			}
