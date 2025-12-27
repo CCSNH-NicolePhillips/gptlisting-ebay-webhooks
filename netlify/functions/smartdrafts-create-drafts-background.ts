@@ -852,6 +852,7 @@ async function createDraftForProduct(
     categoryId: draft.category?.id,
     categoryTitle: draft.category?.title,
     imagesCount: draft.images?.length || 0,
+    images: draft.images?.map(u => u?.substring(0, 80) + '...'),
     price: draft.price,
     condition: draft.condition
   }, null, 2));
