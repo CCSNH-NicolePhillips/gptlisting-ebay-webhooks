@@ -362,7 +362,9 @@ export const handler: Handler = async (event) => {
           // Create persistent URL for this image
           // ALWAYS upload to R2 for consistent quality (no 6MB proxy limit)
           // This gives Dropbox uploads the same quality as local uploads
-          if (uploadMethod === "dropbox" && job.userId) {
+          if (uploadMethod === "dropbox") {
+            // Use userId or fallback to 'anonymous' for R2 path
+            const userId = job.userId || 'anonymous';
             try {
               // Detect mime type from extension
               const ext = path.extname(filename).toLowerCase();
@@ -373,7 +375,7 @@ export const handler: Handler = async (event) => {
               };
               const mime = mimeMap[ext] || 'image/jpeg';
               
-              const r2Url = await uploadBufferToStaging(buffer, job.userId, filename, mime, jobId);
+              const r2Url = await uploadBufferToStaging(buffer, userId, filename, mime, jobId);
               persistentUrlMap[filename] = r2Url;
               console.log(`[pairing-v2-processor] ✓ Uploaded to R2: ${filename} → ${r2Url.substring(0, 80)}...`);
             } catch (uploadErr: any) {
