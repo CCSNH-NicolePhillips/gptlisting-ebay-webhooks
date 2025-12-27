@@ -460,6 +460,14 @@ export const handler: Handler = async (event) => {
           const photoQty = p.photoQuantity || 1;
           console.log(`[pairing-v2-processor] Storing pair: brand=${p.brand}, photoQuantity=${photoQty}, packCount=${p.packCount ?? 'null'}, frontUrl=${frontUrl ? 'OK' : 'MISSING'}`);
           
+          // 🔍 CRITICAL DEBUG: Log the full pair→URL association to verify correctness
+          console.log(`[pairing-v2-processor] 📦 PAIR SUMMARY:`);
+          console.log(`[pairing-v2-processor]   Brand: "${p.brand}", Product: "${p.product}"`);
+          console.log(`[pairing-v2-processor]   Front file: "${frontFilename}"`);
+          console.log(`[pairing-v2-processor]   Front URL hash: ${frontUrl.match(/\/([a-f0-9]+)-/)?.[1] || 'N/A'}`);
+          console.log(`[pairing-v2-processor]   Back file: "${backFilename}"`);
+          console.log(`[pairing-v2-processor]   Back URL hash: ${backUrl.match(/\/([a-f0-9]+)-/)?.[1] || 'N/A'}`);
+          
           return {
             front: frontFilename,
             back: backFilename,

@@ -821,8 +821,11 @@ async function createDraftForProduct(
   
   // 🔍 DEBUG: Log images being added to draft
   console.log(`[Draft] 🖼️ Images for ${product.productId}:`);
+  console.log(`[Draft]   Brand: "${product.brand}", Product: "${product.product}"`);
   console.log(`[Draft]   heroDisplayUrl: ${product.heroDisplayUrl || 'MISSING'}`);
+  console.log(`[Draft]   heroDisplayUrl hash: ${product.heroDisplayUrl?.match(/\/([a-f0-9]+)-/)?.[1] || 'N/A'}`);
   console.log(`[Draft]   backDisplayUrl: ${product.backDisplayUrl || 'MISSING'}`);
+  console.log(`[Draft]   backDisplayUrl hash: ${product.backDisplayUrl?.match(/\/([a-f0-9]+)-/)?.[1] || 'N/A'}`);
   console.log(`[Draft]   side1DisplayUrl: ${product.side1DisplayUrl || 'MISSING'}`);
   console.log(`[Draft]   side2DisplayUrl: ${product.side2DisplayUrl || 'MISSING'}`);
   console.log(`[Draft]   extras: ${(product.extras || []).length} items`);
