@@ -4,6 +4,7 @@ import { pickCategoryForGroup } from "./taxonomy-select.js";
 import { computeEbayItemPriceCents } from "./pricing-compute.js";
 import { getDefaultPricingSettings, type PricingSettings } from "./pricing-config.js";
 import { tokensStore } from "./_blobs.js";
+import { proxyImageUrls } from "./image-utils.js";
 
 const MAX_TITLE_LENGTH = 80;
 const DEFAULT_MARKETPLACE = process.env.DEFAULT_MARKETPLACE_ID || "EBAY_US";
@@ -77,7 +78,10 @@ function ensureImages(group: Record<string, any>): string[] {
     .map((url) => normalizeImageUrl(url))
     .filter((u): u is string => typeof u === "string" && !!u);
   if (!urls.length) throw new Error("Group missing image URLs");
-  return urls.slice(0, 12);
+  const sliced = urls.slice(0, 12);
+  // Proxy URLs through image-proxy to ensure eBay can fetch them
+  const appBase = process.env.APP_URL || "https://draftpilot.app";
+  return proxyImageUrls(sliced, appBase);
 }
 
 function extractPrice(group: Record<string, any>): number {

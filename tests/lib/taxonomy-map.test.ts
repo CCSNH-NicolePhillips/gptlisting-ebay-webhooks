@@ -307,7 +307,7 @@ describe('taxonomy-map', () => {
     });
 
     describe('Image handling', () => {
-      it('should normalize Dropbox URLs', async () => {
+      it('should proxy Dropbox URLs through image-proxy for eBay compatibility', async () => {
         const group = {
           brand: 'TestBrand',
           product: 'TestProduct',
@@ -317,7 +317,9 @@ describe('taxonomy-map', () => {
         
         const result = await mapGroupToDraftWithTaxonomy(group);
         
-        expect(result.inventory.product.imageUrls[0]).toBe('https://dl.dropboxusercontent.com/scl/fo/abc?raw=1');
+        // imageUrls should contain proxy path and NOT contain dropbox.com
+        expect(result.inventory.product.imageUrls[0]).toContain('/.netlify/functions/image-proxy?url=');
+        expect(result.inventory.product.imageUrls[0]).not.toContain('dropbox.com');
       });
 
       it('should limit images to 12', async () => {
@@ -351,10 +353,12 @@ describe('taxonomy-map', () => {
         const result = await mapGroupToDraftWithTaxonomy(group);
         
         expect(result.inventory.product.imageUrls).toHaveLength(1);
-        expect(result.inventory.product.imageUrls[0]).toBe('https://example.com/valid.jpg');
+        // URLs are now proxied through image-proxy
+        expect(result.inventory.product.imageUrls[0]).toContain('/.netlify/functions/image-proxy?url=');
+        expect(result.inventory.product.imageUrls[0]).toContain(encodeURIComponent('https://example.com/valid.jpg'));
       });
 
-      it('should handle non-Dropbox URLs unchanged', async () => {
+      it('should proxy non-Dropbox URLs through image-proxy', async () => {
         const group = {
           brand: 'TestBrand',
           product: 'TestProduct',
@@ -364,7 +368,9 @@ describe('taxonomy-map', () => {
         
         const result = await mapGroupToDraftWithTaxonomy(group);
         
-        expect(result.inventory.product.imageUrls[0]).toBe('https://example.com/img1.jpg');
+        // All external URLs are now proxied for eBay compatibility
+        expect(result.inventory.product.imageUrls[0]).toContain('/.netlify/functions/image-proxy?url=');
+        expect(result.inventory.product.imageUrls[0]).toContain(encodeURIComponent('https://example.com/img1.jpg'));
       });
     });
 
