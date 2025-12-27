@@ -173,6 +173,14 @@ export async function putInventoryItem(
     hasBrand: !!(payload.product as any).aspects?.Brand,
     brandValue: (payload.product as any).aspects?.Brand,
   }, null, 2));
+  
+  // DEBUG: Log ALL image URLs being sent to eBay
+  console.log('[EBAY-SELL IMAGE URLS]', JSON.stringify({
+    sku,
+    imageUrls: (payload.product as any).imageUrls,
+    hasDropbox: ((payload.product as any).imageUrls || []).some((u: string) => u?.includes('dropbox')),
+    hasProxy: ((payload.product as any).imageUrls || []).some((u: string) => u?.includes('image-proxy')),
+  }, null, 2));
 
   const url = `${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
   const res = await fetch(url, {

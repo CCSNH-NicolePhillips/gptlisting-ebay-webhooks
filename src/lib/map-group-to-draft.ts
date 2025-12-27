@@ -271,6 +271,9 @@ export async function mapGroupToDraft(group: Record<string, any>, opts?: MapOpti
     product: group.product,
     groupId: group.groupId,
     aspects: group.aspects,
+    images: group.images,
+    heroDisplayUrl: group.heroDisplayUrl,
+    backDisplayUrl: group.backDisplayUrl,
     allKeys: Object.keys(group)
   }, null, 2));
   
@@ -280,7 +283,8 @@ export async function mapGroupToDraft(group: Record<string, any>, opts?: MapOpti
     sku: base.sku,
     aspectsCount: Object.keys(base.inventory?.product?.aspects || {}).length,
     aspects: base.inventory?.product?.aspects,
-    hasBrand: !!base.inventory?.product?.aspects?.Brand
+    hasBrand: !!base.inventory?.product?.aspects?.Brand,
+    imageUrls: base.inventory?.product?.imageUrls,
   }, null, 2));
   
   const groupIdRaw = group?.groupId ?? group?.id ?? null;
