@@ -1,6 +1,11 @@
 import type { Handler } from '@netlify/functions';
 import sharp from 'sharp';
 
+// Netlify Functions have a 6MB response limit, base64 encoding adds ~33% overhead
+// So we target ~4MB max image size to be safe
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // 4MB
+const MAX_DIMENSION = 2000; // Max width/height for eBay images
+
 export const handler: Handler = async (event) => {
 	try {
 		const src = event.queryStringParameters?.url;
@@ -46,27 +51,67 @@ export const handler: Handler = async (event) => {
 		if (!type.startsWith('image/')) {
 			return { statusCode: 415, body: `Not an image (type=${type})` };
 		}
-		// Auto-orient images based on EXIF to avoid sideways photos on eBay
-		// Priority: Maximum quality for product photos
+		
+		// Process image: auto-orient, resize if too large, compress if needed
 		let outBuf: Buffer = buf as Buffer;
 		try {
 			const s = sharp(buf, { failOnError: false });
 			const metadata = await s.metadata();
 			
-			// Only process if image has EXIF orientation data, otherwise keep original
-			if (metadata.orientation && metadata.orientation !== 1) {
-				// Rotate according to EXIF orientation - use quality 100 for product photos
-				const rotated = await s.rotate().jpeg({ quality: 100, mozjpeg: false }).toBuffer();
-				if (rotated && rotated.length) outBuf = Buffer.from(rotated);
-			} else {
-				// No rotation needed - pass through original buffer to avoid ANY recompression
-				outBuf = buf;
+			const needsRotation = metadata.orientation && metadata.orientation !== 1;
+			const needsResize = (metadata.width && metadata.width > MAX_DIMENSION) || 
+			                    (metadata.height && metadata.height > MAX_DIMENSION);
+			const isTooLarge = buf.length > MAX_IMAGE_BYTES;
+			
+			if (needsRotation || needsResize || isTooLarge) {
+				// Build sharp pipeline
+				let pipeline = sharp(buf, { failOnError: false });
+				
+				// Auto-rotate based on EXIF
+				if (needsRotation) {
+					pipeline = pipeline.rotate();
+				}
+				
+				// Resize if dimensions too large
+				if (needsResize) {
+					pipeline = pipeline.resize(MAX_DIMENSION, MAX_DIMENSION, {
+						fit: 'inside',
+						withoutEnlargement: true
+					});
+				}
+				
+				// Choose quality based on size - aim for <4MB output
+				// Start with high quality, reduce if image is very large
+				let quality = 90;
+				if (buf.length > 8 * 1024 * 1024) quality = 75; // >8MB original
+				else if (buf.length > 6 * 1024 * 1024) quality = 80; // >6MB original
+				else if (buf.length > 4 * 1024 * 1024) quality = 85; // >4MB original
+				
+				outBuf = await pipeline.jpeg({ quality, mozjpeg: true }).toBuffer();
+				
+				// If still too large, compress more aggressively
+				if (outBuf.length > MAX_IMAGE_BYTES) {
+					outBuf = await sharp(buf, { failOnError: false })
+						.rotate()
+						.resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
+						.jpeg({ quality: 70, mozjpeg: true })
+						.toBuffer();
+				}
 			}
-		} catch {
-			// If sharp fails, fallback to original buffer
+		} catch (sharpErr) {
+			// If sharp fails, try to at least return something
+			console.error('[image-proxy] sharp error:', sharpErr);
+		}
+		
+		// Final size check - if still too large, we can't serve it
+		if (outBuf.length > MAX_IMAGE_BYTES) {
+			return { 
+				statusCode: 413, 
+				body: `Image too large after compression (${Math.round(outBuf.length/1024/1024)}MB). Max is ${MAX_IMAGE_BYTES/1024/1024}MB.` 
+			};
 		}
 
-		// Always emit JPEG so downstream (eBay) gets normalized pixels without EXIF orientation
+		// Return JPEG so downstream (eBay) gets normalized pixels without EXIF orientation
 		return {
 			statusCode: 200,
 			headers: {
