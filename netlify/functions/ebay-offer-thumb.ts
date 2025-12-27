@@ -117,6 +117,11 @@ export const handler: Handler = async (event) => {
 			return { statusCode: 204 };
 		}
 
+		// Log the image URL type for debugging
+		const isS3 = imageUrl.includes('.s3.') || imageUrl.includes('amazonaws.com');
+		const isDropbox = imageUrl.includes('dropbox');
+		console.log(`[offer-thumb] Image source for ${offerId}: ${isS3 ? 'S3' : isDropbox ? 'Dropbox' : 'Other'} - ${imageUrl.substring(0, 100)}...`);
+
 		// normalize dropbox viewer links
 		const toDirectDropbox = (u: string) => {
 			try {
@@ -188,7 +193,8 @@ export const handler: Handler = async (event) => {
 			isBase64Encoded: true,
 		};
 	} catch (e: any) {
-		console.error(`[offer-thumb] Unexpected error: ${e?.message}`, e);
-		return { statusCode: 500, body: `offer-thumb error: ${e?.message || String(e)}` };
+		console.error(`[offer-thumb] Unexpected error for ${event.queryStringParameters?.offerId}: ${e?.message}`, e?.stack);
+		// Return 204 instead of 500/502 to prevent broken image icons
+		return { statusCode: 204 };
 	}
 };
