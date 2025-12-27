@@ -182,6 +182,14 @@ export const handler: Handler = async (event) => {
       return responseBadRequest(originHdr, { error: "Group missing groupId", group });
     }
 
+    // DEBUG: Log what images are being received from frontend
+    console.log(`[create-ebay-draft-user] Processing group ${groupId}:`, {
+      hasImages: !!group.images,
+      imagesCount: Array.isArray(group.images) ? group.images.length : 0,
+      imagesPreview: Array.isArray(group.images) ? group.images.slice(0, 2).map((u: string) => u?.substring(0, 80)) : null,
+      allKeys: Object.keys(group),
+    });
+
     let mapped: TaxonomyMappedDraft;
     try {
       mapped = await mapGroupToDraft(group, { jobId, userId: user.userId });
