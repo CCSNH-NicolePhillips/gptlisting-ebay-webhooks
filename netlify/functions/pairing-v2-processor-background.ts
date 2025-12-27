@@ -6,6 +6,7 @@
 import { Handler } from "@netlify/functions";
 import { getPairingV2JobStatus } from "../../src/lib/pairingV2Jobs.js";
 import { runNewTwoStagePipeline, type PairingResult } from "../../src/smartdrafts/pairing-v2-core.js";
+import { uploadBufferToStaging } from "../../src/lib/storage.js";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
@@ -358,16 +359,33 @@ export const handler: Handler = async (event) => {
           fs.writeFileSync(localPath, buffer);
           localPaths.push(localPath);
           
-          // Create persistent URL for this image NOW, not later
-          // For Dropbox: Create shared link (never expires)
-          // For Local: The stagedUrls are already S3 URLs (persistent)
-          if (uploadMethod === "dropbox" && job.accessToken && job.dropboxPaths?.[i]) {
-            const sharedUrl = await getDropboxSharedLink(job.accessToken, job.dropboxPaths[i]);
-            if (sharedUrl) {
-              persistentUrlMap[filename] = sharedUrl;
-              console.log(`[pairing-v2-processor] ✓ Persistent URL for ${filename}: ${sharedUrl.substring(0, 60)}...`);
-            } else {
-              console.warn(`[pairing-v2-processor] ✗ Failed to create shared link for ${filename}`);
+          // Create persistent URL for this image
+          // ALWAYS upload to R2 for consistent quality (no 6MB proxy limit)
+          // This gives Dropbox uploads the same quality as local uploads
+          if (uploadMethod === "dropbox" && job.userId) {
+            try {
+              // Detect mime type from extension
+              const ext = path.extname(filename).toLowerCase();
+              const mimeMap: Record<string, string> = {
+                '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+                '.png': 'image/png', '.gif': 'image/gif',
+                '.webp': 'image/webp', '.heic': 'image/heic',
+              };
+              const mime = mimeMap[ext] || 'image/jpeg';
+              
+              const r2Url = await uploadBufferToStaging(buffer, job.userId, filename, mime, jobId);
+              persistentUrlMap[filename] = r2Url;
+              console.log(`[pairing-v2-processor] ✓ Uploaded to R2: ${filename} → ${r2Url.substring(0, 80)}...`);
+            } catch (uploadErr: any) {
+              console.error(`[pairing-v2-processor] ✗ R2 upload failed for ${filename}, falling back to Dropbox shared link:`, uploadErr?.message);
+              // Fallback to Dropbox shared link if R2 fails
+              if (job.accessToken && job.dropboxPaths?.[i]) {
+                const sharedUrl = await getDropboxSharedLink(job.accessToken, job.dropboxPaths[i]);
+                if (sharedUrl) {
+                  persistentUrlMap[filename] = sharedUrl;
+                  console.log(`[pairing-v2-processor] ✓ Fallback Dropbox URL for ${filename}`);
+                }
+              }
             }
           } else {
             // Local mode: stagedUrls are already S3/R2 URLs

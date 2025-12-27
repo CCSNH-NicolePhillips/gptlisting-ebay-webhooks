@@ -228,6 +228,38 @@ export async function getUserStagingUsage(userId: string): Promise<number> {
 }
 
 /**
+ * Upload buffer directly to staging
+ * Returns the public/signed URL for the uploaded file
+ */
+export async function uploadBufferToStaging(
+  buffer: Buffer | Uint8Array,
+  userId: string,
+  filename: string,
+  mime: string,
+  jobId?: string
+): Promise<string> {
+  const key = generateStagingKey(userId, filename, jobId);
+  const client = createStorageClient();
+  const config = getStagingConfig();
+  
+  const command = new PutObjectCommand({
+    Bucket: config.bucket,
+    Key: key,
+    Body: buffer instanceof Buffer ? new Uint8Array(buffer) : buffer,
+    ContentType: mime,
+    Metadata: {
+      uploadedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + (config.retentionHours || 72) * 3600000).toISOString(),
+    },
+  });
+  
+  await client.send(command);
+  
+  // Return public or signed URL
+  return await getStagedUrl(key);
+}
+
+/**
  * Delete staged files (for cleanup after processing)
  */
 export async function deleteStagedFiles(keys: string[]): Promise<void> {
