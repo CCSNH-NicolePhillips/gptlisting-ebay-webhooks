@@ -5,6 +5,7 @@ import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey
 
 // Lambda has a 6MB response limit. Base64 encoding adds ~33% overhead.
 // So we need to keep images under ~4MB to be safe.
+// NOTE: sharp was removed to avoid native dependency issues on Netlify
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // 4MB limit before base64 (~5.3MB after)
 
 export const handler: Handler = async (event) => {
