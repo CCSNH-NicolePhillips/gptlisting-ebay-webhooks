@@ -2,6 +2,13 @@ import type { Handler } from '@netlify/functions';
 import { accessTokenFromRefresh, tokenHosts } from '../../src/lib/_common.js';
 import { tokensStore } from '../../src/lib/_blobs.js';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
+import sharp from 'sharp';
+
+// Lambda has a 6MB response limit. Base64 encoding adds ~33% overhead.
+// So we need to keep images under ~4MB to be safe.
+const MAX_IMAGE_BYTES = 3 * 1024 * 1024; // 3MB target (becomes ~4MB base64)
+const THUMBNAIL_WIDTH = 800; // Max width for thumbnails
+const THUMBNAIL_QUALITY = 80; // JPEG quality
 
 export const handler: Handler = async (event) => {
 	try {
@@ -182,15 +189,49 @@ export const handler: Handler = async (event) => {
 			// Return 204 (no content) instead of error to avoid 502s in UI
 			return { statusCode: 204 };
 		}
+		
+		// Resize image if too large to avoid Lambda 6MB response limit
+		let finalBuf = upstream.buf!;
+		let finalType = upstream.type;
+		
+		if (finalBuf.length > MAX_IMAGE_BYTES) {
+			console.log(`[offer-thumb] Image too large (${(finalBuf.length / 1024 / 1024).toFixed(2)}MB), resizing for ${offerId}...`);
+			try {
+				finalBuf = await sharp(finalBuf)
+					.resize(THUMBNAIL_WIDTH, null, { 
+						withoutEnlargement: true,
+						fit: 'inside'
+					})
+					.jpeg({ quality: THUMBNAIL_QUALITY })
+					.toBuffer();
+				finalType = 'image/jpeg';
+				console.log(`[offer-thumb] ✓ Resized to ${(finalBuf.length / 1024 / 1024).toFixed(2)}MB for ${offerId}`);
+			} catch (resizeErr: any) {
+				console.error(`[offer-thumb] Failed to resize image for ${offerId}: ${resizeErr?.message}`);
+				// Try with more aggressive compression
+				try {
+					finalBuf = await sharp(finalBuf)
+						.resize(600, null, { withoutEnlargement: true, fit: 'inside' })
+						.jpeg({ quality: 60 })
+						.toBuffer();
+					finalType = 'image/jpeg';
+					console.log(`[offer-thumb] ✓ Aggressively resized to ${(finalBuf.length / 1024 / 1024).toFixed(2)}MB for ${offerId}`);
+				} catch {
+					console.error(`[offer-thumb] Resize completely failed for ${offerId}, returning 204`);
+					return { statusCode: 204 };
+				}
+			}
+		}
+		
 		return {
 			statusCode: 200,
 			headers: {
-				'Content-Type': upstream.type,
+				'Content-Type': finalType,
 				// Short cache to allow updates to propagate, but still provide some caching benefit
 				'Cache-Control': 'public, max-age=300',
 				'Access-Control-Allow-Origin': '*',
 			},
-			body: upstream.buf!.toString('base64'),
+			body: finalBuf.toString('base64'),
 			isBase64Encoded: true,
 		};
 	} catch (e: any) {
