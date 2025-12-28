@@ -226,7 +226,9 @@ describe('price-lookup.ts', () => {
 
         expect(result.ok).toBe(true);
         expect(result.chosen?.source).toBe('brand-msrp');
-        expect(result.recommendedListingPrice).toBe(26.99);
+        // With ALGO_COMPETITIVE_TOTAL (default):
+        // ($29.99 * 0.9) - $6.00 = $26.99 - $6.00 = $20.99
+        expect(result.recommendedListingPrice).toBe(20.99);
       });
 
       it('should skip homepage URLs for brand sites', async () => {
@@ -558,9 +560,11 @@ describe('price-lookup.ts', () => {
         const result = await lookupPrice(input);
 
         expect(result.ok).toBe(true);
-        // lotBeforeDiscount = 22.45 / 1 * 2 = 44.90
-        // finalListing = 20.20 / 22.45 * 44.90 = ~40.40
-        expect(result.recommendedListingPrice).toBeCloseTo(40.40, 1);
+        // With ALGO_COMPETITIVE_TOTAL (default):
+        // perUnitPrice = 22.45 / 1 = 22.45
+        // lotRetailCents = 22.45 * 2 * 100 = 4490
+        // ALGO: (4490 * 0.9) - 600 = 4041 - 600 = 3441 cents = $34.41
+        expect(result.recommendedListingPrice).toBeCloseTo(34.41, 1);
       });
 
       it('should apply amazonPackSize normalization correctly', async () => {
@@ -590,10 +594,11 @@ describe('price-lookup.ts', () => {
         const result = await lookupPrice(input);
 
         expect(result.ok).toBe(true);
-        // perUnit = 44.90 / 2 = 22.45
-        // lotBeforeDiscount = 22.45 * 1 = 22.45
-        // finalListing = 40.41 / 44.90 * 22.45 = ~20.20
-        expect(result.recommendedListingPrice).toBeCloseTo(20.20, 1);
+        // With ALGO_COMPETITIVE_TOTAL (default):
+        // perUnitPrice = 44.90 / 2 = 22.45
+        // lotRetailCents = 22.45 * 1 * 100 = 2245
+        // ALGO: (2245 * 0.9) - 600 = 2021 - 600 = 1421 cents = $14.21
+        expect(result.recommendedListingPrice).toBeCloseTo(14.21, 1);
       });
 
       it('should handle AI arbitration failure with fallback', async () => {
@@ -706,6 +711,230 @@ describe('price-lookup.ts', () => {
         expect(pricingLog?.[0]).toContain('final=$');
 
         consoleSpy.mockRestore();
+      });
+    });
+
+    describe('Default pricing strategy (ALGO_COMPETITIVE_TOTAL)', () => {
+      /**
+       * CRITICAL REGRESSION TESTS
+       * 
+       * These tests ensure that when pricingSettings is NOT passed,
+       * the system uses ALGO_COMPETITIVE_TOTAL (not DISCOUNT_ITEM_ONLY).
+       * 
+       * ALGO formula: itemPrice = (amazonTotal × (1 - discount%)) - templateShipping
+       * DISCOUNT_ITEM_ONLY formula: itemPrice = amazonItemPrice × (1 - discount%)
+       * 
+       * For a $20.99 item with free shipping and default settings (10% discount, $6 shipping):
+       * - ALGO: ($20.99 × 0.9) - $6 = $18.89 - $6 = $12.89 ✓
+       * - DISCOUNT_ITEM_ONLY: $20.99 × 0.9 = $18.89 ✗
+       */
+
+      it('should use ALGO_COMPETITIVE_TOTAL for AI arbitration path (Amazon free shipping)', async () => {
+        // Setup: Amazon price $20.99 with free shipping
+        // Brand must be in page title to pass brand validation
+        mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
+        mockBraveSearch.mockResolvedValue('https://www.amazon.com/test-product');
+        mockExtractPriceWithShipping.mockReturnValue({
+          amazonItemPrice: 20.99,
+          amazonShippingPrice: 0, // Free shipping
+          shippingEvidence: 'free',
+          pageTitle: 'Clinique Moisture Surge Face Spray', // Include brand for validation
+        });
+        (global.fetch as jest.Mock).mockResolvedValue({
+          ok: true,
+          text: async () => '<html>mock</html>',
+        });
+
+        mockOpenAI.mockResolvedValue({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                chosenSource: 'amazon',
+                basePrice: 20.99,
+                reasoning: 'Amazon price selected',
+              }),
+            },
+          }],
+        } as any);
+
+        const input: PriceLookupInput = {
+          title: 'Clinique Moisture Surge Face Spray 1 fl oz',
+          brand: 'Clinique',
+          // Note: NO pricingSettings passed - should use defaults
+        };
+
+        const result = await lookupPrice(input);
+
+        expect(result.ok).toBe(true);
+        // ALGO formula: ($20.99 × 0.9) - $6.00 = $18.89 - $6.00 = $12.89
+        // If DISCOUNT_ITEM_ONLY was used, it would be $18.89
+        expect(result.recommendedListingPrice).toBeCloseTo(12.89, 2);
+      });
+
+      it('should use ALGO_COMPETITIVE_TOTAL for AI arbitration path (Amazon with shipping)', async () => {
+        // Setup: Amazon price $20.99 with $5.99 shipping
+        // Brand must be in page title to pass brand validation
+        mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
+        mockBraveSearch.mockResolvedValue('https://www.amazon.com/test-product');
+        mockExtractPriceWithShipping.mockReturnValue({
+          amazonItemPrice: 20.99,
+          amazonShippingPrice: 5.99, // Paid shipping - THIS is what we're testing
+          shippingEvidence: 'paid',
+          pageTitle: 'TestBrand Premium Product', // Include brand for validation
+        });
+        (global.fetch as jest.Mock).mockResolvedValue({
+          ok: true,
+          text: async () => '<html>mock</html>',
+        });
+
+        mockOpenAI.mockResolvedValue({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                chosenSource: 'amazon',
+                basePrice: 20.99,
+                reasoning: 'Amazon price selected',
+              }),
+            },
+          }],
+        } as any);
+
+        const input: PriceLookupInput = {
+          title: 'TestBrand Premium Product',
+          brand: 'TestBrand',
+          // Note: NO pricingSettings passed - should use defaults
+        };
+
+        const result = await lookupPrice(input);
+
+        expect(result.ok).toBe(true);
+        // ALGO formula: (($20.99 + $5.99) × 0.9) - $6.00 = $24.28 - $6.00 = $18.28
+        // If DISCOUNT_ITEM_ONLY was used, it would be $18.89 (ignoring Amazon shipping)
+        expect(result.recommendedListingPrice).toBeCloseTo(18.28, 2);
+      });
+
+      it('should use ALGO_COMPETITIVE_TOTAL for brand-MSRP fallback path', async () => {
+        // Setup: Only brand-MSRP available, no other sources
+        mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
+        mockBraveSearch.mockResolvedValue('https://testbrand.com/product');
+        mockExtractPrice.mockReturnValue(25.00);
+        (global.fetch as jest.Mock).mockResolvedValue({
+          ok: true,
+          text: async () => '<html><span class="price">$25.00</span></html>',
+        });
+        mockGetBrandUrls.mockResolvedValue({ urls: [] });
+
+        // AI fails - forces fallback to brand-MSRP path
+        mockOpenAI.mockRejectedValue(new Error('AI timeout'));
+
+        const input: PriceLookupInput = {
+          title: 'Brand MSRP Test Product',
+          brand: 'TestBrand',
+          brandWebsite: 'https://testbrand.com/product',
+          // Note: NO pricingSettings passed - should use defaults
+        };
+
+        const result = await lookupPrice(input);
+
+        expect(result.ok).toBe(true);
+        expect(result.chosen?.source).toBe('brand-msrp');
+        // ALGO formula: ($25.00 × 0.9) - $6.00 = $22.50 - $6.00 = $16.50
+        // If DISCOUNT_ITEM_ONLY was used, it would be $22.50
+        expect(result.recommendedListingPrice).toBeCloseTo(16.50, 2);
+      });
+
+      it('should respect explicit DISCOUNT_ITEM_ONLY when passed in pricingSettings', async () => {
+        // Setup: Amazon price $20.99 with free shipping
+        // Brand must be in page title to pass brand validation
+        mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
+        mockBraveSearch.mockResolvedValue('https://www.amazon.com/test-product');
+        mockExtractPriceWithShipping.mockReturnValue({
+          amazonItemPrice: 20.99,
+          amazonShippingPrice: 0, // Free shipping
+          shippingEvidence: 'free',
+          pageTitle: 'TestBrand Vitamin Supplement', // Include brand for validation
+        });
+        (global.fetch as jest.Mock).mockResolvedValue({
+          ok: true,
+          text: async () => '<html>mock</html>',
+        });
+
+        mockOpenAI.mockResolvedValue({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                chosenSource: 'amazon',
+                basePrice: 20.99,
+                reasoning: 'Amazon price selected',
+              }),
+            },
+          }],
+        } as any);
+
+        const input: PriceLookupInput = {
+          title: 'TestBrand Vitamin Supplement',
+          brand: 'TestBrand',
+          pricingSettings: {
+            discountPercent: 10,
+            shippingStrategy: 'DISCOUNT_ITEM_ONLY',
+            templateShippingEstimateCents: 600,
+            shippingSubsidyCapCents: null,
+            minItemPriceCents: 199,
+          },
+        };
+
+        const result = await lookupPrice(input);
+
+        expect(result.ok).toBe(true);
+        // DISCOUNT_ITEM_ONLY: $20.99 × 0.9 = $18.89 (shipping ignored)
+        expect(result.recommendedListingPrice).toBeCloseTo(18.89, 2);
+      });
+
+      it('should use correct shipping deduction with custom template shipping', async () => {
+        // Setup: Amazon price $30.00 with free shipping, custom $8 template shipping
+        // Brand must be in page title to pass brand validation
+        mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
+        mockBraveSearch.mockResolvedValue('https://www.amazon.com/test-product');
+        mockExtractPriceWithShipping.mockReturnValue({
+          amazonItemPrice: 30.00,
+          amazonShippingPrice: 0, // Free shipping
+          shippingEvidence: 'free',
+          pageTitle: 'TestBrand Premium Supplement', // Include brand for validation
+        });
+        (global.fetch as jest.Mock).mockResolvedValue({
+          ok: true,
+          text: async () => '<html>mock</html>',
+        });
+
+        mockOpenAI.mockResolvedValue({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                chosenSource: 'amazon',
+                basePrice: 30.00,
+                reasoning: 'Amazon price selected',
+              }),
+            },
+          }],
+        } as any);
+
+        const input: PriceLookupInput = {
+          title: 'TestBrand Premium Supplement',
+          brand: 'TestBrand',
+          pricingSettings: {
+            discountPercent: 10,
+            shippingStrategy: 'ALGO_COMPETITIVE_TOTAL',
+            templateShippingEstimateCents: 800, // $8.00 shipping
+            shippingSubsidyCapCents: null,
+            minItemPriceCents: 199,
+          },
+        };
+
+        const result = await lookupPrice(input);
+
+        expect(result.ok).toBe(true);
+        // ALGO formula: ($30.00 × 0.9) - $8.00 = $27.00 - $8.00 = $19.00
+        expect(result.recommendedListingPrice).toBeCloseTo(19.00, 2);
       });
     });
 
@@ -911,7 +1140,9 @@ describe('price-lookup.ts', () => {
         expect(result).toHaveProperty('walmart');
         expect(result).toHaveProperty('brand');
         expect(result).toHaveProperty('avg');
-        expect(result.avg).toBe(22.49); // 24.99 * 0.9 (10% default discount applied)
+        // With ALGO_COMPETITIVE_TOTAL (default):
+        // ($24.99 * 0.9) - $6.00 = $22.49 - $6.00 = $16.49
+        expect(result.avg).toBe(16.49);
       }, 15000); // Increase timeout for this test
     });
 
@@ -2136,7 +2367,10 @@ describe('price-lookup.ts', () => {
           const result = await lookupPrice(input);
 
           expect(result.ok).toBe(true);
-          expect(result.recommendedListingPrice).toBeCloseTo(27.0, 2);
+          // With ALGO_COMPETITIVE_TOTAL (default):
+          // Brand MSRP = $30.00
+          // ALGO: ($30.00 * 0.9) - $6.00 = $27.00 - $6.00 = $21.00
+          expect(result.recommendedListingPrice).toBeCloseTo(21.0, 2);
         });
       });
     });
