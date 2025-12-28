@@ -2,13 +2,10 @@ import type { Handler } from '@netlify/functions';
 import { accessTokenFromRefresh, tokenHosts } from '../../src/lib/_common.js';
 import { tokensStore } from '../../src/lib/_blobs.js';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
-import sharp from 'sharp';
 
 // Lambda has a 6MB response limit. Base64 encoding adds ~33% overhead.
 // So we need to keep images under ~4MB to be safe.
-const MAX_IMAGE_BYTES = 3 * 1024 * 1024; // 3MB target (becomes ~4MB base64)
-const THUMBNAIL_WIDTH = 800; // Max width for thumbnails
-const THUMBNAIL_QUALITY = 80; // JPEG quality
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // 4MB limit before base64 (~5.3MB after)
 
 export const handler: Handler = async (event) => {
 	try {
@@ -147,6 +144,18 @@ export const handler: Handler = async (event) => {
 			}
 		};
 		
+		// Check Content-Length first to avoid downloading huge files
+		const checkSize = async (u: string): Promise<number | null> => {
+			try {
+				const headResp = await fetchWithTimeout(u, { method: 'HEAD', redirect: 'follow' }, 3000);
+				if (!headResp.ok) return null;
+				const cl = headResp.headers.get('content-length');
+				return cl ? parseInt(cl, 10) : null;
+			} catch {
+				return null;
+			}
+		};
+		
 		const tryFetchImage = async (u: string) => {
 			const resp = await fetchWithTimeout(u, { redirect: 'follow' }, 7000);
 			const type = (resp.headers.get('content-type') || '').toLowerCase();
@@ -158,6 +167,22 @@ export const handler: Handler = async (event) => {
 		let direct = toDirectDropbox(imageUrl);
 		if (direct !== imageUrl) {
 			console.log(`[offer-thumb] Normalized Dropbox URL for ${offerId}: ${imageUrl} -> ${direct}`);
+		}
+		
+		// Check size before downloading
+		const estimatedSize = await checkSize(direct);
+		if (estimatedSize && estimatedSize > MAX_IMAGE_BYTES) {
+			console.log(`[offer-thumb] Image too large (${(estimatedSize / 1024 / 1024).toFixed(2)}MB estimated) for ${offerId}, returning redirect URL`);
+			// Return JSON with the URL for client-side redirect
+			return {
+				statusCode: 200,
+				headers: {
+					'Content-Type': 'application/json',
+					'Cache-Control': 'public, max-age=300',
+					'Access-Control-Allow-Origin': '*',
+				},
+				body: JSON.stringify({ redirect: direct }),
+			};
 		}
 		
 		let upstream = await tryFetchImage(direct);
@@ -190,37 +215,22 @@ export const handler: Handler = async (event) => {
 			return { statusCode: 204 };
 		}
 		
-		// Resize image if too large to avoid Lambda 6MB response limit
+		// Check if image is too large for Lambda 6MB response limit (backup check)
 		let finalBuf = upstream.buf!;
-		let finalType = upstream.type;
+		const finalType = upstream.type;
 		
 		if (finalBuf.length > MAX_IMAGE_BYTES) {
-			console.log(`[offer-thumb] Image too large (${(finalBuf.length / 1024 / 1024).toFixed(2)}MB), resizing for ${offerId}...`);
-			try {
-				finalBuf = await sharp(finalBuf)
-					.resize(THUMBNAIL_WIDTH, null, { 
-						withoutEnlargement: true,
-						fit: 'inside'
-					})
-					.jpeg({ quality: THUMBNAIL_QUALITY })
-					.toBuffer();
-				finalType = 'image/jpeg';
-				console.log(`[offer-thumb] ✓ Resized to ${(finalBuf.length / 1024 / 1024).toFixed(2)}MB for ${offerId}`);
-			} catch (resizeErr: any) {
-				console.error(`[offer-thumb] Failed to resize image for ${offerId}: ${resizeErr?.message}`);
-				// Try with more aggressive compression
-				try {
-					finalBuf = await sharp(finalBuf)
-						.resize(600, null, { withoutEnlargement: true, fit: 'inside' })
-						.jpeg({ quality: 60 })
-						.toBuffer();
-					finalType = 'image/jpeg';
-					console.log(`[offer-thumb] ✓ Aggressively resized to ${(finalBuf.length / 1024 / 1024).toFixed(2)}MB for ${offerId}`);
-				} catch {
-					console.error(`[offer-thumb] Resize completely failed for ${offerId}, returning 204`);
-					return { statusCode: 204 };
-				}
-			}
+			console.log(`[offer-thumb] Image too large after download (${(finalBuf.length / 1024 / 1024).toFixed(2)}MB) for ${offerId}, returning redirect`);
+			// Return JSON with URL for client-side redirect
+			return {
+				statusCode: 200,
+				headers: {
+					'Content-Type': 'application/json',
+					'Cache-Control': 'public, max-age=300',
+					'Access-Control-Allow-Origin': '*',
+				},
+				body: JSON.stringify({ redirect: direct }),
+			};
 		}
 		
 		return {
