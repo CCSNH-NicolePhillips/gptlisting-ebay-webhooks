@@ -175,6 +175,65 @@ function isProbablyBundlePrice(brandPrice: number, comparisonPrice: number): boo
   return ratio > 2.5;
 }
 
+/**
+ * Detect if an Amazon page title indicates a bundle/multi-pack product
+ * when we're selling a single item.
+ * 
+ * Common patterns:
+ * - "48 Pack" / "24-Pack" / "(Pack of 12)"
+ * - "Bundle" 
+ * - "Case of 12"
+ * - "X Count" where X > 1
+ * 
+ * @param pageTitle - The Amazon page title
+ * @param sellingQuantity - How many items we're selling (photoQuantity)
+ * @param sellingPackCount - If we're selling a pack (e.g., 6-pack), what size
+ * @returns true if this appears to be a bundle page for more than we're selling
+ */
+function isAmazonBundlePage(
+  pageTitle: string | undefined,
+  sellingQuantity: number = 1,
+  sellingPackCount: number | null | undefined = null
+): boolean {
+  if (!pageTitle) return false;
+  
+  const title = pageTitle.toLowerCase();
+  
+  // Pattern 1: Explicit "Bundle" in title
+  if (/\bbundle\b/.test(title)) {
+    console.log(`[price] ⚠️ Amazon page title contains 'Bundle' - rejecting for single item`);
+    return true;
+  }
+  
+  // Pattern 2: "X Pack" / "X-Pack" / "(Pack of X)" where X > what we're selling
+  const packPatterns = [
+    /(\d+)\s*[-\s]?pack\b/i,           // "48 Pack", "24-pack"
+    /\(pack of (\d+)\)/i,               // "(Pack of 12)"
+    /case of (\d+)/i,                   // "Case of 12"
+    /(\d+)\s*count\b/i,                 // "24 Count"
+    /(\d+)\s*(?:ct|pk)\b/i,             // "24ct", "12pk"
+  ];
+  
+  const effectiveSellingQty = sellingPackCount && sellingPackCount > 1 
+    ? sellingPackCount * sellingQuantity 
+    : sellingQuantity;
+  
+  for (const pattern of packPatterns) {
+    const match = title.match(pattern);
+    if (match) {
+      const packSize = parseInt(match[1], 10);
+      // If Amazon is selling significantly more than we are (more than 2x), reject
+      // Use > instead of >= to allow borderline cases like "Pack of 2" when selling 1
+      if (packSize > effectiveSellingQty * 2 && packSize > 1) {
+        console.log(`[price] ⚠️ Amazon page for ${packSize}-pack but we're selling ${effectiveSellingQty} items - rejecting`);
+        return true;
+      }
+    }
+  }
+  
+  return false;
+}
+
 function normalizeBrand(str?: string | null): string | null {
   if (!str) return null;
   const cleaned = str.toLowerCase().replace(/[^a-z0-9]+/g, "");
@@ -708,7 +767,14 @@ export async function lookupPrice(
             productMatches = true;
           }
 
-          if (skipValidation || (brandMatches && productMatches)) {
+          // BUNDLE CHECK: Reject Amazon pages that are bundles when we're selling single items
+          const isBundleMismatch = isAmazonBundlePage(
+            priceData.pageTitle,
+            input.photoQuantity || 1,
+            input.packCount
+          );
+
+          if (skipValidation || (brandMatches && productMatches && !isBundleMismatch)) {
             amazonPrice = priceData.amazonItemPrice;
             amazonUrl = amazonUrlFound;
             
@@ -731,7 +797,11 @@ export async function lookupPrice(
               matchesBrand: true,
             });
           } else {
-            console.log(`[price] ✗ Amazon result rejected - brand match: ${brandMatches}, product match: ${productMatches} (title: ${priceData.pageTitle || 'unknown'})`);
+            const rejectReasons = [];
+            if (!brandMatches) rejectReasons.push('brand mismatch');
+            if (!productMatches) rejectReasons.push('product mismatch');
+            if (isBundleMismatch) rejectReasons.push('bundle/multipack page');
+            console.log(`[price] ✗ Amazon result rejected - ${rejectReasons.join(', ')} (title: ${priceData.pageTitle || 'unknown'})`);
           }
         }
       }
@@ -918,21 +988,27 @@ export async function lookupPrice(
         comparableMarketCandidates[0]
       );
 
-      // Check each brand candidate
-      for (const brand of brandCandidates) {
-        if (isProbablyBundlePrice(brand.price, bestMarket.price)) {
-          console.log(`[price] ⚠️ Brand price looks like bundle (>3x market). Dropping brand candidate`, {
-            brandPrice: brand.price,
-            comparisonPrice: bestMarket.price,
-            ratio: (brand.price / bestMarket.price).toFixed(2) + 'x',
-            brandUrl: brand.url,
-            marketUrl: bestMarket.url,
-          });
+      // SAFEGUARD: If marketplace price is suspiciously low (< $8), don't trust it
+      // This catches cases where Amazon returned a multi-pack page that we divided incorrectly
+      if (bestMarket.price < 8.00) {
+        console.log(`[price] ⚠️ Marketplace price $${bestMarket.price.toFixed(2)} is suspiciously low - keeping brand MSRP as alternative`);
+      } else {
+        // Check each brand candidate
+        for (const brand of brandCandidates) {
+          if (isProbablyBundlePrice(brand.price, bestMarket.price)) {
+            console.log(`[price] ⚠️ Brand price looks like bundle (>3x market). Dropping brand candidate`, {
+              brandPrice: brand.price,
+              comparisonPrice: bestMarket.price,
+              ratio: (brand.price / bestMarket.price).toFixed(2) + 'x',
+              brandUrl: brand.url,
+              marketUrl: bestMarket.url,
+            });
 
-          // Remove it from candidates
-          const idx = candidates.indexOf(brand);
-          if (idx >= 0) {
-            candidates.splice(idx, 1);
+            // Remove it from candidates
+            const idx = candidates.indexOf(brand);
+            if (idx >= 0) {
+              candidates.splice(idx, 1);
+            }
           }
         }
       }

@@ -335,6 +335,201 @@ describe('price-lookup.ts', () => {
       });
     });
 
+    describe('Amazon bundle/multipack detection', () => {
+      beforeEach(() => {
+        mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
+      });
+
+      it('should reject Amazon pages with "Bundle" in title when selling single item', async () => {
+        mockBraveSearch.mockResolvedValue('https://www.amazon.com/bundle-product');
+        mockExtractPriceWithShipping.mockReturnValueOnce({
+          amazonItemPrice: 7.20, // Incorrectly divided price
+          amazonShippingPrice: 0,
+          shippingEvidence: 'free',
+          pageTitle: 'Amazon.com: Frog Fuel Power Energized Protein & Ultra Energized Pre Workout Shot Bundle, 48 Pack',
+        } as any);
+        // Brand MSRP fallback
+        mockBrandUrlForBrandSite.mockResolvedValue('https://frogfuel.com/product');
+        mockExtractPrice.mockReturnValueOnce(48.00);
+        mockOpenAI.mockResolvedValue({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                chosenSource: 'brand-msrp',
+                basePrice: 48.00,
+                recommendedListingPrice: 43.20,
+                reasoning: 'Brand MSRP after bundle rejection',
+              }),
+            },
+          }],
+        } as any);
+
+        const input: PriceLookupInput = {
+          title: 'Pre-Workout Evolved Energized',
+          brand: 'Frog Fuel',
+          photoQuantity: 1, // Single item
+          packCount: null, // Not a multi-pack
+        };
+
+        const result = await lookupPrice(input);
+
+        // Amazon should be rejected due to "Bundle" in title
+        const amazonCandidate = result.candidates.find((c) => c.source === 'amazon');
+        expect(amazonCandidate).toBeUndefined();
+      });
+
+      it('should reject Amazon pages with "X Pack" in title when selling single item', async () => {
+        mockBraveSearch.mockResolvedValue('https://www.amazon.com/multipack-product');
+        mockExtractPriceWithShipping.mockReturnValueOnce({
+          amazonItemPrice: 2.00, // Incorrectly divided price
+          amazonShippingPrice: 0,
+          shippingEvidence: 'free',
+          pageTitle: 'Amazon.com: Energy Shots 24-Pack',
+        } as any);
+        mockBrandUrlForBrandSite.mockResolvedValue('https://brand.com/product');
+        mockExtractPrice.mockReturnValueOnce(24.00);
+        mockOpenAI.mockResolvedValue({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                chosenSource: 'brand-msrp',
+                basePrice: 24.00,
+                recommendedListingPrice: 21.60,
+                reasoning: 'Brand MSRP baseline',
+              }),
+            },
+          }],
+        } as any);
+
+        const input: PriceLookupInput = {
+          title: 'Energy Shot',
+          brand: 'EnergyBrand',
+          photoQuantity: 1,
+          packCount: null,
+        };
+
+        const result = await lookupPrice(input);
+
+        const amazonCandidate = result.candidates.find((c) => c.source === 'amazon');
+        expect(amazonCandidate).toBeUndefined();
+      });
+
+      it('should accept Amazon pages with matching pack size', async () => {
+        mockBraveSearch.mockResolvedValue('https://www.amazon.com/correct-product');
+        mockExtractPriceWithShipping.mockReturnValueOnce({
+          amazonItemPrice: 48.00,
+          amazonShippingPrice: 0,
+          shippingEvidence: 'free',
+          pageTitle: 'Amazon.com: EnergyBrand Energy Shot 6 Pack',
+        } as any);
+        mockOpenAI.mockResolvedValue({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                chosenSource: 'amazon',
+                basePrice: 48.00,
+                recommendedListingPrice: 43.20,
+                reasoning: 'Amazon price used',
+              }),
+            },
+          }],
+        } as any);
+
+        const input: PriceLookupInput = {
+          title: 'Energy Shot 6 Pack',
+          brand: 'EnergyBrand',
+          photoQuantity: 1,
+          packCount: 6, // We're selling a 6-pack, so 6-pack on Amazon is fine
+        };
+
+        const result = await lookupPrice(input);
+
+        // Amazon should be accepted - pack sizes are compatible
+        const amazonCandidate = result.candidates.find((c) => c.source === 'amazon');
+        expect(amazonCandidate).toBeDefined();
+      });
+
+      it('should accept Amazon pages with "Pack of 2" when selling photoQuantity=1', async () => {
+        // Pack of 2 is less than 2x what we're selling (1*2=2), so it should be accepted
+        mockBraveSearch.mockResolvedValue('https://www.amazon.com/twopack-product');
+        mockExtractPriceWithShipping.mockReturnValueOnce({
+          amazonItemPrice: 24.00,
+          amazonShippingPrice: 0,
+          shippingEvidence: 'free',
+          pageTitle: 'Amazon.com: EnergyBrand Protein Bar (Pack of 2)',
+        } as any);
+        mockOpenAI.mockResolvedValue({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                chosenSource: 'amazon',
+                basePrice: 24.00,
+                recommendedListingPrice: 21.60,
+                reasoning: 'Amazon price used',
+              }),
+            },
+          }],
+        } as any);
+
+        const input: PriceLookupInput = {
+          title: 'Protein Bar',
+          brand: 'EnergyBrand',
+          photoQuantity: 1,
+          packCount: null,
+        };
+
+        const result = await lookupPrice(input);
+
+        // Pack of 2 is NOT >= 2x what we're selling, so it should be accepted
+        // (The threshold is packSize >= effectiveSellingQty * 2)
+        const amazonCandidate = result.candidates.find((c) => c.source === 'amazon');
+        expect(amazonCandidate).toBeDefined();
+      });
+    });
+
+    describe('Low marketplace price safeguard', () => {
+      beforeEach(() => {
+        mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
+      });
+
+      it('should not drop brand MSRP when Amazon price is suspiciously low (< $8)', async () => {
+        mockBraveSearch.mockResolvedValue('https://www.amazon.com/wrongly-divided');
+        mockExtractPriceWithShipping.mockReturnValueOnce({
+          amazonItemPrice: 5.00, // Suspiciously low - probably wrong
+          amazonShippingPrice: 0,
+          shippingEvidence: 'free',
+          pageTitle: 'Amazon.com: SomeBrand Supplement Pills',
+        } as any);
+        mockBrandUrlForBrandSite.mockResolvedValue('https://somebrand.com/product');
+        mockExtractPrice.mockReturnValueOnce(45.00); // Realistic brand price
+        mockOpenAI.mockResolvedValue({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                chosenSource: 'brand-msrp',
+                basePrice: 45.00,
+                recommendedListingPrice: 40.50,
+                reasoning: 'Brand MSRP retained due to low marketplace price',
+              }),
+            },
+          }],
+        } as any);
+
+        const input: PriceLookupInput = {
+          title: 'Supplement Pills 60ct',
+          brand: 'SomeBrand',
+          photoQuantity: 1,
+        };
+
+        const result = await lookupPrice(input);
+
+        // Both candidates should be present - brand not dropped
+        const brandCandidate = result.candidates.find((c) => c.source === 'brand-msrp');
+        expect(brandCandidate).toBeDefined();
+        expect(brandCandidate?.price).toBe(45.00);
+      });
+    });
+
     describe('Tier 3: AI arbitration', () => {
       it('should apply photoQuantity multiplier correctly', async () => {
         mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
@@ -828,7 +1023,7 @@ describe('price-lookup.ts', () => {
 
       it('should handle brand website URL directly', async () => {
         mockFetchSoldStats.mockResolvedValue({ ok: false, rateLimited: false, samples: [] });
-        mockExtractPrice.mockReturnValue(45.99);
+        mockExtractPrice.mockReturnValueOnce(45.99);
         mockOpenAI.mockResolvedValue({
           choices: [{
             message: {
@@ -1118,7 +1313,7 @@ describe('price-lookup.ts', () => {
           text: async () => '<html><script type="application/ld+json">{"offers":{"price":"100.00"}}</script></html>',
         }) as any;
 
-        mockExtractPrice.mockReturnValue(100); // Suspiciously high brand price
+        mockExtractPrice.mockReturnValueOnce(100); // Suspiciously high brand price
 
         // Mock Brave search for comparison
         mockBraveSearch.mockResolvedValue('https://amazon.com/product');

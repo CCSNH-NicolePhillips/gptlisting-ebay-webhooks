@@ -32,6 +32,7 @@ export interface PairingResult {
     categoryPath?: string | null;
     photoQuantity?: number; // Max quantityInPhoto across front/back images
     packCount?: number | null; // Number of units inside package (from label, e.g., "24 packets")
+    packageType?: string; // bottle/jar/tub/pouch/box/sachet/book/unknown - used for formulation inference
   }>;
   unpaired: Array<{
     imagePath: string;
@@ -46,6 +47,7 @@ export interface PairingResult {
     categoryPath?: string | null;
     photoQuantity?: number; // quantityInPhoto from vision (for single-image products)
     packCount?: number | null; // Number of units inside package (from label)
+    packageType?: string; // bottle/jar/tub/pouch/box/sachet/book/unknown
   }>;
   metrics: {
     totals: {
@@ -1224,6 +1226,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
       categoryPath: frontClass?.categoryPath || null,
       photoQuantity,
       packCount,
+      packageType: frontClass?.packageType || backClass?.packageType || 'unknown',
     };
   });
   
@@ -1252,6 +1255,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
         categoryPath: classification?.categoryPath || null,
         photoQuantity: classification?.quantityInPhoto || 1, // CHUNK 3: Single image products
         packCount: classification?.packCount ?? null,
+        packageType: classification?.packageType || 'unknown',
       };
     }),
     ...rejectedPairs.flatMap(p => {
@@ -1271,6 +1275,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
           categoryPath: frontClass?.categoryPath || null,
           photoQuantity: frontClass?.quantityInPhoto || 1, // CHUNK 3
           packCount: frontClass?.packCount ?? null,
+          packageType: frontClass?.packageType || 'unknown',
         },
         {
           imagePath: p.back,
@@ -1285,6 +1290,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
           categoryPath: backClass?.categoryPath || null,
           photoQuantity: backClass?.quantityInPhoto || 1, // CHUNK 3
           packCount: backClass?.packCount ?? null,
+          packageType: backClass?.packageType || 'unknown',
         },
       ];
     }),

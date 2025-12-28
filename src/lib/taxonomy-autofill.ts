@@ -177,8 +177,26 @@ export function buildItemSpecifics(cat: CategoryDef, group: GroupRecord): Record
         const productLower = (group.product || '').toLowerCase();
         const searchText = keyText || productLower;
         
+        // PRIORITY 3: Check packageType from Vision API if available
+        const packageType = (group.packageType || '').toLowerCase();
+        
         // Detect formulation from actual label text or title
-        if (searchText.includes('liquid') || searchText.includes('drops') || searchText.includes('oil') || searchText.includes('dropper')) {
+        // IMPORTANT: Check liquid indicators FIRST as they are more specific
+        // (some products may have "powder" in name but are actually drinks, like "10g Ketones Powder" which is sold as a ready-to-drink)
+        if (
+          searchText.includes('liquid') || 
+          searchText.includes('drops') || 
+          searchText.includes('oil') || 
+          searchText.includes('dropper') ||
+          searchText.includes('drink') ||
+          searchText.includes('beverage') ||
+          searchText.includes('ready to drink') ||
+          searchText.includes('rtd') ||
+          searchText.includes(' shot') ||  // "energy shot", "protein shot" - note leading space to avoid "shot" in other words
+          searchText.includes('shots') ||
+          /\d+\s*ml\b/.test(searchText) ||  // "355ml", "12 ml" - mL indicates liquid
+          /\d+\s*fl\.?\s*oz\b/.test(searchText) // "12 fl oz", "12fl.oz" - fluid ounces indicates liquid
+        ) {
           defaultValue = 'Liquid';
         } else if (searchText.includes('capsule') || searchText.includes('cap') || searchText.includes('softgel')) {
           defaultValue = 'Capsule';
@@ -192,11 +210,15 @@ export function buildItemSpecifics(cat: CategoryDef, group: GroupRecord): Record
           defaultValue = 'Cream';
         } else if (searchText.includes('gel')) {
           defaultValue = 'Gel';
+        } else if (packageType === 'bottle') {
+          // If no explicit formulation keyword but package is a bottle, default to Liquid
+          // (most bottles contain liquids; powders are usually in tubs, pouches, or jars)
+          defaultValue = 'Liquid';
         } else {
           defaultValue = 'Other';
         }
         
-        console.log(`[buildItemSpecifics] Formulation inference: "${defaultValue}" (from ${keyText ? 'keyText' : 'product name'}: "${searchText.substring(0, 100)}")`);
+        console.log(`[buildItemSpecifics] Formulation inference: "${defaultValue}" (from ${keyText ? 'keyText' : 'product name'}: "${searchText.substring(0, 100)}"${packageType ? `, packageType: ${packageType}` : ''})`);;
       }
       // Main Purpose for supplements
       else if (specific.name === 'Main Purpose') {

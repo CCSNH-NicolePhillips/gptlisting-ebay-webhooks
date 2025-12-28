@@ -45,6 +45,7 @@ type PairedProduct = {
   keyText?: string[]; // Key text snippets from product packaging (from Vision API)
   photoQuantity?: number; // CHUNK 4: How many physical products visible in photo (from vision analysis)
   packCount?: number | null; // Number of units in package (e.g., 24 for 24-pack) - CRITICAL for variant pricing
+  packageType?: string; // bottle/jar/tub/pouch/box/sachet/book/unknown - used for formulation inference
   heroDisplayUrl?: string;
   backDisplayUrl?: string;
   side1DisplayUrl?: string;  // Optional 3rd image (side panel)
@@ -73,6 +74,7 @@ type Draft = {
   price: number | null;
   condition: string;
   keyText?: string[]; // Key text from Vision API - helps determine formulation
+  packageType?: string; // bottle/jar/tub/pouch/box/sachet/book/unknown - used for formulation inference
   pricingStatus?: 'OK' | 'ESTIMATED' | 'NEEDS_REVIEW';
   priceWarning?: string; // Explains why price needs review
   needsPriceReview?: boolean; // Frontend flag for red glow/warning
@@ -454,13 +456,27 @@ function buildPrompt(
   lines.push("FORMULATION DETECTION (CRITICAL):");
   lines.push("⚠️ ALWAYS use 'Product Label Text' provided above - do NOT guess or make assumptions!");
   lines.push("Look at the extracted text from product photos to determine formulation:");
+  lines.push("- If label text mentions 'drink', 'beverage', 'ready to drink', 'RTD', 'shot' (energy shot/protein shot) → formulation is 'Liquid'");
+  lines.push("- If label text mentions 'ml', 'mL', 'fl oz', 'fluid ounces' → formulation is 'Liquid' (these are liquid measurements!)");
+  lines.push("- If label text mentions 'liquid', 'drops', 'dropper', 'sublingual' → formulation is 'Liquid'");
   lines.push("- If label text mentions 'mix', 'mixing instructions', 'add to water', 'shake', 'stir', 'scoop', 'flavor' (Berry, Vanilla, etc.) → formulation is 'Powder'");
   lines.push("- If label text mentions 'capsule', 'capsules', 'caps', 'vcaps', '60 count', '90 count' → formulation is 'Capsule'");
   lines.push("- If label text mentions 'tablet', 'tablets', 'tabs' → formulation is 'Tablet'");
-  lines.push("- If label text mentions 'liquid', 'drops', 'dropper', 'sublingual', 'fl oz', 'ml' → formulation is 'Liquid'");
   lines.push("- If label text mentions 'gummy', 'gummies', 'chewable' → formulation is 'Gummy'");
+  
+  // Add packageType hint if available (from Vision API)
+  if (product.packageType && product.packageType !== 'unknown') {
+    lines.push(`- Product package type from photo: ${product.packageType}`);
+    if (product.packageType === 'bottle') {
+      lines.push("  → Most bottles contain LIQUID (drinks, oils, drops) - verify with label text");
+    } else if (product.packageType === 'tub' || product.packageType === 'pouch' || product.packageType === 'jar') {
+      lines.push("  → Tubs/pouches/jars often contain POWDER - verify with label text");
+    }
+  }
+  
   lines.push("Common mistake: Products with flavors (Natural Berry, Vanilla) are usually POWDER drinks, NOT capsules!");
   lines.push("Common mistake: If label says 'Liquid Drops', do NOT output 'Capsule' - use the actual label text!");
+  lines.push("Common mistake: Ketone/electrolyte DRINKS in bottles are LIQUID formulation, not Powder!");
   lines.push("");
   lines.push("TITLE REQUIREMENTS (SEO-CRITICAL):");
   lines.push("- Must be 60-80 characters (use ALL available space for SEO)");
@@ -850,6 +866,7 @@ async function createDraftForProduct(
     price: finalPrice,
     condition: parsed.condition,
     keyText: product.keyText, // Pass through Vision API key text for formulation detection
+    packageType: product.packageType, // Pass through Vision API package type for formulation inference
     pricingStatus,
     priceWarning,
     needsPriceReview: pricingStatus !== 'OK',
