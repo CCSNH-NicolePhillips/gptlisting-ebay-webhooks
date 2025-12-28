@@ -161,6 +161,79 @@ export const handler: Handler = async (event) => {
 			// retry publish once
 			pub = await publishOnce();
 		}
+
+		// 25015: Picture URL too long — convert S3 presigned URLs to short redirect URLs and retry
+		// S3 presigned URLs are ~550+ chars but eBay requires ≤500 chars per URL
+		const needsImageUrlFix = !pub.ok && errors.some((e) => Number(e?.errorId) === 25015);
+		if (needsImageUrlFix) {
+			console.log('[ebay-publish-offer] Error 25015: Picture URL too long, attempting to fix...');
+			// Fetch current offer to get SKU
+			const getOfferUrl = `${apiHost}/sell/inventory/v1/offer/${encodeURIComponent(offerId)}`;
+			const getOfferRes = await fetch(getOfferUrl, { headers });
+			const getOfferTxt = await getOfferRes.text();
+			let off: any = {};
+			try { off = JSON.parse(getOfferTxt); } catch { off = {}; }
+			const sku = (off && (off.sku || off?.offer?.sku)) ? String(off.sku || off.offer?.sku) : '';
+			if (getOfferRes.ok && sku) {
+				// Fetch inventory item to get image URLs
+				const getInvUrl = `${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
+				const invRes = await fetch(getInvUrl, { headers });
+				const invTxt = await invRes.text();
+				let inv: any = {};
+				try { inv = JSON.parse(invTxt); } catch { inv = {}; }
+				if (invRes.ok && inv?.product?.imageUrls) {
+					const originalUrls: string[] = inv.product.imageUrls || [];
+					// Get base URL for short redirect
+					const appBase = process.env.URL || process.env.DEPLOY_PRIME_URL || 'https://gptlisting.netlify.app';
+					// Convert S3 presigned URLs to short redirect URLs
+					const shortUrls = originalUrls.map((url: string) => {
+						try {
+							const u = new URL(url);
+							const isS3 = u.hostname.includes('.s3.') || u.hostname.includes('.amazonaws.com');
+							if (isS3) {
+								// Extract S3 object key from path
+								const key = decodeURIComponent(u.pathname.replace(/^\//, ''));
+								if (key && key.startsWith('staging/')) {
+									// Short redirect URL: /.netlify/functions/img?k=staging/user/job/hash-file.jpg
+									const shortUrl = `${appBase}/.netlify/functions/img?k=${encodeURIComponent(key)}`;
+									console.log(`[ebay-publish-offer] Image URL ${url.length} chars → ${shortUrl.length} chars`);
+									return shortUrl;
+								}
+							}
+						} catch { /* ignore parse errors */ }
+						return url; // Return original if not S3 or can't parse
+					});
+					// Check if we actually shortened any URLs
+					const didShorten = shortUrls.some((u, i) => u !== originalUrls[i]);
+					if (didShorten) {
+						console.log(`[ebay-publish-offer] Shortened ${shortUrls.filter((u, i) => u !== originalUrls[i]).length} image URLs`);
+						// Update inventory item with short URLs
+						const patched: any = {
+							sku,
+							product: {
+								...inv.product,
+								imageUrls: shortUrls,
+							},
+							availability: inv?.availability,
+							condition: inv?.condition,
+							packageWeightAndSize: inv?.packageWeightAndSize,
+						};
+						const putInvRes = await fetch(getInvUrl, {
+							method: 'PUT',
+							headers,
+							body: JSON.stringify(patched),
+						});
+						if (putInvRes.ok) {
+							console.log('[ebay-publish-offer] Updated inventory with short image URLs, retrying publish...');
+							pub = await publishOnce();
+						} else {
+							console.error('[ebay-publish-offer] Failed to update inventory with short URLs');
+						}
+					}
+				}
+			}
+		}
+
 	if (!pub.ok) {
 			// Do NOT auto-delete. Return a clear error payload so the UI can show details and the user can fix or delete manually.
 			return {

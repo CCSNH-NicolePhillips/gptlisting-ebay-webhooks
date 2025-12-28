@@ -85,14 +85,25 @@ export function proxyImageUrls(urls: string[], appBase?: string): string[] {
     const direct = toDirectDropbox(source);
     if (isProxy(direct)) return addBust(absolutizeProxy(direct));
     
-    // Check if this is an S3 signed URL - these are already publicly accessible
-    // and don't need proxying. Send them directly to eBay.
+    // Check if this is an S3 signed URL - need to convert to short redirect URL
+    // eBay requires picture URLs ≤500 chars, but S3 presigned URLs are ~550+ chars
     try {
       const url = new URL(direct);
       const isS3 = url.hostname.includes('.s3.') || url.hostname.includes('.amazonaws.com');
       if (isS3) {
-        console.log('[proxyImageUrls] S3 URL detected, skipping proxy:', direct.substring(0, 80));
-        return direct; // Return S3 URL directly without proxy
+        // Extract the S3 object key from the URL path
+        // URL format: https://bucket.s3.region.amazonaws.com/staging/user/job/hash-file.jpg?X-Amz-...
+        const key = decodeURIComponent(url.pathname.replace(/^\//, ''));
+        if (key && key.startsWith('staging/')) {
+          // Use short redirect URL: /.netlify/functions/img?k=staging/user/job/hash-file.jpg
+          // This is ~100-150 chars vs 550+ chars for presigned URL
+          const shortUrl = `${base}/.netlify/functions/img?k=${encodeURIComponent(key)}`;
+          console.log('[proxyImageUrls] S3 URL → short redirect:', shortUrl.length, 'chars');
+          return shortUrl;
+        }
+        // If not a staging URL, return as-is (shouldn't happen in normal flow)
+        console.log('[proxyImageUrls] S3 URL (non-staging), using as-is:', direct.substring(0, 80));
+        return direct;
       }
     } catch {
       // Not a valid URL, continue with proxy logic
