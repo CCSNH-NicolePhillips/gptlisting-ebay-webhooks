@@ -1130,12 +1130,14 @@
         ];
         const q = [];
         const exec = authClient && typeof authClient.authFetch === 'function' ? authClient.authFetch : fetch;
+        // Cache buster: changes daily to ensure fresh images while still allowing short-term caching
+        const cacheBuster = Math.floor(Date.now() / 300000); // Changes every 5 minutes
         for (const n of nodes) {
           const offerId = n.dataset.offerId;
           if (!offerId) continue;
           q.push(async () => {
             // Prefer server-side offer thumb to avoid client CORS/SKU issues
-            const url = `/.netlify/functions/ebay-offer-thumb?offerId=${encodeURIComponent(offerId)}`;
+            const url = `/.netlify/functions/ebay-offer-thumb?offerId=${encodeURIComponent(offerId)}&_cb=${cacheBuster}`;
             if (url && n._img) {
               try {
                 const resp = await exec(url);

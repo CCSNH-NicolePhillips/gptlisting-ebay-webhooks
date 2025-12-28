@@ -186,7 +186,8 @@ export const handler: Handler = async (event) => {
 			statusCode: 200,
 			headers: {
 				'Content-Type': upstream.type,
-				'Cache-Control': 'public, max-age=86400',
+				// Short cache to allow updates to propagate, but still provide some caching benefit
+				'Cache-Control': 'public, max-age=300',
 				'Access-Control-Allow-Origin': '*',
 			},
 			body: upstream.buf!.toString('base64'),
