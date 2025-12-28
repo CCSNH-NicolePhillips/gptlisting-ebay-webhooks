@@ -1168,8 +1168,11 @@
                   n._sk?.remove?.();
                   revoke();
                 };
+                // DEBUG: Log which offerId gets which image
+                console.log(`[thumb] Setting image for offerId ${offerId}`, objectUrl.substring(0, 80));
                 n._img.src = objectUrl;
               } catch (err) {
+                console.error(`[thumb] Error for offerId ${offerId}:`, err);
                 n._sk?.remove?.();
               }
             } else {
@@ -1178,8 +1181,8 @@
             }
           });
         }
-        // run with limited concurrency
-        const concurrency = 12;
+        // run with limited concurrency - REDUCED TO 1 TO DEBUG RACE CONDITION
+        const concurrency = 1;
         let i = 0;
         async function next() {
           const fn = q[i++];
