@@ -37,7 +37,9 @@ export const handler: Handler = async (event) => {
       enabled: false,
       reduceBy: 100,    // $1.00 in cents
       everyDays: 7,
-      minPrice: 199     // $1.99 in cents
+      minPriceType: 'fixed' as 'fixed' | 'percent',
+      minPrice: 199,    // $1.99 in cents
+      minPercent: 50    // 50%
     };
 
     // Return with defaults
@@ -58,7 +60,9 @@ export const handler: Handler = async (event) => {
           enabled: settings.autoPrice?.enabled ?? defaultAutoPrice.enabled,
           reduceBy: settings.autoPrice?.reduceBy ?? defaultAutoPrice.reduceBy,
           everyDays: settings.autoPrice?.everyDays ?? defaultAutoPrice.everyDays,
+          minPriceType: settings.autoPrice?.minPriceType ?? defaultAutoPrice.minPriceType,
           minPrice: settings.autoPrice?.minPrice ?? defaultAutoPrice.minPrice,
+          minPercent: settings.autoPrice?.minPercent ?? defaultAutoPrice.minPercent,
         }
       })
     };
