@@ -1126,4 +1126,408 @@ describe("pairing-v2-core", () => {
       expect(pairedFilenames.has("side1b.jpg")).toBe(true);
     });
   });
+
+  describe("malformed GPT response handling", () => {
+    it("should filter out unpaired items with missing filename", async () => {
+      const imagePaths = ["front.jpg", "back.jpg"];
+
+      // Mock classification - both valid
+      (mockOpenAI.chat.completions.create as jest.Mock<any>).mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                items: [
+                  {
+                    filename: "front.jpg",
+                    kind: "product",
+                    panel: "front",
+                    brand: "Brand",
+                    productName: "Product",
+                    title: null,
+                    brandWebsite: "https://brand.com",
+                    packageType: "bottle",
+                    keyText: ["Brand"],
+                    categoryPath: "Health",
+                    colorSignature: ["blue"],
+                    layoutSignature: "vertical",
+                    confidence: 0.95,
+                    rationale: "Clear front",
+                    quantityInPhoto: 1,
+                  },
+                  {
+                    filename: "back.jpg",
+                    kind: "product",
+                    panel: "back",
+                    brand: "Brand",
+                    productName: "Product",
+                    title: null,
+                    brandWebsite: "https://brand.com",
+                    packageType: "bottle",
+                    keyText: ["Supplement Facts"],
+                    categoryPath: "Health",
+                    colorSignature: ["blue"],
+                    layoutSignature: "back",
+                    confidence: 0.95,
+                    rationale: "Clear back",
+                    quantityInPhoto: 1,
+                  },
+                ],
+              }),
+            },
+          },
+        ],
+      } as any);
+
+      // Mock pairing - GPT returns one valid pair and one malformed unpaired item
+      // Note: Only 1 unpaired item to avoid triggering Pass 2 (which requires >= 2)
+      (mockOpenAI.chat.completions.create as jest.Mock<any>).mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                pairs: [
+                  {
+                    front: "front.jpg",
+                    back: "back.jpg",
+                    confidence: 0.95,
+                    rationale: "Same product",
+                  },
+                ],
+                unpaired: [
+                  // Malformed: missing filename property - should be filtered out
+                  {
+                    reason: "No match found",
+                    needsReview: true,
+                  },
+                ],
+              }),
+            },
+          },
+        ],
+      } as any);
+
+      // Mock verification
+      (mockOpenAI.chat.completions.create as jest.Mock<any>).mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                verifiedPairs: [
+                  {
+                    front: "front.jpg",
+                    back: "back.jpg",
+                    confidence: 0.95,
+                    status: "accepted",
+                    issues: [],
+                  },
+                ],
+              }),
+            },
+          },
+        ],
+      } as any);
+
+      const result = await runNewTwoStagePipeline(imagePaths);
+
+      // Malformed unpaired items should be filtered out
+      expect(result.unpaired.every(u => typeof u.imagePath === "string")).toBe(true);
+      expect(result.unpaired.every(u => u.imagePath.length > 0)).toBe(true);
+      // Should not crash
+      expect(result.pairs).toHaveLength(1);
+    });
+
+    it("should filter out pairs with missing front or back", async () => {
+      const imagePaths = ["front.jpg", "back.jpg"];
+
+      // Mock classification
+      (mockOpenAI.chat.completions.create as jest.Mock<any>).mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                items: [
+                  {
+                    filename: "front.jpg",
+                    kind: "product",
+                    panel: "front",
+                    brand: "Brand",
+                    productName: "Product",
+                    title: null,
+                    brandWebsite: "https://brand.com",
+                    packageType: "bottle",
+                    keyText: ["Brand"],
+                    categoryPath: "Health",
+                    colorSignature: ["blue"],
+                    layoutSignature: "vertical",
+                    confidence: 0.95,
+                    rationale: "Clear front",
+                    quantityInPhoto: 1,
+                  },
+                  {
+                    filename: "back.jpg",
+                    kind: "product",
+                    panel: "back",
+                    brand: "Brand",
+                    productName: "Product",
+                    title: null,
+                    brandWebsite: "https://brand.com",
+                    packageType: "bottle",
+                    keyText: ["Supplement Facts"],
+                    categoryPath: "Health",
+                    colorSignature: ["blue"],
+                    layoutSignature: "back",
+                    confidence: 0.95,
+                    rationale: "Clear back",
+                    quantityInPhoto: 1,
+                  },
+                ],
+              }),
+            },
+          },
+        ],
+      } as any);
+
+      // Mock pairing - returns valid pair
+      (mockOpenAI.chat.completions.create as jest.Mock<any>).mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                pairs: [
+                  {
+                    front: "front.jpg",
+                    back: "back.jpg",
+                    confidence: 0.95,
+                    rationale: "Same product",
+                  },
+                ],
+                unpaired: [],
+              }),
+            },
+          },
+        ],
+      } as any);
+
+      // Mock verification - GPT returns malformed pairs with missing front/back
+      (mockOpenAI.chat.completions.create as jest.Mock<any>).mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                verifiedPairs: [
+                  // Malformed: missing front
+                  {
+                    back: "back.jpg",
+                    confidence: 0.95,
+                    status: "accepted",
+                    issues: [],
+                  },
+                  // Malformed: null back
+                  {
+                    front: "front.jpg",
+                    back: null,
+                    confidence: 0.9,
+                    status: "accepted",
+                    issues: [],
+                  },
+                ],
+              }),
+            },
+          },
+        ],
+      } as any);
+
+      const result = await runNewTwoStagePipeline(imagePaths);
+
+      // Malformed pairs should be filtered out, not crash
+      expect(result.pairs.every(p => typeof p.front === "string" && p.front.length > 0)).toBe(true);
+      expect(result.pairs.every(p => typeof p.back === "string" && p.back.length > 0)).toBe(true);
+    });
+
+    it("should filter out rejected pairs with missing front or back", async () => {
+      const imagePaths = ["front.jpg", "back.jpg"];
+
+      // Mock classification
+      (mockOpenAI.chat.completions.create as jest.Mock<any>).mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                items: [
+                  {
+                    filename: "front.jpg",
+                    kind: "product",
+                    panel: "front",
+                    brand: "Brand",
+                    productName: "Product",
+                    title: null,
+                    brandWebsite: "https://brand.com",
+                    packageType: "bottle",
+                    keyText: ["Brand"],
+                    categoryPath: "Health",
+                    colorSignature: ["blue"],
+                    layoutSignature: "vertical",
+                    confidence: 0.95,
+                    rationale: "Clear front",
+                    quantityInPhoto: 1,
+                  },
+                  {
+                    filename: "back.jpg",
+                    kind: "product",
+                    panel: "back",
+                    brand: "Brand",
+                    productName: "Product",
+                    title: null,
+                    brandWebsite: "https://brand.com",
+                    packageType: "bottle",
+                    keyText: ["Supplement Facts"],
+                    categoryPath: "Health",
+                    colorSignature: ["blue"],
+                    layoutSignature: "back",
+                    confidence: 0.95,
+                    rationale: "Clear back",
+                    quantityInPhoto: 1,
+                  },
+                ],
+              }),
+            },
+          },
+        ],
+      } as any);
+
+      // Mock pairing
+      (mockOpenAI.chat.completions.create as jest.Mock<any>).mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                pairs: [
+                  {
+                    front: "front.jpg",
+                    back: "back.jpg",
+                    confidence: 0.95,
+                    rationale: "Same product",
+                  },
+                ],
+                unpaired: [],
+              }),
+            },
+          },
+        ],
+      } as any);
+
+      // Mock verification - rejected pair with malformed data
+      (mockOpenAI.chat.completions.create as jest.Mock<any>).mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                verifiedPairs: [
+                  // Malformed rejected pair: missing front
+                  {
+                    back: "back.jpg",
+                    confidence: 0.5,
+                    status: "rejected",
+                    issues: ["Brand mismatch"],
+                  },
+                ],
+              }),
+            },
+          },
+        ],
+      } as any);
+
+      const result = await runNewTwoStagePipeline(imagePaths);
+
+      // Should not crash when processing rejected pairs with missing data
+      // All unpaired items should have valid imagePath
+      expect(result.unpaired.every(u => typeof u.imagePath === "string" && u.imagePath.length > 0)).toBe(true);
+    });
+
+    it("should handle completely empty GPT response gracefully", async () => {
+      const imagePaths = ["front.jpg", "back.jpg"];
+
+      // Mock classification
+      (mockOpenAI.chat.completions.create as jest.Mock<any>).mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                items: [
+                  {
+                    filename: "front.jpg",
+                    kind: "product",
+                    panel: "front",
+                    brand: "Brand",
+                    productName: "Product",
+                    title: null,
+                    brandWebsite: null,
+                    packageType: "bottle",
+                    keyText: [],
+                    categoryPath: "Health",
+                    colorSignature: ["blue"],
+                    layoutSignature: "vertical",
+                    confidence: 0.95,
+                    rationale: "Clear front",
+                    quantityInPhoto: 1,
+                  },
+                  {
+                    filename: "back.jpg",
+                    kind: "product",
+                    panel: "back",
+                    brand: "Brand",
+                    productName: "Product",
+                    title: null,
+                    brandWebsite: null,
+                    packageType: "bottle",
+                    keyText: [],
+                    categoryPath: "Health",
+                    colorSignature: ["blue"],
+                    layoutSignature: "back",
+                    confidence: 0.95,
+                    rationale: "Clear back",
+                    quantityInPhoto: 1,
+                  },
+                ],
+              }),
+            },
+          },
+        ],
+      } as any);
+
+      // Mock pairing - GPT returns empty response
+      (mockOpenAI.chat.completions.create as jest.Mock<any>).mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                pairs: [],
+                unpaired: [],
+              }),
+            },
+          },
+        ],
+      } as any);
+
+      // Mock verification
+      (mockOpenAI.chat.completions.create as jest.Mock<any>).mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                verifiedPairs: [],
+              }),
+            },
+          },
+        ],
+      } as any);
+
+      const result = await runNewTwoStagePipeline(imagePaths);
+
+      // Should not crash, should return empty results
+      expect(result.pairs).toHaveLength(0);
+      expect(Array.isArray(result.unpaired)).toBe(true);
+    });
+  });
 });
