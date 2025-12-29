@@ -10,8 +10,9 @@
   function initSidebarToggle() {
     const sidebar = document.querySelector('.dp-sidebar');
     const shell = document.querySelector('.dp-shell');
+    const brandArea = sidebar?.querySelector('.dp-sidebar__brand');
     
-    if (!sidebar || !shell) return;
+    if (!sidebar || !shell || !brandArea) return;
     
     // Create toggle button if it doesn't exist
     let toggle = sidebar.querySelector('.dp-sidebar__toggle');
@@ -19,25 +20,15 @@
       toggle = document.createElement('button');
       toggle.className = 'dp-sidebar__toggle';
       toggle.setAttribute('aria-label', 'Toggle sidebar');
+      toggle.setAttribute('title', 'Close sidebar');
       toggle.innerHTML = `
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="15 18 9 12 15 6"></polyline>
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="9" y1="3" x2="9" y2="21"></line>
         </svg>
       `;
-      sidebar.appendChild(toggle);
-    }
-    
-    // Create collapsed logo placeholder in brand area
-    const brandArea = sidebar.querySelector('.dp-sidebar__brand');
-    if (brandArea && !brandArea.querySelector('.dp-sidebar__collapsed-logo')) {
-      const collapsedLogo = document.createElement('div');
-      collapsedLogo.className = 'dp-sidebar__collapsed-logo';
-      collapsedLogo.innerHTML = `
-        <svg viewBox="0 0 24 24" fill="currentColor" width="32" height="32">
-          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
-        </svg>
-      `;
-      brandArea.appendChild(collapsedLogo);
+      // Insert toggle button into brand area (like ChatGPT)
+      brandArea.appendChild(toggle);
     }
     
     // Restore saved state

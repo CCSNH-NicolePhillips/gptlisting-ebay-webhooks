@@ -119,34 +119,32 @@ select option {
   transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Sidebar Collapse Toggle Button */
+/* Sidebar Collapse Toggle Button - positioned in brand area like ChatGPT */
 .dp-sidebar__toggle {
-  position: absolute;
-  right: -12px;
-  top: 24px;
-  width: 24px;
-  height: 24px;
-  background: var(--bg-sidebar);
-  border: 1px solid rgba(148, 163, 184, 0.15);
-  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  z-index: 101;
   transition: all 0.2s ease;
   color: var(--text-muted);
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .dp-sidebar__toggle:hover {
-  background: var(--accent);
+  background: rgba(255, 255, 255, 0.15);
   color: white;
-  border-color: var(--accent);
+  border-color: rgba(148, 163, 184, 0.4);
 }
 
 .dp-sidebar__toggle svg {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   transition: transform 0.25s ease;
 }
 
@@ -164,9 +162,12 @@ select option {
 }
 
 .dp-sidebar.dp-sidebar--collapsed .dp-sidebar__brand {
-  padding: 20px 12px;
-  display: flex;
+  padding: 16px 12px;
   justify-content: center;
+}
+
+.dp-sidebar.dp-sidebar--collapsed .dp-sidebar__toggle {
+  margin-left: 0;
 }
 
 .dp-sidebar.dp-sidebar--collapsed .dp-nav-group__label {
@@ -238,14 +239,19 @@ select option {
 
 /* Brand Area */
 .dp-sidebar__brand {
-  padding: 20px 16px 20px;
+  padding: 16px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .dp-brand-logo {
-  width: 100%;
-  height: auto;
-  display: block;
+  flex: 1;
+  height: 28px;
+  width: auto;
+  object-fit: contain;
+  object-position: left center;
 }
 
 .dp-brand {
