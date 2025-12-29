@@ -223,5 +223,10 @@ window.DraftPilotShell = {
         }
       }).catch(() => {});
     }
+    
+    // Load sidebar-toggle.js for collapsible sidebar
+    const toggleScript = document.createElement('script');
+    toggleScript.src = '/sidebar-toggle.js';
+    document.body.appendChild(toggleScript);
   }
 };
