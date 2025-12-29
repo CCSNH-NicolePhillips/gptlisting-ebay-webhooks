@@ -13,6 +13,17 @@
     
     if (!sidebar || !shell) return;
     
+    // Add title attributes to all nav items for hover tooltips
+    const navItems = sidebar.querySelectorAll('.dp-nav-item');
+    navItems.forEach(function(item) {
+      if (!item.hasAttribute('title')) {
+        const label = item.querySelector('.dp-nav-item__label');
+        if (label) {
+          item.setAttribute('title', label.textContent.trim());
+        }
+      }
+    });
+    
     // Create toggle button if it doesn't exist
     let toggle = sidebar.querySelector('.dp-sidebar__toggle');
     if (!toggle) {
