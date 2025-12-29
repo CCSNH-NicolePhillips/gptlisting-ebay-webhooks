@@ -10,9 +10,8 @@
   function initSidebarToggle() {
     const sidebar = document.querySelector('.dp-sidebar');
     const shell = document.querySelector('.dp-shell');
-    const brandArea = sidebar?.querySelector('.dp-sidebar__brand');
     
-    if (!sidebar || !shell || !brandArea) return;
+    if (!sidebar || !shell) return;
     
     // Create toggle button if it doesn't exist
     let toggle = sidebar.querySelector('.dp-sidebar__toggle');
@@ -27,8 +26,8 @@
           <line x1="9" y1="3" x2="9" y2="21"></line>
         </svg>
       `;
-      // Insert toggle button into brand area (like ChatGPT)
-      brandArea.appendChild(toggle);
+      // Insert toggle at the start of sidebar (will be positioned absolutely)
+      sidebar.insertBefore(toggle, sidebar.firstChild);
     }
     
     // Restore saved state

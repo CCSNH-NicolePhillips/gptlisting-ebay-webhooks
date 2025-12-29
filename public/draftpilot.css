@@ -119,8 +119,11 @@ select option {
   transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Sidebar Collapse Toggle Button - positioned in brand area like ChatGPT */
+/* Sidebar Collapse Toggle Button - positioned absolutely in top right */
 .dp-sidebar__toggle {
+  position: absolute;
+  top: 20px;
+  right: 16px;
   width: 28px;
   height: 28px;
   background: rgba(255, 255, 255, 0.08);
@@ -132,8 +135,7 @@ select option {
   cursor: pointer;
   transition: all 0.2s ease;
   color: var(--text-muted);
-  flex-shrink: 0;
-  margin-left: auto;
+  z-index: 10;
 }
 
 .dp-sidebar__toggle:hover {
@@ -162,12 +164,12 @@ select option {
 }
 
 .dp-sidebar.dp-sidebar--collapsed .dp-sidebar__brand {
-  padding: 16px 12px;
-  justify-content: center;
+  padding: 20px 12px;
 }
 
 .dp-sidebar.dp-sidebar--collapsed .dp-sidebar__toggle {
-  margin-left: 0;
+  position: static;
+  margin: 0 auto;
 }
 
 .dp-sidebar.dp-sidebar--collapsed .dp-nav-group__label {
@@ -239,19 +241,15 @@ select option {
 
 /* Brand Area */
 .dp-sidebar__brand {
-  padding: 16px;
+  padding: 20px 16px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.08);
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  position: relative;
 }
 
 .dp-brand-logo {
-  flex: 1;
-  height: 28px;
-  width: auto;
-  object-fit: contain;
-  object-position: left center;
+  width: 100%;
+  height: auto;
+  display: block;
 }
 
 .dp-brand {
