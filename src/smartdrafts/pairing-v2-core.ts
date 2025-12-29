@@ -1181,7 +1181,18 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
   const stage3Duration = ((Date.now() - stage3Start) / 1000).toFixed(1);
   console.log(`[pairing-v2] ⏱️ Stage 3 (Verification): ${stage3Duration}s`);
   
-  const acceptedPairs = verification.verifiedPairs.filter(p => p.status === 'accepted');
+  // Filter out malformed GPT responses where front/back is missing
+  const malformedPairs = verification.verifiedPairs.filter(
+    p => p.status === 'accepted' && (!p.front || typeof p.front !== 'string' || !p.back || typeof p.back !== 'string')
+  );
+  if (malformedPairs.length > 0) {
+    console.warn(`[pairing-v2] ⚠️ Filtered ${malformedPairs.length} malformed pairs (missing front/back):`, 
+      malformedPairs.map(p => ({ front: p.front, back: p.back })));
+  }
+  
+  const acceptedPairs = verification.verifiedPairs
+    .filter(p => p.status === 'accepted')
+    .filter(p => p.front && typeof p.front === 'string' && p.back && typeof p.back === 'string');
   const rejectedPairs = verification.verifiedPairs.filter(p => p.status === 'rejected');
   
   // Build classification map for metrics
@@ -1239,15 +1250,24 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
     if (p.side2) pairedFilenames.add(p.side2);
   });
   
+  // Filter out any malformed GPT responses where filename is missing
+  const malformedUnpaired = pairing.unpaired.filter(u => !u.filename || typeof u.filename !== 'string');
+  if (malformedUnpaired.length > 0) {
+    console.warn(`[pairing-v2] ⚠️ Filtered ${malformedUnpaired.length} malformed unpaired items (missing filename):`, 
+      malformedUnpaired.map(u => ({ filename: u.filename, reason: u.reason })));
+  }
+  
   const unpaired = [
-    ...pairing.unpaired.map(u => {
-      const classification = classMap.get(u.filename);
-      return {
-        imagePath: u.filename,
-        reason: u.reason,
-        needsReview: u.needsReview,
-        panel: classification?.panel || 'unknown',
-        brand: classification?.brand || null,
+    ...pairing.unpaired
+      .filter(u => u.filename && typeof u.filename === 'string')
+      .map(u => {
+        const classification = classMap.get(u.filename);
+        return {
+          imagePath: u.filename,
+          reason: u.reason,
+          needsReview: u.needsReview,
+          panel: classification?.panel || 'unknown',
+          brand: classification?.brand || null,
         product: classification?.productName || null,
         title: classification?.title || null,
         brandWebsite: classification?.brandWebsite || null,
@@ -1258,31 +1278,34 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
         packageType: classification?.packageType || 'unknown',
       };
     }),
-    ...rejectedPairs.flatMap(p => {
-      const frontClass = classMap.get(p.front);
-      const backClass = classMap.get(p.back);
-      return [
-        {
-          imagePath: p.front,
-          reason: `Pair rejected: ${p.issues?.join(', ') || 'verification failed'}`,
-          needsReview: true,
-          panel: frontClass?.panel || 'unknown',
-          brand: frontClass?.brand || null,
-          product: frontClass?.productName || null,
-          title: frontClass?.title || null,
-          brandWebsite: frontClass?.brandWebsite || null,
-          keyText: frontClass?.keyText || [],
-          categoryPath: frontClass?.categoryPath || null,
-          photoQuantity: frontClass?.quantityInPhoto || 1, // CHUNK 3
-          packCount: frontClass?.packCount ?? null,
-          packageType: frontClass?.packageType || 'unknown',
-        },
-        {
-          imagePath: p.back,
-          reason: `Pair rejected: ${p.issues?.join(', ') || 'verification failed'}`,
-          needsReview: true,
-          panel: backClass?.panel || 'unknown',
-          brand: backClass?.brand || null,
+    ...rejectedPairs
+      // Filter out malformed rejected pairs
+      .filter(p => p.front && typeof p.front === 'string' && p.back && typeof p.back === 'string')
+      .flatMap(p => {
+        const frontClass = classMap.get(p.front);
+        const backClass = classMap.get(p.back);
+        return [
+          {
+            imagePath: p.front,
+            reason: `Pair rejected: ${p.issues?.join(', ') || 'verification failed'}`,
+            needsReview: true,
+            panel: frontClass?.panel || 'unknown',
+            brand: frontClass?.brand || null,
+            product: frontClass?.productName || null,
+            title: frontClass?.title || null,
+            brandWebsite: frontClass?.brandWebsite || null,
+            keyText: frontClass?.keyText || [],
+            categoryPath: frontClass?.categoryPath || null,
+            photoQuantity: frontClass?.quantityInPhoto || 1, // CHUNK 3
+            packCount: frontClass?.packCount ?? null,
+            packageType: frontClass?.packageType || 'unknown',
+          },
+          {
+            imagePath: p.back,
+            reason: `Pair rejected: ${p.issues?.join(', ') || 'verification failed'}`,
+            needsReview: true,
+            panel: backClass?.panel || 'unknown',
+            brand: backClass?.brand || null,
           product: backClass?.productName || null,
           title: backClass?.title || null,
           brandWebsite: backClass?.brandWebsite || null,

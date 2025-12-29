@@ -176,8 +176,8 @@ describe("map-group-to-draft", () => {
       );
     });
 
-    it("should handle empty image array", async () => {
-      const { mapGroupToDraft } = await import("../../src/lib/map-group-to-draft.js");
+    it("should throw EmptyImagesError when image array is empty", async () => {
+      const { mapGroupToDraft, EmptyImagesError } = await import("../../src/lib/map-group-to-draft.js");
 
       mapGroupToDraftWithTaxonomy.mockResolvedValueOnce({
         ...baseDraft,
@@ -191,10 +191,9 @@ describe("map-group-to-draft", () => {
       });
 
       const group = { groupId: "g123" };
-      const result = await mapGroupToDraft(group);
-
+      
+      await expect(mapGroupToDraft(group)).rejects.toThrow(EmptyImagesError);
       expect(proxyImageUrls).not.toHaveBeenCalled();
-      expect(result.inventory.product.imageUrls).toEqual([]);
     });
 
     it("should use fallback APP_URL from environment", async () => {
