@@ -380,7 +380,8 @@
       width: 50px;
       height: 50px;
       border-radius: 6px;
-      object-fit: cover;
+      object-fit: contain;
+      background: var(--bg-elevated, #1a1a2e);
       flex-shrink: 0;
     }
     .file-info {
@@ -1709,7 +1710,7 @@
                 const img = document.createElement('img');
                 img.src = item.imageUrl || '';
                 img.alt = item.imagePath || 'Rejected image';
-                img.style.cssText = 'width: 100%; height: 150px; object-fit: cover; border-radius: 4px; background: rgba(0, 0, 0, 0.2);';
+                img.style.cssText = 'width: 100%; height: 150px; object-fit: contain; border-radius: 4px; background: #1a1a2e;';
                 img.onerror = () => {
                   img.style.display = 'none';
                   // Show filename if image fails to load

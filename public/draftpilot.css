@@ -1306,7 +1306,7 @@ select option {
 .dp-dropdown__option-thumb {
   width: 40px;
   height: 40px;
-  object-fit: cover;
+  object-fit: contain;
   border-radius: 6px;
   background: var(--bg-elevated);
 }
@@ -1380,8 +1380,9 @@ select option {
 .dp-dropdown__chip img {
   width: 16px;
   height: 16px;
-  object-fit: cover;
+  object-fit: contain;
   border-radius: 3px;
+  background: var(--bg-elevated, #1a1a2e);
 }
 
 .dp-dropdown__chip-remove {
