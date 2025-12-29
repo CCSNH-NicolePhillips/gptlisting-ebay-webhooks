@@ -10,7 +10,9 @@ interface AutoPriceSettings {
   enabled: boolean;
   reduceBy?: number;  // cents
   everyDays?: number;
-  minPrice?: number;  // cents
+  minPriceType?: 'fixed' | 'percent';  // how to calculate minimum price floor
+  minPrice?: number;  // cents (used when minPriceType='fixed')
+  minPercent?: number;  // percentage of listing price (used when minPriceType='percent')
 }
 
 /**
@@ -116,12 +118,30 @@ export const handler: Handler = async (event) => {
           };
         }
       }
+      if (autoPrice.minPriceType !== undefined) {
+        if (autoPrice.minPriceType !== 'fixed' && autoPrice.minPriceType !== 'percent') {
+          return {
+            statusCode: 400,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'minPriceType must be "fixed" or "percent"' })
+          };
+        }
+      }
       if (autoPrice.minPrice !== undefined) {
         if (typeof autoPrice.minPrice !== 'number' || autoPrice.minPrice < 99) {
           return {
             statusCode: 400,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ error: 'minPrice must be at least 99 cents ($0.99)' })
+          };
+        }
+      }
+      if (autoPrice.minPercent !== undefined) {
+        if (typeof autoPrice.minPercent !== 'number' || autoPrice.minPercent < 10 || autoPrice.minPercent > 90) {
+          return {
+            statusCode: 400,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'minPercent must be between 10 and 90' })
           };
         }
       }
@@ -157,7 +177,9 @@ export const handler: Handler = async (event) => {
         enabled: autoPrice.enabled ?? false,
         reduceBy: autoPrice.reduceBy ?? 100,  // default $1.00
         everyDays: autoPrice.everyDays ?? 7,  // default 7 days
-        minPrice: autoPrice.minPrice ?? 199   // default $1.99
+        minPriceType: autoPrice.minPriceType ?? 'fixed',  // default to fixed amount
+        minPrice: autoPrice.minPrice ?? 199,  // default $1.99
+        minPercent: autoPrice.minPercent ?? 50  // default 50%
       };
     }
 
