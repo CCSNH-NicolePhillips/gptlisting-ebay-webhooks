@@ -116,6 +116,124 @@ select option {
   top: 0;
   z-index: 100;
   overflow-y: hidden;
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Sidebar Collapse Toggle Button */
+.dp-sidebar__toggle {
+  position: absolute;
+  right: -12px;
+  top: 24px;
+  width: 24px;
+  height: 24px;
+  background: var(--bg-sidebar);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 101;
+  transition: all 0.2s ease;
+  color: var(--text-muted);
+}
+
+.dp-sidebar__toggle:hover {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.dp-sidebar__toggle svg {
+  width: 14px;
+  height: 14px;
+  transition: transform 0.25s ease;
+}
+
+/* Collapsed Sidebar State */
+.dp-sidebar.dp-sidebar--collapsed {
+  width: 72px;
+}
+
+.dp-sidebar.dp-sidebar--collapsed .dp-sidebar__toggle svg {
+  transform: rotate(180deg);
+}
+
+.dp-sidebar.dp-sidebar--collapsed .dp-brand-logo {
+  display: none;
+}
+
+.dp-sidebar.dp-sidebar--collapsed .dp-sidebar__brand {
+  padding: 20px 12px;
+  display: flex;
+  justify-content: center;
+}
+
+.dp-sidebar.dp-sidebar--collapsed .dp-nav-group__label {
+  opacity: 0;
+  height: 0;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+}
+
+.dp-sidebar.dp-sidebar--collapsed .dp-nav-item {
+  justify-content: center;
+  padding: 12px;
+}
+
+.dp-sidebar.dp-sidebar--collapsed .dp-nav-item__label {
+  display: none;
+}
+
+.dp-sidebar.dp-sidebar--collapsed .dp-nav-item--active::before {
+  left: 0;
+  width: 3px;
+  height: 24px;
+}
+
+.dp-sidebar.dp-sidebar--collapsed .dp-sidebar__footer {
+  padding: 12px 8px 16px;
+}
+
+.dp-sidebar.dp-sidebar--collapsed .dp-user-card {
+  justify-content: center;
+  padding: 8px;
+}
+
+.dp-sidebar.dp-sidebar--collapsed .dp-user-card__info,
+.dp-sidebar.dp-sidebar--collapsed .dp-user-card__chevron {
+  display: none;
+}
+
+.dp-sidebar.dp-sidebar--collapsed .dp-user-menu {
+  left: 72px;
+  right: auto;
+  bottom: 16px;
+  width: 200px;
+}
+
+/* Collapsed sidebar logo placeholder */
+.dp-sidebar__collapsed-logo {
+  width: 32px;
+  height: 32px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+}
+
+.dp-sidebar.dp-sidebar--collapsed .dp-sidebar__collapsed-logo {
+  display: flex;
+}
+
+/* Main content adjustment for collapsed sidebar */
+.dp-shell.dp-sidebar-collapsed .dp-main-wrapper {
+  margin-left: 72px;
+}
+
+.dp-main-wrapper {
+  transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Brand Area */
