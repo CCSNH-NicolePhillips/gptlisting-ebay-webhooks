@@ -17,6 +17,9 @@ import {
   getJobStatus,
   getQueueStats,
   cancelJob,
+  storePromotionIntent,
+  getPromotionIntent,
+  deletePromotionIntent,
 } from '../../src/lib/promotion-queue';
 
 describe('promotion-queue', () => {
@@ -491,6 +494,237 @@ describe('promotion-queue', () => {
       const jobs = await getReadyJobs(10).catch(() => []);
       
       expect(jobs).toEqual([]);
+    });
+  });
+
+  // ============================================================================
+  // Promotion Intent Tests - Tests the Redis-based promotion intent storage
+  // that bridges offer creation and publishing
+  // ============================================================================
+  describe('promotion intent storage', () => {
+    beforeEach(() => {
+      // Ensure Redis env vars are set for these tests
+      process.env.UPSTASH_REDIS_REST_URL = 'https://test-redis.upstash.io';
+      process.env.UPSTASH_REDIS_REST_TOKEN = 'test-token';
+      jest.clearAllMocks();
+    });
+
+    describe('storePromotionIntent', () => {
+      it('should store promotion intent with correct key and TTL', async () => {
+        (global.fetch as jest.Mock)
+          .mockImplementationOnce(() => mockRedisResponse('OK')) // SET
+          .mockImplementationOnce(() => mockRedisResponse(1)); // EXPIRE
+
+        await storePromotionIntent('offer-123', true, 5);
+
+        expect(global.fetch).toHaveBeenCalledTimes(2);
+        
+        // Verify SET call contains correct key
+        const setCall = (global.fetch as jest.Mock).mock.calls[0][0];
+        expect(setCall).toContain('/SET/');
+        expect(setCall).toContain('promo_intent%3Aoffer-123'); // URL encoded
+        
+        // Verify EXPIRE call sets 7-day TTL (604800 seconds)
+        const expireCall = (global.fetch as jest.Mock).mock.calls[1][0];
+        expect(expireCall).toContain('/EXPIRE/');
+        expect(expireCall).toContain('604800');
+      });
+
+      it('should store correct intent data structure', async () => {
+        (global.fetch as jest.Mock)
+          .mockImplementationOnce(() => mockRedisResponse('OK'))
+          .mockImplementationOnce(() => mockRedisResponse(1));
+
+        await storePromotionIntent('offer-456', true, 7.5);
+
+        const setCall = (global.fetch as jest.Mock).mock.calls[0][0];
+        const intentData = decodeURIComponent(setCall.split('/SET/')[1].split('/')[1]);
+        const parsed = JSON.parse(intentData);
+        
+        expect(parsed.offerId).toBe('offer-456');
+        expect(parsed.enabled).toBe(true);
+        expect(parsed.adRate).toBe(7.5);
+        expect(parsed.createdAt).toBeDefined();
+        expect(typeof parsed.createdAt).toBe('number');
+      });
+
+      it('should store disabled intent', async () => {
+        (global.fetch as jest.Mock)
+          .mockImplementationOnce(() => mockRedisResponse('OK'))
+          .mockImplementationOnce(() => mockRedisResponse(1));
+
+        await storePromotionIntent('offer-789', false, 0);
+
+        const setCall = (global.fetch as jest.Mock).mock.calls[0][0];
+        const intentData = decodeURIComponent(setCall.split('/SET/')[1].split('/')[1]);
+        const parsed = JSON.parse(intentData);
+        
+        expect(parsed.enabled).toBe(false);
+        expect(parsed.adRate).toBe(0);
+      });
+
+      it('should not throw when Redis is not configured', async () => {
+        process.env.UPSTASH_REDIS_REST_URL = '';
+        process.env.UPSTASH_REDIS_REST_TOKEN = '';
+
+        // Should not throw, just warn
+        await expect(storePromotionIntent('offer-xyz', true, 5)).resolves.toBeUndefined();
+      });
+    });
+
+    describe('getPromotionIntent', () => {
+      it('should retrieve stored promotion intent', async () => {
+        const storedIntent = {
+          offerId: 'offer-123',
+          enabled: true,
+          adRate: 5,
+          createdAt: Date.now(),
+        };
+
+        (global.fetch as jest.Mock).mockImplementationOnce(() => 
+          mockRedisResponse(JSON.stringify(storedIntent))
+        );
+
+        const result = await getPromotionIntent('offer-123');
+
+        expect(result).toEqual(storedIntent);
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+        
+        const getCall = (global.fetch as jest.Mock).mock.calls[0][0];
+        expect(getCall).toContain('/GET/');
+        expect(getCall).toContain('promo_intent%3Aoffer-123');
+      });
+
+      it('should return null when intent not found', async () => {
+        (global.fetch as jest.Mock).mockImplementationOnce(() => 
+          mockRedisResponse(null)
+        );
+
+        const result = await getPromotionIntent('nonexistent-offer');
+
+        expect(result).toBeNull();
+      });
+
+      it('should return null for malformed JSON', async () => {
+        (global.fetch as jest.Mock).mockImplementationOnce(() => 
+          mockRedisResponse('not-valid-json{')
+        );
+
+        const result = await getPromotionIntent('offer-bad-data');
+
+        expect(result).toBeNull();
+      });
+
+      it('should return null when Redis is not configured', async () => {
+        process.env.UPSTASH_REDIS_REST_URL = '';
+        process.env.UPSTASH_REDIS_REST_TOKEN = '';
+
+        const result = await getPromotionIntent('offer-xyz');
+
+        expect(result).toBeNull();
+      });
+    });
+
+    describe('deletePromotionIntent', () => {
+      it('should delete promotion intent by offerId', async () => {
+        (global.fetch as jest.Mock).mockImplementationOnce(() => 
+          mockRedisResponse(1) // DEL returns count of deleted keys
+        );
+
+        await deletePromotionIntent('offer-123');
+
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+        
+        const delCall = (global.fetch as jest.Mock).mock.calls[0][0];
+        expect(delCall).toContain('/DEL/');
+        expect(delCall).toContain('promo_intent%3Aoffer-123');
+      });
+
+      it('should not throw when deleting non-existent intent', async () => {
+        (global.fetch as jest.Mock).mockImplementationOnce(() => 
+          mockRedisResponse(0) // DEL returns 0 when key doesn't exist
+        );
+
+        await expect(deletePromotionIntent('nonexistent')).resolves.toBeUndefined();
+      });
+
+      it('should not throw when Redis is not configured', async () => {
+        process.env.UPSTASH_REDIS_REST_URL = '';
+        process.env.UPSTASH_REDIS_REST_TOKEN = '';
+
+        await expect(deletePromotionIntent('offer-xyz')).resolves.toBeUndefined();
+      });
+    });
+
+    describe('promotion intent flow integration', () => {
+      it('should store and retrieve intent correctly (simulated flow)', async () => {
+        const offerId = 'offer-flow-test-123';
+        const adRate = 7;
+        
+        // Simulate storing intent when offer is created
+        (global.fetch as jest.Mock)
+          .mockImplementationOnce(() => mockRedisResponse('OK')) // SET
+          .mockImplementationOnce(() => mockRedisResponse(1)); // EXPIRE
+
+        await storePromotionIntent(offerId, true, adRate);
+        
+        // Simulate retrieving intent when publishing
+        const storedIntent = {
+          offerId,
+          enabled: true,
+          adRate,
+          createdAt: Date.now(),
+        };
+        
+        (global.fetch as jest.Mock).mockImplementationOnce(() => 
+          mockRedisResponse(JSON.stringify(storedIntent))
+        );
+
+        const retrieved = await getPromotionIntent(offerId);
+        
+        expect(retrieved).not.toBeNull();
+        expect(retrieved!.offerId).toBe(offerId);
+        expect(retrieved!.enabled).toBe(true);
+        expect(retrieved!.adRate).toBe(adRate);
+        
+        // Simulate deleting intent after processing
+        (global.fetch as jest.Mock).mockImplementationOnce(() => 
+          mockRedisResponse(1)
+        );
+
+        await deletePromotionIntent(offerId);
+        
+        // Verify delete was called
+        expect(global.fetch).toHaveBeenCalledTimes(4); // SET, EXPIRE, GET, DEL
+      });
+
+      it('should handle disabled promotion intent', async () => {
+        const offerId = 'offer-disabled-test';
+        
+        // Store disabled intent
+        (global.fetch as jest.Mock)
+          .mockImplementationOnce(() => mockRedisResponse('OK'))
+          .mockImplementationOnce(() => mockRedisResponse(1));
+
+        await storePromotionIntent(offerId, false, 0);
+        
+        // Retrieve and verify disabled
+        const storedIntent = {
+          offerId,
+          enabled: false,
+          adRate: 0,
+          createdAt: Date.now(),
+        };
+        
+        (global.fetch as jest.Mock).mockImplementationOnce(() => 
+          mockRedisResponse(JSON.stringify(storedIntent))
+        );
+
+        const retrieved = await getPromotionIntent(offerId);
+        
+        expect(retrieved).not.toBeNull();
+        expect(retrieved!.enabled).toBe(false);
+      });
     });
   });
 });
