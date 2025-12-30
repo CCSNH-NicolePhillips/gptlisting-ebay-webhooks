@@ -7,7 +7,7 @@ import { getEbayAccessTokenStrict } from "../../src/lib/ebay-auth.js";
 import { tokensStore } from "../../src/lib/_blobs.js";
 import { userScopedKey } from "../../src/lib/_auth.js";
 import { createOffer, putInventoryItem } from "../../src/lib/ebay-sell.js";
-import { promoteSingleListing } from "../../src/lib/ebay-promote.js";
+import { storePromotionIntent } from "../../src/lib/promotion-queue.js";
 
 async function fetchOfferById(token: string, apiHost: string, offerId: string, marketplaceId: string) {
   const url = `${apiHost}/sell/inventory/v1/offer/${encodeURIComponent(offerId)}`;
@@ -441,34 +441,16 @@ export const handler: Handler = async (event) => {
         });
         console.log(`[create-ebay-draft-user] ✓ Offer created successfully for SKU: ${mapped.sku}, offerId: ${offerResult.offerId}`);
         
-        // Apply promotion if enabled
-        if (group.promotion?.enabled) {
+        // Store promotion intent in Redis for when the offer is published
+        // (eBay doesn't persist custom merchantData, so we use Redis to bridge)
+        if (group.promotion?.enabled && offerResult.offerId) {
           try {
-            console.log(`[create-ebay-draft-user] Applying promotion to ${mapped.sku} at ${group.promotion.rate || 5}%...`);
-            
-            // Create token cache implementation for promoteSingleListing
-            const promoteTokenCache = {
-              async get(userId: string): Promise<string | null> {
-                return userId === user.userId ? access.token : null;
-              },
-              async set(_userId: string, _token: string, _expiresIn: number): Promise<void> {
-                // No-op: we already have the token
-              }
-            };
-            
-            const promoResult = await promoteSingleListing({
-              tokenCache: promoteTokenCache,
-              userId: user.userId,
-              ebayAccountId: user.userId, // Use userId as accountId for default account
-              inventoryReferenceId: mapped.sku,
-              adRate: group.promotion.rate || 5,
-              campaignIdOverride: undefined,
-            });
-            
-            console.log(`[create-ebay-draft-user] ✓ Promotion applied to ${mapped.sku}: campaign=${promoResult.campaignId}, enabled=${promoResult.enabled}`);
-          } catch (promoErr: any) {
-            console.error(`[create-ebay-draft-user] ⚠️ Failed to promote ${mapped.sku}:`, promoErr?.message || promoErr);
-            // Don't fail the whole job - promotion is optional
+            const adRate = group.promotion.rate || 5;
+            await storePromotionIntent(offerResult.offerId, true, adRate);
+            console.log(`[create-ebay-draft-user] ✓ Stored promotion intent for offerId ${offerResult.offerId}: adRate=${adRate}%`);
+          } catch (intentErr: any) {
+            console.error(`[create-ebay-draft-user] ⚠️ Failed to store promotion intent for ${offerResult.offerId}:`, intentErr?.message || intentErr);
+            // Don't fail the whole job - this is just for auto-promote on publish
           }
         }
       } catch (e: any) {

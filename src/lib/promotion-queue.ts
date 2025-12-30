@@ -256,3 +256,89 @@ export async function cancelJob(jobId: string): Promise<boolean> {
   await redisCall('DEL', `${JOB_PREFIX}${jobId}`);
   return removed > 0;
 }
+
+// ============================================================================
+// Promotion Intent Storage
+// ============================================================================
+// Stores promotion settings keyed by offerId so they can be retrieved when
+// the offer is published. eBay's Inventory API doesn't persist custom data,
+// so we use Redis to bridge the gap between offer creation and publishing.
+
+const PROMO_INTENT_PREFIX = 'promo_intent:';
+const PROMO_INTENT_TTL_SEC = 604800; // 7 days - offers should be published within this time
+
+export interface PromotionIntent {
+  offerId: string;
+  enabled: boolean;
+  adRate: number;
+  createdAt: number;
+}
+
+/**
+ * Store promotion intent for an offer
+ * Called when create-ebay-draft-user creates an offer with promotion enabled
+ */
+export async function storePromotionIntent(
+  offerId: string,
+  enabled: boolean,
+  adRate: number
+): Promise<void> {
+  if (!REDIS_URL || !REDIS_TOKEN) {
+    console.warn('[promotion-queue] Redis not configured, skipping promotion intent storage');
+    return;
+  }
+
+  const intent: PromotionIntent = {
+    offerId,
+    enabled,
+    adRate,
+    createdAt: Date.now(),
+  };
+
+  const key = `${PROMO_INTENT_PREFIX}${offerId}`;
+  await redisCall('SET', key, JSON.stringify(intent));
+  await redisCall('EXPIRE', key, PROMO_INTENT_TTL_SEC);
+  
+  console.log(`[promotion-queue] Stored promotion intent for offerId ${offerId}: enabled=${enabled}, adRate=${adRate}`);
+}
+
+/**
+ * Get promotion intent for an offer
+ * Called when ebay-publish-offer publishes an offer
+ */
+export async function getPromotionIntent(offerId: string): Promise<PromotionIntent | null> {
+  if (!REDIS_URL || !REDIS_TOKEN) {
+    console.warn('[promotion-queue] Redis not configured, cannot retrieve promotion intent');
+    return null;
+  }
+
+  const key = `${PROMO_INTENT_PREFIX}${offerId}`;
+  const data = await redisCall('GET', key);
+  
+  if (!data) {
+    console.log(`[promotion-queue] No promotion intent found for offerId ${offerId}`);
+    return null;
+  }
+
+  try {
+    const intent = JSON.parse(data) as PromotionIntent;
+    console.log(`[promotion-queue] Retrieved promotion intent for offerId ${offerId}: enabled=${intent.enabled}, adRate=${intent.adRate}`);
+    return intent;
+  } catch (err) {
+    console.error(`[promotion-queue] Failed to parse promotion intent for offerId ${offerId}:`, err);
+    return null;
+  }
+}
+
+/**
+ * Delete promotion intent for an offer (after processing)
+ */
+export async function deletePromotionIntent(offerId: string): Promise<void> {
+  if (!REDIS_URL || !REDIS_TOKEN) {
+    return;
+  }
+
+  const key = `${PROMO_INTENT_PREFIX}${offerId}`;
+  await redisCall('DEL', key);
+  console.log(`[promotion-queue] Deleted promotion intent for offerId ${offerId}`);
+}

@@ -2,7 +2,7 @@ import type { Handler } from '@netlify/functions';
 import { accessTokenFromRefresh, tokenHosts } from '../../src/lib/_common.js';
 import { tokensStore } from '../../src/lib/_blobs.js';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
-import { queuePromotionJob } from '../../src/lib/promotion-queue.js';
+import { queuePromotionJob, getPromotionIntent, deletePromotionIntent } from '../../src/lib/promotion-queue.js';
 import { bindListing } from '../../src/lib/price-store.js';
 
 export const handler: Handler = async (event) => {
@@ -304,13 +304,13 @@ export const handler: Handler = async (event) => {
 			
 			console.log(`[ebay-publish-offer] DEBUG: autoPromote=${autoPromote}, defaultAdRate=${defaultAdRate}`);
 			
-			// Fetch the offer to get SKU and listingId
+			// Fetch the offer to get SKU, listingId, and merchantData (promotion settings)
 			const getOfferUrl = `${apiHost}/sell/inventory/v1/offer/${encodeURIComponent(offerId)}`;
 			const getOfferRes = await fetch(getOfferUrl, { headers });
 			
 			console.log(`[ebay-publish-offer] DEBUG: getOfferRes.ok=${getOfferRes.ok}, status=${getOfferRes.status}`);
 			
-			if (getOfferRes.ok && autoPromote) {
+			if (getOfferRes.ok) {
 				const offerText = await getOfferRes.text();
 				const offer = JSON.parse(offerText);
 				const offerSku = typeof offer?.sku === 'string'
@@ -319,14 +319,36 @@ export const handler: Handler = async (event) => {
 						? offer.offer.sku
 						: undefined;
 				
-				console.log(`[ebay-publish-offer] Auto-promotion enabled for user, SKU ${offerSku}, offerId ${offerId}`);
-				console.log(`[ebay-publish-offer] Using ad rate: ${defaultAdRate}% (from ${userSettings.autoPromoteEnabled ? 'settings.json' : 'policy-defaults.json'})`);
+				// Check Redis for promotion intent stored by create-ebay-draft-user
+				// This takes precedence over user settings for per-draft promotion control
+				let usePromotion = autoPromote;
+				let adRate = defaultAdRate;
 				
-				const adRate = defaultAdRate;
+				try {
+					const promotionIntent = await getPromotionIntent(offerId);
+					if (promotionIntent && promotionIntent.enabled) {
+						console.log(`[ebay-publish-offer] Found promotion intent in Redis for offerId ${offerId}: enabled=${promotionIntent.enabled}, adRate=${promotionIntent.adRate}`);
+						usePromotion = true;
+						adRate = promotionIntent.adRate;
+						// Clean up the intent after reading
+						await deletePromotionIntent(offerId);
+					} else if (promotionIntent && !promotionIntent.enabled) {
+						console.log(`[ebay-publish-offer] Promotion intent found but disabled for offerId ${offerId}`);
+						usePromotion = false;
+						await deletePromotionIntent(offerId);
+					}
+				} catch (intentErr: any) {
+					console.warn(`[ebay-publish-offer] Failed to check promotion intent for offerId ${offerId}:`, intentErr?.message);
+					// Fall back to user settings check
+				}
 				
-				// Get listingId from publish response
-				const listingId = pub.body?.listingId || offer.listing?.listingId;
-				console.log(`[ebay-publish-offer] DEBUG: pub.body.listingId=${pub.body?.listingId}, offer.listing?.listingId=${offer.listing?.listingId}, final listingId=${listingId}`);
+				if (usePromotion) {
+					console.log(`[ebay-publish-offer] Auto-promotion enabled for offerId ${offerId}, SKU ${offerSku}`);
+					console.log(`[ebay-publish-offer] Using ad rate: ${adRate}%`);
+				
+					// Get listingId from publish response
+					const listingId = pub.body?.listingId || offer.listing?.listingId;
+					console.log(`[ebay-publish-offer] DEBUG: pub.body.listingId=${pub.body?.listingId}, offer.listing?.listingId=${offer.listing?.listingId}, final listingId=${listingId}`);
 				
 				if (listingId) {
 					// Queue promotion job for background processing
@@ -366,10 +388,11 @@ export const handler: Handler = async (event) => {
 						reason: 'Listing ID not found in eBay publish response',
 					};
 				}
+				} else {
+					console.log(`[ebay-publish-offer] Auto-promotion not enabled for offerId ${offerId}`);
+				}
 			} else if (!getOfferRes.ok) {
 				console.log(`[ebay-publish-offer] Could not fetch offer details for offerId ${offerId}`);
-			} else if (!autoPromote) {
-				console.log(`[ebay-publish-offer] Auto-promotion not enabled for user, skipping for offerId ${offerId}`);
 			}
 		} catch (err: any) {
 			// Log error but don't fail the publish
