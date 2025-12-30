@@ -316,11 +316,48 @@
         position: absolute;
         top: 0.6rem;
         left: 0.6rem;
-        width: 22px;
-        height: 22px;
+        width: 20px;
+        height: 20px;
         cursor: pointer;
         accent-color: var(--primary);
         z-index: 10;
+        opacity: 0;
+        transition: opacity 0.15s ease;
+      }
+      .card:hover .card-checkbox,
+      .card.selected .card-checkbox {
+        opacity: 1;
+      }
+      .card.selected {
+        background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.1) 100%);
+        border-color: var(--primary);
+        box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.4), 0 18px 40px rgba(15, 23, 42, 0.45);
+      }
+      
+      /* Select All toolbar */
+      .select-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 0.75rem 1rem;
+        background: rgba(99, 102, 241, 0.08);
+        border: 1px solid rgba(99, 102, 241, 0.2);
+        border-radius: 10px;
+        margin-bottom: 1rem;
+      }
+      .select-toolbar label {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        cursor: pointer;
+        color: #cbd5ff;
+        font-size: 0.9rem;
+      }
+      .select-toolbar input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--primary);
+        cursor: pointer;
       }
       .card.selected {
         border-color: var(--primary);
@@ -586,6 +623,10 @@
             
             <div id="readySection" style="display: none;">
               <h2 style="font-size: 1.25rem; margin: 1.5rem 0 1rem; color: var(--success);">✓ Ready to Publish <span id="readyCount" style="font-size: 0.875rem; color: var(--text-muted);"></span></h2>
+              <div class="select-toolbar">
+                <label><input type="checkbox" id="selectAllReady"> Select All</label>
+                <span id="selectedReadyCount" style="color: var(--text-muted); font-size: 0.85rem;"></span>
+              </div>
               <div id="readyList" class="grid" aria-live="polite">
                 <div class="loading">
                   <div class="spinner" role="status" aria-label="Loading"></div>
@@ -1546,7 +1587,9 @@
       // ========================================================================
       const bulkActionBar = document.getElementById('bulkActionBar');
       const selectAllCheckbox = document.getElementById('selectAll');
+      const selectAllReadyCheckbox = document.getElementById('selectAllReady');
       const selectedCountEl = document.getElementById('selectedCount');
+      const selectedReadyCountEl = document.getElementById('selectedReadyCount');
       const bulkPublishBtn = document.getElementById('bulkPublish');
       const bulkDeleteBtn = document.getElementById('bulkDelete');
       
@@ -1571,17 +1614,41 @@
           selectedCountEl.textContent = `${count} selected`;
         } else {
           bulkActionBar.classList.remove('show');
-          selectAllCheckbox.checked = false;
+          if (selectAllCheckbox) selectAllCheckbox.checked = false;
         }
         
-        // Update select all checkbox state
+        // Update select all checkbox states
+        const readyCheckboxes = document.querySelectorAll('#readyList .card-checkbox');
+        const readyChecked = Array.from(readyCheckboxes).filter(cb => cb.checked).length;
+        if (selectAllReadyCheckbox) {
+          selectAllReadyCheckbox.checked = readyCheckboxes.length > 0 && readyChecked === readyCheckboxes.length;
+          selectAllReadyCheckbox.indeterminate = readyChecked > 0 && readyChecked < readyCheckboxes.length;
+        }
+        if (selectedReadyCountEl) {
+          selectedReadyCountEl.textContent = readyChecked > 0 ? `${readyChecked} selected` : '';
+        }
+        
+        // Update bar's select all
         const allCheckboxes = document.querySelectorAll('#readyList .card-checkbox, #needsList .card-checkbox');
         const allChecked = allCheckboxes.length > 0 && 
           Array.from(allCheckboxes).every(cb => cb.checked);
-        selectAllCheckbox.checked = allChecked;
-        selectAllCheckbox.indeterminate = count > 0 && !allChecked;
+        if (selectAllCheckbox) {
+          selectAllCheckbox.checked = allChecked;
+          selectAllCheckbox.indeterminate = count > 0 && !allChecked;
+        }
       }
       
+      // Select All in toolbar above grid
+      selectAllReadyCheckbox?.addEventListener('change', () => {
+        const checkboxes = document.querySelectorAll('#readyList .card-checkbox');
+        checkboxes.forEach(cb => {
+          cb.checked = selectAllReadyCheckbox.checked;
+          cb.closest('.card')?.classList.toggle('selected', selectAllReadyCheckbox.checked);
+        });
+        updateBulkActionBar();
+      });
+      
+      // Select All in bulk action bar
       selectAllCheckbox?.addEventListener('change', () => {
         const checkboxes = document.querySelectorAll('#readyList .card-checkbox, #needsList .card-checkbox');
         checkboxes.forEach(cb => {
