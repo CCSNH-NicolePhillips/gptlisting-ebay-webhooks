@@ -310,6 +310,73 @@
         opacity: 0.5;
         cursor: not-allowed;
       }
+      
+      /* Multi-select styles */
+      .card-checkbox {
+        position: absolute;
+        top: 0.6rem;
+        left: 0.6rem;
+        width: 22px;
+        height: 22px;
+        cursor: pointer;
+        accent-color: var(--primary);
+        z-index: 10;
+        opacity: 0;
+        transition: opacity 0.15s ease;
+      }
+      .card:hover .card-checkbox,
+      .card-checkbox:checked {
+        opacity: 1;
+      }
+      .card.selected {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3), 0 18px 40px rgba(15, 23, 42, 0.45);
+      }
+      .card.selected .card-checkbox {
+        opacity: 1;
+      }
+      .bulk-action-bar {
+        display: none;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+        border: 1px solid var(--primary);
+        border-radius: 12px;
+        padding: 0.75rem 1rem;
+        margin-bottom: 1rem;
+        align-items: center;
+        gap: 1rem;
+        box-shadow: 0 4px 20px rgba(99, 102, 241, 0.3);
+      }
+      .bulk-action-bar.show {
+        display: flex;
+      }
+      .bulk-action-bar .select-all-wrap {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .bulk-action-bar .select-all-wrap input {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--primary);
+        cursor: pointer;
+      }
+      .bulk-action-bar .selected-count {
+        font-weight: 600;
+        color: #fff;
+        min-width: 120px;
+      }
+      .bulk-action-bar .bulk-actions {
+        display: flex;
+        gap: 0.5rem;
+        margin-left: auto;
+      }
+      .bulk-action-bar .btn {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.85rem;
+      }
     </style>
   </head>
   <body>
@@ -495,6 +562,19 @@
               <div id="flash" class="flash"></div>
             </div>
             
+            <!-- Bulk Action Bar -->
+            <div id="bulkActionBar" class="bulk-action-bar">
+              <div class="select-all-wrap">
+                <input type="checkbox" id="selectAll" title="Select all">
+                <label for="selectAll" style="cursor: pointer; color: #cbd5ff;">Select All</label>
+              </div>
+              <span class="selected-count" id="selectedCount">0 selected</span>
+              <div class="bulk-actions">
+                <button class="btn" id="bulkPublish" title="Publish selected drafts">Publish</button>
+                <button class="btn danger" id="bulkDelete" title="Delete selected drafts">Delete</button>
+              </div>
+            </div>
+            
             <div id="initialLoader" class="loading" style="margin: 3rem 0;">
               <div class="spinner" role="status" aria-label="Loading"></div>
               <div class="label">Loading drafts…</div>
@@ -579,6 +659,22 @@
       function card(offer) {
         const el = document.createElement('div');
         el.className = 'card';
+        el.style.position = 'relative';
+        el.dataset.offerId = offer.offerId || '';
+        el.dataset.sku = offer.sku || '';
+        
+        // Multi-select checkbox
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'card-checkbox';
+        checkbox.title = 'Select this draft';
+        checkbox.addEventListener('change', () => {
+          el.classList.toggle('selected', checkbox.checked);
+          updateBulkActionBar();
+        });
+        checkbox.addEventListener('click', (e) => e.stopPropagation());
+        el.appendChild(checkbox);
+        
         // thumbnail area
         const th = document.createElement('div');
         th.className = 'thumb';
@@ -1450,6 +1546,155 @@
           load(); 
         } catch {} 
       });
+      
+      // ========================================================================
+      // Multi-select and Bulk Actions
+      // ========================================================================
+      const bulkActionBar = document.getElementById('bulkActionBar');
+      const selectAllCheckbox = document.getElementById('selectAll');
+      const selectedCountEl = document.getElementById('selectedCount');
+      const bulkPublishBtn = document.getElementById('bulkPublish');
+      const bulkDeleteBtn = document.getElementById('bulkDelete');
+      
+      function getSelectedCards() {
+        return Array.from(document.querySelectorAll('#readyList .card.selected, #needsList .card.selected'));
+      }
+      
+      function getSelectedOffers() {
+        return getSelectedCards().map(card => ({
+          offerId: card.dataset.offerId,
+          sku: card.dataset.sku,
+          title: card.querySelector('.title')?.textContent || '',
+        })).filter(o => o.offerId);
+      }
+      
+      function updateBulkActionBar() {
+        const selected = getSelectedCards();
+        const count = selected.length;
+        
+        if (count > 0) {
+          bulkActionBar.classList.add('show');
+          selectedCountEl.textContent = `${count} selected`;
+        } else {
+          bulkActionBar.classList.remove('show');
+          selectAllCheckbox.checked = false;
+        }
+        
+        // Update select all checkbox state
+        const allCheckboxes = document.querySelectorAll('#readyList .card-checkbox, #needsList .card-checkbox');
+        const allChecked = allCheckboxes.length > 0 && 
+          Array.from(allCheckboxes).every(cb => cb.checked);
+        selectAllCheckbox.checked = allChecked;
+        selectAllCheckbox.indeterminate = count > 0 && !allChecked;
+      }
+      
+      selectAllCheckbox?.addEventListener('change', () => {
+        const checkboxes = document.querySelectorAll('#readyList .card-checkbox, #needsList .card-checkbox');
+        checkboxes.forEach(cb => {
+          cb.checked = selectAllCheckbox.checked;
+          cb.closest('.card')?.classList.toggle('selected', selectAllCheckbox.checked);
+        });
+        updateBulkActionBar();
+      });
+      
+      bulkPublishBtn?.addEventListener('click', async () => {
+        const offers = getSelectedOffers();
+        if (offers.length === 0) return;
+        
+        const confirmed = confirm(`Publish ${offers.length} draft(s) to eBay?`);
+        if (!confirmed) return;
+        
+        flash.textContent = `Publishing ${offers.length} draft(s)...`;
+        
+        let successCount = 0;
+        let errorCount = 0;
+        const exec = (window.authClient && typeof window.authClient.authFetch === 'function') 
+          ? window.authClient.authFetch 
+          : fetch;
+        
+        for (const offer of offers) {
+          try {
+            const res = await exec('/.netlify/functions/ebay-publish-offer', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ offerId: offer.offerId }),
+            });
+            
+            if (res.ok) {
+              successCount++;
+              // Remove card from grid
+              const card = document.querySelector(`.card[data-offer-id="${offer.offerId}"]`);
+              card?.remove();
+            } else {
+              errorCount++;
+            }
+          } catch {
+            errorCount++;
+          }
+        }
+        
+        updateBulkActionBar();
+        checkAndShowEmptyState();
+        
+        if (errorCount === 0) {
+          flash.textContent = `✓ Successfully published ${successCount} draft(s)`;
+        } else {
+          flash.textContent = `Published ${successCount}, failed ${errorCount}`;
+        }
+        
+        // Clear cache so refresh shows updated data
+        sessionStorage.removeItem('drafts-cache');
+        sessionStorage.removeItem('drafts-cache-time');
+      });
+      
+      bulkDeleteBtn?.addEventListener('click', async () => {
+        const offers = getSelectedOffers();
+        if (offers.length === 0) return;
+        
+        const confirmed = confirm(`Delete ${offers.length} draft(s)? This cannot be undone.`);
+        if (!confirmed) return;
+        
+        flash.textContent = `Deleting ${offers.length} draft(s)...`;
+        
+        let successCount = 0;
+        let errorCount = 0;
+        const exec = (window.authClient && typeof window.authClient.authFetch === 'function') 
+          ? window.authClient.authFetch 
+          : fetch;
+        
+        for (const offer of offers) {
+          try {
+            const res = await exec(`/.netlify/functions/ebay-delete-draft?offerId=${encodeURIComponent(offer.offerId)}`, {
+              method: 'DELETE',
+            });
+            
+            if (res.ok) {
+              successCount++;
+              // Remove card from grid
+              const card = document.querySelector(`.card[data-offer-id="${offer.offerId}"]`);
+              card?.remove();
+            } else {
+              errorCount++;
+            }
+          } catch {
+            errorCount++;
+          }
+        }
+        
+        updateBulkActionBar();
+        checkAndShowEmptyState();
+        
+        if (errorCount === 0) {
+          flash.textContent = `✓ Successfully deleted ${successCount} draft(s)`;
+        } else {
+          flash.textContent = `Deleted ${successCount}, failed ${errorCount}`;
+        }
+        
+        // Clear cache
+        sessionStorage.removeItem('drafts-cache');
+        sessionStorage.removeItem('drafts-cache-time');
+      });
+      
       initUserMenu();
       bootstrap();
     </script>
