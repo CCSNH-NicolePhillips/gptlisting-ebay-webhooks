@@ -653,11 +653,14 @@
       function card(offer) {
         const el = document.createElement('div');
         el.className = 'card';
-        el.style.position = 'relative';
         el.dataset.offerId = offer.offerId || '';
         el.dataset.sku = offer.sku || '';
         
-        // Multi-select checkbox
+        // thumbnail area
+        const th = document.createElement('div');
+        th.className = 'thumb';
+        
+        // Multi-select checkbox (inside thumb so it overlays the image)
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
         checkbox.className = 'card-checkbox';
@@ -667,11 +670,8 @@
           updateBulkActionBar();
         });
         checkbox.addEventListener('click', (e) => e.stopPropagation());
-        el.appendChild(checkbox);
+        th.appendChild(checkbox);
         
-        // thumbnail area
-        const th = document.createElement('div');
-        th.className = 'thumb';
         const sk = document.createElement('div');
         sk.className = 'skeleton';
         th.appendChild(sk);

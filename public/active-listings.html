@@ -462,21 +462,8 @@
     function renderCard(o) {
       const card = document.createElement('div');
       card.className = 'card';
-      card.style.position = 'relative';
       card.dataset.listingId = o.listingId || '';
       card.dataset.sku = o.sku || '';
-      
-      // Multi-select checkbox
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.className = 'card-checkbox';
-      checkbox.title = 'Select this listing';
-      checkbox.addEventListener('change', () => {
-        card.classList.toggle('selected', checkbox.checked);
-        updateBulkActionBar();
-      });
-      checkbox.addEventListener('click', (e) => e.stopPropagation());
-      card.appendChild(checkbox);
 
       // Add image thumbnail if available
       if (o.imageUrl) {
@@ -484,9 +471,22 @@
         imgContainer.style.width = '100%';
         imgContainer.style.height = '180px';
         imgContainer.style.marginBottom = '0.8rem';
-        imgContainer.style.overflow = 'hidden';
+        imgContainer.style.overflow = 'visible'; // Allow checkbox to be visible
         imgContainer.style.borderRadius = '6px';
         imgContainer.style.backgroundColor = '#2a2a2a';
+        imgContainer.style.position = 'relative';
+        
+        // Multi-select checkbox (inside image container)
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'card-checkbox';
+        checkbox.title = 'Select this listing';
+        checkbox.addEventListener('change', () => {
+          card.classList.toggle('selected', checkbox.checked);
+          updateBulkActionBar();
+        });
+        checkbox.addEventListener('click', (e) => e.stopPropagation());
+        imgContainer.appendChild(checkbox);
         
         const img = document.createElement('img');
         img.src = o.imageUrl;
@@ -495,8 +495,35 @@
         img.style.height = '100%';
         img.style.objectFit = 'contain';
         img.style.objectPosition = 'center';
+        img.style.borderRadius = '6px';
         
         imgContainer.appendChild(img);
+        card.appendChild(imgContainer);
+      } else {
+        // No image - add checkbox directly to card with placeholder
+        const imgContainer = document.createElement('div');
+        imgContainer.style.width = '100%';
+        imgContainer.style.height = '180px';
+        imgContainer.style.marginBottom = '0.8rem';
+        imgContainer.style.borderRadius = '6px';
+        imgContainer.style.backgroundColor = '#2a2a2a';
+        imgContainer.style.position = 'relative';
+        imgContainer.style.display = 'flex';
+        imgContainer.style.alignItems = 'center';
+        imgContainer.style.justifyContent = 'center';
+        imgContainer.style.color = 'var(--muted)';
+        imgContainer.textContent = 'No image';
+        
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'card-checkbox';
+        checkbox.title = 'Select this listing';
+        checkbox.addEventListener('change', () => {
+          card.classList.toggle('selected', checkbox.checked);
+          updateBulkActionBar();
+        });
+        checkbox.addEventListener('click', (e) => e.stopPropagation());
+        imgContainer.appendChild(checkbox);
         card.appendChild(imgContainer);
       }
 
