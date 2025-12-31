@@ -5,8 +5,13 @@
  * Handles eBay's sync delays with retry logic.
  */
 
-import type { Handler, HandlerEvent } from '@netlify/functions';
+import type { Handler, HandlerEvent, Config } from '@netlify/functions';
 import { getReadyJobs, updateJob, getQueueStats } from '../../src/lib/promotion-queue.js';
+
+// Schedule config - runs every minute
+export const config: Config = {
+  schedule: '* * * * *',
+};
 import {
   createAds,
   getCampaigns,
