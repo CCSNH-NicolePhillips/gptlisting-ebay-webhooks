@@ -186,6 +186,31 @@ function calculateShippingWeight(
       // Using 0.015 oz as average (larger capsules)
       weightInOz = netWeight.value * 0.015;
       break;
+    case 'sticks':
+    case 'stick':
+      // Honey sticks, supplement sticks - typically 0.3-0.5 oz each
+      // Using 0.35 oz as average for honey/supplement sticks
+      weightInOz = netWeight.value * 0.35;
+      break;
+    case 'pieces':
+    case 'piece':
+    case 'pcs':
+      // Gum pieces, small candies - typically very light
+      // Using 0.02 oz as average per piece
+      weightInOz = netWeight.value * 0.02;
+      break;
+    case 'packets':
+    case 'packet':
+      // Individual powder packets, sachets - typically 0.1-0.3 oz each
+      // Using 0.2 oz as average
+      weightInOz = netWeight.value * 0.2;
+      break;
+    case 'chews':
+    case 'chew':
+      // Chewable supplements - similar to gummies
+      // Using 0.03 oz as average
+      weightInOz = netWeight.value * 0.03;
+      break;
     default:
       // Unknown unit - assume ounces
       console.warn(`[weight] Unknown weight unit "${netWeight.unit}", assuming ounces`);
@@ -815,6 +840,7 @@ async function createDraftForProduct(
       packCount: product.packCount, // CRITICAL: Pass pack count for variant matching (e.g., 24-pack → $48)
       amazonPackSize: undefined, // TODO: Extract from Amazon product detection in extractPriceFromHtml
       pricingSettings, // Phase 3: Pass user pricing settings
+      netWeight: product.netWeight || undefined, // Include size for better Amazon variant matching
     };
 
     pricingDecision = await lookupPrice(priceInput);

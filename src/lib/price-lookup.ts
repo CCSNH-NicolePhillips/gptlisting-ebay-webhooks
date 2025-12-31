@@ -116,6 +116,8 @@ export interface PriceLookupInput {
   packCount?: number | null; // Pack count from vision analysis (e.g., 24 for "24-pack") for variant pricing
   amazonPackSize?: number; // Pack size detected from Amazon product page (e.g., 2 for "2-pack")
   pricingSettings?: PricingSettings; // Phase 3: User-configurable pricing settings
+  skipCache?: boolean; // Skip cache and force fresh lookup (for testing/debugging)
+  netWeight?: { value: number; unit: string }; // Size/weight from Vision API (e.g., {value: 15.22, unit: "fl oz"})
 }
 
 export type PriceSource = 'ebay-sold' | 'amazon' | 'brand-msrp' | 'brave-fallback' | 'estimate';
@@ -170,9 +172,10 @@ function isProbablyBundlePrice(brandPrice: number, comparisonPrice: number): boo
 
   const ratio = brandPrice / comparisonPrice;
 
-  // Tunable: > 2.5x seems very likely to be a bundle or multi-pack
-  // Lowered from 3.0x to catch MLM brands like Root (2.90x ratio)
-  return ratio > 2.5;
+  // Tunable: > 1.8x seems very likely to be a bundle or multi-pack
+  // Lowered from 2.5x to better catch size mismatches like brand site showing larger bottles
+  // Example: Brand MSRP $74.95 vs Amazon $39.95 = 1.87x ratio suggests different sizes
+  return ratio > 1.8;
 }
 
 /**
@@ -234,10 +237,121 @@ function isAmazonBundlePage(
   return false;
 }
 
+/**
+ * Check if Amazon page has a significantly different size than what we're selling
+ * @param pageTitle - Amazon page title
+ * @param productTitle - Our product title (should include size like "15.22 fl oz")
+ * @returns true if there's a major size mismatch
+ */
+function isAmazonSizeMismatch(
+  pageTitle: string | undefined,
+  productTitle: string | undefined
+): boolean {
+  if (!pageTitle || !productTitle) return false;
+  
+  // Extract size from both titles
+  const sizePattern = /(\d+(?:\.\d+)?)\s*(fl\s*oz|oz|ml|l|g|kg|lb|lbs)/i;
+  
+  const amazonMatch = pageTitle.match(sizePattern);
+  const productMatch = productTitle.match(sizePattern);
+  
+  if (!amazonMatch || !productMatch) return false;
+  
+  const amazonSize = parseFloat(amazonMatch[1]);
+  const amazonUnit = amazonMatch[2].toLowerCase().replace(/\s+/g, '');
+  const productSize = parseFloat(productMatch[1]);
+  const productUnit = productMatch[2].toLowerCase().replace(/\s+/g, '');
+  
+  // Normalize units to a common base (oz for liquid, g for weight)
+  const normalizeToOz = (size: number, unit: string): number => {
+    switch (unit) {
+      case 'oz':
+      case 'floz':
+        return size;
+      case 'ml':
+        return size / 29.5735; // ml to fl oz
+      case 'l':
+        return size * 33.814; // liters to fl oz
+      default:
+        return size; // For weight units, just compare directly
+    }
+  };
+  
+  // Only compare if units are compatible (both liquid or both weight)
+  const liquidUnits = ['oz', 'floz', 'ml', 'l'];
+  const weightUnits = ['g', 'kg', 'lb', 'lbs'];
+  
+  const amazonIsLiquid = liquidUnits.includes(amazonUnit);
+  const productIsLiquid = liquidUnits.includes(productUnit);
+  
+  if (amazonIsLiquid !== productIsLiquid) return false; // Incompatible units
+  
+  let amazonNormalized: number, productNormalized: number;
+  
+  if (amazonIsLiquid) {
+    amazonNormalized = normalizeToOz(amazonSize, amazonUnit);
+    productNormalized = normalizeToOz(productSize, productUnit);
+  } else {
+    // Weight comparison - normalize to grams
+    const normalizeToG = (size: number, unit: string): number => {
+      switch (unit) {
+        case 'g': return size;
+        case 'kg': return size * 1000;
+        case 'lb':
+        case 'lbs': return size * 453.592;
+        default: return size;
+      }
+    };
+    amazonNormalized = normalizeToG(amazonSize, amazonUnit);
+    productNormalized = normalizeToG(productSize, productUnit);
+  }
+  
+  // Reject if Amazon size is more than 50% different from our product
+  const ratio = amazonNormalized / productNormalized;
+  if (ratio > 1.5 || ratio < 0.67) {
+    console.log(`[price] ⚠️ Size mismatch: Amazon=${amazonSize} ${amazonUnit}, Product=${productSize} ${productUnit} (ratio=${ratio.toFixed(2)})`);
+    return true;
+  }
+  
+  return false;
+}
+
 function normalizeBrand(str?: string | null): string | null {
   if (!str) return null;
   const cleaned = str.toLowerCase().replace(/[^a-z0-9]+/g, "");
   return cleaned || null;
+}
+
+/**
+ * Check if two brands are a reasonable match
+ * Handles cases like "MaryRuth's" matching "MaryRuth Organics"
+ */
+function brandsMatch(brand1?: string | null, brand2?: string | null): boolean {
+  const n1 = normalizeBrand(brand1);
+  const n2 = normalizeBrand(brand2);
+  if (!n1 || !n2) return false;
+  
+  // Direct substring match
+  if (n1.includes(n2) || n2.includes(n1)) return true;
+  
+  // Check if they share a significant common prefix (at least 6 chars or 80% of shorter)
+  const minLen = Math.min(n1.length, n2.length);
+  const prefixThreshold = Math.max(6, Math.floor(minLen * 0.8));
+  
+  let commonPrefix = 0;
+  for (let i = 0; i < minLen && n1[i] === n2[i]; i++) {
+    commonPrefix++;
+  }
+  
+  if (commonPrefix >= prefixThreshold) return true;
+  
+  // Handle possessive 's - "maryruths" vs "maryruth" (remove trailing 's')
+  const n1NoS = n1.endsWith('s') && n1.length > 3 ? n1.slice(0, -1) : n1;
+  const n2NoS = n2.endsWith('s') && n2.length > 3 ? n2.slice(0, -1) : n2;
+  
+  if (n1NoS.includes(n2NoS) || n2NoS.includes(n1NoS)) return true;
+  
+  return false;
 }
 
 /**
@@ -418,10 +532,13 @@ RECENT SOLD PRICES (last 30 days):
 ` : ''}
 
 PRICING RULES:
-1. **ALWAYS prefer brand MSRP if available** - this is the retail price we'll discount
-2. Only use eBay sold prices if NO brand MSRP is available
+1. **Prefer the HIGHER price between brand MSRP and Amazon** - we sell at a discount from market price
+   - If Amazon price > brand MSRP by 20% or more, use Amazon (brand may have sale/promo pricing)
+   - If brand MSRP >= Amazon, use brand MSRP (standard retail)
+   - Example: Brand $17, Amazon $25 → use Amazon $25 (brand is running a sale)
+2. Only use eBay sold prices if NO brand MSRP and NO Amazon price is available
 3. If using eBay sold price, return it as basePrice (already competitive)
-4. Never pick a price below 50% of brand MSRP (prevents undervaluing new products)
+4. Never pick a price below 50% of the highest available price (prevents undervaluing)
 5. For used items, eBay sold data is more reliable than MSRP
 
 IMPORTANT: Return the BASE/RETAIL price as both basePrice and recommendedListingPrice.
@@ -429,7 +546,7 @@ Do NOT apply discounts yourself - the system will apply competitive pricing auto
 
 RESPONSE FORMAT (JSON only):
 {
-  "chosenSource": "ebay-sold" | "brand-msrp" | "brave-fallback",
+  "chosenSource": "amazon" | "brand-msrp" | "ebay-sold" | "brave-fallback",
   "basePrice": <number>,
   "recommendedListingPrice": <number>,
   "reasoning": "<brief explanation of pricing decision>"
@@ -605,8 +722,9 @@ export async function lookupPrice(
   // Check cache first - cache stores MSRP data, we compute price with current user settings
   const cacheKey = makePriceSig(input.brand, input.title);
   
-  try {
-    const cached = await getCachedPrice(cacheKey);
+  if (!input.skipCache) {
+    try {
+      const cached = await getCachedPrice(cacheKey);
     
     if (cached?.msrpCents && cached?.chosen) {
       console.log(`[price] ✓ Using cached MSRP: $${(cached.msrpCents / 100).toFixed(2)} (source: ${cached.chosen.source})`);
@@ -637,6 +755,9 @@ export async function lookupPrice(
   } catch (error) {
     console.warn('[price] Cache read error, proceeding without cache:', error);
     // Continue with normal price lookup
+  }
+  } else {
+    console.log('[price] Skipping cache (skipCache=true)');
   }
 
   const candidates: PriceSourceDetail[] = [];
@@ -693,8 +814,24 @@ export async function lookupPrice(
       console.log('[price-debug] Building Amazon search query...');
       console.log(`[price-debug] input.keyText =`, input.keyText);
       console.log(`[price-debug] input.categoryPath =`, input.categoryPath);
+      console.log(`[price-debug] input.netWeight =`, input.netWeight);
       
       let searchQuery = `${input.brand} ${input.title}`;
+      
+      // Include size/weight in search query to find correct variant
+      // Only add if not already in the title (avoid duplication like "15.22 fl oz 15.22 fl oz")
+      if (input.netWeight && input.netWeight.value && input.netWeight.unit) {
+        const sizeStr = `${input.netWeight.value} ${input.netWeight.unit}`;
+        const normalizedTitle = input.title.toLowerCase().replace(/\s+/g, ' ');
+        const normalizedSize = sizeStr.toLowerCase().replace(/\s+/g, ' ');
+        if (!normalizedTitle.includes(normalizedSize)) {
+          searchQuery += ` ${sizeStr}`;
+          console.log(`[price-debug] Added netWeight to query: "${sizeStr}"`);
+        } else {
+          console.log(`[price-debug] Size "${sizeStr}" already in title, not duplicating`);
+        }
+      }
+      
       if (input.categoryPath) {
         searchQuery += ` ${input.categoryPath}`;
         console.log(`[price-debug] Added categoryPath to query: "${input.categoryPath}"`);
@@ -735,9 +872,8 @@ export async function lookupPrice(
         
         if (priceData.amazonItemPrice && priceData.amazonItemPrice > 0) {
           // STRICT VALIDATION: Must match brand AND key product terms (unless using registered ASIN)
-          const normalizedBrand = normalizeBrand(input.brand);
+          const brandMatches = brandsMatch(input.brand, priceData.pageTitle);
           const normalizedTitle = normalizeBrand(priceData.pageTitle);
-          const brandMatches = Boolean(normalizedBrand && normalizedTitle && normalizedTitle.includes(normalizedBrand));
           
           // Skip validation if we used a registered ASIN (already trusted)
           const skipValidation = Boolean(registeredAsin);
@@ -764,7 +900,13 @@ export async function lookupPrice(
             input.packCount
           );
 
-          if (skipValidation || (brandMatches && productMatches && !isBundleMismatch)) {
+          // SIZE CHECK: Reject Amazon pages with significantly different sizes
+          const isSizeMismatch = isAmazonSizeMismatch(
+            priceData.pageTitle,
+            input.title
+          );
+
+          if (skipValidation || (brandMatches && productMatches && !isBundleMismatch && !isSizeMismatch)) {
             amazonPrice = priceData.amazonItemPrice;
             amazonUrl = amazonUrlFound;
             
@@ -791,7 +933,72 @@ export async function lookupPrice(
             if (!brandMatches) rejectReasons.push('brand mismatch');
             if (!productMatches) rejectReasons.push('product mismatch');
             if (isBundleMismatch) rejectReasons.push('bundle/multipack page');
+            if (isSizeMismatch) rejectReasons.push('size mismatch');
             console.log(`[price] ✗ Amazon result rejected - ${rejectReasons.join(', ')} (title: ${priceData.pageTitle || 'unknown'})`);
+            
+            // AUTO-RETRY: If size mismatch and we have netWeight, try a size-focused search
+            if (isSizeMismatch && !registeredAsin && input.netWeight && input.netWeight.value && input.netWeight.unit) {
+              console.log(`[price] 🔄 Retrying with size-focused search...`);
+              
+              // Build a size-first query: "Brand 15.22 oz" or "Brand 60 capsules"
+              const sizeStr = `${input.netWeight.value} ${input.netWeight.unit}`;
+              // Extract key product term (first significant word from title, skip size)
+              const titleWords = input.title
+                .replace(/[\d.]+\s*(oz|fl oz|ml|g|mg|capsules?|tablets?|pieces?|sticks?|gummies?)/gi, '')
+                .trim()
+                .split(/\s+/)
+                .filter(w => w.length > 3);
+              const keyWord = titleWords[0] || '';
+              
+              const sizeFirstQuery = `${input.brand} ${sizeStr} ${keyWord}`.trim();
+              console.log(`[price-debug] Size-focused retry query: "${sizeFirstQuery}"`);
+              
+              const retryUrl = await braveFirstUrl(sizeFirstQuery, 'amazon.com');
+              
+              if (retryUrl && retryUrl !== amazonUrlFound) {
+                console.log(`[price] 🔄 Retry found different URL: ${retryUrl}`);
+                
+                const { html: retryHtml } = await fetchHtml(retryUrl);
+                if (retryHtml) {
+                  const retryPriceData = extractPriceWithShipping(retryHtml, input.title);
+                  
+                  if (retryPriceData.amazonItemPrice && retryPriceData.amazonItemPrice > 0) {
+                    // Re-validate size match
+                    const retryBrandMatches = brandsMatch(input.brand, retryPriceData.pageTitle);
+                    const retrySizeMismatch = isAmazonSizeMismatch(retryPriceData.pageTitle, input.title);
+                    
+                    if (retryBrandMatches && !retrySizeMismatch) {
+                      amazonPrice = retryPriceData.amazonItemPrice;
+                      amazonUrl = retryUrl;
+                      
+                      const shippingCents = Math.round(retryPriceData.amazonShippingPrice * 100);
+                      const shippingNote = retryPriceData.shippingEvidence === 'free' 
+                        ? 'free shipping' 
+                        : retryPriceData.shippingEvidence === 'paid' 
+                          ? `$${retryPriceData.amazonShippingPrice.toFixed(2)} shipping` 
+                          : 'shipping unknown';
+                      
+                      console.log(`[price] ✓ Retry success! Amazon: item=$${amazonPrice.toFixed(2)}, ${shippingNote}`);
+                      console.log(`[price]   Title: ${retryPriceData.pageTitle?.substring(0, 100)}...`);
+                      
+                      candidates.push({
+                        source: 'amazon',
+                        price: amazonPrice,
+                        currency: 'USD',
+                        url: amazonUrl,
+                        notes: `Amazon marketplace price (${shippingNote}) [retry-with-size]`,
+                        shippingCents,
+                        matchesBrand: true,
+                      });
+                    } else {
+                      console.log(`[price] ✗ Retry also rejected - brand=${retryBrandMatches}, sizeMismatch=${retrySizeMismatch}`);
+                    }
+                  }
+                }
+              } else if (retryUrl === amazonUrlFound) {
+                console.log(`[price] 🔄 Retry returned same URL, skipping`);
+              }
+            }
           }
         }
       }

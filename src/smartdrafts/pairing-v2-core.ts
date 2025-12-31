@@ -247,14 +247,24 @@ For each image, provide:
      * "capsules", "caps" → "capsules"
      * "tablets", "tabs" → "tablets"
      * "softgels" → "softgels"
+     * "gummies", "gummy" → "gummies"
+     * "sticks", "stick" → "sticks"
+     * "pieces", "piece", "pcs" → "pieces"
+     * "packets", "packet" → "packets"
+     * "chews", "chew" → "chews"
    - Examples:
      * Label says "8 oz" → netWeight: { "value": 8, "unit": "oz" }
      * Label says "250 grams" → netWeight: { "value": 250, "unit": "g" }
      * Label says "60 Capsules" → netWeight: { "value": 60, "unit": "capsules" }
      * Label says "2 FL OZ" → netWeight: { "value": 2, "unit": "fl oz" }
      * Label says "Net Wt. 1.5 lb" → netWeight: { "value": 1.5, "unit": "lb" }
+     * Label says "30 Sticks" → netWeight: { "value": 30, "unit": "sticks" }
+     * Label says "90 Pieces" → netWeight: { "value": 90, "unit": "pieces" }
    - CRITICAL: Prioritize actual weight units (oz, g, lb, fl oz, ml) over count units (capsules, tablets)
      * If label shows BOTH "120 capsules" and "150g" → use weight: { "value": 150, "unit": "g" }
+   - IMPORTANT: For products sold by count (sticks, pieces, gummies, etc.), extract the count as netWeight
+     * This applies to honey sticks, gum pieces, individual packets, etc.
+     * Do NOT confuse with packCount - netWeight counts CONTENTS, packCount counts MULTI-PACK units
    - null if no weight or size is visible on the label
 
 DEFINITIONS:
