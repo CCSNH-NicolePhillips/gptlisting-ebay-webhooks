@@ -54,9 +54,14 @@
 [functions."ebay-list-offers"]
   timeout = 26  # Max for Pro tier, handles multiple eBay API calls with retries
 
-# Promotion worker timeout (scheduled every minute)
+# Promotion worker timeout and schedule (runs every minute)
 [functions."promotion-worker"]
   timeout = 26
+  schedule = "* * * * *"
+
+# Price tick schedule (every 6 hours)  
+[functions."price-tick"]
+  schedule = "0 */6 * * *"
 
 # Reduce false positives in Netlify Secrets Scanning by omitting documentation/examples
 [build.environment]
@@ -76,11 +81,3 @@
 
 ## Do not force a single Content-Type for all functions; individual functions set appropriate headers.
 
-# Promotion worker runs every minute to process queued promotion jobs
-[[scheduled_function]]
-  name = "promotion-worker"
-  schedule = "* * * * *"
-
-[[scheduled_function]]
-  name = "price-tick"
-  schedule = "0 */6 * * *"
