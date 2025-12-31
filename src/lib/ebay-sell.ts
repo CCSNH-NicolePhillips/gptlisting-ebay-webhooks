@@ -133,20 +133,22 @@ export async function putInventoryItem(
       imageUrls: sanitizeImageUrls(inventory.product.imageUrls || []),
       aspects: sanitizeAspects(inventory.product.aspects || {}),
     },
-    // Add default package weight/size to prevent shipping errors
-    packageWeightAndSize: {
-      dimensions: {
-        height: 3,
-        length: 6,
-        width: 4,
-        unit: "INCH"
-      },
-      weight: {
-        value: 1,
-        unit: "POUND"
-      }
-    }
   };
+  
+  // Only add package weight/size if provided - NO defaults!
+  // Missing weight will be flagged as "Needs Attention" in the UI
+  if (inventory.packageWeightAndSize?.weight?.value) {
+    (payload as any).packageWeightAndSize = {
+      weight: {
+        value: inventory.packageWeightAndSize.weight.value,
+        unit: inventory.packageWeightAndSize.weight.unit || 'OUNCE'
+      }
+    };
+    // Add dimensions if provided
+    if (inventory.packageWeightAndSize.dimensions) {
+      (payload as any).packageWeightAndSize.dimensions = inventory.packageWeightAndSize.dimensions;
+    }
+  }
 
   // Ensure at least one valid image URL remains
   if (!Array.isArray((payload.product as any).imageUrls) || !(payload.product as any).imageUrls.length) {

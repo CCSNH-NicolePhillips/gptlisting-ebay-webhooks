@@ -144,6 +144,8 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       categoryId: offer.categoryId || '',
       offerId: offer.offerId,
       categoryAspects: categoryAspects?.aspects || [], // Available aspects for this category
+      // Include weight from inventory item
+      weight: inventory.packageWeightAndSize?.weight || null,
     };
     
     // Debug: Check cardinality values

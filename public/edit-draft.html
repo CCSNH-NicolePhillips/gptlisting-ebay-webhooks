@@ -589,6 +589,34 @@
             </div>
           </div>
           
+          <!-- Shipping Weight -->
+          <div style="margin-top: 1.5rem; padding: 1rem; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--line);">
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+              <span style="font-size: 1.125rem;">📦</span>
+              <span style="font-weight: 600; color: var(--text-primary);">Shipping Weight</span>
+              <span id="weightWarning" style="display: none; margin-left: auto; color: #fbbf24; font-size: 0.8125rem;">⚠️ Required for accurate shipping</span>
+            </div>
+            <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+              <div style="flex: 1; min-width: 120px;">
+                <label for="weightOz" style="display: block; font-size: 0.875rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                  Weight (ounces)
+                </label>
+                <input type="number" id="weightOz" min="0" step="0.1" placeholder="e.g. 8"
+                       style="width: 100%; padding: 0.5rem 0.75rem; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; color: var(--text-primary); font-size: 0.9375rem;" />
+              </div>
+              <div style="flex: 1; min-width: 120px;">
+                <label for="weightLbs" style="display: block; font-size: 0.875rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                  — or Pounds —
+                </label>
+                <input type="number" id="weightLbs" min="0" step="0.01" placeholder="e.g. 0.5"
+                       style="width: 100%; padding: 0.5rem 0.75rem; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; color: var(--text-primary); font-size: 0.9375rem;" />
+              </div>
+            </div>
+            <div style="font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.5rem;">
+              💡 Enter weight in ounces OR pounds. Most supplements are 4-12 oz. Accurate weight prevents shipping overcharges.
+            </div>
+          </div>
+          
           <!-- Promotion Settings -->
           <div style="margin-top: 1.5rem; padding: 1rem; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--line);">
             <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
@@ -918,6 +946,23 @@
         $('price').value = originalDraft.price || '';
         $('condition').value = originalDraft.condition || 'NEW';
         
+        // Populate weight fields
+        if (originalDraft.weight) {
+          const weightVal = originalDraft.weight.value || 0;
+          const weightUnit = (originalDraft.weight.unit || 'OUNCE').toUpperCase();
+          if (weightUnit === 'POUND') {
+            $('weightLbs').value = weightVal;
+            $('weightOz').value = '';
+          } else {
+            // Default to ounces
+            $('weightOz').value = weightVal;
+            $('weightLbs').value = '';
+          }
+        } else {
+          // Show warning if no weight
+          $('weightWarning').style.display = 'inline';
+        }
+        
         // Populate promotion settings
         if (originalDraft.promotion) {
           $('promotionEnabled').checked = originalDraft.promotion.enabled || false;
@@ -1144,6 +1189,17 @@
         const promotionEnabled = $('promotionEnabled').checked;
         const promotionRate = parseFloat($('promotionRate').value) || null;
         
+        // Collect weight (prefer oz, convert lbs to oz if only lbs given)
+        const weightOzRaw = parseFloat($('weightOz').value) || 0;
+        const weightLbsRaw = parseFloat($('weightLbs').value) || 0;
+        let weightValue = null;
+        let weightUnit = 'OUNCE';
+        if (weightOzRaw > 0) {
+          weightValue = weightOzRaw;
+        } else if (weightLbsRaw > 0) {
+          weightValue = weightLbsRaw * 16; // Convert to oz for consistency
+        }
+        
         const updatedDraft = {
           ...originalDraft,
           title: $('title').value.trim(),
@@ -1155,7 +1211,8 @@
           promotion: {
             enabled: promotionEnabled,
             rate: promotionEnabled ? promotionRate : null
-          }
+          },
+          weight: weightValue ? { value: weightValue, unit: weightUnit } : null
         };
         
         // Save to backend

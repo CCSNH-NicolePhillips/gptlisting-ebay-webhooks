@@ -739,12 +739,14 @@
         // Check for pricing status from custom merchant data
         const pricingStatus = offer?.merchantData?.pricingStatus;
         const needsReview = pricingStatus === 'NEEDS_REVIEW';
+        const missingWeight = offer?._hasWeight === false;
         
         meta.textContent = [
           offer.sku ? `SKU: ${offer.sku}` : null,
           offer.categoryId ? `Cat: ${offer.categoryId}` : null,
           offer.availableQuantity != null ? `Qty: ${offer.availableQuantity}` : null,
           priceStr ? `Price: ${priceStr}` : (needsReview ? 'Price: ⚠️ Needs Review' : null),
+          missingWeight ? '⚠️ No Weight' : (offer?._weight ? `${offer._weight.value} ${offer._weight.unit?.toLowerCase() || 'oz'}` : null),
         ]
           .filter(Boolean)
           .join(' • ');
@@ -1148,9 +1150,18 @@
             return;
           }
           
-          // Separate drafts by pricing status
-          const needsAttention = offers.filter(o => o?.merchantData?.pricingStatus === 'NEEDS_REVIEW');
-          const ready = offers.filter(o => o?.merchantData?.pricingStatus !== 'NEEDS_REVIEW');
+          // Separate drafts by pricing status AND weight status
+          // Needs attention if: pricing needs review OR missing weight
+          const needsAttention = offers.filter(o => {
+            const pricingBad = o?.merchantData?.pricingStatus === 'NEEDS_REVIEW';
+            const missingWeight = o?._hasWeight === false;
+            return pricingBad || missingWeight;
+          });
+          const ready = offers.filter(o => {
+            const pricingOk = o?.merchantData?.pricingStatus !== 'NEEDS_REVIEW';
+            const hasWeight = o?._hasWeight !== false; // true or undefined (legacy) is OK
+            return pricingOk && hasWeight;
+          });
           
           readyList.innerHTML = '';
           needsList.innerHTML = '';

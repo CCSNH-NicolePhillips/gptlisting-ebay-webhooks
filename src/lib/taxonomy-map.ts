@@ -153,6 +153,10 @@ export type TaxonomyMappedDraft = {
       imageUrls: string[];
       aspects: Record<string, string[]>;
     };
+    packageWeightAndSize?: {
+      weight?: { value: number; unit: string };
+      dimensions?: { height: number; length: number; width: number; unit: string };
+    };
   };
   offer: {
     sku: string;

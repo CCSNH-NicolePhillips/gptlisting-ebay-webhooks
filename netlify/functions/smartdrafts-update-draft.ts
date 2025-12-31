@@ -111,8 +111,8 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     const currentOffer = await offerRes.json();
     const sku = currentOffer.sku;
     
-    // Update the inventory item first (title, description, aspects, images)
-    const inventoryPayload = {
+    // Update the inventory item first (title, description, aspects, images, weight)
+    const inventoryPayload: Record<string, unknown> = {
       product: {
         title: draft.title,
         description: draft.description,
@@ -126,6 +126,17 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         },
       },
     };
+    
+    // Add weight if provided
+    if (draft.weight?.value && draft.weight.value > 0) {
+      inventoryPayload.packageWeightAndSize = {
+        weight: {
+          value: draft.weight.value,
+          unit: draft.weight.unit || 'OUNCE',
+        },
+      };
+      console.log(`Setting weight: ${draft.weight.value} ${draft.weight.unit || 'OUNCE'}`);
+    }
     
     const inventoryRes = await fetch(`${apiHost}/sell/inventory/v1/inventory_item/${sku}`, {
       method: 'PUT',

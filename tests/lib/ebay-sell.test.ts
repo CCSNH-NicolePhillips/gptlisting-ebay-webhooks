@@ -115,9 +115,29 @@ describe('ebay-sell', () => {
 
         const call = (global.fetch as jest.Mock).mock.calls[0];
         const body = JSON.parse(call[1].body);
+        // No default weight anymore - weight must be explicitly provided
+        expect(body.packageWeightAndSize).toBeUndefined();
+      });
+
+      it('should include weight when provided in inventory', async () => {
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+        });
+
+        const inventoryWithWeight: TaxonomyMappedDraft['inventory'] = {
+          ...baseInventory,
+          packageWeightAndSize: {
+            weight: { value: 8, unit: 'OUNCE' },
+          },
+        };
+
+        await putInventoryItem('test-token', 'https://api.ebay.com', 'SKU123', inventoryWithWeight, 5);
+
+        const call = (global.fetch as jest.Mock).mock.calls[0];
+        const body = JSON.parse(call[1].body);
         expect(body.packageWeightAndSize).toEqual({
-          dimensions: { height: 3, length: 6, width: 4, unit: 'INCH' },
-          weight: { value: 1, unit: 'POUND' },
+          weight: { value: 8, unit: 'OUNCE' },
         });
       });
 

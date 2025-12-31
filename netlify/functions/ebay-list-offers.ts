@@ -492,9 +492,9 @@ export const handler: Handler = async (event) => {
 				)
 			: offers;
 		
-		// Enrich offers with inventory item titles for faster frontend display
-		// Fetch titles in parallel with limited concurrency to avoid timeout
-		const enrichWithTitles = async (offerList: any[]) => {
+		// Enrich offers with inventory item titles and weight for faster frontend display
+		// Fetch data in parallel with limited concurrency to avoid timeout
+		const enrichWithInventoryData = async (offerList: any[]) => {
 			const concurrency = 10;
 			const queue = offerList.map((offer, index) => async () => {
 				const sku = offer?.sku;
@@ -509,6 +509,14 @@ export const handler: Handler = async (event) => {
 						const title = invJson?.product?.title || invJson?.title;
 						if (title) {
 							offerList[index]._enrichedTitle = title;
+						}
+						// Include weight info for "needs attention" detection
+						const weight = invJson?.packageWeightAndSize?.weight;
+						if (weight?.value && weight?.value > 0) {
+							offerList[index]._hasWeight = true;
+							offerList[index]._weight = { value: weight.value, unit: weight.unit || 'OUNCE' };
+						} else {
+							offerList[index]._hasWeight = false;
 						}
 					}
 				} catch {
@@ -531,8 +539,8 @@ export const handler: Handler = async (event) => {
 		// Only enrich if we have a reasonable number of offers (prevent timeout)
 		if (final.length > 0 && final.length <= 50) {
 			const enrichStart = Date.now();
-			await enrichWithTitles(final);
-			console.log('[ebay-list-offers] Title enrichment took', Date.now() - enrichStart, 'ms');
+			await enrichWithInventoryData(final);
+			console.log('[ebay-list-offers] Inventory data enrichment took', Date.now() - enrichStart, 'ms');
 		}
 		
 		// 🔍 DEBUG: Log image URLs in offers for debugging
