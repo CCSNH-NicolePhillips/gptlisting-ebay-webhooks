@@ -229,10 +229,35 @@
   freeWrap.appendChild(paidWrap);
         // Helpers to manage UI state
         function serviceOptionsFor(carrier, costType) {
-          if (carrier === 'UPS') return [ ['UPSGround','UPS Ground'], ['UPS3DaySelect','UPS 3 Day Select'] ];
-          if (carrier === 'FedEx') return [ ['FedExHomeDelivery','FedEx Home Delivery'], ['FedEx2Day','FedEx 2Day'] ];
-          // USPS: temporarily restrict to Ground Advantage until other mappings are fixed
-          return [['USPSParcel','USPS Ground Advantage']];
+          if (carrier === 'UPS') return [
+            ['UPSGround','UPS Ground'],
+            ['UPS3rdDay','UPS 3 Day'],
+            ['UPSNextDay','UPS Next Day'],
+            ['UPS2ndDay','UPS 2nd Day'],
+          ];
+          if (carrier === 'FedEx') return [
+            ['FedExHomeDelivery','FedEx Home Delivery'],
+            ['FedExGround','FedEx Ground'],
+            ['FedEx2Day','FedEx 2Day'],
+            ['FedExExpressSaver','FedEx Express Saver'],
+            ['FedExStandardOvernight','FedEx Standard Overnight'],
+          ];
+          // USPS options - comprehensive list
+          return [
+            ['USPSGround','USPS Ground Advantage'],
+            ['USPSPriority','USPS Priority Mail'],
+            ['USPSPriorityMailSmallFlatRateBox','USPS Priority Mail Small Flat Rate Box'],
+            ['USPSPriorityMailFlatRateBox','USPS Priority Mail Flat Rate Box'],
+            ['USPSPriorityMailLargeFlatRateBox','USPS Priority Mail Large Flat Rate Box'],
+            ['USPSPriorityFlatRateEnvelope','USPS Priority Mail Flat Rate Envelope'],
+            ['USPSPriorityMailPaddedFlatRateEnvelope','USPS Priority Mail Padded Flat Rate Envelope'],
+            ['USPSExpressMail','USPS Priority Mail Express'],
+            ['USPSExpressMailFlatRateEnvelope','USPS Priority Mail Express Flat Rate Envelope'],
+            ['USPSExpressMailFlatRateBox','USPS Priority Mail Express Flat Rate Box'],
+            ['USPSMedia','USPS Media Mail'],
+            ['USPSFirstClass','USPS First Class'],
+            ['USPSParcel','USPS Parcel Select'],
+          ];
         }
         function updateServiceOptions() {
           const carrier = form.shippingCarrierCode.value || 'USPS';

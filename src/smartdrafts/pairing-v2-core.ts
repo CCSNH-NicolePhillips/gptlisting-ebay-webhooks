@@ -33,6 +33,7 @@ export interface PairingResult {
     photoQuantity?: number; // Max quantityInPhoto across front/back images
     packCount?: number | null; // Number of units inside package (from label, e.g., "24 packets")
     packageType?: string; // bottle/jar/tub/pouch/box/sachet/book/unknown - used for formulation inference
+    netWeight?: { value: number; unit: string } | null; // Product weight from label for shipping
   }>;
   unpaired: Array<{
     imagePath: string;
@@ -48,6 +49,7 @@ export interface PairingResult {
     photoQuantity?: number; // quantityInPhoto from vision (for single-image products)
     packCount?: number | null; // Number of units inside package (from label)
     packageType?: string; // bottle/jar/tub/pouch/box/sachet/book/unknown
+    netWeight?: { value: number; unit: string } | null; // Product weight from label for shipping
   }>;
   metrics: {
     totals: {
@@ -88,6 +90,7 @@ interface ImageClassificationV2 {
   confidence: number;
   quantityInPhoto: number; // How many of this product are visible in the photo (1-10)
   packCount: number | null; // Number of units inside the package (e.g., 24 for a 24-pack box, null if single unit or unknown)
+  netWeight: { value: number; unit: string } | null; // Product weight from label (e.g., 8 oz, 60 capsules, 250g)
 }
 
 interface PairingInputItem {
@@ -99,9 +102,14 @@ interface PairingInputItem {
   title: string | null;
   brandWebsite: string | null;
   packageType: string;
+  keyText: string[];
+  categoryPath: string | null;
   colorSignature: string[];
   layoutSignature: string;
   confidence: number;
+  quantityInPhoto: number;
+  packCount: number | null;
+  netWeight: { value: number; unit: string } | null;
 }
 
 interface PairingOutput {
@@ -226,6 +234,28 @@ For each image, provide:
      * Single bottle with no pack info → packCount: null
    - Use null if no pack count is visible or if the product is a single unit (not a multi-pack)
    - ONLY set for multi-pack boxes/cases containing multiple saleable units (packets, bottles, pouches)
+16. netWeight: Product weight/size from label text for shipping estimation
+   - Look for weight printed on the label: "8 oz", "250g", "2 fl oz", "60 capsules", "90 tablets", "30 softgels", "1.5 lb"
+   - Return as an object: { "value": 8, "unit": "oz" }
+   - Normalize units:
+     * "oz", "ounce", "ounces" → "oz"
+     * "fl oz", "fluid oz", "fluid ounces" → "fl oz"
+     * "g", "gram", "grams" → "g"
+     * "mg", "milligram" → "mg"
+     * "lb", "lbs", "pound", "pounds" → "lb"
+     * "ml", "milliliter" → "ml"
+     * "capsules", "caps" → "capsules"
+     * "tablets", "tabs" → "tablets"
+     * "softgels" → "softgels"
+   - Examples:
+     * Label says "8 oz" → netWeight: { "value": 8, "unit": "oz" }
+     * Label says "250 grams" → netWeight: { "value": 250, "unit": "g" }
+     * Label says "60 Capsules" → netWeight: { "value": 60, "unit": "capsules" }
+     * Label says "2 FL OZ" → netWeight: { "value": 2, "unit": "fl oz" }
+     * Label says "Net Wt. 1.5 lb" → netWeight: { "value": 1.5, "unit": "lb" }
+   - CRITICAL: Prioritize actual weight units (oz, g, lb, fl oz, ml) over count units (capsules, tablets)
+     * If label shows BOTH "120 capsules" and "150g" → use weight: { "value": 150, "unit": "g" }
+   - null if no weight or size is visible on the label
 
 DEFINITIONS:
 - PRODUCT: Clear consumer product packaging (supplement, cosmetic, food, book, etc.)
@@ -311,7 +341,8 @@ Respond ONLY with valid JSON:
       "confidence": 0.95,
       "rationale": "Brief explanation of classification choices",
       "quantityInPhoto": 1,
-      "packCount": 24 or null
+      "packCount": 24 or null,
+      "netWeight": { "value": 8, "unit": "oz" } or null
     }
   ]
 }
@@ -572,9 +603,14 @@ async function pairChunk(items: ImageClassificationV2[], chunkLabel = ''): Promi
     title: x.title,
     brandWebsite: x.brandWebsite,
     packageType: x.packageType,
+    keyText: x.keyText || [],
+    categoryPath: x.categoryPath,
     colorSignature: x.colorSignature,
     layoutSignature: x.layoutSignature,
     confidence: x.confidence,
+    quantityInPhoto: x.quantityInPhoto || 1,
+    packCount: x.packCount ?? null,
+    netWeight: x.netWeight ?? null,
   }));
   
   const systemMessage = `You are an expert at pairing product package images based on their metadata.
@@ -860,9 +896,14 @@ async function pairVisuallyAggressive(items: ImageClassificationV2[]): Promise<P
       title: x.title,
       brandWebsite: x.brandWebsite,
       packageType: x.packageType,
+      keyText: x.keyText || [],
+      categoryPath: x.categoryPath,
       colorSignature: x.colorSignature,
       layoutSignature: x.layoutSignature,
       confidence: x.confidence,
+      quantityInPhoto: x.quantityInPhoto || 1,
+      packCount: x.packCount ?? null,
+      netWeight: x.netWeight ?? null,
     }));
     
     const systemMessage = `You are doing AGGRESSIVE VISUAL MATCHING for product images that failed strict pairing.
@@ -1223,6 +1264,13 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
       console.log(`[pairing-v2] packCount detected: ${packCount} units (brand: ${frontClass?.brand})`);
     }
     
+    // CHUNK 5: Extract netWeight - prefer actual weight units over count units
+    // Take from front first (often has primary label info), then back
+    const netWeight = frontClass?.netWeight ?? backClass?.netWeight ?? side1Class?.netWeight ?? side2Class?.netWeight ?? null;
+    if (netWeight) {
+      console.log(`[pairing-v2] netWeight detected: ${netWeight.value} ${netWeight.unit} (brand: ${frontClass?.brand})`);
+    }
+    
     return {
       front: p.front,
       back: p.back,
@@ -1238,6 +1286,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
       photoQuantity,
       packCount,
       packageType: frontClass?.packageType || backClass?.packageType || 'unknown',
+      netWeight,
     };
   });
   
@@ -1276,6 +1325,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
         photoQuantity: classification?.quantityInPhoto || 1, // CHUNK 3: Single image products
         packCount: classification?.packCount ?? null,
         packageType: classification?.packageType || 'unknown',
+        netWeight: classification?.netWeight ?? null,
       };
     }),
     ...rejectedPairs
@@ -1299,6 +1349,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
             photoQuantity: frontClass?.quantityInPhoto || 1, // CHUNK 3
             packCount: frontClass?.packCount ?? null,
             packageType: frontClass?.packageType || 'unknown',
+            netWeight: frontClass?.netWeight ?? null,
           },
           {
             imagePath: p.back,
@@ -1314,6 +1365,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
           photoQuantity: backClass?.quantityInPhoto || 1, // CHUNK 3
           packCount: backClass?.packCount ?? null,
           packageType: backClass?.packageType || 'unknown',
+          netWeight: backClass?.netWeight ?? null,
         },
       ];
     }),

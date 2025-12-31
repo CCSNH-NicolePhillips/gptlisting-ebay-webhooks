@@ -685,6 +685,7 @@
             categoryPath: pair.categoryPath || null,  // Vision category path
             photoQuantity: pair.photoQuantity || 1,  // CHUNK 4: Pass photo quantity from vision analysis
             packCount: pair.packCount ?? null,  // CRITICAL: Pack count for variant pricing (e.g., 24-pack → $48)
+            netWeight: pair.netWeight ?? null,  // AI-extracted weight from product label
           };
         });
         

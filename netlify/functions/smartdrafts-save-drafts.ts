@@ -29,6 +29,7 @@ type ChatGptDraft = {
   images: string[];
   price: number;
   condition: string;
+  weight?: { value: number; unit: string } | null; // AI-extracted and calculated shipping weight
   promotion?: {
     enabled: boolean;
     rate: number | null;
@@ -76,17 +77,31 @@ function convertToEbayDraft(draft: ChatGptDraft, index: number) {
   const conditionCode = conditionCodeToNumber(conditionStr);
   const description = formatDescription(draft);
   
+  // Build inventory object with optional weight
+  const inventory: Record<string, any> = {
+    condition: conditionStr,
+    product: {
+      title: draft.title,
+      description,
+      imageUrls: draft.images,
+      aspects: draft.aspects,
+    },
+  };
+  
+  // Add weight to inventory if provided
+  if (draft.weight?.value && draft.weight.value > 0) {
+    inventory.packageWeightAndSize = {
+      weight: {
+        value: draft.weight.value,
+        unit: draft.weight.unit || 'OUNCE',
+      },
+    };
+    console.log(`[smartdrafts-save-drafts] Adding weight to inventory: ${draft.weight.value} ${draft.weight.unit || 'OUNCE'}`);
+  }
+  
   return {
     sku,
-    inventory: {
-      condition: conditionStr,
-      product: {
-        title: draft.title,
-        description,
-        imageUrls: draft.images,
-        aspects: draft.aspects,
-      },
-    },
+    inventory,
     offer: {
       sku,
       marketplaceId,

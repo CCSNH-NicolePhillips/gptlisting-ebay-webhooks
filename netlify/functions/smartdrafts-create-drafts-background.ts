@@ -46,6 +46,7 @@ type PairedProduct = {
   photoQuantity?: number; // CHUNK 4: How many physical products visible in photo (from vision analysis)
   packCount?: number | null; // Number of units in package (e.g., 24 for 24-pack) - CRITICAL for variant pricing
   packageType?: string; // bottle/jar/tub/pouch/box/sachet/book/unknown - used for formulation inference
+  netWeight?: { value: number; unit: string } | null; // AI-extracted weight from product label (e.g., 8 oz, 250 g)
   heroDisplayUrl?: string;
   backDisplayUrl?: string;
   side1DisplayUrl?: string;  // Optional 3rd image (side panel)
@@ -75,6 +76,7 @@ type Draft = {
   condition: string;
   keyText?: string[]; // Key text from Vision API - helps determine formulation
   packageType?: string; // bottle/jar/tub/pouch/box/sachet/book/unknown - used for formulation inference
+  weight?: { value: number; unit: string } | null; // Shipping weight in ounces (calculated from AI-extracted netWeight + container buffer)
   pricingStatus?: 'OK' | 'ESTIMATED' | 'NEEDS_REVIEW';
   priceWarning?: string; // Explains why price needs review
   needsPriceReview?: boolean; // Frontend flag for red glow/warning
@@ -106,6 +108,111 @@ async function writeJob(jobId: string, userId: string | undefined, data: Record<
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Convert AI-extracted netWeight to shipping weight in ounces.
+ * Adds a container buffer based on packageType for more accurate shipping costs.
+ * 
+ * Container buffer estimates (in ounces):
+ * - bottle: 1 oz (plastic/glass bottle weight)
+ * - jar: 2 oz (heavier glass jar)
+ * - tub: 1.5 oz (larger plastic container)
+ * - pouch: 0.5 oz (lightweight packaging)
+ * - box: 1 oz (cardboard box)
+ * - sachet: 0.25 oz (minimal packaging)
+ * - book: 0 oz (weight is total book weight)
+ * - unknown: 1 oz (safe default)
+ */
+function calculateShippingWeight(
+  netWeight: { value: number; unit: string } | null | undefined,
+  packageType: string | undefined
+): { value: number; unit: string } | null {
+  if (!netWeight || !netWeight.value || netWeight.value <= 0) {
+    return null;
+  }
+  
+  // Convert to ounces
+  let weightInOz: number;
+  const unit = (netWeight.unit || '').toLowerCase();
+  
+  switch (unit) {
+    case 'oz':
+    case 'ounce':
+    case 'ounces':
+      weightInOz = netWeight.value;
+      break;
+    case 'lb':
+    case 'lbs':
+    case 'pound':
+    case 'pounds':
+      weightInOz = netWeight.value * 16;
+      break;
+    case 'g':
+    case 'gram':
+    case 'grams':
+      weightInOz = netWeight.value / 28.3495;
+      break;
+    case 'kg':
+    case 'kilogram':
+    case 'kilograms':
+      weightInOz = netWeight.value * 35.274;
+      break;
+    case 'ml':
+    case 'milliliter':
+    case 'milliliters':
+      // For liquids, assume 1ml = ~1g = ~0.035oz
+      weightInOz = netWeight.value / 28.3495;
+      break;
+    case 'fl oz':
+    case 'fl':
+    case 'fluid oz':
+    case 'fluid ounce':
+    case 'fluid ounces':
+      // Fluid ounces to weight ounces (assume water density)
+      weightInOz = netWeight.value * 1.043; // 1 fl oz water = ~1.043 oz weight
+      break;
+    case 'capsules':
+    case 'capsule':
+    case 'tablets':
+    case 'tablet':
+    case 'softgels':
+    case 'softgel':
+    case 'gummies':
+    case 'gummy':
+    case 'ct':
+    case 'count':
+      // For pill counts, estimate weight: ~0.01-0.02 oz per capsule/tablet
+      // Using 0.015 oz as average (larger capsules)
+      weightInOz = netWeight.value * 0.015;
+      break;
+    default:
+      // Unknown unit - assume ounces
+      console.warn(`[weight] Unknown weight unit "${netWeight.unit}", assuming ounces`);
+      weightInOz = netWeight.value;
+  }
+  
+  // Add container buffer based on packageType
+  const containerBuffer: Record<string, number> = {
+    bottle: 1,
+    jar: 2,
+    tub: 1.5,
+    pouch: 0.5,
+    box: 1,
+    sachet: 0.25,
+    book: 0,
+    unknown: 1,
+  };
+  
+  const buffer = containerBuffer[packageType || 'unknown'] ?? 1;
+  const totalWeight = weightInOz + buffer;
+  
+  // Round to 1 decimal place
+  const roundedWeight = Math.round(totalWeight * 10) / 10;
+  
+  console.log(`[weight] Calculated shipping weight: ${netWeight.value} ${netWeight.unit} → ${weightInOz.toFixed(1)} oz + ${buffer} oz buffer = ${roundedWeight} oz`);
+  
+  return { value: roundedWeight, unit: 'OUNCE' };
 }
 
 function timeoutPromise<T>(promise: Promise<T>, ms: number): Promise<T> {
@@ -852,6 +959,15 @@ async function createDraftForProduct(
   });
   
   // Use AI-powered pricing decision (already computed above)
+  
+  // Calculate shipping weight from AI-extracted netWeight
+  const shippingWeight = calculateShippingWeight(product.netWeight, product.packageType);
+  if (shippingWeight) {
+    console.log(`[Draft] ✓ AI-extracted weight for ${product.productId}: ${product.netWeight?.value} ${product.netWeight?.unit} → shipping weight ${shippingWeight.value} oz`);
+  } else if (product.netWeight) {
+    console.log(`[Draft] ⚠️ Could not calculate shipping weight from netWeight: ${JSON.stringify(product.netWeight)}`);
+  }
+  
   const draft: Draft = {
     productId: product.productId,
     groupId: product.productId, // Add groupId for eBay publishing
@@ -867,6 +983,7 @@ async function createDraftForProduct(
     condition: parsed.condition,
     keyText: product.keyText, // Pass through Vision API key text for formulation detection
     packageType: product.packageType, // Pass through Vision API package type for formulation inference
+    weight: shippingWeight, // AI-extracted and calculated shipping weight
     pricingStatus,
     priceWarning,
     needsPriceReview: pricingStatus !== 'OK',
