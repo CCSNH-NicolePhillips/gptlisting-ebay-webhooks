@@ -145,6 +145,8 @@ export interface PriceDecision {
   // Manual review flags for low-confidence estimates
   needsManualReview?: boolean;
   manualReviewReason?: string;
+  // Shipping weight from Amazon product data (if available)
+  amazonWeight?: { value: number; unit: string } | null;
 }
 
 // ============================================================================
@@ -989,6 +991,7 @@ export async function lookupPrice(
   
   let amazonPrice: number | null = null;
   let amazonUrl: string | undefined;
+  let amazonWeight: { value: number; unit: string } | null = null; // Track Amazon weight data
   
   if (input.brand) {
     const { braveFirstUrl } = await import('./search.js');
@@ -1104,6 +1107,7 @@ export async function lookupPrice(
           if (skipValidation || (brandMatches && productMatches && !isBundleMismatch && !isSizeMismatch && !isTermMismatch)) {
             amazonPrice = priceData.amazonItemPrice;
             amazonUrl = amazonUrlFound;
+            amazonWeight = priceData.amazonWeight || null; // Capture weight data
             
             const shippingCents = Math.round(priceData.amazonShippingPrice * 100);
             const shippingNote = priceData.shippingEvidence === 'free' 
@@ -1483,6 +1487,12 @@ export async function lookupPrice(
   
   console.log(`[price] Tier 3: AI arbitration with ${candidates.length} candidate(s)...`);
   const decision = await decideFinalPrice(input, candidates, soldStats);
+
+  // Add Amazon weight data to decision if available
+  if (amazonWeight) {
+    decision.amazonWeight = amazonWeight;
+    console.log(`[price] ⚖️ Amazon weight data available: ${amazonWeight.value} ${amazonWeight.unit}`);
+  }
 
   if (decision.ok && decision.chosen && decision.recommendedListingPrice) {
     // Sanity check: reject negative or suspiciously low prices

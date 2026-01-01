@@ -107,6 +107,12 @@ export interface PriceExtractionResult {
    * Page title text (used for brand matching heuristics)
    */
   pageTitle?: string;
+  
+  /**
+   * Product weight extracted from Amazon page (if available)
+   * Example: { value: 1.98, unit: "pound" }
+   */
+  amazonWeight?: { value: number; unit: string } | null;
 }
 
 interface OfferCandidate {
@@ -1137,11 +1143,36 @@ export function extractPriceWithShipping(html: string, productTitle?: string, ov
       console.log(`[HTML Parser] 📦 Raw price: $${rawPrice.toFixed(2)} | Units sold: 1 | Normalized price: $${normalizedPrice.toFixed(2)} (no adjustment)`);
     }
     
+    // Extract product weight from Amazon HTML
+    let amazonWeight: { value: number; unit: string } | null = null;
+    const weightPatterns = [
+      /(\d+(?:\.\d+)?)\s*(pound|lb|ounce|oz|gram|g|kg)\s*\(Pack of \d+\)/i, // "1.98 Pound (Pack of 1)"
+      /(\d+(?:\.\d+)?)\s*(pound|lb|ounce|oz|gram|g|kg)/i, // Generic weight
+    ];
+    
+    const bodyText = $('body').text();
+    for (const pattern of weightPatterns) {
+      const match = bodyText.match(pattern);
+      if (match && match[1] && match[2]) {
+        const value = parseFloat(match[1]);
+        let unit = match[2].toLowerCase();
+        // Normalize unit names
+        if (unit === 'lb') unit = 'pound';
+        if (unit === 'oz') unit = 'ounce';
+        if (!isNaN(value) && value > 0 && value < 1000) { // Sanity check
+          amazonWeight = { value, unit };
+          console.log(`[HTML Parser] ⚖️ Found weight: ${value} ${unit}`);
+          break;
+        }
+      }
+    }
+    
     return {
       amazonItemPrice: normalizedPrice,
       amazonShippingPrice: shippingPrice,
       shippingEvidence: evidence,
       pageTitle: resolvedPageTitle,
+      amazonWeight,
     };
   } catch (error) {
     console.error('[HTML Parser] Error extracting price with shipping:', error);

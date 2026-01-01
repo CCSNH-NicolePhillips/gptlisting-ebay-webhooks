@@ -10,6 +10,7 @@ interface AmazonScraperResult {
   url?: string;
   packQuantity?: number; // Number of units in pack (1 for single, 2 for 2-pack, etc.)
   pricePerUnit?: number; // Calculated price per single unit
+  weight?: { value: number; unit: string } | null; // Shipping weight extracted from product page
 }
 
 /**
@@ -172,12 +173,38 @@ export async function scrapeAmazonPrice(
       console.log(`[amazon-scraper] ⚠️  Multi-pack detected: ${packQuantity} units @ $${price} = $${pricePerUnit.toFixed(2)} per unit`);
     }
 
+    // Extract weight from product details section
+    let weight: { value: number; unit: string } | null = null;
+    const weightPatterns = [
+      /(\d+(?:\.\d+)?)\s*(pound|lb|ounce|oz|gram|g|kg)\s*\(Pack of \d+\)/i, // "1.98 Pound (Pack of 1)"
+      /(\d+(?:\.\d+)?)\s*(pound|lb|ounce|oz|gram|g|kg)/i, // Generic weight
+      /Item Weight.*?(\d+(?:\.\d+)?)\s*(pound|lb|ounce|oz)/i, // Product details table
+      /Shipping Weight.*?(\d+(?:\.\d+)?)\s*(pound|lb|ounce|oz)/i, // Shipping weight line
+    ];
+
+    for (const pattern of weightPatterns) {
+      const match = searchSection.match(pattern);
+      if (match && match[1] && match[2]) {
+        const value = parseFloat(match[1]);
+        let unit = match[2].toLowerCase();
+        // Normalize unit names
+        if (unit === 'lb') unit = 'pound';
+        if (unit === 'oz') unit = 'ounce';
+        if (!isNaN(value) && value > 0) {
+          weight = { value, unit };
+          console.log(`[amazon-scraper] ✓ Found weight: ${value} ${unit} (${match[0]})`);
+          break;
+        }
+      }
+    }
+
     return {
       price,
       asin,
       url: `https://www.amazon.com/dp/${asin}`,
       packQuantity,
       pricePerUnit: Math.round(pricePerUnit * 100) / 100, // Round to 2 decimals
+      weight,
     };
 
   } catch (error) {

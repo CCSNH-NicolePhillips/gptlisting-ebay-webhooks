@@ -994,6 +994,18 @@ async function createDraftForProduct(
     console.log(`[Draft] ⚠️ Could not calculate shipping weight from netWeight: ${JSON.stringify(product.netWeight)}`);
   }
   
+  // Fallback to Amazon weight if no AI weight available
+  let finalWeight = shippingWeight;
+  if (!finalWeight && pricingDecision?.amazonWeight) {
+    const amazonWt = pricingDecision.amazonWeight;
+    console.log(`[Draft] 🔄 Using Amazon weight as fallback: ${amazonWt.value} ${amazonWt.unit}`);
+    // Convert Amazon weight to ounces for eBay shipping
+    finalWeight = calculateShippingWeight(amazonWt, product.packageType);
+    if (finalWeight) {
+      console.log(`[Draft] ✓ Amazon weight converted to shipping weight: ${finalWeight.value} oz`);
+    }
+  }
+  
   const draft: Draft = {
     productId: product.productId,
     groupId: product.productId, // Add groupId for eBay publishing
@@ -1009,7 +1021,7 @@ async function createDraftForProduct(
     condition: parsed.condition,
     keyText: product.keyText, // Pass through Vision API key text for formulation detection
     packageType: product.packageType, // Pass through Vision API package type for formulation inference
-    weight: shippingWeight, // AI-extracted and calculated shipping weight
+    weight: finalWeight, // AI-extracted weight with Amazon fallback
     pricingStatus,
     priceWarning,
     needsPriceReview: pricingStatus !== 'OK',

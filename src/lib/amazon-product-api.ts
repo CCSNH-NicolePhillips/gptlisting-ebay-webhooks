@@ -16,6 +16,7 @@ export interface AmazonProductResult {
   currency: string | null;
   url: string | null;
   categories: string[]; // from browse nodes / product group
+  weight?: { value: number; unit: string } | null; // Shipping weight from ProductInfo
 }
 
 export async function searchAmazonProduct(input: AmazonSearchInput): Promise<AmazonProductResult | null> {
@@ -49,6 +50,7 @@ export async function searchAmazonProduct(input: AmazonSearchInput): Promise<Ama
     Resources: [
       'ItemInfo.Title',
       'ItemInfo.ByLineInfo',
+      'ItemInfo.ProductInfo',
       'Offers.Listings.Price',
       'BrowseNodeInfo.BrowseNodes',
       'BrowseNodeInfo.BrowseNodes.Ancestor'
@@ -140,12 +142,43 @@ export async function searchAmazonProduct(input: AmazonSearchInput): Promise<Ama
     }
   }
 
+  // 7. Extract weight from ProductInfo (Item Weight or Package Weight)
+  let weight: { value: number; unit: string } | null = null;
+  const productInfo = item.ItemInfo?.ProductInfo;
+  
+  // Try Item Weight first (more accurate for shipping)
+  const itemWeight = productInfo?.ItemDimensions?.Weight;
+  if (itemWeight?.DisplayValue && itemWeight?.Unit) {
+    const value = parseFloat(itemWeight.DisplayValue);
+    if (!isNaN(value) && value > 0) {
+      weight = { value, unit: itemWeight.Unit.toLowerCase() };
+      console.log(`[amazon-product-api] ✓ Found item weight: ${value} ${weight.unit}`);
+    }
+  }
+  
+  // Fallback to Size (often includes weight in display value like "1.98 Pound")
+  if (!weight && productInfo?.Size?.DisplayValue) {
+    const sizeMatch = productInfo.Size.DisplayValue.match(/([\d.]+)\s*(pound|lb|ounce|oz|gram|g|kg)/i);
+    if (sizeMatch) {
+      const value = parseFloat(sizeMatch[1]);
+      let unit = sizeMatch[2].toLowerCase();
+      // Normalize unit names
+      if (unit === 'lb') unit = 'pound';
+      if (unit === 'oz') unit = 'ounce';
+      if (!isNaN(value) && value > 0) {
+        weight = { value, unit };
+        console.log(`[amazon-product-api] ✓ Found weight from Size: ${value} ${unit}`);
+      }
+    }
+  }
+
   return {
     asin,
     title: titleText || title,
     price: amount,
     currency,
     url: detailUrl,
-    categories: Array.from(new Set(categories))
+    categories: Array.from(new Set(categories)),
+    weight
   };
 }
