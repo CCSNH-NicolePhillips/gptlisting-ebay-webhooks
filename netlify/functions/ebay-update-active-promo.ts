@@ -207,6 +207,44 @@ export const handler: Handler = async (event) => {
     }
 
     console.log('[ebay-update-active-promo] Success:', { action, campaignId, adId, rate: normalizedRate });
+    
+    // Update offer's merchantData to reflect promotion status for UI consistency
+    if (offerId || sku) {
+      try {
+        console.log('[ebay-update-active-promo] Updating offer merchantData for', offerId || sku);
+        const { accessTokenFromRefresh, tokenHosts } = await import('../../src/lib/_common.js');
+        const { access_token } = await accessTokenFromRefresh(refresh);
+        const { apiHost } = tokenHosts(process.env.EBAY_ENV);
+        
+        // Get current offer to preserve other merchantData fields
+        const getUrl = `${apiHost}/sell/inventory/v1/offer/${offerId || sku}`;
+        const getRes = await fetch(getUrl, {
+          headers: { 'Authorization': `Bearer ${access_token}`, 'Content-Type': 'application/json' }
+        });
+        
+        if (getRes.ok) {
+          const offer = await getRes.json();
+          const updatedMerchantData = {
+            ...(offer.merchantData || {}),
+            autoPromote: true,
+            autoPromoteAdRate: normalizedRate
+          };
+          
+          // Update offer with new merchantData
+          const updateUrl = `${apiHost}/sell/inventory/v1/offer/${offerId || sku}`;
+          await fetch(updateUrl, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${access_token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...offer, merchantData: updatedMerchantData })
+          });
+          console.log('[ebay-update-active-promo] merchantData updated successfully');
+        }
+      } catch (mdError: any) {
+        console.warn('[ebay-update-active-promo] Failed to update merchantData:', mdError.message);
+        // Don't fail the whole operation if merchantData update fails
+      }
+    }
+    
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },

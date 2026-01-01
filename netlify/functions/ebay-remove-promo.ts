@@ -73,6 +73,48 @@ export const handler: Handler = async (event) => {
 
     // Delete the ad
     await deleteAd(sub!, campaignId, adId);
+    
+    // Update offer's merchantData to reflect removal for UI consistency
+    if (offerId || sku) {
+      try {
+        console.log('[ebay-remove-promo] Updating offer merchantData for', offerId || sku);
+        const { accessTokenFromRefresh, tokenHosts } = await import('../../src/lib/_common.js');
+        const { access_token } = await accessTokenFromRefresh(refresh);
+        const { apiHost } = tokenHosts(process.env.EBAY_ENV);
+        
+        // Get current offer to preserve other merchantData fields
+        const getUrl = `${apiHost}/sell/inventory/v1/offer/${offerId || sku}`;
+        const getRes = await fetch(getUrl, {
+          headers: { 'Authorization': `Bearer ${access_token}`, 'Content-Type': 'application/json' }
+        });
+        
+        if (getRes.ok) {
+          const offer = await getRes.json();
+          const updatedMerchantData = {
+            ...(offer.merchantData || {}),
+            autoPromote: false,
+            autoPromoteAdRate: undefined
+          };
+          
+          // Remove undefined fields
+          if (updatedMerchantData.autoPromoteAdRate === undefined) {
+            delete updatedMerchantData.autoPromoteAdRate;
+          }
+          
+          // Update offer with new merchantData
+          const updateUrl = `${apiHost}/sell/inventory/v1/offer/${offerId || sku}`;
+          await fetch(updateUrl, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${access_token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...offer, merchantData: updatedMerchantData })
+          });
+          console.log('[ebay-remove-promo] merchantData updated successfully');
+        }
+      } catch (mdError: any) {
+        console.warn('[ebay-remove-promo] Failed to update merchantData:', mdError.message);
+        // Don't fail the whole operation if merchantData update fails
+      }
+    }
 
     return {
       statusCode: 200,
