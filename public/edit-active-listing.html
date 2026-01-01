@@ -424,6 +424,27 @@
           </div>
         </div>
         
+        <!-- Promotion Settings -->
+        <div class="dp-card dp-card--full">
+          <h3 style="margin-top: 0; margin-bottom: 1rem; color: var(--text-primary);">📣 Promoted Listings</h3>
+          <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+              <input type="checkbox" id="promotionEnabled" style="width: 18px; height: 18px; accent-color: var(--primary);" />
+              <span style="font-weight: 500;">Enable Promoted Listings</span>
+            </label>
+          </div>
+          <div id="promotionSettings" style="display: none;">
+            <div class="dp-form-row">
+              <div class="dp-form-col">
+                <label for="adRate">Ad Rate (%)</label>
+                <input type="number" id="adRate" placeholder="5" min="1" max="100" step="0.1" />
+                <p class="muted-hint">Percentage of sale price as advertising fee (typically 2-15%)</p>
+              </div>
+            </div>
+            <div id="promotionStatus" style="margin-top: 0.75rem; padding: 0.75rem; background: var(--bg-subtle); border-radius: var(--radius-md); font-size: 0.875rem; color: var(--text-muted);"></div>
+          </div>
+        </div>
+        
         <!-- Item Specifics -->
         <div class="dp-card dp-card--full">
           <h3 style="margin-top: 0; margin-bottom: 1rem; color: var(--text-primary);">Item Specifics (Aspects)</h3>
@@ -567,9 +588,49 @@
         
         showFlash('Listing loaded successfully!', 'success');
         
+        // Load promotion settings if available
+        loadPromotionSettings();
+        
       } catch (err) {
         console.error('Failed to load listing:', err);
         showFlash(`Error: ${err.message}`, 'error');
+      }
+    }
+    
+    // Promotion toggle handler
+    document.addEventListener('DOMContentLoaded', () => {
+      const promotionEnabled = $('promotionEnabled');
+      const promotionSettings = $('promotionSettings');
+      
+      if (promotionEnabled && promotionSettings) {
+        promotionEnabled.addEventListener('change', (e) => {
+          promotionSettings.style.display = e.target.checked ? 'block' : 'none';
+        });
+      }
+    });
+    
+    async function loadPromotionSettings() {
+      try {
+        if (!originalItem || !originalItem.sku) return;
+        
+        const promotionStatus = $('promotionStatus');
+        promotionStatus.textContent = 'Loading promotion settings...';
+        
+        // Check if listing is currently promoted
+        const res = await fetchJSON(`/.netlify/functions/ebay-get-promotion-status?sku=${encodeURIComponent(originalItem.sku)}`);
+        
+        if (res.ok && res.promoted) {
+          $('promotionEnabled').checked = true;
+          $('promotionSettings').style.display = 'block';
+          $('adRate').value = res.adRate || 5;
+          promotionStatus.textContent = `✓ Currently promoted at ${res.adRate}%`;
+          promotionStatus.style.color = 'var(--success)';
+        } else {
+          promotionStatus.textContent = 'Not currently promoted';
+        }
+      } catch (err) {
+        console.warn('Could not load promotion settings:', err);
+        $('promotionStatus').textContent = 'Promotion status unknown';
       }
     }
     
@@ -646,6 +707,10 @@
         // Collect images in their current order
         const images = Array.from(document.querySelectorAll('.image-thumb')).map(el => el.dataset.url);
         
+        // Collect promotion settings
+        const promotionEnabled = $('promotionEnabled').checked;
+        const adRate = promotionEnabled ? parseFloat($('adRate').value) || 5 : null;
+        
         const updatedListing = {
           itemId: currentItemId,
           sku: originalItem.sku,
@@ -657,6 +722,7 @@
           condition: $('condition').value,
           aspects,
           images, // Include reordered images
+          promotion: promotionEnabled ? { enabled: true, adRate } : { enabled: false },
         };
         
         console.log('Saving listing:', updatedListing);
