@@ -722,35 +722,44 @@ export async function lookupPrice(
   // Check cache first - cache stores MSRP data, we compute price with current user settings
   const cacheKey = makePriceSig(input.brand, input.title);
   
+  // Minimum reasonable MSRP to accept from cache (catches corrupted entries like $2.71)
+  const MIN_VALID_MSRP_CENTS = 500; // $5.00 minimum - most supplements/products cost more
+  
   if (!input.skipCache) {
     try {
       const cached = await getCachedPrice(cacheKey);
     
     if (cached?.msrpCents && cached?.chosen) {
-      console.log(`[price] ✓ Using cached MSRP: $${(cached.msrpCents / 100).toFixed(2)} (source: ${cached.chosen.source})`);
+      // Validate cached price isn't suspiciously low (catches corrupted cache entries)
+      if (cached.msrpCents < MIN_VALID_MSRP_CENTS) {
+        console.warn(`[price] ⚠️ Cached MSRP $${(cached.msrpCents / 100).toFixed(2)} is suspiciously low - ignoring cache`);
+        // Fall through to fresh lookup
+      } else {
+        console.log(`[price] ✓ Using cached MSRP: $${(cached.msrpCents / 100).toFixed(2)} (source: ${cached.chosen.source})`);
       
-      // Compute final price using current user settings
-      const settings = input.pricingSettings || getDefaultPricingSettings();
-      const shippingCents = cached.chosen.shippingCents ?? settings.templateShippingEstimateCents ?? 600;
+        // Compute final price using current user settings
+        const settings = input.pricingSettings || getDefaultPricingSettings();
+        const shippingCents = cached.chosen.shippingCents ?? settings.templateShippingEstimateCents ?? 600;
       
-      const pricingResult = computeEbayItemPrice({
-        amazonItemPriceCents: cached.msrpCents,
-        amazonShippingCents: shippingCents,
-        discountPercent: settings.discountPercent,
-        shippingStrategy: settings.shippingStrategy,
-        templateShippingEstimateCents: settings.templateShippingEstimateCents,
-        shippingSubsidyCapCents: settings.shippingSubsidyCapCents,
-      });
+        const pricingResult = computeEbayItemPrice({
+          amazonItemPriceCents: cached.msrpCents,
+          amazonShippingCents: shippingCents,
+          discountPercent: settings.discountPercent,
+          shippingStrategy: settings.shippingStrategy,
+          templateShippingEstimateCents: settings.templateShippingEstimateCents,
+          shippingSubsidyCapCents: settings.shippingSubsidyCapCents,
+        });
       
-      const finalPrice = pricingResult.ebayItemPriceCents / 100;
-      console.log(`[price] ✓ Computed from cached MSRP: $${finalPrice.toFixed(2)} with current user settings`);
+        const finalPrice = pricingResult.ebayItemPriceCents / 100;
+        console.log(`[price] ✓ Computed from cached MSRP: $${finalPrice.toFixed(2)} with current user settings`);
       
-      return {
-        ok: true,
-        chosen: cached.chosen,
-        candidates: cached.candidates || [],
-        recommendedListingPrice: finalPrice,
-      } as PriceDecision;
+        return {
+          ok: true,
+          chosen: cached.chosen,
+          candidates: cached.candidates || [],
+          recommendedListingPrice: finalPrice,
+        } as PriceDecision;
+      }
     }
   } catch (error) {
     console.warn('[price] Cache read error, proceeding without cache:', error);
@@ -1258,20 +1267,38 @@ export async function lookupPrice(
   const decision = await decideFinalPrice(input, candidates, soldStats);
 
   if (decision.ok && decision.chosen && decision.recommendedListingPrice) {
+    // Sanity check: reject negative or suspiciously low prices
+    const minValidPrice = 5.00; // Minimum $5 recommended price
+    if (decision.recommendedListingPrice < minValidPrice) {
+      console.warn(`[price] ⚠️ Recommended price $${decision.recommendedListingPrice.toFixed(2)} is below minimum - rejecting`);
+      return {
+        ok: false,
+        candidates: decision.candidates,
+        reason: `Price $${decision.recommendedListingPrice.toFixed(2)} is below minimum threshold`,
+        needsManualReview: true,
+        manualReviewReason: 'Calculated price too low - please verify manually',
+      } as PriceDecision;
+    }
+    
     console.log(`[price] ✓ Final decision: source=${decision.chosen.source} base=$${decision.chosen.price.toFixed(2)} final=$${decision.recommendedListingPrice.toFixed(2)}`);
     
     // Cache MSRP data (not computed price) so pricing logic can be applied with any user settings
+    // Only cache prices above $5 to prevent corrupted cache entries
     try {
       const msrpCents = Math.round(decision.chosen.price * 100);
       
-      await setCachedPrice(cacheKey, {
-        msrpCents,
-        chosen: decision.chosen,
-        candidates: decision.candidates,
-        cachedAt: Date.now(),
-      });
+      if (msrpCents >= 500) { // Only cache if MSRP >= $5
+        await setCachedPrice(cacheKey, {
+          msrpCents,
+          chosen: decision.chosen,
+          candidates: decision.candidates,
+          cachedAt: Date.now(),
+        });
       
-      console.log(`[price] ✓ Cached MSRP ($${decision.chosen.price.toFixed(2)}) for future lookups (30-day TTL)`);
+        console.log(`[price] ✓ Cached MSRP ($${decision.chosen.price.toFixed(2)}) for future lookups (30-day TTL)`);
+      } else {
+        console.warn(`[price] ⚠️ Not caching MSRP $${decision.chosen.price.toFixed(2)} - too low`);
+      }
     } catch (err) {
       console.warn(`[price] Failed to cache MSRP:`, err);
     }

@@ -71,3 +71,17 @@ export async function setCachedPrice(sig: string, data: Record<string, any>): Pr
     console.warn("price-cache write failed", err);
   }
 }
+/**
+ * Delete a cached price entry (for invalidation)
+ */
+export async function deleteCachedPrice(sig: string): Promise<boolean> {
+  if (!sig) return false;
+  try {
+    const result = await redisCall("DEL", `pricecache:${sig}`);
+    console.log(`[price-cache] Deleted cache entry: ${sig}`);
+    return result?.result === 1;
+  } catch (err) {
+    console.warn("price-cache delete failed", err);
+    return false;
+  }
+}
