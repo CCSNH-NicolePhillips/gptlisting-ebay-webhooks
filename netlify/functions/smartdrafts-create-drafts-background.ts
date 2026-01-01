@@ -771,6 +771,14 @@ function normalizeAspects(aspects: any, product: PairedProduct): Record<string, 
   if (product.brand && product.brand !== "Unknown" && (!normalized.Brand || normalized.Brand.length === 0)) {
     normalized.Brand = [product.brand];
     console.log(`[normalizeAspects] ✓ Brand set from product.brand: "${product.brand}"`);
+  } else if (!normalized.Brand || normalized.Brand.length === 0) {
+    console.error(`[normalizeAspects] ⚠️ CRITICAL: Brand is missing! product.brand="${product.brand}", productId="${product.productId}"`);
+    console.error(`[normalizeAspects] Product data:`, JSON.stringify({ 
+      brand: product.brand, 
+      product: product.product,
+      productId: product.productId,
+      title: product.title 
+    }));
   }
   
   if (product.size && !normalized.Size) {
@@ -1050,6 +1058,24 @@ async function createDraftForProduct(
   const hasCategory = draft.category && draft.category.id && draft.category.id !== '';
   const hasBrand = draft.aspects?.Brand && draft.aspects.Brand.length > 0;
   const hasType = draft.aspects?.Type && draft.aspects.Type.length > 0;
+  
+  // CRITICAL: If Brand is missing, this will cause eBay publish errors
+  if (!hasBrand) {
+    console.error(`[Draft] 🚨 CRITICAL: Brand aspect is missing for ${product.productId}!`);
+    console.error(`[Draft] Product brand field: "${product.brand}"`);
+    console.error(`[Draft] All aspects:`, JSON.stringify(draft.aspects));
+    
+    // Last resort: Try to extract brand from title or product name
+    if (!product.brand) {
+      const titleWords = (draft.title || '').split(' ');
+      const potentialBrand = titleWords[0]; // Often brand is first word
+      if (potentialBrand && potentialBrand.length > 2) {
+        console.warn(`[Draft] Using fallback brand from title: "${potentialBrand}"`);
+        draft.aspects.Brand = [potentialBrand];
+        // Don't retry - accept this fallback
+      }
+    }
+  }
   
   // Consider draft incomplete if it's missing critical fields
   const isIncomplete = !hasCategory || !hasBrand || aspectsCount < 3;
