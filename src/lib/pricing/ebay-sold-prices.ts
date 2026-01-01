@@ -1,4 +1,23 @@
-import { appAccessToken, tokenHosts } from "../_common.js";
+/**
+ * Fetch eBay sold/completed item pricing data using SearchAPI.io
+ * 
+ * Replaces deprecated eBay Finding API (findCompletedItems).
+ * Uses SearchAPI.io to scrape eBay sold listings for competitive pricing.
+ */
+
+// Rate limiting: Conservative 1 call/second for SearchAPI.io
+let lastCallTime = 0;
+const MIN_CALL_INTERVAL_MS = 1000;
+
+async function rateLimitDelay() {
+  const now = Date.now();
+  const timeSinceLastCall = now - lastCallTime;
+  if (timeSinceLastCall < MIN_CALL_INTERVAL_MS) {
+    const delayNeeded = MIN_CALL_INTERVAL_MS - timeSinceLastCall;
+    await new Promise(resolve => setTimeout(resolve, delayNeeded));
+  }
+  lastCallTime = Date.now();
+}
 
 export interface SoldPriceSample {
   price: number;
@@ -14,7 +33,8 @@ export interface SoldPriceStats {
   p35?: number;
   p10?: number;
   p90?: number;
-  rateLimited?: boolean; // True if API rate limit was hit
+  samplesCount?: number;
+  rateLimited?: boolean;
 }
 
 export interface SoldPriceQuery {
@@ -23,253 +43,136 @@ export interface SoldPriceQuery {
   upc?: string;
   condition?: 'NEW' | 'USED' | 'OTHER';
   quantity?: number;
+  userId?: string; // Ignored - no longer needed
+}
+
+function percentile(sorted: number[], p: number): number {
+  if (sorted.length === 0) return 0;
+  const index = Math.ceil(sorted.length * p) - 1;
+  return sorted[Math.max(0, index)];
 }
 
 /**
- * Calculate percentile from sorted array
- */
-function percentile(sortedValues: number[], p: number): number {
-  if (sortedValues.length === 0) return 0;
-  if (sortedValues.length === 1) return sortedValues[0];
-  
-  const index = (p / 100) * (sortedValues.length - 1);
-  const lower = Math.floor(index);
-  const upper = Math.ceil(index);
-  const weight = index % 1;
-  
-  if (lower === upper) {
-    return sortedValues[lower];
-  }
-  
-  return sortedValues[lower] * (1 - weight) + sortedValues[upper] * weight;
-}
-
-/**
- * Calculate statistics from price samples
- */
-function computeStats(prices: number[]): {
-  median: number;
-  p35: number;
-  p10: number;
-  p90: number;
-} {
-  if (prices.length === 0) {
-    return { median: 0, p35: 0, p10: 0, p90: 0 };
-  }
-  
-  const sorted = [...prices].sort((a, b) => a - b);
-  
-  return {
-    median: percentile(sorted, 50),
-    p35: percentile(sorted, 35),
-    p10: percentile(sorted, 10),
-    p90: percentile(sorted, 90),
-  };
-}
-
-/**
- * Map query condition to eBay API condition IDs
- */
-function getConditionFilter(condition?: string): string[] {
-  if (!condition) return [];
-  
-  switch (condition.toUpperCase()) {
-    case 'NEW':
-      return ['1000', '1500', '1750']; // New, New with tags, New with defects
-    case 'USED':
-      return ['3000', '4000', '5000', '6000']; // Used, Very Good, Good, Acceptable
-    default:
-      return [];
-  }
-}
-
-/**
- * Check if item quantity roughly matches query
- */
-function isQuantityMatch(itemQuantity: number | undefined, queryQuantity: number | undefined): boolean {
-  if (!queryQuantity || !itemQuantity) return true; // No filter if either is missing
-  
-  // Allow 20% variance in quantity
-  const lower = queryQuantity * 0.8;
-  const upper = queryQuantity * 1.2;
-  
-  return itemQuantity >= lower && itemQuantity <= upper;
-}
-
-/**
- * Fetch sold price statistics from eBay completed listings using Finding API
+ * Fetch sold price statistics from eBay completed listings via SearchAPI.io
+ * 
+ * Replaces deprecated Finding API with SearchAPI.io scraping.
  */
 export async function fetchSoldPriceStats(
   query: SoldPriceQuery
 ): Promise<SoldPriceStats> {
-  const empty: SoldPriceStats = {
-    ok: false,
-    samples: [],
-  };
+  const empty: SoldPriceStats = { ok: false, samples: [] };
+
+  // Check if SearchAPI key is available
+  const apiKey = process.env.SEARCHAPI_KEY;
+  if (!apiKey) {
+    console.log('[ebay-sold] No SEARCHAPI_KEY - skipping eBay sold prices');
+    return { ...empty, rateLimited: true };
+  }
 
   try {
-    // Finding API requires app ID (not OAuth token)
-    const appId = process.env.EBAY_APP_ID || process.env.EBAY_CLIENT_ID;
-    if (!appId) {
-      console.error('[ebay-sold] Missing EBAY_APP_ID or EBAY_CLIENT_ID');
-      return empty;
-    }
-
-    const isSandbox = process.env.EBAY_ENV === 'sandbox';
-    const baseUrl = isSandbox 
-      ? 'https://svcs.sandbox.ebay.com/services/search/FindingService/v1'
-      : 'https://svcs.ebay.com/services/search/FindingService/v1';
-
-    // Build keywords
+    // Build search query
     const keywords = [query.brand, query.title].filter(Boolean).join(' ');
-    console.log(`[ebay-sold] Searching completed items for: "${keywords}"`);
+    console.log(`[ebay-sold] Searching sold items via SearchAPI.io: "${keywords}"`);
 
-    const searchUrl = new URL(baseUrl);
-    searchUrl.searchParams.set('OPERATION-NAME', 'findCompletedItems');
-    searchUrl.searchParams.set('SERVICE-VERSION', '1.0.0');
-    searchUrl.searchParams.set('SECURITY-APPNAME', appId);
-    searchUrl.searchParams.set('RESPONSE-DATA-FORMAT', 'JSON');
-    searchUrl.searchParams.set('REST-PAYLOAD', '');
-    searchUrl.searchParams.set('keywords', keywords);
-    searchUrl.searchParams.set('paginationInput.entriesPerPage', '100');
-    searchUrl.searchParams.set('sortOrder', 'EndTimeSoonest');
+    const params = new URLSearchParams({
+      engine: 'ebay_search',
+      ebay_domain: 'ebay.com',
+      q: keywords,
+      ebay_tbs: 'LH_Complete:1,LH_Sold:1', // Sold/completed items filter
+    });
 
-    // Add item filters
-    let filterIndex = 0;
-
-    // Filter: Sold items only
-    searchUrl.searchParams.set(`itemFilter(${filterIndex}).name`, 'SoldItemsOnly');
-    searchUrl.searchParams.set(`itemFilter(${filterIndex}).value`, 'true');
-    filterIndex++;
-
-    // Filter: Buy It Now listings
-    searchUrl.searchParams.set(`itemFilter(${filterIndex}).name`, 'ListingType');
-    searchUrl.searchParams.set(`itemFilter(${filterIndex}).value`, 'FixedPrice');
-    filterIndex++;
-
-    // Filter: US location
-    searchUrl.searchParams.set(`itemFilter(${filterIndex}).name`, 'LocatedIn');
-    searchUrl.searchParams.set(`itemFilter(${filterIndex}).value`, 'US');
-    filterIndex++;
-
-    // Filter: Condition if specified
-    if (query.condition) {
-      const conditionIds = getConditionFilter(query.condition);
-      if (conditionIds.length > 0) {
-        searchUrl.searchParams.set(`itemFilter(${filterIndex}).name`, 'Condition');
-        conditionIds.forEach((condId, idx) => {
-          searchUrl.searchParams.set(`itemFilter(${filterIndex}).value(${idx})`, condId);
-        });
-        console.log(`[ebay-sold] Filtering by condition: ${query.condition} (IDs: ${conditionIds.join(', ')})`);
-        filterIndex++;
-      }
+    if (query.condition === 'NEW') {
+      params.append('ebay_tbs', 'LH_ItemCondition:1000');
+    } else if (query.condition === 'USED') {
+      params.append('ebay_tbs', 'LH_ItemCondition:3000');
     }
 
-    console.log(`[ebay-sold] API URL: ${searchUrl.toString().substring(0, 200)}...`);
+    const url = `https://www.searchapi.io/api/v1/search?${params.toString()}`;
+    
+    await rateLimitDelay();
 
-    const response = await fetch(searchUrl.toString(), {
+    const response = await fetch(url, {
       headers: {
-        'Accept': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
       },
     });
 
     if (!response.ok) {
-      const errorText = await response.text().catch(() => '');
-      
-      // Check for rate limit error
-      if (response.status === 500 && errorText.includes('exceeded the number of times')) {
-        console.warn(`[ebay-sold] Rate limit exceeded - daily quota reached`);
-        return { ...empty, rateLimited: true };
-      }
-      
-      console.error(`[ebay-sold] API error: ${response.status} ${response.statusText}`, {
-        preview: errorText.slice(0, 500),
-      });
-      return empty;
+      const errorText = await response.text();
+      console.error(`[ebay-sold] SearchAPI error ${response.status}:`, errorText);
+      return { ...empty, rateLimited: response.status === 429 };
     }
 
-    const data = await response.json();
+    const data: any = await response.json();
     
-    // Finding API response structure
-    const searchResult = data?.findCompletedItemsResponse?.[0]?.searchResult?.[0];
-    const items = searchResult?.item || [];
-    const count = parseInt(searchResult?.['@count'] || '0', 10);
-
-    console.log(`[ebay-sold] Found ${count} completed items from API`);
-
-    if (count === 0 || items.length === 0) {
-      console.warn(`[ebay-sold] No sold items found for query:`, {
-        title: query.title,
-        brand: query.brand,
-        condition: query.condition,
-      });
+    if (!data.organic_results || data.organic_results.length === 0) {
+      console.log('[ebay-sold] No sold items found');
       return empty;
     }
 
-    // Extract and filter samples
+    console.log(`[ebay-sold] Found ${data.organic_results.length} sold items`);
+
+    // Parse sold items
     const samples: SoldPriceSample[] = [];
-
-    for (const item of items) {
-      // Finding API structure: item.sellingStatus[0].currentPrice[0]
-      const sellingStatus = item.sellingStatus?.[0];
-      const currentPrice = sellingStatus?.currentPrice?.[0];
+    for (const item of data.organic_results) {
+      // Extract price from various possible fields
+      let priceValue: number | undefined;
       
-      if (!currentPrice?.__value__) continue;
-
-      const price = parseFloat(currentPrice.__value__);
-      if (!price || price <= 0) continue;
-
-      // Check quantity match if specified
-      const itemQuantity = parseInt(item.quantity?.[0] || '1', 10);
-      if (!isQuantityMatch(itemQuantity, query.quantity)) {
-        continue;
+      if (item.price?.value) {
+        priceValue = parseFloat(item.price.value);
+      } else if (item.price?.raw) {
+        const match = item.price.raw.match(/[\d,]+\.\d+/);
+        if (match) priceValue = parseFloat(match[0].replace(/,/g, ''));
+      } else if (typeof item.price === 'string') {
+        const match = item.price.match(/[\d,]+\.\d+/);
+        if (match) priceValue = parseFloat(match[0].replace(/,/g, ''));
       }
 
-      samples.push({
-        price: Math.round(price * 100) / 100,
-        currency: currentPrice['@currencyId'] || 'USD',
-        url: item.viewItemURL?.[0],
-        endedAt: item.listingInfo?.[0]?.endTime?.[0],
-      });
+      if (priceValue && priceValue > 0) {
+        samples.push({
+          price: priceValue,
+          currency: 'USD',
+          url: item.link,
+        });
+      }
     }
 
-    console.log(`[ebay-sold] Filtered to ${samples.length} valid samples (after quantity filter)`);
+    console.log(`[ebay-sold] Parsed ${samples.length} valid price samples`);
 
-    // Compute statistics if we have enough samples
     if (samples.length === 0) {
-      console.warn(`[ebay-sold] No sold items matched filters for query:`, {
-        title: query.title,
-        brand: query.brand,
-        condition: query.condition,
-      });
       return empty;
     }
 
-    const prices = samples.map(s => s.price);
-    const stats = computeStats(prices);
+    // Sort and compute statistics
+    const prices = samples.map(s => s.price).sort((a, b) => a - b);
+    const median = percentile(prices, 0.5);
+    const p35 = percentile(prices, 0.35);
+    const p10 = percentile(prices, 0.1);
+    const p90 = percentile(prices, 0.9);
 
     const result: SoldPriceStats = {
       ok: samples.length >= 3, // Need at least 3 samples for reliable stats
       samples,
-      ...stats,
+      median,
+      p35,
+      p10,
+      p90,
+      samplesCount: samples.length,
     };
 
-    console.log(`[ebay-sold] Statistics computed:`, {
-      title: query.title,
-      brand: query.brand,
-      condition: query.condition,
-      samplesCount: samples.length,
-      median: stats.median?.toFixed(2),
-      p35: stats.p35?.toFixed(2),
-      p10: stats.p10?.toFixed(2),
-      p90: stats.p90?.toFixed(2),
-      ok: result.ok,
+    console.log(`[ebay-sold] Statistics:`, {
+      samplesCount: result.samplesCount,
+      median: result.median?.toFixed(2),
+      p35: result.p35?.toFixed(2),
+      p10: result.p10?.toFixed(2),
+      p90: result.p90?.toFixed(2),
     });
 
     return result;
 
-  } catch (error) {
-    console.error('[ebay-sold] Error fetching sold prices:', error);
+  } catch (error: any) {
+    console.error('[ebay-sold] Error fetching sold prices:', error.message);
     return empty;
   }
 }
