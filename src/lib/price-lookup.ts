@@ -532,13 +532,13 @@ RECENT SOLD PRICES (last 30 days):
 ` : ''}
 
 PRICING RULES:
-1. **Prefer the HIGHER price between brand MSRP and Amazon** - we sell at a discount from market price
-   - If Amazon price > brand MSRP by 20% or more, use Amazon (brand may have sale/promo pricing)
-   - If brand MSRP >= Amazon, use brand MSRP (standard retail)
-   - Example: Brand $17, Amazon $25 → use Amazon $25 (brand is running a sale)
-2. Only use eBay sold prices if NO brand MSRP and NO Amazon price is available
-3. If using eBay sold price, return it as basePrice (already competitive)
-4. Never pick a price below 50% of the highest available price (prevents undervaluing)
+1. **ALWAYS prefer Amazon price when available** - this is the competitive marketplace price buyers compare against
+   - Amazon reflects real market pricing that buyers will comparison shop
+   - Brand MSRP is often inflated and not competitive
+   - Example: Brand $115, Amazon $75 → use Amazon $75 (competitive price)
+2. Only use brand MSRP if NO Amazon price is available
+3. Only use eBay sold prices if NO brand MSRP and NO Amazon price is available
+4. If using eBay sold price, return it as basePrice (already competitive)
 5. For used items, eBay sold data is more reliable than MSRP
 
 IMPORTANT: Return the BASE/RETAIL price as both basePrice and recommendedListingPrice.
@@ -649,10 +649,27 @@ RESPONSE FORMAT (JSON only):
 }
 
 /**
- * Fallback decision when AI fails: prefer ebay-sold p35, then brand MSRP with discount
+ * Fallback decision when AI fails: prefer ebay-sold, then Amazon, then brand MSRP
  */
 function fallbackDecision(input: PriceLookupInput, candidates: PriceSourceDetail[]): PriceDecision {
-  // Prefer ebay-sold first
+  // Get user pricing settings
+  const settings = input.pricingSettings || getDefaultPricingSettings();
+  
+  // Helper to apply discount
+  const applyDiscount = (price: number, shippingCents: number = 0): number => {
+    const priceCents = Math.round(price * 100);
+    const result = computeEbayItemPrice({
+      amazonItemPriceCents: priceCents,
+      amazonShippingCents: shippingCents,
+      discountPercent: settings.discountPercent,
+      shippingStrategy: settings.shippingStrategy,
+      templateShippingEstimateCents: settings.templateShippingEstimateCents,
+      shippingSubsidyCapCents: settings.shippingSubsidyCapCents,
+    });
+    return result.ebayItemPriceCents / 100;
+  };
+  
+  // Prefer ebay-sold first (already competitive marketplace price)
   const ebaySold = candidates.find(c => c.source === 'ebay-sold');
   if (ebaySold) {
     console.log(`[price] Fallback decision: using ebay-sold $${ebaySold.price.toFixed(2)}`);
@@ -665,26 +682,24 @@ function fallbackDecision(input: PriceLookupInput, candidates: PriceSourceDetail
     };
   }
 
-  // Then try brand MSRP with pricing settings (Phase 3)
+  // PRIORITY 2: Amazon (competitive marketplace price)
+  const amazon = candidates.find(c => c.source === 'amazon');
+  if (amazon) {
+    const finalPrice = applyDiscount(amazon.price, amazon.shippingCents || 0);
+    console.log(`[price] Fallback decision: amazon $${amazon.price.toFixed(2)} → $${finalPrice.toFixed(2)} (${settings.shippingStrategy}, ${settings.discountPercent}% off)`);
+    return {
+      ok: true,
+      chosen: amazon,
+      candidates,
+      recommendedListingPrice: finalPrice,
+      reason: 'fallback-to-amazon-with-discount'
+    };
+  }
+
+  // PRIORITY 3: Brand MSRP (less competitive, but better than estimate)
   const brandMsrp = candidates.find(c => c.source === 'brand-msrp');
   if (brandMsrp) {
-    // Phase 3: Use computeEbayItemPrice with user settings
-    const settings = input.pricingSettings || getDefaultPricingSettings();
-    
-    const priceCents = Math.round(brandMsrp.price * 100);
-    const shippingCents = brandMsrp.shippingCents || 0;
-    
-    const result = computeEbayItemPrice({
-      amazonItemPriceCents: priceCents,
-      amazonShippingCents: shippingCents,
-      discountPercent: settings.discountPercent,
-      shippingStrategy: settings.shippingStrategy,
-      templateShippingEstimateCents: settings.templateShippingEstimateCents,
-      shippingSubsidyCapCents: settings.shippingSubsidyCapCents,
-    });
-    
-    const finalPrice = result.ebayItemPriceCents / 100;
-    
+    const finalPrice = applyDiscount(brandMsrp.price, brandMsrp.shippingCents || 0);
     console.log(`[price] Fallback decision: brand-msrp $${brandMsrp.price.toFixed(2)} → $${finalPrice.toFixed(2)} (${settings.shippingStrategy}, ${settings.discountPercent}% off)`);
     return {
       ok: true,
