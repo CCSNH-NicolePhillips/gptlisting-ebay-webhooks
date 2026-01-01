@@ -130,6 +130,7 @@ export interface PriceSourceDetail {
   notes?: string;
   shippingCents?: number; // Phase 3: Amazon shipping cost in cents (0 for free shipping)
   matchesBrand?: boolean; // Whether this price signal matches the requested brand (helps bundle checks)
+  confidence?: 'high' | 'medium' | 'low'; // Match confidence for product identity validation
 }
 
 export interface PriceDecision {
@@ -687,7 +688,7 @@ ${input.condition ? `- Condition: ${input.condition}` : ''}
 ${input.quantity ? `- Quantity: ${input.quantity}` : ''}
 
 AVAILABLE PRICE DATA:
-${candidates.map((c, i) => `${i + 1}. ${c.source}: $${c.price.toFixed(2)} (${c.notes || 'no notes'})`).join('\n')}
+${candidates.map((c, i) => `${i + 1}. ${c.source}: $${c.price.toFixed(2)} ${c.confidence ? `[confidence: ${c.confidence}]` : ''} (${c.notes || 'no notes'})`).join('\n')}
 
 ${soldStats && soldStats.ok ? `
 RECENT SOLD PRICES (last 30 days):
@@ -704,9 +705,10 @@ PRICING RULES:
    - Brand MSRP is often inflated and not competitive
    - Example: Brand $115, Amazon $75 → use Amazon $75 (competitive price)
 2. Only use brand MSRP if NO Amazon price is available
-3. Only use eBay sold prices if NO brand MSRP and NO Amazon price is available
-4. If using eBay sold price, return it as basePrice (already competitive)
-5. For used items, eBay sold data is more reliable than MSRP
+3. **CONFIDENCE IS KING**: If a source has 'confidence: high', prefer it over 'confidence: low' sources, even if the low confidence price is cheaper. Low confidence often means a wrong item match.
+4. Only use eBay sold prices if NO brand MSRP and NO Amazon price is available
+5. If using eBay sold price, return it as basePrice (already competitive)
+6. For used items, eBay sold data is more reliable than MSRP
 
 IMPORTANT: Return the BASE/RETAIL price as both basePrice and recommendedListingPrice.
 Do NOT apply discounts yourself - the system will apply competitive pricing automatically.
@@ -1009,18 +1011,11 @@ export async function lookupPrice(
       
       let searchQuery = `${input.brand} ${input.title}`;
       
-      // Include size/weight in search query to find correct variant
-      // Only add if not already in the title (avoid duplication like "15.22 fl oz 15.22 fl oz")
+      // ALWAYS include netWeight in search query to ensure Identity Integrity
       if (input.netWeight && input.netWeight.value && input.netWeight.unit) {
         const sizeStr = `${input.netWeight.value} ${input.netWeight.unit}`;
-        const normalizedTitle = input.title.toLowerCase().replace(/\s+/g, ' ');
-        const normalizedSize = sizeStr.toLowerCase().replace(/\s+/g, ' ');
-        if (!normalizedTitle.includes(normalizedSize)) {
-          searchQuery += ` ${sizeStr}`;
-          console.log(`[price-debug] Added netWeight to query: "${sizeStr}"`);
-        } else {
-          console.log(`[price-debug] Size "${sizeStr}" already in title, not duplicating`);
-        }
+        searchQuery += ` ${sizeStr}`;
+        console.log(`[price-debug] Enforcing netWeight in query: "${sizeStr}"`);
       }
       
       if (input.categoryPath) {
@@ -1119,6 +1114,23 @@ export async function lookupPrice(
             
             console.log(`[price] ✓ Amazon: item=$${amazonPrice.toFixed(2)}, ${shippingNote}`);
             
+            // LOGIC: Calculate Match Confidence
+            // 1. Brand Match (Critical)
+            const pageTitle = priceData.pageTitle || '';
+            const brandInTitle = input.brand ? pageTitle.toLowerCase().includes(input.brand.toLowerCase()) : false;
+            
+            // 2. Word Overlap (How many distinct words from input title exist in result title?)
+            const inputWords = input.title.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+            const resultTitleLower = pageTitle.toLowerCase();
+            const matchCount = inputWords.filter(w => resultTitleLower.includes(w)).length;
+            const matchRatio = inputWords.length > 0 ? matchCount / inputWords.length : 0;
+            
+            let confidence: 'high' | 'medium' | 'low' = 'low';
+            if (brandInTitle && matchRatio > 0.8) confidence = 'high';
+            else if (brandInTitle && matchRatio > 0.4) confidence = 'medium';
+            
+            console.log(`[price-debug] Match Confidence: ${confidence} (Brand=${brandInTitle}, Ratio=${matchRatio.toFixed(2)})`);
+            
             candidates.push({
               source: 'amazon',
               price: amazonPrice,
@@ -1127,6 +1139,7 @@ export async function lookupPrice(
               notes: `Amazon marketplace price (${shippingNote})`,
               shippingCents,
               matchesBrand: true,
+              confidence,
             });
           } else {
             const rejectReasons = [];
@@ -1182,6 +1195,20 @@ export async function lookupPrice(
                       console.log(`[price] ✓ Retry success! Amazon: item=$${amazonPrice.toFixed(2)}, ${shippingNote}`);
                       console.log(`[price]   Title: ${retryPriceData.pageTitle?.substring(0, 100)}...`);
                       
+                      // Calculate confidence for retry result
+                      const retryPageTitle = retryPriceData.pageTitle || '';
+                      const retryBrandInTitle = input.brand ? retryPageTitle.toLowerCase().includes(input.brand.toLowerCase()) : false;
+                      const retryInputWords = input.title.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+                      const retryResultTitleLower = retryPageTitle.toLowerCase();
+                      const retryMatchCount = retryInputWords.filter(w => retryResultTitleLower.includes(w)).length;
+                      const retryMatchRatio = retryInputWords.length > 0 ? retryMatchCount / retryInputWords.length : 0;
+                      
+                      let retryConfidence: 'high' | 'medium' | 'low' = 'low';
+                      if (retryBrandInTitle && retryMatchRatio > 0.8) retryConfidence = 'high';
+                      else if (retryBrandInTitle && retryMatchRatio > 0.4) retryConfidence = 'medium';
+                      
+                      console.log(`[price-debug] Retry Match Confidence: ${retryConfidence} (Brand=${retryBrandInTitle}, Ratio=${retryMatchRatio.toFixed(2)})`);
+                      
                       candidates.push({
                         source: 'amazon',
                         price: amazonPrice,
@@ -1190,6 +1217,7 @@ export async function lookupPrice(
                         notes: `Amazon marketplace price (${shippingNote}) [retry-with-size]`,
                         shippingCents,
                         matchesBrand: true,
+                        confidence: retryConfidence,
                       });
                     } else {
                       console.log(`[price] ✗ Retry also rejected - brand=${retryBrandMatches}, sizeMismatch=${retrySizeMismatch}`);

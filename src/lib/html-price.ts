@@ -127,9 +127,17 @@ function detectPackQty(text: string | undefined): number {
   if (!text) return 1;
   const t = text.toLowerCase();
 
+  // Expanded Container Patterns (Box, Case, Carton, Set, Display)
+  const containerMatch = t.match(/\b(?:box|case|carton|set|display)\s*of\s*(\d+)\b/i);
+  if (containerMatch) return parseInt(containerMatch[1], 10);
+
+  // Reverse Patterns (12 box)
+  const reverseMatch = t.match(/\b(\d+)\s*(?:box|case|carton|set|display)\b/i);
+  if (reverseMatch && parseInt(reverseMatch[1], 10) > 1) return parseInt(reverseMatch[1], 10);
+
   // Strong signals: "pack of 2", "pk of 3", "pack of 24"
-  const m1 = t.match(/\b(?:pack|pk)\s*of\s*(\d+)\b/);
-  if (m1) return parseInt(m1[1], 10);
+  const packOfMatch = t.match(/\b(?:pack|pk)\s*of\s*(\d+)\b/);
+  if (packOfMatch) return parseInt(packOfMatch[1], 10);
 
   // "24 pack", "24 count", "24 ct" - explicit pack language (allow higher counts)
   const packExplicit = t.match(/\b(\d+)\s*(?:pack|pk|ct)\b/);
@@ -148,17 +156,17 @@ function detectPackQty(text: string | undefined): number {
   }
 
   // "2 bottles", "3 bottles", "4 count" - lower threshold for bottles/count
-  const m2 = t.match(/\b(\d+)\s*(?:bottles?|capsules?|softgels?|units?)\b/);
-  if (m2) {
-    const qty = parseInt(m2[1], 10);
+  const bottlesMatch = t.match(/\b(\d+)\s*(?:bottles?|capsules?|softgels?|units?)\b/);
+  if (bottlesMatch) {
+    const qty = parseInt(bottlesMatch[1], 10);
     // Ignore high counts that are likely product contents, not pack qty
     // e.g., "60 capsules" means 60 capsules per bottle, not 60-pack
     if (qty <= 10) return qty;
   }
 
   // Phrases like "2-pack", "3pk", "2x"
-  const m3 = t.match(/\b(\d+)\s*-\s*pack\b|\b(\d+)\s*pk\b|\b(\d+)x\b/);
-  const n = m3 && (m3[1] || m3[2] || m3[3]);
+  const dashPackMatch = t.match(/\b(\d+)\s*-\s*pack\b|\b(\d+)\s*pk\b|\b(\d+)x\b/);
+  const n = dashPackMatch && (dashPackMatch[1] || dashPackMatch[2] || dashPackMatch[3]);
   if (n) {
     const qty = parseInt(n, 10);
     if (qty <= 48) return qty;
@@ -801,36 +809,17 @@ function detectMultiPack($: cheerio.CheerioAPI): { isMultiPack: boolean; packSiz
   console.log(`[HTML Parser] detectMultiPack - title: "${title.slice(0, 200)}"`);
   console.log(`[HTML Parser] detectMultiPack - h1: "${h1.slice(0, 200)}"`);
   
-  // Common multi-pack indicators (case-insensitive)
-  const packPatterns = [
-    /\((\d+)\s*pack\)/i,   // "(2 Pack)" or "(4 Pack)" - Amazon format
-    /\b(\d+)pk\b/i,        // "2pk", "4pk" - compact format
-    /\b(\d+)\s*pack\b/i,
-    /\b(\d+)\s*count\s*pack\b/i,
-    /\bpack\s*of\s*(\d+)\b/i,
-    /\btwin\s*pack\b/i,    // twin = 2
-    /\bdouble\s*pack\b/i,  // double = 2
-    /\btriple\s*pack\b/i,  // triple = 3
-    /\b(\d+)\s*bottles?\b/i,
-    /\b(\d+)\s*units?\b/i,
-    /\bbundle/i,
-  ];
+  // Use detectPackQty to check for pack patterns (includes Box/Case/etc)
+  const packQty = detectPackQty(productText);
+  if (packQty > 1) {
+    console.log(`[HTML Parser] detectMultiPack - detected ${packQty}-pack via detectPackQty`);
+    return { isMultiPack: true, packSize: packQty };
+  }
   
-  for (const pattern of packPatterns) {
-    const match = productText.match(pattern);
-    if (match) {
-      console.log(`[HTML Parser] detectMultiPack - matched pattern: ${pattern} → "${match[0]}"`);
-      
-      // Extract pack size if available
-      const packSize = match[1] ? parseInt(match[1], 10) : undefined;
-      
-      // Special cases
-      if (/twin|double/i.test(match[0])) return { isMultiPack: true, packSize: 2 };
-      if (/triple/i.test(match[0])) return { isMultiPack: true, packSize: 3 };
-      
-      console.log(`[HTML Parser] detectMultiPack - result: isMultiPack=true, packSize=${packSize}`);
-      return { isMultiPack: true, packSize };
-    }
+  // Fallback: Check for generic "bundle" keyword
+  if (/\bbundle\b/i.test(productText)) {
+    console.log(`[HTML Parser] detectMultiPack - detected bundle keyword`);
+    return { isMultiPack: true };
   }
   
   console.log(`[HTML Parser] detectMultiPack - no pack indicators found`);
@@ -906,18 +895,7 @@ function detectAmazonSelectedVariant($: cheerio.CheerioAPI): { packSize?: number
     }
   }
   
-  // Strategy 5: Search all text nodes for "Pack of N" pattern near size info
-  const bodyText = $('body').text();
-  const packMatches = bodyText.match(/(\d+\.?\d*\s*(?:Fl\s*Oz|oz|ml))[^<>]{0,50}\(Pack of (\d+)\)/gi);
-  if (packMatches && packMatches.length > 0) {
-    // Take the first match (usually the selected variant)
-    const match = packMatches[0].match(/\(Pack of (\d+)\)/i);
-    if (match) {
-      const packSize = parseInt(match[1], 10);
-      console.log(`[HTML Parser] ✓ Detected pack size from body text pattern: ${packSize} (from "${packMatches[0].substring(0, 60)}...")`);
-      return { packSize, size: detectSize(packMatches[0]) || undefined };
-    }
-  }
+  // Strategy 5 REMOVED: Only trust Title or Dropdowns, not body text search
   
   console.log(`[HTML Parser] No Amazon variant pack size found, will use title detection`);
   return null;
