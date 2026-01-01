@@ -116,6 +116,10 @@ export const handler: Handler = async (event) => {
             
             const adRateRaw = o?.merchantData?.autoPromoteAdRate;
             const adRate = typeof adRateRaw === 'number' ? adRateRaw : parseFloat(adRateRaw);
+            
+            // Note: merchantData reflects our INTENT to promote, but doesn't guarantee it's actually promoted
+            // The actual promotion status should be checked via Marketing API if accuracy is critical
+            // For now, we trust merchantData as the source of truth
 
             results.push({
               offerId: String(o.offerId || ''),
