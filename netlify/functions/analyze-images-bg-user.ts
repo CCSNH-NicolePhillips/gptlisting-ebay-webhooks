@@ -1,5 +1,5 @@
 import type { Handler } from "@netlify/functions";
-import crypto from "node:crypto";
+import crypto from "crypto";
 import { requireUserAuth } from "../../src/lib/auth-user.js";
 import { getOrigin, isOriginAllowed, json } from "../../src/lib/http.js";
 import { sanitizeUrls, toDirectDropbox } from "../../src/lib/merge.js";

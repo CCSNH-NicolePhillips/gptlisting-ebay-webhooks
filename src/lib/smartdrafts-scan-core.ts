@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash } from "crypto";
 import { STRICT_TWO_ONLY, USE_CLIP, USE_NEW_SORTER, USE_ROLE_SORTING } from "../config.js";
 import { makeDisplayUrl } from "../utils/displayUrl.js";
 import { finalizeDisplayUrls } from "../utils/finalizeDisplay.js";

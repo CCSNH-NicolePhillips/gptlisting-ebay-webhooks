@@ -1,4 +1,4 @@
-import crypto from "node:crypto";
+import crypto from "crypto";
 
 /**
  * Convert a Dropbox "share" URL into a direct-download URL

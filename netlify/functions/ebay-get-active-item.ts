@@ -205,7 +205,7 @@ export const handler: Handler = async (event) => {
       try {
         console.log(`[ebay-get-active-item] Fetching offer merchantData for SKU: ${item.sku}`);
         const { accessTokenFromRefresh, tokenHosts } = await import('../../src/lib/_common.js');
-        const { access_token } = await accessTokenFromRefresh(token);
+        const { access_token } = await accessTokenFromRefresh(refresh);
         const { apiHost } = tokenHosts(process.env.EBAY_ENV);
         
         const offerUrl = `${apiHost}/sell/inventory/v1/offer/${encodeURIComponent(item.sku)}`;

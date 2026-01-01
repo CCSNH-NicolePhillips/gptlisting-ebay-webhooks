@@ -1,5 +1,5 @@
 import type { Handler } from '@netlify/functions';
-import { createHash } from 'node:crypto';
+import { createHash } from 'crypto';
 import { tokensStore } from '../../src/lib/_blobs.js';
 import { userScopedKey } from '../../src/lib/_auth.js';
 import { requireUserAuth } from '../../src/lib/auth-user.js';

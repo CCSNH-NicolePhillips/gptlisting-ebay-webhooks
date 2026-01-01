@@ -1,5 +1,5 @@
 import type { Handler } from '@netlify/functions';
-import crypto from 'node:crypto';
+import crypto from 'crypto';
 
 export const handler: Handler = async (event) => {
 	const VERIFICATION_TOKEN = process.env.EBAY_VERIFICATION_TOKEN;

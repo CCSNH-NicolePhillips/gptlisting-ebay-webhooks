@@ -1,5 +1,5 @@
 import type { Handler } from "@netlify/functions";
-import { createHash } from "node:crypto";
+import { createHash } from "crypto";
 import { USE_CLIP, USE_NEW_SORTER, USE_ROLE_SORTING } from "../../src/config.js";
 import { config } from "../../src/config/smartdrafts.js";
 import { putJob, redisSet } from "../../src/lib/job-store.js";

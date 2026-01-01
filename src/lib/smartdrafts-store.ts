@@ -1,4 +1,4 @@
-import crypto from "node:crypto";
+import crypto from "crypto";
 import type { ImageInsight } from "./image-insight.js";
 
 const BASE = (process.env.UPSTASH_REDIS_REST_URL || "").replace(/\/$/, "");

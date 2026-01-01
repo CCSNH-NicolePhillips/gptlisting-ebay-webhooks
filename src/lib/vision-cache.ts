@@ -1,4 +1,4 @@
-import crypto from "node:crypto";
+import crypto from "crypto";
 
 const BASE = (process.env.UPSTASH_REDIS_REST_URL || "").replace(/\/$/, "");
 const TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || "";
