@@ -179,6 +179,94 @@ function isProbablyBundlePrice(brandPrice: number, comparisonPrice: number): boo
 }
 
 /**
+ * Extract key distinguishing terms from a product title.
+ * These are terms that must appear in the Amazon page to consider it a match.
+ * 
+ * Examples:
+ * - "Fem Dophilus Ultra 50 Billion CFU" → ["ultra", "50billion"]
+ * - "TestoPro Capsules 90" → ["testopro", "capsules"]
+ * - "Morning Complete" → ["morningcomplete"]
+ * 
+ * This prevents matching "Fem Dophilus 5 Billion" when searching for "Ultra 50 Billion"
+ */
+function extractDistinguishingTerms(title: string): string[] {
+  if (!title) return [];
+  
+  const terms: string[] = [];
+  const lowerTitle = title.toLowerCase();
+  
+  // Key product differentiators
+  const differentiators = [
+    // Size/strength variants
+    /ultra/i,
+    /pro\b/i,
+    /plus\b/i,
+    /max\b/i,
+    /(\d+)\s*billion/i,      // "50 Billion" → "50billion"
+    /(\d+)\s*million/i,
+    /(\d+)\s*capsules?/i,    // "90 Capsules" → "90capsules"
+    /(\d+)\s*tablets?/i,
+    /(\d+)\s*gummies?/i,
+    /(\d+)\s*softgels?/i,
+    /(\d+)\s*count/i,
+    /(\d+)\s*ct\b/i,
+    /(\d+)\s*oz\b/i,         // Size in oz
+    /(\d+(?:\.\d+)?)\s*fl\s*oz/i,
+    /(\d+)\s*ml\b/i,
+    /(\d+)\s*mg\b/i,
+  ];
+  
+  for (const pattern of differentiators) {
+    const match = lowerTitle.match(pattern);
+    if (match) {
+      // Normalize the match (remove spaces, lowercase)
+      const term = match[0].replace(/\s+/g, '').toLowerCase();
+      terms.push(term);
+    }
+  }
+  
+  // Also add the core product name (2+ word phrases)
+  // e.g., "TestoPro", "Morning Complete"
+  const words = title.split(/\s+/).filter(w => w.length > 3);
+  if (words.length >= 2) {
+    // Take the first 2-3 significant words as a phrase
+    const phrase = words.slice(0, 3).join('').toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (phrase.length > 6) {
+      terms.push(phrase);
+    }
+  }
+  
+  return [...new Set(terms)]; // Dedupe
+}
+
+/**
+ * Check if Amazon page title contains the key distinguishing terms from our product.
+ * Returns false if any critical terms are missing.
+ */
+function amazonMatchesProductTerms(
+  amazonPageTitle: string | undefined,
+  ourProductTitle: string | undefined
+): { matches: boolean; missing: string[] } {
+  if (!amazonPageTitle || !ourProductTitle) {
+    return { matches: true, missing: [] }; // Can't validate, assume OK
+  }
+  
+  const ourTerms = extractDistinguishingTerms(ourProductTitle);
+  if (ourTerms.length === 0) {
+    return { matches: true, missing: [] }; // No distinguishing terms
+  }
+  
+  const normalizedAmazon = amazonPageTitle.toLowerCase().replace(/\s+/g, '');
+  const missing = ourTerms.filter(term => !normalizedAmazon.includes(term));
+  
+  // Must match at least 60% of distinguishing terms
+  const matchRatio = (ourTerms.length - missing.length) / ourTerms.length;
+  const matches = matchRatio >= 0.6 || missing.length === 0;
+  
+  return { matches, missing };
+}
+
+/**
  * Detect if an Amazon page title indicates a bundle/multi-pack product
  * when we're selling a single item.
  * 
@@ -191,16 +279,19 @@ function isProbablyBundlePrice(brandPrice: number, comparisonPrice: number): boo
  * @param pageTitle - The Amazon page title
  * @param sellingQuantity - How many items we're selling (photoQuantity)
  * @param sellingPackCount - If we're selling a pack (e.g., 6-pack), what size
+ * @param productTitle - Our product title (to check if count matches our product size)
  * @returns true if this appears to be a bundle page for more than we're selling
  */
 function isAmazonBundlePage(
   pageTitle: string | undefined,
   sellingQuantity: number = 1,
-  sellingPackCount: number | null | undefined = null
+  sellingPackCount: number | null | undefined = null,
+  productTitle: string | undefined = undefined
 ): boolean {
   if (!pageTitle) return false;
   
   const title = pageTitle.toLowerCase();
+  const ourTitle = productTitle?.toLowerCase() || '';
   
   // Pattern 1: Explicit "Bundle" in title
   if (/\bbundle\b/.test(title)) {
@@ -209,6 +300,7 @@ function isAmazonBundlePage(
   }
   
   // Pattern 2: "X Pack" / "X-Pack" / "(Pack of X)" where X > what we're selling
+  // BUT: If our product also contains the same count (e.g., "90 pieces"), it's not a multipack
   const packPatterns = [
     /(\d+)\s*[-\s]?pack\b/i,           // "48 Pack", "24-pack"
     /\(pack of (\d+)\)/i,               // "(Pack of 12)"
@@ -216,6 +308,22 @@ function isAmazonBundlePage(
     /(\d+)\s*count\b/i,                 // "24 Count"
     /(\d+)\s*(?:ct|pk)\b/i,             // "24ct", "12pk"
   ];
+  
+  // Patterns that indicate product size (not pack quantity) in our product title
+  // e.g., "90 Pieces", "60 Capsules", "30 Tablets"
+  const productSizePatterns = [
+    /(\d+)\s*(?:pieces?|pcs?|capsules?|tablets?|softgels?|gummies?|mints?|chews?|servings?)/i,
+  ];
+  
+  // Extract our product's size count if present
+  let ourProductSizeCount: number | null = null;
+  for (const pattern of productSizePatterns) {
+    const match = ourTitle.match(pattern);
+    if (match) {
+      ourProductSizeCount = parseInt(match[1], 10);
+      break;
+    }
+  }
   
   const effectiveSellingQty = sellingPackCount && sellingPackCount > 1 
     ? sellingPackCount * sellingQuantity 
@@ -225,6 +333,14 @@ function isAmazonBundlePage(
     const match = title.match(pattern);
     if (match) {
       const packSize = parseInt(match[1], 10);
+      
+      // If our product title has the same count (e.g., both say "90"), 
+      // this is the product size, not a multipack
+      if (ourProductSizeCount && Math.abs(packSize - ourProductSizeCount) <= 5) {
+        console.log(`[price] ✓ Amazon "${packSize} ct" matches our product size (${ourProductSizeCount}) - not a multipack`);
+        continue; // Skip this pattern, check others
+      }
+      
       // If Amazon is selling significantly more than we are (more than 2x), reject
       // Use > instead of >= to allow borderline cases like "Pack of 2" when selling 1
       if (packSize > effectiveSellingQty * 2 && packSize > 1) {
@@ -921,7 +1037,8 @@ export async function lookupPrice(
           const isBundleMismatch = isAmazonBundlePage(
             priceData.pageTitle,
             input.photoQuantity || 1,
-            input.packCount
+            input.packCount,
+            input.title  // Pass product title to check if count matches product size
           );
 
           // SIZE CHECK: Reject Amazon pages with significantly different sizes
@@ -930,7 +1047,15 @@ export async function lookupPrice(
             input.title
           );
 
-          if (skipValidation || (brandMatches && productMatches && !isBundleMismatch && !isSizeMismatch)) {
+          // PRODUCT TERMS CHECK: Ensure Amazon page has key distinguishing terms from our product
+          // This catches cases like "5 Billion CFU" vs "Ultra 50 Billion CFU"
+          const termMatch = amazonMatchesProductTerms(priceData.pageTitle, input.title);
+          const isTermMismatch = !termMatch.matches;
+          if (isTermMismatch) {
+            console.log(`[price] ⚠️ Amazon missing distinguishing terms: ${termMatch.missing.join(', ')}`);
+          }
+
+          if (skipValidation || (brandMatches && productMatches && !isBundleMismatch && !isSizeMismatch && !isTermMismatch)) {
             amazonPrice = priceData.amazonItemPrice;
             amazonUrl = amazonUrlFound;
             
@@ -958,6 +1083,7 @@ export async function lookupPrice(
             if (!productMatches) rejectReasons.push('product mismatch');
             if (isBundleMismatch) rejectReasons.push('bundle/multipack page');
             if (isSizeMismatch) rejectReasons.push('size mismatch');
+            if (isTermMismatch) rejectReasons.push(`missing key terms: ${termMatch.missing.join(', ')}`);
             console.log(`[price] ✗ Amazon result rejected - ${rejectReasons.join(', ')} (title: ${priceData.pageTitle || 'unknown'})`);
             
             // AUTO-RETRY: If size mismatch and we have netWeight, try a size-focused search
@@ -1032,38 +1158,36 @@ export async function lookupPrice(
   }
 
   // ========================================
-  // TIER 2.5: Web Search AI (Experimental - when Amazon fails)
+  // TIER 2.5: RapidAPI Product Search (Multi-source pricing)
   // ========================================
-  // Only use web search if Amazon didn't return anything
+  // Use RapidAPI when Amazon didn't return anything - aggregates Google Shopping data
   if (!amazonPrice && input.brand && input.title) {
-    console.log('[price] Tier 2.5: Trying web-search AI...');
+    console.log('[price] Tier 2.5: Trying RapidAPI product search...');
     
-    const { searchWebForPrice } = await import('./web-search-pricing.js');
+    const { searchProductPrice } = await import('./rapidapi-product-search.js');
     const additionalContext = [
-      input.categoryPath,
-      input.keyText?.slice(0, 3).join(', '),
-    ].filter(Boolean).join(' | ');
+      input.netWeight ? `${input.netWeight.value} ${input.netWeight.unit}` : '',
+      input.keyText?.slice(0, 2).join(' '),
+    ].filter(Boolean).join(' ');
     
-    const webResult = await searchWebForPrice(
+    const rapidResult = await searchProductPrice(
       input.brand,
       input.title,
       additionalContext
     );
     
-    if (webResult.price && webResult.price > 0) {
-      console.log(`[price] ✓ Web search found: $${webResult.price.toFixed(2)} (${webResult.source}, ${webResult.confidence} confidence)`);
-      console.log(`[price]   URL: ${webResult.url}`);
-      console.log(`[price]   Reasoning: ${webResult.reasoning}`);
+    if (rapidResult.price && rapidResult.price > 0) {
+      console.log(`[price] ✓ RapidAPI found: $${rapidResult.price.toFixed(2)} from ${rapidResult.source} (${rapidResult.confidence} confidence)`);
       
       candidates.push({
-        source: 'brave-fallback', // Map to existing source type
-        price: webResult.price,
+        source: 'brave-fallback', // Map to existing source type for AI arbitration
+        price: rapidResult.price,
         currency: 'USD',
-        url: webResult.url || undefined,
-        notes: `Web search: ${webResult.source} (${webResult.confidence} confidence) - ${webResult.reasoning}`,
+        url: rapidResult.url || undefined,
+        notes: `RapidAPI: ${rapidResult.source} (${rapidResult.confidence}) - ${rapidResult.reasoning}`,
       });
     } else {
-      console.log('[price] ✗ Web search did not find price');
+      console.log('[price] ✗ RapidAPI did not find price');
     }
   }
 

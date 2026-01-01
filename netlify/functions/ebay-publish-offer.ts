@@ -325,7 +325,10 @@ export const handler: Handler = async (event) => {
 				let adRate = defaultAdRate;
 				
 				try {
+					console.log(`[ebay-publish-offer] Checking Redis for promotion intent, offerId=${offerId}`);
 					const promotionIntent = await getPromotionIntent(offerId);
+					console.log(`[ebay-publish-offer] Redis promotion intent result:`, promotionIntent);
+					
 					if (promotionIntent && promotionIntent.enabled) {
 						console.log(`[ebay-publish-offer] Found promotion intent in Redis for offerId ${offerId}: enabled=${promotionIntent.enabled}, adRate=${promotionIntent.adRate}`);
 						usePromotion = true;
@@ -336,6 +339,8 @@ export const handler: Handler = async (event) => {
 						console.log(`[ebay-publish-offer] Promotion intent found but disabled for offerId ${offerId}`);
 						usePromotion = false;
 						await deletePromotionIntent(offerId);
+					} else {
+						console.log(`[ebay-publish-offer] No promotion intent in Redis for offerId ${offerId}, falling back to user settings (autoPromote=${autoPromote})`);
 					}
 				} catch (intentErr: any) {
 					console.warn(`[ebay-publish-offer] Failed to check promotion intent for offerId ${offerId}:`, intentErr?.message);

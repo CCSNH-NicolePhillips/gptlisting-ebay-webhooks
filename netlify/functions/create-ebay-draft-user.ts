@@ -443,6 +443,7 @@ export const handler: Handler = async (event) => {
         
         // Store promotion intent in Redis for when the offer is published
         // (eBay doesn't persist custom merchantData, so we use Redis to bridge)
+        console.log(`[create-ebay-draft-user] Promotion check for offerId ${offerResult.offerId}: group.promotion=${JSON.stringify(group.promotion)}`);
         if (group.promotion?.enabled && offerResult.offerId) {
           try {
             const adRate = group.promotion.rate || 5;
@@ -452,6 +453,8 @@ export const handler: Handler = async (event) => {
             console.error(`[create-ebay-draft-user] ⚠️ Failed to store promotion intent for ${offerResult.offerId}:`, intentErr?.message || intentErr);
             // Don't fail the whole job - this is just for auto-promote on publish
           }
+        } else {
+          console.log(`[create-ebay-draft-user] ℹ No promotion intent to store for offerId ${offerResult.offerId} (promotion not enabled)`);
         }
       } catch (e: any) {
         const msg = String(e?.message || e || "");
