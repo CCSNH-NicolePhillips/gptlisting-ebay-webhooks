@@ -28,6 +28,13 @@ export const handler: Handler = async (event) => {
     console.log('[ebay-update-active-item] Updating item:', itemId, 'Inventory listing:', isInventoryListing);
     console.log('[ebay-update-active-item] Received data - title:', title ? 'YES' : 'NO', 'description:', description ? 'YES' : 'NO', 'price:', price, 'quantity:', quantity);
 
+    // If SKU is placeholder/invalid, treat as Trading API listing regardless of isInventoryListing flag
+    let actuallyInventoryListing = isInventoryListing;
+    if (isInventoryListing && sku && (sku.includes('SKU123456789') || sku === '' || /^sku\d+$/i.test(sku))) {
+      console.warn('[ebay-update-active-item] Placeholder SKU detected, forcing Trading API path:', sku);
+      actuallyInventoryListing = false;
+    }
+
     // Load refresh token
     const store = tokensStore();
     const saved = (await store.get(userScopedKey(sub, 'ebay.json'), { type: 'json' })) as any;
@@ -43,7 +50,7 @@ export const handler: Handler = async (event) => {
     console.log('[DEBUG] Token preview:', access_token.substring(0, 50) + '...');
 
     // Use Inventory API for inventory listings, Trading API for traditional listings
-    if (isInventoryListing) {
+    if (actuallyInventoryListing) {
       // Use Inventory API - update inventory item AND offer
       console.log('[ebay-update-active-item] Using Inventory API for inventory listing');
       
