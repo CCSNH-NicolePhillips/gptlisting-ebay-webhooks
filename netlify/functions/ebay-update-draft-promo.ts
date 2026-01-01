@@ -2,6 +2,7 @@ import type { Handler } from '@netlify/functions';
 import { accessTokenFromRefresh, tokenHosts } from '../../src/lib/_common.js';
 import { tokensStore } from '../../src/lib/_blobs.js';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
+import { storePromotionIntent, deletePromotionIntent } from '../../src/lib/promotion-queue.js';
 
 /**
  * Update draft promotion intent settings
@@ -103,6 +104,23 @@ export const handler: Handler = async (event) => {
 				statusCode: putR.status,
 				body: JSON.stringify({ error: 'Failed to update offer', detail: putData }),
 			};
+		}
+
+		// Store promotion intent in Redis (this is what ebay-publish-offer reads)
+		// eBay doesn't persist merchantData, so we use Redis to bridge the gap
+		try {
+			if (autoPromote === true) {
+				const adRate = typeof autoPromoteAdRate === 'number' ? autoPromoteAdRate : 5;
+				await storePromotionIntent(offerId, true, adRate);
+				console.log(`[ebay-update-draft-promo] ✓ Stored promotion intent in Redis for offerId ${offerId}: adRate=${adRate}%`);
+			} else if (autoPromote === false) {
+				// Explicitly disabled - delete any existing intent
+				await deletePromotionIntent(offerId);
+				console.log(`[ebay-update-draft-promo] ✓ Deleted promotion intent from Redis for offerId ${offerId}`);
+			}
+		} catch (redisErr: any) {
+			console.error(`[ebay-update-draft-promo] ⚠️ Failed to update Redis promotion intent for ${offerId}:`, redisErr?.message || redisErr);
+			// Don't fail the whole request - eBay update succeeded
 		}
 
 		return {
