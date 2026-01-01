@@ -543,6 +543,14 @@
           originalItem.sku = skuParam;
         }
         
+        // CRITICAL: Check for missing SKU on inventory listings
+        if (originalItem.isInventoryListing && !originalItem.sku) {
+          console.error('[CRITICAL] Inventory listing missing SKU!', originalItem);
+          showFlash('⚠️ Warning: This listing is missing a SKU and cannot be updated. Please contact support.', 'error');
+          $('btnSave').disabled = true;
+          $('btnSave').textContent = 'Cannot Save (Missing SKU)';
+        }
+        
         console.log('Item loaded - isInventoryListing:', originalItem.isInventoryListing, 'SKU:', originalItem.sku);
         
         // Populate form

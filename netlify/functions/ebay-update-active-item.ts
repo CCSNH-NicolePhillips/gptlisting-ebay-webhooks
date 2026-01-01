@@ -48,7 +48,13 @@ export const handler: Handler = async (event) => {
       console.log('[ebay-update-active-item] Using Inventory API for inventory listing');
       
       if (!sku) {
-        return { statusCode: 400, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' }, body: JSON.stringify({ error: 'SKU required for inventory listings' }) };
+        console.error('[ebay-update-active-item] CRITICAL: SKU missing for inventory listing. ItemId:', itemId);
+        return { statusCode: 400, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' }, body: JSON.stringify({ error: 'SKU required for inventory listings. This listing may have been created without a SKU or the SKU was not retrieved from eBay. ItemId: ' + itemId }) };
+      }
+      
+      if (sku.includes('SKU123456789') || sku === '') {
+        console.error('[ebay-update-active-item] CRITICAL: Invalid/placeholder SKU detected:', sku, 'for itemId:', itemId);
+        return { statusCode: 400, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' }, body: JSON.stringify({ error: 'Invalid SKU detected. This listing cannot be updated through the Inventory API.' }) };
       }
 
       const { apiHost } = require('../../src/lib/_common.js').tokenHosts(process.env.EBAY_ENV);
