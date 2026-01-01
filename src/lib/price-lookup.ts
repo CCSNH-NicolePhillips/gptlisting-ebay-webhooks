@@ -227,12 +227,17 @@ function extractDistinguishingTerms(title: string): string[] {
   
   // Also add the core product name (2+ word phrases)
   // e.g., "TestoPro", "Morning Complete"
-  const words = title.split(/\s+/).filter(w => w.length > 3);
-  if (words.length >= 2) {
-    // Take the first 2-3 significant words as a phrase
-    const phrase = words.slice(0, 3).join('').toLowerCase().replace(/[^a-z0-9]/g, '');
-    if (phrase.length > 6) {
-      terms.push(phrase);
+  // BUT: For liposomal/pouch products, Amazon titles vary too much for phrase matching
+  const isPouchProduct = /pouch|sachet|stick|packet|liposomal|liquid supplement/i.test(title);
+  
+  if (!isPouchProduct) {
+    const words = title.split(/\s+/).filter(w => w.length > 3);
+    if (words.length >= 2) {
+      // Take the first 2-3 significant words as a phrase
+      const phrase = words.slice(0, 3).join('').toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (phrase.length > 6) {
+        terms.push(phrase);
+      }
     }
   }
   
@@ -256,11 +261,25 @@ function amazonMatchesProductTerms(
     return { matches: true, missing: [] }; // No distinguishing terms
   }
   
-  const normalizedAmazon = amazonPageTitle.toLowerCase().replace(/\s+/g, '');
-  const missing = ourTerms.filter(term => !normalizedAmazon.includes(term));
+  // Normalize Amazon title: remove spaces, dashes, and special chars for matching
+  const normalizedAmazon = amazonPageTitle.toLowerCase().replace(/[\s\-_]+/g, '').replace(/[^a-z0-9]/g, '');
+  
+  // For pouch/liposomal products, size terms like "280ml" won't match because
+  // Amazon shows per-pouch size (e.g., "10ml pouches (28 count)").
+  // Filter out size-only terms for these products.
+  const isPouchProduct = /pouch|sachet|stick|packet|liposomal|liquid supplement/i.test(ourProductTitle);
+  const filteredTerms = isPouchProduct 
+    ? ourTerms.filter(term => !/^\d+(?:ml|oz|floz|g|mg|l)$/.test(term))  // Remove pure size terms
+    : ourTerms;
+  
+  if (filteredTerms.length === 0) {
+    return { matches: true, missing: [] }; // All terms were size-only, skip validation
+  }
+  
+  const missing = filteredTerms.filter(term => !normalizedAmazon.includes(term));
   
   // Must match at least 60% of distinguishing terms
-  const matchRatio = (ourTerms.length - missing.length) / ourTerms.length;
+  const matchRatio = (filteredTerms.length - missing.length) / filteredTerms.length;
   const matches = matchRatio >= 0.6 || missing.length === 0;
   
   return { matches, missing };
@@ -312,8 +331,13 @@ function isAmazonBundlePage(
   // Patterns that indicate product size (not pack quantity) in our product title
   // e.g., "90 Pieces", "60 Capsules", "30 Tablets"
   const productSizePatterns = [
-    /(\d+)\s*(?:pieces?|pcs?|capsules?|tablets?|softgels?|gummies?|mints?|chews?|servings?)/i,
+    /(\d+)\s*(?:pieces?|pcs?|capsules?|tablets?|softgels?|gummies?|mints?|chews?|servings?|pouches?|sachets?|sticks?|packets?)/i,
   ];
+  
+  // Check if product is a pouch/sachet type (where count IS the product)
+  // e.g., "Cymbiotika Liposomal Magnesium Complex Vanilla Almond 280ml" is 28 pouches
+  const isPouchProduct = /pouch|sachet|stick|packet/i.test(ourTitle) || 
+    /liposomal|liquid supplement/i.test(ourTitle); // Liposomal supplements often come in pouches
   
   // Extract our product's size count if present
   let ourProductSizeCount: number | null = null;
@@ -341,6 +365,13 @@ function isAmazonBundlePage(
         continue; // Skip this pattern, check others
       }
       
+      // For pouch/sachet products like Cymbiotika (28 pouches = 280ml), the count IS the product
+      // Don't reject these as multipacks - the Amazon page is the correct single-box product
+      if (isPouchProduct) {
+        console.log(`[price] ✓ Pouch/liposomal product detected - "${packSize} ct" is the product, not a multipack`);
+        continue;
+      }
+      
       // If Amazon is selling significantly more than we are (more than 2x), reject
       // Use > instead of >= to allow borderline cases like "Pack of 2" when selling 1
       if (packSize > effectiveSellingQty * 2 && packSize > 1) {
@@ -364,6 +395,15 @@ function isAmazonSizeMismatch(
   productTitle: string | undefined
 ): boolean {
   if (!pageTitle || !productTitle) return false;
+  
+  // For pouch/liposomal products, the Amazon size is per-pouch, not total
+  // e.g., "10ml pouches (28 count)" vs our "280ml" → 10 × 28 = 280ml → matches!
+  const isPouchProduct = /pouch|sachet|stick|packet|liposomal|liquid supplement/i.test(productTitle);
+  
+  // Extract count from Amazon title (e.g., "28 Count", "Pack of 26")
+  const countMatch = pageTitle.match(/(\d+)\s*(?:count|ct|pack\b)/i) || 
+                     pageTitle.match(/\(pack of (\d+)\)/i);
+  const amazonCount = countMatch ? parseInt(countMatch[1], 10) : 1;
   
   // Extract size from both titles
   const sizePattern = /(\d+(?:\.\d+)?)\s*(fl\s*oz|oz|ml|l|g|kg|lb|lbs)/i;
@@ -420,6 +460,17 @@ function isAmazonSizeMismatch(
     };
     amazonNormalized = normalizeToG(amazonSize, amazonUnit);
     productNormalized = normalizeToG(productSize, productUnit);
+  }
+  
+  // For pouch products, Amazon size is per-pouch, so multiply by count to get total
+  // e.g., Amazon "10ml × 28 count" = 280ml total, matching our "280ml"
+  if (isPouchProduct && amazonCount > 1) {
+    const amazonTotalSize = amazonNormalized * amazonCount;
+    const pouchRatio = amazonTotalSize / productNormalized;
+    if (pouchRatio >= 0.67 && pouchRatio <= 1.5) {
+      console.log(`[price] ✓ Pouch product size matches: Amazon ${amazonSize}${amazonUnit}×${amazonCount}=${(amazonSize*amazonCount).toFixed(0)}${amazonUnit} ≈ Product ${productSize}${productUnit}`);
+      return false; // Not a mismatch
+    }
   }
   
   // Reject if Amazon size is more than 50% different from our product

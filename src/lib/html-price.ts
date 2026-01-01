@@ -1135,6 +1135,21 @@ export function extractPriceWithShipping(html: string, productTitle?: string, ov
       ({ unitsSold, evidence: evidenceArray } = detectUnitsSoldFromTitle(titleForUnitsSold));
     }
     
+    // POUCH/LIPOSOMAL PRODUCT FIX: Do NOT divide for pouch products
+    // For products like Cymbiotika (28 pouches = 1 box), the price IS the box price
+    // Dividing $54.40 by 28 gives incorrect $1.94/pouch
+    // Key insight: Liposomal/pouch products sell as a box, not individual sachets
+    const isPouchProduct = /pouch|sachet|stick|packet|liposomal|liquid supplement/i.test(productTitle || '');
+    const isAmazonPouchListing = /pouch|sachet|stick|packet|\b\d+\s*count\b|\bPack of \d+\b/i.test(titleForUnitsSold || '');
+    
+    // If our product is liposomal/pouch type, skip division even if Amazon shows "Pack of N"
+    // because that "N" refers to individual sachets in a box, not multiple boxes
+    if (isPouchProduct && unitsSold > 1) {
+      console.log(`[HTML Parser] ⚠️ Pouch/liposomal product detected ("${productTitle?.slice(0, 50)}..."). Skipping ${unitsSold}-unit division - treating as single box price.`);
+      unitsSold = 1;
+      evidenceArray = ['Pouch product - single box pricing'];
+    }
+    
     let normalizedPrice = rawPrice;
     if (unitsSold > 1) {
       normalizedPrice = rawPrice / unitsSold;
