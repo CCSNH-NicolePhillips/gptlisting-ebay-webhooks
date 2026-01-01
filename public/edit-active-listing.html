@@ -619,19 +619,20 @@
     
     async function loadPromotionSettings() {
       try {
-        if (!originalItem || !originalItem.sku) return;
+        if (!originalItem) return;
         
         const promotionStatus = $('promotionStatus');
         promotionStatus.textContent = 'Loading promotion settings...';
         
-        // Check if listing is currently promoted
-        const res = await fetchJSON(`/.netlify/functions/ebay-get-promotion-status?sku=${encodeURIComponent(originalItem.sku)}`);
+        // Check merchantData for promotion settings (set by ebay-update-active-promo)
+        const isPromoted = originalItem.autoPromote === true;
+        const adRate = originalItem.autoPromoteAdRate;
         
-        if (res.ok && res.promoted) {
+        if (isPromoted && adRate) {
           $('promotionEnabled').checked = true;
           $('promotionSettings').style.display = 'block';
-          $('adRate').value = res.adRate || 5;
-          promotionStatus.textContent = `✓ Currently promoted at ${res.adRate}%`;
+          $('adRate').value = adRate;
+          promotionStatus.textContent = `✓ Currently promoted at ${adRate}%`;
           promotionStatus.style.color = 'var(--success)';
         } else {
           promotionStatus.textContent = 'Not currently promoted';

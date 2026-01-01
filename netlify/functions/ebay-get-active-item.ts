@@ -196,7 +196,40 @@ export const handler: Handler = async (event) => {
       conditionName: conditionNameMatch ? conditionNameMatch[1] : 'New',
       images,
       aspects,
+      autoPromote: false, // Default values
+      autoPromoteAdRate: undefined,
     };
+    
+    // If inventory listing, fetch promotion data from offer's merchantData
+    if (finalIsInventoryListing && item.sku) {
+      try {
+        console.log(`[ebay-get-active-item] Fetching offer merchantData for SKU: ${item.sku}`);
+        const { accessTokenFromRefresh, tokenHosts } = await import('../../src/lib/_common.js');
+        const { access_token } = await accessTokenFromRefresh(token);
+        const { apiHost } = tokenHosts(process.env.EBAY_ENV);
+        
+        const offerUrl = `${apiHost}/sell/inventory/v1/offer/${encodeURIComponent(item.sku)}`;
+        const offerRes = await fetch(offerUrl, {
+          headers: {
+            'Authorization': `Bearer ${access_token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        
+        if (offerRes.ok) {
+          const offer = await offerRes.json();
+          if (offer.merchantData) {
+            item.autoPromote = offer.merchantData.autoPromote === true;
+            item.autoPromoteAdRate = offer.merchantData.autoPromoteAdRate;
+            console.log(`[ebay-get-active-item] Promotion data: autoPromote=${item.autoPromote}, rate=${item.autoPromoteAdRate}`);
+          }
+        } else {
+          console.warn(`[ebay-get-active-item] Could not fetch offer: ${offerRes.status}`);
+        }
+      } catch (err: any) {
+        console.warn(`[ebay-get-active-item] Failed to fetch promotion data:`, err.message);
+      }
+    }
 
     console.log('[ebay-get-active-item] Successfully parsed item');
 
