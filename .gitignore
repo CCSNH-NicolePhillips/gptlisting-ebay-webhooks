@@ -28,6 +28,12 @@ test-*.ts
 *-test-*.json
 *.local.*
 
+# Test images and large files
+testDropbox/**/*.jpg
+testDropbox/**/*.jpeg
+testDropbox/**/*.png
+testDropbox/**/*.gif
+
 # Temporary scripts
 scripts/delete-*.mjs
 
