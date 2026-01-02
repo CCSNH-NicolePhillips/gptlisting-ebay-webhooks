@@ -107,10 +107,10 @@ export const handler: Handler = async (event) => {
         let publishedCount = 0;
         for (const o of offers) {
           try {
-            // Filter for PUBLISHED status only
+            // Filter for PUBLISHED or ACTIVE status (eBay uses both depending on API version)
             const status = o?.status || o?.listing?.status || o?.publication?.status;
-            if (status !== 'PUBLISHED') {
-              continue; // Skip non-published offers
+            if (status !== 'PUBLISHED' && status !== 'ACTIVE') {
+              continue; // Skip non-active offers
             }
             publishedCount++;
             
