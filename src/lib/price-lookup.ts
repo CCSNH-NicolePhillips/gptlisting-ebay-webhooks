@@ -135,6 +135,13 @@ export interface PriceSourceDetail {
 
 export interface PriceDecision {
   ok: boolean;
+  // Top-level convenience fields (duplicate chosen.* for easy access)
+  source?: PriceSource;
+  price?: number;
+  confidence?: 'high' | 'medium' | 'low';
+  amazonUrl?: string;
+  brandUrl?: string;
+  // Detailed data
   chosen?: PriceSourceDetail;
   candidates: PriceSourceDetail[];
   recommendedListingPrice?: number;
@@ -770,10 +777,14 @@ RESPONSE FORMAT (JSON only):
     // Step 3: Apply competitive pricing via Phase 2 function
     const shippingCents = chosen.shippingCents || 0;
     
+    // FIX 2: Stop Applying Discount to Amazon Prices (Amazon IS the market price)
+    // Only apply discount if we are using Brand MSRP or estimations
+    const effectiveDiscount = chosen.source === 'amazon' ? 0 : settings.discountPercent;
+    
     const pricingResult = computeEbayItemPrice({
       amazonItemPriceCents: lotRetailPriceCents,
       amazonShippingCents: shippingCents,
-      discountPercent: settings.discountPercent,
+      discountPercent: effectiveDiscount,
       shippingStrategy: settings.shippingStrategy,
       templateShippingEstimateCents: settings.templateShippingEstimateCents,
       shippingSubsidyCapCents: settings.shippingSubsidyCapCents,
@@ -807,10 +818,15 @@ RESPONSE FORMAT (JSON only):
 
     return {
       ok: true,
+      source: chosen.source,
+      price: finalListingPrice,
+      confidence: chosen.confidence || 'medium',
       chosen,
       candidates,
       recommendedListingPrice: finalListingPrice,
-      reason: reasoning
+      reason: reasoning,
+      amazonUrl: chosen.source === 'amazon' ? chosen.url : undefined,
+      brandUrl: chosen.source === 'brand-msrp' ? chosen.url : undefined
     };
 
   } catch (error) {
@@ -827,12 +843,14 @@ function fallbackDecision(input: PriceLookupInput, candidates: PriceSourceDetail
   const settings = input.pricingSettings || getDefaultPricingSettings();
   
   // Helper to apply discount
-  const applyDiscount = (price: number, shippingCents: number = 0): number => {
+  const applyDiscount = (price: number, shippingCents: number = 0, source?: PriceSource): number => {
     const priceCents = Math.round(price * 100);
+    // FIX 3: Don't discount Amazon prices in fallback either
+    const effectiveDiscount = source === 'amazon' ? 0 : settings.discountPercent;
     const result = computeEbayItemPrice({
       amazonItemPriceCents: priceCents,
       amazonShippingCents: shippingCents,
-      discountPercent: settings.discountPercent,
+      discountPercent: effectiveDiscount,
       shippingStrategy: settings.shippingStrategy,
       templateShippingEstimateCents: settings.templateShippingEstimateCents,
       shippingSubsidyCapCents: settings.shippingSubsidyCapCents,
@@ -840,44 +858,55 @@ function fallbackDecision(input: PriceLookupInput, candidates: PriceSourceDetail
     return result.ebayItemPriceCents / 100;
   };
   
-  // Prefer ebay-sold first (already competitive marketplace price)
+  // PRIORITY 1: Amazon (The Gold Standard - competitive marketplace price)
+  const amazon = candidates.find(c => c.source === 'amazon');
+  if (amazon) {
+    const finalPrice = applyDiscount(amazon.price, amazon.shippingCents || 0, 'amazon');
+    console.log(`[price] Fallback decision: amazon $${amazon.price.toFixed(2)} (no discount applied)`);
+    return {
+      ok: true,
+      source: 'amazon',
+      price: amazon.price,
+      confidence: amazon.confidence || 'medium',
+      chosen: amazon,
+      candidates,
+      recommendedListingPrice: amazon.price,
+      reason: 'fallback-to-amazon',
+      amazonUrl: amazon.url
+    };
+  }
+
+  // PRIORITY 2: Brand MSRP (less competitive, but better than estimate)
+  const brandMsrp = candidates.find(c => c.source === 'brand-msrp');
+  if (brandMsrp) {
+    const finalPrice = applyDiscount(brandMsrp.price, brandMsrp.shippingCents || 0, 'brand-msrp');
+    console.log(`[price] Fallback decision: brand-msrp $${brandMsrp.price.toFixed(2)} → $${finalPrice.toFixed(2)} (${settings.shippingStrategy}, ${settings.discountPercent}% off)`);
+    return {
+      ok: true,
+      source: 'brand-msrp',
+      price: finalPrice,
+      confidence: brandMsrp.confidence || 'medium',
+      chosen: brandMsrp,
+      candidates,
+      recommendedListingPrice: finalPrice,
+      reason: 'fallback-to-brand-msrp-with-discount',
+      brandUrl: brandMsrp.url
+    };
+  }
+
+  // PRIORITY 3 (Last Resort): eBay Sold
   const ebaySold = candidates.find(c => c.source === 'ebay-sold');
   if (ebaySold) {
     console.log(`[price] Fallback decision: using ebay-sold $${ebaySold.price.toFixed(2)}`);
     return {
       ok: true,
+      source: 'ebay-sold',
+      price: ebaySold.price,
+      confidence: ebaySold.confidence || 'medium',
       chosen: ebaySold,
       candidates,
       recommendedListingPrice: ebaySold.price,
       reason: 'fallback-to-ebay-sold'
-    };
-  }
-
-  // PRIORITY 2: Amazon (competitive marketplace price)
-  const amazon = candidates.find(c => c.source === 'amazon');
-  if (amazon) {
-    const finalPrice = applyDiscount(amazon.price, amazon.shippingCents || 0);
-    console.log(`[price] Fallback decision: amazon $${amazon.price.toFixed(2)} → $${finalPrice.toFixed(2)} (${settings.shippingStrategy}, ${settings.discountPercent}% off)`);
-    return {
-      ok: true,
-      chosen: amazon,
-      candidates,
-      recommendedListingPrice: finalPrice,
-      reason: 'fallback-to-amazon-with-discount'
-    };
-  }
-
-  // PRIORITY 3: Brand MSRP (less competitive, but better than estimate)
-  const brandMsrp = candidates.find(c => c.source === 'brand-msrp');
-  if (brandMsrp) {
-    const finalPrice = applyDiscount(brandMsrp.price, brandMsrp.shippingCents || 0);
-    console.log(`[price] Fallback decision: brand-msrp $${brandMsrp.price.toFixed(2)} → $${finalPrice.toFixed(2)} (${settings.shippingStrategy}, ${settings.discountPercent}% off)`);
-    return {
-      ok: true,
-      chosen: brandMsrp,
-      candidates,
-      recommendedListingPrice: finalPrice,
-      reason: 'fallback-to-brand-msrp-with-discount'
     };
   }
 
@@ -886,6 +915,9 @@ function fallbackDecision(input: PriceLookupInput, candidates: PriceSourceDetail
   console.log(`[price] Fallback decision: using ${fallback.source} $${fallback.price.toFixed(2)}`);
   return {
     ok: true,
+    source: fallback.source,
+    price: fallback.price,
+    confidence: fallback.confidence || 'low',
     chosen: fallback,
     candidates,
     recommendedListingPrice: fallback.price,
@@ -927,10 +959,13 @@ export async function lookupPrice(
         const settings = input.pricingSettings || getDefaultPricingSettings();
         const shippingCents = cached.chosen.shippingCents ?? settings.templateShippingEstimateCents ?? 600;
       
+        // FIX 2 (Cache Path): Don't discount Amazon prices from cache either
+        const effectiveDiscount = cached.chosen.source === 'amazon' ? 0 : settings.discountPercent;
+      
         const pricingResult = computeEbayItemPrice({
           amazonItemPriceCents: cached.msrpCents,
           amazonShippingCents: shippingCents,
-          discountPercent: settings.discountPercent,
+          discountPercent: effectiveDiscount,
           shippingStrategy: settings.shippingStrategy,
           templateShippingEstimateCents: settings.templateShippingEstimateCents,
           shippingSubsidyCapCents: settings.shippingSubsidyCapCents,
@@ -941,9 +976,17 @@ export async function lookupPrice(
       
         return {
           ok: true,
+          source: cached.chosen.source,
+          price: finalPrice,
+          confidence: cached.chosen.confidence || 'medium',
+          reason: `Using cached ${cached.chosen.source} price with current discount settings`,
           chosen: cached.chosen,
           candidates: cached.candidates || [],
           recommendedListingPrice: finalPrice,
+          amazonUrl: cached.chosen.source === 'amazon' ? cached.chosen.url : undefined,
+          brandUrl: cached.chosen.source === 'brand-msrp' ? cached.chosen.url : undefined,
+          msrpCents: cached.msrpCents,
+          cachedAt: cached.cachedAt
         } as PriceDecision;
       }
     }
@@ -1077,6 +1120,12 @@ export async function lookupPrice(
             
             productMatches = keyTerms.some(term => normalizedTitle?.includes(term));
             console.log(`[price-debug] Amazon product match check: keyTerms=${JSON.stringify(keyTerms)}, matches=${productMatches}`);
+            
+            // FIX 1B: If keyText doesn't match but brand does, accept it anyway (Relaxed Product Matching)
+            if (!productMatches && brandMatches) {
+              console.log(`[price] ⚠️ Amazon keyText mismatch but brand matches - accepting anyway`);
+              productMatches = true;
+            }
           } else {
             // No keyText - just use brand match
             productMatches = true;
@@ -1100,11 +1149,14 @@ export async function lookupPrice(
           // This catches cases like "5 Billion CFU" vs "Ultra 50 Billion CFU"
           const termMatch = amazonMatchesProductTerms(priceData.pageTitle, input.title);
           const isTermMismatch = !termMatch.matches;
+          
+          // FIX 1: Do not reject solely on missing terms (Relaxed Matching)
           if (isTermMismatch) {
-            console.log(`[price] ⚠️ Amazon missing distinguishing terms: ${termMatch.missing.join(', ')}`);
+            console.log(`[price] ⚠️ Amazon missing terms (allowing anyway): ${termMatch.missing.join(', ')}`);
           }
 
-          if (skipValidation || (brandMatches && productMatches && !isBundleMismatch && !isSizeMismatch && !isTermMismatch)) {
+          // REMOVED !isTermMismatch from the condition below to allow matches with missing terms
+          if (skipValidation || (brandMatches && productMatches && !isBundleMismatch && !isSizeMismatch)) {
             amazonPrice = priceData.amazonItemPrice;
             amazonUrl = amazonUrlFound;
             amazonWeight = priceData.amazonWeight || null; // Capture weight data
@@ -1129,11 +1181,13 @@ export async function lookupPrice(
             const matchCount = inputWords.filter(w => resultTitleLower.includes(w)).length;
             const matchRatio = inputWords.length > 0 ? matchCount / inputWords.length : 0;
             
+            // Confidence Logic: High if terms match, Medium if terms missing but brand matches
             let confidence: 'high' | 'medium' | 'low' = 'low';
-            if (brandInTitle && matchRatio > 0.8) confidence = 'high';
+            if (brandInTitle && !isTermMismatch) confidence = 'high';      // High if terms match
+            else if (brandInTitle && isTermMismatch) confidence = 'medium'; // Medium if terms missing
             else if (brandInTitle && matchRatio > 0.4) confidence = 'medium';
             
-            console.log(`[price-debug] Match Confidence: ${confidence} (Brand=${brandInTitle}, Ratio=${matchRatio.toFixed(2)})`);
+            console.log(`[price-debug] Match Confidence: ${confidence} (TermMismatch=${isTermMismatch})`);
             
             candidates.push({
               source: 'amazon',
