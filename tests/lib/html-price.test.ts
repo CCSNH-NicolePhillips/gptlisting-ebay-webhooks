@@ -300,7 +300,8 @@ describe('html-price.ts', () => {
         expect(price).toBeCloseTo(22.45, 1); // Allow some rounding variance
       });
 
-      it('should detect pack size from Amazon variant dropdown (Pack of 4)', () => {
+      it('should detect pack size from title (2pk)', () => {
+        // Body text "Pack of 4" is intentionally ignored - only title/dropdown trusted
         const html = `
           <html>
             <head><title>Amazon.com: NUSAVA Vitamin B12 2pk Each</title></head>
@@ -313,11 +314,12 @@ describe('html-price.ts', () => {
         `;
 
         const price = extractPriceFromHtml(html, 'B12 2 fl oz');
-        // Price $43.95 ÷ 4 (from "Pack of 4" in body text) = $10.99
-        expect(price).toBeCloseTo(10.99, 1);
+        // Price $43.95 ÷ 2 (from "2pk" in title) = $21.975
+        expect(price).toBeCloseTo(21.98, 1);
       });
 
-      it('should detect pack size from Amazon body text pattern', () => {
+      it('should not detect pack size from body text alone', () => {
+        // Body text pack detection was intentionally removed to avoid false positives
         const html = `
           <html>
             <head><title>Amazon.com: Vitamin B12</title></head>
@@ -329,8 +331,8 @@ describe('html-price.ts', () => {
         `;
 
         const price = extractPriceFromHtml(html);
-        // Price $42.00 ÷ 4 = $10.50
-        expect(price).toBeCloseTo(10.50, 1);
+        // No pack info in title, body text ignored → full price $42.00
+        expect(price).toBeCloseTo(42.00, 1);
       });
 
       it('should detect pack size from Amazon input field', () => {
@@ -349,7 +351,8 @@ describe('html-price.ts', () => {
         expect(price).toBe(12.00);
       });
 
-      it('should prefer dropdown pack size over title detection', () => {
+      it('should use title pack size when no dropdown present', () => {
+        // Body text "Pack of 4" is ignored; title "2pk" is used
         const html = `
           <html>
             <head><title>Amazon.com: Vitamin B12 2pk Each</title></head>
@@ -362,9 +365,8 @@ describe('html-price.ts', () => {
         `;
 
         const price = extractPriceFromHtml(html);
-        // Title says "2pk" but body shows "Pack of 4"
-        // Should use "Pack of 4" from body: $43.00 ÷ 4 = $10.75
-        expect(price).toBeCloseTo(10.75, 1);
+        // Title says "2pk", body ignored → $43.00 ÷ 2 = $21.50
+        expect(price).toBeCloseTo(21.50, 1);
       });
     });
 
@@ -1607,7 +1609,9 @@ describe('html-price.ts', () => {
         expect(result.amazonItemPrice).toBe(49.95);
       });
 
-      it('detects Amazon pack size from body text when selectors are missing', () => {
+      it('body text pack detection was removed - returns full price', () => {
+        // Body text pack detection was intentionally removed to avoid false positives
+        // Only title/dropdown pack sizes are trusted
         const html = `
           <html>
             <body>
@@ -1623,7 +1627,8 @@ describe('html-price.ts', () => {
         `;
 
         const result = extractPriceWithShipping(html, 'Body Text Pack');
-        expect(result.amazonItemPrice).toBe(10); // 30 / 3-pack
+        // No title/dropdown pack size → full price returned
+        expect(result.amazonItemPrice).toBe(30);
       });
 
       it('rejects fallback price when below JSON-LD highest price threshold', () => {

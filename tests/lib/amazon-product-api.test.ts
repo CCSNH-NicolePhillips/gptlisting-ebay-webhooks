@@ -79,7 +79,8 @@ describe('amazon-product-api', () => {
         price: 249.99,
         currency: 'USD',
         url: 'https://amazon.com/dp/B08N5WRWNW',
-        categories: ['Electronics', 'Categories']
+        categories: ['Electronics', 'Categories'],
+        weight: null
       });
 
       // Verify fetch was called with signed request
