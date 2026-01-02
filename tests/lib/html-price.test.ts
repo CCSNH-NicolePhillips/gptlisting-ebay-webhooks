@@ -1675,5 +1675,134 @@ describe('html-price.ts', () => {
         jest.dontMock('cheerio');
       });
     });
+
+    describe('Sale price vs List price (strikethrough) handling', () => {
+      it('should skip priceType ListPrice and use sale price from priceSpecification array', () => {
+        // Real-world case: Root Brands has both sale price and list price in array
+        const html = `
+          <html>
+            <script type="application/ld+json">
+            {
+              "@type": "Product",
+              "name": "Sculpt",
+              "offers": [{
+                "@type": "Offer",
+                "priceSpecification": [
+                  {
+                    "@type": "UnitPriceSpecification",
+                    "price": "87.20",
+                    "priceCurrency": "USD"
+                  },
+                  {
+                    "@type": "UnitPriceSpecification",
+                    "price": "109.00",
+                    "priceCurrency": "USD",
+                    "priceType": "https://schema.org/ListPrice"
+                  }
+                ]
+              }]
+            }
+            </script>
+          </html>
+        `;
+
+        const price = extractPriceFromHtml(html);
+        expect(price).toBe(87.20); // Should use sale price, not ListPrice
+      });
+
+      it('should prefer lowPrice over price when both exist (AggregateOffer pattern)', () => {
+        const html = `
+          <html>
+            <script type="application/ld+json">
+            {
+              "@type": "Product",
+              "name": "Vitamin D3 K2",
+              "offers": {
+                "@type": "AggregateOffer",
+                "lowPrice": "29.95",
+                "highPrice": "39.95",
+                "price": "39.95",
+                "priceCurrency": "USD"
+              }
+            }
+            </script>
+          </html>
+        `;
+
+        const price = extractPriceFromHtml(html);
+        expect(price).toBe(29.95); // Should use lowPrice (sale), not price/highPrice
+      });
+
+      it('should use lowPrice when price is absent', () => {
+        const html = `
+          <html>
+            <script type="application/ld+json">
+            {
+              "@type": "Product",
+              "offers": {
+                "lowPrice": "24.99",
+                "priceCurrency": "USD"
+              }
+            }
+            </script>
+          </html>
+        `;
+
+        const price = extractPriceFromHtml(html);
+        expect(price).toBe(24.99);
+      });
+
+      it('should handle single priceSpecification with ListPrice (skip it)', () => {
+        const html = `
+          <html>
+            <body>
+              <div class="product">
+                <h1>Premium Vitamin Product</h1>
+                <div class="price-display">Price: $25.00</div>
+                <p>High quality supplement for daily wellness support.</p>
+              </div>
+              <script type="application/ld+json">
+              {
+                "@type": "Product",
+                "offers": {
+                  "priceSpecification": {
+                    "price": "35.00",
+                    "priceType": "https://schema.org/ListPrice"
+                  }
+                }
+              }
+              </script>
+            </body>
+          </html>
+        `;
+
+        const price = extractPriceFromHtml(html);
+        // Should skip the ListPrice and fall back to body extraction
+        expect(price).toBe(25.00);
+      });
+
+      it('should prefer lowPrice when both lowPrice and regular price exist (Neuro Vita case)', () => {
+        // Simulates Amazon-style pricing where lowPrice is current sale price
+        const html = `
+          <html>
+            <script type="application/ld+json">
+            {
+              "@type": "Product",
+              "name": "Neuro Vita+Mints Vitamins D3 & K2 Mints 90 Count",
+              "offers": {
+                "@type": "Offer",
+                "price": "39.95",
+                "lowPrice": "29.95",
+                "priceCurrency": "USD"
+              }
+            }
+            </script>
+          </html>
+        `;
+
+        const price = extractPriceFromHtml(html, 'Neuro Vita+Mints Vitamins D3 & K2');
+        expect(price).toBe(29.95); // Should use lowPrice (sale price)
+      });
+    });
   });
 });

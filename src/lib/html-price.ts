@@ -493,20 +493,45 @@ function extractFromJsonLd($: cheerio.CheerioAPI, requestedSize?: string | null,
           
           // If priceSpec is an array, extract ALL prices (not just first)
           // Root Brands lists bulk/wholesale first, retail prices after
+          // IMPORTANT: Skip prices with priceType: "https://schema.org/ListPrice" - these are strikethrough prices
           const pricesFromSpec: number[] = [];
           if (Array.isArray(priceSpec)) {
             for (const spec of priceSpec) {
+              // Skip list/strikethrough prices - we want sale prices
+              const priceType = String(spec?.priceType || '').toLowerCase();
+              if (priceType.includes('listprice')) {
+                console.log(`[HTML Parser] Skipping ListPrice (strikethrough): $${spec?.price}`);
+                continue;
+              }
               const p = toNumber(spec?.price);
               if (p) pricesFromSpec.push(p);
             }
           } else if (priceSpec) {
-            const p = toNumber(priceSpec?.price);
-            if (p) pricesFromSpec.push(p);
+            // Skip list/strikethrough prices
+            const priceType = String(priceSpec?.priceType || '').toLowerCase();
+            if (!priceType.includes('listprice')) {
+              const p = toNumber(priceSpec?.price);
+              if (p) pricesFromSpec.push(p);
+            } else {
+              console.log(`[HTML Parser] Skipping ListPrice (strikethrough): $${priceSpec?.price}`);
+            }
           }
           
-          // Also check top-level price fields
-          const topPrice = toNumber((offer as any).price) ?? toNumber((offer as any).lowPrice);
-          if (topPrice) pricesFromSpec.push(topPrice);
+          // Check top-level price fields
+          // PRIORITY: lowPrice (sale price) > price (may be list price on some sites)
+          // For AggregateOffer: lowPrice is the current price, highPrice/price is original
+          const lowPrice = toNumber((offer as any).lowPrice);
+          const regularPrice = toNumber((offer as any).price);
+          
+          // Prefer lowPrice when available (it's typically the sale/current price)
+          if (lowPrice) {
+            pricesFromSpec.push(lowPrice);
+            if (regularPrice && regularPrice > lowPrice) {
+              console.log(`[HTML Parser] Using lowPrice $${lowPrice} over higher price $${regularPrice} (sale price detected)`);
+            }
+          } else if (regularPrice) {
+            pricesFromSpec.push(regularPrice);
+          }
           
           // Create a candidate for EACH price found
           for (const priceValue of pricesFromSpec) {
