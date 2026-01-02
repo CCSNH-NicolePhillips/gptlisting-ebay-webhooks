@@ -90,11 +90,34 @@ async function tryGoogle(images: string[], prompt: string, model: string) {
   if (!apiKey) throw new Error("Gemini API key missing");
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genAI = new GoogleGenerativeAI(apiKey);
-  const generativeModel = genAI.getGenerativeModel({ model });
+  const generativeModel = genAI.getGenerativeModel({ 
+    model,
+  });
   const parts: any[] = [{ text: prompt }];
+  
   for (const url of images) {
-    parts.push({ text: `Image URL: ${url}` });
+    // Handle base64 data URLs
+    if (url.startsWith('data:')) {
+      const match = url.match(/^data:([^;]+);base64,(.+)$/);
+      if (match) {
+        parts.push({
+          inlineData: {
+            mimeType: match[1],
+            data: match[2],
+          },
+        });
+      }
+    } else {
+      // For regular URLs, Gemini can fetch them directly
+      parts.push({
+        fileData: {
+          mimeType: "image/jpeg",
+          fileUri: url,
+        },
+      });
+    }
   }
+  
   const response = await generativeModel.generateContent({
     contents: [{ role: "user", parts }],
   });

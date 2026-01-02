@@ -218,12 +218,25 @@ function extractDistinguishingTerms(title: string): string[] {
     /(\d+)\s*tablets?/i,
     /(\d+)\s*gummies?/i,
     /(\d+)\s*softgels?/i,
+    /(\d+)\s*pieces?/i,      // "90 Pieces" → "90pieces"
+    /(\d+)\s*mints?/i,       // "90 Mints" → "90mints"
+    /(\d+)\s*chews?/i,       // "60 Chews" → "60chews"
     /(\d+)\s*count/i,
     /(\d+)\s*ct\b/i,
     /(\d+)\s*oz\b/i,         // Size in oz
     /(\d+(?:\.\d+)?)\s*fl\s*oz/i,
     /(\d+)\s*ml\b/i,
     /(\d+)\s*mg\b/i,
+    // Vitamin patterns - important for matching supplements
+    /vitamin\s*d3?/i,        // "Vitamin D3"
+    /vitamin\s*k2?/i,        // "Vitamin K2"
+    /vitamin\s*b\d+/i,       // "Vitamin B12"
+    /vitamin\s*c\b/i,        // "Vitamin C"
+    /\bd3\b/i,               // Just "D3"
+    /\bk2\b/i,               // Just "K2"
+    /\bnad\+?/i,             // "NAD+"
+    /coq10/i,                // "CoQ10"
+    /omega[- ]?\d+/i,        // "Omega-3"
   ];
   
   for (const pattern of differentiators) {
@@ -235,24 +248,34 @@ function extractDistinguishingTerms(title: string): string[] {
     }
   }
   
-  // Also add the core product name (2+ word phrases)
-  // e.g., "TestoPro", "Morning Complete"
-  // BUT: For liposomal/pouch products, Amazon titles vary too much for phrase matching
+  // Also add individual significant words (3+ chars) for word-level matching
+  // This is more flexible than phrase matching
   const isPouchProduct = /pouch|sachet|stick|packet|liposomal|liquid supplement/i.test(title);
   
   if (!isPouchProduct) {
-    const words = title.split(/\s+/).filter(w => w.length > 3);
-    if (words.length >= 2) {
-      // Take the first 2-3 significant words as a phrase
-      const phrase = words.slice(0, 3).join('').toLowerCase().replace(/[^a-z0-9]/g, '');
-      if (phrase.length > 6) {
-        terms.push(phrase);
+    // Extract significant words that could identify the product
+    const significantWords = title.split(/[\s\-_+&]+/)
+      .map(w => w.toLowerCase().replace(/[^a-z0-9]/g, ''))
+      .filter(w => w.length >= 4 && !commonWords.has(w));
+    
+    // Add the first 2-3 significant words individually (not concatenated)
+    // This allows partial matching: "Neuro" + "Mints" matches even if "Vita" doesn't
+    for (const word of significantWords.slice(0, 3)) {
+      if (word.length >= 4) {
+        terms.push(word);
       }
     }
   }
   
   return [...new Set(terms)]; // Dedupe
 }
+
+// Common words to skip in term matching
+const commonWords = new Set([
+  'supplement', 'supplements', 'health', 'healthy', 'natural', 'organic',
+  'premium', 'advanced', 'daily', 'formula', 'support', 'care', 'free',
+  'sugar', 'gluten', 'vegan', 'dietary', 'flavor', 'flavored', 'with'
+]);
 
 /**
  * Check if Amazon page title contains the key distinguishing terms from our product.
@@ -350,12 +373,19 @@ function isAmazonBundlePage(
     /liposomal|liquid supplement/i.test(ourTitle); // Liposomal supplements often come in pouches
   
   // Extract our product's size count if present
+  // Use matchAll to find ALL matches and pick the largest number (most likely the actual count)
+  // This avoids matching "K2 mints" → 2 instead of "90 Pieces" → 90
   let ourProductSizeCount: number | null = null;
   for (const pattern of productSizePatterns) {
-    const match = ourTitle.match(pattern);
-    if (match) {
-      ourProductSizeCount = parseInt(match[1], 10);
-      break;
+    const matches = [...ourTitle.matchAll(new RegExp(pattern, 'gi'))];
+    if (matches.length > 0) {
+      // Get the largest number found (e.g., 90 from "90 Pieces" rather than 2 from "K2 mints")
+      const counts = matches.map(m => parseInt(m[1], 10)).filter(n => n >= 10); // Ignore small numbers like K2
+      if (counts.length > 0) {
+        ourProductSizeCount = Math.max(...counts);
+        console.log(`[price] Detected product size count: ${ourProductSizeCount} from "${ourTitle}"`);
+        break;
+      }
     }
   }
   
@@ -1451,23 +1481,46 @@ export async function lookupPrice(
   // SANITY CHECK 1: Remove low-confidence Amazon when Brand MSRP exists
   // ========================================
   // If we have official brand pricing, don't let poor Amazon matches override it
+  // EXCEPTION: Keep Amazon if price is within 20% of brand MSRP (price proximity suggests correct product)
   const hasBrandMSRP = candidates.some(c => c.source === 'brand-msrp');
-  if (hasBrandMSRP) {
+  const brandMSRPCandidate = candidates.find(c => c.source === 'brand-msrp');
+  
+  if (hasBrandMSRP && brandMSRPCandidate) {
     const lowConfidenceAmazon = candidates.filter(c => 
       c.source === 'amazon' && 
       c.confidence !== 'high'
     );
     
     if (lowConfidenceAmazon.length > 0) {
-      console.log('[price] ⚠️ Removing low-confidence Amazon results (brand MSRP available):', 
-        lowConfidenceAmazon.map(c => ({ url: c.url, confidence: c.confidence }))
-      );
+      // Check price proximity - if Amazon is within 20% of brand MSRP, it's likely the right product
+      const amazonToKeep: typeof lowConfidenceAmazon = [];
+      const amazonToRemove: typeof lowConfidenceAmazon = [];
       
-      // Remove low-confidence Amazon candidates
-      for (const candidate of lowConfidenceAmazon) {
-        const idx = candidates.indexOf(candidate);
-        if (idx >= 0) {
-          candidates.splice(idx, 1);
+      for (const amazonCandidate of lowConfidenceAmazon) {
+        const priceRatio = amazonCandidate.price / brandMSRPCandidate.price;
+        const isWithinRange = priceRatio >= 0.80 && priceRatio <= 1.20; // Within 20%
+        
+        if (isWithinRange) {
+          // Price proximity suggests correct product - upgrade to high confidence
+          console.log(`[price] ✓ Amazon $${amazonCandidate.price.toFixed(2)} is within 20% of brand MSRP $${brandMSRPCandidate.price.toFixed(2)} - keeping as high confidence`);
+          amazonCandidate.confidence = 'high';
+          amazonToKeep.push(amazonCandidate);
+        } else {
+          amazonToRemove.push(amazonCandidate);
+        }
+      }
+      
+      if (amazonToRemove.length > 0) {
+        console.log('[price] ⚠️ Removing low-confidence Amazon results (price not within 20% of brand MSRP):', 
+          amazonToRemove.map(c => ({ url: c.url, confidence: c.confidence, price: c.price }))
+        );
+        
+        // Remove low-confidence Amazon candidates that aren't price-proximate
+        for (const candidate of amazonToRemove) {
+          const idx = candidates.indexOf(candidate);
+          if (idx >= 0) {
+            candidates.splice(idx, 1);
+          }
         }
       }
     }
