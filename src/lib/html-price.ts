@@ -396,7 +396,7 @@ function pickBestOffer(candidates: OfferCandidate[], requestedSize?: string | nu
  * - { price: -1, skipOpenGraph: true } if all prices rejected (bulk/subscription only)
  * - { price: null, highestPrice?: number } if no prices found (highestPrice for sanity check)
  */
-function extractFromJsonLd($: cheerio.CheerioAPI, requestedSize?: string | null, requestedPackQty?: number | null): ExtractedData & { skipOpenGraph?: boolean; highestPrice?: number } {
+function extractFromJsonLd($: cheerio.CheerioAPI, requestedSize?: string | null, requestedPackQty?: number | null, isAmazon?: boolean): ExtractedData & { skipOpenGraph?: boolean; highestPrice?: number } {
   const scripts = $('script[type="application/ld+json"]').toArray();
   
   if (scripts.length === 0) {

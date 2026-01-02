@@ -432,9 +432,8 @@ File: `src/lib/pricing-compute.ts`
 │ │ (Ignores shipping in calculation)                                       │ │
 │ └─────────────────────────────────────────────────────────────────────────┘ │
 │                                                                              │
-│ ⚠️ CRITICAL: Amazon prices get NO discount (effectiveDiscount = 0)          │
-│    Only Brand MSRP gets discounted!                                          │
-│    Rationale: Amazon IS the competitive market price already.               │
+│ ✅ ALL sources get user-configured discount (settings.discountPercent)       │
+│    Discount % is configurable per user in pricing settings.                 │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 

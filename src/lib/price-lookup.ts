@@ -807,14 +807,11 @@ RESPONSE FORMAT (JSON only):
     // Step 3: Apply competitive pricing via Phase 2 function
     const shippingCents = chosen.shippingCents || 0;
     
-    // FIX 2: Stop Applying Discount to Amazon Prices (Amazon IS the market price)
-    // Only apply discount if we are using Brand MSRP or estimations
-    const effectiveDiscount = chosen.source === 'amazon' ? 0 : settings.discountPercent;
-    
+    // Apply user-configured discount to ALL sources (comes from user settings)
     const pricingResult = computeEbayItemPrice({
       amazonItemPriceCents: lotRetailPriceCents,
       amazonShippingCents: shippingCents,
-      discountPercent: effectiveDiscount,
+      discountPercent: settings.discountPercent,
       shippingStrategy: settings.shippingStrategy,
       templateShippingEstimateCents: settings.templateShippingEstimateCents,
       shippingSubsidyCapCents: settings.shippingSubsidyCapCents,
@@ -872,15 +869,14 @@ function fallbackDecision(input: PriceLookupInput, candidates: PriceSourceDetail
   // Get user pricing settings
   const settings = input.pricingSettings || getDefaultPricingSettings();
   
-  // Helper to apply discount
-  const applyDiscount = (price: number, shippingCents: number = 0, source?: PriceSource): number => {
+  // Helper to apply discount using user settings
+  const applyDiscount = (price: number, shippingCents: number = 0): number => {
     const priceCents = Math.round(price * 100);
-    // FIX 3: Don't discount Amazon prices in fallback either
-    const effectiveDiscount = source === 'amazon' ? 0 : settings.discountPercent;
+    // Apply user-configured discount to ALL sources
     const result = computeEbayItemPrice({
       amazonItemPriceCents: priceCents,
       amazonShippingCents: shippingCents,
-      discountPercent: effectiveDiscount,
+      discountPercent: settings.discountPercent,
       shippingStrategy: settings.shippingStrategy,
       templateShippingEstimateCents: settings.templateShippingEstimateCents,
       shippingSubsidyCapCents: settings.shippingSubsidyCapCents,
@@ -891,16 +887,16 @@ function fallbackDecision(input: PriceLookupInput, candidates: PriceSourceDetail
   // PRIORITY 1: Amazon (The Gold Standard - competitive marketplace price)
   const amazon = candidates.find(c => c.source === 'amazon');
   if (amazon) {
-    const finalPrice = applyDiscount(amazon.price, amazon.shippingCents || 0, 'amazon');
-    console.log(`[price] Fallback decision: amazon $${amazon.price.toFixed(2)} (no discount applied)`);
+    const finalPrice = applyDiscount(amazon.price, amazon.shippingCents || 0);
+    console.log(`[price] Fallback decision: amazon $${amazon.price.toFixed(2)} → $${finalPrice.toFixed(2)} (${settings.shippingStrategy}, ${settings.discountPercent}% off)`);
     return {
       ok: true,
       source: 'amazon',
-      price: amazon.price,
+      price: finalPrice,
       confidence: amazon.confidence || 'medium',
       chosen: amazon,
       candidates,
-      recommendedListingPrice: amazon.price,
+      recommendedListingPrice: finalPrice,
       reason: 'fallback-to-amazon',
       amazonUrl: amazon.url
     };
@@ -909,7 +905,7 @@ function fallbackDecision(input: PriceLookupInput, candidates: PriceSourceDetail
   // PRIORITY 2: Brand MSRP (less competitive, but better than estimate)
   const brandMsrp = candidates.find(c => c.source === 'brand-msrp');
   if (brandMsrp) {
-    const finalPrice = applyDiscount(brandMsrp.price, brandMsrp.shippingCents || 0, 'brand-msrp');
+    const finalPrice = applyDiscount(brandMsrp.price, brandMsrp.shippingCents || 0);
     console.log(`[price] Fallback decision: brand-msrp $${brandMsrp.price.toFixed(2)} → $${finalPrice.toFixed(2)} (${settings.shippingStrategy}, ${settings.discountPercent}% off)`);
     return {
       ok: true,
@@ -989,13 +985,11 @@ export async function lookupPrice(
         const settings = input.pricingSettings || getDefaultPricingSettings();
         const shippingCents = cached.chosen.shippingCents ?? settings.templateShippingEstimateCents ?? 600;
       
-        // FIX 2 (Cache Path): Don't discount Amazon prices from cache either
-        const effectiveDiscount = cached.chosen.source === 'amazon' ? 0 : settings.discountPercent;
-      
+        // Apply user-configured discount to ALL sources
         const pricingResult = computeEbayItemPrice({
           amazonItemPriceCents: cached.msrpCents,
           amazonShippingCents: shippingCents,
-          discountPercent: effectiveDiscount,
+          discountPercent: settings.discountPercent,
           shippingStrategy: settings.shippingStrategy,
           templateShippingEstimateCents: settings.templateShippingEstimateCents,
           shippingSubsidyCapCents: settings.shippingSubsidyCapCents,
