@@ -1169,10 +1169,17 @@ export function extractPriceWithShipping(html: string, productTitle?: string, ov
     }
     
     // Extract product weight from Amazon HTML
+    // Prioritize Shipping Weight > Item Weight > Product Dimensions weight > Generic weight
     let amazonWeight: { value: number; unit: string } | null = null;
     const weightPatterns = [
+      // Amazon-specific labeled weights (most reliable)
+      /Shipping\s*Weight[:\s]+(\d+(?:\.\d+)?)\s*(pound|lb|ounce|oz|gram|g|kg)/i, // "Shipping Weight: 1.98 pounds"
+      /Item\s*Weight[:\s]+(\d+(?:\.\d+)?)\s*(pound|lb|ounce|oz|gram|g|kg)/i, // "Item Weight: 8.8 ounces"
+      /Package\s*Weight[:\s]+(\d+(?:\.\d+)?)\s*(pound|lb|ounce|oz|gram|g|kg)/i, // "Package Weight: 1.2 pounds"
+      /Product\s*Dimensions[^;]*;\s*(\d+(?:\.\d+)?)\s*(pound|lb|ounce|oz|gram|g|kg)/i, // "6 x 4 x 3 inches; 12 ounces"
+      // Generic patterns (fallback)
       /(\d+(?:\.\d+)?)\s*(pound|lb|ounce|oz|gram|g|kg)\s*\(Pack of \d+\)/i, // "1.98 Pound (Pack of 1)"
-      /(\d+(?:\.\d+)?)\s*(pound|lb|ounce|oz|gram|g|kg)/i, // Generic weight
+      /(\d+(?:\.\d+)?)\s*(pound|pounds|lb|lbs|ounce|ounces|oz|gram|grams|g|kg)\b/i, // Generic weight with word boundary
     ];
     
     const bodyText = $('body').text();
@@ -1182,11 +1189,14 @@ export function extractPriceWithShipping(html: string, productTitle?: string, ov
         const value = parseFloat(match[1]);
         let unit = match[2].toLowerCase();
         // Normalize unit names
-        if (unit === 'lb') unit = 'pound';
-        if (unit === 'oz') unit = 'ounce';
-        if (!isNaN(value) && value > 0 && value < 1000) { // Sanity check
+        if (unit === 'lb' || unit === 'lbs' || unit === 'pounds') unit = 'pound';
+        if (unit === 'oz' || unit === 'ounces') unit = 'ounce';
+        if (unit === 'grams') unit = 'gram';
+        // Sanity check: weight should be reasonable (0 < weight < 100 lbs / 1600 oz)
+        const maxWeight = unit === 'ounce' ? 1600 : unit === 'gram' ? 45000 : 100;
+        if (!isNaN(value) && value > 0 && value < maxWeight) {
           amazonWeight = { value, unit };
-          console.log(`[HTML Parser] ⚖️ Found weight: ${value} ${unit}`);
+          console.log(`[HTML Parser] ⚖️ Found weight: ${value} ${unit} (pattern: ${pattern.source.substring(0, 40)}...)`);
           break;
         }
       }

@@ -1804,5 +1804,188 @@ describe('html-price.ts', () => {
         expect(price).toBe(29.95); // Should use lowPrice (sale price)
       });
     });
+
+    describe('Weight extraction', () => {
+      it('should extract Shipping Weight from Amazon product details', () => {
+        const html = `
+          <html>
+            <body>
+              <table id="productDetails">
+                <tr><th>Shipping Weight</th><td>1.98 pounds</td></tr>
+              </table>
+            </body>
+            <script type="application/ld+json">
+            { "@type": "Product", "offers": { "price": "24.99" } }
+            </script>
+          </html>
+        `;
+
+        const result = extractPriceWithShipping(html);
+        expect(result.amazonWeight).toEqual({ value: 1.98, unit: 'pound' });
+      });
+
+      it('should extract Item Weight from Amazon product details', () => {
+        const html = `
+          <html>
+            <body>
+              <div>Item Weight: 8.8 ounces</div>
+            </body>
+            <script type="application/ld+json">
+            { "@type": "Product", "offers": { "price": "24.99" } }
+            </script>
+          </html>
+        `;
+
+        const result = extractPriceWithShipping(html);
+        expect(result.amazonWeight).toEqual({ value: 8.8, unit: 'ounce' });
+      });
+
+      it('should extract Package Weight', () => {
+        const html = `
+          <html>
+            <body>
+              <div>Package Weight: 1.2 lbs</div>
+            </body>
+            <script type="application/ld+json">
+            { "@type": "Product", "offers": { "price": "24.99" } }
+            </script>
+          </html>
+        `;
+
+        const result = extractPriceWithShipping(html);
+        expect(result.amazonWeight).toEqual({ value: 1.2, unit: 'pound' });
+      });
+
+      it('should extract weight from Product Dimensions with weight suffix', () => {
+        const html = `
+          <html>
+            <body>
+              <div>Product Dimensions: 6 x 4 x 3 inches; 12 ounces</div>
+            </body>
+            <script type="application/ld+json">
+            { "@type": "Product", "offers": { "price": "24.99" } }
+            </script>
+          </html>
+        `;
+
+        const result = extractPriceWithShipping(html);
+        expect(result.amazonWeight).toEqual({ value: 12, unit: 'ounce' });
+      });
+
+      it('should extract weight with "Pack of N" notation', () => {
+        const html = `
+          <html>
+            <body>
+              <div>1.98 Pound (Pack of 1)</div>
+            </body>
+            <script type="application/ld+json">
+            { "@type": "Product", "offers": { "price": "24.99" } }
+            </script>
+          </html>
+        `;
+
+        const result = extractPriceWithShipping(html);
+        expect(result.amazonWeight).toEqual({ value: 1.98, unit: 'pound' });
+      });
+
+      it('should normalize weight units (oz -> ounce, lb -> pound)', () => {
+        const html = `
+          <html>
+            <body>
+              <div>Item Weight: 16 oz</div>
+            </body>
+            <script type="application/ld+json">
+            { "@type": "Product", "offers": { "price": "24.99" } }
+            </script>
+          </html>
+        `;
+
+        const result = extractPriceWithShipping(html);
+        expect(result.amazonWeight).toEqual({ value: 16, unit: 'ounce' });
+      });
+
+      it('should prefer Shipping Weight over generic weight patterns', () => {
+        const html = `
+          <html>
+            <body>
+              <div>5 oz bottle size</div>
+              <div>Shipping Weight: 8.5 ounces</div>
+            </body>
+            <script type="application/ld+json">
+            { "@type": "Product", "offers": { "price": "24.99" } }
+            </script>
+          </html>
+        `;
+
+        const result = extractPriceWithShipping(html);
+        // Should find Shipping Weight first (more reliable)
+        expect(result.amazonWeight).toEqual({ value: 8.5, unit: 'ounce' });
+      });
+
+      it('should extract weight in grams', () => {
+        const html = `
+          <html>
+            <body>
+              <div>Item Weight: 250 grams</div>
+            </body>
+            <script type="application/ld+json">
+            { "@type": "Product", "offers": { "price": "24.99" } }
+            </script>
+          </html>
+        `;
+
+        const result = extractPriceWithShipping(html);
+        expect(result.amazonWeight).toEqual({ value: 250, unit: 'gram' });
+      });
+
+      it('should extract weight in kilograms', () => {
+        const html = `
+          <html>
+            <body>
+              <div>Shipping Weight: 2.5 kg</div>
+            </body>
+            <script type="application/ld+json">
+            { "@type": "Product", "offers": { "price": "24.99" } }
+            </script>
+          </html>
+        `;
+
+        const result = extractPriceWithShipping(html);
+        expect(result.amazonWeight).toEqual({ value: 2.5, unit: 'kg' });
+      });
+
+      it('should return null amazonWeight when no weight found', () => {
+        const html = `
+          <html>
+            <body>
+              <div>This product has no weight information</div>
+            </body>
+            <script type="application/ld+json">
+            { "@type": "Product", "offers": { "price": "24.99" } }
+            </script>
+          </html>
+        `;
+
+        const result = extractPriceWithShipping(html);
+        expect(result.amazonWeight).toBeNull();
+      });
+
+      it('should reject unreasonably high weights', () => {
+        const html = `
+          <html>
+            <body>
+              <div>Item Weight: 5000 pounds</div>
+            </body>
+            <script type="application/ld+json">
+            { "@type": "Product", "offers": { "price": "24.99" } }
+            </script>
+          </html>
+        `;
+
+        const result = extractPriceWithShipping(html);
+        // 5000 lbs is over the 100 lb sanity threshold
+        expect(result.amazonWeight).toBeNull();
+      });
+    });
   });
 });
