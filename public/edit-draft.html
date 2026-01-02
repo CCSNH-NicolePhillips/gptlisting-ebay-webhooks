@@ -644,6 +644,48 @@
               </div>
             </div>
           </div>
+          
+          <!-- Best Offer Settings -->
+          <div style="margin-top: 1.5rem; padding: 1rem; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--line);">
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+              <span style="font-size: 1.125rem;">🤝</span>
+              <label style="font-weight: 600; color: var(--text-primary); cursor: pointer; user-select: none; flex: 1;" for="bestOfferEnabled">
+                Best Offer
+              </label>
+              <label class="toggle-switch">
+                <input type="checkbox" id="bestOfferEnabled" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            
+            <div id="bestOfferOptions" style="opacity: 0.5; pointer-events: none; transition: opacity 0.2s;">
+              <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 140px;">
+                  <label for="bestOfferAutoDecline" style="display: block; font-size: 0.875rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                    Minimum Offer (auto-decline below)
+                  </label>
+                  <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <input type="number" id="bestOfferAutoDecline" min="10" max="95" placeholder="60" 
+                           style="width: 80px; padding: 0.5rem 0.75rem; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; color: var(--text-primary); font-size: 0.9375rem;" />
+                    <span style="color: var(--text-muted); font-size: 0.9375rem;">%</span>
+                  </div>
+                </div>
+                <div style="flex: 1; min-width: 140px;">
+                  <label for="bestOfferAutoAccept" style="display: block; font-size: 0.875rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                    Auto-accept at
+                  </label>
+                  <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <input type="number" id="bestOfferAutoAccept" min="50" max="100" placeholder="90" 
+                           style="width: 80px; padding: 0.5rem 0.75rem; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; color: var(--text-primary); font-size: 0.9375rem;" />
+                    <span style="color: var(--text-muted); font-size: 0.9375rem;">%</span>
+                  </div>
+                </div>
+              </div>
+              <div style="font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.5rem;">
+                💡 Allow buyers to negotiate prices. Auto-decline rejects low offers, auto-accept accepts good offers automatically.
+              </div>
+            </div>
+          </div>
         </div>
         
         <!-- Item Specifics -->
@@ -973,6 +1015,17 @@
           }
         }
         
+        // Populate Best Offer settings
+        if (originalDraft.bestOffer) {
+          $('bestOfferEnabled').checked = originalDraft.bestOffer.enabled || false;
+          $('bestOfferAutoDecline').value = originalDraft.bestOffer.autoDeclinePercent || '';
+          $('bestOfferAutoAccept').value = originalDraft.bestOffer.autoAcceptPercent || '';
+          if (originalDraft.bestOffer.enabled) {
+            $('bestOfferOptions').style.opacity = '1';
+            $('bestOfferOptions').style.pointerEvents = 'auto';
+          }
+        }
+        
         updateTitleCount();
         
         // Build aspect metadata lookup
@@ -1189,6 +1242,11 @@
         const promotionEnabled = $('promotionEnabled').checked;
         const promotionRate = parseFloat($('promotionRate').value) || null;
         
+        // Collect Best Offer settings
+        const bestOfferEnabled = $('bestOfferEnabled').checked;
+        const bestOfferAutoDecline = parseInt($('bestOfferAutoDecline').value) || 60;
+        const bestOfferAutoAccept = parseInt($('bestOfferAutoAccept').value) || 90;
+        
         // Collect weight (prefer oz, convert lbs to oz if only lbs given)
         const weightOzRaw = parseFloat($('weightOz').value) || 0;
         const weightLbsRaw = parseFloat($('weightLbs').value) || 0;
@@ -1211,6 +1269,11 @@
           promotion: {
             enabled: promotionEnabled,
             rate: promotionEnabled ? promotionRate : null
+          },
+          bestOffer: {
+            enabled: bestOfferEnabled,
+            autoDeclinePercent: bestOfferEnabled ? bestOfferAutoDecline : null,
+            autoAcceptPercent: bestOfferEnabled ? bestOfferAutoAccept : null
           },
           weight: weightValue ? { value: weightValue, unit: weightUnit } : null
         };
@@ -1297,6 +1360,21 @@
             } else {
               promotionOptions.style.opacity = '0.5';
               promotionOptions.style.pointerEvents = 'none';
+            }
+          });
+        }
+        
+        // Setup Best Offer toggle handler
+        const bestOfferToggle = $('bestOfferEnabled');
+        const bestOfferOptions = $('bestOfferOptions');
+        if (bestOfferToggle && bestOfferOptions) {
+          bestOfferToggle.addEventListener('change', () => {
+            if (bestOfferToggle.checked) {
+              bestOfferOptions.style.opacity = '1';
+              bestOfferOptions.style.pointerEvents = 'auto';
+            } else {
+              bestOfferOptions.style.opacity = '0.5';
+              bestOfferOptions.style.pointerEvents = 'none';
             }
           });
         }

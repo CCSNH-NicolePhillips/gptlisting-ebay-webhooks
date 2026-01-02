@@ -752,6 +752,53 @@
       </div>
     </div>
 
+    <!-- Best Offer Settings Card -->
+    <div class="dp-card dp-card--full">
+      <h3 style="margin-top: 0; margin-bottom: 1.25rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+        <span>🤝 Best Offer (Optional)</span>
+      </h3>
+      
+      <div style="display: flex; flex-direction: column; gap: 0.875rem;">
+        <div>
+          <label style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--text-muted); font-weight: 500;">Best Offer Mode</label>
+          <select id="bestOfferMode" class="promo-select">
+            <option value="default">Use my default settings</option>
+            <option value="enabled">Enable Best Offer for this run</option>
+            <option value="disabled">No Best Offer</option>
+          </select>
+          <div id="defaultBestOfferInfo" style="margin-top: 0.5rem; font-size: 0.875rem; color: var(--text-muted);">Loading...</div>
+        </div>
+        
+        <div id="customBestOfferInputs" style="display: none;">
+          <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 200px;">
+              <label style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--text-muted); font-weight: 500;">Minimum Offer (auto-decline below)</label>
+              <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <input type="number" id="customAutoDeclinePercent" placeholder="60" min="10" max="95" 
+                       style="width: 80px; padding: 0.625rem 0.75rem; background: var(--bg-secondary); border: 1px solid var(--line); border-radius: 6px; color: var(--text-primary); font-size: 0.9375rem;" />
+                <span style="color: var(--text-muted); font-size: 0.9375rem;">% of price</span>
+              </div>
+            </div>
+            <div style="flex: 1; min-width: 200px;">
+              <label style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--text-muted); font-weight: 500;">Auto-accept at</label>
+              <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <input type="number" id="customAutoAcceptPercent" placeholder="90" min="50" max="100" 
+                       style="width: 80px; padding: 0.625rem 0.75rem; background: var(--bg-secondary); border: 1px solid var(--line); border-radius: 6px; color: var(--text-primary); font-size: 0.9375rem;" />
+                <span style="color: var(--text-muted); font-size: 0.9375rem;">% of price</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div style="margin-top: 1.25rem; padding: 0.875rem; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--line);">
+        <div style="font-size: 0.875rem; color: var(--text-muted); display: flex; gap: 0.5rem;">
+          <span style="color: var(--primary);">💡</span>
+          <span>Best Offer lets buyers negotiate prices. Configure defaults in <a href="/settings.html" style="color: var(--primary); text-decoration: none; font-weight: 500;">Settings</a>.</span>
+        </div>
+      </div>
+    </div>
+
     <div class="dp-card dp-card--full">
       <h3 style="margin-top: 0; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; color: var(--text-primary);">
         <span>🔄 Automated Pipeline</span>
@@ -1509,7 +1556,14 @@
         return; // Validation failed (custom rate out of range)
       }
       
+      // Get Best Offer settings for this run
+      const bestOfferSettings = getBestOfferSettings();
+      if (bestOfferSettings === null) {
+        return; // Validation failed
+      }
+      
       console.log('[Quick List] Promotion settings for this run:', promotionSettings);
+      console.log('[Quick List] Best Offer settings for this run:', bestOfferSettings);
       
       const btn = $('btnStart');
       btn.disabled = true;
@@ -1854,7 +1908,8 @@
               condition: draft.condition,
               category: draft.category,
               categoryPath: draft.category?.title || product.categoryPath,
-              promotion: promotionSettings // Pass promotion settings to each group
+              promotion: promotionSettings, // Pass promotion settings to each group
+              bestOffer: bestOfferSettings  // Pass Best Offer settings to each group
             };
           })
           .filter(g => g !== null); // Remove nulls
@@ -1996,6 +2051,13 @@
       enabled: false,
       rate: null
     };
+
+    // Best Offer settings state
+    let defaultBestOfferSettings = {
+      enabled: false,
+      autoDeclinePercent: 60,
+      autoAcceptPercent: 90
+    };
     
     // Load user's default promotion settings
     async function loadPromotionSettings() {
@@ -2019,6 +2081,25 @@
               infoEl.style.color = 'var(--text-muted)';
             }
           }
+
+          // Also load Best Offer settings
+          defaultBestOfferSettings = {
+            enabled: settings.bestOffer?.enabled || false,
+            autoDeclinePercent: settings.bestOffer?.autoDeclinePercent || 60,
+            autoAcceptPercent: settings.bestOffer?.autoAcceptPercent || 90
+          };
+          
+          // Update Best Offer info text
+          const bestOfferInfoEl = document.getElementById('defaultBestOfferInfo');
+          if (bestOfferInfoEl) {
+            if (defaultBestOfferSettings.enabled) {
+              bestOfferInfoEl.textContent = `Best Offer enabled: auto-decline <${defaultBestOfferSettings.autoDeclinePercent}%, auto-accept ≥${defaultBestOfferSettings.autoAcceptPercent}%`;
+              bestOfferInfoEl.style.color = 'var(--success)';
+            } else {
+              bestOfferInfoEl.textContent = 'Best Offer disabled (not configured in settings)';
+              bestOfferInfoEl.style.color = 'var(--text-muted)';
+            }
+          }
         }
       } catch (err) {
         console.error('[Quick List] Failed to load promotion settings:', err);
@@ -2026,6 +2107,11 @@
         if (infoEl) {
           infoEl.textContent = 'Failed to load settings';
           infoEl.style.color = '#ef4444';
+        }
+        const bestOfferInfoEl = document.getElementById('defaultBestOfferInfo');
+        if (bestOfferInfoEl) {
+          bestOfferInfoEl.textContent = 'Failed to load settings';
+          bestOfferInfoEl.style.color = '#ef4444';
         }
       }
     }
@@ -2068,6 +2154,54 @@
         };
       }
     }
+
+    // Handle Best Offer dropdown changes
+    function initBestOfferControls() {
+      const modeSelect = document.getElementById('bestOfferMode');
+      const customInputs = document.getElementById('customBestOfferInputs');
+      const defaultInfo = document.getElementById('defaultBestOfferInfo');
+      
+      if (modeSelect) {
+        modeSelect.addEventListener('change', () => {
+          const mode = modeSelect.value;
+          if (customInputs) {
+            customInputs.style.display = mode === 'enabled' ? 'block' : 'none';
+          }
+          if (defaultInfo) {
+            defaultInfo.style.display = mode === 'default' ? 'block' : 'none';
+          }
+        });
+      }
+    }
+    
+    // Get current Best Offer settings for this run
+    function getBestOfferSettings() {
+      const mode = document.getElementById('bestOfferMode')?.value;
+      
+      if (mode === 'disabled') {
+        return { enabled: false };
+      } else if (mode === 'enabled') {
+        const autoDeclinePercent = parseInt(document.getElementById('customAutoDeclinePercent')?.value || '60', 10);
+        const autoAcceptPercent = parseInt(document.getElementById('customAutoAcceptPercent')?.value || '90', 10);
+        
+        if (autoDeclinePercent < 10 || autoDeclinePercent > 95) {
+          alert('Auto-decline percent must be between 10% and 95%');
+          return null;
+        }
+        if (autoAcceptPercent < 50 || autoAcceptPercent > 100) {
+          alert('Auto-accept percent must be between 50% and 100%');
+          return null;
+        }
+        if (autoDeclinePercent >= autoAcceptPercent) {
+          alert('Auto-decline percent must be less than auto-accept percent');
+          return null;
+        }
+        return { enabled: true, autoDeclinePercent, autoAcceptPercent };
+      } else {
+        // default - use user's default settings
+        return defaultBestOfferSettings;
+      }
+    }
     
     async function bootstrap() {
       try {
@@ -2081,8 +2215,9 @@
           loadPromotionSettings()
         ]);
         
-        // Initialize promotion controls
+        // Initialize promotion and best offer controls
         initPromotionControls();
+        initBestOfferControls();
       } catch (e) {
         console.error('Auth check failed', e);
       }

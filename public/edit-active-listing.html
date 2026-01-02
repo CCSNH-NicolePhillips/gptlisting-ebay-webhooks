@@ -445,6 +445,31 @@
           </div>
         </div>
         
+        <!-- Best Offer Settings -->
+        <div class="dp-card dp-card--full">
+          <h3 style="margin-top: 0; margin-bottom: 1rem; color: var(--text-primary);">🤝 Best Offer</h3>
+          <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+              <input type="checkbox" id="bestOfferEnabled" style="width: 18px; height: 18px; accent-color: var(--primary);" />
+              <span style="font-weight: 500;">Enable Best Offer</span>
+            </label>
+          </div>
+          <div id="bestOfferSettings" style="display: none;">
+            <div class="dp-form-row">
+              <div class="dp-form-col">
+                <label for="bestOfferAutoDecline">Minimum Offer (% of price)</label>
+                <input type="number" id="bestOfferAutoDecline" placeholder="60" min="10" max="95" />
+                <p class="muted-hint">Auto-decline offers below this percentage of your listing price</p>
+              </div>
+              <div class="dp-form-col">
+                <label for="bestOfferAutoAccept">Auto-Accept (% of price)</label>
+                <input type="number" id="bestOfferAutoAccept" placeholder="90" min="50" max="100" />
+                <p class="muted-hint">Auto-accept offers at or above this percentage of your listing price</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        
         <!-- Item Specifics -->
         <div class="dp-card dp-card--full">
           <h3 style="margin-top: 0; margin-bottom: 1rem; color: var(--text-primary);">Item Specifics (Aspects)</h3>
@@ -596,8 +621,9 @@
         
         showFlash('Listing loaded successfully!', 'success');
         
-        // Load promotion settings if available
+        // Load promotion and best offer settings if available
         loadPromotionSettings();
+        loadBestOfferSettings();
         
       } catch (err) {
         console.error('Failed to load listing:', err);
@@ -613,6 +639,16 @@
       if (promotionEnabled && promotionSettings) {
         promotionEnabled.addEventListener('change', (e) => {
           promotionSettings.style.display = e.target.checked ? 'block' : 'none';
+        });
+      }
+      
+      // Best Offer toggle handler
+      const bestOfferEnabled = $('bestOfferEnabled');
+      const bestOfferSettings = $('bestOfferSettings');
+      
+      if (bestOfferEnabled && bestOfferSettings) {
+        bestOfferEnabled.addEventListener('change', (e) => {
+          bestOfferSettings.style.display = e.target.checked ? 'block' : 'none';
         });
       }
     });
@@ -640,6 +676,35 @@
       } catch (err) {
         console.warn('Could not load promotion settings:', err);
         $('promotionStatus').textContent = 'Promotion status unknown';
+      }
+    }
+    
+    async function loadBestOfferSettings() {
+      try {
+        if (!originalItem) return;
+        
+        // Check offer data for Best Offer settings
+        const bestOfferTerms = originalItem.listingPolicies?.bestOfferTerms;
+        
+        if (bestOfferTerms?.bestOfferEnabled) {
+          $('bestOfferEnabled').checked = true;
+          $('bestOfferSettings').style.display = 'block';
+          
+          // Try to extract percentages from the prices if available
+          const price = parseFloat(originalItem.price) || 0;
+          if (price > 0) {
+            if (bestOfferTerms.autoDeclinePrice?.value) {
+              const autoDeclinePercent = Math.round((parseFloat(bestOfferTerms.autoDeclinePrice.value) / price) * 100);
+              $('bestOfferAutoDecline').value = autoDeclinePercent;
+            }
+            if (bestOfferTerms.autoAcceptPrice?.value) {
+              const autoAcceptPercent = Math.round((parseFloat(bestOfferTerms.autoAcceptPrice.value) / price) * 100);
+              $('bestOfferAutoAccept').value = autoAcceptPercent;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Could not load Best Offer settings:', err);
       }
     }
     
@@ -720,6 +785,11 @@
         const promotionEnabled = $('promotionEnabled').checked;
         const adRate = promotionEnabled ? parseFloat($('adRate').value) || 5 : null;
         
+        // Collect Best Offer settings
+        const bestOfferEnabled = $('bestOfferEnabled').checked;
+        const bestOfferAutoDecline = bestOfferEnabled ? parseInt($('bestOfferAutoDecline').value) || 60 : null;
+        const bestOfferAutoAccept = bestOfferEnabled ? parseInt($('bestOfferAutoAccept').value) || 90 : null;
+        
         const updatedListing = {
           itemId: currentItemId,
           sku: originalItem.sku,
@@ -732,6 +802,11 @@
           aspects,
           images, // Include reordered images
           promotion: promotionEnabled ? { enabled: true, adRate } : { enabled: false },
+          bestOffer: bestOfferEnabled ? { 
+            enabled: true, 
+            autoDeclinePercent: bestOfferAutoDecline, 
+            autoAcceptPercent: bestOfferAutoAccept 
+          } : { enabled: false },
         };
         
         console.log('Saving listing:', updatedListing);

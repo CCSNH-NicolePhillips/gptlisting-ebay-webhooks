@@ -16,12 +16,22 @@ interface AutoPriceSettings {
 }
 
 /**
- * Save user settings (promotion preferences, pricing config, auto-price reduction, etc.)
+ * Best Offer settings for eBay listings
+ */
+interface BestOfferSettings {
+  enabled: boolean;
+  autoDeclinePercent?: number;  // Minimum offer to consider (e.g., 60 = 60% of listing price)
+  autoAcceptPercent?: number;   // Auto-accept offers at or above this percent (e.g., 90 = 90% of listing price)
+}
+
+/**
+ * Save user settings (promotion preferences, pricing config, auto-price reduction, best offer, etc.)
  * POST body: { 
  *   autoPromoteEnabled?: boolean, 
  *   defaultPromotionRate?: number,
  *   pricing?: Partial<PricingSettings>,
- *   autoPrice?: AutoPriceSettings
+ *   autoPrice?: AutoPriceSettings,
+ *   bestOffer?: BestOfferSettings
  * }
  */
 export const handler: Handler = async (event) => {
@@ -36,6 +46,7 @@ export const handler: Handler = async (event) => {
     const defaultPromotionRate = body.defaultPromotionRate as number | undefined;
     const pricing = body.pricing as Partial<PricingSettings> | undefined;
     const autoPrice = body.autoPrice as AutoPriceSettings | undefined;
+    const bestOffer = body.bestOffer as BestOfferSettings | undefined;
 
     // Validate promotion rate if provided
     if (defaultPromotionRate !== undefined && defaultPromotionRate !== null) {
@@ -147,6 +158,38 @@ export const handler: Handler = async (event) => {
       }
     }
 
+    // Validate best offer settings if provided
+    if (bestOffer) {
+      if (bestOffer.autoDeclinePercent !== undefined) {
+        if (typeof bestOffer.autoDeclinePercent !== 'number' || bestOffer.autoDeclinePercent < 10 || bestOffer.autoDeclinePercent > 95) {
+          return {
+            statusCode: 400,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'autoDeclinePercent must be between 10 and 95' })
+          };
+        }
+      }
+      if (bestOffer.autoAcceptPercent !== undefined) {
+        if (typeof bestOffer.autoAcceptPercent !== 'number' || bestOffer.autoAcceptPercent < 50 || bestOffer.autoAcceptPercent > 100) {
+          return {
+            statusCode: 400,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'autoAcceptPercent must be between 50 and 100' })
+          };
+        }
+      }
+      // Validate that autoDecline < autoAccept if both are set
+      if (bestOffer.autoDeclinePercent !== undefined && bestOffer.autoAcceptPercent !== undefined) {
+        if (bestOffer.autoDeclinePercent >= bestOffer.autoAcceptPercent) {
+          return {
+            statusCode: 400,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'autoDeclinePercent must be less than autoAcceptPercent' })
+          };
+        }
+      }
+    }
+
     const store = tokensStore();
     const key = userScopedKey(sub, 'settings.json');
     
@@ -180,6 +223,15 @@ export const handler: Handler = async (event) => {
         minPriceType: autoPrice.minPriceType ?? 'fixed',  // default to fixed amount
         minPrice: autoPrice.minPrice ?? 199,  // default $1.99
         minPercent: autoPrice.minPercent ?? 50  // default 50%
+      };
+    }
+
+    // Update best offer settings
+    if (bestOffer !== undefined) {
+      settings.bestOffer = {
+        enabled: bestOffer.enabled ?? false,
+        autoDeclinePercent: bestOffer.autoDeclinePercent ?? 60,  // default auto-decline below 60% of price
+        autoAcceptPercent: bestOffer.autoAcceptPercent ?? 90     // default auto-accept at 90% of price
       };
     }
 

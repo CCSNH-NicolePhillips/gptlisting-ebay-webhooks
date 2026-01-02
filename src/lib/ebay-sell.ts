@@ -200,6 +200,12 @@ export async function putInventoryItem(
   console.log('[putInventoryItem] ✓ Success for SKU:', sku);
 }
 
+export type BestOfferTerms = {
+  enabled: boolean;
+  autoDeclinePercent?: number;  // Auto-decline offers below this percent of listing price
+  autoAcceptPercent?: number;   // Auto-accept offers at or above this percent of listing price
+};
+
 export type OfferCreationPayload = {
   sku: string;
   marketplaceId: string;
@@ -213,6 +219,7 @@ export type OfferCreationPayload = {
   merchantLocationKey: string | null;
   description: string;
   merchantData?: Record<string, any>;
+  bestOffer?: BestOfferTerms;
 };
 
 export type OfferCreationResult = {
@@ -273,6 +280,35 @@ export async function createOffer(
   // Add merchant data if provided (stores pricing status and metadata)
   if (input.merchantData) {
     payload.merchantData = input.merchantData;
+  }
+
+  // Add Best Offer settings if enabled
+  if (input.bestOffer?.enabled) {
+    const listingPolicies = payload.listingPolicies as Record<string, unknown>;
+    const bestOfferTerms: Record<string, unknown> = {
+      bestOfferEnabled: true,
+    };
+    
+    // Calculate auto-decline price (minimum offer to consider)
+    if (input.bestOffer.autoDeclinePercent) {
+      const autoDeclinePrice = (price * input.bestOffer.autoDeclinePercent / 100);
+      bestOfferTerms.autoDeclinePrice = {
+        currency: "USD",
+        value: autoDeclinePrice.toFixed(2),
+      };
+    }
+    
+    // Calculate auto-accept price (auto-accept offers at or above this)
+    if (input.bestOffer.autoAcceptPercent) {
+      const autoAcceptPrice = (price * input.bestOffer.autoAcceptPercent / 100);
+      bestOfferTerms.autoAcceptPrice = {
+        currency: "USD",
+        value: autoAcceptPrice.toFixed(2),
+      };
+    }
+    
+    listingPolicies.bestOfferTerms = bestOfferTerms;
+    console.log(`[createOffer] Best Offer enabled for SKU ${input.sku}:`, bestOfferTerms);
   }
 
   const url = `${apiHost}/sell/inventory/v1/offer`;

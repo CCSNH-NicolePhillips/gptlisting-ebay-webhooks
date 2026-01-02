@@ -293,6 +293,44 @@
               </div>
             </section>
             
+            <!-- Best Offer Settings Card -->
+            <section class="dp-card">
+              <div class="dp-card__header">
+                <h3 class="dp-card__title">🤝 Best Offer</h3>
+                <p class="dp-card__subtitle">Let buyers negotiate prices on your listings</p>
+              </div>
+              
+              <div class="dp-card__content">
+                <label class="dp-form-label">
+                  <input type="checkbox" id="bestOfferEnabled" style="margin-right: 8px; vertical-align: middle;" />
+                  <span>Enable Best Offer on new drafts</span>
+                </label>
+                
+                <div id="bestOfferOptions" style="margin-top: 1rem; padding-left: 1.5rem; opacity: 0.5; pointer-events: none;">
+                  <label class="dp-form-label">Auto-decline offers below</label>
+                  <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem;">
+                    <input type="number" id="bestOfferAutoDeclinePercent" class="dp-input" placeholder="60" min="10" max="95" style="width: 120px;" />
+                    <span style="color: var(--text-muted);">% of listing price</span>
+                  </div>
+                  <p style="font-size: 0.875rem; color: var(--text-muted); margin-top: -0.5rem; margin-bottom: 1rem;">
+                    Offers below this percentage are automatically declined. Recommended: 60%.
+                  </p>
+                  
+                  <label class="dp-form-label">Auto-accept offers at or above</label>
+                  <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <input type="number" id="bestOfferAutoAcceptPercent" class="dp-input" placeholder="90" min="50" max="100" style="width: 120px;" />
+                    <span style="color: var(--text-muted);">% of listing price</span>
+                  </div>
+                  <p style="font-size: 0.875rem; color: var(--text-muted); margin-top: 0.5rem;">
+                    Offers at or above this percentage are automatically accepted. Recommended: 90%.
+                  </p>
+                </div>
+                
+                <button id="bestOfferSaveButton" class="dp-btn dp-btn-primary" style="margin-top: 24px;">Save Best Offer settings</button>
+                <p id="bestOfferSaveMessage" class="dp-muted" style="text-align: center; margin-top: 12px; min-height: 20px;"></p>
+              </div>
+            </section>
+            
             <!-- Pricing Settings Card -->
             <section class="dp-card">
               <div class="dp-card__header">
@@ -627,10 +665,120 @@
             if (rateInput && settings.defaultPromotionRate) {
               rateInput.value = settings.defaultPromotionRate;
             }
+            
+            // Also load Best Offer settings
+            const bestOfferEnabledCheckbox = document.getElementById('bestOfferEnabled');
+            const bestOfferOptions = document.getElementById('bestOfferOptions');
+            const autoDeclineInput = document.getElementById('bestOfferAutoDeclinePercent');
+            const autoAcceptInput = document.getElementById('bestOfferAutoAcceptPercent');
+            
+            if (bestOfferEnabledCheckbox && settings.bestOffer !== undefined) {
+              bestOfferEnabledCheckbox.checked = settings.bestOffer.enabled;
+              
+              if (settings.bestOffer.enabled && bestOfferOptions) {
+                bestOfferOptions.style.opacity = '1';
+                bestOfferOptions.style.pointerEvents = 'auto';
+              }
+            }
+            
+            if (autoDeclineInput && settings.bestOffer?.autoDeclinePercent) {
+              autoDeclineInput.value = settings.bestOffer.autoDeclinePercent;
+            }
+            
+            if (autoAcceptInput && settings.bestOffer?.autoAcceptPercent) {
+              autoAcceptInput.value = settings.bestOffer.autoAcceptPercent;
+            }
           }
         } catch (err) {
           console.error('[Settings] Failed to load promotion settings:', err);
         }
+      }
+      
+      // Best Offer settings toggle
+      const bestOfferCheckbox = document.getElementById('bestOfferEnabled');
+      const bestOfferOptions = document.getElementById('bestOfferOptions');
+      
+      if (bestOfferCheckbox && bestOfferOptions) {
+        bestOfferCheckbox.addEventListener('change', () => {
+          if (bestOfferCheckbox.checked) {
+            bestOfferOptions.style.opacity = '1';
+            bestOfferOptions.style.pointerEvents = 'auto';
+          } else {
+            bestOfferOptions.style.opacity = '0.5';
+            bestOfferOptions.style.pointerEvents = 'none';
+          }
+        });
+      }
+      
+      // Save Best Offer settings
+      const bestOfferSaveBtn = document.getElementById('bestOfferSaveButton');
+      if (bestOfferSaveBtn) {
+        bestOfferSaveBtn.onclick = async () => {
+          const msg = document.getElementById('bestOfferSaveMessage');
+          const enabled = document.getElementById('bestOfferEnabled')?.checked || false;
+          const autoDeclinePercent = parseInt(document.getElementById('bestOfferAutoDeclinePercent')?.value || '60');
+          const autoAcceptPercent = parseInt(document.getElementById('bestOfferAutoAcceptPercent')?.value || '90');
+          
+          if (enabled) {
+            if (autoDeclinePercent < 10 || autoDeclinePercent > 95) {
+              if (msg) {
+                msg.textContent = 'Auto-decline percent must be between 10% and 95%';
+                msg.style.color = '#ef4444';
+                setTimeout(() => { msg.textContent = ''; msg.style.color = ''; }, 3000);
+              }
+              return;
+            }
+            if (autoAcceptPercent < 50 || autoAcceptPercent > 100) {
+              if (msg) {
+                msg.textContent = 'Auto-accept percent must be between 50% and 100%';
+                msg.style.color = '#ef4444';
+                setTimeout(() => { msg.textContent = ''; msg.style.color = ''; }, 3000);
+              }
+              return;
+            }
+            if (autoDeclinePercent >= autoAcceptPercent) {
+              if (msg) {
+                msg.textContent = 'Auto-decline must be less than auto-accept';
+                msg.style.color = '#ef4444';
+                setTimeout(() => { msg.textContent = ''; msg.style.color = ''; }, 3000);
+              }
+              return;
+            }
+          }
+          
+          if (msg) msg.textContent = 'Saving...';
+          
+          try {
+            const response = await authClient.authFetch('/.netlify/functions/user-settings-save', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                bestOffer: {
+                  enabled,
+                  autoDeclinePercent: enabled ? autoDeclinePercent : null,
+                  autoAcceptPercent: enabled ? autoAcceptPercent : null
+                }
+              })
+            });
+            
+            if (response.ok) {
+              if (msg) {
+                msg.textContent = 'Best Offer settings saved!';
+                msg.style.color = '#10b981';
+                setTimeout(() => { msg.textContent = ''; msg.style.color = ''; }, 3000);
+              }
+            } else {
+              throw new Error('Failed to save');
+            }
+          } catch (err) {
+            console.error('[Settings] Failed to save Best Offer settings:', err);
+            if (msg) {
+              msg.textContent = 'Failed to save settings';
+              msg.style.color = '#ef4444';
+              setTimeout(() => { msg.textContent = ''; msg.style.color = ''; }, 3000);
+            }
+          }
+        };
       }
       
       // Save pricing settings

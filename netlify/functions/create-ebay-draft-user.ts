@@ -417,6 +417,8 @@ export const handler: Handler = async (event) => {
         returnPolicyId: mapped.offer.returnPolicyId ?? userPolicyDefaults.return ?? null,
         merchantLocationKey,
         description: mapped.offer.description,
+        // Best Offer settings from group (set by user settings or overridden)
+        bestOffer: group.bestOffer,
         merchantData: {
           ...(group.pricingStatus || group.priceMeta ? {
             pricingStatus: group.pricingStatus,

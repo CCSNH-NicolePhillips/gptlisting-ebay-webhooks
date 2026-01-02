@@ -1,0 +1,382 @@
+﻿Testing ALL 12 images from C:\Users\hanri\OneDrive\Documents\GitHub\gptlisting-ebay-webhooks\testDropbox\ebay09
+
+=== Starting Classification ===
+
+[pairing-v2] Classification results: [
+  {
+    "filename": "IMG_20260101_174731.jpg",
+    "kind": "product",
+    "panel": "front",
+    "brand": "Salud",
+    "productName": "Hydration + Immunity Drink Mix",
+    "title": null,
+    "brandWebsite": "https://tastesalud.com",
+    "packageType": "pouch",
+    "keyText": [
+      "Salud",
+      "Hydration + Immunity",
+      "Drink Mix"
+    ],
+    "categoryPath": "Health & Personal Care > Vitamins & Dietary Supplements",
+    "colorSignature": [
+      "beige",
+      "red",
+      "black"
+    ],
+    "layoutSignature": "pouch vertical label center",
+    "confidence": 0.95,
+    "rationale": "Front panel with brand and product name clearly visible.",
+    "quantityInPhoto": 1,
+    "packCount": null,
+    "netWeight": null
+  },
+  {
+    "filename": "IMG_20260101_174746.jpg",
+    "kind": "product",
+    "panel": "back",
+    "brand": "Salud",
+    "productName": "Hydration + Immunity Drink Mix",
+    "title": null,
+    "brandWebsite": "https://tastesalud.com",
+    "packageType": "pouch",
+    "keyText": [
+      "Nutrition Facts",
+      "Immunity & Antioxidants",
+      "Hydration & Electrolytes"
+    ],
+    "categoryPath": "Health & Personal Care > Vitamins & Dietary Supplements",
+    "colorSignature": [
+      "beige",
+      "black"
+    ],
+    "layoutSignature": "pouch vertical label back",
+    "confidence": 0.95,
+    "rationale": "Back panel with nutrition facts and product details.",
+    "quantityInPhoto": 1,
+    "packCount": null,
+    "netWeight": null
+  },
+  {
+    "filename": "IMG_20260101_174800.jpg",
+    "kind": "product",
+    "panel": "front",
+    "brand": "Re Lierre",
+    "productName": "Daily Tanning Gummies 4.23 oz",
+    "title": null,
+    "brandWebsite": "https://relierre.com",
+    "packageType": "pouch",
+    "keyText": [
+      "Daily Tanning Gummies",
+      "Watermelon Flavor",
+      "Net Wt. 4.23 oz"
+    ],
+    "categoryPath": "Health & Personal Care > Vitamins & Dietary Supplements",
+    "colorSignature": [
+      "red",
+      "green",
+      "white"
+    ],
+    "layoutSignature": "pouch vertical label center",
+    "confidence": 0.95,
+    "rationale": "Front panel with brand and product name clearly visible.",
+    "quantityInPhoto": 1,
+    "packCount": null,
+    "netWeight": {
+      "value": 4.23,
+      "unit": "oz"
+    }
+  },
+  {
+    "filename": "IMG_20260101_174814.jpg",
+    "kind": "product",
+    "panel": "back",
+    "brand": "Re Lierre",
+    "productName": "Daily Tanning Gummies 4.23 oz",
+    "title": null,
+    "brandWebsite": "https://relierre.com",
+    "packageType": "pouch",
+    "keyText": [
+      "Supplement Facts",
+      "Flawless Tan",
+      "Serving Size: 2 Gummies"
+    ],
+    "categoryPath": "Health & Personal Care > Vitamins & Dietary Supplements",
+    "colorSignature": [
+      "red",
+      "green",
+      "white"
+    ],
+    "layoutSignature": "pouch vertical label back",
+    "confidence": 0.95,
+    "rationale": "Back panel with supplement facts and product details.",
+    "quantityInPhoto": 1,
+    "packCount": null,
+    "netWeight": {
+      "value": 4.23,
+      "unit": "oz"
+    }
+  },
+  {
+    "filename": "IMG_20260101_174831.jpg",
+    "kind": "product",
+    "panel": "front",
+    "brand": "Hermon",
+    "productName": "Jock Itch Ringworm Athlete's Foot 3.4 fl oz",
+    "title": null,
+    "brandWebsite": "https://hermon.com",
+    "packageType": "box",
+    "keyText": [
+      "Jock Itch",
+      "Ringworm",
+      "Athlete's Foot"
+    ],
+    "categoryPath": "Health & Personal Care > Skin Care > Foot Creams & Lotions",
+    "colorSignature": [
+      "blue",
+      "white",
+      "black"
+    ],
+    "layoutSignature": "box vertical label center",
+    "confidence": 0.95,
+    "rationale": "Front panel with brand and product name clearly visible.",
+    "quantityInPhoto": 1,
+    "packCount": null,
+    "netWeight": {
+      "value": 3.4,
+      "unit": "fl oz"
+    }
+  },
+  {
+    "filename": "IMG_20260101_174840.jpg",
+    "kind": "product",
+    "panel": "side",
+    "brand": "Hermon",
+    "productName": "Jock Itch Ringworm Athlete's Foot 3.4 fl oz",
+    "title": null,
+    "brandWebsite": "https://hermon.com",
+    "packageType": "box",
+    "keyText": [
+      "Drug Facts",
+      "Directions",
+      "Apply a thin layer"
+    ],
+    "categoryPath": "Health & Personal Care > Skin Care > Foot Creams & Lotions",
+    "colorSignature": [
+      "blue",
+      "white"
+    ],
+    "layoutSignature": "box vertical label side",
+    "confidence": 0.95,
+    "rationale": "Side panel with drug facts and usage directions.",
+    "quantityInPhoto": 1,
+    "packCount": null,
+    "netWeight": {
+      "value": 3.4,
+      "unit": "fl oz"
+    }
+  },
+  {
+    "filename": "IMG_20260101_174906.jpg",
+    "kind": "product",
+    "panel": "front",
+    "brand": "Prime Natural",
+    "productName": "Black Seed Oil 120ml",
+    "title": null,
+    "brandWebsite": "https://primenatural.us",
+    "packageType": "bottle",
+    "keyText": [
+      "Black Seed",
+      "USDA Organic",
+      "120ml"
+    ],
+    "categoryPath": "Health & Personal Care > Vitamins & Dietary Supplements",
+    "colorSignature": [
+      "brown",
+      "green",
+      "white"
+    ],
+    "layoutSignature": "bottle wraparound",
+    "confidence": 0.95,
+    "rationale": "Front panel with brand and product name clearly visible.",
+    "quantityInPhoto": 1,
+    "packCount": null,
+    "netWeight": {
+      "value": 120,
+      "unit": "ml"
+    }
+  },
+  {
+    "filename": "IMG_20260101_174918.jpg",
+    "kind": "product",
+    "panel": "back",
+    "brand": "Prime Natural",
+    "productName": "Black Seed Oil 120ml",
+    "title": null,
+    "brandWebsite": "https://primenatural.us",
+    "packageType": "bottle",
+    "keyText": [
+      "Ingredients",
+      "Supplement Facts",
+      "Purity Tested"
+    ],
+    "categoryPath": "Health & Personal Care > Vitamins & Dietary Supplements",
+    "colorSignature": [
+      "brown",
+      "white"
+    ],
+    "layoutSignature": "bottle wraparound",
+    "confidence": 0.95,
+    "rationale": "Back panel with supplement facts and product details.",
+    "quantityInPhoto": 1,
+    "packCount": null,
+    "netWeight": {
+      "value": 120,
+      "unit": "ml"
+    }
+  },
+  {
+    "filename": "IMG_20260101_174951.jpg",
+    "kind": "product",
+    "panel": "front",
+    "brand": "JYM",
+    "productName": "Pre-Workout Juicy Orange 31.7 oz",
+    "title": null,
+    "brandWebsite": "https://jym.com",
+    "packageType": "tub",
+    "keyText": [
+      "Pre-Workout",
+      "Juicy Orange",
+      "31.7 oz"
+    ],
+    "categoryPath": "Health & Personal Care > Vitamins & Dietary Supplements",
+    "colorSignature": [
+      "black",
+      "orange",
+      "green"
+    ],
+    "layoutSignature": "tub wraparound",
+    "confidence": 0.95,
+    "rationale": "Front panel with brand and product name clearly visible.",
+    "quantityInPhoto": 1,
+    "packCount": null,
+    "netWeight": {
+      "value": 31.7,
+      "unit": "oz"
+    }
+  },
+  {
+    "filename": "IMG_20260101_175005.jpg",
+    "kind": "product",
+    "panel": "back",
+    "brand": "JYM",
+    "productName": "Pre-Workout Juicy Orange 31.7 oz",
+    "title": null,
+    "brandWebsite": "https://jym.com",
+    "packageType": "tub",
+    "keyText": [
+      "Supplement Facts",
+      "Directions",
+      "Keep out of reach"
+    ],
+    "categoryPath": "Health & Personal Care > Vitamins & Dietary Supplements",
+    "colorSignature": [
+      "black",
+      "white"
+    ],
+    "layoutSignature": "tub wraparound",
+    "confidence": 0.95,
+    "rationale": "Back panel with supplement facts and product details.",
+    "quantityInPhoto": 1,
+    "packCount": null,
+    "netWeight": {
+npx : TypeError [ERR_INVALID_ARG_TYPE]: The "path" 
+argument must be of type string. Received undefined
+At line:1 char:117
++ ... t "=",2)[1] }); npx tsx 
+scripts/test-brand-extraction.ts 2>&1 | Out-F ...
++                     
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: 
+(TypeError [ERR_...eived undefined:String) [], Re   
+ moteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    at Module.basename (node:path:820:5)
+    at testBrandExtraction (C:\Users\hanri\OneDrive\
+Documents\GitHub\gptlisting-ebay-webhooks\scripts\te
+st-brand-extraction.ts:31:31)
+    at process.processTicksAndRejections 
+(node:internal/process/task_queues:95:5) {
+  code: 'ERR_INVALID_ARG_TYPE'
+}
+      "value": 31.7,
+      "unit": "oz"
+    }
+  },
+  {
+    "filename": "IMG_20260101_175150.jpg",
+    "kind": "non_product",
+    "panel": "unknown",
+    "brand": null,
+    "productName": null,
+    "title": null,
+    "brandWebsite": null,
+    "packageType": "unknown",
+    "keyText": [
+      "Welcome to the good side",
+      "A partnership made in heaven"
+    ],
+    "categoryPath": null,
+    "colorSignature": [
+      "yellow",
+      "black",
+      "green"
+    ],
+    "layoutSignature": "open book style with accessories",
+    "confidence": 0.7,
+    "rationale": "Image shows a display with text and accessories, not a clear product package.",
+    "quantityInPhoto": 1,
+    "packCount": null,
+    "netWeight": null
+  },
+  {
+    "filename": "IMG_20260101_175228.jpg",
+    "kind": "non_product",
+    "panel": "unknown",
+    "brand": null,
+    "productName": null,
+    "title": null,
+    "brandWebsite": null,
+    "packageType": "unknown",
+    "keyText": [
+      "We're here to bring",
+      "No nicotine, no vapor"
+    ],
+    "categoryPath": null,
+    "colorSignature": [
+      "green",
+      "black",
+      "red"
+    ],
+    "layoutSignature": "box with pouches",
+    "confidence": 0.7,
+    "rationale": "Image shows a box with pouches, not a clear product package.",
+    "quantityInPhoto": 1,
+    "packCount": null,
+    "netWeight": null
+  }
+]
+[pairing-v2] IMG_20260101_174731.jpg: Front panel with brand and product name clearly visible.
+[pairing-v2] IMG_20260101_174746.jpg: Back panel with nutrition facts and product details.
+[pairing-v2] IMG_20260101_174800.jpg: Front panel with brand and product name clearly visible.
+[pairing-v2] IMG_20260101_174814.jpg: Back panel with supplement facts and product details.
+[pairing-v2] IMG_20260101_174831.jpg: Front panel with brand and product name clearly visible.
+[pairing-v2] IMG_20260101_174840.jpg: Side panel with drug facts and usage directions.
+[pairing-v2] IMG_20260101_174906.jpg: Front panel with brand and product name clearly visible.
+[pairing-v2] IMG_20260101_174918.jpg: Back panel with supplement facts and product details.
+[pairing-v2] IMG_20260101_174951.jpg: Front panel with brand and product name clearly visible.
+[pairing-v2] IMG_20260101_175005.jpg: Back panel with supplement facts and product details.
+[pairing-v2] IMG_20260101_175150.jpg: Image shows a display with text and accessories, not a clear product package.
+[pairing-v2] IMG_20260101_175228.jpg: Image shows a box with pouches, not a clear product package.
+=== Results (12 images) ===
+

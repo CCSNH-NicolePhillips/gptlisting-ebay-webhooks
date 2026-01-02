@@ -154,8 +154,8 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       };
     }
     
-    // Update the offer (price and promotion settings)
-    const offerPayload = {
+    // Update the offer (price, promotion settings, and best offer)
+    const offerPayload: Record<string, unknown> = {
       ...currentOffer,
       pricingSummary: {
         price: {
@@ -172,6 +172,48 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
           : null,
       },
     };
+
+    // Add Best Offer settings if provided
+    if (draft.bestOffer !== undefined) {
+      const existingPolicies = (currentOffer.listingPolicies || {}) as Record<string, unknown>;
+      if (draft.bestOffer?.enabled) {
+        const price = parseFloat(draft.price);
+        const bestOfferTerms: Record<string, unknown> = {
+          bestOfferEnabled: true,
+        };
+        
+        // Calculate auto-decline price
+        if (draft.bestOffer.autoDeclinePercent) {
+          const autoDeclinePrice = (price * draft.bestOffer.autoDeclinePercent / 100);
+          bestOfferTerms.autoDeclinePrice = {
+            currency: 'USD',
+            value: autoDeclinePrice.toFixed(2),
+          };
+        }
+        
+        // Calculate auto-accept price
+        if (draft.bestOffer.autoAcceptPercent) {
+          const autoAcceptPrice = (price * draft.bestOffer.autoAcceptPercent / 100);
+          bestOfferTerms.autoAcceptPrice = {
+            currency: 'USD',
+            value: autoAcceptPrice.toFixed(2),
+          };
+        }
+        
+        offerPayload.listingPolicies = {
+          ...existingPolicies,
+          bestOfferTerms,
+        };
+        console.log(`[smartdrafts-update-draft] Best Offer enabled for offer ${offerId}:`, bestOfferTerms);
+      } else {
+        // Explicitly disable Best Offer
+        offerPayload.listingPolicies = {
+          ...existingPolicies,
+          bestOfferTerms: { bestOfferEnabled: false },
+        };
+        console.log(`[smartdrafts-update-draft] Best Offer disabled for offer ${offerId}`);
+      }
+    }
     
     const updateOfferRes = await fetch(`${apiHost}/sell/inventory/v1/offer/${offerId}`, {
       method: 'PUT',

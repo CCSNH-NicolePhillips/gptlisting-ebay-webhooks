@@ -19,7 +19,7 @@ export const handler: Handler = async (event) => {
     }
 
     const body = event.body ? JSON.parse(event.body) : {};
-    const { itemId, sku, isInventoryListing, title, description, price, quantity, condition, aspects, images } = body;
+    const { itemId, sku, isInventoryListing, title, description, price, quantity, condition, aspects, images, bestOffer } = body;
 
     if (!itemId) {
       return { statusCode: 400, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' }, body: JSON.stringify({ error: 'Missing itemId' }) };
@@ -258,6 +258,48 @@ export const handler: Handler = async (event) => {
       if (quantity !== undefined) {
         console.log('[ebay-update-active-item] Updating quantity to:', quantity);
         offerUpdatePayload.availableQuantity = quantity;
+      }
+
+      // Update Best Offer settings if provided
+      if (bestOffer !== undefined) {
+        const existingPolicies = offerUpdatePayload.listingPolicies || {};
+        if (bestOffer?.enabled) {
+          const offerPrice = price !== undefined ? parseFloat(price) : parseFloat(offerUpdatePayload.pricingSummary?.price?.value || '0');
+          const bestOfferTerms: Record<string, unknown> = {
+            bestOfferEnabled: true,
+          };
+          
+          // Calculate auto-decline price
+          if (bestOffer.autoDeclinePercent) {
+            const autoDeclinePrice = (offerPrice * bestOffer.autoDeclinePercent / 100);
+            bestOfferTerms.autoDeclinePrice = {
+              currency: 'USD',
+              value: autoDeclinePrice.toFixed(2),
+            };
+          }
+          
+          // Calculate auto-accept price
+          if (bestOffer.autoAcceptPercent) {
+            const autoAcceptPrice = (offerPrice * bestOffer.autoAcceptPercent / 100);
+            bestOfferTerms.autoAcceptPrice = {
+              currency: 'USD',
+              value: autoAcceptPrice.toFixed(2),
+            };
+          }
+          
+          offerUpdatePayload.listingPolicies = {
+            ...existingPolicies,
+            bestOfferTerms,
+          };
+          console.log('[ebay-update-active-item] Best Offer enabled:', bestOfferTerms);
+        } else {
+          // Explicitly disable Best Offer
+          offerUpdatePayload.listingPolicies = {
+            ...existingPolicies,
+            bestOfferTerms: { bestOfferEnabled: false },
+          };
+          console.log('[ebay-update-active-item] Best Offer disabled');
+        }
       }
 
       // Update the offer - this triggers the live listing update
