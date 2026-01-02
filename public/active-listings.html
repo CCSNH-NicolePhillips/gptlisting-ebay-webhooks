@@ -655,6 +655,7 @@
       const card = document.createElement('div');
       card.className = 'card';
       card.dataset.listingId = o.listingId || '';
+      card.dataset.offerId = o.offerId || '';
       card.dataset.sku = o.sku || '';
 
       // Add image thumbnail if available
@@ -1188,6 +1189,7 @@
     function getSelectedListings() {
       return getSelectedCards().map(card => ({
         listingId: card.dataset.listingId,
+        offerId: card.dataset.offerId,
         sku: card.dataset.sku,
         title: card.querySelector('.card-title')?.textContent || '',
       })).filter(l => l.listingId);
@@ -1248,11 +1250,13 @@
       
       for (const listing of listings) {
         try {
-          const res = await exec('/.netlify/functions/promote-listing', {
+          const res = await exec('/.netlify/functions/ebay-update-active-promo', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
               listingId: listing.listingId,
+              offerId: listing.offerId,
+              sku: listing.sku,
               adRate: adRate,
             }),
           });
