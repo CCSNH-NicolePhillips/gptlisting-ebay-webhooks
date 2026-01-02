@@ -158,15 +158,19 @@ export const handler: Handler = async (event) => {
 
     // Parse request
     const body = JSON.parse(event.body || "{}");
-    const { folder } = body;
+    const { folder, files } = body;
 
     if (!folder || typeof folder !== "string") {
       return json(400, { error: "Missing or invalid folder parameter" }, originHdr);
     }
 
+    // files is optional - if provided, only process those specific files
+    const selectedFiles: string[] | undefined = Array.isArray(files) ? files.filter(f => typeof f === 'string') : undefined;
+
     console.log("[smartdrafts-pairing-v2-start] Request", {
       userId: userAuth.userId,
       folder,
+      selectedFilesCount: selectedFiles?.length ?? 'all',
     });
 
     // Get Dropbox refresh token
@@ -182,7 +186,17 @@ export const handler: Handler = async (event) => {
     const accessToken = await dropboxAccessToken(dropboxRefreshToken);
 
     // List images in folder
-    const imagePaths = await listDropboxImages(accessToken, folder);
+    let imagePaths = await listDropboxImages(accessToken, folder);
+
+    // If specific files were selected, filter to only those
+    if (selectedFiles && selectedFiles.length > 0) {
+      const selectedPathsLower = new Set(selectedFiles.map(p => p.toLowerCase()));
+      imagePaths = imagePaths.filter(p => selectedPathsLower.has(p.toLowerCase()));
+      console.log("[smartdrafts-pairing-v2-start] Filtered to selected files", {
+        requested: selectedFiles.length,
+        matched: imagePaths.length,
+      });
+    }
 
     if (imagePaths.length === 0) {
       return json(400, { error: "No images found in folder" }, originHdr);

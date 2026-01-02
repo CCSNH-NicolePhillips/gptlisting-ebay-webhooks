@@ -1632,10 +1632,16 @@
           updateStep(2, 'active');
           $('status1').innerHTML = '<span class="spinner"></span>Starting Dropbox pairing-v2...';
 
+          // Send folder and selected file paths (if files were removed from preview)
+          const requestBody = { folder: selectedFolder };
+          if (selectedDropboxFiles.length > 0) {
+            requestBody.files = selectedDropboxFiles.map(f => f.path);
+          }
+
           const pairStartRes = await fetchJSON('/.netlify/functions/smartdrafts-pairing-v2-start', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ folder: selectedFolder })
+            body: JSON.stringify(requestBody)
           });
 
           console.log('[Quick List] Dropbox pairing-v2 start response:', pairStartRes);
