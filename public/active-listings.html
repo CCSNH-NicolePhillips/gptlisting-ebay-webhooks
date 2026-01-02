@@ -763,6 +763,14 @@
         badges.appendChild(promoBadge);
       }
 
+      if (o.bestOfferEnabled) {
+        const bestOfferBadge = document.createElement('span');
+        bestOfferBadge.className = 'pill';
+        bestOfferBadge.style.background = '#d97706';
+        bestOfferBadge.textContent = `Best Offer${o.bestOfferCount ? ' (' + o.bestOfferCount + ')' : ''}`;
+        badges.appendChild(bestOfferBadge);
+      }
+
       card.appendChild(badges);
 
       // Promotion control

@@ -184,6 +184,8 @@ interface ActiveOffer {
   quantitySold?: number;
   watchCount?: number;
   hitCount?: number;
+  bestOfferEnabled?: boolean;
+  bestOfferCount?: number;
 }
 
 export const handler: Handler = async (event) => {
@@ -436,6 +438,12 @@ export const handler: Handler = async (event) => {
           const watchCountMatch = itemXml.match(/<WatchCount>([^<]+)<\/WatchCount>/);
           const hitCountMatch = itemXml.match(/<HitCount>([^<]+)<\/HitCount>/);
           
+          // Extract BestOfferDetails - presence indicates Best Offer is enabled
+          const bestOfferDetailsMatch = itemXml.match(/<BestOfferDetails>(.*?)<\/BestOfferDetails>/s);
+          const bestOfferCountMatch = bestOfferDetailsMatch ? bestOfferDetailsMatch[1].match(/<BestOfferCount>([^<]+)<\/BestOfferCount>/) : null;
+          const bestOfferEnabled = !!bestOfferDetailsMatch; // Presence of container means Best Offer is enabled
+          const bestOfferCount = bestOfferCountMatch ? parseInt(bestOfferCountMatch[1]) : 0;
+          
           // Check if this is an Inventory API listing (has SellerInventoryID)
           const sellerInventoryIdMatch = itemXml.match(/<SellerInventoryID>([^<]+)<\/SellerInventoryID>/);
           const isInventoryListing = !!sellerInventoryIdMatch;
@@ -543,6 +551,8 @@ export const handler: Handler = async (event) => {
               startTime: startTimeMatch ? startTimeMatch[1] : undefined,
               watchCount: watchCountMatch ? parseInt(watchCountMatch[1]) : 0,
               hitCount: hitCountMatch ? parseInt(hitCountMatch[1]) : 0,
+              bestOfferEnabled: bestOfferEnabled,
+              bestOfferCount: bestOfferCount,
             };
             
             results.push(listing);
@@ -693,6 +703,13 @@ export const handler: Handler = async (event) => {
       console.log('[ebay-list-active-trading] Built promotion map with', promotionMap.size, 'entries');
       if (promotionMap.size > 0) {
         console.log('[ebay-list-active-trading] Sample promotion keys:', Array.from(promotionMap.keys()).slice(0, 5));
+      }
+      
+      // Log sample offer keys for debugging
+      if (activeOffers.length > 0) {
+        console.log('[ebay-list-active-trading] Sample offer keys (first 3):', 
+          activeOffers.slice(0, 3).map(o => ({ sku: o.sku, itemId: o.itemId, offerId: o.offerId }))
+        );
       }
       
       // Merge promotion data into listings
