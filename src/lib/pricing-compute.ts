@@ -174,8 +174,14 @@ export function computeEbayItemPrice(
   let ebayItemPrice: number;
 
   if (shippingStrategy === 'ALGO_COMPETITIVE_TOTAL') {
-    // ALGO: Item price = Target total - Estimated shipping
-    ebayItemPrice = roundToCents(targetDeliveredTotal - templateShippingEstimate);
+    // FIX 7: When discount is 0% (Amazon prices), use item price directly
+    // Amazon prices are already competitive - don't subtract shipping!
+    if (discountPercent === 0) {
+      ebayItemPrice = amazonItemPrice;
+    } else {
+      // ALGO: Item price = Target total - Estimated shipping
+      ebayItemPrice = roundToCents(targetDeliveredTotal - templateShippingEstimate);
+    }
   } else {
     // DISCOUNT_ITEM_ONLY: Item price = Amazon item price * discount
     ebayItemPrice = roundToCents(amazonItemPrice * discountMultiplier);
