@@ -1448,7 +1448,33 @@ export async function lookupPrice(
   }
 
   // ========================================
-  // PRICE SANITY CHECK: Filter out bundle prices
+  // SANITY CHECK 1: Remove low-confidence Amazon when Brand MSRP exists
+  // ========================================
+  // If we have official brand pricing, don't let poor Amazon matches override it
+  const hasBrandMSRP = candidates.some(c => c.source === 'brand-msrp');
+  if (hasBrandMSRP) {
+    const lowConfidenceAmazon = candidates.filter(c => 
+      c.source === 'amazon' && 
+      c.confidence !== 'high'
+    );
+    
+    if (lowConfidenceAmazon.length > 0) {
+      console.log('[price] ⚠️ Removing low-confidence Amazon results (brand MSRP available):', 
+        lowConfidenceAmazon.map(c => ({ url: c.url, confidence: c.confidence }))
+      );
+      
+      // Remove low-confidence Amazon candidates
+      for (const candidate of lowConfidenceAmazon) {
+        const idx = candidates.indexOf(candidate);
+        if (idx >= 0) {
+          candidates.splice(idx, 1);
+        }
+      }
+    }
+  }
+
+  // ========================================
+  // SANITY CHECK 2: Filter out bundle prices
   // ========================================
   // Before AI arbitration, check if brand prices look like bundles compared to marketplace prices
   const brandCandidates = candidates.filter(c => c.source === 'brand-msrp');
@@ -1460,9 +1486,15 @@ export async function lookupPrice(
   );
 
   if (brandCandidates.length > 0 && marketCandidates.length > 0) {
-    const comparableMarketCandidates = marketCandidates.filter(c => c.matchesBrand !== false);
+    // FIX: Only use HIGH CONFIDENCE marketplace signals for bundle detection
+    // Don't drop brand MSRP based on low-quality Amazon matches (wrong products)
+    const comparableMarketCandidates = marketCandidates.filter(c => 
+      c.matchesBrand !== false && 
+      c.confidence === 'high' // Only high-confidence matches
+    );
+    
     if (comparableMarketCandidates.length === 0) {
-      console.log('[price] ⚠️ Skipping bundle check: no marketplace signals match brand');
+      console.log('[price] ⚠️ Skipping bundle check: no high-confidence marketplace signals');
     } else {
       // Find the lowest marketplace price among comparable signals
       const bestMarket = comparableMarketCandidates.reduce((best, c) =>
