@@ -1337,9 +1337,20 @@ function updateUIFromCache(data) {
           
           // Populate table rows
           const rowsContainer = document.getElementById('recentDraftsRows');
+          if (!rowsContainer) {
+            console.error('[Recent Drafts] ERROR: recentDraftsRows element not found!');
+            return;
+          }
           rowsContainer.innerHTML = '';
           
-          recentDrafts.forEach(draft => {
+          console.log('[Recent Drafts] Creating', recentDrafts.length, 'rows...');
+          recentDrafts.forEach((draft, index) => {
+            console.log(`[Recent Drafts] Creating row ${index + 1}:`, {
+              offerId: draft.offerId,
+              title: draft.title,
+              sku: draft.sku,
+              status: draft.status
+            });
             const title = draft?.title || draft?.sku || 'Untitled Draft';
             const status = (draft?.status || 'DRAFT').toUpperCase();
             const updatedTime = draft?.listingStartDate || draft?.creationDate;
@@ -1411,7 +1422,12 @@ function updateUIFromCache(data) {
             row._titleElement = titleSpan;
             
             rowsContainer.appendChild(row);
+            console.log(`[Recent Drafts] Row ${index + 1} appended successfully`);
           });
+          
+          console.log('[Recent Drafts] All rows created. Table should now be visible.');
+          console.log('[Recent Drafts] recentDraftsTable display:', document.getElementById('recentDraftsTable').style.display);
+          console.log('[Recent Drafts] rowsContainer children count:', rowsContainer.children.length);
           
           // Enrich titles from inventory API (async, don't block UI)
           enrichDraftTitles(recentDrafts);
