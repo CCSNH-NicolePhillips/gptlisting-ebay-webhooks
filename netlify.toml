@@ -5,6 +5,9 @@
   functions = "netlify/functions"
   # Redeploy to pick up new API keys
 
+[build.environment]
+  NODE_OPTIONS = "--max-old-space-size=4096"
+
 [functions]
   node_bundler = "esbuild"
   directory = "netlify/functions"
