@@ -1,11 +1,22 @@
 import type { Handler } from '@netlify/functions';
 import { tokensStore } from '../../src/lib/_blobs.js';
+import { computeEbayItemPrice } from '../../src/lib/pricing-compute.js';
+import { getDefaultPricingSettings } from '../../src/lib/pricing-config.js';
 
 function computeEbayPrice(base: number) {
 	if (!isFinite(base) || base <= 0) return 0;
-	let price = base * 0.9; // 10% off
-	if (base > 30) price -= 5;
-	return Math.round(price * 100) / 100;
+	// Use user settings from pricing config (not hardcoded 10%)
+	const settings = getDefaultPricingSettings();
+	const result = computeEbayItemPrice({
+		amazonItemPriceCents: Math.round(base * 100),
+		amazonShippingCents: 0,
+		discountPercent: settings.discountPercent,
+		shippingStrategy: settings.shippingStrategy,
+		templateShippingEstimateCents: settings.templateShippingEstimateCents,
+		shippingSubsidyCapCents: settings.shippingSubsidyCapCents,
+		minItemPriceCents: settings.minItemPriceCents,
+	});
+	return result.ebayItemPriceCents / 100;
 }
 function computeFloorPrice(ebayPrice: number) {
 	const floor = ebayPrice * 0.8; // 20% off
