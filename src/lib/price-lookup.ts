@@ -716,6 +716,30 @@ async function decideFinalPrice(
     };
   }
 
+  // FIXED: Use deterministic priority instead of AI
+  // AI was inconsistently picking eBay over Amazon despite prompt instructions
+  console.log(`[price] Using deterministic priority for ${candidates.length} candidate(s)`);
+  return selectPriceSource(input, candidates);
+}
+
+/**
+ * DEPRECATED: AI arbitration removed - was inconsistently picking eBay over Amazon
+ * Keeping code below for reference but it's no longer called
+ */
+async function decideFinalPriceAI_DEPRECATED(
+  input: PriceLookupInput,
+  candidates: PriceSourceDetail[],
+  soldStats?: SoldPriceStats
+): Promise<PriceDecision> {
+  /* istanbul ignore next */
+  if (candidates.length === 0) {
+    return {
+      ok: false,
+      candidates: [],
+      reason: 'no-price-signals'
+    };
+  }
+
   // Build structured prompt for AI
   const prompt = `You are a pricing expert for eBay listings. Analyze the following price data and recommend the optimal listing price.
 
