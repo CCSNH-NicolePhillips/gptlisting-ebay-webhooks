@@ -773,9 +773,9 @@ describe('price-lookup.ts', () => {
         const result = await lookupPrice(input);
 
         expect(result.ok).toBe(true);
-        // ALGO formula for Amazon (NO discount applied): $20.99 - $6.00 = $14.99
-        // Amazon prices are not discounted per FIX 2
-        expect(result.recommendedListingPrice).toBeCloseTo(14.99, 2);
+        // ALGO formula for Amazon: $20.99 × 0.9 = $18.89 - $6.00 = $12.89
+        // All sources get user-configured discount
+        expect(result.recommendedListingPrice).toBeCloseTo(12.89, 2);
       });
 
       it('should use ALGO_COMPETITIVE_TOTAL for AI arbitration path (Amazon with shipping)', async () => {
@@ -815,9 +815,9 @@ describe('price-lookup.ts', () => {
         const result = await lookupPrice(input);
 
         expect(result.ok).toBe(true);
-        // ALGO formula for Amazon (NO discount): ($20.99 + $5.99) - $6.00 = $26.98 - $6.00 = $20.98
-        // Amazon prices are not discounted per FIX 2
-        expect(result.recommendedListingPrice).toBeCloseTo(20.98, 2);
+        // ALGO formula for Amazon: ($20.99 + $5.99) × 0.9 = $24.28 - $6.00 = $18.28
+        // All sources get user-configured discount
+        expect(result.recommendedListingPrice).toBeCloseTo(18.28, 2);
       });
 
       it('should use ALGO_COMPETITIVE_TOTAL for brand-MSRP fallback path', async () => {
@@ -893,9 +893,9 @@ describe('price-lookup.ts', () => {
         const result = await lookupPrice(input);
 
         expect(result.ok).toBe(true);
-        // DISCOUNT_ITEM_ONLY for Amazon: No discount applied (Amazon is market price)
-        // So $20.99 × 1.0 = $20.99
-        expect(result.recommendedListingPrice).toBeCloseTo(20.99, 2);
+        // DISCOUNT_ITEM_ONLY for Amazon: $20.99 × 0.9 = $18.89
+        // All sources get user-configured discount
+        expect(result.recommendedListingPrice).toBeCloseTo(18.89, 2);
       });
 
       it('should use correct shipping deduction with custom template shipping', async () => {
@@ -941,8 +941,9 @@ describe('price-lookup.ts', () => {
         const result = await lookupPrice(input);
 
         expect(result.ok).toBe(true);
-        // ALGO formula for Amazon (NO discount): $30.00 - $8.00 = $22.00
-        expect(result.recommendedListingPrice).toBeCloseTo(22.00, 2);
+        // ALGO formula for Amazon: $30.00 × 0.9 = $27.00 - $8.00 = $19.00
+        // All sources get user-configured discount
+        expect(result.recommendedListingPrice).toBeCloseTo(19.00, 2);
       });
     });
 
