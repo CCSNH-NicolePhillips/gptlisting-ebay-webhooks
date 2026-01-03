@@ -904,126 +904,141 @@
         const promoControls = document.createElement('div');
         promoControls.className = 'promo-controls';
         
-        // Determine promotion state: use offer's setting if explicit, otherwise fall back to global defaults
-        const hasExplicitPromo = offer.merchantData?.autoPromote !== undefined;
-        const isPromoted = hasExplicitPromo 
-          ? offer.merchantData?.autoPromote 
-          : globalPromoSettings.enabled;
-        const promoRate = offer.merchantData?.autoPromoteAdRate || globalPromoSettings.rate || 5;
+        // Check if price is below eBay's minimum for promotion ($3.00)
+        const MIN_PROMOTABLE_PRICE = 3.00;
+        const itemPrice = parseFloat(offer?.pricingSummary?.price?.value || '0');
+        const canPromote = itemPrice >= MIN_PROMOTABLE_PRICE;
         
-        const promoToggleDiv = document.createElement('div');
-        promoToggleDiv.className = 'promo-toggle';
-        
-        const promoCheckbox = document.createElement('input');
-        promoCheckbox.type = 'checkbox';
-        promoCheckbox.id = `promo-${offer.offerId}`;
-        promoCheckbox.checked = isPromoted;
-        
-        const promoLabel = document.createElement('label');
-        promoLabel.htmlFor = `promo-${offer.offerId}`;
-        // Show rate in label when enabled, matching active listings style
-        promoLabel.textContent = isPromoted 
-          ? `📢 Promoted at ${promoRate}%`
-          : '🚀 Promote when listed';
-        
-        promoToggleDiv.appendChild(promoCheckbox);
-        promoToggleDiv.appendChild(promoLabel);
-        
-        const promoRateDiv = document.createElement('div');
-        promoRateDiv.className = 'promo-rate';
-        promoRateDiv.style.display = promoCheckbox.checked ? 'flex' : 'none';
-        
-        const rateLabel = document.createElement('label');
-        rateLabel.textContent = 'Ad rate:';
-        
-        const rateInput = document.createElement('input');
-        rateInput.type = 'number';
-        rateInput.min = '1';
-        rateInput.max = '20';
-        rateInput.step = '0.1';
-        rateInput.value = String(promoRate);
-        
-        const ratePercent = document.createElement('span');
-        ratePercent.textContent = '%';
-        
-        promoRateDiv.appendChild(rateLabel);
-        promoRateDiv.appendChild(rateInput);
-        promoRateDiv.appendChild(ratePercent);
-        
-        const promoSaveBtn = document.createElement('button');
-        promoSaveBtn.className = 'promo-save';
-        promoSaveBtn.textContent = 'Save Promo Settings';
-        
-        // Toggle rate input visibility and update label
-        promoCheckbox.addEventListener('change', () => {
-          promoRateDiv.style.display = promoCheckbox.checked ? 'flex' : 'none';
-          const currentRate = parseFloat(rateInput.value) || promoRate;
-          promoLabel.textContent = promoCheckbox.checked 
-            ? `📢 Promoted at ${currentRate}%`
-            : '🚀 Promote when listed';
-        });
-        
-        // Update label when rate changes
-        rateInput.addEventListener('input', () => {
-          if (promoCheckbox.checked) {
-            const currentRate = parseFloat(rateInput.value) || promoRate;
-            promoLabel.textContent = `📢 Promoted at ${currentRate}%`;
-          }
-        });
-        
-        // Save promotion settings
-        promoSaveBtn.addEventListener('click', async () => {
-          promoSaveBtn.disabled = true;
-          promoSaveBtn.textContent = 'Saving...';
+        if (!canPromote) {
+          // Price too low - show warning instead of promotion controls
+          const warningDiv = document.createElement('div');
+          warningDiv.className = 'promo-toggle';
+          warningDiv.style.color = 'var(--muted)';
+          warningDiv.innerHTML = `⚠️ Price below $${MIN_PROMOTABLE_PRICE.toFixed(2)} – cannot be promoted on eBay`;
+          promoControls.appendChild(warningDiv);
+        } else {
+          // Normal promotion controls
+          // Determine promotion state: use offer's setting if explicit, otherwise fall back to global defaults
+          const hasExplicitPromo = offer.merchantData?.autoPromote !== undefined;
+          const isPromoted = hasExplicitPromo 
+            ? offer.merchantData?.autoPromote 
+            : globalPromoSettings.enabled;
+          const promoRate = offer.merchantData?.autoPromoteAdRate || globalPromoSettings.rate || 5;
           
-          try {
-            const exec = (window.authClient && typeof window.authClient.authFetch === 'function') 
-              ? window.authClient.authFetch 
-              : fetch;
-            
-            const response = await exec('/.netlify/functions/ebay-update-draft-promo', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                offerId: offer.offerId,
-                autoPromote: promoCheckbox.checked,
-                autoPromoteAdRate: parseFloat(rateInput.value) || 5,
-              }),
-            });
-            
-            const data = await response.json();
-            
-            if (response.ok && data.ok) {
-              flash.textContent = `✓ Promotion settings saved for ${offer.offerId}`;
-              promoSaveBtn.textContent = 'Saved ✓';
-              
-              // Update local offer data
-              if (!offer.merchantData) offer.merchantData = {};
-              offer.merchantData.autoPromote = data.autoPromote;
-              offer.merchantData.autoPromoteAdRate = data.autoPromoteAdRate;
-              
-              // Clear cache to reflect changes on reload
-              sessionStorage.removeItem('drafts-cache');
-              sessionStorage.removeItem('drafts-cache-time');
-              
-              setTimeout(() => {
-                promoSaveBtn.textContent = 'Save Promo Settings';
-              }, 2000);
-            } else {
-              flash.textContent = `Promo save error: ${data.error || 'Unknown error'}`;
-              promoSaveBtn.textContent = 'Save Promo Settings';
+          const promoToggleDiv = document.createElement('div');
+          promoToggleDiv.className = 'promo-toggle';
+          
+          const promoCheckbox = document.createElement('input');
+          promoCheckbox.type = 'checkbox';
+          promoCheckbox.id = `promo-${offer.offerId}`;
+          promoCheckbox.checked = isPromoted;
+          
+          const promoLabel = document.createElement('label');
+          promoLabel.htmlFor = `promo-${offer.offerId}`;
+          // Show rate in label when enabled, matching active listings style
+          promoLabel.textContent = isPromoted 
+            ? `📢 Promoted at ${promoRate}%`
+            : '🚀 Promote when listed';
+          
+          promoToggleDiv.appendChild(promoCheckbox);
+          promoToggleDiv.appendChild(promoLabel);
+          
+          const promoRateDiv = document.createElement('div');
+          promoRateDiv.className = 'promo-rate';
+          promoRateDiv.style.display = promoCheckbox.checked ? 'flex' : 'none';
+          
+          const rateLabel = document.createElement('label');
+          rateLabel.textContent = 'Ad rate:';
+          
+          const rateInput = document.createElement('input');
+          rateInput.type = 'number';
+          rateInput.min = '1';
+          rateInput.max = '20';
+          rateInput.step = '0.1';
+          rateInput.value = String(promoRate);
+          
+          const ratePercent = document.createElement('span');
+          ratePercent.textContent = '%';
+          
+          promoRateDiv.appendChild(rateLabel);
+          promoRateDiv.appendChild(rateInput);
+          promoRateDiv.appendChild(ratePercent);
+          
+          const promoSaveBtn = document.createElement('button');
+          promoSaveBtn.className = 'promo-save';
+          promoSaveBtn.textContent = 'Save Promo Settings';
+          
+          // Toggle rate input visibility and update label
+          promoCheckbox.addEventListener('change', () => {
+            promoRateDiv.style.display = promoCheckbox.checked ? 'flex' : 'none';
+            const currentRate = parseFloat(rateInput.value) || promoRate;
+            promoLabel.textContent = promoCheckbox.checked 
+              ? `📢 Promoted at ${currentRate}%`
+              : '🚀 Promote when listed';
+          });
+          
+          // Update label when rate changes
+          rateInput.addEventListener('input', () => {
+            if (promoCheckbox.checked) {
+              const currentRate = parseFloat(rateInput.value) || promoRate;
+              promoLabel.textContent = `📢 Promoted at ${currentRate}%`;
             }
-          } catch (e) {
-            flash.textContent = `Promo save error: ${e.message}`;
-            promoSaveBtn.textContent = 'Save Promo Settings';
-          } finally {
-            promoSaveBtn.disabled = false;
-          }
-        });
-        
-        promoControls.appendChild(promoToggleDiv);
-        promoControls.appendChild(promoRateDiv);
-        promoControls.appendChild(promoSaveBtn);
+          });
+          
+          // Save promotion settings
+          promoSaveBtn.addEventListener('click', async () => {
+            promoSaveBtn.disabled = true;
+            promoSaveBtn.textContent = 'Saving...';
+            
+            try {
+              const exec = (window.authClient && typeof window.authClient.authFetch === 'function') 
+                ? window.authClient.authFetch 
+                : fetch;
+              
+              const response = await exec('/.netlify/functions/ebay-update-draft-promo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  offerId: offer.offerId,
+                  autoPromote: promoCheckbox.checked,
+                  autoPromoteAdRate: parseFloat(rateInput.value) || 5,
+                }),
+              });
+              
+              const data = await response.json();
+              
+              if (response.ok && data.ok) {
+                flash.textContent = `✓ Promotion settings saved for ${offer.offerId}`;
+                promoSaveBtn.textContent = 'Saved ✓';
+                
+                // Update local offer data
+                if (!offer.merchantData) offer.merchantData = {};
+                offer.merchantData.autoPromote = data.autoPromote;
+                offer.merchantData.autoPromoteAdRate = data.autoPromoteAdRate;
+                
+                // Clear cache to reflect changes on reload
+                sessionStorage.removeItem('drafts-cache');
+                sessionStorage.removeItem('drafts-cache-time');
+                
+                setTimeout(() => {
+                  promoSaveBtn.textContent = 'Save Promo Settings';
+                }, 2000);
+              } else {
+                flash.textContent = `Promo save error: ${data.error || 'Unknown error'}`;
+                promoSaveBtn.textContent = 'Save Promo Settings';
+              }
+            } catch (e) {
+              flash.textContent = `Promo save error: ${e.message}`;
+              promoSaveBtn.textContent = 'Save Promo Settings';
+            } finally {
+              promoSaveBtn.disabled = false;
+            }
+          });
+          
+          promoControls.appendChild(promoToggleDiv);
+          promoControls.appendChild(promoRateDiv);
+          promoControls.appendChild(promoSaveBtn);
+        }
         
         body.appendChild(title);
   if (desc.textContent) body.appendChild(desc);

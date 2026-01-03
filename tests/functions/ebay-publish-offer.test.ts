@@ -85,7 +85,11 @@ describe('ebay-publish-offer auto-promotion', () => {
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
-          text: async () => JSON.stringify({ sku: 'TEST-SKU-001', listing: { listingId: '12345' } }),
+          text: async () => JSON.stringify({ 
+            sku: 'TEST-SKU-001', 
+            listing: { listingId: '12345' },
+            pricingSummary: { price: { value: '19.99', currency: 'USD' } }
+          }),
         } as Response);
 
       // Import and call handler
@@ -132,7 +136,10 @@ describe('ebay-publish-offer auto-promotion', () => {
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
-          text: async () => JSON.stringify({ sku: 'SKU-123' }),
+          text: async () => JSON.stringify({ 
+            sku: 'SKU-123',
+            pricingSummary: { price: { value: '19.99', currency: 'USD' } }
+          }),
         } as Response);
 
       const { handler } = await import('../../netlify/functions/ebay-publish-offer.js');
@@ -176,7 +183,10 @@ describe('ebay-publish-offer auto-promotion', () => {
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
-          text: async () => JSON.stringify({ sku: 'SKU-789' }),
+          text: async () => JSON.stringify({ 
+            sku: 'SKU-789',
+            pricingSummary: { price: { value: '19.99', currency: 'USD' } }
+          }),
         } as Response);
 
       const { handler } = await import('../../netlify/functions/ebay-publish-offer.js');
@@ -328,7 +338,10 @@ describe('ebay-publish-offer auto-promotion', () => {
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
-          text: async () => JSON.stringify({ sku: 'SKU-001' }),
+          text: async () => JSON.stringify({ 
+            sku: 'SKU-001',
+            pricingSummary: { price: { value: '19.99', currency: 'USD' } }
+          }),
         } as Response);
 
       const { handler } = await import('../../netlify/functions/ebay-publish-offer.js');
@@ -374,7 +387,10 @@ describe('ebay-publish-offer auto-promotion', () => {
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
-          text: async () => JSON.stringify({ sku: 'SKU-001' }),
+          text: async () => JSON.stringify({ 
+            sku: 'SKU-001',
+            pricingSummary: { price: { value: '19.99', currency: 'USD' } }
+          }),
         } as Response);
 
       const { handler } = await import('../../netlify/functions/ebay-publish-offer.js');
@@ -424,7 +440,10 @@ describe('ebay-publish-offer auto-promotion', () => {
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
-          text: async () => JSON.stringify({ sku: 'SKU-001' }),
+          text: async () => JSON.stringify({ 
+            sku: 'SKU-001',
+            pricingSummary: { price: { value: '19.99', currency: 'USD' } }
+          }),
         } as Response);
 
       const { handler } = await import('../../netlify/functions/ebay-publish-offer.js');

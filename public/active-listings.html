@@ -773,10 +773,23 @@
       const promoControl = document.createElement('div');
       promoControl.className = 'promo-control';
 
+      // Check if price is below eBay's minimum for promotion ($3.00)
+      const MIN_PROMOTABLE_PRICE = 3.00;
+      const itemPrice = parseFloat(o.price?.value || '0');
+      const canPromote = itemPrice >= MIN_PROMOTABLE_PRICE;
+
       // Check if already promoted
       const isPromoted = o.autoPromote && o.autoPromoteAdRate != null;
       
-      if (isPromoted) {
+      if (!canPromote) {
+        // Price too low - show warning instead of promotion controls
+        const warningDiv = document.createElement('div');
+        warningDiv.className = 'promo-status';
+        warningDiv.style.color = 'var(--muted)';
+        warningDiv.style.fontSize = '0.85rem';
+        warningDiv.innerHTML = `⚠️ Price below $${MIN_PROMOTABLE_PRICE.toFixed(2)} – cannot be promoted on eBay`;
+        promoControl.appendChild(warningDiv);
+      } else if (isPromoted) {
         // Show current promotion status
         const statusDiv = document.createElement('div');
         statusDiv.className = 'promo-status';

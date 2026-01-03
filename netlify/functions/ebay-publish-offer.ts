@@ -319,9 +319,20 @@ export const handler: Handler = async (event) => {
 						? offer.offer.sku
 						: undefined;
 				
+				// Check if price is above eBay's minimum for promotion ($3.00)
+				const MIN_PROMOTABLE_PRICE = 3.00;
+				const itemPrice = offer?.pricingSummary?.price?.value 
+					? parseFloat(offer.pricingSummary.price.value)
+					: 0;
+				const canPromote = itemPrice >= MIN_PROMOTABLE_PRICE;
+				
+				if (!canPromote) {
+					console.log(`[ebay-publish-offer] Skipping promotion for offerId ${offerId} - price $${itemPrice.toFixed(2)} is below minimum $${MIN_PROMOTABLE_PRICE.toFixed(2)}`);
+				}
+				
 				// Check Redis for promotion intent stored by create-ebay-draft-user
 				// This takes precedence over user settings for per-draft promotion control
-				let usePromotion = autoPromote;
+				let usePromotion = autoPromote && canPromote;
 				let adRate = defaultAdRate;
 				
 				try {
@@ -331,7 +342,11 @@ export const handler: Handler = async (event) => {
 					
 					if (promotionIntent && promotionIntent.enabled) {
 						console.log(`[ebay-publish-offer] Found promotion intent in Redis for offerId ${offerId}: enabled=${promotionIntent.enabled}, adRate=${promotionIntent.adRate}`);
-						usePromotion = true;
+						// Only enable promotion if price is above minimum threshold
+						usePromotion = canPromote;
+						if (!canPromote) {
+							console.log(`[ebay-publish-offer] Cannot promote due to low price despite Redis intent`);
+						}
 						adRate = promotionIntent.adRate;
 						// Clean up the intent after reading
 						await deletePromotionIntent(offerId);
