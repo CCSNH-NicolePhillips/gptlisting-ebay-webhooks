@@ -419,6 +419,40 @@
       border-color: var(--accent);
       box-shadow: 0 0 0 3px var(--accent-soft);
     }
+
+    /* Collapsible sections */
+    .collapsible-section {
+      border: 1px solid var(--line);
+    }
+    .collapsible-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      cursor: pointer;
+      padding: 0;
+      margin: 0;
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      list-style: none;
+    }
+    .collapsible-header::-webkit-details-marker {
+      display: none;
+    }
+    .collapsible-header:hover {
+      color: var(--primary);
+    }
+    .collapse-icon {
+      font-size: 0.75rem;
+      transition: transform 0.2s ease;
+      color: var(--text-muted);
+    }
+    details[open] .collapse-icon {
+      transform: rotate(90deg);
+    }
+    .collapsible-content {
+      margin-top: 1.25rem;
+    }
   </style>
 </head>
 <body>
@@ -700,12 +734,13 @@
     </div>
 
     <!-- Promotion Settings Card -->
-    <div class="dp-card dp-card--full">
-      <h3 style="margin-top: 0; margin-bottom: 1.25rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+    <details class="dp-card dp-card--full collapsible-section">
+      <summary class="collapsible-header">
+        <span class="collapse-icon">▶</span>
         <span>📢 Promoted Listings (Optional)</span>
-      </h3>
+      </summary>
       
-      <div style="display: flex; flex-direction: column; gap: 0.875rem;">
+      <div class="collapsible-content" style="display: flex; flex-direction: column; gap: 0.875rem;">
         <div>
           <label style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--text-muted); font-weight: 500;">Promotion Mode</label>
           <select id="promotionMode" class="promo-select">
@@ -732,15 +767,16 @@
           <span>Promoted listings increase visibility on eBay. Configure defaults in <a href="/settings.html" style="color: var(--primary); text-decoration: none; font-weight: 500;">Settings</a>.</span>
         </div>
       </div>
-    </div>
+    </details>
 
     <!-- Best Offer Settings Card -->
-    <div class="dp-card dp-card--full">
-      <h3 style="margin-top: 0; margin-bottom: 1.25rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+    <details class="dp-card dp-card--full collapsible-section">
+      <summary class="collapsible-header">
+        <span class="collapse-icon">▶</span>
         <span>🤝 Best Offer (Optional)</span>
-      </h3>
+      </summary>
       
-      <div style="display: flex; flex-direction: column; gap: 0.875rem;">
+      <div class="collapsible-content" style="display: flex; flex-direction: column; gap: 0.875rem;">
         <div>
           <label style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; color: var(--text-muted); font-weight: 500;">Best Offer Mode</label>
           <select id="bestOfferMode" class="promo-select">
@@ -779,7 +815,7 @@
           <span>Best Offer lets buyers negotiate prices. Configure defaults in <a href="/settings.html" style="color: var(--primary); text-decoration: none; font-weight: 500;">Settings</a>.</span>
         </div>
       </div>
-    </div>
+    </details>
 
     <div class="dp-card dp-card--full">
       <h3 style="margin-top: 0; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; color: var(--text-primary);">
