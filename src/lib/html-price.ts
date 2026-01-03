@@ -1,5 +1,10 @@
 import * as cheerio from "cheerio";
 
+// Minimum product price threshold - prices below this are likely not real product prices
+// (shipping costs, discounts, etc.)
+// Lowered from $15 to $5 to capture low-priced supplements (e.g., $12.76 Heart Health Gummies)
+const MIN_PRODUCT_PRICE = 5;
+
 // Currency conversion rates (approximate, updated periodically)
 const CURRENCY_TO_USD: Record<string, number> = {
   USD: 1.0,
@@ -715,10 +720,10 @@ function extractFromBody($: cheerio.CheerioAPI, packInfo?: { isMultiPack: boolea
     console.log(`[HTML Parser] Targeted match found: $${price} (full match: "${targeted[0].slice(0, 80)}...")`);
     
     // Check if this is a non-product price (shipping, rewards, etc.)
-    if (price && price >= 15 && !isNonProductPrice(bodyText, matchIndex, price)) {
+    if (price && price >= MIN_PRODUCT_PRICE && !isNonProductPrice(bodyText, matchIndex, price)) {
       // CHUNK 3: No division here - normalization happens in extractPriceFromHtml
       return price;
-    } else if (price && price >= 15) {
+    } else if (price && price >= MIN_PRODUCT_PRICE) {
       console.log(`[HTML Parser] Targeted match rejected due to non-product context`);
     }
   }
@@ -730,7 +735,7 @@ function extractFromBody($: cheerio.CheerioAPI, packInfo?: { isMultiPack: boolea
   if (jsonMatches.length > 0) {
     const jsonPrices = jsonMatches
       .map(m => toNumber(m[1]))
-      .filter((p): p is number => p !== null && p >= 15 && p <= 500);
+      .filter((p): p is number => p !== null && p >= MIN_PRODUCT_PRICE && p <= 500);
     
     if (jsonPrices.length > 0) {
       console.log(`[HTML Parser] Found ${jsonPrices.length} JSON-style prices: [${jsonPrices.slice(0, 10).join(', ')}]`);
@@ -791,7 +796,7 @@ function extractFromBody($: cheerio.CheerioAPI, packInfo?: { isMultiPack: boolea
       const price = toNumber(priceStr);
       const matchIndex = match.index || 0;
       
-      if (price && price >= 15 && price <= 500) {
+      if (price && price >= MIN_PRODUCT_PRICE && price <= 500) {
         // Check if this is a non-product price
         if (!isNonProductPrice(bodyText, matchIndex, price)) {
           validPrices.push(price);
@@ -799,7 +804,7 @@ function extractFromBody($: cheerio.CheerioAPI, packInfo?: { isMultiPack: boolea
       }
     }
     
-    console.log(`[HTML Parser] After filtering (>=$15, <=$500, not shipping/rewards): ${validPrices.length} prices - [${validPrices.slice(0, 10).join(', ')}${validPrices.length > 10 ? '...' : ''}]`);
+    console.log(`[HTML Parser] After filtering (>=$${MIN_PRODUCT_PRICE}, <=$500, not shipping/rewards): ${validPrices.length} prices - [${validPrices.slice(0, 10).join(', ')}${validPrices.length > 10 ? '...' : ''}]`);
     
     if (validPrices.length > 0) {
       // Prefer retail-formatted prices (.95 or .99) over round numbers
@@ -815,9 +820,9 @@ function extractFromBody($: cheerio.CheerioAPI, packInfo?: { isMultiPack: boolea
         : Math.min(...validPrices);
       
       if (retailPrices.length > 0) {
-        console.log(`[HTML Parser] Found ${validPrices.length} prices (>=$15), using lowest retail-formatted (.95/.99): $${extractedPrice}`);
+        console.log(`[HTML Parser] Found ${validPrices.length} prices (>=$${MIN_PRODUCT_PRICE}), using lowest retail-formatted (.95/.99): $${extractedPrice}`);
       } else {
-        console.log(`[HTML Parser] Found ${validPrices.length} prices (>=$15), no retail formatting found, using lowest: $${extractedPrice}`);
+        console.log(`[HTML Parser] Found ${validPrices.length} prices (>=$${MIN_PRODUCT_PRICE}), no retail formatting found, using lowest: $${extractedPrice}`);
       }
       
       // CHUNK 3: No division here - normalization happens in extractPriceFromHtml

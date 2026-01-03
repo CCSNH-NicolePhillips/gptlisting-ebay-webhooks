@@ -154,18 +154,18 @@ describe('html-price.ts', () => {
         expect(price).toBe(100.00);
       });
 
-      it('should filter out very low prices (< $15)', () => {
+      it('should filter out very low prices (< $5)', () => {
         const html = `
           <html>
             <body>
-              <div>$5.99</div>
+              <div>$2.99</div>
               <div>$24.99</div>
             </body>
           </html>
         `;
 
         const price = extractPriceFromHtml(html);
-        expect(price).toBe(24.99); // Should ignore $5.99
+        expect(price).toBe(24.99); // Should ignore $2.99 (below $5 threshold)
       });
 
       it('should filter out very high prices (> $500)', () => {
