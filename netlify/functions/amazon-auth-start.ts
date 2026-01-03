@@ -13,10 +13,10 @@ export const handler: Handler = async (event: HandlerEvent) => {
   // Generate a random state for CSRF protection
   const state = Math.random().toString(36).substring(2, 15);
   
-  // Amazon SP-API authorization URL
-  // Note: For self-authorization, we use the sellercentral authorization endpoint
+  // Amazon LWA (Login with Amazon) authorization URL for SP-API
+  // Uses the standard OAuth2 flow - NOT sellercentral/apps/authorize
   const amazonAuthUrl = clientId 
-    ? `https://sellercentral.amazon.com/apps/authorize/consent?application_id=${clientId}&state=${state}&redirect_uri=${encodeURIComponent(redirectUri)}`
+    ? `https://www.amazon.com/ap/oa?client_id=${clientId}&scope=sellingpartnerapi::migration&response_type=code&state=${state}&redirect_uri=${encodeURIComponent(redirectUri)}`
     : null;
 
   const html = `<!DOCTYPE html>
