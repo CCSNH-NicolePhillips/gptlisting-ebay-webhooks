@@ -50,7 +50,7 @@ async function tryPromoteViaSku(job: any) {
   }
 
   try {
-    await promoteSingleListing({
+    const result = await promoteSingleListing({
       tokenCache: workerTokenCache,
       userId: job.userId,
       ebayAccountId: job.userId,
@@ -58,6 +58,13 @@ async function tryPromoteViaSku(job: any) {
       adRate: job.adRate,
       campaignIdOverride: job.campaignId,
     });
+    
+    // Check if promotion actually succeeded (promoteSingleListing returns enabled: false on failure)
+    if (!result.enabled) {
+      console.warn(`[promotion-worker] SKU promotion returned disabled for job ${job.id}, falling back to listingId`);
+      return { outcome: 'fallback' as const, error: 'Promotion returned disabled status' };
+    }
+    
     console.log(`[promotion-worker] ✓ Job ${job.id} succeeded via SKU ${job.sku}`);
     return { outcome: 'success' as const };
   } catch (error: any) {
