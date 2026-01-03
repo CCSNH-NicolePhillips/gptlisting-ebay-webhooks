@@ -120,7 +120,7 @@ export interface PriceLookupInput {
   netWeight?: { value: number; unit: string }; // Size/weight from Vision API (e.g., {value: 15.22, unit: "fl oz"})
 }
 
-export type PriceSource = 'ebay-sold' | 'amazon' | 'brand-msrp' | 'brave-fallback' | 'estimate';
+export type PriceSource = 'ebay-sold' | 'amazon' | 'brand-msrp' | 'brave-fallback' | 'rapidapi-amazon' | 'rapidapi-retail' | 'rapidapi-ebay' | 'estimate';
 
 export interface PriceSourceDetail {
   source: PriceSource;
@@ -738,23 +738,22 @@ RECENT SOLD PRICES (last 30 days):
 - Sample count: ${soldStats.samples.length}
 ` : ''}
 
-PRICING RULES:
-1. **ALWAYS prefer Amazon price when available** - this is the competitive marketplace price buyers compare against
-   - Amazon reflects real market pricing that buyers will comparison shop
-   - Brand MSRP is often inflated and not competitive
-   - Example: Brand $115, Amazon $75 → use Amazon $75 (competitive price)
-2. Only use brand MSRP if NO Amazon price is available
-3. **CONFIDENCE IS KING**: If a source has 'confidence: high', prefer it over 'confidence: low' sources, even if the low confidence price is cheaper. Low confidence often means a wrong item match.
-4. Only use eBay sold prices if NO brand MSRP and NO Amazon price is available
-5. If using eBay sold price, return it as basePrice (already competitive)
-6. For used items, eBay sold data is more reliable than MSRP
+PRICING RULES (STRICT PRIORITY ORDER):
+1. **AMAZON FIRST (98% of cases)** - Always prefer amazon or rapidapi-amazon when available
+   - Amazon is THE competitive marketplace price buyers comparison shop against
+   - This is the correct retail baseline
+2. **BRAND MSRP SECOND** - Use brand-msrp only if NO Amazon price available
+3. **OTHER RETAIL THIRD** - Use rapidapi-retail only if no Amazon or brand-msrp
+4. **EBAY IS LAST RESORT ONLY** - NEVER use ebay-sold or rapidapi-ebay as retail baseline!
+   - eBay prices are RESELLER prices, NOT retail
+   - Only use if absolutely nothing else is available
+5. **CONFIDENCE MATTERS**: Prefer 'confidence: high' sources over 'confidence: low'
 
-IMPORTANT: Return the BASE/RETAIL price as both basePrice and recommendedListingPrice.
-Do NOT apply discounts yourself - the system will apply competitive pricing automatically.
+CRITICAL: eBay/reseller prices should NEVER be chosen over Amazon or brand MSRP.
 
 RESPONSE FORMAT (JSON only):
 {
-  "chosenSource": "amazon" | "brand-msrp" | "ebay-sold" | "brave-fallback",
+  "chosenSource": "amazon" | "rapidapi-amazon" | "brand-msrp" | "rapidapi-retail" | "ebay-sold" | "rapidapi-ebay",
   "basePrice": <number>,
   "recommendedListingPrice": <number>,
   "reasoning": "<brief explanation of pricing decision>"
@@ -781,7 +780,7 @@ RESPONSE FORMAT (JSON only):
     const content = response.choices[0]?.message?.content;
     if (!content) {
       console.error('[price] AI returned empty response');
-      return fallbackDecision(input, candidates);
+      return selectPriceSource(input, candidates);
     }
 
     const parsed = JSON.parse(content);
@@ -858,14 +857,22 @@ RESPONSE FORMAT (JSON only):
 
   } catch (error) {
     console.error('[price] AI arbitration failed:', error);
-    return fallbackDecision(input, candidates);
+    return selectPriceSource(input, candidates);
   }
 }
 
 /**
- * Fallback decision when AI fails: prefer ebay-sold, then Amazon, then brand MSRP
+ * Price decision logic - SIMPLE PRIORITY ORDER:
+ * 1. Amazon (direct or via RapidAPI) - the gold standard (98% of cases)
+ * 2. Brand MSRP from official sites  
+ * 3. Other retail (Target, Walmart, etc from RapidAPI)
+ * 4. eBay (LAST RESORT - reseller prices, NOT retail)
+ * 
+ * eBay prices should NEVER be used as retail baseline - they're reseller prices.
+ * 
+ * @public Exported for unit testing
  */
-function fallbackDecision(input: PriceLookupInput, candidates: PriceSourceDetail[]): PriceDecision {
+export function selectPriceSource(input: PriceLookupInput, candidates: PriceSourceDetail[]): PriceDecision {
   // Get user pricing settings
   const settings = input.pricingSettings || getDefaultPricingSettings();
   
@@ -884,70 +891,111 @@ function fallbackDecision(input: PriceLookupInput, candidates: PriceSourceDetail
     return result.ebayItemPriceCents / 100;
   };
   
-  // PRIORITY 1: Amazon (The Gold Standard - competitive marketplace price)
-  const amazon = candidates.find(c => c.source === 'amazon');
-  if (amazon) {
-    const finalPrice = applyDiscount(amazon.price, amazon.shippingCents || 0);
-    console.log(`[price] Fallback decision: amazon $${amazon.price.toFixed(2)} → $${finalPrice.toFixed(2)} (${settings.shippingStrategy}, ${settings.discountPercent}% off)`);
+  // Helper to build decision result
+  const buildResult = (
+    source: PriceSource, 
+    chosen: PriceSourceDetail, 
+    reason: string
+  ): PriceDecision => {
+    const finalPrice = applyDiscount(chosen.price, chosen.shippingCents || 0);
+    console.log(`[price] Decision: ${source} $${chosen.price.toFixed(2)} → $${finalPrice.toFixed(2)} (${settings.shippingStrategy}, ${settings.discountPercent}% off)`);
     return {
       ok: true,
-      source: 'amazon',
+      source,
       price: finalPrice,
-      confidence: amazon.confidence || 'medium',
-      chosen: amazon,
+      confidence: chosen.confidence || 'medium',
+      chosen,
       candidates,
       recommendedListingPrice: finalPrice,
-      reason: 'fallback-to-amazon',
-      amazonUrl: amazon.url
+      reason,
+      amazonUrl: source === 'amazon' || source === 'rapidapi-amazon' ? chosen.url : undefined,
+      brandUrl: source === 'brand-msrp' ? chosen.url : undefined
     };
+  };
+  
+  // ============================================
+  // PRIORITY 1: AMAZON (Direct or via RapidAPI)
+  // This is THE price 98% of the time
+  // ============================================
+  const amazonDirect = candidates.find(c => c.source === 'amazon');
+  if (amazonDirect) {
+    return buildResult('amazon', amazonDirect, 'amazon-direct');
+  }
+  
+  const rapidapiAmazon = candidates.find(c => c.source === 'rapidapi-amazon');
+  if (rapidapiAmazon) {
+    return buildResult('rapidapi-amazon', rapidapiAmazon, 'amazon-via-rapidapi');
   }
 
-  // PRIORITY 2: Brand MSRP (less competitive, but better than estimate)
+  // ============================================
+  // PRIORITY 2: BRAND MSRP (Official site price)
+  // ============================================
   const brandMsrp = candidates.find(c => c.source === 'brand-msrp');
   if (brandMsrp) {
-    const finalPrice = applyDiscount(brandMsrp.price, brandMsrp.shippingCents || 0);
-    console.log(`[price] Fallback decision: brand-msrp $${brandMsrp.price.toFixed(2)} → $${finalPrice.toFixed(2)} (${settings.shippingStrategy}, ${settings.discountPercent}% off)`);
-    return {
-      ok: true,
-      source: 'brand-msrp',
-      price: finalPrice,
-      confidence: brandMsrp.confidence || 'medium',
-      chosen: brandMsrp,
-      candidates,
-      recommendedListingPrice: finalPrice,
-      reason: 'fallback-to-brand-msrp-with-discount',
-      brandUrl: brandMsrp.url
-    };
+    return buildResult('brand-msrp', brandMsrp, 'brand-msrp');
   }
 
-  // PRIORITY 3 (Last Resort): eBay Sold
+  // ============================================
+  // PRIORITY 3: OTHER RETAIL (Target, Walmart, etc)
+  // ============================================
+  const rapidapiRetail = candidates.find(c => c.source === 'rapidapi-retail');
+  if (rapidapiRetail) {
+    return buildResult('rapidapi-retail', rapidapiRetail, 'other-retail-via-rapidapi');
+  }
+  
+  // Legacy brave-fallback (non-eBay sources)
+  const braveFallback = candidates.find(c => c.source === 'brave-fallback');
+  if (braveFallback) {
+    return buildResult('brave-fallback', braveFallback, 'brave-fallback');
+  }
+
+  // ============================================
+  // PRIORITY 4 (LAST RESORT): EBAY
+  // These are RESELLER prices - NOT retail!
+  // ============================================
   const ebaySold = candidates.find(c => c.source === 'ebay-sold');
   if (ebaySold) {
-    console.log(`[price] Fallback decision: using ebay-sold $${ebaySold.price.toFixed(2)}`);
+    console.log(`[price] ⚠️ Using eBay sold as LAST RESORT: $${ebaySold.price.toFixed(2)} (reseller pricing)`);
     return {
       ok: true,
       source: 'ebay-sold',
       price: ebaySold.price,
-      confidence: ebaySold.confidence || 'medium',
+      confidence: 'low', // ALWAYS low confidence for eBay reseller prices
       chosen: ebaySold,
       candidates,
       recommendedListingPrice: ebaySold.price,
-      reason: 'fallback-to-ebay-sold'
+      reason: 'ebay-sold-last-resort'
+    };
+  }
+  
+  // RapidAPI eBay (reseller - also last resort)
+  const rapidapiEbay = candidates.find(c => c.source === 'rapidapi-ebay');
+  if (rapidapiEbay) {
+    console.log(`[price] ⚠️ Using RapidAPI eBay as LAST RESORT: $${rapidapiEbay.price.toFixed(2)} (reseller pricing)`);
+    return {
+      ok: true,
+      source: 'rapidapi-ebay',
+      price: rapidapiEbay.price,
+      confidence: 'low', // Always low confidence for eBay reseller prices
+      chosen: rapidapiEbay,
+      candidates,
+      recommendedListingPrice: rapidapiEbay.price,
+      reason: 'ebay-reseller-last-resort'
     };
   }
 
-  // Last resort: use any available price
+  // Absolute last resort: use any available price
   const fallback = candidates[0];
-  console.log(`[price] Fallback decision: using ${fallback.source} $${fallback.price.toFixed(2)}`);
+  if (fallback) {
+    console.log(`[price] Using last fallback: ${fallback.source} $${fallback.price.toFixed(2)}`);
+    return buildResult(fallback.source, fallback, 'last-available');
+  }
+  
+  // No prices found at all
   return {
-    ok: true,
-    source: fallback.source,
-    price: fallback.price,
-    confidence: fallback.confidence || 'low',
-    chosen: fallback,
+    ok: false,
     candidates,
-    recommendedListingPrice: fallback.price,
-    reason: 'fallback-to-first-available'
+    reason: 'no-price-signals'
   };
 }
 
@@ -1322,10 +1370,11 @@ export async function lookupPrice(
   // TIER 2.5: RapidAPI Product Search (Multi-source pricing)
   // ========================================
   // Use RapidAPI when Amazon didn't return anything - aggregates Google Shopping data
+  // PRIORITY: Amazon > Brand > Other retailers > eBay (last resort)
   if (!amazonPrice && input.brand && input.title) {
     console.log('[price] Tier 2.5: Trying RapidAPI product search...');
     
-    const { searchProductPrice } = await import('./rapidapi-product-search.js');
+    const { searchProductPrice, findAmazonResult } = await import('./rapidapi-product-search.js');
     const additionalContext = [
       input.netWeight ? `${input.netWeight.value} ${input.netWeight.unit}` : '',
       input.keyText?.slice(0, 2).join(' '),
@@ -1338,15 +1387,51 @@ export async function lookupPrice(
     );
     
     if (rapidResult.price && rapidResult.price > 0) {
-      console.log(`[price] ✓ RapidAPI found: $${rapidResult.price.toFixed(2)} from ${rapidResult.source} (${rapidResult.confidence} confidence)`);
+      const sourceLower = (rapidResult.source || '').toLowerCase();
+      const isAmazon = sourceLower.includes('amazon');
+      const isEbay = sourceLower.includes('ebay');
+      
+      // Determine the correct source type based on where the price came from
+      let sourceType: PriceSource;
+      if (isAmazon) {
+        sourceType = 'rapidapi-amazon';
+        console.log(`[price] ✓ RapidAPI found AMAZON: $${rapidResult.price.toFixed(2)} (${rapidResult.confidence} confidence)`);
+      } else if (isEbay) {
+        // eBay is RESELLER pricing - mark it clearly and only use as last resort
+        sourceType = 'rapidapi-ebay';
+        console.log(`[price] ⚠️ RapidAPI found eBay (reseller price, last resort): $${rapidResult.price.toFixed(2)}`);
+      } else {
+        sourceType = 'rapidapi-retail';
+        console.log(`[price] ✓ RapidAPI found retail: $${rapidResult.price.toFixed(2)} from ${rapidResult.source} (${rapidResult.confidence} confidence)`);
+      }
       
       candidates.push({
-        source: 'brave-fallback', // Map to existing source type for AI arbitration
+        source: sourceType,
         price: rapidResult.price,
         currency: 'USD',
         url: rapidResult.url || undefined,
-        notes: `RapidAPI: ${rapidResult.source} (${rapidResult.confidence}) - ${rapidResult.reasoning}`,
+        confidence: rapidResult.confidence,
+        notes: `RapidAPI: ${rapidResult.source} - ${rapidResult.reasoning}`,
       });
+      
+      // Also check if Amazon is in the results even if not the best match
+      if (!isAmazon) {
+        const amazonFromResults = findAmazonResult(rapidResult.allResults);
+        if (amazonFromResults && amazonFromResults.price) {
+          const amazonPriceNum = parseFloat(amazonFromResults.price.replace(/[^0-9.]/g, ''));
+          if (!isNaN(amazonPriceNum) && amazonPriceNum > 0) {
+            console.log(`[price] ✓ RapidAPI also found Amazon: $${amazonPriceNum.toFixed(2)}`);
+            candidates.push({
+              source: 'rapidapi-amazon',
+              price: amazonPriceNum,
+              currency: 'USD',
+              url: amazonFromResults.link || undefined,
+              confidence: 'medium',
+              notes: 'Amazon from RapidAPI results',
+            });
+          }
+        }
+      }
     } else {
       console.log('[price] ✗ RapidAPI did not find price');
     }
