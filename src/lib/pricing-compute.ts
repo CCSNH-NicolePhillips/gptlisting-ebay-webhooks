@@ -12,6 +12,29 @@
  */
 
 import type { PricingSettings, ShippingStrategy } from './pricing-config.js';
+import { getDefaultPricingSettings } from './pricing-config.js';
+
+/**
+ * Get category-specific price cap to prevent unrealistic pricing.
+ * Returns undefined if no cap applies.
+ * 
+ * @param categoryPath - eBay category path string (e.g., "Books > Fiction")
+ * @returns Max retail price for this category, or undefined for no cap
+ */
+export function getCategoryCap(categoryPath?: string): number | undefined {
+  const lowerCategory = (categoryPath || '').toLowerCase();
+  
+  // Books: cap at $35 retail (most used books shouldn't exceed this)
+  if (lowerCategory.includes('book')) {
+    return 35;
+  }
+  // DVDs/Media: cap at $25 retail  
+  if (lowerCategory.includes('dvd') || lowerCategory.includes('movie') || lowerCategory.includes('music')) {
+    return 25;
+  }
+  
+  return undefined; // No cap
+}
 
 /**
  * Round to cents (2 decimal places)
@@ -298,6 +321,58 @@ export function computeEbayItemPriceCents(args: {
     targetDeliveredTotalCents,
     evidence,
   };
+}
+
+/**
+ * SIMPLE WRAPPER: Convert base retail price to final eBay price
+ * 
+ * THIS IS THE ONE FUNCTION ALL CODE SHOULD USE for simple price conversion.
+ * It uses the default pricing settings (discountPercent, shippingStrategy, etc.)
+ * 
+ * @param basePriceDollars - The retail/MSRP price in dollars (e.g., 29.99)
+ * @param options - Optional overrides (category caps, custom settings)
+ * @returns Final eBay listing price in dollars
+ * 
+ * @example
+ * // Amazon $29.99 → eBay $20.99 (with default 10% discount and $6 shipping)
+ * getFinalEbayPrice(29.99) // returns 20.99
+ * 
+ * // With category cap for books
+ * getFinalEbayPrice(50.00, { categoryCap: 35 }) // caps at $35, then applies formula
+ */
+export function getFinalEbayPrice(
+  basePriceDollars: number,
+  options?: {
+    /** Optional category-specific price cap (e.g., 35 for books) */
+    categoryCap?: number;
+    /** Optional custom settings (otherwise uses defaults) */
+    settings?: PricingSettings;
+  }
+): number {
+  // Guard against invalid input
+  if (!isFinite(basePriceDollars) || basePriceDollars <= 0) return 0;
+  
+  // Apply category cap if specified
+  let cappedPrice = basePriceDollars;
+  if (options?.categoryCap && basePriceDollars > options.categoryCap) {
+    cappedPrice = options.categoryCap;
+  }
+  
+  // Get settings (use provided or default)
+  const settings = options?.settings ?? getDefaultPricingSettings();
+  
+  // Convert to cents and compute
+  const result = computeEbayItemPrice({
+    amazonItemPriceCents: Math.round(cappedPrice * 100),
+    amazonShippingCents: 0, // Base retail price has no shipping
+    discountPercent: settings.discountPercent,
+    shippingStrategy: settings.shippingStrategy,
+    templateShippingEstimateCents: settings.templateShippingEstimateCents,
+    shippingSubsidyCapCents: settings.shippingSubsidyCapCents,
+    minItemPriceCents: settings.minItemPriceCents,
+  });
+  
+  return result.ebayItemPriceCents / 100;
 }
 
 /**

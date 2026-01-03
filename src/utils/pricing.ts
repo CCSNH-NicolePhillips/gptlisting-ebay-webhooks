@@ -1,9 +1,11 @@
+import { getFinalEbayPrice } from '../lib/pricing-compute.js';
+
+/**
+ * @deprecated Use getFinalEbayPrice from pricing-compute.ts directly.
+ * This wrapper exists only for backward compatibility.
+ */
 export function computeEbayPrice(base: number) {
-  if (!isFinite(base) || base <= 0) return 0;
-  let price = base * 0.9; // 10% off
-  if (base > 30) price -= 5;
-  // round to 2 decimals, typical $X.XX
-  return Math.round(price * 100) / 100;
+  return getFinalEbayPrice(base);
 }
 
 export function computeFloorPrice(ebayPrice: number) {

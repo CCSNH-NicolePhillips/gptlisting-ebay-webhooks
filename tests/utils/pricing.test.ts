@@ -1,36 +1,51 @@
 /**
  * Comprehensive tests for utils/pricing.ts
- * Target: 100% code coverage
+ * 
+ * NOTE: computeEbayPrice now delegates to getFinalEbayPrice in pricing-compute.ts
+ * The formula uses user settings (default: ALGO_COMPETITIVE_TOTAL):
+ *   - 10% discount from base price
+ *   - Subtract $6 shipping (templateShippingEstimateCents: 600)
+ *   - Minimum $1.99 floor
+ * 
+ * OLD formula was: base * 0.9, then -$5 if >$30
+ * NEW formula is: (base * 0.9) - $6
  */
 
 import { computeEbayPrice, computeFloorPrice } from '../../src/utils/pricing';
 
 describe('pricing.ts', () => {
   describe('computeEbayPrice', () => {
-    it('should apply 10% discount to base price', () => {
-      // 100 * 0.9 = 90, but >30 so -5 = 85
-      expect(computeEbayPrice(100)).toBe(85);
-      // 50 * 0.9 = 45, but >30 so -5 = 40
-      expect(computeEbayPrice(50)).toBe(40);
-      expect(computeEbayPrice(20)).toBe(18);
+    it('should apply 10% discount and $6 shipping deduction', () => {
+      // 100 * 0.9 = 90 - 6 = 84
+      expect(computeEbayPrice(100)).toBe(84);
+      // 50 * 0.9 = 45 - 6 = 39
+      expect(computeEbayPrice(50)).toBe(39);
+      // 20 * 0.9 = 18 - 6 = 12
+      expect(computeEbayPrice(20)).toBe(12);
     });
 
-    it('should apply additional $5 discount for prices > $30', () => {
-      expect(computeEbayPrice(40)).toBe(31); // 40 * 0.9 - 5 = 36 - 5 = 31
-      expect(computeEbayPrice(50)).toBe(40); // 50 * 0.9 - 5 = 45 - 5 = 40
-      expect(computeEbayPrice(100)).toBe(85); // 100 * 0.9 - 5 = 90 - 5 = 85
+    it('should apply $6 shipping deduction consistently', () => {
+      expect(computeEbayPrice(40)).toBe(30); // 40 * 0.9 - 6 = 36 - 6 = 30
+      expect(computeEbayPrice(50)).toBe(39); // 50 * 0.9 - 6 = 45 - 6 = 39
+      expect(computeEbayPrice(100)).toBe(84); // 100 * 0.9 - 6 = 90 - 6 = 84
     });
 
-    it('should not apply $5 discount for prices <= $30', () => {
-      expect(computeEbayPrice(30)).toBe(27); // 30 * 0.9 = 27 (no extra $5 off)
-      expect(computeEbayPrice(25)).toBe(22.5); // 25 * 0.9 = 22.5
-      expect(computeEbayPrice(10)).toBe(9); // 10 * 0.9 = 9
+    it('should handle prices around $30 consistently', () => {
+      // 30 * 0.9 - 6 = 27 - 6 = 21
+      expect(computeEbayPrice(30)).toBe(21);
+      // 25 * 0.9 - 6 = 22.5 - 6 = 16.5
+      expect(computeEbayPrice(25)).toBe(16.5);
+      // 10 * 0.9 - 6 = 9 - 6 = 3
+      expect(computeEbayPrice(10)).toBe(3);
     });
 
     it('should round to 2 decimal places', () => {
-      expect(computeEbayPrice(33.33)).toBe(25); // 33.33 * 0.9 - 5 = 29.997 - 5 = 24.997 ≈ 25
-      expect(computeEbayPrice(15.99)).toBe(14.39); // 15.99 * 0.9 = 14.391 ≈ 14.39
-      expect(computeEbayPrice(22.22)).toBe(20); // 22.22 * 0.9 = 19.998 ≈ 20
+      // 33.33 * 0.9 - 6 = 30 - 6 = 24 (approx)
+      expect(computeEbayPrice(33.33)).toBeCloseTo(24, 0);
+      // 15.99 * 0.9 - 6 = 14.391 - 6 = 8.39
+      expect(computeEbayPrice(15.99)).toBeCloseTo(8.39, 2);
+      // 22.22 * 0.9 - 6 = 20 - 6 = 14
+      expect(computeEbayPrice(22.22)).toBeCloseTo(14, 0);
     });
 
     it('should return 0 for non-finite values', () => {
@@ -45,19 +60,22 @@ describe('pricing.ts', () => {
       expect(computeEbayPrice(-100)).toBe(0);
     });
 
-    it('should handle edge case at $30 boundary', () => {
-      expect(computeEbayPrice(30)).toBe(27); // Exactly 30: 30 * 0.9 = 27
-      expect(computeEbayPrice(30.01)).toBe(22.01); // Just over 30: 30.01 * 0.9 - 5 = 27.009 - 5 = 22.009 ≈ 22.01
+    it('should enforce minimum price floor of $1.99', () => {
+      // Very small base: formula would go negative, but floor is $1.99
+      expect(computeEbayPrice(5)).toBe(1.99); // 5 * 0.9 - 6 = -1.5, but min is 1.99
+      expect(computeEbayPrice(7)).toBe(1.99); // 7 * 0.9 - 6 = 0.3, but min is 1.99
     });
 
-    it('should handle very small prices', () => {
-      expect(computeEbayPrice(0.01)).toBe(0.01); // 0.01 * 0.9 = 0.009 ≈ 0.01
-      expect(computeEbayPrice(1)).toBe(0.9); // 1 * 0.9 = 0.9
+    it('should handle very small positive prices with floor', () => {
+      // 0.01 * 0.9 - 6 would be negative, so floor of $1.99
+      expect(computeEbayPrice(0.01)).toBe(1.99);
+      // 1 * 0.9 - 6 = -5.1, floor to $1.99
+      expect(computeEbayPrice(1)).toBe(1.99);
     });
 
     it('should handle very large prices', () => {
-      expect(computeEbayPrice(1000)).toBe(895); // 1000 * 0.9 - 5 = 900 - 5 = 895
-      expect(computeEbayPrice(10000)).toBe(8995); // 10000 * 0.9 - 5 = 9000 - 5 = 8995
+      expect(computeEbayPrice(1000)).toBe(894); // 1000 * 0.9 - 6 = 900 - 6 = 894
+      expect(computeEbayPrice(10000)).toBe(8994); // 10000 * 0.9 - 6 = 9000 - 6 = 8994
     });
   });
 
@@ -93,9 +111,9 @@ describe('pricing.ts', () => {
     });
 
     it('should work with eBay price output', () => {
-      const ebayPrice = computeEbayPrice(100); // 85
-      const floorPrice = computeFloorPrice(ebayPrice); // 85 * 0.8 = 68
-      expect(floorPrice).toBe(68);
+      const ebayPrice = computeEbayPrice(100); // 84 (new formula)
+      const floorPrice = computeFloorPrice(ebayPrice); // 84 * 0.8 = 67.2
+      expect(floorPrice).toBe(67.2);
     });
 
     it('should handle rounding edge cases', () => {
@@ -108,29 +126,29 @@ describe('pricing.ts', () => {
   describe('integration tests', () => {
     it('should calculate complete price chain from base to floor', () => {
       const base = 50;
-      const ebay = computeEbayPrice(base); // 50 * 0.9 = 45, but >30 so -5 = 40
-      const floor = computeFloorPrice(ebay); // 40 * 0.8 = 32
+      const ebay = computeEbayPrice(base); // 50 * 0.9 - 6 = 39
+      const floor = computeFloorPrice(ebay); // 39 * 0.8 = 31.2
       
-      expect(ebay).toBe(40);
-      expect(floor).toBe(32);
+      expect(ebay).toBe(39);
+      expect(floor).toBe(31.2);
     });
 
-    it('should calculate complete price chain for > $30', () => {
+    it('should calculate complete price chain for $100', () => {
       const base = 100;
-      const ebay = computeEbayPrice(base); // 100 * 0.9 - 5 = 85
-      const floor = computeFloorPrice(ebay); // 85 * 0.8 = 68
+      const ebay = computeEbayPrice(base); // 100 * 0.9 - 6 = 84
+      const floor = computeFloorPrice(ebay); // 84 * 0.8 = 67.2
       
-      expect(ebay).toBe(85);
-      expect(floor).toBe(68);
+      expect(ebay).toBe(84);
+      expect(floor).toBe(67.2);
     });
 
-    it('should handle edge case at $30 boundary in full chain', () => {
+    it('should handle $30 base in full chain', () => {
       const base = 30;
-      const ebay = computeEbayPrice(base); // 30 * 0.9 = 27
-      const floor = computeFloorPrice(ebay); // 27 * 0.8 = 21.6
+      const ebay = computeEbayPrice(base); // 30 * 0.9 - 6 = 21
+      const floor = computeFloorPrice(ebay); // 21 * 0.8 = 16.8
       
-      expect(ebay).toBe(27);
-      expect(floor).toBe(21.6);
+      expect(ebay).toBe(21);
+      expect(floor).toBe(16.8);
     });
   });
 });

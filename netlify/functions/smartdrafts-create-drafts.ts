@@ -5,8 +5,7 @@ import { pickCategoryForGroup } from "../../src/lib/taxonomy-select.js";
 import { listCategories } from "../../src/lib/taxonomy-store.js";
 import type { CategoryDef } from "../../src/lib/taxonomy-schema.js";
 import { openai } from "../../src/lib/openai.js";
-import { computeEbayItemPrice } from "../../src/lib/pricing-compute.js";
-import { getDefaultPricingSettings } from "../../src/lib/pricing-config.js";
+import { getFinalEbayPrice, getCategoryCap } from "../../src/lib/pricing-compute.js";
 
 const METHODS = "POST, OPTIONS";
 const MODEL = process.env.GPT_MODEL || "gpt-4o"; // Use gpt-4o for web search capability
@@ -17,38 +16,11 @@ const GPT_TIMEOUT_MS = Math.max(5000, Number(process.env.GPT_TIMEOUT_MS || 30000
 const MAX_SEEDS = Math.max(1, Number(process.env.DRAFTS_MAX_SEEDS || 1)); // Process 1 item per request to avoid Netlify timeout
 
 /**
- * Apply pricing formula to base retail price using user settings
- * Uses computeEbayItemPrice from pricing-compute.ts for consistent pricing across all flows
+ * Apply pricing formula to base retail price using the ONE centralized pricing function.
+ * All pricing logic lives in pricing-compute.ts - this is just a thin wrapper.
  */
 function computeEbayPrice(base: number, categoryPath?: string): number {
-  if (!isFinite(base) || base <= 0) return 0;
-  
-  // Apply category-specific price caps to prevent unrealistic pricing
-  const lowerCategory = (categoryPath || '').toLowerCase();
-  let cappedBase = base;
-  
-  // Books: cap at $35 retail (most used books shouldn't exceed this)
-  if (lowerCategory.includes('book')) {
-    cappedBase = Math.min(base, 35);
-  }
-  // DVDs/Media: cap at $25 retail
-  else if (lowerCategory.includes('dvd') || lowerCategory.includes('movie') || lowerCategory.includes('music')) {
-    cappedBase = Math.min(base, 25);
-  }
-  
-  // Use user settings from pricing config (not hardcoded 10%)
-  const settings = getDefaultPricingSettings();
-  const result = computeEbayItemPrice({
-    amazonItemPriceCents: Math.round(cappedBase * 100),
-    amazonShippingCents: 0, // GPT provides retail price without shipping
-    discountPercent: settings.discountPercent,
-    shippingStrategy: settings.shippingStrategy,
-    templateShippingEstimateCents: settings.templateShippingEstimateCents,
-    shippingSubsidyCapCents: settings.shippingSubsidyCapCents,
-    minItemPriceCents: settings.minItemPriceCents,
-  });
-  
-  return result.ebayItemPriceCents / 100;
+  return getFinalEbayPrice(base, { categoryCap: getCategoryCap(categoryPath) });
 }
 
 function sleep(ms: number) {
