@@ -75,6 +75,7 @@ export async function getAmazonAsin(brand: string, product: string): Promise<str
 
 /**
  * Save Amazon ASIN for a brand + product
+ * No expiration - UPC/ASIN mappings are stable
  */
 export async function saveAmazonAsin(
   brand: string, 
@@ -93,9 +94,8 @@ export async function saveAmazonAsin(
       verified,
     };
     
-    // 90-day TTL
-    const ttlSeconds = 60 * 60 * 24 * 90;
-    await redisCall("SETEX", key, String(ttlSeconds), JSON.stringify(entry));
+    // No TTL - permanent storage (UPC/ASIN mappings don't change)
+    await redisCall("SET", key, JSON.stringify(entry));
     console.log(`[brand-registry] ✓ Saved ASIN ${asin} for: ${brand} ${product} (verified: ${verified})`);
   } catch (error) {
     console.error('[brand-registry] Save error:', error);
