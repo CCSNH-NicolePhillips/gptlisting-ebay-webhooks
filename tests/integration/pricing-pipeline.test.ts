@@ -381,13 +381,16 @@ describe('pricing-pipeline-integration', () => {
       );
       expect(targetResult.targetCents).toBe(1895);
       
-      // Step 3: Get shipping estimate (supplements = $5.00)
+      // Step 3: Get shipping estimate
+      // "90 Pieces" triggers size heuristic → 'light' band (350) blended with supplements (500)
+      // = round(350 * 0.6 + 500 * 0.4) = 440 cents
       const shippingEstimate = getShippingEstimate(
         'Neuro',
         'Vita+Mints D3 K2 90 Pieces',
         ebayComps
       );
-      expect(shippingEstimate.cents).toBe(500); // supplements
+      expect(shippingEstimate.cents).toBe(440); // size-heuristic blended with supplements
+      expect(shippingEstimate.source).toBe('size-heuristic');
       
       // Step 4: Split into item + shipping
       const settings: DeliveredPricingSettings = {
@@ -397,8 +400,8 @@ describe('pricing-pipeline-integration', () => {
       const splitResult = splitDeliveredPrice(targetResult.targetCents, settings);
       
       // Verify final pricing
-      expect(splitResult.itemCents).toBe(1395); // $13.95
-      expect(splitResult.shipCents).toBe(500);  // $5.00
+      expect(splitResult.itemCents).toBe(1455); // $14.55
+      expect(splitResult.shipCents).toBe(440);  // $4.40 (size-heuristic)
       expect(splitResult.itemCents + splitResult.shipCents).toBe(1895); // $18.95 total
     });
 
