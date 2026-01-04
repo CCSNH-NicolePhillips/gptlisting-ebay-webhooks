@@ -1492,7 +1492,8 @@ function updateUIFromCache(data) {
         
         try {
           const exec = authClient && typeof authClient.authFetch === 'function' ? authClient.authFetch : fetch;
-          const response = await exec('/.netlify/functions/ebay-list-active');
+          // Use Trading API endpoint which returns actual seller listings
+          const response = await exec('/.netlify/functions/ebay-list-active-trading');
           
           if (loadingEl) loadingEl.style.display = 'none';
           
@@ -1503,17 +1504,12 @@ function updateUIFromCache(data) {
           }
           
           const data = await response.json();
-          const offers = Array.isArray(data?.offers) ? data.offers : [];
+          // Trading API returns items array, not offers
+          const items = Array.isArray(data?.items) ? data.items : [];
           
-          // Backend already filters for PUBLISHED - accept all returned offers
-          // listingStatus can be 'PUBLISHED' or 'ACTIVE' depending on eBay API version
-          const activeOffers = offers.filter(o => 
-            o.listingStatus === 'ACTIVE' || o.listingStatus === 'PUBLISHED'
-          );
+          console.log('[Active Listings] Loaded', items.length, 'active listings');
           
-          console.log('[Active Listings] Loaded', activeOffers.length, 'active listings');
-          
-          if (activeOffers.length === 0) {
+          if (items.length === 0) {
             if (emptyEl) emptyEl.style.display = 'block';
             if (statsEl) statsEl.style.display = 'none';
             return;
@@ -1521,9 +1517,9 @@ function updateUIFromCache(data) {
           
           // Calculate total value
           let totalValue = 0;
-          activeOffers.forEach(offer => {
-            const price = parseFloat(offer.price?.value || offer.pricingSummary?.price?.value || 0);
-            const qty = offer.availableQuantity || 1;
+          items.forEach(item => {
+            const price = parseFloat(item.price || item.currentPrice || 0);
+            const qty = item.quantity || item.quantityAvailable || 1;
             totalValue += price * qty;
           });
           
@@ -1531,7 +1527,7 @@ function updateUIFromCache(data) {
           const countEl = document.getElementById('metricActiveCount');
           const valueEl = document.getElementById('metricTotalValue');
           
-          if (countEl) countEl.textContent = activeOffers.length.toLocaleString();
+          if (countEl) countEl.textContent = items.length.toLocaleString();
           if (valueEl) valueEl.textContent = '$' + totalValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
           
           if (statsEl) statsEl.style.display = 'block';
