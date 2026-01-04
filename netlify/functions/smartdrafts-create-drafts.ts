@@ -6,6 +6,7 @@ import { listCategories } from "../../src/lib/taxonomy-store.js";
 import type { CategoryDef } from "../../src/lib/taxonomy-schema.js";
 import { openai } from "../../src/lib/openai.js";
 import { getFinalEbayPrice, getCategoryCap } from "../../src/lib/pricing-compute.js";
+import { getDeliveredPricing, type DeliveredPricingDecision } from "../../src/lib/delivered-pricing.js";
 
 const METHODS = "POST, OPTIONS";
 const MODEL = process.env.GPT_MODEL || "gpt-4o"; // Use gpt-4o for web search capability
@@ -14,6 +15,12 @@ const GPT_RETRY_ATTEMPTS = Math.max(1, Number(process.env.GPT_RETRY_ATTEMPTS || 
 const GPT_RETRY_DELAY_MS = Math.max(250, Number(process.env.GPT_RETRY_DELAY_MS || 1500));
 const GPT_TIMEOUT_MS = Math.max(5000, Number(process.env.GPT_TIMEOUT_MS || 30000)); // Longer timeout for web search
 const MAX_SEEDS = Math.max(1, Number(process.env.DRAFTS_MAX_SEEDS || 1)); // Process 1 item per request to avoid Netlify timeout
+
+/**
+ * Feature flag for delivered-price-first pricing v2
+ * Set DELIVERED_PRICING_V2=true to enable new competitive pricing
+ */
+const DELIVERED_PRICING_ENABLED = process.env.DELIVERED_PRICING_V2 === 'true';
 
 /**
  * Apply pricing formula to base retail price using the ONE centralized pricing function.
@@ -70,7 +77,17 @@ type Draft = {
   category: CategoryHint;
   images: string[];
   price?: number;
+  shippingPrice?: number;  // New: for delivered-pricing v2
   condition?: string;
+  pricingEvidence?: {      // New: evidence log for delivered-pricing v2
+    mode: string;
+    targetDeliveredCents: number;
+    finalItemCents: number;
+    finalShipCents: number;
+    ebayCompsCount: number;
+    fallbackUsed: boolean;
+    warnings: string[];
+  };
 };
 
 /**
@@ -449,11 +466,54 @@ async function createDraftForProduct(product: PairedProduct): Promise<Draft> {
     console.log(`[Draft]       Contains pipe: ${url.includes('|')}, Contains %7C: ${url.includes('%7C')}`);
   });
   
-  // Step 9: Build final draft
-  // Apply pricing formula: ChatGPT provides retail price, we apply our discount formula with category caps
-  const retailPrice = typeof parsed.price === 'number' && parsed.price > 0 ? parsed.price : 0;
+  // Step 9: Build final draft with pricing
   const categoryPath = finalCategory?.title || product.categoryPath || '';
-  const ebayPrice = computeEbayPrice(retailPrice, categoryPath);
+  let ebayPrice: number;
+  let shippingPrice: number | undefined;
+  let pricingEvidence: Draft['pricingEvidence'];
+
+  if (DELIVERED_PRICING_ENABLED) {
+    // NEW: Delivered-price-first competitive pricing v2
+    console.log(`[Draft] 💰 Using DELIVERED_PRICING_V2 for ${product.productId}`);
+    const pricingStart = Date.now();
+    
+    try {
+      const pricingDecision = await getDeliveredPricing(product.brand, product.product, {
+        mode: 'market-match',
+      });
+      
+      ebayPrice = pricingDecision.finalItemCents / 100;
+      shippingPrice = pricingDecision.finalShipCents / 100;
+      pricingEvidence = {
+        mode: pricingDecision.mode,
+        targetDeliveredCents: pricingDecision.targetDeliveredCents,
+        finalItemCents: pricingDecision.finalItemCents,
+        finalShipCents: pricingDecision.finalShipCents,
+        ebayCompsCount: pricingDecision.ebayComps.length,
+        fallbackUsed: pricingDecision.fallbackUsed,
+        warnings: pricingDecision.warnings,
+      };
+      
+      console.log(`[Draft] 💰 Pricing took ${Date.now() - pricingStart}ms: $${ebayPrice} + $${shippingPrice} ship = $${ebayPrice + shippingPrice} delivered`);
+      if (pricingDecision.warnings.length > 0) {
+        console.log(`[Draft] ⚠️ Pricing warnings: ${pricingDecision.warnings.join(', ')}`);
+      }
+    } catch (err) {
+      // Fallback to legacy pricing on error
+      console.error(`[Draft] ❌ Delivered pricing failed, falling back to legacy:`, err);
+      const retailPrice = typeof parsed.price === 'number' && parsed.price > 0 ? parsed.price : 0;
+      ebayPrice = computeEbayPrice(retailPrice, categoryPath);
+      shippingPrice = undefined;
+      pricingEvidence = undefined;
+    }
+  } else {
+    // LEGACY: ChatGPT retail price with discount formula
+    const retailPrice = typeof parsed.price === 'number' && parsed.price > 0 ? parsed.price : 0;
+    ebayPrice = computeEbayPrice(retailPrice, categoryPath);
+    shippingPrice = undefined;
+    pricingEvidence = undefined;
+    console.log(`[Draft] 💰 Legacy pricing: retail $${retailPrice} → eBay $${ebayPrice}`);
+  }
   
   const draft: Draft = {
     productId: product.productId,
@@ -465,11 +525,14 @@ async function createDraftForProduct(product: PairedProduct): Promise<Draft> {
     aspects,
     category: finalCategory || { id: '', title: product.categoryPath || 'Uncategorized' },
     images,
-    price: ebayPrice, // Use computed eBay price with discount formula
+    price: ebayPrice,
+    shippingPrice,
     condition: parsed.condition,
+    pricingEvidence,
   };
   
-  console.log(`[Draft] ✓ Created for ${product.productId} in ${Date.now() - startTime}ms: "${draft.title}" (retail: $${retailPrice} → eBay: $${ebayPrice}, category: ${categoryPath})`);
+  const deliveredStr = shippingPrice !== undefined ? ` + $${shippingPrice} ship` : '';
+  console.log(`[Draft] ✓ Created for ${product.productId} in ${Date.now() - startTime}ms: "${draft.title}" (price: $${ebayPrice}${deliveredStr}, category: ${categoryPath})`);
   
   return draft;
 }
