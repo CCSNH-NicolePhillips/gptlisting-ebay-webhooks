@@ -391,11 +391,60 @@
     .toggle-switch input:checked + .toggle-slider:before {
       transform: translateX(22px);
     }
+    
+    /* Image Lightbox */
+    .image-lightbox {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.9);
+      z-index: 10000;
+      cursor: zoom-out;
+      align-items: center;
+      justify-content: center;
+    }
+    .image-lightbox.active {
+      display: flex;
+    }
+    .image-lightbox img {
+      max-width: 90%;
+      max-height: 90%;
+      object-fit: contain;
+      border-radius: 8px;
+      box-shadow: 0 4px 40px rgba(0, 0, 0, 0.5);
+    }
+    .image-lightbox-close {
+      position: absolute;
+      top: 20px;
+      right: 30px;
+      color: white;
+      font-size: 2.5rem;
+      font-weight: 300;
+      cursor: pointer;
+      opacity: 0.8;
+      transition: opacity 0.2s;
+      z-index: 10001;
+    }
+    .image-lightbox-close:hover {
+      opacity: 1;
+    }
+    .image-thumb {
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
   <script src="/auth-client.js"></script>
   <script src="/sidebar-toggle.js"></script>
+  
+  <!-- Image Lightbox -->
+  <div class="image-lightbox" id="imageLightbox">
+    <span class="image-lightbox-close" id="lightboxClose">&times;</span>
+    <img src="" alt="Expanded image" id="lightboxImage" />
+  </div>
   
   <div class="dp-shell">
     <!-- Sidebar -->
@@ -1078,6 +1127,13 @@
             div.addEventListener('drop', handleDrop);
             div.addEventListener('dragleave', handleDragLeave);
             
+            // Click to expand image
+            div.addEventListener('click', (e) => {
+              // Don't expand if dragging
+              if (e.target.classList.contains('dragging')) return;
+              openLightbox(url);
+            });
+            
             preview.appendChild(div);
           });
           
@@ -1385,6 +1441,32 @@
         showFlash(`Failed to load: ${e.message}`, 'error');
       }
     }
+    
+    // Lightbox functions
+    function openLightbox(imageUrl) {
+      const lightbox = $('imageLightbox');
+      const lightboxImg = $('lightboxImage');
+      if (lightbox && lightboxImg) {
+        lightboxImg.src = imageUrl;
+        lightbox.classList.add('active');
+        document.body.style.overflow = 'hidden';
+      }
+    }
+    
+    function closeLightbox() {
+      const lightbox = $('imageLightbox');
+      if (lightbox) {
+        lightbox.classList.remove('active');
+        document.body.style.overflow = '';
+      }
+    }
+    
+    // Close lightbox on click or escape
+    $('imageLightbox')?.addEventListener('click', closeLightbox);
+    $('lightboxClose')?.addEventListener('click', closeLightbox);
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeLightbox();
+    });
     
     initUserMenu();
     bootstrap();
