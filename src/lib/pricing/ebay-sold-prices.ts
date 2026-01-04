@@ -122,9 +122,53 @@ export async function fetchSoldPriceStats(
 
     console.log(`[ebay-sold] Found ${data.organic_results.length} sold items`);
 
+    // Lot detection patterns - these indicate multi-packs that inflate prices
+    const LOT_PATTERNS = [
+      /\blot\s*(of\s*)?\d+/i,          // "lot of 2", "lot 3"
+      /\b(\d+)\s*pack\b/i,             // "2 pack", "3pack"
+      /\bset\s*(of\s*)?\d+/i,          // "set of 2"
+      /\bbundle\s*(of\s*)?\d+/i,       // "bundle of 3"
+      /\b(\d+)\s*count\b/i,            // "2 count" (but not "90 count" for pills)
+      /\bx\s*\d+\b/i,                  // "x2", "x 3"
+      /\b(\d+)\s*bottles?\b/i,         // "2 bottles"
+      /\b(\d+)\s*pieces?\b/i,          // "2 pieces" (but not "90 pieces" for gum)
+      /\bmulti[-\s]?pack/i,            // "multi-pack", "multipack"
+    ];
+    
+    function isLotListing(title: string): boolean {
+      if (!title) return false;
+      const lower = title.toLowerCase();
+      
+      for (const pattern of LOT_PATTERNS) {
+        const match = title.match(pattern);
+        if (match) {
+          // For patterns with numbers, only flag if quantity is 2-10 (not 90 pieces gum, etc.)
+          const numMatch = match[1] || match[0].match(/\d+/)?.[0];
+          if (numMatch) {
+            const qty = parseInt(numMatch, 10);
+            if (qty >= 2 && qty <= 10) {
+              return true;
+            }
+          } else {
+            // Pattern without captured number (like "multi-pack")
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
     // Parse sold items - now including shipping for TRUE delivered price
     const samples: SoldPriceSample[] = [];
+    let lotsSkipped = 0;
+    
     for (const item of data.organic_results) {
+      // Skip lot listings - they inflate prices
+      if (isLotListing(item.title)) {
+        lotsSkipped++;
+        continue;
+      }
+      
       // Extract item price
       let priceValue: number | undefined;
       
@@ -166,7 +210,10 @@ export async function fetchSoldPriceStats(
       }
     }
 
-    console.log(`[ebay-sold] Parsed ${samples.length} valid price samples`);
+    if (lotsSkipped > 0) {
+      console.log(`[ebay-sold] Filtered out ${lotsSkipped} lot/multi-pack listings`);
+    }
+    console.log(`[ebay-sold] Parsed ${samples.length} valid single-item samples`);
 
     if (samples.length === 0) {
       return empty;

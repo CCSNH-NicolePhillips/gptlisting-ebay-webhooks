@@ -16,7 +16,7 @@ if (!apiKey) {
 const params = new URLSearchParams({
   engine: 'ebay_search',
   ebay_domain: 'ebay.com',
-  q: 'New Chapter Liquid Multivitamin 30 fl oz',
+  q: 'OGX Bond Protein Repair 3-in-1 Oil Mist',
   ebay_tbs: 'LH_Complete:1,LH_Sold:1',
 });
 
@@ -28,13 +28,9 @@ const response = await fetch(url, {
 
 const data = await response.json();
 
-console.log('=== FIRST 3 SOLD ITEMS (ALL FIELDS) ===\n');
-for (const item of data.organic_results?.slice(0, 3) || []) {
-  console.log('Title:', item.title);
-  console.log('Price:', JSON.stringify(item.price));
-  console.log('Shipping:', JSON.stringify(item.shipping));
-  console.log('Extracted Price:', item.extracted_price);
-  console.log('Total Price:', item.total_price);
-  console.log('All keys:', Object.keys(item));
-  console.log('---');
+console.log('=== FIRST 10 SOLD ITEMS ===\n');
+for (const item of data.organic_results?.slice(0, 10) || []) {
+  const ship = item.extracted_shipping || (item.shipping?.toLowerCase().includes('free') ? 0 : '?');
+  const delivered = item.extracted_price + (typeof ship === 'number' ? ship : 0);
+  console.log(`$${item.extracted_price} + $${ship} = $${delivered.toFixed(2)} | ${item.title?.slice(0,60)}`);
 }
