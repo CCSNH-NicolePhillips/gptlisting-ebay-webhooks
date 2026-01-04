@@ -2,13 +2,12 @@
  * Delivered-Price-First Pricing Engine (v2)
  * 
  * Prices to delivered-to-door, then backs into item + shipping.
- * Uses eBay comps as primary source, falls back to retail MSRP.
+ * Uses Google Shopping for comps (eBay + retail), falls back to sold prices.
  * 
  * @see docs/PRICING-OVERHAUL.md for full specification
  */
 
 import { searchGoogleShopping, GoogleShoppingResult } from './google-shopping-search.js';
-import { searchEbayComps as searchEbayBrowseAPI, EbayCompetitor } from './ebay-browse-search.js';
 import { fetchSoldPriceStats, SoldPriceStats } from './pricing/ebay-sold-prices.js';
 import { getShippingEstimate, ShippingEstimate, ShippingSettings, DEFAULT_SHIPPING_SETTINGS } from './shipping-estimates.js';
 
@@ -193,22 +192,6 @@ export function median(values: number[]): number {
     return Math.round((sorted[mid - 1] + sorted[mid]) / 2);
   }
   return sorted[mid];
-}
-
-/**
- * Convert eBay Browse API result to CompetitorPrice
- */
-export function ebayBrowseToCompetitor(comp: EbayCompetitor): CompetitorPrice {
-  return {
-    source: 'ebay',
-    itemCents: comp.itemPriceCents,
-    shipCents: comp.shippingCents,
-    deliveredCents: comp.deliveredCents,
-    title: comp.title,
-    url: comp.url,
-    inStock: true,  // Browse API only returns active listings
-    seller: comp.seller,
-  };
 }
 
 /**
@@ -456,49 +439,20 @@ export async function getDeliveredPricing(
 
   console.log(`[delivered-pricing] Pricing "${brand} ${productName}" in ${fullSettings.mode} mode`);
 
-  // === Step 1: Try eBay Browse API first (direct, accurate comps) ===
-  let ebayComps: CompetitorPrice[] = [];
-  let compsSource: 'ebay' | 'ebay-browse' | 'google-shopping' | 'fallback' = 'google-shopping';
-  
-  try {
-    // Clean product name - remove brand if already at start to avoid duplication
-    const cleanProductName = productName.toLowerCase().startsWith(brand.toLowerCase())
-      ? productName.substring(brand.length).trim()
-      : productName;
-    
-    const browseResult = await searchEbayBrowseAPI(brand, cleanProductName, { limit: 50 });
-    
-    if (browseResult.ok && browseResult.count > 0) {
-      ebayComps = browseResult.competitors.map(ebayBrowseToCompetitor);
-      compsSource = 'ebay-browse';
-      console.log(`[delivered-pricing] eBay Browse API: ${browseResult.count} usable comps, floor $${(browseResult.floorDeliveredCents! / 100).toFixed(2)}`);
-    } else {
-      console.log(`[delivered-pricing] eBay Browse API: 0 usable comps`);
-    }
-  } catch (err) {
-    console.log(`[delivered-pricing] eBay Browse API error: ${err}`);
-    warnings.push('ebayBrowseApiError');
-  }
-
-  // === Step 2: Search Google Shopping for retail prices (always) ===
+  // === Step 1: Search Google Shopping for all comps ===
+  // Note: eBay Browse API is unreliable/deprecated, so we use Google Shopping
+  // which indexes eBay listings along with Amazon, Walmart, etc.
   const searchResult = await searchGoogleShopping(brand, productName);
   
   // Convert to CompetitorPrice format
   const googleComps = searchResult.allResults.map(googleResultToCompetitor);
   
-  // If eBay Browse didn't return comps, use Google Shopping eBay results
-  if (ebayComps.length === 0) {
-    ebayComps = googleComps.filter(c => c.source === 'ebay');
-    if (ebayComps.length > 0) {
-      compsSource = 'google-shopping';
-      console.log(`[delivered-pricing] Using ${ebayComps.length} eBay comps from Google Shopping`);
-    }
-  }
-  
-  // Retail comps from Google Shopping
+  // Separate eBay comps from retail comps
+  const ebayComps = googleComps.filter(c => c.source === 'ebay');
   const retailComps = googleComps.filter(c => c.source !== 'ebay');
+  const compsSource: 'ebay' | 'ebay-browse' | 'google-shopping' | 'fallback' = 'google-shopping';
   
-  console.log(`[delivered-pricing] Total: ${ebayComps.length} eBay comps, ${retailComps.length} retail comps (source: ${compsSource})`);
+  console.log(`[delivered-pricing] Google Shopping: ${ebayComps.length} eBay comps, ${retailComps.length} retail comps`);
 
   // Calculate metrics using eBay comps
   const allComps = [...ebayComps, ...retailComps];
@@ -628,19 +582,18 @@ export async function getDeliveredPricing(
 
   console.log(`[delivered-pricing] Final: item $${(splitResult.itemCents / 100).toFixed(2)} + ship $${(splitResult.shipCents / 100).toFixed(2)}`);
 
-  // Determine confidence
+  // Determine confidence based on comp count
   let matchConfidence: 'high' | 'medium' | 'low' = 'low';
-  if (ebayComps.length >= 3 && compsSource === 'ebay-browse') {
+  if (ebayComps.length >= 5) {
     matchConfidence = 'high';
-  } else if (ebayComps.length >= 3) {
-    matchConfidence = 'medium'; // Google Shopping eBay is less reliable
-  } else if (ebayComps.length >= 1 || retailComps.length >= 2) {
+  } else if (ebayComps.length >= 3 || (ebayComps.length >= 1 && retailComps.length >= 2)) {
     matchConfidence = 'medium';
   }
 
-  // Use the compsSource already determined above
+  // Determine final comps source
+  let finalCompsSource: 'ebay' | 'ebay-browse' | 'google-shopping' | 'fallback' = compsSource;
   if (targetResult.fallbackUsed && ebayComps.length === 0) {
-    compsSource = 'fallback';
+    finalCompsSource = 'fallback';
   }
 
   // Log compete status
@@ -678,7 +631,7 @@ export async function getDeliveredPricing(
     canCompete: splitResult.canCompete,
     matchConfidence,
     fallbackUsed: targetResult.fallbackUsed,
-    compsSource,
+    compsSource: finalCompsSource,
     warnings,
   };
 }
