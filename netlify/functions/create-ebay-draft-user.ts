@@ -182,12 +182,32 @@ export const handler: Handler = async (event) => {
       return responseBadRequest(originHdr, { error: "Group missing groupId", group });
     }
 
+    // CHECK: Block drafts with blocking attention issues
+    const attentionReasons = Array.isArray(group.attentionReasons) ? group.attentionReasons : [];
+    const blockingIssues = attentionReasons.filter((r: any) => r?.severity === 'error');
+    if (blockingIssues.length > 0) {
+      console.log(`[create-ebay-draft-user] Blocking publish for ${groupId}: ${blockingIssues.length} error-level issues`);
+      return json(
+        400,
+        {
+          error: "Draft needs attention before publishing",
+          groupId,
+          attentionReasons: blockingIssues,
+          message: `This draft has ${blockingIssues.length} issue(s) that must be resolved before publishing: ${blockingIssues.map((r: any) => r.message).join('; ')}`,
+        },
+        originHdr,
+        METHODS,
+      );
+    }
+
     // DEBUG: Log what images are being received from frontend
     console.log(`[create-ebay-draft-user] Processing group ${groupId}:`, {
       hasImages: !!group.images,
       imagesCount: Array.isArray(group.images) ? group.images.length : 0,
       imagesPreview: Array.isArray(group.images) ? group.images.slice(0, 2).map((u: string) => u?.substring(0, 80)) : null,
       allKeys: Object.keys(group),
+      hasAttentionReasons: attentionReasons.length > 0,
+      warningCount: attentionReasons.filter((r: any) => r?.severity === 'warning').length,
     });
 
     let mapped: TaxonomyMappedDraft;

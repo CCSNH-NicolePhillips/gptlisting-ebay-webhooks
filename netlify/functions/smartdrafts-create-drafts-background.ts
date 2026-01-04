@@ -65,6 +65,16 @@ type CategoryHint = {
   aspects: Record<string, any>;
 };
 
+// Attention reason codes - each describes why a draft needs manual review
+type AttentionReason = {
+  code: 'PRICE_FALLBACK' | 'PRICE_LOW' | 'PRICE_ESTIMATED' | 'NO_COMPS' | 'MISSING_WEIGHT' | 'MISSING_IMAGES' | 'MISSING_BRAND' | 'LOW_CONFIDENCE';
+  message: string;
+  severity: 'warning' | 'error';  // 'error' blocks publishing, 'warning' allows but shows alert
+};
+
+// Minimum fallback price when all pricing sources fail ($9.99)
+const FALLBACK_PRICE_FLOOR = 9.99;
+
 type Draft = {
   productId: string;
   groupId: string; // For eBay publishing via create-ebay-draft-user
@@ -76,7 +86,7 @@ type Draft = {
   aspects: Record<string, string[]>;
   category: CategoryHint;
   images: string[];
-  price: number | null;
+  price: number; // Always set (never null) - uses fallback if needed
   condition: string;
   keyText?: string[]; // Key text from Vision API - helps determine formulation
   packageType?: string; // bottle/jar/tub/pouch/box/sachet/book/unknown - used for formulation inference
@@ -84,6 +94,9 @@ type Draft = {
   pricingStatus?: 'OK' | 'ESTIMATED' | 'NEEDS_REVIEW';
   priceWarning?: string; // Explains why price needs review
   needsPriceReview?: boolean; // Frontend flag for red glow/warning
+  // NEW: Structured attention system for blocking publishing
+  attentionReasons?: AttentionReason[]; // List of all issues requiring review
+  needsAttention?: boolean; // True if any attentionReasons exist (convenience flag)
   priceMeta?: {
     chosenSource?: string;
     basePrice?: number;
@@ -1134,15 +1147,97 @@ async function createDraftForProduct(
     }
   }
   
-  // FALLBACK: If pricing engine returned null but GPT suggested a price, use GPT price
-  // This prevents eBay publish failures due to null price
-  let resolvedPrice = finalPrice;
-  if (resolvedPrice === null && parsed.price) {
+  // ========================================
+  // BUILD ATTENTION REASONS (track all issues)
+  // ========================================
+  const attentionReasons: AttentionReason[] = [];
+  
+  // Track pricing issues
+  let resolvedPrice: number = finalPrice ?? FALLBACK_PRICE_FLOOR;
+  
+  if (finalPrice === null && parsed.price) {
+    // GPT suggested a price when pricing engine failed
     console.log(`[Draft] 💰 Using GPT-suggested price as fallback: $${parsed.price.toFixed(2)}`);
     resolvedPrice = parsed.price;
     pricingStatus = 'ESTIMATED';
     priceWarning = 'Price from AI estimate (pricing engine failed). Please verify.';
+    attentionReasons.push({
+      code: 'PRICE_FALLBACK',
+      message: `Price $${parsed.price.toFixed(2)} is from AI estimate - please verify against market`,
+      severity: 'warning',
+    });
+  } else if (finalPrice === null) {
+    // No price from engine OR GPT - use floor price
+    console.log(`[Draft] ⚠️ No price available, using fallback floor: $${FALLBACK_PRICE_FLOOR.toFixed(2)}`);
+    resolvedPrice = FALLBACK_PRICE_FLOOR;
+    pricingStatus = 'NEEDS_REVIEW';
+    priceWarning = `No price found - using minimum $${FALLBACK_PRICE_FLOOR.toFixed(2)}. YOU MUST SET CORRECT PRICE.`;
+    attentionReasons.push({
+      code: 'PRICE_FALLBACK',
+      message: `No pricing data found. Defaulted to $${FALLBACK_PRICE_FLOOR.toFixed(2)} - set correct price before publishing`,
+      severity: 'error',
+    });
   }
+  
+  // Flag low prices (under $5)
+  if (resolvedPrice !== null && resolvedPrice < 5.00) {
+    attentionReasons.push({
+      code: 'PRICE_LOW',
+      message: `Price $${resolvedPrice.toFixed(2)} is very low - verify this is correct`,
+      severity: 'warning',
+    });
+  }
+  
+  // Flag estimated prices from low-confidence matches
+  if (pricingStatus === 'ESTIMATED' && !attentionReasons.some(r => r.code === 'PRICE_FALLBACK')) {
+    attentionReasons.push({
+      code: 'PRICE_ESTIMATED',
+      message: priceWarning || 'Price is an estimate - please verify',
+      severity: 'warning',
+    });
+  }
+  
+  // Track missing weight
+  if (!finalWeight) {
+    attentionReasons.push({
+      code: 'MISSING_WEIGHT',
+      message: 'No shipping weight detected - eBay may reject or estimate weight',
+      severity: 'warning',
+    });
+  }
+  
+  // Track missing images
+  if (images.length === 0) {
+    attentionReasons.push({
+      code: 'MISSING_IMAGES',
+      message: 'No product images available',
+      severity: 'error',
+    });
+  }
+  
+  // Track missing brand (for non-books)
+  if (!product.brand && product.packageType !== 'book') {
+    attentionReasons.push({
+      code: 'MISSING_BRAND',
+      message: 'Brand not detected - may affect search visibility',
+      severity: 'warning',
+    });
+  }
+  
+  // Track no competitive data
+  if (pricingDecision && pricingDecision.candidates && pricingDecision.candidates.length === 0) {
+    attentionReasons.push({
+      code: 'NO_COMPS',
+      message: 'No market data found - price is a blind estimate',
+      severity: 'warning',
+    });
+  }
+  
+  const needsAttention = attentionReasons.length > 0;
+  const hasBlockingIssue = attentionReasons.some(r => r.severity === 'error');
+  
+  console.log(`[Draft] Attention check: ${attentionReasons.length} issues (${hasBlockingIssue ? 'BLOCKING' : 'warnings only'})`);
+  attentionReasons.forEach(r => console.log(`[Draft]   ${r.severity.toUpperCase()}: ${r.code} - ${r.message}`));
   
   const draft: Draft = {
     productId: product.productId,
@@ -1155,7 +1250,7 @@ async function createDraftForProduct(
     aspects,
     category: finalCategory || { id: '', title: product.categoryPath || 'Uncategorized', aspects: {} },
     images,
-    price: resolvedPrice,
+    price: resolvedPrice,  // Always a number now (never null)
     condition: parsed.condition,
     keyText: product.keyText, // Pass through Vision API key text for formulation detection
     packageType: product.packageType, // Pass through Vision API package type for formulation inference
@@ -1163,6 +1258,8 @@ async function createDraftForProduct(
     pricingStatus,
     priceWarning,
     needsPriceReview: pricingStatus !== 'OK',
+    attentionReasons: attentionReasons.length > 0 ? attentionReasons : undefined,
+    needsAttention,
     priceMeta,
     promotion, // Include promotion settings in draft
   };

@@ -67,10 +67,73 @@
           border-color 0.15s ease-out;
       }
 
+      /* Needs attention styling - red glow for drafts with issues */
+      .card.needs-attention {
+        border-color: rgba(239, 68, 68, 0.6);
+        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.45), 
+                    0 0 20px rgba(239, 68, 68, 0.3),
+                    inset 0 0 0 1px rgba(239, 68, 68, 0.2);
+        animation: attention-pulse 2s ease-in-out infinite;
+      }
+      
+      .card.needs-attention:hover {
+        border-color: rgba(239, 68, 68, 0.8);
+        box-shadow: 0 22px 55px rgba(15, 23, 42, 0.6),
+                    0 0 30px rgba(239, 68, 68, 0.4);
+      }
+      
+      .card.needs-attention.has-blocking-issue {
+        border-color: rgba(239, 68, 68, 0.8);
+        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.45), 
+                    0 0 25px rgba(239, 68, 68, 0.5);
+      }
+      
+      @keyframes attention-pulse {
+        0%, 100% { box-shadow: 0 18px 40px rgba(15, 23, 42, 0.45), 0 0 15px rgba(239, 68, 68, 0.25); }
+        50% { box-shadow: 0 18px 40px rgba(15, 23, 42, 0.45), 0 0 25px rgba(239, 68, 68, 0.4); }
+      }
+      
+      .attention-reasons {
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        border-radius: 8px;
+        padding: 0.5rem 0.75rem;
+        margin-top: 0.5rem;
+        font-size: 0.75rem;
+      }
+      
+      .attention-reasons .reason {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.4rem;
+        margin-bottom: 0.25rem;
+        color: var(--text-muted);
+      }
+      
+      .attention-reasons .reason:last-child {
+        margin-bottom: 0;
+      }
+      
+      .attention-reasons .reason.error {
+        color: #ef4444;
+      }
+      
+      .attention-reasons .reason.warning {
+        color: #f59e0b;
+      }
+      
+      .attention-reasons .icon {
+        flex-shrink: 0;
+      }
+
       .card:hover {
         transform: translateY(-2px);
         box-shadow: 0 22px 55px rgba(15, 23, 42, 0.6);
         border-color: rgba(94, 234, 212, 0.5);
+      }
+      
+      .card.needs-attention:hover {
+        border-color: rgba(239, 68, 68, 0.8);
       }
       .thumb {
         position: relative;
@@ -668,6 +731,18 @@
         el.dataset.offerId = offer.offerId || '';
         el.dataset.sku = offer.sku || '';
         
+        // Check for attention reasons (new structured attention system)
+        const attentionReasons = offer?.merchantData?.attentionReasons || [];
+        const hasBlockingIssue = attentionReasons.some(r => r?.severity === 'error');
+        const needsAttention = attentionReasons.length > 0 || offer?.merchantData?.pricingStatus === 'NEEDS_REVIEW' || offer?._hasWeight === false;
+        
+        if (needsAttention) {
+          el.classList.add('needs-attention');
+          if (hasBlockingIssue) {
+            el.classList.add('has-blocking-issue');
+          }
+        }
+        
         // thumbnail area
         const th = document.createElement('div');
         th.className = 'thumb';
@@ -721,6 +796,22 @@
         ]
           .filter(Boolean)
           .join(' • ');
+          
+        // Create attention reasons display if there are issues
+        let attentionReasonsEl = null;
+        if (attentionReasons.length > 0) {
+          attentionReasonsEl = document.createElement('div');
+          attentionReasonsEl.className = 'attention-reasons';
+          
+          attentionReasons.forEach(reason => {
+            const reasonEl = document.createElement('div');
+            reasonEl.className = `reason ${reason.severity || 'warning'}`;
+            const icon = reason.severity === 'error' ? '🚫' : '⚠️';
+            reasonEl.innerHTML = `<span class="icon">${icon}</span> <span>${reason.message || reason.code}</span>`;
+            attentionReasonsEl.appendChild(reasonEl);
+          });
+        }
+        
   const badge = document.createElement('div');
   badge.className = 'badge';
   const st = String(offer?.status || 'UNPUBLISHED');
@@ -730,12 +821,22 @@
         
         const pub = document.createElement('button');
         pub.className = 'btn';
-        pub.textContent = 'Publish';
+        
+        // Block publish if there are blocking issues
+        if (hasBlockingIssue) {
+          pub.textContent = '⚠️ Fix Issues First';
+          pub.disabled = true;
+          pub.title = 'This draft has issues that must be resolved before publishing. Click Edit to fix.';
+          pub.style.opacity = '0.6';
+          pub.style.cursor = 'not-allowed';
+        } else {
+          pub.textContent = 'Publish';
+        }
         
         const edit = document.createElement('button');
         edit.className = 'btn secondary';
-        edit.textContent = 'Edit';
-        edit.title = 'Edit draft details';
+        edit.textContent = needsAttention ? '✏️ Edit & Fix' : 'Edit';
+        edit.title = needsAttention ? 'Edit draft to resolve issues' : 'Edit draft details';
         const del = document.createElement('button');
         del.className = 'btn danger';
         del.textContent = 'Delete';
@@ -749,6 +850,12 @@
         };
 
         pub.onclick = async () => {
+          // Double-check blocking before publish
+          if (hasBlockingIssue) {
+            flash.textContent = 'Cannot publish: This draft has issues that must be resolved first. Click Edit to fix.';
+            return;
+          }
+          
           pub.disabled = true;
           del.disabled = true;
           flash.textContent = 'Publishing…';
@@ -1043,6 +1150,10 @@
         body.appendChild(title);
   if (desc.textContent) body.appendChild(desc);
   body.appendChild(meta);
+        // Add attention reasons display if there are issues
+        if (attentionReasonsEl) {
+          body.appendChild(attentionReasonsEl);
+        }
         body.appendChild(badge);
         body.appendChild(promoControls);
         body.appendChild(row);
