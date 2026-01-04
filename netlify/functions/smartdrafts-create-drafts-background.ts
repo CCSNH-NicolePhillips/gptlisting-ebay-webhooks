@@ -64,7 +64,7 @@ type CategoryHint = {
 
 // Attention reason codes - each describes why a draft needs manual review
 type AttentionReason = {
-  code: 'PRICE_FALLBACK' | 'PRICE_LOW' | 'PRICE_ESTIMATED' | 'NO_COMPS' | 'MISSING_WEIGHT' | 'MISSING_IMAGES' | 'MISSING_BRAND' | 'LOW_CONFIDENCE';
+  code: 'PRICE_FALLBACK' | 'PRICE_LOW' | 'PRICE_ABOVE_RETAIL' | 'PRICE_ESTIMATED' | 'NO_COMPS' | 'MISSING_WEIGHT' | 'MISSING_IMAGES' | 'MISSING_BRAND' | 'LOW_CONFIDENCE';
   message: string;
   severity: 'warning' | 'error';  // 'error' blocks publishing, 'warning' allows but shows alert
 };
@@ -1150,6 +1150,32 @@ async function createDraftForProduct(
       message: `Price $${resolvedPrice.toFixed(2)} is very low - verify this is correct`,
       severity: 'warning',
     });
+  }
+  
+  // Flag prices higher than retail (Amazon/Walmart/major retailers)
+  // Our price should be LOWER than retail to be competitive
+  if (resolvedPrice !== null && deliveredDecision) {
+    const retailPrices = [
+      deliveredDecision.amazonPriceCents,
+      deliveredDecision.walmartPriceCents,
+    ].filter((p): p is number => p !== null && p > 0);
+    
+    if (retailPrices.length > 0) {
+      const lowestRetailCents = Math.min(...retailPrices);
+      const ourPriceCents = Math.round(resolvedPrice * 100);
+      
+      // Flag if we're priced higher than ANY major retailer
+      if (ourPriceCents > lowestRetailCents) {
+        const lowestRetailDollars = lowestRetailCents / 100;
+        const overpricePercent = ((ourPriceCents - lowestRetailCents) / lowestRetailCents * 100).toFixed(0);
+        attentionReasons.push({
+          code: 'PRICE_ABOVE_RETAIL',
+          message: `Price $${resolvedPrice.toFixed(2)} is ${overpricePercent}% above retail ($${lowestRetailDollars.toFixed(2)}) - may not sell`,
+          severity: 'warning',
+        });
+        console.log(`[Draft]   WARNING: PRICE_ABOVE_RETAIL - $${resolvedPrice.toFixed(2)} > retail $${lowestRetailDollars.toFixed(2)}`);
+      }
+    }
   }
   
   // Flag estimated prices from low-confidence matches
