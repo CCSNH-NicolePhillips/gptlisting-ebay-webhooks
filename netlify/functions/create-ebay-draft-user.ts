@@ -247,7 +247,7 @@ export const handler: Handler = async (event) => {
       offer: mapped.offer,
       meta: mapped._meta,
     }));
-    return json(200, { dryRun: true, count: previews.length, previews }, originHdr, METHODS);
+    return json(200, { ok: true, dryRun: true, count: previews.length, previews }, originHdr, METHODS);
   }
 
   let access;

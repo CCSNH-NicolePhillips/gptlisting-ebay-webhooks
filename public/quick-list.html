@@ -2021,6 +2021,10 @@
         let errorMessage = err.message;
         if (err.message?.includes('Invalid inventory location')) {
           errorMessage = `⚠️ ${err.message}\n\nPlease set up your inventory location in Settings before creating listings.`;
+        } else if (err.message?.includes('needs attention') || err.message?.includes('must be resolved')) {
+          errorMessage = `⚠️ Draft has issues that need fixing:\n\n${err.message}\n\nPlease edit the draft to fix these issues before publishing.`;
+        } else if (err.message?.includes('No pricing data') || err.message?.includes('PRICE_FALLBACK')) {
+          errorMessage = `⚠️ Pricing issue detected:\n\n${err.message}\n\nPlease set a valid price before publishing.`;
         }
 
         alert(`Error: ${errorMessage}`);
