@@ -90,6 +90,7 @@
       
       .dp-grid {
         height: 100%;
+        display: block;  /* Override grid for full width */
       }
       
       .dp-card {
@@ -97,6 +98,8 @@
         height: 100%;
         display: flex;
         flex-direction: column;
+        max-width: none;  /* Remove any max-width */
+        width: 100%;      /* Full width */
       }
       
       .dp-card__content {
@@ -324,7 +327,7 @@
                     </button>
                     <div class="faq-answer">
                       <div class="faq-answer-content">
-                        DraftPilot can process up to 100 photos in a single batch. SmartDrafts will automatically group related images together (front, back, side views of the same product) and create separate draft listings for each distinct product it identifies. For optimal performance and accuracy, we recommend uploading photos in batches of 20-50 at a time.
+                        DraftPilot can process up to <strong>200 photos</strong> in a single batch. SmartDrafts uses AI vision to automatically identify which photos belong to the same product (front, back, side views) and groups them together. For best results, take 2-4 photos per product showing different angles. Processing typically takes 1-3 minutes for 20 photos, or 5-10 minutes for larger batches.
                       </div>
                     </div>
                   </div>
@@ -338,7 +341,7 @@
                     </button>
                     <div class="faq-answer">
                       <div class="faq-answer-content">
-                        No, Dropbox is completely optional. While connecting Dropbox enables automatic import of new product photos from a chosen folder, you can also upload photos manually from your computer using the "Upload from device" option on the Create Listings page.
+                        No, Dropbox is completely optional. You can upload photos directly from your device using the "Upload from device" option. Dropbox is useful if you take photos on your phone and want them to sync automatically to a folder that DraftPilot can access. Both methods work the same way once photos are uploaded.
                       </div>
                     </div>
                   </div>
@@ -352,7 +355,11 @@
                     </button>
                     <div class="faq-answer">
                       <div class="faq-answer-content">
-                        SmartDrafts uses Vision AI and GPT-4 to analyze your product photos and automatically generate complete eBay listing drafts. It identifies products, groups related images, generates SEO-optimized titles and descriptions, suggests competitive pricing, selects the correct eBay category, and fills in product-specific attributes. You get ready-to-review drafts in minutes instead of hours of manual work.
+                        SmartDrafts is a 3-stage AI pipeline:<br><br>
+                        <strong>1. Scan</strong> – Vision AI analyzes each photo to identify the product, brand, and whether it's a front, back, or side view.<br><br>
+                        <strong>2. Pair</strong> – The AI groups related photos together (front + back of the same product) using brand, color, and package matching.<br><br>
+                        <strong>3. Draft</strong> – GPT-4 generates a complete eBay listing including title, description, bullet points, category, item specifics, and competitive pricing based on current market data.<br><br>
+                        You get ready-to-review drafts in minutes instead of hours of manual work.
                       </div>
                     </div>
                   </div>
@@ -366,7 +373,7 @@
                     </button>
                     <div class="faq-answer">
                       <div class="faq-answer-content">
-                        No, DraftPilot never publishes listings automatically. It only creates drafts that you can review, edit, and publish manually when you're ready. You have complete control over what goes live on eBay. Every draft stays in "UNPUBLISHED" status until you explicitly click the Publish button.
+                        <strong>No, never.</strong> DraftPilot only creates drafts that you must manually review and publish. Every listing stays in "UNPUBLISHED" status until you click the Publish button. You have complete control over what goes live on eBay.
                       </div>
                     </div>
                   </div>
@@ -380,21 +387,46 @@
                     </button>
                     <div class="faq-answer">
                       <div class="faq-answer-content">
-                        Yes! Every draft can be fully edited. Click on any draft to customize the title, description, price, condition, product attributes, category, and even reorder images. Changes are saved automatically, and you can return to edit as many times as needed before publishing.
+                        Yes! Click any draft to open the editor where you can customize everything: title, description, price, condition, shipping weight, category, item specifics (aspects), and image order. Changes save automatically. You can edit as many times as needed before publishing.
                       </div>
                     </div>
                   </div>
                   
                   <div class="faq-item">
                     <button class="faq-question">
-                      <span>How accurate is the AI pricing?</span>
+                      <span>How does pricing work?</span>
                       <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="6 9 12 15 18 9"></polyline>
                       </svg>
                     </button>
                     <div class="faq-answer">
                       <div class="faq-answer-content">
-                        DraftPilot uses multiple pricing sources including Amazon marketplace data, manufacturer websites, and retail databases to find accurate MSRP (retail price). We cache these retail prices for 30 days, then apply YOUR pricing settings (discount percentage, shipping strategy) in real-time when creating drafts. This means changing your shipping policy (free vs. paid) or discount rate automatically updates pricing for all future drafts—no stale prices! The AI detects bundles, subscription pricing, and applies smart logic for used/refurbished items. Drafts with uncertain pricing are flagged for review. Always verify pricing matches your margin requirements before publishing.
+                        DraftPilot uses a <strong>delivered-price-first</strong> strategy to price competitively:<br><br>
+                        <strong>1. eBay Sold Data</strong> – We analyze recently sold listings for the same product to see what buyers actually paid (including shipping).<br><br>
+                        <strong>2. Retail Reference</strong> – We check prices at Amazon, Walmart, Target, Ulta, CVS, and other major retailers.<br><br>
+                        <strong>3. Competitive Pricing</strong> – We target a price that's competitive with other eBay sellers offering free shipping.<br><br>
+                        If we can't find market data, the draft is flagged for your review. <strong>Always verify pricing before publishing.</strong>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div class="faq-item">
+                    <button class="faq-question">
+                      <span>What do the "Needs Attention" warnings mean?</span>
+                      <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                      </svg>
+                    </button>
+                    <div class="faq-answer">
+                      <div class="faq-answer-content">
+                        Drafts with a <span style="color: #ff6b6b; font-weight: 600;">red glow</span> need your attention before publishing. Common reasons:<br><br>
+                        <strong>PRICE_FALLBACK</strong> – No pricing data found; defaulted to $9.99. Set the correct price.<br><br>
+                        <strong>PRICE_LOW</strong> – Price is under $5. Verify this is intentional.<br><br>
+                        <strong>PRICE_ABOVE_RETAIL</strong> – Your price is higher than Amazon/Walmart. May not sell competitively.<br><br>
+                        <strong>MISSING_WEIGHT</strong> – No shipping weight detected. eBay may reject or estimate poorly.<br><br>
+                        <strong>MISSING_IMAGES</strong> – No product images (blocks publishing).<br><br>
+                        <strong>NO_COMPS</strong> – No market data found; price is a blind estimate.<br><br>
+                        Click the draft to see details and fix the issue.
                       </div>
                     </div>
                   </div>
@@ -408,7 +440,7 @@
                     </button>
                     <div class="faq-answer">
                       <div class="faq-answer-content">
-                        Promoted Listings is eBay's advertising program that boosts your listings' visibility in search results. You set an ad rate (1-20%), and only pay a fee when your item sells. DraftPilot can automatically promote listings when you publish them. Configure your default promotion rate in Settings, or set it per-batch when creating listings, or toggle it on individual drafts.
+                        Promoted Listings is eBay's advertising program that boosts your listings' visibility in search results. You set an ad rate (1-20%), and <strong>only pay when your item sells</strong>. DraftPilot can automatically promote listings when you publish them. Configure your default promotion rate in Settings, or toggle it per-draft in the editor.
                       </div>
                     </div>
                   </div>
@@ -422,7 +454,25 @@
                     </button>
                     <div class="faq-answer">
                       <div class="faq-answer-content">
-                        You need a connected eBay seller account with Business Policies enabled. Set up at least one payment policy, shipping policy, and return policy in eBay's Seller Hub, then configure them as defaults in DraftPilot's eBay Policies page. You'll also need at least one inventory location. The app will guide you through setup on first use.
+                        Before using DraftPilot, you need:<br><br>
+                        <strong>1. Business Policies</strong> – Enable Business Policies in eBay Seller Hub, then create at least one payment policy, shipping policy, and return policy.<br><br>
+                        <strong>2. Inventory Location</strong> – Set up at least one inventory location (your warehouse/home address) in eBay.<br><br>
+                        <strong>3. Connect to DraftPilot</strong> – Use the eBay Policies page to select your default policies, and the Inventory Locations page to confirm your location.<br><br>
+                        The app will guide you through this on first use.
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div class="faq-item">
+                    <button class="faq-question">
+                      <span>How does free shipping work?</span>
+                      <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                      </svg>
+                    </button>
+                    <div class="faq-answer">
+                      <div class="faq-answer-content">
+                        When you select a free shipping policy, DraftPilot <strong>builds shipping cost into the item price</strong>. For example, if the competitive delivered price is $15 and shipping costs ~$5, the item price is set to $15 with free shipping. This makes your listings more attractive to buyers who filter by "Free Shipping" on eBay. Your shipping policy in eBay controls whether you offer free shipping or calculated rates.
                       </div>
                     </div>
                   </div>
@@ -436,7 +486,25 @@
                     </button>
                     <div class="faq-answer">
                       <div class="faq-answer-content">
-                        Yes! The Active Listings page shows all your published eBay listings. You can view listing details, check performance metrics, and manage promotions. Future updates will add bulk editing, repricing tools, and inventory sync capabilities.
+                        Yes! The Active Listings page shows all your published eBay listings. You can view listing details, check views/watchers, and manage promotions. Click any listing to open it on eBay for full editing.
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div class="faq-item">
+                    <button class="faq-question">
+                      <span>Why did the AI group my photos incorrectly?</span>
+                      <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                      </svg>
+                    </button>
+                    <div class="faq-answer">
+                      <div class="faq-answer-content">
+                        The AI pairs photos based on brand name, product name, color, and package design. It can get confused when:<br><br>
+                        • Similar products from the same brand are photographed together<br>
+                        • Photos are blurry or text is hard to read<br>
+                        • Products have very similar packaging<br><br>
+                        <strong>Tip:</strong> Take photos with clear, readable labels. If pairing is wrong, delete the draft and re-upload just those photos—or edit the draft to remove/add images manually.
                       </div>
                     </div>
                   </div>
@@ -450,21 +518,12 @@
                     </button>
                     <div class="faq-answer">
                       <div class="faq-answer-content">
-                        Yes. DraftPilot uses industry-standard security practices. Your eBay and Dropbox credentials are stored using OAuth tokens (never passwords), all API communications are encrypted via HTTPS, and user data is isolated per account. You can disconnect services anytime. Images are processed securely and not permanently stored. See our <a href="/privacy.html">Privacy Policy</a> for details.
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div class="faq-item">
-                    <button class="faq-question">
-                      <span>What if the AI gets something wrong?</span>
-                      <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="6 9 12 15 18 9"></polyline>
-                      </svg>
-                    </button>
-                    <div class="faq-answer">
-                      <div class="faq-answer-content">
-                        The AI is highly accurate but not perfect. That's why everything goes to drafts first—you review, edit, and approve before anything goes live. Drafts flagged with "Needs Attention" typically need pricing verification or missing product details. You can edit any field, regenerate content, or delete and recreate drafts as needed.
+                        Yes. DraftPilot uses industry-standard security:<br><br>
+                        • <strong>OAuth tokens</strong> – We never store your eBay or Dropbox passwords<br>
+                        • <strong>HTTPS encryption</strong> – All data in transit is encrypted<br>
+                        • <strong>Isolated accounts</strong> – Your data is separate from other users<br>
+                        • <strong>No permanent image storage</strong> – Photos are processed and not stored long-term<br><br>
+                        You can disconnect eBay or Dropbox anytime from Settings. See our <a href="/privacy.html">Privacy Policy</a> for full details.
                       </div>
                     </div>
                   </div>
@@ -478,7 +537,11 @@
                     </button>
                     <div class="faq-answer">
                       <div class="faq-answer-content">
-                        Visit the Support page from the navigation menu to contact us directly. We respond to all inquiries within 24 hours (usually much faster). For urgent issues, include your user email and a description of what you were doing when the problem occurred.
+                        Visit the <a href="/support.html">Support page</a> from the navigation menu. When reporting an issue, please include:<br><br>
+                        • What you were trying to do<br>
+                        • What happened (error message, unexpected behavior)<br>
+                        • Which browser you're using<br><br>
+                        We typically respond within 24 hours.
                       </div>
                     </div>
                   </div>
