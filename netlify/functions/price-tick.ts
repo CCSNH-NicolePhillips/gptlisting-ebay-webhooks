@@ -328,11 +328,10 @@ async function runTick(options: {
 }
 
 async function handleScheduledInvocation(): Promise<{ statusCode: number; body: string }> {
-  const envDry = parseBoolean(process.env.EBAY_DRY_RUN);
   try {
     const result = await runTick({
       source: "schedule",
-      dryRun: envDry ?? false,
+      dryRun: false,
     });
     console.log("price-tick", JSON.stringify({
       source: result.source,
@@ -381,7 +380,7 @@ export const handler: Handler = async (event) => {
   }
 
   const dryParam = payload.dryRun ?? payload.preview;
-  const dryRun = parseBoolean(dryParam) ?? parseBoolean(process.env.EBAY_DRY_RUN) ?? false;
+  const dryRun = parseBoolean(dryParam) ?? false;
   const jobId = typeof payload.jobId === "string" ? payload.jobId.trim() : undefined;
   const groupId = typeof payload.groupId === "string" ? payload.groupId.trim() : undefined;
 

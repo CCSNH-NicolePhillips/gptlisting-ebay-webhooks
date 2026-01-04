@@ -208,67 +208,7 @@ export const handler: Handler = async (event) => {
     meta: cleanMeta(entry.meta ?? null),
   }));
 
-  const publishMode = (process.env.PUBLISH_MODE || "draft").toLowerCase();
-  const envDryRun = (process.env.EBAY_DRY_RUN || "true").toLowerCase() !== "false";
-  const requestDry = payload?.dryRun === true;
-  const dryRunModes = new Set(["dry-run", "dryrun", "simulate", "preview", "test"]);
-  const modeImpliedDry = dryRunModes.has(publishMode);
-  const isDryRun = envDryRun || modeImpliedDry || requestDry;
-  const dryRunReason = envDryRun
-    ? "env"
-    : modeImpliedDry
-      ? "mode"
-      : requestDry
-        ? "request"
-        : null;
   const appBase = deriveBaseUrlFromEvent(event);
-
-  if (isDryRun) {
-    console.log(
-      JSON.stringify({
-        evt: "ebay.dryRun",
-        publishMode,
-        envDryRun,
-        requestedDry: requestDry,
-        dryRunReason,
-        userId: userAuth?.userId || null,
-      }),
-    );
-    const previews = normalized.map((item, idx) => {
-      const meta = mergeMeta(normalizedMeta[idx], item);
-      return {
-        sku: item.sku,
-        title: item.title,
-        price: item.price,
-        quantity: item.quantity,
-        categoryId: item.categoryId,
-        marketplaceId: item.marketplaceId,
-        imageUrls: item.imageUrls,
-        aspects: item.aspects || {},
-        meta,
-      };
-    });
-    return jsonResponse(
-      200,
-      {
-        ok: true,
-        dryRun: true,
-        status: "DRY_RUN",
-        dryRunReason,
-        message:
-          dryRunReason === "env"
-            ? "Draft creation skipped because EBAY_DRY_RUN is enabled."
-            : dryRunReason === "mode"
-              ? `Draft creation skipped because PUBLISH_MODE=${publishMode} is set to a dry-run mode.`
-              : "Draft creation skipped because dryRun=true was requested.",
-        count: previews.length,
-        previews,
-        invalid: invalidSummaries,
-      },
-      originHdr,
-      METHODS
-    );
-  }
 
   let refreshToken = (process.env.EBAY_REFRESH_TOKEN || "").trim();
   let refreshSource: "env" | "user" | "global" | null = refreshToken ? "env" : null;

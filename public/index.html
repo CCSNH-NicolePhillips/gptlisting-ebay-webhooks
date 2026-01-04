@@ -940,17 +940,6 @@
               const resultsCount = Array.isArray(data?.results) ? data.results.length : 0;
               const failuresCount = Array.isArray(data?.failures) ? data.failures.length : 0;
               const ok = r.ok && (data?.ok !== false);
-              if (ok && data?.dryRun) {
-                const reason = data.dryRunReason || null;
-                let note = data.message || 'Dry run only — no draft created.';
-                if (!data.message) {
-                  if (reason === 'env') note = 'Dry run only — disable EBAY_DRY_RUN to create live drafts.';
-                  else if (reason === 'mode') note = 'Dry run only — set PUBLISH_MODE=publish (or live) to create drafts.';
-                  else if (reason === 'request') note = 'Dry run only — payload requested dryRun=true.';
-                }
-                msg.textContent = note;
-                return;
-              }
               const treatedSuccess = ok && resultsCount > 0;
               if (treatedSuccess) {
                 const first = Array.isArray(data.results) ? data.results[0] : null;

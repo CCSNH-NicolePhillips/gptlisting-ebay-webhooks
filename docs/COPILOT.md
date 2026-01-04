@@ -49,7 +49,6 @@ For every new endpoint:
   - Keep sections: “Now”, “Next”, “Later”, “Blocked”.
 
 ## 8) Safety toggles
-- **EBAY_DRY_RUN=true** unless explicitly disabled.
 - **VISION_BYPASS_CACHE=false** unless testing cache bypass.
 - **PUBLISH_MODE=draft** unless we explicitly publish.
 

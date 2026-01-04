@@ -71,7 +71,7 @@ async function fetchInventoryLocationKeys(accessToken: string, apiHost: string, 
 }
 
 const METHODS = "POST, OPTIONS";
-const DRY_RUN_DEFAULT = (process.env.EBAY_DRY_RUN || "true").toLowerCase() !== "false";
+
 // Note: This constant is deprecated and should not be used.
 // Users must configure their merchant location via /location.html
 // Environment variable EBAY_MERCHANT_LOCATION_KEY is only for single-user deployments
@@ -238,16 +238,6 @@ export const handler: Handler = async (event) => {
     }
 
     prepared.push({ group, mapped, groupId });
-  }
-
-  if (DRY_RUN_DEFAULT) {
-    const previews = prepared.map(({ mapped }) => ({
-      sku: mapped.sku,
-      inventory: mapped.inventory,
-      offer: mapped.offer,
-      meta: mapped._meta,
-    }));
-    return json(200, { ok: true, dryRun: true, count: previews.length, previews }, originHdr, METHODS);
   }
 
   let access;
