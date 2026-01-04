@@ -272,8 +272,16 @@ export function calculateTargetDelivered(
         }
         break;
     }
+  } else if (soldStrong) {
+    // No active eBay comps BUT we have strong sold data - use it!
+    // This handles cases where Google Shopping doesn't find active listings
+    // but eBay sold API finds plenty of recent sales
+    targetCents = soldMedian!;
+    fallbackUsed = false; // Not a fallback - this is real market data
+    warnings.push('usingSoldDataOnly');
+    console.log(`[delivered-pricing] No active comps, using sold median: $${(soldMedian! / 100).toFixed(2)}`);
   } else {
-    // No eBay comps - fall back to retail
+    // No eBay comps and no strong sold data - fall back to retail
     fallbackUsed = true;
     warnings.push('noEbayComps');
     
