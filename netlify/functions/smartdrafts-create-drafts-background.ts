@@ -7,12 +7,9 @@ import { recordDraftsCreated } from "../../src/lib/user-stats.js";
 import OpenAI from "openai";
 import { pickCategoryForGroup } from "../../src/lib/taxonomy-select.js";
 import { listCategories } from "../../src/lib/taxonomy-store.js";
-import { lookupPrice, type PriceLookupInput, type PriceDecision } from "../../src/lib/price-lookup.js";
+import { type PriceDecision } from "../../src/lib/price-lookup.js";
 import { getDeliveredPricing, type DeliveredPricingDecision, type DeliveredPricingSettings } from "../../src/lib/delivered-pricing.js";
 import { getBrandMetadata } from "../../src/lib/brand-map.js";
-
-// Feature flag for new delivered-price-first pricing engine
-const USE_DELIVERED_PRICING_V2 = process.env.USE_DELIVERED_PRICING_V2 === 'true';
 import { getDefaultPricingSettings, type PricingSettings } from "../../src/lib/pricing-config.js";
 import { tokensStore } from "../../src/lib/_blobs.js";
 import { fetchCategoryAspects, formatAspectsForPrompt, type CategoryAspectsResult } from "../../src/lib/ebay-category-aspects.js";
@@ -825,12 +822,10 @@ async function createDraftForProduct(
   console.log(`[Draft-debug] Full product keys:`, Object.keys(product));
   
   // ========================================
-  // TIERED PRICING ENGINE (Phase 4 / v2)
+  // DELIVERED PRICING ENGINE
   // ========================================
-  // v1: eBay sold → Brand MSRP → AI arbitration
-  // v2 (USE_DELIVERED_PRICING_V2): Delivered-price-first engine
-  //     Uses eBay Browse API + Google Shopping for market comps
-  //     Prices to delivered-to-door, then backs into item + shipping
+  // Uses Google Shopping for market comps
+  // Prices to delivered-to-door, then backs into item + shipping
   // ========================================
   
   let pricingDecision: PriceDecision | null = null;
@@ -855,107 +850,81 @@ async function createDraftForProduct(
     console.log(`[smartdrafts-price] Looking up price for: ${product.brand || '(no brand)'} ${priceLookupTitle || '(no product name)'}`);
     
     // ========================================
-    // V2: Delivered-Price-First Pricing Engine
+    // Delivered-Price-First Pricing Engine
     // ========================================
-    if (USE_DELIVERED_PRICING_V2) {
-      console.log(`[smartdrafts-price] 🆕 Using v2 delivered-pricing engine`);
-      
-      const v2Settings: Partial<DeliveredPricingSettings> = {
-        mode: 'market-match',
-        shippingEstimateCents: pricingSettings.templateShippingEstimateCents || 600,
-        minItemCents: 499, // $4.99 floor
-        lowPriceMode: 'FLAG_ONLY', // Soft rollout: flag but don't skip
-        useSmartShipping: true,
+    
+    const deliveredSettings: Partial<DeliveredPricingSettings> = {
+      mode: 'market-match',
+      shippingEstimateCents: pricingSettings.templateShippingEstimateCents || 600,
+      minItemCents: 499, // $4.99 floor
+      lowPriceMode: 'FLAG_ONLY', // Soft rollout: flag but don't skip
+      useSmartShipping: true,
+    };
+    
+    deliveredDecision = await getDeliveredPricing(
+      product.brand || '',
+      priceLookupTitle,
+      deliveredSettings
+    );
+    
+    console.log(`[smartdrafts-price] Result: item=$${(deliveredDecision.finalItemCents / 100).toFixed(2)}, ship=$${(deliveredDecision.finalShipCents / 100).toFixed(2)}, canCompete=${deliveredDecision.canCompete}`);
+    
+    // Convert to PriceDecision format for compatibility
+    const itemDollars = deliveredDecision.finalItemCents / 100;
+    
+    if (deliveredDecision.skipListing) {
+      // Can't compete and lowPriceMode=AUTO_SKIP
+      pricingDecision = {
+        ok: false,
+        candidates: [],
+        reason: 'Cannot compete on delivered price',
       };
-      
-      deliveredDecision = await getDeliveredPricing(
-        product.brand || '',
-        priceLookupTitle,
-        v2Settings
-      );
-      
-      console.log(`[smartdrafts-price] v2 result: item=$${(deliveredDecision.finalItemCents / 100).toFixed(2)}, ship=$${(deliveredDecision.finalShipCents / 100).toFixed(2)}, canCompete=${deliveredDecision.canCompete}`);
-      
-      // Convert v2 decision to v1 PriceDecision format for compatibility
-      const itemDollars = deliveredDecision.finalItemCents / 100;
-      
-      if (deliveredDecision.skipListing) {
-        // Can't compete and lowPriceMode=AUTO_SKIP
-        pricingDecision = {
-          ok: false,
-          candidates: [],
-          reason: 'Cannot compete on delivered price',
-        };
-      } else if (!deliveredDecision.canCompete) {
-        // Overpriced but not skipping (FLAG_ONLY mode)
-        pricingDecision = {
-          ok: true,
-          source: deliveredDecision.compsSource as any,
-          price: itemDollars,
-          recommendedListingPrice: itemDollars,
-          candidates: deliveredDecision.ebayComps.map(c => ({
+    } else if (!deliveredDecision.canCompete) {
+      // Overpriced but not skipping (FLAG_ONLY mode)
+      pricingDecision = {
+        ok: true,
+        source: deliveredDecision.compsSource as any,
+        price: itemDollars,
+        recommendedListingPrice: itemDollars,
+        candidates: deliveredDecision.ebayComps.map(c => ({
+          source: 'ebay-sold' as const,
+          price: c.deliveredCents / 100,
+          url: c.url || undefined,
+          currency: 'USD',
+        })),
+        needsManualReview: true,
+        manualReviewReason: `Cannot compete: market floor $${(deliveredDecision.activeFloorDeliveredCents! / 100).toFixed(2)} delivered, our price $${((deliveredDecision.finalItemCents + deliveredDecision.finalShipCents) / 100).toFixed(2)}`,
+      };
+    } else {
+      // Good price - can compete
+      pricingDecision = {
+        ok: true,
+        source: deliveredDecision.compsSource as any,
+        price: itemDollars,
+        confidence: deliveredDecision.matchConfidence,
+        recommendedListingPrice: itemDollars,
+        candidates: [
+          ...deliveredDecision.ebayComps.slice(0, 3).map(c => ({
             source: 'ebay-sold' as const,
             price: c.deliveredCents / 100,
             url: c.url || undefined,
             currency: 'USD',
           })),
-          needsManualReview: true,
-          manualReviewReason: `Cannot compete: market floor $${(deliveredDecision.activeFloorDeliveredCents! / 100).toFixed(2)} delivered, our price $${((deliveredDecision.finalItemCents + deliveredDecision.finalShipCents) / 100).toFixed(2)}`,
-        };
-      } else {
-        // Good price - can compete
-        pricingDecision = {
-          ok: true,
-          source: deliveredDecision.compsSource as any,
-          price: itemDollars,
-          confidence: deliveredDecision.matchConfidence,
-          recommendedListingPrice: itemDollars,
-          candidates: [
-            ...deliveredDecision.ebayComps.slice(0, 3).map(c => ({
-              source: 'ebay-sold' as const,
-              price: c.deliveredCents / 100,
-              url: c.url || undefined,
-              currency: 'USD',
-            })),
-            ...deliveredDecision.retailComps.slice(0, 2).map(c => ({
-              source: c.source as any,
-              price: c.deliveredCents / 100,
-              url: c.url || undefined,
-              currency: 'USD',
-            })),
-          ],
-          needsManualReview: deliveredDecision.matchConfidence === 'low',
-          manualReviewReason: deliveredDecision.matchConfidence === 'low' 
-            ? 'Low confidence match - please verify product identity'
-            : undefined,
-        };
-      }
-      
-      console.log(`[smartdrafts-price] v2 price lookup took ${Date.now() - priceStart}ms`);
-      
-    } else {
-      // ========================================
-      // V1: Legacy Pricing Engine
-      // ========================================
-      const priceInput: PriceLookupInput = {
-        title: priceLookupTitle,
-        brand: product.brand || undefined,
-        brandWebsite: product.brandWebsite || undefined,
-        upc: undefined,
-        condition: 'NEW',
-        quantity: undefined,
-        keyText: product.keyText,
-        categoryPath: product.categoryPath,
-        photoQuantity: product.photoQuantity || 1,
-        packCount: product.packCount,
-        amazonPackSize: undefined,
-        pricingSettings,
-        netWeight: product.netWeight || undefined,
+          ...deliveredDecision.retailComps.slice(0, 2).map(c => ({
+            source: c.source as any,
+            price: c.deliveredCents / 100,
+            url: c.url || undefined,
+            currency: 'USD',
+          })),
+        ],
+        needsManualReview: deliveredDecision.matchConfidence === 'low',
+        manualReviewReason: deliveredDecision.matchConfidence === 'low' 
+          ? 'Low confidence match - please verify product identity'
+          : undefined,
       };
-
-      pricingDecision = await lookupPrice(priceInput);
-      console.log(`[smartdrafts-price] v1 price lookup took ${Date.now() - priceStart}ms`);
     }
+    
+    console.log(`[smartdrafts-price] Price lookup took ${Date.now() - priceStart}ms`);
 
     // Guard against null pricingDecision (should never happen, but TypeScript needs it)
     if (!pricingDecision) {
@@ -977,20 +946,18 @@ async function createDraftForProduct(
       priceMeta = {
         chosenSource: pricingDecision.chosen?.source || pricingDecision.source,
         basePrice: pricingDecision.chosen?.price || pricingDecision.price,
-        pricingEngine: USE_DELIVERED_PRICING_V2 ? 'v2-delivered' : 'v1-legacy',
+        pricingEngine: 'delivered',
         candidates: pricingDecision.candidates.map(c => ({
           source: c.source,
           price: c.price,
           notes: c.notes,
         })),
         ...(deliveredDecision && {
-          v2: {
-            canCompete: deliveredDecision.canCompete,
-            compsSource: deliveredDecision.compsSource,
-            ebayCompsCount: deliveredDecision.ebayComps.length,
-            retailCompsCount: deliveredDecision.retailComps.length,
-            shippingEstimateSource: deliveredDecision.shippingEstimateSource,
-          },
+          canCompete: deliveredDecision.canCompete,
+          compsSource: deliveredDecision.compsSource,
+          ebayCompsCount: deliveredDecision.ebayComps.length,
+          retailCompsCount: deliveredDecision.retailComps.length,
+          shippingEstimateSource: deliveredDecision.shippingEstimateSource,
         }),
       };
     } else {
@@ -999,32 +966,29 @@ async function createDraftForProduct(
       priceMeta = {
         chosenSource: pricingDecision.chosen?.source || pricingDecision.source,
         basePrice: pricingDecision.chosen?.price || pricingDecision.price,
-        pricingEngine: USE_DELIVERED_PRICING_V2 ? 'v2-delivered' : 'v1-legacy',
+        pricingEngine: 'delivered',
         candidates: pricingDecision.candidates.map(c => ({
           source: c.source,
           price: c.price,
           notes: c.notes,
         })),
         ...(deliveredDecision && {
-          v2: {
-            canCompete: deliveredDecision.canCompete,
-            compsSource: deliveredDecision.compsSource,
-            ebayCompsCount: deliveredDecision.ebayComps.length,
-            retailCompsCount: deliveredDecision.retailComps.length,
-            activeFloorCents: deliveredDecision.activeFloorDeliveredCents,
-            finalItemCents: deliveredDecision.finalItemCents,
-            finalShipCents: deliveredDecision.finalShipCents,
-            freeShipApplied: deliveredDecision.freeShipApplied,
-            shippingEstimateSource: deliveredDecision.shippingEstimateSource,
-          },
+          canCompete: deliveredDecision.canCompete,
+          compsSource: deliveredDecision.compsSource,
+          ebayCompsCount: deliveredDecision.ebayComps.length,
+          retailCompsCount: deliveredDecision.retailComps.length,
+          activeFloorCents: deliveredDecision.activeFloorDeliveredCents,
+          finalItemCents: deliveredDecision.finalItemCents,
+          finalShipCents: deliveredDecision.finalShipCents,
+          freeShipApplied: deliveredDecision.freeShipApplied,
+          shippingEstimateSource: deliveredDecision.shippingEstimateSource,
         }),
       };
       
       console.log(
         `[smartdrafts-price] ✓ title="${priceLookupTitle}" ` +
         `final=$${finalPrice.toFixed(2)} ` +
-        `source=${pricingDecision.chosen?.source || pricingDecision.source} ` +
-        `engine=${USE_DELIVERED_PRICING_V2 ? 'v2' : 'v1'}`
+        `source=${pricingDecision.chosen?.source || pricingDecision.source}`
       );
     }
   } catch (err) {
