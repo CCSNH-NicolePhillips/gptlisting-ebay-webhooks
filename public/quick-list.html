@@ -1117,6 +1117,23 @@
           window.location.replace('/login.html');
           throw new Error('Authentication required');
         }
+        
+        // Handle service connection errors (Dropbox/eBay not connected)
+        const errorMsg = data?.error || rawText || '';
+        if (r.status === 400) {
+          if (errorMsg.includes('Connect Dropbox first') || errorMsg.includes('dropbox-not-connected')) {
+            console.warn('[API] Dropbox not connected, redirecting to onboarding');
+            alert('Your Dropbox connection has expired or is not set up. Please reconnect Dropbox.');
+            window.location.href = '/onboarding.html';
+            throw new Error('Dropbox connection required');
+          }
+          if (errorMsg.includes('Connect eBay first') || errorMsg.includes('ebay-not-connected')) {
+            console.warn('[API] eBay not connected, redirecting to onboarding');
+            alert('Your eBay connection has expired or is not set up. Please reconnect eBay.');
+            window.location.href = '/onboarding.html';
+            throw new Error('eBay connection required');
+          }
+        }
 
         // Make the thrown message actually useful
         const msg =
@@ -1265,6 +1282,7 @@
 
       } catch (err) {
         console.error('Failed to load folders:', err);
+        // Connection errors are handled by fetchJSON and will redirect
         $('folderSelect').innerHTML = '<option value="">Error loading folders</option>';
       }
     }
