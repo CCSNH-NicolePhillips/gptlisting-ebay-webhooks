@@ -234,10 +234,26 @@ For each image, provide:
      * Single bottle with no pack info → packCount: null
    - Use null if no pack count is visible or if the product is a single unit (not a multi-pack)
    - ONLY set for multi-pack boxes/cases containing multiple saleable units (packets, bottles, pouches)
-16. netWeight: Product weight/size from label text for shipping estimation
-   - Look for weight printed on the label: "8 oz", "250g", "2 fl oz", "60 capsules", "90 tablets", "30 softgels", "1.5 lb"
-   - Return as an object: { "value": 8, "unit": "oz" }
-   - Normalize units:
+16. netWeight: Product weight/size - THIS IS NON-NEGOTIABLE, YOU MUST PROVIDE A VALUE
+   
+   ⚠️ CRITICAL: netWeight is REQUIRED for shipping cost calculation. We CANNOT ship without weight.
+   Incorrect weight = wrong shipping cost = we lose money. This field must NEVER be null.
+   
+   STEP 1: Look for weight printed on label: "8 oz", "250g", "2 fl oz", "60 capsules", "1.5 lb"
+   
+   STEP 2: If no weight visible, you MUST ESTIMATE based on product type and size:
+   - Shampoo/conditioner bottle: Standard sizes are 8oz, 12oz, 16oz, 32oz. Estimate from bottle size.
+   - Supplement bottle with capsules: 60 capsules ≈ 4oz total, 120 capsules ≈ 6oz, 240 capsules ≈ 10oz
+   - Vitamin gummies: 60 gummies ≈ 8oz, 120 gummies ≈ 14oz (heavier than capsules)
+   - Protein powder: Small jar ≈ 1lb, medium ≈ 2lb, large ≈ 5lb
+   - Skincare cream/lotion: Small tube ≈ 1oz, jar ≈ 2-4oz, pump bottle ≈ 8-16oz
+   - Hair spray/mist: Small ≈ 4oz, standard ≈ 8oz
+   - Books: Paperback ≈ 8oz, hardcover ≈ 1.5lb, textbook ≈ 3lb
+   - Honey sticks: 12 sticks ≈ 4oz, 50 sticks ≈ 1lb
+   
+   STEP 3: Return as object: { "value": 8, "unit": "oz" }
+   
+   Normalize units:
      * "oz", "ounce", "ounces" → "oz"
      * "fl oz", "fluid oz", "fluid ounces" → "fl oz"
      * "g", "gram", "grams" → "g"
@@ -252,20 +268,22 @@ For each image, provide:
      * "pieces", "piece", "pcs" → "pieces"
      * "packets", "packet" → "packets"
      * "chews", "chew" → "chews"
-   - Examples:
+   
+   Examples (from label OR estimated):
      * Label says "8 oz" → netWeight: { "value": 8, "unit": "oz" }
      * Label says "250 grams" → netWeight: { "value": 250, "unit": "g" }
      * Label says "60 Capsules" → netWeight: { "value": 60, "unit": "capsules" }
-     * Label says "2 FL OZ" → netWeight: { "value": 2, "unit": "fl oz" }
-     * Label says "Net Wt. 1.5 lb" → netWeight: { "value": 1.5, "unit": "lb" }
-     * Label says "30 Sticks" → netWeight: { "value": 30, "unit": "sticks" }
-     * Label says "90 Pieces" → netWeight: { "value": 90, "unit": "pieces" }
+     * NO label visible but standard shampoo bottle → ESTIMATE: { "value": 12, "unit": "oz" }
+     * NO label visible but supplement bottle looks like 90-count → ESTIMATE: { "value": 90, "unit": "capsules" }
+   
    - CRITICAL: Prioritize actual weight units (oz, g, lb, fl oz, ml) over count units (capsules, tablets)
      * If label shows BOTH "120 capsules" and "150g" → use weight: { "value": 150, "unit": "g" }
    - IMPORTANT: For products sold by count (sticks, pieces, gummies, etc.), extract the count as netWeight
      * This applies to honey sticks, gum pieces, individual packets, etc.
      * Do NOT confuse with packCount - netWeight counts CONTENTS, packCount counts MULTI-PACK units
-   - null if no weight or size is visible on the label
+   
+   ⚠️ NEVER return null. If you absolutely cannot determine weight, make your best estimate based on the 
+   product category and apparent container size. An estimate is better than no weight.
 
 DEFINITIONS:
 - PRODUCT: Clear consumer product packaging (supplement, cosmetic, food, book, etc.)
@@ -352,7 +370,7 @@ Respond ONLY with valid JSON:
       "rationale": "Brief explanation of classification choices",
       "quantityInPhoto": 1,
       "packCount": 24 or null,
-      "netWeight": { "value": 8, "unit": "oz" } or null
+      "netWeight": { "value": 8, "unit": "oz" }  // ⚠️ REQUIRED - never null, estimate if needed
     }
   ]
 }

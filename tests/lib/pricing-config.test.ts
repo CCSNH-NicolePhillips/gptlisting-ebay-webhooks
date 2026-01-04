@@ -168,4 +168,104 @@ describe('pricing-config', () => {
       expect(dollars).toBeLessThan(10);
     });
   });
+
+  // ============================================================================
+  // NEW TESTS: EbayShippingMode settings (Step 1 of DraftPilot pricing fix)
+  // ============================================================================
+
+  describe('EbayShippingMode defaults', () => {
+    it('should default to BUYER_PAYS_SHIPPING', () => {
+      const defaults = getDefaultPricingSettings();
+      expect(defaults.ebayShippingMode).toBe('BUYER_PAYS_SHIPPING');
+    });
+
+    it('should have buyerShippingChargeCents of 600 ($6.00)', () => {
+      const defaults = getDefaultPricingSettings();
+      expect(defaults.buyerShippingChargeCents).toBe(600);
+    });
+
+    it('should default allowAutoFreeShippingOnLowPrice to true', () => {
+      const defaults = getDefaultPricingSettings();
+      expect(defaults.allowAutoFreeShippingOnLowPrice).toBe(true);
+    });
+  });
+
+  describe('EbayShippingMode type safety', () => {
+    it('should accept FREE_SHIPPING mode', () => {
+      const settings: PricingSettings = {
+        discountPercent: 10,
+        shippingStrategy: 'ALGO_COMPETITIVE_TOTAL',
+        templateShippingEstimateCents: 600,
+        shippingSubsidyCapCents: null,
+        minItemPriceCents: 199,
+        ebayShippingMode: 'FREE_SHIPPING',
+        buyerShippingChargeCents: 0,
+        allowAutoFreeShippingOnLowPrice: false,
+      };
+      expect(settings.ebayShippingMode).toBe('FREE_SHIPPING');
+    });
+
+    it('should accept BUYER_PAYS_SHIPPING mode', () => {
+      const settings: PricingSettings = {
+        discountPercent: 10,
+        shippingStrategy: 'ALGO_COMPETITIVE_TOTAL',
+        templateShippingEstimateCents: 600,
+        shippingSubsidyCapCents: null,
+        minItemPriceCents: 199,
+        ebayShippingMode: 'BUYER_PAYS_SHIPPING',
+        buyerShippingChargeCents: 800,
+        allowAutoFreeShippingOnLowPrice: true,
+      };
+      expect(settings.ebayShippingMode).toBe('BUYER_PAYS_SHIPPING');
+      expect(settings.buyerShippingChargeCents).toBe(800);
+    });
+  });
+
+  describe('Settings merge with new fields', () => {
+    it('should merge partial settings with defaults', () => {
+      const defaults = getDefaultPricingSettings();
+      const partialOverrides = {
+        discountPercent: 15,
+        ebayShippingMode: 'FREE_SHIPPING' as const,
+      };
+      
+      const merged = { ...defaults, ...partialOverrides };
+      
+      // Overridden values
+      expect(merged.discountPercent).toBe(15);
+      expect(merged.ebayShippingMode).toBe('FREE_SHIPPING');
+      
+      // Default values preserved
+      expect(merged.shippingStrategy).toBe('ALGO_COMPETITIVE_TOTAL');
+      expect(merged.templateShippingEstimateCents).toBe(600);
+      expect(merged.minItemPriceCents).toBe(199);
+      expect(merged.buyerShippingChargeCents).toBe(600);
+      expect(merged.allowAutoFreeShippingOnLowPrice).toBe(true);
+    });
+
+    it('existing users without new fields get defaults', () => {
+      // Simulate a saved settings object without new fields (legacy user)
+      const legacySettings = {
+        discountPercent: 12,
+        shippingStrategy: 'DISCOUNT_ITEM_ONLY' as const,
+        templateShippingEstimateCents: 500,
+        shippingSubsidyCapCents: null,
+        minItemPriceCents: 299,
+      };
+      
+      const defaults = getDefaultPricingSettings();
+      const merged: PricingSettings = { ...defaults, ...legacySettings };
+      
+      // Legacy values preserved
+      expect(merged.discountPercent).toBe(12);
+      expect(merged.shippingStrategy).toBe('DISCOUNT_ITEM_ONLY');
+      expect(merged.templateShippingEstimateCents).toBe(500);
+      expect(merged.minItemPriceCents).toBe(299);
+      
+      // New fields get defaults
+      expect(merged.ebayShippingMode).toBe('BUYER_PAYS_SHIPPING');
+      expect(merged.buyerShippingChargeCents).toBe(600);
+      expect(merged.allowAutoFreeShippingOnLowPrice).toBe(true);
+    });
+  });
 });

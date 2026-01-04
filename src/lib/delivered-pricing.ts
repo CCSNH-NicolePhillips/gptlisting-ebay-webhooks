@@ -4,6 +4,31 @@
  * Prices to delivered-to-door, then backs into item + shipping.
  * Uses Google Shopping for comps (eBay + retail), falls back to sold prices.
  * 
+ * IMPORTANT: Shipping Handling
+ * ============================
+ * This engine calculates a TARGET DELIVERED PRICE (what buyer pays total).
+ * 
+ * How shipping is handled depends on your eBay fulfillment policy:
+ * 
+ * 1. FREE SHIPPING POLICY (ebayHandlesShipping: false, freeShipApplied: true)
+ *    - Item price = full delivered price (shipping baked into item)
+ *    - eBay shows $0 shipping to buyer
+ *    - Seller absorbs shipping cost
+ * 
+ * 2. CALCULATED/FLAT SHIPPING POLICY (ebayHandlesShipping: true)
+ *    - Item price = delivered price - estimated shipping
+ *    - eBay adds shipping on top based on buyer location/weight
+ *    - ⚠️ Risk: If our shipping estimate doesn't match eBay's, total may differ
+ * 
+ * 3. SIMPLE MODE (ebayHandlesShipping: true, skipShippingSplit: true) - RECOMMENDED
+ *    - Item price = target delivered price (no split)
+ *    - eBay adds shipping on top
+ *    - Total to buyer = itemPrice + eBay shipping
+ *    - This is the simplest and most predictable mode
+ * 
+ * Set ebayHandlesShipping: true in settings if your fulfillment policy charges
+ * shipping separately (calculated or flat rate). This avoids double-charging.
+ * 
  * @see docs/PRICING-OVERHAUL.md for full specification
  */
 
@@ -220,7 +245,15 @@ export function getActiveMedianDelivered(comps: CompetitorPrice[]): number | nul
  * Phase 3: Now incorporates sold comps:
  * - market-match: min(soldMedian, activeFloor) when soldStrong
  * - max-margin: min(activeMedian, soldMedian) when soldStrong
+ * 
+ * Phase 4: Always cap against retail prices
+ * - If major retailer (Amazon, Walmart, Ulta, etc.) is selling for $X,
+ *   we should price at ~80% of that to be competitive
+ * - RETAIL_CAP_RATIO: 0.80 = never price above 80% of retail
  */
+
+const RETAIL_CAP_RATIO = 0.80; // Never price above 80% of best retail
+
 export function calculateTargetDelivered(
   mode: PricingMode,
   activeFloor: number | null,
@@ -244,6 +277,22 @@ export function calculateTargetDelivered(
     console.log(`[delivered-pricing] Sold data is STRONG (${soldCount} samples, median $${(soldMedian! / 100).toFixed(2)})`);
   } else if (soldMedian !== null) {
     console.log(`[delivered-pricing] Sold data is weak (${soldCount} samples) - ignoring`);
+  }
+  
+  // Calculate the retail cap - never price above 80% of best retail
+  const retailPrices = [
+    amazonPrice,
+    walmartPrice,
+    ...retailComps.filter(c => c.inStock).map(c => c.deliveredCents)
+  ].filter((p): p is number => p !== null && p > 0);
+  
+  const lowestRetailCents = retailPrices.length > 0 ? Math.min(...retailPrices) : null;
+  const retailCapCents = lowestRetailCents !== null 
+    ? Math.round(lowestRetailCents * RETAIL_CAP_RATIO)
+    : null;
+  
+  if (retailCapCents !== null) {
+    console.log(`[delivered-pricing] Retail cap: $${(retailCapCents / 100).toFixed(2)} (80% of lowest retail $${(lowestRetailCents! / 100).toFixed(2)})`);
   }
 
   // Try eBay comps first
@@ -309,6 +358,14 @@ export function calculateTargetDelivered(
       targetCents = 0;
       warnings.push('noPricingData');
     }
+  }
+  
+  // Apply retail cap - NEVER price above 80% of lowest retail
+  // This ensures we don't price an item at $17.98 when Ulta is selling for $10.99
+  if (retailCapCents !== null && targetCents > retailCapCents) {
+    console.log(`[delivered-pricing] Applying retail cap: $${(targetCents / 100).toFixed(2)} → $${(retailCapCents / 100).toFixed(2)}`);
+    warnings.push('retailCapApplied');
+    targetCents = retailCapCents;
   }
 
   return { targetCents, fallbackUsed, soldStrong, warnings };

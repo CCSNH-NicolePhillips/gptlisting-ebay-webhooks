@@ -9,9 +9,25 @@
  * - Strategy-based pricing (ALGO_COMPETITIVE_TOTAL vs DISCOUNT_ITEM_ONLY)
  * - Comprehensive evidence tracking for debugging
  * - Not wired into production yet (Phase 2 is math only)
+ * 
+ * SHIPPING TERMINOLOGY (CRITICAL - READ THIS):
+ * =============================================
+ * shippingChargeCents = what BUYER pays for shipping (0 if free shipping)
+ *   - This is displayed on eBay listing as "Shipping: $X.XX"
+ *   - Set to 0 when using FREE_SHIPPING mode
+ * 
+ * shippingCostEstimateCents = what WE expect to pay the carrier
+ *   - Used internally for margin calculations
+ *   - Does NOT affect buyer's displayed price
+ *   - Category/weight-based estimate of our actual shipping cost
+ * 
+ * targetDeliveredTotalCents = what buyer pays TOTAL (item + shippingCharge)
+ *   - This is the ANCHOR for all pricing decisions
+ *   - Calculated from comps/Amazon/retail before any split
+ *   - NEVER double-count: targetDelivered = itemPrice + shippingCharge (always)
  */
 
-import type { PricingSettings, ShippingStrategy } from './pricing-config.js';
+import type { PricingSettings, ShippingStrategy, EbayShippingMode } from './pricing-config.js';
 import { getDefaultPricingSettings } from './pricing-config.js';
 
 /**
@@ -402,4 +418,238 @@ export function computeAmazonTotals(input: {
     amazonTotal,
     ebayTargetTotal,
   };
+}
+
+// ============================================================================
+// NEW: Unified eBay Offer Pricing (Step 2 of DraftPilot pricing fix)
+// ============================================================================
+
+/**
+ * Result of eBay offer pricing computation
+ * 
+ * This is the FINAL output used when creating eBay listings.
+ * All values are in cents (integers) to avoid float precision issues.
+ */
+export interface EbayOfferPricingResult {
+  /**
+   * Target delivered total - what buyer pays in total (item + shipping charge)
+   * This is the ANCHOR for all pricing decisions.
+   */
+  targetDeliveredTotalCents: number;
+
+  /**
+   * Item price to set on eBay offer (cents)
+   * This is what goes in pricingSummary.price
+   */
+  itemPriceCents: number;
+
+  /**
+   * Shipping charge buyer pays (cents)
+   * 0 if FREE_SHIPPING mode, otherwise buyerShippingChargeCents from settings
+   * 
+   * INVARIANT: itemPriceCents + shippingChargeCents = targetDeliveredTotalCents
+   */
+  shippingChargeCents: number;
+
+  /**
+   * Estimated shipping cost WE pay to carrier (cents)
+   * Used for margin calculations, NOT displayed to buyer.
+   * This is separate from shippingChargeCents!
+   */
+  shippingCostEstimateCents: number;
+
+  /**
+   * Actual shipping mode used (may differ from settings if auto-switched)
+   */
+  effectiveShippingMode: EbayShippingMode;
+
+  /**
+   * Warnings generated during computation
+   * e.g., ["minItemFloorHit", "cannotCompete", "autoSwitchedToFreeShipping"]
+   */
+  warnings: string[];
+
+  /**
+   * Evidence for debugging - all inputs and intermediate values
+   */
+  evidence: EbayOfferPricingEvidence;
+}
+
+/**
+ * Evidence object for pricing transparency and debugging
+ */
+export interface EbayOfferPricingEvidence {
+  baseDeliveredTargetCents: number;
+  shippingCostEstimateCents: number;
+  requestedShippingMode: EbayShippingMode;
+  effectiveShippingMode: EbayShippingMode;
+  buyerShippingChargeCents: number;
+  itemPriceCents: number;
+  targetDeliveredTotalCents: number;
+  minItemPriceCents: number;
+  autoFreeShippingTriggered: boolean;
+  warnings: string[];
+}
+
+/**
+ * Compute final eBay offer pricing (item price + shipping charge)
+ * 
+ * WHY THIS FUNCTION EXISTS:
+ * =========================
+ * Previous code was confusing "shipping charge to buyer" with "shipping cost we pay".
+ * This led to double-counting shipping or incorrect splits.
+ * 
+ * This function provides ONE source of truth:
+ * - Input: baseDeliveredTargetCents (what buyer should pay total, from comps)
+ * - Output: itemPriceCents + shippingChargeCents that sum to targetDeliveredTotalCents
+ * 
+ * NEVER DOUBLE COUNT:
+ * - If mode is FREE_SHIPPING: shippingChargeCents = 0, itemPriceCents = targetDelivered
+ * - If mode is BUYER_PAYS: itemPriceCents = targetDelivered - shippingCharge
+ * 
+ * @param input.baseDeliveredTargetCents - Target total buyer pays (from comps/amazon/retail)
+ * @param input.shippingCostEstimateCents - What WE expect to pay carrier (for margin calc)
+ * @param input.settings - User pricing settings including ebayShippingMode
+ * @returns EbayOfferPricingResult with itemPriceCents, shippingChargeCents, evidence
+ */
+export function computeEbayOfferPricingCents(input: {
+  baseDeliveredTargetCents: number;
+  shippingCostEstimateCents: number;
+  settings: PricingSettings;
+}): EbayOfferPricingResult {
+  const { baseDeliveredTargetCents, shippingCostEstimateCents, settings } = input;
+  const warnings: string[] = [];
+
+  // Start with target delivered = base (may be updated if we have to clamp)
+  let targetDeliveredTotalCents = baseDeliveredTargetCents;
+
+  let itemPriceCents: number;
+  let shippingChargeCents: number;
+  let effectiveShippingMode: EbayShippingMode = settings.ebayShippingMode;
+  let autoFreeShippingTriggered = false;
+
+  /*
+   * ========================================================================
+   * CORE SPLIT LOGIC
+   * ========================================================================
+   * 
+   * WHY we split differently based on mode:
+   * 
+   * FREE_SHIPPING:
+   *   - Buyer sees "$X.XX + Free Shipping"
+   *   - We bake shipping cost into item price
+   *   - itemPrice = targetDelivered (shipping already "in there")
+   *   - shippingCharge = 0
+   * 
+   * BUYER_PAYS_SHIPPING:
+   *   - Buyer sees "$X.XX + $Y.YY shipping"
+   *   - We split: itemPrice + shippingCharge = targetDelivered
+   *   - itemPrice = targetDelivered - shippingCharge
+   *   - shippingCharge = settings.buyerShippingChargeCents
+   * 
+   * INVARIANT: itemPriceCents + shippingChargeCents === targetDeliveredTotalCents
+   * This is ALWAYS true. No exceptions.
+   */
+
+  if (effectiveShippingMode === 'FREE_SHIPPING') {
+    // FREE_SHIPPING: buyer pays item price only, shipping baked in
+    shippingChargeCents = 0;
+    itemPriceCents = targetDeliveredTotalCents;
+  } else {
+    // BUYER_PAYS_SHIPPING: split into item + shipping
+    shippingChargeCents = settings.buyerShippingChargeCents;
+    itemPriceCents = targetDeliveredTotalCents - shippingChargeCents;
+  }
+
+  /*
+   * ========================================================================
+   * GUARDRAIL: Minimum item price floor
+   * ========================================================================
+   * 
+   * WHY: Prevents listings like "$0.50 + $8.00 shipping" which:
+   * 1. Look scammy to buyers
+   * 2. May violate eBay policies
+   * 3. Indicate we can't actually compete at this price point
+   */
+
+  if (itemPriceCents < settings.minItemPriceCents) {
+    // Option A: Auto-switch to FREE_SHIPPING if allowed
+    if (settings.allowAutoFreeShippingOnLowPrice && effectiveShippingMode === 'BUYER_PAYS_SHIPPING') {
+      // Switch to FREE_SHIPPING mode
+      effectiveShippingMode = 'FREE_SHIPPING';
+      shippingChargeCents = 0;
+      itemPriceCents = baseDeliveredTargetCents; // Use original target, not the split value
+      autoFreeShippingTriggered = true;
+      warnings.push('autoSwitchedToFreeShipping');
+
+      // Check if even with free shipping we're below floor
+      if (itemPriceCents < settings.minItemPriceCents) {
+        itemPriceCents = settings.minItemPriceCents;
+        warnings.push('minItemFloorHit');
+      }
+      
+      // Update targetDeliveredTotal to maintain invariant
+      targetDeliveredTotalCents = itemPriceCents + shippingChargeCents;
+    } else {
+      // Option B: Clamp to minimum (will be overpriced vs market)
+      itemPriceCents = settings.minItemPriceCents;
+      warnings.push('minItemFloorHit');
+      warnings.push('cannotCompete');
+      
+      // Update targetDeliveredTotal to maintain invariant
+      targetDeliveredTotalCents = itemPriceCents + shippingChargeCents;
+    }
+  }
+
+  // Ensure no negative values (sanity check)
+  if (itemPriceCents < 0) {
+    itemPriceCents = 0;
+    warnings.push('negativePriceClamped');
+  }
+  if (shippingChargeCents < 0) {
+    shippingChargeCents = 0;
+    warnings.push('negativeShippingClamped');
+  }
+
+  // Build evidence for debugging
+  const evidence: EbayOfferPricingEvidence = {
+    baseDeliveredTargetCents,
+    shippingCostEstimateCents,
+    requestedShippingMode: settings.ebayShippingMode,
+    effectiveShippingMode,
+    buyerShippingChargeCents: settings.buyerShippingChargeCents,
+    itemPriceCents,
+    targetDeliveredTotalCents,
+    minItemPriceCents: settings.minItemPriceCents,
+    autoFreeShippingTriggered,
+    warnings: [...warnings],
+  };
+
+  return {
+    targetDeliveredTotalCents,
+    itemPriceCents,
+    shippingChargeCents,
+    shippingCostEstimateCents,
+    effectiveShippingMode,
+    warnings,
+    evidence,
+  };
+}
+
+/**
+ * Format pricing result for logging (one line per product)
+ * 
+ * WHY: Easy debugging in logs without scrolling through JSON blobs.
+ * Format: [pricing] deliveredTarget=$X.XX mode=FREE shippingCharge=$0.00 item=$X.XX shipCostEst=$Y.YY warnings=[...]
+ */
+export function formatPricingLogLine(result: EbayOfferPricingResult): string {
+  const mode = result.effectiveShippingMode === 'FREE_SHIPPING' ? 'FREE' : 'BUYER_PAYS';
+  const warnStr = result.warnings.length > 0 ? result.warnings.join(',') : 'none';
+  
+  return `[pricing] deliveredTarget=$${(result.targetDeliveredTotalCents / 100).toFixed(2)} ` +
+    `mode=${mode} ` +
+    `shippingCharge=$${(result.shippingChargeCents / 100).toFixed(2)} ` +
+    `item=$${(result.itemPriceCents / 100).toFixed(2)} ` +
+    `shipCostEst=$${(result.shippingCostEstimateCents / 100).toFixed(2)} ` +
+    `warnings=[${warnStr}]`;
 }

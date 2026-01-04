@@ -1,7 +1,7 @@
 import { buildItemSpecifics } from "./taxonomy-autofill.js";
 import type { CategoryDef } from "./taxonomy-schema.js";
 import { pickCategoryForGroup } from "./taxonomy-select.js";
-import { computeEbayItemPriceCents } from "./pricing-compute.js";
+import { computeEbayItemPriceCents, computeEbayOfferPricingCents, formatPricingLogLine } from "./pricing-compute.js";
 import { getDefaultPricingSettings, type PricingSettings } from "./pricing-config.js";
 import { tokensStore } from "./_blobs.js";
 import { proxyImageUrls } from "./image-utils.js";
@@ -261,6 +261,7 @@ export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>, us
   let amazonShippingAssumedZero = true;
   let price = 0;
   let pricingResult: any = null;
+  let offerPricingResult: ReturnType<typeof computeEbayOfferPricingCents> | null = null;
   let priceAlreadyComputed = false;
 
   // CRITICAL: If group.price exists AND group.priceMeta exists, this is a PUBLISH operation
@@ -296,19 +297,32 @@ export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>, us
       }
     }
 
-    // PHASE 3: Compute eBay offer price using Phase 2 function
+    // STEP 1: Compute base delivered target using Phase 2 function
+    // This gets us targetDeliveredTotalCents (what buyer should pay total)
     pricingResult = computeEbayItemPriceCents({
       amazonItemPriceCents,
       amazonShippingCents,
       settings: pricingSettings,
     });
 
-    price = pricingResult.ebayItemPriceCents / 100; // Convert cents to dollars
+    // STEP 2: Split delivered target into item + shipping based on shipping mode
+    // This is the NEW function that prevents double-counting shipping
+    offerPricingResult = computeEbayOfferPricingCents({
+      baseDeliveredTargetCents: pricingResult.targetDeliveredTotalCents,
+      shippingCostEstimateCents: pricingSettings.templateShippingEstimateCents,
+      settings: pricingSettings,
+    });
+
+    // Use itemPriceCents from the offer pricing (respects shipping mode)
+    price = offerPricingResult.itemPriceCents / 100; // Convert cents to dollars
   }
 
   // PHASE 3: Log PRICING_EVIDENCE (CRITICAL: Do not log tokens/PII)
   if (priceAlreadyComputed) {
     console.log(`[taxonomy-map] PRICING_EVIDENCE for SKU ${sku}: Using pre-computed price $${price.toFixed(2)} (publish mode, no re-calculation)`);
+  } else if (offerPricingResult) {
+    // New one-line logging format for easy debugging
+    console.log(`[taxonomy-map] ${formatPricingLogLine(offerPricingResult)} sku=${sku}`);
   } else {
     console.log(`[taxonomy-map] PRICING_EVIDENCE for SKU ${sku}:`, {
       sku,
@@ -318,9 +332,9 @@ export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>, us
       discountPercent: pricingSettings.discountPercent,
       shippingStrategy: pricingSettings.shippingStrategy,
       templateShippingEstimateCents: pricingSettings.templateShippingEstimateCents,
-      targetDeliveredTotalCents: pricingResult.targetDeliveredTotalCents,
-      ebayItemPriceCents: pricingResult.ebayItemPriceCents,
-      shippingSubsidyAppliedCents: pricingResult.evidence.shippingSubsidyAppliedCents,
+      targetDeliveredTotalCents: pricingResult?.targetDeliveredTotalCents,
+      ebayItemPriceCents: pricingResult?.ebayItemPriceCents,
+      shippingSubsidyAppliedCents: pricingResult?.evidence?.shippingSubsidyAppliedCents,
       finalOfferPriceDollars: price,
     });
   }

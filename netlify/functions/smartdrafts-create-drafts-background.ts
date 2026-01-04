@@ -125,6 +125,93 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
+ * Extract weight from product title/name as a last-resort fallback.
+ * Parses patterns like "8 oz", "16oz", "500 mL", "1.5 lb", "100 capsules"
+ * 
+ * @returns Weight object if found, null otherwise
+ */
+function extractWeightFromTitle(title: string): { value: number; unit: string } | null {
+  if (!title) return null;
+  
+  // Common weight patterns in product titles
+  const patterns = [
+    // Fluid ounces (must come before oz to match "fl oz" first)
+    /(\d+(?:\.\d+)?)\s*(?:fl\.?\s*oz\.?|fluid\s*oz(?:ounce)?s?)/i,
+    // Regular ounces
+    /(\d+(?:\.\d+)?)\s*oz(?:ounces?)?(?!\s*fl)/i,
+    // Milliliters
+    /(\d+(?:\.\d+)?)\s*(?:ml|milliliters?)/i,
+    // Liters
+    /(\d+(?:\.\d+)?)\s*(?:l|liters?)(?![a-z])/i,
+    // Grams
+    /(\d+(?:\.\d+)?)\s*(?:g|grams?)(?![a-z])/i,
+    // Kilograms
+    /(\d+(?:\.\d+)?)\s*(?:kg|kilograms?)/i,
+    // Pounds
+    /(\d+(?:\.\d+)?)\s*(?:lb|lbs|pounds?)/i,
+    // Count-based: capsules, tablets, softgels, gummies, ct
+    /(\d+)\s*(?:capsules?|caps?|tablets?|tabs?|softgels?|gummies?|gummy|ct|count)/i,
+  ];
+  
+  const unitMap: Record<string, string> = {
+    'fl oz': 'fl oz',
+    'fluid': 'fl oz',
+    'oz': 'oz',
+    'ounce': 'oz',
+    'ml': 'ml',
+    'milliliter': 'ml',
+    'l': 'ml', // Will multiply by 1000
+    'liter': 'ml', // Will multiply by 1000
+    'g': 'g',
+    'gram': 'g',
+    'kg': 'g', // Will multiply by 1000
+    'kilogram': 'g', // Will multiply by 1000
+    'lb': 'lb',
+    'lbs': 'lb',
+    'pound': 'lb',
+    'capsule': 'capsules',
+    'cap': 'capsules',
+    'tablet': 'tablets',
+    'tab': 'tablets',
+    'softgel': 'softgels',
+    'gummie': 'gummies',
+    'gummy': 'gummies',
+    'ct': 'count',
+    'count': 'count',
+  };
+  
+  for (const pattern of patterns) {
+    const match = title.match(pattern);
+    if (match) {
+      const value = parseFloat(match[1]);
+      // Determine unit from the matched string
+      const matchedText = match[0].toLowerCase();
+      
+      // Handle liters → ml conversion
+      if (/\d+(?:\.\d+)?\s*(?:l|liters?)(?![a-z])/i.test(match[0])) {
+        return { value: value * 1000, unit: 'ml' };
+      }
+      // Handle kg → g conversion
+      if (/\d+(?:\.\d+)?\s*(?:kg|kilograms?)/i.test(match[0])) {
+        return { value: value * 1000, unit: 'g' };
+      }
+      
+      // Map to standard unit
+      for (const [key, unit] of Object.entries(unitMap)) {
+        if (matchedText.includes(key)) {
+          return { value, unit };
+        }
+      }
+      
+      // Fallback to oz if we matched something but couldn't identify unit
+      return { value, unit: 'oz' };
+    }
+  }
+  
+  return null;
+}
+
+/**
  * Convert AI-extracted netWeight to shipping weight in ounces.
  * Adds a container buffer based on packageType for more accurate shipping costs.
  * 
@@ -1111,6 +1198,21 @@ async function createDraftForProduct(
     }
   }
   
+  // Last-resort fallback: extract weight from product title/name
+  // This is better than defaulting to 16 oz for everything
+  if (!finalWeight) {
+    const titleWeight = extractWeightFromTitle(product.product || '') 
+      || extractWeightFromTitle(product.brand + ' ' + product.product || '')
+      || extractWeightFromTitle(parsed.title || '');
+    if (titleWeight) {
+      console.log(`[Draft] 📦 Extracted weight from title: ${titleWeight.value} ${titleWeight.unit}`);
+      finalWeight = calculateShippingWeight(titleWeight, product.packageType);
+      if (finalWeight) {
+        console.log(`[Draft] ✓ Title weight converted to shipping weight: ${finalWeight.value} oz`);
+      }
+    }
+  }
+  
   // ========================================
   // BUILD ATTENTION REASONS (track all issues)
   // ========================================
@@ -1187,13 +1289,14 @@ async function createDraftForProduct(
     });
   }
   
-  // Track missing weight
+  // Track missing weight - this is a serious issue that affects shipping cost
   if (!finalWeight) {
     attentionReasons.push({
       code: 'MISSING_WEIGHT',
-      message: 'No shipping weight detected - eBay may reject or estimate weight',
-      severity: 'warning',
+      message: 'No weight found (AI, Amazon, or title) - will default to 16oz which may cause incorrect shipping cost',
+      severity: 'error', // Upgraded to error - weight is critical for accurate shipping
     });
+    console.log(`[Draft] ❌ MISSING_WEIGHT for ${product.productId}: No weight from AI, Amazon, or title extraction`);
   }
   
   // Track missing images

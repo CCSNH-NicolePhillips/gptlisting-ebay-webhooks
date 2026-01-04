@@ -200,6 +200,41 @@ export async function searchGoogleShopping(
     const isLotListing = (title: string): boolean => {
       return LOT_PATTERNS.some(pattern => pattern.test(title));
     };
+    
+    // Title matching - verify the result is actually the same product
+    // Tokenizes both strings and requires a high overlap ratio
+    const isTitleMatch = (resultTitle: string, searchQuery: string): boolean => {
+      // Normalize both strings
+      const normalize = (s: string): string[] => {
+        return s.toLowerCase()
+          .replace(/[^a-z0-9\s]/g, ' ')  // Remove punctuation
+          .split(/\s+/)                   // Split on whitespace
+          .filter(w => w.length > 2)      // Ignore tiny words
+          .filter(w => !['the', 'and', 'for', 'with', 'new'].includes(w)); // Common words
+      };
+      
+      const queryWords = normalize(searchQuery);
+      const titleWords = normalize(resultTitle);
+      
+      if (queryWords.length === 0) return true;
+      
+      // Count how many query words appear in the title
+      const matchCount = queryWords.filter(qw => 
+        titleWords.some(tw => tw.includes(qw) || qw.includes(tw))
+      ).length;
+      
+      const matchRatio = matchCount / queryWords.length;
+      
+      // Require 70% of query words to match for a product match
+      const isMatch = matchRatio >= 0.7;
+      
+      if (!isMatch && resultTitle.length > 0) {
+        // Log mismatches for debugging
+        console.log(`[google-shopping] Title mismatch (${(matchRatio * 100).toFixed(0)}%): "${resultTitle.slice(0, 50)}"`);
+      }
+      
+      return isMatch;
+    };
 
     // Helper to check if seller is first-party (not marketplace/seller)
     const isFirstPartySeller = (seller: string): boolean => {
@@ -211,10 +246,12 @@ export async function searchGoogleShopping(
     };
 
     // Extract prices by retailer (prioritize Amazon, first-party only)
+    // CRITICAL: Also filter by title match to avoid using wrong product prices
     const amazonResult = results.find(r => 
       r.seller?.toLowerCase().includes('amazon') && 
       isFirstPartySeller(r.seller) &&
       !isLotListing(r.title || '') &&
+      isTitleMatch(r.title || '', searchQuery) &&
       r.extracted_price > 0
     );
     
@@ -222,12 +259,14 @@ export async function searchGoogleShopping(
       r.seller?.toLowerCase().includes('walmart') &&
       isFirstPartySeller(r.seller) &&
       !isLotListing(r.title || '') &&
+      isTitleMatch(r.title || '', searchQuery) &&
       r.extracted_price > 0
     );
     
     const targetResult = results.find(r => 
       r.seller?.toLowerCase() === 'target' &&
       !isLotListing(r.title || '') &&
+      isTitleMatch(r.title || '', searchQuery) &&
       r.extracted_price > 0
     );
 
@@ -248,6 +287,7 @@ export async function searchGoogleShopping(
     };
 
     // Find lowest price from major chain retailers only (for retail comparison)
+    // CRITICAL: Must match product title to avoid using different product prices as retail cap
     const majorRetailResults = results.filter(r => {
       const seller = r.seller || '';
       const title = r.title || '';
@@ -255,13 +295,15 @@ export async function searchGoogleShopping(
         r.extracted_price > 0 &&
         isMajorRetailer(seller) &&
         isFirstPartySeller(seller) &&
-        !isLotListing(title)
+        !isLotListing(title) &&
+        isTitleMatch(title, searchQuery)
       );
     });
     majorRetailResults.sort((a, b) => a.extracted_price - b.extracted_price);
     const lowestRetailResult = majorRetailResults[0];
 
     // Find best price among any retailers (excluding eBay, marketplaces, and lots)
+    // CRITICAL: Title matching prevents using wrong product prices
     const retailResults = results.filter(r => {
       const seller = r.seller?.toLowerCase() || '';
       const title = r.title || '';
@@ -271,7 +313,8 @@ export async function searchGoogleShopping(
         !seller.includes('mercari') &&
         !seller.includes('poshmark') &&
         !isLotListing(title) &&
-        isFirstPartySeller(r.seller || '')
+        isFirstPartySeller(r.seller || '') &&
+        isTitleMatch(title, searchQuery)
       );
     });
 

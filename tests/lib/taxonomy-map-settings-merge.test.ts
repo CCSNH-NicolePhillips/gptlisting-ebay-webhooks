@@ -18,6 +18,8 @@ jest.mock('../../src/lib/_blobs.js', () => ({
 
 jest.mock('../../src/lib/pricing-compute.js', () => ({
   computeEbayItemPriceCents: jest.fn(),
+  computeEbayOfferPricingCents: jest.fn(),
+  formatPricingLogLine: jest.fn(() => '[pricing] mock log line'),
 }));
 
 describe('taxonomy-map: Pricing Settings Merge', () => {
@@ -26,6 +28,7 @@ describe('taxonomy-map: Pricing Settings Merge', () => {
   let mockPickCategoryForGroup: jest.Mock;
   let mockTokensStore: jest.Mock;
   let mockComputeEbayItemPriceCents: jest.Mock;
+  let mockComputeEbayOfferPricingCents: jest.Mock;
   let mockStoreGet: jest.Mock;
 
   beforeEach(() => {
@@ -36,6 +39,7 @@ describe('taxonomy-map: Pricing Settings Merge', () => {
     mockPickCategoryForGroup = require('../../src/lib/taxonomy-select.js').pickCategoryForGroup;
     mockTokensStore = require('../../src/lib/_blobs.js').tokensStore;
     mockComputeEbayItemPriceCents = require('../../src/lib/pricing-compute.js').computeEbayItemPriceCents;
+    mockComputeEbayOfferPricingCents = require('../../src/lib/pricing-compute.js').computeEbayOfferPricingCents;
     
     // Setup default mocks
     mockBuildItemSpecifics.mockReturnValue({ Brand: ['TestBrand'] });
@@ -53,6 +57,17 @@ describe('taxonomy-map: Pricing Settings Merge', () => {
         shippingSubsidyAppliedCents: 600,
       },
     });
+    
+    // Mock offer pricing split (new function) - pass through delivered target
+    mockComputeEbayOfferPricingCents.mockImplementation((opts: { baseDeliveredTargetCents: number }) => ({
+      targetDeliveredTotalCents: opts.baseDeliveredTargetCents,
+      itemPriceCents: opts.baseDeliveredTargetCents - 600, // subtract default shipping
+      shippingChargeCents: 600,
+      shippingCostEstimateCents: 600,
+      effectiveShippingMode: 'BUYER_PAYS_SHIPPING',
+      warnings: [],
+      evidence: {},
+    }));
     
     // Load module under test
     ({ mapGroupToDraftWithTaxonomy } = require('../../src/lib/taxonomy-map'));
@@ -159,16 +174,16 @@ describe('taxonomy-map: Pricing Settings Merge', () => {
       
       await mapGroupToDraftWithTaxonomy(baseGroup, 'user-123');
       
-      // All values should match user settings exactly
+      // All values should match user settings exactly (plus defaults for new fields)
       expect(mockComputeEbayItemPriceCents).toHaveBeenCalledWith(
         expect.objectContaining({
-          settings: {
+          settings: expect.objectContaining({
             discountPercent: 20,
             shippingStrategy: 'DISCOUNT_ITEM_ONLY',
             templateShippingEstimateCents: 800,
             shippingSubsidyCapCents: 1000,
             minItemPriceCents: 500,
-          },
+          }),
         })
       );
     });
@@ -308,6 +323,17 @@ describe('taxonomy-map: Pricing Settings Merge', () => {
         evidence: {
           shippingSubsidyAppliedCents: 0,
         },
+      });
+      
+      // For DISCOUNT_ITEM_ONLY, the offer pricing should put full target into item price
+      mockComputeEbayOfferPricingCents.mockReturnValue({
+        targetDeliveredTotalCents: 5130,
+        itemPriceCents: 5130, // Full target - no shipping split
+        shippingChargeCents: 0,
+        shippingCostEstimateCents: 600,
+        effectiveShippingMode: 'FREE_SHIPPING',
+        warnings: [],
+        evidence: {},
       });
       
       const userSettings = {
