@@ -496,11 +496,18 @@ export async function getDeliveredPricing(
       condition: 'NEW',
     });
     
-    if (soldResult.ok && soldResult.samplesCount && soldResult.median) {
-      // Convert dollars to cents and estimate shipping
+    if (soldResult.ok && soldResult.samplesCount && soldResult.deliveredMedian) {
+      // Use TRUE delivered median (item + actual shipping) - no more guessing!
+      soldMedianCents = Math.round(soldResult.deliveredMedian * 100);
+      soldCount = soldResult.samplesCount;
+      const avgShip = soldResult.avgShipping ? `$${soldResult.avgShipping.toFixed(2)}` : 'n/a';
+      console.log(`[delivered-pricing] Sold comps: ${soldCount} samples, delivered median $${(soldMedianCents / 100).toFixed(2)} (avg shipping ${avgShip})`);
+    } else if (soldResult.ok && soldResult.samplesCount && soldResult.median) {
+      // Fallback: old-style data without shipping - estimate
       soldMedianCents = Math.round(soldResult.median * 100) + fullSettings.shippingEstimateCents;
       soldCount = soldResult.samplesCount;
-      console.log(`[delivered-pricing] Sold comps: ${soldCount} samples, median $${(soldMedianCents / 100).toFixed(2)} delivered`);
+      console.log(`[delivered-pricing] Sold comps: ${soldCount} samples, item median $${soldResult.median.toFixed(2)} + est shipping = $${(soldMedianCents / 100).toFixed(2)}`);
+      warnings.push('soldShippingEstimated');
     } else {
       console.log(`[delivered-pricing] No sold comps found`);
     }

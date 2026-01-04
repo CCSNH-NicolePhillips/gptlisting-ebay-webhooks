@@ -20,7 +20,9 @@ async function rateLimitDelay() {
 }
 
 export interface SoldPriceSample {
-  price: number;
+  price: number;           // Item price only
+  shipping: number;        // Shipping cost (0 = free shipping)
+  deliveredPrice: number;  // price + shipping
   currency: string;
   url?: string;
   endedAt?: string;
@@ -29,10 +31,17 @@ export interface SoldPriceSample {
 export interface SoldPriceStats {
   ok: boolean;
   samples: SoldPriceSample[];
+  // Item-only stats (for reference)
   median?: number;
   p35?: number;
   p10?: number;
   p90?: number;
+  // TRUE DELIVERED stats (item + shipping) - use these for pricing!
+  deliveredMedian?: number;
+  deliveredP35?: number;
+  deliveredP10?: number;
+  deliveredP90?: number;
+  avgShipping?: number;
   samplesCount?: number;
   rateLimited?: boolean;
 }
@@ -113,13 +122,15 @@ export async function fetchSoldPriceStats(
 
     console.log(`[ebay-sold] Found ${data.organic_results.length} sold items`);
 
-    // Parse sold items
+    // Parse sold items - now including shipping for TRUE delivered price
     const samples: SoldPriceSample[] = [];
     for (const item of data.organic_results) {
-      // Extract price from various possible fields
+      // Extract item price
       let priceValue: number | undefined;
       
-      if (item.price?.value) {
+      if (item.extracted_price !== undefined) {
+        priceValue = parseFloat(item.extracted_price);
+      } else if (item.price?.value) {
         priceValue = parseFloat(item.price.value);
       } else if (item.price?.raw) {
         const match = item.price.raw.match(/[\d,]+\.\d+/);
@@ -129,9 +140,26 @@ export async function fetchSoldPriceStats(
         if (match) priceValue = parseFloat(match[0].replace(/,/g, ''));
       }
 
+      // Extract shipping cost
+      let shippingValue = 0;
+      if (item.extracted_shipping !== undefined) {
+        shippingValue = parseFloat(item.extracted_shipping) || 0;
+      } else if (typeof item.shipping === 'string') {
+        const lower = item.shipping.toLowerCase();
+        if (lower.includes('free')) {
+          shippingValue = 0;
+        } else {
+          const match = item.shipping.match(/\$?([\d,]+\.?\d*)/);
+          if (match) shippingValue = parseFloat(match[1].replace(/,/g, '')) || 0;
+        }
+      }
+
       if (priceValue && priceValue > 0) {
+        const deliveredPrice = priceValue + shippingValue;
         samples.push({
           price: priceValue,
+          shipping: shippingValue,
+          deliveredPrice,
           currency: 'USD',
           url: item.link,
         });
@@ -144,12 +172,22 @@ export async function fetchSoldPriceStats(
       return empty;
     }
 
-    // Sort and compute statistics
+    // Sort and compute statistics for ITEM prices (for reference)
     const prices = samples.map(s => s.price).sort((a, b) => a - b);
     const median = percentile(prices, 0.5);
     const p35 = percentile(prices, 0.35);
     const p10 = percentile(prices, 0.1);
     const p90 = percentile(prices, 0.9);
+
+    // Compute TRUE DELIVERED price stats (item + shipping)
+    const deliveredPrices = samples.map(s => s.deliveredPrice).sort((a, b) => a - b);
+    const deliveredMedian = percentile(deliveredPrices, 0.5);
+    const deliveredP35 = percentile(deliveredPrices, 0.35);
+    const deliveredP10 = percentile(deliveredPrices, 0.1);
+    const deliveredP90 = percentile(deliveredPrices, 0.9);
+
+    // Average shipping for reference
+    const avgShipping = samples.reduce((sum, s) => sum + s.shipping, 0) / samples.length;
 
     const result: SoldPriceStats = {
       ok: samples.length >= 3, // Need at least 3 samples for reliable stats
@@ -158,15 +196,21 @@ export async function fetchSoldPriceStats(
       p35,
       p10,
       p90,
+      deliveredMedian,
+      deliveredP35,
+      deliveredP10,
+      deliveredP90,
+      avgShipping,
       samplesCount: samples.length,
     };
 
     console.log(`[ebay-sold] Statistics:`, {
       samplesCount: result.samplesCount,
-      median: result.median?.toFixed(2),
-      p35: result.p35?.toFixed(2),
-      p10: result.p10?.toFixed(2),
-      p90: result.p90?.toFixed(2),
+      itemMedian: result.median?.toFixed(2),
+      deliveredMedian: result.deliveredMedian?.toFixed(2),
+      avgShipping: result.avgShipping?.toFixed(2),
+      deliveredP10: result.deliveredP10?.toFixed(2),
+      deliveredP90: result.deliveredP90?.toFixed(2),
     });
 
     return result;
