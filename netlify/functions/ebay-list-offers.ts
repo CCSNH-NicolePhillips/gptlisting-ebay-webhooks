@@ -265,7 +265,17 @@ export const handler: Handler = async (event) => {
 						scannedCount++;
 						const sku = item.sku;
 						
-						if (!SKU_OK(sku)) {
+						// Log ALL SKUs for diagnostics (first 20 only to avoid log spam)
+						if (scannedCount <= 20) {
+							const skuDisplay = sku === undefined ? '<undefined>' : sku === null ? '<null>' : sku === '' ? '<empty>' : `"${sku}"`;
+							const skuBytes = typeof sku === 'string' ? Array.from(sku).map(c => c.charCodeAt(0)).join(',') : 'N/A';
+							console.log(`[ebay-list-offers] 📋 SKU #${scannedCount}: ${skuDisplay} (len=${String(sku || '').length}, bytes=[${skuBytes}], valid=${SKU_OK(sku || '')})`);
+						}
+						
+						// More aggressive check: empty, null, undefined, or whitespace-only SKUs
+						const isInvalid = !sku || !SKU_OK(sku) || sku.trim() !== sku || sku.length === 0;
+						
+						if (isInvalid) {
 							console.log(`[ebay-list-offers] 🗑️ Deleting invalid SKU: "${sku}" (${item.product?.title || 'no title'})`);
 							
 							// Delete the inventory item
@@ -290,6 +300,9 @@ export const handler: Handler = async (event) => {
 				}
 				
 				console.log(`[ebay-list-offers] Scan complete: ${scannedCount} items scanned, ${deletedCount} invalid SKUs deleted`);
+				if (scannedCount > 20) {
+					console.log(`[ebay-list-offers] (Only first 20 SKUs were logged for brevity)`);
+				}
 				
 				// Now use safe aggregation to return valid offers
 				const safe = await safeAggregateByInventory();
