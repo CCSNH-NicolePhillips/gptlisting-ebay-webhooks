@@ -2000,6 +2000,15 @@
         const published = pubRes.created || 0;
         console.log('[Quick List] Published', published, 'drafts to eBay');
 
+        // Clear drafts page cache so new drafts appear immediately when user visits /drafts.html
+        try {
+          sessionStorage.removeItem('drafts-cache');
+          sessionStorage.removeItem('drafts-cache-time');
+          console.log('[Quick List] Cleared drafts cache for fresh load');
+        } catch (e) {
+          console.warn('[Quick List] Failed to clear drafts cache:', e);
+        }
+
         // Show results
         $('progressBar').style.width = '100%';
         $('results').classList.add('show');

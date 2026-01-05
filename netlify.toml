@@ -63,6 +63,10 @@
 [functions."ebay-list-offers"]
   timeout = 26  # Max for Pro tier, handles multiple eBay API calls with retries
 
+# Create eBay drafts from quick-list - processes multiple items with eBay API calls
+[functions."create-ebay-draft-user"]
+  timeout = 26  # Max for Pro tier, handles multiple eBay inventory + offer creation calls
+
 # Promotion worker timeout and schedule (runs every minute)
 [functions."promotion-worker"]
   timeout = 26
