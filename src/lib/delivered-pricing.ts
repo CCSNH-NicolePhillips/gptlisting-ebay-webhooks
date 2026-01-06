@@ -4,30 +4,47 @@
  * Prices to delivered-to-door, then backs into item + shipping.
  * Uses Google Shopping for comps (eBay + retail), falls back to sold prices.
  * 
- * IMPORTANT: Shipping Handling
- * ============================
- * This engine calculates a TARGET DELIVERED PRICE (what buyer pays total).
+ * ============================================================================
+ * CRITICAL DEFINITIONS (DO NOT CONFUSE THESE)
+ * ============================================================================
  * 
- * How shipping is handled depends on your eBay fulfillment policy:
+ * targetDeliveredTotalCents:
+ *   What the BUYER pays TOTAL (item + shippingCharge).
+ *   This is the anchor for all pricing decisions.
  * 
- * 1. FREE SHIPPING POLICY (ebayHandlesShipping: false, freeShipApplied: true)
- *    - Item price = full delivered price (shipping baked into item)
- *    - eBay shows $0 shipping to buyer
+ * shippingChargeCents:
+ *   What the BUYER pays for shipping on eBay.
+ *   - 0 if FREE_SHIPPING mode
+ *   - flatRateCents if BUYER_PAYS_FLAT mode
+ *   - categoryEstimateCents if BUYER_PAYS_CATEGORY_ESTIMATE mode
+ * 
+ * shippingCostEstimateCents:
+ *   What WE estimate we pay the carrier (USPS/UPS).
+ *   Used for margin calculations and analytics ONLY.
+ *   NEVER affects the buyer-facing split.
+ * 
+ * ============================================================================
+ * INVARIANT (MUST HOLD ALWAYS)
+ * ============================================================================
+ * 
+ * itemPriceCents + shippingChargeCents === targetDeliveredTotalCents
+ * 
+ * If this invariant is violated, the pricing is WRONG.
+ * 
+ * ============================================================================
+ * SHIPPING MODES
+ * ============================================================================
+ * 
+ * 1. FREE_SHIPPING:
+ *    - shippingChargeCents = 0
+ *    - itemPriceCents = targetDeliveredTotalCents
+ *    - eBay shows "Free shipping" to buyer
  *    - Seller absorbs shipping cost
  * 
- * 2. CALCULATED/FLAT SHIPPING POLICY (ebayHandlesShipping: true)
- *    - Item price = delivered price - estimated shipping
- *    - eBay adds shipping on top based on buyer location/weight
- *    - ⚠️ Risk: If our shipping estimate doesn't match eBay's, total may differ
- * 
- * 3. SIMPLE MODE (ebayHandlesShipping: true, skipShippingSplit: true) - RECOMMENDED
- *    - Item price = target delivered price (no split)
- *    - eBay adds shipping on top
- *    - Total to buyer = itemPrice + eBay shipping
- *    - This is the simplest and most predictable mode
- * 
- * Set ebayHandlesShipping: true in settings if your fulfillment policy charges
- * shipping separately (calculated or flat rate). This avoids double-charging.
+ * 2. BUYER_PAYS (flat or category-based):
+ *    - shippingChargeCents = flatRateCents or categoryEstimateCents
+ *    - itemPriceCents = targetDeliveredTotalCents - shippingChargeCents
+ *    - eBay shows shipping charge to buyer
  * 
  * @see docs/PRICING-OVERHAUL.md for full specification
  */
@@ -372,12 +389,57 @@ export function calculateTargetDelivered(
 }
 
 /**
- * Split delivered price into item + shipping
+ * Split delivered price into item + shipping for eBay listing.
  * 
- * Core logic:
- * 1. Try normal split: target - shipping = item
- * 2. If item < min, try free shipping (if enabled and within subsidy cap)
- * 3. If still can't compete, flag or skip based on lowPriceMode
+ * ============================================================================
+ * KEY DEFINITIONS (do not confuse these)
+ * ============================================================================
+ * 
+ * targetDeliveredCents:
+ *   The total price we want the BUYER to pay (item + shipping shown on eBay).
+ *   This is computed from market comps and is the anchor for pricing decisions.
+ * 
+ * buyerShippingChargeCents (settings.shippingEstimateCents):
+ *   The shipping amount shown to the BUYER when mode=BUYER_PAYS_SHIPPING.
+ *   This is what eBay displays as the shipping cost.
+ *   IMPORTANT: This is NOT the same as carrierShippingCostEstimateCents!
+ * 
+ * carrierShippingCostEstimateCents:
+ *   Our internal estimate of what shipping will cost US (carrier cost).
+ *   Used for margin calculations ONLY. Never affects buyer-facing split.
+ * 
+ * minItemCents:
+ *   Minimum allowed item price (prevents $0.01 items). Default: $4.99.
+ * 
+ * ============================================================================
+ * INVARIANT: totalDelivered === finalItemCents + finalShipCents (always)
+ * ============================================================================
+ * 
+ * WORKED EXAMPLE A — Normal buyer-pays-shipping (OK):
+ *   Input:  targetDeliveredCents=2038 ($20.38), buyerShippingChargeCents=600, minItemCents=499
+ *   Calc:   rawItem = 2038 - 600 = 1438 ($14.38)
+ *   Check:  1438 >= 499? YES → canCompete=true
+ *   Output: finalItem=1438, finalShip=600, total=2038, canCompete=true
+ * 
+ * WORKED EXAMPLE B — Buyer-pays-shipping triggers cannotCompete:
+ *   Input:  targetDeliveredCents=900 ($9.00), buyerShippingChargeCents=600, minItemCents=499
+ *   Calc:   rawItem = 900 - 600 = 300 ($3.00)
+ *   Check:  300 >= 499? NO → clamp to 499
+ *   Total:  499 + 600 = 1099 > 900 → cannotCompete
+ *   Output: finalItem=499, finalShip=600, total=1099, canCompete=false
+ * 
+ * WORKED EXAMPLE C — Auto free-shipping fallback fixes it:
+ *   Input:  targetDeliveredCents=900, buyerShippingChargeCents=600, minItemCents=499,
+ *           allowAutoFreeShippingOnLowPrice=true
+ *   Calc:   rawItem = 900 - 600 = 300 < 499 → try free shipping
+ *   Free:   finalItem = 900 (= targetDelivered), finalShip = 0
+ *   Check:  900 >= 499? YES → canCompete=true
+ *   Output: finalItem=900, finalShip=0, total=900, canCompete=true,
+ *           warning='autoFreeShippingOnLowPrice'
+ * 
+ * @param targetDeliveredCents - What buyer pays TOTAL (item + buyerShippingCharge)
+ * @param settings - Pricing settings including shippingEstimateCents (= buyerShippingChargeCents)
+ * @param shippingEstimateSource - Source of the shipping estimate for logging
  */
 export function splitDeliveredPrice(
   targetDeliveredCents: number,
@@ -394,17 +456,29 @@ export function splitDeliveredPrice(
   warnings: string[];
 } {
   const warnings: string[] = [];
-  const shipping = settings.shippingEstimateCents;
-  const minItem = settings.minItemCents;
   
-  // Calculate what item price would be with normal shipping
-  const naiveItemCents = targetDeliveredCents - shipping;
+  // shippingChargeCents = what BUYER pays for shipping (NOT carrier cost)
+  // This is the SAME value used to compute targetDelivered from comps
+  const shippingChargeCents = settings.shippingEstimateCents;
+  const minItemCents = settings.minItemCents;
   
+  console.log(`[split-price] ── SPLIT CALCULATION ──`);
+  console.log(`[split-price] Input: targetDelivered=$${(targetDeliveredCents / 100).toFixed(2)}, shippingCharge=$${(shippingChargeCents / 100).toFixed(2)}, minItem=$${(minItemCents / 100).toFixed(2)}`);
+  
+  // Calculate what item price would be with buyer-pays shipping
+  const naiveItemCents = targetDeliveredCents - shippingChargeCents;
+  console.log(`[split-price] Naive split: item=$${(naiveItemCents / 100).toFixed(2)} (targetDelivered - shippingCharge)`);
+  
+  // ========================================================================
   // Case 1: Normal split works (item >= min)
-  if (naiveItemCents >= minItem) {
+  // INVARIANT: naiveItemCents + shippingChargeCents === targetDeliveredCents ✓
+  // ========================================================================
+  if (naiveItemCents >= minItemCents) {
+    console.log(`[split-price] ✅ Case 1: Normal split works (item $${(naiveItemCents / 100).toFixed(2)} >= min $${(minItemCents / 100).toFixed(2)})`);
+    console.log(`[split-price] Result: item=$${(naiveItemCents / 100).toFixed(2)} + ship=$${(shippingChargeCents / 100).toFixed(2)} = $${((naiveItemCents + shippingChargeCents) / 100).toFixed(2)}`);
     return {
       itemCents: naiveItemCents,
-      shipCents: shipping,
+      shipCents: shippingChargeCents,
       subsidyCents: 0,
       freeShipApplied: false,
       canCompete: true,
@@ -414,19 +488,31 @@ export function splitDeliveredPrice(
     };
   }
   
-  // Case 2: Need free shipping to hit target
-  // Can we absorb shipping cost and still have item >= min?
+  console.log(`[split-price] ⚠️ Item $${(naiveItemCents / 100).toFixed(2)} < min $${(minItemCents / 100).toFixed(2)} - trying free shipping fallback`);
+  
+  // ========================================================================
+  // Case 2: Item price would be below min floor
+  // Try switching to FREE_SHIPPING if allowed
+  // ========================================================================
   if (settings.allowFreeShippingWhenNeeded) {
-    const subsidyNeeded = shipping; // Full shipping absorbed
+    const subsidyNeeded = shippingChargeCents; // Full shipping absorbed by seller
+    console.log(`[split-price] Free shipping allowed, subsidy needed: $${(subsidyNeeded / 100).toFixed(2)} (max: $${(settings.freeShippingMaxSubsidyCents / 100).toFixed(2)})`);
     
-    // With free shipping, item price = target delivered
+    // With free shipping: shippingChargeCents = 0, itemCents = targetDelivered
+    // INVARIANT: targetDeliveredCents + 0 === targetDeliveredCents ✓
     const freeShipItemCents = targetDeliveredCents;
+    console.log(`[split-price] With free ship: item would be $${(freeShipItemCents / 100).toFixed(2)} (= targetDelivered)`);
     
-    // Check: can we afford the subsidy AND is item price valid?
-    if (subsidyNeeded <= settings.freeShippingMaxSubsidyCents && freeShipItemCents >= minItem) {
+    // Check: can we afford the subsidy AND is item price >= min floor?
+    // AUTO-FREE-SHIPPING FALLBACK: When buyer-pays-shipping would push item
+    // below minItemCents, switch to FREE_SHIPPING mode if allowed. This lets
+    // us compete on low-price items without violating the min floor.
+    if (subsidyNeeded <= settings.freeShippingMaxSubsidyCents && freeShipItemCents >= minItemCents) {
+      console.log(`[split-price] ✅ Case 2: Free shipping works! item=$${(freeShipItemCents / 100).toFixed(2)} + ship=$0 = $${(freeShipItemCents / 100).toFixed(2)}`);
+      warnings.push('autoFreeShippingOnLowPrice');
       return {
         itemCents: freeShipItemCents,
-        shipCents: 0,
+        shipCents: 0,  // FREE_SHIPPING mode
         subsidyCents: subsidyNeeded,
         freeShipApplied: true,
         canCompete: true,
@@ -436,14 +522,28 @@ export function splitDeliveredPrice(
       };
     }
     
-    // Free shipping helps but subsidy exceeds cap
-    if (freeShipItemCents >= minItem && subsidyNeeded > settings.freeShippingMaxSubsidyCents) {
+    // Free shipping would help but subsidy exceeds our cap
+    if (freeShipItemCents >= minItemCents && subsidyNeeded > settings.freeShippingMaxSubsidyCents) {
+      console.log(`[split-price] ❌ Subsidy $${(subsidyNeeded / 100).toFixed(2)} exceeds cap $${(settings.freeShippingMaxSubsidyCents / 100).toFixed(2)}`);
       warnings.push('subsidyExceedsCap');
-      // Fall through to cannot compete
+      // Fall through to cannotCompete
+    }
+    
+    // Item price still below min even with free shipping
+    if (freeShipItemCents < minItemCents) {
+      console.log(`[split-price] ❌ Even with free ship, item $${(freeShipItemCents / 100).toFixed(2)} < min $${(minItemCents / 100).toFixed(2)}`);
     }
   }
   
-  // Case 3: Cannot compete - market price is below our floor
+  // ========================================================================
+  // Case 3: Cannot compete - target delivered is below our floor
+  // DO NOT silently clamp. Return explicit cannotCompete.
+  // ========================================================================
+  // CLAMP TO MIN: rawItem was below minItemCents, and free-ship fallback
+  // either wasn't allowed or subsidy exceeded cap. We must use minItemCents.
+  // totalDelivered will now EXCEED targetDeliveredCents → cannotCompete.
+  console.log(`[split-price] 🚫 Case 3: CANNOT COMPETE - market price too low`);
+  warnings.push('minItemFloorHit');
   warnings.push('cannotCompete');
   
   // Determine skip behavior based on lowPriceMode
@@ -451,12 +551,15 @@ export function splitDeliveredPrice(
   const canCompete = false;
   
   // Return our minimum viable price (will be overpriced vs market)
-  // Use free shipping if enabled to at least get closer
-  if (settings.allowFreeShippingWhenNeeded && shipping <= settings.freeShippingMaxSubsidyCents) {
+  // Use free shipping if enabled and within subsidy cap to get closer
+  if (settings.allowFreeShippingWhenNeeded && shippingChargeCents <= settings.freeShippingMaxSubsidyCents) {
+    console.log(`[split-price] Returning min price with free ship: item=$${(minItemCents / 100).toFixed(2)} + ship=$0`);
+    // Even though we can't fully compete, free shipping gets us closer
+    // INVARIANT: minItemCents + 0 !== targetDeliveredCents (but we're explicit about cannotCompete)
     return {
-      itemCents: minItem,
+      itemCents: minItemCents,
       shipCents: 0,
-      subsidyCents: shipping,
+      subsidyCents: shippingChargeCents,
       freeShipApplied: true,
       canCompete,
       skipListing,
@@ -465,10 +568,12 @@ export function splitDeliveredPrice(
     };
   }
   
-  // No free shipping - return min item + shipping (overpriced)
+  // No free shipping available - return min item + shipping (overpriced)
+  console.log(`[split-price] Returning min price with shipping: item=$${(minItemCents / 100).toFixed(2)} + ship=$${(shippingChargeCents / 100).toFixed(2)}`);
+  // INVARIANT: minItemCents + shippingChargeCents !== targetDeliveredCents (but we're explicit about cannotCompete)
   return {
-    itemCents: minItem,
-    shipCents: shipping,
+    itemCents: minItemCents,
+    shipCents: shippingChargeCents,
     subsidyCents: 0,
     freeShipApplied: false,
     canCompete,
@@ -679,6 +784,21 @@ export async function getDeliveredPricing(
   if (warnings.length > 0) {
     console.log(`[delivered-pricing] Warnings: ${warnings.join(', ')}`);
   }
+
+  // ========================================================================
+  // STRUCTURED LOG LINE (required by pricing fix spec)
+  // Shows buyer-facing split, cost estimate separately, and warnings
+  // ========================================================================
+  console.log(`[delivered-pricing] decision`, JSON.stringify({
+    targetDeliveredTotalCents: targetResult.targetCents,
+    mode: fullSettings.mode,
+    shippingChargeCents: splitResult.shipCents,
+    itemPriceCents: splitResult.itemCents,
+    shippingCostEstimateCents: effectiveShippingCents, // carrier cost (NOT buyer-facing)
+    freeShipApplied: splitResult.freeShipApplied,
+    canCompete: splitResult.canCompete,
+    warnings,
+  }));
 
   return {
     brand,
