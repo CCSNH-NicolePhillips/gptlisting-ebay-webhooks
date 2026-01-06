@@ -235,8 +235,10 @@ export const handler: Handler = async (event) => {
 	}
 	
 	// ORPHAN MODE: Delete inventory items that have NO offers (orphaned from old tests)
+	// With force=true, skip checking offers and delete all inventory items directly
 	if (deleteOrphans) {
-		console.log('[clean-broken-drafts] ORPHAN MODE: Deleting inventory items with no offers');
+		const forceDelete = /^1|true|yes$/i.test(String(qp.force || 'false'));
+		console.log(`[clean-broken-drafts] ORPHAN MODE: ${forceDelete ? 'FORCE deleting ALL inventory items' : 'Deleting inventory items with no offers'}`);
 		let invOffset = 0;
 		let scanned = 0;
 		let orphansDeleted = 0;
@@ -260,12 +262,18 @@ export const handler: Handler = async (event) => {
 				if (!sku) continue;
 				scanned++;
 				
-				// Check if this SKU has any offers
-				const offers = await listOffersForSku(sku);
-				if (offers.length === 0) {
-					// Orphaned inventory item - no offers
+				let isOrphan = forceDelete; // If force=true, treat all as orphans
+				
+				// Only check offers if not forcing
+				if (!forceDelete) {
+					const offers = await listOffersForSku(sku);
+					isOrphan = offers.length === 0;
+				}
+				
+				if (isOrphan) {
+					// Orphaned inventory item - no offers (or force delete)
 					orphansFound.push(sku);
-					console.log(`[clean-broken-drafts] 🗑️ Orphan found: ${sku} (${it.product?.title || 'no title'})`);
+					console.log(`[clean-broken-drafts] 🗑️ ${forceDelete ? 'Force delete' : 'Orphan'}: ${sku} (${it.product?.title?.slice(0, 40) || 'no title'}...)`);
 					
 					if (!dryRun) {
 						await deleteInventoryItem(sku);

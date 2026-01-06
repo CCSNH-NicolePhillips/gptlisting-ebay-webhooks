@@ -63,6 +63,10 @@
 [functions."ebay-list-offers"]
   timeout = 26  # Max for Pro tier, handles multiple eBay API calls with retries
 
+# Clean broken drafts needs extended timeout for orphan cleanup (many eBay API calls)
+[functions."ebay-clean-broken-drafts"]
+  timeout = 26  # Max for Pro tier, handles checking offers for each inventory item
+
 # Create eBay drafts from quick-list - processes multiple items with eBay API calls
 [functions."create-ebay-draft-user"]
   timeout = 26  # Max for Pro tier, handles multiple eBay inventory + offer creation calls
