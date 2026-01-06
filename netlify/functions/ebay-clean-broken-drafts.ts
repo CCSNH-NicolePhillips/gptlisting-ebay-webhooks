@@ -113,9 +113,9 @@ export const handler: Handler = async (event) => {
 			return false;
 		}
 
-		async function deleteInventoryItem(sku: string) {
+		async function deleteInventoryItem(sku: string, forceAllowDeletion = false) {
 			const url = `${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
-			if (!deleteInventory) return false;
+			if (!deleteInventory && !forceAllowDeletion) return false;
 			if (dryRun) {
 				results.deletedInventory.push({ sku, dryRun: true });
 				return true;
@@ -276,7 +276,7 @@ export const handler: Handler = async (event) => {
 					console.log(`[clean-broken-drafts] 🗑️ ${forceDelete ? 'Force delete' : 'Orphan'}: ${sku} (${it.product?.title?.slice(0, 40) || 'no title'}...)`);
 					
 					if (!dryRun) {
-						await deleteInventoryItem(sku);
+						await deleteInventoryItem(sku, true); // forceAllowDeletion=true for orphan mode
 						orphansDeleted++;
 					}
 				}
