@@ -360,13 +360,13 @@ export function calculateTargetDelivered(
     }
   }
   
-  // Apply retail cap - NEVER price above 80% of lowest retail
-  // This ensures we don't price an item at $17.98 when Ulta is selling for $10.99
-  if (retailCapCents !== null && targetCents > retailCapCents) {
-    console.log(`[delivered-pricing] Applying retail cap: $${(targetCents / 100).toFixed(2)} → $${(retailCapCents / 100).toFixed(2)}`);
-    warnings.push('retailCapApplied');
-    targetCents = retailCapCents;
-  }
+  // DISABLED: Retail cap was causing bad prices when Google Shopping returned wrong products
+  // TODO: Re-enable once title matching is improved
+  // if (retailCapCents !== null && targetCents > retailCapCents) {
+  //   console.log(`[delivered-pricing] Applying retail cap: $${(targetCents / 100).toFixed(2)} → $${(retailCapCents / 100).toFixed(2)}`);
+  //   warnings.push('retailCapApplied');
+  //   targetCents = retailCapCents;
+  // }
 
   return { targetCents, fallbackUsed, soldStrong, warnings };
 }
