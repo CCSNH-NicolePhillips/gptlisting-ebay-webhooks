@@ -16,8 +16,10 @@ export const handler: Handler = async (event) => {
 	const deleteInventory = /^1|true|yes$/i.test(String(qp.deleteInventory || qp.inv || 'false'));
 	const skipFastScan = /^1|true|yes$/i.test(String(qp.skipFastScan || 'false'));
 	const nuclearMode = /^1|true|yes$/i.test(String(qp.nuclear || 'false')); // FAST: Just delete inventory, no offer checking
-	const deleteOrphans = /^1|true|yes$/i.test(String(qp.orphans || 'false')); // Delete inventory items with no offers		// Check for admin token bypass
-		const isAdminAuth = qp.adminToken && qp.adminToken === process.env.ADMIN_API_TOKEN;
+	const deleteOrphans = /^1|true|yes$/i.test(String(qp.orphans || 'false')); // Delete inventory items with no offers
+	
+	// Check for admin token bypass
+	const isAdminAuth = qp.adminToken && qp.adminToken === process.env.ADMIN_API_TOKEN;
 		
 		// Get user-scoped eBay token
 		const store = tokensStore();
