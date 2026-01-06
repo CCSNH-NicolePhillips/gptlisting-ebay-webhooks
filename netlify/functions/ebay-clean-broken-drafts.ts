@@ -15,7 +15,8 @@ export const handler: Handler = async (event) => {
 	const deleteAllUnpublished = /^1|true|yes$/i.test(String(qp.deleteAll || qp.all || 'false'));
 	const deleteInventory = /^1|true|yes$/i.test(String(qp.deleteInventory || qp.inv || 'false'));
 	const skipFastScan = /^1|true|yes$/i.test(String(qp.skipFastScan || 'false'));
-	const nuclearMode = /^1|true|yes$/i.test(String(qp.nuclear || 'false')); // FAST: Just delete inventory, no offer checking		// Check for admin token bypass
+	const nuclearMode = /^1|true|yes$/i.test(String(qp.nuclear || 'false')); // FAST: Just delete inventory, no offer checking
+	const deleteOrphans = /^1|true|yes$/i.test(String(qp.orphans || 'false')); // Delete inventory items with no offers		// Check for admin token bypass
 		const isAdminAuth = qp.adminToken && qp.adminToken === process.env.ADMIN_API_TOKEN;
 		
 		// Get user-scoped eBay token
@@ -227,6 +228,70 @@ export const handler: Handler = async (event) => {
 				deletedInventory: results.deletedInventory,
 				errors: results.errors,
 				message: timedOut ? 'Partial deletion - run again' : `Deleted ${results.deletedInventory.length} items`
+			}),
+		};
+	}
+	
+	// ORPHAN MODE: Delete inventory items that have NO offers (orphaned from old tests)
+	if (deleteOrphans) {
+		console.log('[clean-broken-drafts] ORPHAN MODE: Deleting inventory items with no offers');
+		let invOffset = 0;
+		let scanned = 0;
+		let orphansDeleted = 0;
+		let orphansFound: string[] = [];
+		
+		while (scanned < 2000) {
+			if (Date.now() - startTime > INTERNAL_LIMIT) {
+				console.log(`[clean-broken-drafts] Orphan mode timeout at ${scanned} items (20s limit)`);
+				timedOut = true;
+				break;
+			}
+			
+			const page = await listInventory(invOffset);
+			const items = page.items;
+			if (!items.length) break;
+			
+			console.log(`[clean-broken-drafts] Orphan scan batch: offset=${invOffset}, count=${items.length}`);
+			
+			for (const it of items) {
+				const sku = it?.sku;
+				if (!sku) continue;
+				scanned++;
+				
+				// Check if this SKU has any offers
+				const offers = await listOffersForSku(sku);
+				if (offers.length === 0) {
+					// Orphaned inventory item - no offers
+					orphansFound.push(sku);
+					console.log(`[clean-broken-drafts] 🗑️ Orphan found: ${sku} (${it.product?.title || 'no title'})`);
+					
+					if (!dryRun) {
+						await deleteInventoryItem(sku);
+						orphansDeleted++;
+					}
+				}
+			}
+			
+			if (!page.next) break;
+			invOffset += 200;
+		}
+		
+		return {
+			statusCode: 200,
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				ok: true,
+				mode: { ...results.mode, orphans: true, dryRun },
+				scanned,
+				orphansFound: orphansFound.length,
+				orphansDeleted: dryRun ? 0 : orphansDeleted,
+				orphanSkus: orphansFound.slice(0, 50), // First 50 for reference
+				timedOut,
+				deletedInventory: results.deletedInventory,
+				errors: results.errors,
+				message: dryRun 
+					? `Found ${orphansFound.length} orphaned inventory items (dry run - nothing deleted)`
+					: (timedOut ? 'Partial deletion - run again' : `Deleted ${orphansDeleted} orphaned items`)
 			}),
 		};
 	}
