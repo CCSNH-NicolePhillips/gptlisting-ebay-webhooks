@@ -122,6 +122,46 @@ export async function fetchSoldPriceStats(
 
     console.log(`[ebay-sold] Found ${data.organic_results.length} sold items`);
 
+    // Title matching - verify the result is actually the same product
+    // Uses bidirectional matching: checks if query words appear in title OR if title words appear in query
+    const isTitleMatch = (resultTitle: string, searchQuery: string): boolean => {
+      // Normalize both strings
+      const normalize = (s: string): string[] => {
+        return s.toLowerCase()
+          .replace(/[^a-z0-9\s]/g, ' ')  // Remove punctuation
+          .split(/\s+/)                   // Split on whitespace
+          .filter(w => w.length > 2)      // Ignore tiny words
+          .filter(w => !['the', 'and', 'for', 'with', 'new', 'nib', 'sealed'].includes(w)); // Common words
+      };
+      
+      const queryWords = normalize(searchQuery);
+      const titleWords = normalize(resultTitle);
+      
+      if (queryWords.length === 0) return true;
+      
+      // Count how many query words appear in the title (forward match)
+      const forwardMatchCount = queryWords.filter(qw => 
+        titleWords.some(tw => tw.includes(qw) || qw.includes(tw))
+      ).length;
+      
+      const forwardMatchRatio = forwardMatchCount / queryWords.length;
+      
+      // ALSO check reverse: what % of title words appear in query (handles abbreviated titles)
+      const reverseMatchCount = titleWords.filter(tw =>
+        queryWords.some(qw => tw.includes(qw) || qw.includes(tw))
+      ).length;
+      
+      const reverseMatchRatio = titleWords.length > 0 ? reverseMatchCount / titleWords.length : 0;
+      
+      // Pass if EITHER:
+      // 1. 70% of query words appear in title (standard match), OR
+      // 2. 90% of title words appear in query AND title has 2+ meaningful words (subset match)
+      const forwardMatch = forwardMatchRatio >= 0.7;
+      const reverseMatch = reverseMatchRatio >= 0.9 && titleWords.length >= 2;
+      
+      return forwardMatch || reverseMatch;
+    };
+
     // Lot detection patterns - these indicate multi-packs that inflate prices
     const LOT_PATTERNS = [
       /\blot\s*(of\s*)?\d+/i,          // "lot of 2", "lot 3"
@@ -161,11 +201,18 @@ export async function fetchSoldPriceStats(
     // Parse sold items - now including shipping for TRUE delivered price
     const samples: SoldPriceSample[] = [];
     let lotsSkipped = 0;
+    let titleMismatchSkipped = 0;
     
     for (const item of data.organic_results) {
       // Skip lot listings - they inflate prices
       if (isLotListing(item.title)) {
         lotsSkipped++;
+        continue;
+      }
+      
+      // Skip title mismatches - wrong products contaminate pricing
+      if (!isTitleMatch(item.title || '', keywords)) {
+        titleMismatchSkipped++;
         continue;
       }
       
@@ -213,7 +260,10 @@ export async function fetchSoldPriceStats(
     if (lotsSkipped > 0) {
       console.log(`[ebay-sold] Filtered out ${lotsSkipped} lot/multi-pack listings`);
     }
-    console.log(`[ebay-sold] Parsed ${samples.length} valid single-item samples`);
+    if (titleMismatchSkipped > 0) {
+      console.log(`[ebay-sold] Filtered out ${titleMismatchSkipped} title mismatches`);
+    }
+    console.log(`[ebay-sold] Parsed ${samples.length} valid title-matched samples`);
 
     if (samples.length === 0) {
       return empty;

@@ -202,7 +202,8 @@ export async function searchGoogleShopping(
     };
     
     // Title matching - verify the result is actually the same product
-    // Tokenizes both strings and requires a high overlap ratio
+    // Uses bidirectional matching: checks if query words appear in title OR if title words appear in query
+    // This handles cases where Google Shopping returns abbreviated titles (e.g., "Root Sculpt" vs full query)
     const isTitleMatch = (resultTitle: string, searchQuery: string): boolean => {
       // Normalize both strings
       const normalize = (s: string): string[] => {
@@ -218,19 +219,32 @@ export async function searchGoogleShopping(
       
       if (queryWords.length === 0) return true;
       
-      // Count how many query words appear in the title
-      const matchCount = queryWords.filter(qw => 
+      // Count how many query words appear in the title (forward match)
+      const forwardMatchCount = queryWords.filter(qw => 
         titleWords.some(tw => tw.includes(qw) || qw.includes(tw))
       ).length;
       
-      const matchRatio = matchCount / queryWords.length;
+      const forwardMatchRatio = forwardMatchCount / queryWords.length;
       
-      // Require 70% of query words to match for a product match
-      const isMatch = matchRatio >= 0.7;
+      // ALSO check reverse: what % of title words appear in query (handles abbreviated titles)
+      // e.g., "Root Sculpt" (2 words) should match query "Root Sculpt Dietary Supplement..."
+      const reverseMatchCount = titleWords.filter(tw =>
+        queryWords.some(qw => tw.includes(qw) || qw.includes(tw))
+      ).length;
+      
+      const reverseMatchRatio = titleWords.length > 0 ? reverseMatchCount / titleWords.length : 0;
+      
+      // Pass if EITHER:
+      // 1. 70% of query words appear in title (standard match), OR
+      // 2. 90% of title words appear in query AND title has 2+ meaningful words (subset match for abbreviated results)
+      const forwardMatch = forwardMatchRatio >= 0.7;
+      const reverseMatch = reverseMatchRatio >= 0.9 && titleWords.length >= 2;
+      
+      const isMatch = forwardMatch || reverseMatch;
       
       if (!isMatch && resultTitle.length > 0) {
         // Log mismatches for debugging
-        console.log(`[google-shopping] Title mismatch (${(matchRatio * 100).toFixed(0)}%): "${resultTitle.slice(0, 50)}"`);
+        console.log(`[google-shopping] Title mismatch (fwd:${(forwardMatchRatio * 100).toFixed(0)}% rev:${(reverseMatchRatio * 100).toFixed(0)}%): "${resultTitle.slice(0, 50)}"`);
       }
       
       return isMatch;
