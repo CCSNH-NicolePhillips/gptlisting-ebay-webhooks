@@ -828,6 +828,8 @@
           });
         }
         
+        console.log('[upload] Uploading', fileData.length, 'files:', fileData.map(f => f.name));
+        
         // Upload to storage
         const uploadRes = await window.authClient.authFetch('/.netlify/functions/ingest-local-upload', {
           method: 'POST',
@@ -835,9 +837,19 @@
           body: JSON.stringify({ files: fileData }),
         });
         
+        console.log('[upload] Response status:', uploadRes.status);
+        
         if (!uploadRes.ok) {
-          const error = await uploadRes.json().catch(() => ({ error: `HTTP ${uploadRes.status}` }));
-          throw new Error(error.error || error.message || 'Upload failed');
+          let errorDetail;
+          try {
+            errorDetail = await uploadRes.json();
+            console.error('[upload] Error response:', errorDetail);
+          } catch (e) {
+            const text = await uploadRes.text();
+            console.error('[upload] Error text:', text);
+            errorDetail = { error: `HTTP ${uploadRes.status}` };
+          }
+          throw new Error(errorDetail.error || errorDetail.message || errorDetail.detail || 'Upload failed');
         }
         
         const uploadData = await uploadRes.json();
