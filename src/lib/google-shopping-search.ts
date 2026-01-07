@@ -348,6 +348,17 @@ export async function searchGoogleShopping(
       console.log(`  ${i + 1}. $${r.extracted_price} - ${r.seller} - ${r.title?.slice(0, 50)}`);
     });
 
+    // CRITICAL: Filter allResults to only include title-matched products
+    // This prevents mismatched products (like $2.99 accessories) from being used as eBay comps
+    const filteredResults = results.filter(r => {
+      const title = r.title || '';
+      return r.extracted_price > 0 && 
+             !isLotListing(title) && 
+             isTitleMatch(title, searchQuery);
+    });
+    
+    console.log(`[google-shopping] Filtered ${results.length} results down to ${filteredResults.length} title-matched results`);
+
     return {
       amazonPrice: amazonResult?.extracted_price || null,
       amazonUrl: amazonResult?.link || amazonResult?.product_link || null,
@@ -361,7 +372,7 @@ export async function searchGoogleShopping(
       bestPrice: bestResult?.extracted_price || null,
       bestPriceSource: bestResult?.seller || null,
       bestPriceUrl: bestResult?.link || bestResult?.product_link || null,
-      allResults: results,
+      allResults: filteredResults,
       confidence,
       reasoning,
     };
