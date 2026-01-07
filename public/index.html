@@ -1504,12 +1504,12 @@ function updateUIFromCache(data) {
           }
           
           const data = await response.json();
-          // Trading API returns items array, not offers
-          const items = Array.isArray(data?.items) ? data.items : [];
+          // Trading API endpoint returns 'offers' array (same structure as before)
+          const offers = Array.isArray(data?.offers) ? data.offers : [];
           
-          console.log('[Active Listings] Loaded', items.length, 'active listings');
+          console.log('[Active Listings] Loaded', offers.length, 'active listings');
           
-          if (items.length === 0) {
+          if (offers.length === 0) {
             if (emptyEl) emptyEl.style.display = 'block';
             if (statsEl) statsEl.style.display = 'none';
             return;
@@ -1517,9 +1517,10 @@ function updateUIFromCache(data) {
           
           // Calculate total value
           let totalValue = 0;
-          items.forEach(item => {
-            const price = parseFloat(item.price || item.currentPrice || 0);
-            const qty = item.quantity || item.quantityAvailable || 1;
+          offers.forEach(offer => {
+            // Price can be offer.price.value (Inventory API style) or offer.price (Trading API style)
+            const price = parseFloat(offer.price?.value || offer.price || 0);
+            const qty = offer.availableQuantity || offer.quantity || 1;
             totalValue += price * qty;
           });
           
@@ -1527,7 +1528,7 @@ function updateUIFromCache(data) {
           const countEl = document.getElementById('metricActiveCount');
           const valueEl = document.getElementById('metricTotalValue');
           
-          if (countEl) countEl.textContent = items.length.toLocaleString();
+          if (countEl) countEl.textContent = offers.length.toLocaleString();
           if (valueEl) valueEl.textContent = '$' + totalValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
           
           if (statsEl) statsEl.style.display = 'block';
