@@ -163,6 +163,54 @@
       font-size: 0.75rem;
       font-weight: 600;
     }
+    .image-thumb .image-delete {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      background: rgba(220, 38, 38, 0.9);
+      color: white;
+      border: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .image-thumb:hover .image-delete {
+      opacity: 1;
+    }
+    .image-thumb .image-delete:hover {
+      background: rgba(220, 38, 38, 1);
+    }
+    .image-upload-zone {
+      border: 2px dashed var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      margin-bottom: 1rem;
+    }
+    .image-upload-zone:hover, .image-upload-zone.dragover {
+      border-color: var(--accent);
+      background: rgba(99, 102, 241, 0.1);
+    }
+    .image-upload-zone .upload-icon {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+    }
+    .image-upload-zone .upload-text {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+    .image-upload-status {
+      margin-top: 0.5rem;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
     .dp-content {
       max-width: 1100px;
       margin: 0 auto;
@@ -480,7 +528,16 @@
         <!-- Images -->
         <div class="dp-card dp-card--full">
           <h3 style="margin-top: 0; margin-bottom: 1rem; color: var(--text-primary);">📸 Images</h3>
-          <p style="color: var(--text-muted); font-size: 0.875rem; margin-bottom: 1rem;">Drag to reorder images. First image is the main listing photo.</p>
+          <p style="color: var(--text-muted); font-size: 0.875rem; margin-bottom: 1rem;">Drag to reorder images. Click × to remove. First image is the main listing photo.</p>
+          
+          <!-- Upload Zone -->
+          <div class="image-upload-zone" id="imageUploadZone">
+            <div class="upload-icon">📤</div>
+            <div class="upload-text">Click or drop images here to add photos</div>
+          </div>
+          <input type="file" id="imageFileInput" multiple accept="image/*" style="display: none;" />
+          <div class="image-upload-status" id="imageUploadStatus"></div>
+          
           <div class="images-preview" id="imagesPreview"></div>
         </div>
       </main>
@@ -597,25 +654,8 @@
         
         // Show images with drag-and-drop reordering
         if (originalItem.images && Array.isArray(originalItem.images)) {
-          const preview = $('imagesPreview');
           originalItem.images.forEach((url, index) => {
-            const div = document.createElement('div');
-            div.className = 'image-thumb';
-            div.draggable = true;
-            div.dataset.url = url;
-            div.innerHTML = `
-              <div class="image-order">${index + 1}</div>
-              <img src="${url}" alt="Product image" />
-            `;
-            
-            // Drag and drop event handlers
-            div.addEventListener('dragstart', handleDragStart);
-            div.addEventListener('dragend', handleDragEnd);
-            div.addEventListener('dragover', handleDragOver);
-            div.addEventListener('drop', handleDrop);
-            div.addEventListener('dragleave', handleDragLeave);
-            
-            preview.appendChild(div);
+            addImageToPreview(url);
           });
         }
         
@@ -711,6 +751,144 @@
     // Drag and drop handlers for image reordering
     let draggedElement = null;
     
+    // ===== Image Upload Functions =====
+    
+    function addImageToPreview(url) {
+      const preview = $('imagesPreview');
+      const currentCount = preview.querySelectorAll('.image-thumb').length;
+      
+      const div = document.createElement('div');
+      div.className = 'image-thumb';
+      div.draggable = true;
+      div.dataset.url = url;
+      div.innerHTML = `
+        <div class="image-order">${currentCount + 1}</div>
+        <button class="image-delete" title="Remove image" onclick="removeImage(this)">×</button>
+        <img src="${url}" alt="Product image" />
+      `;
+      
+      // Drag and drop event handlers
+      div.addEventListener('dragstart', handleDragStart);
+      div.addEventListener('dragend', handleDragEnd);
+      div.addEventListener('dragover', handleDragOver);
+      div.addEventListener('drop', handleDrop);
+      div.addEventListener('dragleave', handleDragLeave);
+      
+      preview.appendChild(div);
+      updateImageOrderLabels();
+    }
+    
+    function removeImage(btn) {
+      const thumb = btn.closest('.image-thumb');
+      if (thumb) {
+        thumb.remove();
+        updateImageOrderLabels();
+      }
+    }
+    
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64 = reader.result.split(',')[1]; // Remove data:image/...;base64, prefix
+          resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+    
+    async function uploadImages(files) {
+      const uploadStatus = $('imageUploadStatus');
+      
+      if (!window.authClient?.authFetch) {
+        uploadStatus.textContent = '❌ Auth not available. Please refresh the page.';
+        return;
+      }
+      
+      // Filter to image files only
+      const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+      
+      if (imageFiles.length === 0) {
+        uploadStatus.textContent = '❌ No valid image files selected.';
+        return;
+      }
+      
+      uploadStatus.textContent = `⏳ Uploading ${imageFiles.length} image(s)...`;
+      
+      try {
+        // Convert files to base64
+        const fileData = [];
+        for (const file of imageFiles) {
+          const base64 = await fileToBase64(file);
+          fileData.push({
+            name: file.name,
+            mime: file.type,
+            data: base64,
+          });
+        }
+        
+        // Upload to storage
+        const uploadRes = await window.authClient.authFetch('/.netlify/functions/ingest-local-upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ files: fileData }),
+        });
+        
+        if (!uploadRes.ok) {
+          const error = await uploadRes.json().catch(() => ({ error: `HTTP ${uploadRes.status}` }));
+          throw new Error(error.error || error.message || 'Upload failed');
+        }
+        
+        const uploadData = await uploadRes.json();
+        const uploadedFiles = uploadData.files || [];
+        
+        // Add each uploaded image to the preview
+        for (const file of uploadedFiles) {
+          addImageToPreview(file.stagedUrl);
+        }
+        
+        uploadStatus.textContent = `✅ Added ${uploadedFiles.length} image(s) successfully!`;
+        setTimeout(() => { uploadStatus.textContent = ''; }, 3000);
+        
+      } catch (err) {
+        console.error('Image upload failed:', err);
+        uploadStatus.textContent = `❌ Upload failed: ${err.message}`;
+      }
+    }
+    
+    // Set up image upload zone event handlers
+    document.addEventListener('DOMContentLoaded', () => {
+      const uploadZone = $('imageUploadZone');
+      const fileInput = $('imageFileInput');
+      
+      if (uploadZone && fileInput) {
+        uploadZone.addEventListener('click', () => fileInput.click());
+        
+        uploadZone.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          uploadZone.classList.add('dragover');
+        });
+        
+        uploadZone.addEventListener('dragleave', () => {
+          uploadZone.classList.remove('dragover');
+        });
+        
+        uploadZone.addEventListener('drop', (e) => {
+          e.preventDefault();
+          uploadZone.classList.remove('dragover');
+          uploadImages(e.dataTransfer.files);
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+          uploadImages(e.target.files);
+          fileInput.value = ''; // Reset so same file can be selected again
+        });
+      }
+    });
+    
+    // ===== Drag and Drop Functions =====
+
     function handleDragStart(e) {
       draggedElement = this;
       this.classList.add('dragging');
