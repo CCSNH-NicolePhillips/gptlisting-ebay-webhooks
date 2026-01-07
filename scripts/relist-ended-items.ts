@@ -11,7 +11,7 @@
  */
 
 import 'dotenv/config';
-import { accessTokenFromRefresh, tokenHosts } from '../src/lib/_common.js';
+import { accessTokenFromRefresh } from '../src/lib/_common.js';
 import { tokensStore } from '../src/lib/_blobs.js';
 import { userScopedKey } from '../src/lib/_auth.js';
 
@@ -37,7 +37,9 @@ async function main() {
 
   const { access_token } = await accessTokenFromRefresh(refresh);
   const ENV = process.env.EBAY_ENV || 'PROD';
-  const { tradingHost } = tokenHosts(ENV);
+  const tradingHost = ENV === 'SANDBOX' 
+    ? 'https://api.sandbox.ebay.com/ws/api.dll'
+    : 'https://api.ebay.com/ws/api.dll';
 
   // Step 1: Get unsold items
   console.log('Fetching unsold/ended items from eBay...');

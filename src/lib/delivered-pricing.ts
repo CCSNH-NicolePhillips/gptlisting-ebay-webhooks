@@ -377,13 +377,14 @@ export function calculateTargetDelivered(
     }
   }
   
-  // DISABLED: Retail cap was causing bad prices when Google Shopping returned wrong products
-  // TODO: Re-enable once title matching is improved
-  // if (retailCapCents !== null && targetCents > retailCapCents) {
-  //   console.log(`[delivered-pricing] Applying retail cap: $${(targetCents / 100).toFixed(2)} → $${(retailCapCents / 100).toFixed(2)}`);
-  //   warnings.push('retailCapApplied');
-  //   targetCents = retailCapCents;
-  // }
+  // Apply retail cap - never price above 80% of best retail price
+  // This ensures we stay competitive with Amazon/Walmart/brand sites
+  // Note: This was previously disabled due to title matching issues, but those are now fixed
+  if (retailCapCents !== null && targetCents > retailCapCents) {
+    console.log(`[delivered-pricing] Applying retail cap: $${(targetCents / 100).toFixed(2)} → $${(retailCapCents / 100).toFixed(2)}`);
+    warnings.push('retailCapApplied');
+    targetCents = retailCapCents;
+  }
 
   return { targetCents, fallbackUsed, soldStrong, warnings };
 }

@@ -31,7 +31,7 @@ describe('ebay-sold-prices (SearchAPI.io)', () => {
         condition: 'NEW',
       };
 
-      // Mock SearchAPI.io response
+      // Mock SearchAPI.io response - all titles contain matching words
       (global.fetch as jest.Mock<any>).mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -42,7 +42,7 @@ describe('ebay-sold-prices (SearchAPI.io)', () => {
               link: 'https://ebay.com/itm/item1',
             },
             {
-              title: 'iPhone 14 Pro 256GB',
+              title: 'Apple iPhone 14 Pro 256GB',
               price: { raw: '$949.00' },
               link: 'https://ebay.com/itm/item2',
             },
@@ -52,7 +52,7 @@ describe('ebay-sold-prices (SearchAPI.io)', () => {
               link: 'https://ebay.com/itm/item3',
             },
             {
-              title: 'iPhone 14 Pro Gold',
+              title: 'Apple iPhone 14 Pro Gold',
               price: { value: 920.00 },
               link: 'https://ebay.com/itm/item4',
             },
@@ -208,11 +208,11 @@ describe('ebay-sold-prices (SearchAPI.io)', () => {
         ok: true,
         json: async () => ({
           organic_results: [
-            { price: { value: 25.99 } },           // Format 1: price.value
-            { price: { raw: '$30.50' } },           // Format 2: price.raw
-            { price: '$28.75' },                    // Format 3: string price
-            { price: '35.00' },                     // Format 4: numeric string
-            { price: { value: '40.25' } },          // Format 5: string value
+            { title: 'Test Product Item 1', price: { value: 25.99 } },           // Format 1: price.value
+            { title: 'Test Product Item 2', price: { raw: '$30.50' } },           // Format 2: price.raw
+            { title: 'Test Product Item 3', price: '$28.75' },                    // Format 3: string price
+            { title: 'Test Product Item 4', price: '35.00' },                     // Format 4: numeric string
+            { title: 'Test Product Item 5', price: { value: '40.25' } },          // Format 5: string value
           ],
         }),
       } as unknown as Response);
@@ -233,22 +233,23 @@ describe('ebay-sold-prices (SearchAPI.io)', () => {
         ok: true,
         json: async () => ({
           organic_results: [
-            { price: { value: 25.99 } },            // Valid
-            { price: { value: 0 } },                // Invalid: 0
-            { price: { value: -10 } },              // Invalid: negative
-            { price: { raw: 'Contact for price' } }, // Invalid: no numeric
-            { price: null },                         // Invalid: null
-            { title: 'No price field' },            // Invalid: missing price
-            { price: { value: 30.00 } },            // Valid
+            { title: 'Test Product Item 1', price: { value: 25.99 } },            // Valid
+            { title: 'Test Product Item 2', price: { value: 0 } },                // Invalid: 0
+            { title: 'Test Product Item 3', price: { value: -10 } },              // Invalid: negative
+            { title: 'Test Product Item 4', price: { raw: 'Contact for price' } }, // Invalid: no numeric
+            { title: 'Test Product Item 5', price: null },                         // Invalid: null
+            { title: 'No price field Test Product' },                              // Invalid: missing price
+            { title: 'Test Product Item 6', price: { value: 30.00 } },             // Valid
+            { title: 'Test Product Item 7', price: { value: 35.00 } },             // Valid (need 3 for ok=true)
           ],
         }),
       } as unknown as Response);
 
       const result = await fetchSoldPriceStats(query);
 
-      expect(result.ok).toBe(false); // Not ok because < 3 samples
-      expect(result.samplesCount).toBe(2); // Only 2 valid prices
-      expect(result.samples.map(s => s.price)).toEqual([25.99, 30.00]);
+      expect(result.ok).toBe(true); // ok because 3 valid samples
+      expect(result.samplesCount).toBe(3); // 3 valid prices
+      expect(result.samples.map(s => s.price)).toEqual([25.99, 30.00, 35.00]);
     });
 
     it('should require at least 3 samples for ok=true', async () => {
@@ -261,8 +262,8 @@ describe('ebay-sold-prices (SearchAPI.io)', () => {
         ok: true,
         json: async () => ({
           organic_results: [
-            { price: { value: 100.00 } },
-            { price: { value: 110.00 } },
+            { title: 'Rare Product Item 1', price: { value: 100.00 } },
+            { title: 'Rare Product Item 2', price: { value: 110.00 } },
           ],
         }),
       } as unknown as Response);
@@ -284,7 +285,7 @@ describe('ebay-sold-prices (SearchAPI.io)', () => {
       (global.fetch as jest.Mock<any>).mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          organic_results: prices.map(p => ({ price: { value: p } })),
+          organic_results: prices.map((p, i) => ({ title: `Test Product Item ${i + 1}`, price: { value: p } })),
         }),
       } as unknown as Response);
 
@@ -338,9 +339,9 @@ describe('ebay-sold-prices (SearchAPI.io)', () => {
         ok: true,
         json: async () => ({
           organic_results: [
-            { price: { raw: '$1,299.99' } },
-            { price: '$2,500.00' },
-            { price: { raw: '$3,750.50' } },
+            { title: 'Expensive Item Deluxe', price: { raw: '$1,299.99' } },
+            { title: 'Expensive Item Premium', price: '$2,500.00' },
+            { title: 'Expensive Item Pro', price: { raw: '$3,750.50' } },
           ],
         }),
       } as unknown as Response);
@@ -392,9 +393,9 @@ describe('ebay-sold-prices (SearchAPI.io)', () => {
         ok: true,
         json: async () => ({
           organic_results: [
-            { price: { value: 53.88 }, link: 'https://ebay.com/itm/1' },
-            { price: { value: 83.97 }, link: 'https://ebay.com/itm/2' },
-            { price: { value: 21.00 }, link: 'https://ebay.com/itm/3' },
+            { title: 'Gashee Rapunzel Hair Serum 3oz', price: { value: 53.88 }, link: 'https://ebay.com/itm/1' },
+            { title: 'Gashee Rapunzel Hair Serum New', price: { value: 83.97 }, link: 'https://ebay.com/itm/2' },
+            { title: 'Gashee Rapunzel Hair Serum', price: { value: 21.00 }, link: 'https://ebay.com/itm/3' },
           ],
         }),
       } as unknown as Response);

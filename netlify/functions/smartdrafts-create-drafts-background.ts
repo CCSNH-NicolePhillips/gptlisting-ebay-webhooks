@@ -603,7 +603,8 @@ function buildPrompt(
     // Include key text from product packaging (Vision API extraction)
     if (product.keyText && product.keyText.length > 0) {
       lines.push(`Product Label Text (visible on packaging): ${product.keyText.join(', ')}`);
-      lines.push('👉 Use this label text to determine the correct formulation, size, and quantity.');
+      lines.push('👉 Use this label text to determine the correct formulation, size, quantity, and FLAVOR.');
+      lines.push('👉 CRITICAL: If you see any flavor text (e.g., "Strawberry Watermelon", "Pistachio Caramel", "Berry", "Vanilla", "Lemon Lime", "Mixed Berry", "Citrus"), you MUST include it in the Flavor aspect!');
     }
   }
   
@@ -773,6 +774,7 @@ function buildPrompt(
   lines.push('    "Brand": ["..."],');
   lines.push('    "Type": ["..."],');
   lines.push('    "Formulation": ["Capsule"], // Example - fill based on product');
+  lines.push('    "Flavor": ["Strawberry Watermelon"], // IMPORTANT: Extract from label text if visible!');
   lines.push('    "Main Purpose": ["Brain Health"], // Example - fill based on product');
   lines.push('    "Ingredients": ["L-Tyrosine", "..."], // Example - list key ingredients');
   lines.push('    "Features": ["Non-GMO", "Gluten-Free"], // Example - list all features');
@@ -884,6 +886,25 @@ function normalizeAspects(aspects: any, product: PairedProduct): Record<string, 
   
   if (product.size && !normalized.Size) {
     normalized.Size = [product.size];
+  }
+  
+  // Extract Flavor from keyText if GPT didn't set it
+  if ((!normalized.Flavor || normalized.Flavor.length === 0) && product.keyText && product.keyText.length > 0) {
+    const flavorPatterns = [
+      /\b(strawberry|watermelon|berry|vanilla|chocolate|lemon|lime|orange|grape|cherry|mint|pistachio|caramel|citrus|apple|mango|peach|pineapple|coconut|banana|blueberry|raspberry|mixed berry|fruit punch|tropical|unflavored)\b/gi
+    ];
+    
+    const keyTextJoined = product.keyText.join(' ');
+    for (const pattern of flavorPatterns) {
+      const matches = keyTextJoined.match(pattern);
+      if (matches && matches.length > 0) {
+        // Capitalize first letter of each word
+        const flavorValue = matches.map(m => m.charAt(0).toUpperCase() + m.slice(1).toLowerCase()).join(' ');
+        normalized.Flavor = [flavorValue];
+        console.log(`[normalizeAspects] ✓ Flavor extracted from keyText: "${flavorValue}"`);
+        break;
+      }
+    }
   }
   
   return normalized;
