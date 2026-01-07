@@ -114,21 +114,18 @@ export const handler: Handler = async (event) => {
     console.log('[ebay-get-active-item] SellerInventoryID found:', sellerInventoryIdMatch?.[1] || 'NONE');
     console.log('[ebay-get-active-item] isInventoryListing:', isInventoryListing);
     
-    // If we have a SKU but no SellerInventoryID, assume it's an inventory listing
-    // (Inventory API header validation is too strict for fallback detection)
+    // Only trust SellerInventoryID for determining if it's an inventory listing
+    // Having a SKU alone doesn't mean it's an Inventory API listing - Trading API listings can have SKUs too
     let finalIsInventoryListing = isInventoryListing;
-    if (!isInventoryListing && skuMatch?.[1]) {
-      console.log('[ebay-get-active-item] SKU found but no SellerInventoryID - assuming inventory listing');
-      finalIsInventoryListing = true;
-    }
     
-    console.log('[ebay-get-active-item] Final isInventoryListing:', finalIsInventoryListing);
+    console.log('[ebay-get-active-item] Initial isInventoryListing based on SellerInventoryID:', finalIsInventoryListing);
     
-    // If it's an inventory listing, fetch the latest data from Inventory API
+    // If it looks like an inventory listing OR has a SKU, try to fetch from Inventory API
+    // But only confirm it's an inventory listing if the fetch succeeds
     let inventoryDescription: string | null = null;
-    if (finalIsInventoryListing && skuMatch?.[1]) {
+    if (skuMatch?.[1]) {
       const sku = skuMatch[1];
-      console.log('[ebay-get-active-item] Fetching from Inventory API for SKU:', sku);
+      console.log('[ebay-get-active-item] Trying to fetch from Inventory API for SKU:', sku);
       
       const inventoryUrl = `https://api.ebay.com/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
       const inventoryRes = await fetch(inventoryUrl, {
@@ -142,14 +139,21 @@ export const handler: Handler = async (event) => {
       
       if (inventoryRes.ok) {
         const inventoryData = await inventoryRes.json();
+        // SUCCESS - this IS an inventory listing
+        finalIsInventoryListing = true;
         if (inventoryData.product?.description) {
           inventoryDescription = inventoryData.product.description;
           console.log('[ebay-get-active-item] Got fresh description from Inventory API (length:', inventoryData.product.description.length, ')');
         }
+        console.log('[ebay-get-active-item] Confirmed as Inventory API listing');
       } else {
-        console.log('[ebay-get-active-item] Failed to fetch from Inventory API:', inventoryRes.status);
+        // FAILED - this is NOT an inventory listing (or SKU doesn't exist in inventory system)
+        console.log('[ebay-get-active-item] Inventory API returned', inventoryRes.status, '- treating as Trading API listing');
+        finalIsInventoryListing = false;
       }
     }
+    
+    console.log('[ebay-get-active-item] Final isInventoryListing:', finalIsInventoryListing);
     
     const priceMatch = xmlText.match(/<CurrentPrice[^>]*>([^<]+)<\/CurrentPrice>/);
     const currencyMatch = xmlText.match(/<CurrentPrice currencyID="([^"]+)"/);
