@@ -52,6 +52,8 @@
 import { searchGoogleShopping, GoogleShoppingResult } from './google-shopping-search.js';
 import { fetchSoldPriceStats, SoldPriceStats } from './pricing/ebay-sold-prices.js';
 import { getShippingEstimate, ShippingEstimate, ShippingSettings, DEFAULT_SHIPPING_SETTINGS } from './shipping-estimates.js';
+import { braveFirstUrl } from './search.js';
+import { extractPriceWithShipping } from './html-price.js';
 
 // ============================================================================
 // Types
@@ -234,6 +236,84 @@ export function median(values: number[]): number {
     return Math.round((sorted[mid - 1] + sorted[mid]) / 2);
   }
   return sorted[mid];
+}
+
+/**
+ * Check if any retail comp title contains the brand name
+ * Used to detect when retail comps are from wrong brands
+ */
+function retailCompsIncludeBrand(retailComps: CompetitorPrice[], brand: string): boolean {
+  if (!brand) return false;
+  const brandLower = brand.toLowerCase();
+  return retailComps.some(c => 
+    c.title.toLowerCase().includes(brandLower) ||
+    c.seller.toLowerCase().includes(brandLower)
+  );
+}
+
+/**
+ * Fetch HTML from a URL with timeout
+ */
+async function fetchHtmlWithTimeout(url: string, timeoutMs = 8000): Promise<string | null> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+      },
+    });
+    clearTimeout(timeout);
+    
+    if (!res.ok) return null;
+    return await res.text();
+  } catch (err) {
+    console.log(`[delivered-pricing] Failed to fetch ${url}: ${err}`);
+    return null;
+  }
+}
+
+/**
+ * Fallback: Search Amazon via Brave when Google Shopping fails to find brand
+ * Returns price in cents or null if not found
+ */
+async function braveAmazonFallback(brand: string, productName: string): Promise<{ 
+  priceCents: number | null;
+  url: string | null;
+}> {
+  const query = `${brand} ${productName}`;
+  console.log(`[delivered-pricing] Brave Amazon fallback for: "${query}"`);
+  
+  const amazonUrl = await braveFirstUrl(query, 'amazon.com');
+  if (!amazonUrl) {
+    console.log(`[delivered-pricing] Brave found no Amazon result for "${query}"`);
+    return { priceCents: null, url: null };
+  }
+  
+  console.log(`[delivered-pricing] Brave found Amazon: ${amazonUrl}`);
+  
+  // Fetch and extract price from Amazon page
+  const html = await fetchHtmlWithTimeout(amazonUrl);
+  if (!html) {
+    console.log(`[delivered-pricing] Failed to fetch Amazon page`);
+    return { priceCents: null, url: amazonUrl };
+  }
+  
+  const result = extractPriceWithShipping(html, productName);
+  if (result.amazonItemPrice && result.amazonItemPrice > 0) {
+    // Use item + shipping for total delivered price
+    const totalPrice = result.amazonItemPrice + (result.amazonShippingPrice || 0);
+    const priceCents = Math.round(totalPrice * 100);
+    console.log(`[delivered-pricing] Brave Amazon price: $${result.amazonItemPrice.toFixed(2)} + $${(result.amazonShippingPrice || 0).toFixed(2)} ship = $${totalPrice.toFixed(2)} → ${priceCents} cents`);
+    return { priceCents, url: amazonUrl };
+  }
+  
+  console.log(`[delivered-pricing] Could not extract price from Amazon page`);
+  return { priceCents: null, url: amazonUrl };
 }
 
 /**
@@ -731,6 +811,38 @@ export async function getDeliveredPricing(
     warnings.push('soldCompsError');
   }
 
+  // === Step 4: Brave Amazon Fallback for Niche Brands ===
+  // When Google Shopping doesn't find brand-matched retail AND no trusted retailers,
+  // try Brave to find the Amazon product page directly
+  let braveAmazonPrice: number | null = null;
+  let effectiveAmazonPriceCents = amazonPriceCents;
+  
+  const hasTrustedRetail = amazonPriceCents !== null || walmartPriceCents !== null || targetPriceCents !== null;
+  const retailHasBrand = retailCompsIncludeBrand(retailComps, brand);
+  const soldStrong = soldMedianCents !== null && soldCount >= 5;
+  
+  if (!hasTrustedRetail && !retailHasBrand && !soldStrong) {
+    console.log(`[delivered-pricing] ⚠️ No brand-matched retail found for "${brand}" - trying Brave Amazon fallback`);
+    
+    const braveResult = await braveAmazonFallback(brand, productName);
+    if (braveResult.priceCents) {
+      braveAmazonPrice = braveResult.priceCents;
+      effectiveAmazonPriceCents = braveAmazonPrice;
+      warnings.push('usedBraveAmazonFallback');
+      console.log(`[delivered-pricing] ✓ Brave Amazon fallback: $${(braveAmazonPrice / 100).toFixed(2)}`);
+    } else if (braveResult.url) {
+      // Found Amazon page but couldn't extract price (likely JS-rendered)
+      // Still flag as needing review since we're using wrong-brand retail as fallback
+      warnings.push('braveAmazonNoPriceExtract');
+      warnings.push('nicheBrandNeedsReview');
+      console.log(`[delivered-pricing] ⚠️ Brave found Amazon page but price extraction failed - MANUAL REVIEW REQUIRED`);
+    } else {
+      // Brave didn't find anything - this is a niche brand with no pricing data
+      warnings.push('nicheBrandNeedsReview');
+      console.log(`[delivered-pricing] ⚠️ NICHE BRAND: "${brand}" has no reliable pricing data - manual review required`);
+    }
+  }
+
   // Calculate target delivered price
   const minDeliveredCents = fullSettings.minItemCents + fullSettings.shippingEstimateCents;
   const targetResult = calculateTargetDelivered(
@@ -739,7 +851,7 @@ export async function getDeliveredPricing(
     activeMedian,
     soldMedianCents,
     soldCount,
-    amazonPriceCents,
+    effectiveAmazonPriceCents, // Use Brave-found Amazon price if available
     walmartPriceCents,
     fullSettings.undercutCents,
     minDeliveredCents,
@@ -759,7 +871,7 @@ export async function getDeliveredPricing(
       retailComps,
       activeFloorDeliveredCents: activeFloor,
       activeMedianDeliveredCents: activeMedian,
-      amazonPriceCents,
+      amazonPriceCents: effectiveAmazonPriceCents,
       walmartPriceCents,
       soldMedianDeliveredCents: soldMedianCents,
       soldCount,
@@ -861,7 +973,7 @@ export async function getDeliveredPricing(
     retailComps,
     activeFloorDeliveredCents: activeFloor,
     activeMedianDeliveredCents: activeMedian,
-    amazonPriceCents,
+    amazonPriceCents: effectiveAmazonPriceCents,
     walmartPriceCents,
     soldMedianDeliveredCents: soldMedianCents,
     soldCount,

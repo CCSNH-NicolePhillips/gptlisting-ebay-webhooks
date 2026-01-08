@@ -64,7 +64,7 @@ type CategoryHint = {
 
 // Attention reason codes - each describes why a draft needs manual review
 type AttentionReason = {
-  code: 'PRICE_FALLBACK' | 'PRICE_LOW' | 'PRICE_ABOVE_RETAIL' | 'PRICE_ESTIMATED' | 'NO_COMPS' | 'MISSING_WEIGHT' | 'MISSING_IMAGES' | 'MISSING_BRAND' | 'LOW_CONFIDENCE';
+  code: 'PRICE_FALLBACK' | 'PRICE_LOW' | 'PRICE_ABOVE_RETAIL' | 'PRICE_ESTIMATED' | 'NO_COMPS' | 'MISSING_WEIGHT' | 'MISSING_IMAGES' | 'MISSING_BRAND' | 'LOW_CONFIDENCE' | 'NICHE_BRAND_PRICING';
   message: string;
   severity: 'warning' | 'error';  // 'error' blocks publishing, 'warning' allows but shows alert
 };
@@ -1269,6 +1269,12 @@ async function createDraftForProduct(
     
     console.log(`[smartdrafts-price] Result: item=$${(deliveredDecision.finalItemCents / 100).toFixed(2)}, ship=$${(deliveredDecision.finalShipCents / 100).toFixed(2)}, canCompete=${deliveredDecision.canCompete}`);
     
+    // Check for niche brand warning - this is a BLOCKING issue
+    const hasNicheBrandWarning = deliveredDecision.warnings?.includes('nicheBrandNeedsReview');
+    if (hasNicheBrandWarning) {
+      console.log(`[smartdrafts-price] ⚠️ NICHE BRAND detected: "${product.brand}" - manual price review required`);
+    }
+    
     // Convert to PriceDecision format for compatibility
     const itemDollars = deliveredDecision.finalItemCents / 100;
     
@@ -1636,6 +1642,16 @@ async function createDraftForProduct(
       code: 'NO_COMPS',
       message: 'No market data found - price is a blind estimate',
       severity: 'warning',
+    });
+  }
+  
+  // Track niche brand with unreliable pricing - BLOCKING issue
+  const hasNicheBrandWarning = deliveredDecision?.warnings?.includes('nicheBrandNeedsReview');
+  if (hasNicheBrandWarning) {
+    attentionReasons.push({
+      code: 'NICHE_BRAND_PRICING',
+      message: `Brand "${product.brand}" not found in retail sources - price may be incorrect. SET CORRECT PRICE BEFORE PUBLISHING.`,
+      severity: 'error', // BLOCKING - cannot publish until fixed
     });
   }
   

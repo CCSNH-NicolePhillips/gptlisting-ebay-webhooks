@@ -1922,6 +1922,15 @@
             const product = products[idx];
             if (!product) return null;
 
+            // Skip drafts with blocking issues (e.g., niche brand pricing)
+            const attentionReasons = draft.attentionReasons || [];
+            const hasBlockingIssue = attentionReasons.some(r => r?.severity === 'error');
+            if (hasBlockingIssue) {
+              const blockingReason = attentionReasons.find(r => r?.severity === 'error');
+              console.warn(`[Quick List] Skipping ${draft.productId} - BLOCKING ISSUE: ${blockingReason?.message || 'Unknown error'}`);
+              return null;
+            }
+
             // Skip drafts with missing price or images
             if (!draft.price || draft.price <= 0) {
               console.warn(`[Quick List] Skipping ${draft.productId} - no price available`);
