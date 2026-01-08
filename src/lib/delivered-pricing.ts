@@ -281,7 +281,8 @@ export function calculateTargetDelivered(
   walmartPrice: number | null,
   undercutCents: number,
   minDeliveredCents: number,
-  retailComps: CompetitorPrice[] = []
+  retailComps: CompetitorPrice[] = [],
+  targetPrice: number | null = null  // Target.com price
 ): { targetCents: number; fallbackUsed: boolean; soldStrong: boolean; warnings: string[] } {
   const warnings: string[] = [];
   let fallbackUsed = false;
@@ -297,19 +298,55 @@ export function calculateTargetDelivered(
   }
   
   // Calculate the retail cap - never price above 80% of best retail
-  const retailPrices = [
+  // Filter out obviously wrong retail prices (likely wrong variants/sizes)
+  // A retail price < 50% of sold median is almost certainly wrong data (single servings, different sizes)
+  // Rationale: Retail should never be less than what things sell for on eBay - eBay is discounted
+  const minValidRetailCents = soldStrong ? Math.round(soldMedian! * 0.50) : 500; // At least $5 or 50% of sold median
+  
+  // RETAIL CAP LOGIC:
+  // Only apply retail cap when we have HIGH CONFIDENCE retail data (Amazon, Walmart, or Target)
+  // Google Shopping often returns wrong variants (8-count box vs 30 oz bottle) which pollute pricing
+  // When sold data is strong, we trust the sold median as the true market price
+  const trustedRetailPrices = [amazonPrice, walmartPrice, targetPrice].filter((p): p is number => p !== null && p > 0 && p >= minValidRetailCents);
+  
+  let retailCapCents: number | null = null;
+  let lowestRetailCents: number | null = null;
+  
+  if (trustedRetailPrices.length > 0) {
+    // We have Amazon/Walmart/Target - use that for cap (high confidence)
+    lowestRetailCents = Math.min(...trustedRetailPrices);
+    retailCapCents = Math.round(lowestRetailCents * RETAIL_CAP_RATIO);
+    console.log(`[delivered-pricing] Using trusted retail (Amazon/Walmart/Target) for cap: $${(lowestRetailCents / 100).toFixed(2)}`);
+    console.log(`[delivered-pricing] Retail cap: $${(retailCapCents / 100).toFixed(2)} (80% of $${(lowestRetailCents / 100).toFixed(2)})`);
+  } else if (!soldStrong) {
+    // No trusted retail AND weak sold data - use Google Shopping with caution
+    const retailPrices = retailComps
+      .filter(c => c.inStock)
+      .map(c => c.deliveredCents)
+      .filter((p): p is number => p !== null && p >= minValidRetailCents);
+    
+    if (retailPrices.length > 0) {
+      lowestRetailCents = Math.min(...retailPrices);
+      retailCapCents = Math.round(lowestRetailCents * RETAIL_CAP_RATIO);
+      console.log(`[delivered-pricing] Weak sold data - using Google Shopping for cap: $${(lowestRetailCents / 100).toFixed(2)}`);
+      console.log(`[delivered-pricing] Retail cap: $${(retailCapCents / 100).toFixed(2)} (80% of $${(lowestRetailCents / 100).toFixed(2)})`);
+    }
+  } else {
+    // Strong sold data but no Amazon/Walmart - SKIP retail cap from Google Shopping
+    // Google Shopping often has wrong variants that would incorrectly cap our price
+    console.log(`[delivered-pricing] Strong sold data (${soldCount} samples) - skipping Google Shopping retail cap (unreliable variants)`);
+    console.log(`[delivered-pricing] Trusting sold median: $${(soldMedian! / 100).toFixed(2)}`);
+  }
+  
+  // Log retail prices for debugging
+  const allRetailPrices = [
     amazonPrice,
     walmartPrice,
     ...retailComps.filter(c => c.inStock).map(c => c.deliveredCents)
   ].filter((p): p is number => p !== null && p > 0);
   
-  const lowestRetailCents = retailPrices.length > 0 ? Math.min(...retailPrices) : null;
-  const retailCapCents = lowestRetailCents !== null 
-    ? Math.round(lowestRetailCents * RETAIL_CAP_RATIO)
-    : null;
-  
-  if (retailCapCents !== null) {
-    console.log(`[delivered-pricing] Retail cap: $${(retailCapCents / 100).toFixed(2)} (80% of lowest retail $${(lowestRetailCents! / 100).toFixed(2)})`);
+  if (allRetailPrices.length > 0) {
+    console.log(`[delivered-pricing] All retail prices: ${allRetailPrices.map(p => '$' + (p / 100).toFixed(2)).join(', ')}`);
   }
 
   // Try eBay comps first
@@ -638,14 +675,29 @@ export async function getDeliveredPricing(
     console.log(`[delivered-pricing] eBay floor: $${(activeFloor / 100).toFixed(2)}, median: $${(activeMedian! / 100).toFixed(2)}`);
   }
 
-  // Get retail prices
+  // Get trusted retail prices (Amazon, Walmart, Target)
   const amazonComp = allComps.find(c => c.source === 'amazon');
   const walmartComp = allComps.find(c => c.source === 'walmart');
+  const targetComp = allComps.find(c => c.source === 'target');
   const amazonPriceCents = amazonComp?.deliveredCents ?? null;
   const walmartPriceCents = walmartComp?.deliveredCents ?? null;
+  const targetPriceCents = targetComp?.deliveredCents ?? null;
+  
+  // Get the LOWEST trusted retail price (Amazon/Walmart/Target)
+  const trustedRetailPrices = [amazonPriceCents, walmartPriceCents, targetPriceCents].filter(p => p !== null) as number[];
+  const lowestTrustedRetailCents = trustedRetailPrices.length > 0 ? Math.min(...trustedRetailPrices) : null;
 
   if (amazonPriceCents) {
     console.log(`[delivered-pricing] Amazon: $${(amazonPriceCents / 100).toFixed(2)} delivered`);
+  }
+  if (walmartPriceCents) {
+    console.log(`[delivered-pricing] Walmart: $${(walmartPriceCents / 100).toFixed(2)} delivered`);
+  }
+  if (targetPriceCents) {
+    console.log(`[delivered-pricing] Target: $${(targetPriceCents / 100).toFixed(2)} delivered`);
+  }
+  if (lowestTrustedRetailCents) {
+    console.log(`[delivered-pricing] Lowest trusted retail: $${(lowestTrustedRetailCents / 100).toFixed(2)}`);
   }
 
   // === Step 3: Fetch sold comps (Phase 3) ===
@@ -691,7 +743,8 @@ export async function getDeliveredPricing(
     walmartPriceCents,
     fullSettings.undercutCents,
     minDeliveredCents,
-    retailComps
+    retailComps,
+    targetPriceCents  // Pass Target.com price
   );
   warnings.push(...targetResult.warnings);
 
