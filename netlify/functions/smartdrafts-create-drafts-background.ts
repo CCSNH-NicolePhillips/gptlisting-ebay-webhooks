@@ -895,6 +895,7 @@ function normalizeAspects(aspects: any, product: PairedProduct): Record<string, 
     ];
     
     const keyTextJoined = product.keyText.join(' ');
+    console.log(`[normalizeAspects] Searching for flavor in keyText: "${keyTextJoined.substring(0, 200)}..."`);
     for (const pattern of flavorPatterns) {
       const matches = keyTextJoined.match(pattern);
       if (matches && matches.length > 0) {
@@ -905,7 +906,20 @@ function normalizeAspects(aspects: any, product: PairedProduct): Record<string, 
         break;
       }
     }
+    if (!normalized.Flavor) {
+      console.log(`[normalizeAspects] ⚠️ No flavor found in keyText`);
+    }
+  } else if (normalized.Flavor && normalized.Flavor.length > 0) {
+    console.log(`[normalizeAspects] ✓ Flavor already set by GPT: "${normalized.Flavor.join(', ')}"`);
   }
+  
+  // Log final aspects with Flavor status
+  console.log(`[normalizeAspects] Final aspects:`, JSON.stringify({
+    Brand: normalized.Brand,
+    Flavor: normalized.Flavor,
+    Formulation: normalized.Formulation,
+    aspectCount: Object.keys(normalized).length
+  }));
   
   return normalized;
 }

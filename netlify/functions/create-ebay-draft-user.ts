@@ -386,6 +386,8 @@ export const handler: Handler = async (event) => {
       console.log(`[create-ebay-draft-user] About to create inventory for SKU: ${mapped.sku}`);
       console.log(`[create-ebay-draft-user] Inventory aspects:`, JSON.stringify(mapped.inventory?.product?.aspects, null, 2));
       console.log(`[create-ebay-draft-user] Has Brand? ${!!mapped.inventory?.product?.aspects?.Brand}, Brand value:`, mapped.inventory?.product?.aspects?.Brand);
+      console.log(`[create-ebay-draft-user] Has Flavor? ${!!mapped.inventory?.product?.aspects?.Flavor}, Flavor value:`, mapped.inventory?.product?.aspects?.Flavor);
+      console.log(`[create-ebay-draft-user] Group aspects from draft:`, JSON.stringify(group.aspects, null, 2));
       
       // DEBUG: Log imageUrls being sent to eBay
       const inventoryImages = mapped.inventory?.product?.imageUrls || [];
