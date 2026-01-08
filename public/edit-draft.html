@@ -867,13 +867,32 @@
         } else {
           // Single selection - use regular dropdown
           const selectedValue = existingValues[0] || '';
+          const isFreeText = mode === 'FREE_TEXT';
+          
+          // Check if selected value is in the predefined list
+          const valueInList = aspectMetadata.aspectValues.some(av => av.localizedValue === selectedValue);
+          
+          // Build options - add current value at top if it's not in the list and we have a value
+          let customOption = '';
+          if (selectedValue && !valueInList) {
+            const escapedValue = escapeHtml(selectedValue);
+            customOption = `<option value="${escapedValue}" selected>${escapedValue} (custom)</option>`;
+            console.log(`[addAspect] ${key}: Adding custom value "${selectedValue}" not in eBay's list`);
+          }
+          
           const options = aspectMetadata.aspectValues.map(av => {
             const selected = av.localizedValue === selectedValue ? 'selected' : '';
             return `<option value="${av.localizedValue}" ${selected}>${av.localizedValue}</option>`;
           }).join('');
-          valueInput = `<select class="aspect-value" ${isRequired ? 'required' : ''}>
+          
+          // For FREE_TEXT mode, also add a custom input option
+          const customInputOption = isFreeText ? `<option value="__custom__">Enter custom value...</option>` : '';
+          
+          valueInput = `<select class="aspect-value aspect-dropdown-with-custom" data-free-text="${isFreeText}" ${isRequired ? 'required' : ''}>
             <option value="">Select ${key}...</option>
+            ${customOption}
             ${options}
+            ${customInputOption}
           </select>`;
         }
       } else {
@@ -1005,6 +1024,29 @@
           hiddenInput.value = selectedValues.join(', ');
           textDisplay.textContent = selectedValues.length > 0 ? selectedValues.join(', ') : `Select ${key}...`;
         }
+      }
+      
+      // Handle custom value option for single-select dropdowns with FREE_TEXT mode
+      const dropdown = div.querySelector('select.aspect-dropdown-with-custom');
+      if (dropdown) {
+        dropdown.addEventListener('change', function(e) {
+          if (this.value === '__custom__') {
+            const customValue = prompt(`Enter custom value for ${key}:`);
+            if (customValue && customValue.trim()) {
+              // Add the custom value as a new option and select it
+              const newOption = document.createElement('option');
+              newOption.value = customValue.trim();
+              newOption.textContent = customValue.trim() + ' (custom)';
+              newOption.selected = true;
+              // Insert after the "Select..." option
+              this.insertBefore(newOption, this.options[1]);
+              this.value = customValue.trim();
+            } else {
+              // Reset to empty if cancelled
+              this.value = '';
+            }
+          }
+        });
       }
     }
     
