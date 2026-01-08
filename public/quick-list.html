@@ -1950,6 +1950,7 @@
               condition: draft.condition,
               category: draft.category,
               categoryPath: draft.category?.title || product.categoryPath,
+              weight: draft.weight, // Pass through shipping weight for eBay inventory
               promotion: promotionSettings, // Pass promotion settings to each group
               bestOffer: bestOfferSettings  // Pass Best Offer settings to each group
             };
