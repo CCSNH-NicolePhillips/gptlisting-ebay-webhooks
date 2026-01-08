@@ -737,53 +737,94 @@ function buildPrompt(
   
   // Add full category aspects from eBay Taxonomy API if available
   if (categoryAspects && (categoryAspects.required.length > 0 || categoryAspects.optional.length > 0)) {
-    lines.push("=== COMPLETE CATEGORY ASPECTS FROM EBAY ===");
-    lines.push("You MUST fill as many of these aspects as possible based on the product information.");
-    lines.push("eBay ranks listings higher when more aspects are filled out accurately.");
+    lines.push("╔══════════════════════════════════════════════════════════════════════════════╗");
+    lines.push("║  🚨 CRITICAL: ASPECT COMPLETION IS MANDATORY - READ CAREFULLY 🚨              ║");
+    lines.push("╚══════════════════════════════════════════════════════════════════════════════╝");
+    lines.push("");
+    lines.push("Your #1 job is to fill out AS MANY aspects as possible. Listings with more aspects:");
+    lines.push("  - Rank HIGHER in eBay search results");
+    lines.push("  - Get MORE visibility and clicks");  
+    lines.push("  - Convert BETTER (buyers trust complete listings)");
+    lines.push("");
+    lines.push("⚠️ MINIMUM REQUIREMENT: Fill at least 15 aspects or your response will be REJECTED.");
+    lines.push("⚠️ Target: Fill 20+ aspects for optimal listing quality.");
     lines.push("");
     const aspectsFormatted = formatAspectsForPrompt(categoryAspects);
     lines.push(aspectsFormatted);
     lines.push("");
-    lines.push("INSTRUCTIONS FOR ASPECTS:");
-    lines.push("- Fill ALL required aspects (these are mandatory for listing)");
-    lines.push("- Fill as many optional aspects as you can determine from the product");
-    lines.push("- For aspects with [allowed: ...] values, use ONLY those exact values");
-    lines.push("- For aspects with [suggested: ...] values, prefer those but can use similar values");
-    lines.push("- If an aspect has (multiple) marker, you can provide an array of values");
-    lines.push("- Use 'Does Not Apply' ONLY if truly not applicable, never for missing data");
-    lines.push("- NEVER leave required aspects empty or with placeholder values");
+    lines.push("═══ ASPECT FILLING RULES (FOLLOW EXACTLY) ═══");
+    lines.push("");
+    lines.push("1. REQUIRED ASPECTS: Fill ALL of these - no exceptions. Missing = listing rejected.");
+    lines.push("");
+    lines.push("2. EXTRACT FROM PRODUCT LABEL:");
+    lines.push("   - Flavor: LOOK AT THE LABEL (e.g., 'Pistachio Caramel Flavor' → Flavor: 'Pistachio Caramel')");
+    lines.push("   - Size/Volume: '15.22 FL OZ' → Volume: '15.22 fl oz' or Number of Ounces: '15.22'");
+    lines.push("   - Count: '60 Gummies' → Number of Gummies: '60'");
+    lines.push("   - Ingredients: List ALL visible on label");
+    lines.push("   - Certifications: 'Gluten Free', 'Vegan', 'Sugar Free', 'Non-GMO', etc.");
+    lines.push("");
+    lines.push("3. INFER FROM PRODUCT TYPE:");
+    lines.push("   - Main Purpose: What health goal? (e.g., 'Hair Growth', 'Weight Loss', 'Energy')");
+    lines.push("   - Target Audience: 'Adults', 'Women', 'Men', 'Children'");
+    lines.push("   - Age Range: 'Adult', '18+', 'All Ages'");
+    lines.push("   - Gender: 'Unisex', 'Female', 'Male'");
+    lines.push("   - Dietary Preferences: 'Vegan', 'Vegetarian', 'Gluten-Free'");
+    lines.push("   - Product Line: The specific product line name if visible");
+    lines.push("");
+    lines.push("4. STANDARD VALUES (use for most supplements):");
+    lines.push("   - Country/Region of Manufacture: 'United States' (unless label says otherwise)");
+    lines.push("   - Expiration Date: 'Long Date/Hand Selected'");
+    lines.push("   - Custom Bundle: 'No'");
+    lines.push("   - Modified Item: 'No'");
+    lines.push("   - Item Weight: Extract from label if visible");
+    lines.push("   - Features: List ALL features visible (Non-GMO, Organic, Sugar-Free, etc.)");
+    lines.push("");
+    lines.push("5. USE ALLOWED VALUES: When [allowed: X, Y, Z] is shown, pick the closest match.");
+    lines.push("6. NEVER SKIP: If you can reasonably determine a value, include it.");
+    lines.push("7. NEVER USE PLACEHOLDERS: No '...', 'N/A', 'See Description', 'Unknown', or empty values.");
     lines.push("");
   } else {
     lines.push("CRITICAL REQUIREMENT: You MUST fill out ALL relevant item specifics (aspects) for your chosen category.");
-    lines.push("Example aspects for health products: Brand, Type, Formulation, Main Purpose, Ingredients, Features, Active Ingredients, Number of Capsules, etc.");
-    lines.push("The more complete and accurate the aspects, the better the eBay search ranking.");
-    lines.push("DO NOT just fill Brand and Type - include ALL relevant aspects you can determine from the product!");
+    lines.push("Target: At least 15-20 aspects. Include:");
+    lines.push("- Brand, Type, Formulation, Flavor, Main Purpose");
+    lines.push("- Ingredients, Features, Active Ingredients");
+    lines.push("- Size, Count, Volume, Weight");
+    lines.push("- Dietary Preferences, Certifications (Vegan, Gluten-Free, etc.)");
+    lines.push("- Country of Manufacture, Target Audience, Age Range, Gender");
     lines.push("");
   }
   
-  lines.push("Response format (JSON):");
+  lines.push("Response format (JSON) - NOTE: This example shows 15+ aspects filled:");
   lines.push("{");
   if (categories && categories.length > 0) {
-    lines.push('  "categoryId": "12345", // Choose the most appropriate eBay category ID from the list above');
+    lines.push('  "categoryId": "12345",');
   }
-  lines.push('  "title": "...", // 60-80 chars, SEO-optimized with keywords (Brand + Product + Features + Size)');
-  lines.push('  "description": "...", // 200-500 word detailed description (NOT one sentence!)');
-  lines.push('  "bullets": ["...", "...", "..."], // 3-5 benefit-focused bullet points');
+  lines.push('  "title": "NatureWise Hair Growth+ Liquid Supplement 15.22 oz Pistachio Caramel NEW",');
+  lines.push('  "description": "Discover NatureWise Hair Growth+, a premium liquid supplement... [200-500 words]",');
+  lines.push('  "bullets": ["Supports healthy hair growth", "Pistachio Caramel flavor", "15.22 FL OZ bottle"],');
   lines.push('  "aspects": {');
-  lines.push('    // REQUIRED: Include ALL aspects shown for your chosen category above');
-  lines.push('    "Brand": ["..."],');
-  lines.push('    "Type": ["..."],');
-  lines.push('    "Formulation": ["Capsule"], // Example - fill based on product');
-  lines.push('    "Flavor": ["Strawberry Watermelon"], // IMPORTANT: Extract from label text if visible!');
-  lines.push('    "Main Purpose": ["Brain Health"], // Example - fill based on product');
-  lines.push('    "Ingredients": ["L-Tyrosine", "..."], // Example - list key ingredients');
-  lines.push('    "Features": ["Non-GMO", "Gluten-Free"], // Example - list all features');
-  lines.push('    "Active Ingredients": ["..."], // Include if shown in category aspects');
-  lines.push('    // ... include EVERY aspect listed for the chosen category');
+  lines.push('    "Brand": ["NatureWise"],');
+  lines.push('    "Type": ["Hair Growth Supplement"],');
+  lines.push('    "Formulation": ["Liquid"],');
+  lines.push('    "Flavor": ["Pistachio Caramel"],');
+  lines.push('    "Main Purpose": ["Hair Growth", "Skin Elasticity"],');
+  lines.push('    "Volume": ["15.22 fl oz"],');
+  lines.push('    "Ingredients": ["TocoGaia Complex", "AnaGain Nu"],');
+  lines.push('    "Features": ["Gluten Free", "Vegan", "Sugar Free"],');
+  lines.push('    "Dietary Preferences": ["Vegan", "Gluten-Free", "Sugar-Free"],');
+  lines.push('    "Country/Region of Manufacture": ["United States"],');
+  lines.push('    "Target Audience": ["Adults"],');
+  lines.push('    "Gender": ["Unisex"],');
+  lines.push('    "Age Range": ["Adult"],');
+  lines.push('    "Custom Bundle": ["No"],');
+  lines.push('    "Expiration Date": ["Long Date/Hand Selected"],');
+  lines.push('    "Product Line": ["Hair Growth+"]');
   lines.push('  },');
-  lines.push('  "price": 29.99, // Current retail price from Amazon/Walmart');
-  lines.push('  "condition": "NEW" // or "USED"');
+  lines.push('  "price": 34.99,');
+  lines.push('  "condition": "NEW"');
   lines.push("}");
+  lines.push("");
+  lines.push("⚠️ YOUR RESPONSE MUST HAVE AT LEAST 15 ASPECTS FILLED. The example above shows the minimum quality expected.");
   
   return lines.join("\n");
 }
@@ -941,6 +982,90 @@ function normalizeAspects(aspects: any, product: PairedProduct): Record<string, 
     }
   } else if (normalized.Flavor && normalized.Flavor.length > 0) {
     console.log(`[normalizeAspects] ✓ Flavor already set by GPT: "${normalized.Flavor.join(', ')}"`);
+  }
+  
+  // === AUTO-POPULATE COMMON ASPECTS FROM PRODUCT DATA ===
+  // These are aspects GPT often misses that we can reliably determine
+  
+  // Extract Features from keyText (certifications like Gluten Free, Vegan, etc.)
+  if ((!normalized.Features || normalized.Features.length === 0) && product.keyText && product.keyText.length > 0) {
+    const keyTextJoined = product.keyText.join(' ').toUpperCase();
+    const detectedFeatures: string[] = [];
+    
+    const featurePatterns: [RegExp, string][] = [
+      [/\bGLUTEN[\s-]?FREE\b/i, 'Gluten-Free'],
+      [/\bVEGAN\b/i, 'Vegan'],
+      [/\bVEGETARIAN\b/i, 'Vegetarian'],
+      [/\bSUGAR[\s-]?FREE\b/i, 'Sugar-Free'],
+      [/\bNON[\s-]?GMO\b/i, 'Non-GMO'],
+      [/\bORGANIC\b/i, 'Organic'],
+      [/\bKOSHER\b/i, 'Kosher'],
+      [/\bHALAL\b/i, 'Halal'],
+      [/\bDAIRY[\s-]?FREE\b/i, 'Dairy-Free'],
+      [/\bSOY[\s-]?FREE\b/i, 'Soy-Free'],
+      [/\bNUT[\s-]?FREE\b/i, 'Nut-Free'],
+      [/\bKETO\b/i, 'Keto-Friendly'],
+      [/\bPALEO\b/i, 'Paleo-Friendly'],
+      [/\bNATURAL\b/i, 'Natural'],
+      [/\bUSDA\b/i, 'USDA Certified'],
+      [/\bNSF\b/i, 'NSF Certified'],
+      [/\bGMP\b/i, 'GMP Certified'],
+      [/\bTHIRD[\s-]?PARTY[\s-]?TESTED\b/i, 'Third-Party Tested'],
+    ];
+    
+    for (const [pattern, label] of featurePatterns) {
+      if (pattern.test(keyTextJoined)) {
+        detectedFeatures.push(label);
+      }
+    }
+    
+    if (detectedFeatures.length > 0) {
+      normalized.Features = detectedFeatures;
+      console.log(`[normalizeAspects] ✓ Features extracted from keyText: ${detectedFeatures.join(', ')}`);
+    }
+  }
+  
+  // Extract volume/size from keyText
+  if (!normalized.Volume && product.keyText && product.keyText.length > 0) {
+    const keyTextJoined = product.keyText.join(' ');
+    const volumeMatch = keyTextJoined.match(/(\d+(?:\.\d+)?)\s*(FL\.?\s*OZ|fl\.?\s*oz|ML|ml|mL|L|oz|OZ)/i);
+    if (volumeMatch) {
+      const value = volumeMatch[1];
+      const unit = volumeMatch[2].toLowerCase().replace(/\s+/g, ' ').trim();
+      normalized.Volume = [`${value} ${unit}`];
+      console.log(`[normalizeAspects] ✓ Volume extracted from keyText: ${value} ${unit}`);
+    }
+  }
+  
+  // Extract count (number of capsules, tablets, gummies, etc.)
+  if (product.keyText && product.keyText.length > 0) {
+    const keyTextJoined = product.keyText.join(' ');
+    const countMatch = keyTextJoined.match(/(\d+)\s*(capsules?|tablets?|gummies|softgels?|count|ct|caps?)/i);
+    if (countMatch) {
+      const count = countMatch[1];
+      const type = countMatch[2].toLowerCase();
+      if (type.includes('capsule') && !normalized['Number of Capsules']) {
+        normalized['Number of Capsules'] = [count];
+      } else if (type.includes('tablet') && !normalized['Number of Tablets']) {
+        normalized['Number of Tablets'] = [count];
+      } else if (type.includes('gumm') && !normalized['Number of Gummies']) {
+        normalized['Number of Gummies'] = [count];
+      } else if (!normalized['Unit Quantity']) {
+        normalized['Unit Quantity'] = [count];
+      }
+      console.log(`[normalizeAspects] ✓ Count extracted from keyText: ${count} ${type}`);
+    }
+  }
+  
+  // Set standard values that should always be present
+  if (!normalized['Country/Region of Manufacture']) {
+    normalized['Country/Region of Manufacture'] = ['United States'];
+  }
+  if (!normalized['Custom Bundle']) {
+    normalized['Custom Bundle'] = ['No'];
+  }
+  if (!normalized['Modified Item']) {
+    normalized['Modified Item'] = ['No'];
   }
   
   // Log final aspects with Flavor status
