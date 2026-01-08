@@ -389,7 +389,7 @@ export const handler: Handler = async (event) => {
       
       // DEBUG: Log imageUrls being sent to eBay
       const inventoryImages = mapped.inventory?.product?.imageUrls || [];
-      console.log(`[create-ebay-draft-user] �️ Images for SKU ${mapped.sku}:`, {
+      console.log(`[create-ebay-draft-user] 🖼️ Images for SKU ${mapped.sku}:`, {
         count: inventoryImages.length,
         urls: inventoryImages.map((u: string) => u?.substring(0, 100)),
       });
@@ -398,6 +398,19 @@ export const handler: Handler = async (event) => {
         console.log(`[create-ebay-draft-user]   [${i}] ${url}`);
         console.log(`[create-ebay-draft-user]       Contains pipe: ${url?.includes('|')}, Contains %7C: ${url?.includes('%7C')}`);
       });
+
+      // Pass through weight from draft (calculated in smartdrafts-create-drafts-background)
+      // Weight structure: { value: number, unit: 'OUNCE' | 'POUND' }
+      const draftWeight = group.weight as { value?: number; unit?: string } | undefined;
+      if (draftWeight?.value && draftWeight.value > 0) {
+        mapped.inventory.packageWeightAndSize = {
+          weight: {
+            value: draftWeight.value,
+            unit: (draftWeight.unit as 'OUNCE' | 'POUND') || 'OUNCE'
+          }
+        };
+        console.log(`[create-ebay-draft-user] 📦 Weight for SKU ${mapped.sku}: ${draftWeight.value} ${draftWeight.unit || 'oz'}`);
+      }
 
   await putInventoryItem(access.token, access.apiHost, mapped.sku, mapped.inventory, mapped.offer.quantity, marketplaceId);
 
