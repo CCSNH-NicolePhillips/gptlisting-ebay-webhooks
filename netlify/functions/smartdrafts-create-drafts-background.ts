@@ -890,22 +890,52 @@ function normalizeAspects(aspects: any, product: PairedProduct): Record<string, 
   
   // Extract Flavor from keyText if GPT didn't set it
   if ((!normalized.Flavor || normalized.Flavor.length === 0) && product.keyText && product.keyText.length > 0) {
-    const flavorPatterns = [
-      /\b(strawberry|watermelon|berry|vanilla|chocolate|lemon|lime|orange|grape|cherry|mint|pistachio|caramel|citrus|apple|mango|peach|pineapple|coconut|banana|blueberry|raspberry|mixed berry|fruit punch|tropical|unflavored)\b/gi
+    // First try compound flavors (multi-word), then individual words
+    const compoundFlavorPatterns = [
+      /\b(pistachio\s+caramel|strawberry\s+watermelon|mixed\s+berry|fruit\s+punch|lemon\s+lime)\s*(flavor)?\b/gi
+    ];
+    const singleFlavorPatterns = [
+      /\b(strawberry|watermelon|berry|vanilla|chocolate|lemon|lime|orange|grape|cherry|mint|pistachio|caramel|citrus|apple|mango|peach|pineapple|coconut|banana|blueberry|raspberry|tropical|unflavored)\s*(flavor)?\b/gi
     ];
     
     const keyTextJoined = product.keyText.join(' ');
-    console.log(`[normalizeAspects] Searching for flavor in keyText: "${keyTextJoined.substring(0, 200)}..."`);
-    for (const pattern of flavorPatterns) {
+    console.log(`[normalizeAspects] Searching for flavor in keyText: "${keyTextJoined.substring(0, 300)}..."`);
+    
+    // Try compound flavors first
+    for (const pattern of compoundFlavorPatterns) {
       const matches = keyTextJoined.match(pattern);
       if (matches && matches.length > 0) {
-        // Capitalize first letter of each word
-        const flavorValue = matches.map(m => m.charAt(0).toUpperCase() + m.slice(1).toLowerCase()).join(' ');
+        // Clean up the match and capitalize properly
+        const flavorValue = matches[0]
+          .replace(/\s*flavor\s*/gi, '') // Remove "flavor" word
+          .trim()
+          .split(/\s+/)
+          .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+          .join(' ');
         normalized.Flavor = [flavorValue];
-        console.log(`[normalizeAspects] ✓ Flavor extracted from keyText: "${flavorValue}"`);
+        console.log(`[normalizeAspects] ✓ Compound flavor extracted from keyText: "${flavorValue}"`);
         break;
       }
     }
+    
+    // Fall back to single-word flavors if no compound found
+    if (!normalized.Flavor || normalized.Flavor.length === 0) {
+      for (const pattern of singleFlavorPatterns) {
+        const matches = keyTextJoined.match(pattern);
+        if (matches && matches.length > 0) {
+          // Get unique flavors, capitalize, and join
+          const uniqueFlavors = [...new Set(matches.map(m => 
+            m.replace(/\s*flavor\s*/gi, '').trim().charAt(0).toUpperCase() + 
+            m.replace(/\s*flavor\s*/gi, '').trim().slice(1).toLowerCase()
+          ))];
+          const flavorValue = uniqueFlavors.join(' ');
+          normalized.Flavor = [flavorValue];
+          console.log(`[normalizeAspects] ✓ Single flavor extracted from keyText: "${flavorValue}"`);
+          break;
+        }
+      }
+    }
+    
     if (!normalized.Flavor) {
       console.log(`[normalizeAspects] ⚠️ No flavor found in keyText`);
     }
