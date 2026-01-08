@@ -1057,6 +1057,127 @@ function normalizeAspects(aspects: any, product: PairedProduct): Record<string, 
     }
   }
   
+  // === TYPE EXTRACTION (NON-NEGOTIABLE) ===
+  // Type must ALWAYS be filled - infer from product name, keyText, or category
+  if (!normalized.Type || normalized.Type.length === 0) {
+    const keyTextJoined = (product.keyText || []).join(' ').toLowerCase();
+    const productName = (product.product || '').toLowerCase();
+    const combinedText = `${keyTextJoined} ${productName}`;
+    
+    // Map keywords to supplement types
+    const typePatterns: [RegExp, string][] = [
+      [/\bhair\s*(growth|support|health|vitamin|supplement)\b/i, 'Hair Growth Supplement'],
+      [/\bskin\s*(health|support|care|supplement)\b/i, 'Skin Care Supplement'],
+      [/\bnail\s*(health|support|supplement)\b/i, 'Nail Supplement'],
+      [/\bcollagen\b/i, 'Collagen Supplement'],
+      [/\bbiotin\b/i, 'Biotin Supplement'],
+      [/\bprobiotic/i, 'Probiotic Supplement'],
+      [/\bprebiotic/i, 'Prebiotic Supplement'],
+      [/\bdigestive\s*(health|support|enzyme)/i, 'Digestive Health Supplement'],
+      [/\bgut\s*(health|support|repair)/i, 'Digestive Health Supplement'],
+      [/\bimmune\s*(support|health|boost)/i, 'Immune Support Supplement'],
+      [/\benergy\s*(boost|support)/i, 'Energy Supplement'],
+      [/\bsleep\s*(support|aid|health)/i, 'Sleep Aid Supplement'],
+      [/\bstress\s*(relief|support)/i, 'Stress Relief Supplement'],
+      [/\banxiety\s*(relief|support)/i, 'Stress Relief Supplement'],
+      [/\bmood\s*(support|boost)/i, 'Mood Support Supplement'],
+      [/\bbrain\s*(health|support|food)/i, 'Brain Health Supplement'],
+      [/\bcognitive\s*(support|health)/i, 'Cognitive Support Supplement'],
+      [/\bmemory\s*(support|health)/i, 'Memory Support Supplement'],
+      [/\bfocus\s*(support|health)/i, 'Focus Supplement'],
+      [/\bheart\s*(health|support|circulation)/i, 'Heart Health Supplement'],
+      [/\bcardio/i, 'Cardiovascular Supplement'],
+      [/\bblood\s*(pressure|sugar|circulation)/i, 'Cardiovascular Supplement'],
+      [/\bcholesterol/i, 'Cholesterol Support Supplement'],
+      [/\bjoint\s*(health|support)/i, 'Joint Support Supplement'],
+      [/\bbone\s*(health|support)/i, 'Bone Health Supplement'],
+      [/\bmuscle\s*(support|recovery|building)/i, 'Muscle Support Supplement'],
+      [/\bprotein\b/i, 'Protein Supplement'],
+      [/\bweight\s*(loss|management|control)/i, 'Weight Management Supplement'],
+      [/\bmetabolism/i, 'Metabolism Support Supplement'],
+      [/\bappetite/i, 'Appetite Control Supplement'],
+      [/\bdetox/i, 'Detox Supplement'],
+      [/\bcleanse/i, 'Cleanse Supplement'],
+      [/\bliver\s*(health|support)/i, 'Liver Support Supplement'],
+      [/\bkidney\s*(health|support)/i, 'Kidney Support Supplement'],
+      [/\beye\s*(health|support|vision)/i, 'Eye Health Supplement'],
+      [/\bvision/i, 'Vision Supplement'],
+      [/\bwomen'?s\s*(health|multi)/i, "Women's Health Supplement"],
+      [/\bmen'?s\s*(health|multi)/i, "Men's Health Supplement"],
+      [/\bprenatal/i, 'Prenatal Vitamin'],
+      [/\bpostnatal/i, 'Postnatal Vitamin'],
+      [/\bmultivitamin/i, 'Multivitamin'],
+      [/\bmulti-vitamin/i, 'Multivitamin'],
+      [/\bvitamin\s*[a-k]\d*/i, 'Vitamin Supplement'],
+      [/\bvitamin\b/i, 'Vitamin Supplement'],
+      [/\bmineral/i, 'Mineral Supplement'],
+      [/\bomega/i, 'Omega Fatty Acid Supplement'],
+      [/\bfish\s*oil/i, 'Fish Oil Supplement'],
+      [/\bkrill\s*oil/i, 'Krill Oil Supplement'],
+      [/\bflax/i, 'Flax Supplement'],
+      [/\bherbal/i, 'Herbal Supplement'],
+      [/\bextract/i, 'Herbal Extract'],
+      [/\bashwagandha/i, 'Ashwagandha Supplement'],
+      [/\bturmeric|curcumin/i, 'Turmeric Supplement'],
+      [/\bginger/i, 'Ginger Supplement'],
+      [/\bgarlic/i, 'Garlic Supplement'],
+      [/\bgreen\s*tea/i, 'Green Tea Supplement'],
+      [/\bcbd\b/i, 'CBD Supplement'],
+      [/\bmelatonin/i, 'Melatonin Supplement'],
+      [/\belectrolyte/i, 'Electrolyte Supplement'],
+      [/\bhydration/i, 'Hydration Supplement'],
+      [/\bketone|keto\b/i, 'Ketone Supplement'],
+      [/\bcreatine/i, 'Creatine Supplement'],
+      [/\bbcaa|amino\s*acid/i, 'Amino Acid Supplement'],
+      [/\bpre[\s-]?workout/i, 'Pre-Workout Supplement'],
+      [/\bpost[\s-]?workout/i, 'Post-Workout Supplement'],
+      [/\bsupplement\b/i, 'Dietary Supplement'], // Generic fallback
+    ];
+    
+    for (const [pattern, typeName] of typePatterns) {
+      if (pattern.test(combinedText)) {
+        normalized.Type = [typeName];
+        console.log(`[normalizeAspects] ✓ Type inferred from product: "${typeName}"`);
+        break;
+      }
+    }
+    
+    // Ultimate fallback - use generic supplement if still no Type
+    if (!normalized.Type || normalized.Type.length === 0) {
+      normalized.Type = ['Dietary Supplement'];
+      console.log(`[normalizeAspects] ✓ Type set to default: "Dietary Supplement"`);
+    }
+  }
+  
+  // === FORMULATION EXTRACTION ===
+  // Formulation is also critical - infer if not set
+  if (!normalized.Formulation || normalized.Formulation.length === 0) {
+    const keyTextJoined = (product.keyText || []).join(' ').toLowerCase();
+    
+    if (/\bliquid\b|\bdrops?\b|\bdropper\b|\bsublingual\b|\bsyrup\b|\belixir\b/i.test(keyTextJoined)) {
+      normalized.Formulation = ['Liquid'];
+    } else if (/\bfl\.?\s*oz\b|\bfluid\s*oz\b|\bml\b|\bmilliliter/i.test(keyTextJoined)) {
+      normalized.Formulation = ['Liquid'];
+    } else if (/\bpowder\b|\bscoop\b|\bmix\b|\bshake\b/i.test(keyTextJoined)) {
+      normalized.Formulation = ['Powder'];
+    } else if (/\bgumm(y|ies)\b|\bchewable\b/i.test(keyTextJoined)) {
+      normalized.Formulation = ['Gummy'];
+    } else if (/\bcapsule/i.test(keyTextJoined)) {
+      normalized.Formulation = ['Capsule'];
+    } else if (/\btablet/i.test(keyTextJoined)) {
+      normalized.Formulation = ['Tablet'];
+    } else if (/\bsoftgel/i.test(keyTextJoined)) {
+      normalized.Formulation = ['Softgel'];
+    } else if (product.packageType === 'bottle') {
+      // Bottles are usually liquid for supplements
+      normalized.Formulation = ['Liquid'];
+    }
+    
+    if (normalized.Formulation) {
+      console.log(`[normalizeAspects] ✓ Formulation inferred: "${normalized.Formulation[0]}"`);
+    }
+  }
+  
   // Set standard values that should always be present
   if (!normalized['Country/Region of Manufacture']) {
     normalized['Country/Region of Manufacture'] = ['United States'];
@@ -1068,11 +1189,13 @@ function normalizeAspects(aspects: any, product: PairedProduct): Record<string, 
     normalized['Modified Item'] = ['No'];
   }
   
-  // Log final aspects with Flavor status
+  // Log final aspects with key values
   console.log(`[normalizeAspects] Final aspects:`, JSON.stringify({
     Brand: normalized.Brand,
-    Flavor: normalized.Flavor,
+    Type: normalized.Type,
     Formulation: normalized.Formulation,
+    Flavor: normalized.Flavor,
+    Features: normalized.Features,
     aspectCount: Object.keys(normalized).length
   }));
   
