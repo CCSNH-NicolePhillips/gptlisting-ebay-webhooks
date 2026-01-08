@@ -876,7 +876,7 @@
           let customOption = '';
           if (selectedValue && !valueInList) {
             const escapedValue = escapeHtml(selectedValue);
-            customOption = `<option value="${escapedValue}" selected>${escapedValue} (custom)</option>`;
+            customOption = `<option value="${escapedValue}" selected>${escapedValue}</option>`;
             console.log(`[addAspect] ${key}: Adding custom value "${selectedValue}" not in eBay's list`);
           }
           
@@ -1036,7 +1036,7 @@
               // Add the custom value as a new option and select it
               const newOption = document.createElement('option');
               newOption.value = customValue.trim();
-              newOption.textContent = customValue.trim() + ' (custom)';
+              newOption.textContent = customValue.trim();
               newOption.selected = true;
               // Insert after the "Select..." option
               this.insertBefore(newOption, this.options[1]);
