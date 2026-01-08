@@ -404,6 +404,11 @@ export const handler: Handler = async (event) => {
       // Pass through weight from draft (calculated in smartdrafts-create-drafts-background)
       // Weight structure: { value: number, unit: 'OUNCE' | 'POUND' }
       const draftWeight = group.weight as { value?: number; unit?: string } | undefined;
+      console.log(`[create-ebay-draft-user] 📦 Weight check for ${mapped.sku}:`, {
+        hasWeight: !!draftWeight,
+        weight: draftWeight,
+        groupKeys: Object.keys(group),
+      });
       if (draftWeight?.value && draftWeight.value > 0) {
         mapped.inventory.packageWeightAndSize = {
           weight: {
@@ -411,7 +416,9 @@ export const handler: Handler = async (event) => {
             unit: (draftWeight.unit as 'OUNCE' | 'POUND') || 'OUNCE'
           }
         };
-        console.log(`[create-ebay-draft-user] 📦 Weight for SKU ${mapped.sku}: ${draftWeight.value} ${draftWeight.unit || 'oz'}`);
+        console.log(`[create-ebay-draft-user] 📦 Weight set for SKU ${mapped.sku}: ${draftWeight.value} ${draftWeight.unit || 'oz'}`);
+      } else {
+        console.log(`[create-ebay-draft-user] ⚠️ No weight found for SKU ${mapped.sku}!`);
       }
 
   await putInventoryItem(access.token, access.apiHost, mapped.sku, mapped.inventory, mapped.offer.quantity, marketplaceId);

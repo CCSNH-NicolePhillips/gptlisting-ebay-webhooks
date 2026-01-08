@@ -1683,7 +1683,9 @@ async function createDraftForProduct(
     imagesCount: draft.images?.length || 0,
     images: draft.images?.map(u => u?.substring(0, 80) + '...'),
     price: draft.price,
-    condition: draft.condition
+    condition: draft.condition,
+    weight: draft.weight, // Add weight to debug log
+    hasWeight: !!draft.weight,
   }, null, 2));
   
   // Validate draft completeness - check for minimum required data
