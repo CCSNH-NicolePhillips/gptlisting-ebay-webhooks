@@ -604,7 +604,14 @@ function buildPrompt(
     if (product.keyText && product.keyText.length > 0) {
       lines.push(`Product Label Text (visible on packaging): ${product.keyText.join(', ')}`);
       lines.push('👉 Use this label text to determine the correct formulation, size, quantity, and FLAVOR.');
-      lines.push('👉 CRITICAL: If you see any flavor text (e.g., "Strawberry Watermelon", "Pistachio Caramel", "Berry", "Vanilla", "Lemon Lime", "Mixed Berry", "Citrus"), you MUST include it in the Flavor aspect!');
+      lines.push('');
+      lines.push('🚨 FLAVOR EXTRACTION IS MANDATORY 🚨');
+      lines.push('Look for ANY of these on the product label or packaging:');
+      lines.push('- Flavor words: Strawberry, Watermelon, Berry, Vanilla, Citrus, Mint, Peppermint, Cherry, Grape, Orange, Lemon, Lime, Tropical, Mango, Peach, Apple, Pistachio, Caramel, Chocolate, etc.');
+      lines.push('- Color-based flavors: Mixed Berry (purple), Cherry (red), Orange (orange), Lemon (yellow)');
+      lines.push('- Descriptors: "Natural Flavor", "Original", "Unflavored" also count as Flavor values!');
+      lines.push('If you see ANY flavor indication, you MUST include it in the Flavor aspect.');
+      lines.push('Common mistake: Seeing "Pistachio Caramel" on bottle but NOT including Flavor aspect - THIS IS WRONG!');
     }
   }
   
@@ -756,14 +763,21 @@ function buildPrompt(
     lines.push("");
     lines.push("1. REQUIRED ASPECTS: Fill ALL of these - no exceptions. Missing = listing rejected.");
     lines.push("");
-    lines.push("2. EXTRACT FROM PRODUCT LABEL:");
+    lines.push("2. 🚨 FLAVOR IS CRITICAL - READ CAREFULLY:");
+    lines.push("   - ALWAYS look at the product label/packaging for flavor text");
+    lines.push("   - Flavor can appear as: 'Strawberry', 'Berry Blast', 'Pistachio Caramel', 'Citrus', 'Mint', 'Natural', 'Unflavored'");
+    lines.push("   - If the product is edible (gummies, drinks, powders, supplements), it almost ALWAYS has a flavor");
+    lines.push("   - Even 'Natural Flavor' or 'Original' counts - include it!");
+    lines.push("   - Common MISTAKE: NatureWise Hair Growth has 'Pistachio Caramel' flavor - you MUST extract this!");
+    lines.push("");
+    lines.push("3. EXTRACT FROM PRODUCT LABEL:");
     lines.push("   - Flavor: LOOK AT THE LABEL (e.g., 'Pistachio Caramel Flavor' → Flavor: 'Pistachio Caramel')");
     lines.push("   - Size/Volume: '15.22 FL OZ' → Volume: '15.22 fl oz' or Number of Ounces: '15.22'");
     lines.push("   - Count: '60 Gummies' → Number of Gummies: '60'");
     lines.push("   - Ingredients: List ALL visible on label");
     lines.push("   - Certifications: 'Gluten Free', 'Vegan', 'Sugar Free', 'Non-GMO', etc.");
     lines.push("");
-    lines.push("3. INFER FROM PRODUCT TYPE:");
+    lines.push("4. INFER FROM PRODUCT TYPE:");
     lines.push("   - Main Purpose: What health goal? (e.g., 'Hair Growth', 'Weight Loss', 'Energy')");
     lines.push("   - Target Audience: 'Adults', 'Women', 'Men', 'Children'");
     lines.push("   - Age Range: 'Adult', '18+', 'All Ages'");
@@ -771,7 +785,7 @@ function buildPrompt(
     lines.push("   - Dietary Preferences: 'Vegan', 'Vegetarian', 'Gluten-Free'");
     lines.push("   - Product Line: The specific product line name if visible");
     lines.push("");
-    lines.push("4. STANDARD VALUES (use for most supplements):");
+    lines.push("5. STANDARD VALUES (use for most supplements):");
     lines.push("   - Country/Region of Manufacture: 'United States' (unless label says otherwise)");
     lines.push("   - Expiration Date: 'Long Date/Hand Selected'");
     lines.push("   - Custom Bundle: 'No'");
@@ -779,9 +793,9 @@ function buildPrompt(
     lines.push("   - Item Weight: Extract from label if visible");
     lines.push("   - Features: List ALL features visible (Non-GMO, Organic, Sugar-Free, etc.)");
     lines.push("");
-    lines.push("5. USE ALLOWED VALUES: When [allowed: X, Y, Z] is shown, pick the closest match.");
-    lines.push("6. NEVER SKIP: If you can reasonably determine a value, include it.");
-    lines.push("7. NEVER USE PLACEHOLDERS: No '...', 'N/A', 'See Description', 'Unknown', or empty values.");
+    lines.push("6. USE ALLOWED VALUES: When [allowed: X, Y, Z] is shown, pick the closest match.");
+    lines.push("7. NEVER SKIP: If you can reasonably determine a value, include it.");
+    lines.push("8. NEVER USE PLACEHOLDERS: No '...', 'N/A', 'See Description', 'Unknown', or empty values.");
     lines.push("");
   } else {
     lines.push("CRITICAL REQUIREMENT: You MUST fill out ALL relevant item specifics (aspects) for your chosen category.");
