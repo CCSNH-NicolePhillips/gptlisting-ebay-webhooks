@@ -204,6 +204,10 @@ For each image, provide:
    - null if brand is unknown or you cannot confidently infer any URL
 7. packageType: bottle/jar/tub/pouch/box/sachet/book/unknown
 8. keyText: array of 3-5 short readable text snippets from the label
+   ⚠️ CRITICAL: ALWAYS include the FLAVOR if visible! (e.g., "Strawberry Watermelon", "Pistachio Caramel", "Mixed Berry", "Citrus", "Natural Flavor")
+   Look for flavor text anywhere on the label - it's often in a different color, larger font, or near the product name.
+   Flavored products include: gummies, drinks, powders, liquid supplements, gum, mints, chews.
+   If you see ANY flavor text, it MUST be one of the keyText entries.
 9. categoryPath: hierarchical product category (e.g., "Health & Personal Care > Vitamins & Dietary Supplements", "Beauty > Skin Care > Face Moisturizers")
    - Infer from the product type, claims, and visible text
    - For supplements: "Health & Personal Care > Vitamins & Dietary Supplements"
@@ -362,7 +366,7 @@ Respond ONLY with valid JSON:
       "title": "Book Title (only for books)" or null,
       "brandWebsite": "https://brandname.com" or null,
       "packageType": "bottle | jar | tub | pouch | box | sachet | book | unknown",
-      "keyText": ["text1", "text2", "text3"],
+      "keyText": ["Brand Name", "Product Name", "Strawberry Flavor"],  // ⚠️ ALWAYS include flavor if visible!
       "categoryPath": "Category > Subcategory" or null,
       "colorSignature": ["color1", "color2", "pattern"],
       "layoutSignature": "layout description",

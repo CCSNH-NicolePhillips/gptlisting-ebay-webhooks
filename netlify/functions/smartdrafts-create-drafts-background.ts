@@ -768,7 +768,7 @@ function buildPrompt(
     lines.push("   - Flavor can appear as: 'Strawberry', 'Berry Blast', 'Pistachio Caramel', 'Citrus', 'Mint', 'Natural', 'Unflavored'");
     lines.push("   - If the product is edible (gummies, drinks, powders, supplements), it almost ALWAYS has a flavor");
     lines.push("   - Even 'Natural Flavor' or 'Original' counts - include it!");
-    lines.push("   - Common MISTAKE: NatureWise Hair Growth has 'Pistachio Caramel' flavor - you MUST extract this!");
+    lines.push("   - Common MISTAKE: Seeing flavor text on the bottle but NOT including the Flavor aspect!");
     lines.push("");
     lines.push("3. EXTRACT FROM PRODUCT LABEL:");
     lines.push("   - Flavor: LOOK AT THE LABEL (e.g., 'Pistachio Caramel Flavor' → Flavor: 'Pistachio Caramel')");
@@ -831,8 +831,8 @@ function buildPrompt(
   if (categories && categories.length > 0) {
     lines.push('  "categoryId": "12345",');
   }
-  lines.push('  "title": "NatureWise Hair Growth+ Liquid Supplement 15.22 oz Pistachio Caramel NEW",');
-  lines.push('  "description": "Discover NatureWise Hair Growth+, a premium liquid supplement... [200-500 words]",');
+  lines.push('  "title": "BrandName Hair Growth+ Liquid Supplement 15.22 oz Pistachio Caramel NEW",');
+  lines.push('  "description": "Discover BrandName Hair Growth+, a premium liquid supplement... [200-500 words]",');
   lines.push('  "bullets": ["Supports healthy hair growth", "Pistachio Caramel flavor", "15.22 FL OZ bottle"],');
   lines.push('  "aspects": {');
   lines.push('    "Brand": ["NatureWise"],');
