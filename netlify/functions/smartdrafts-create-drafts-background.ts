@@ -794,6 +794,24 @@ function buildPrompt(
     lines.push("");
   }
   
+  lines.push("SHIPPING WEIGHT ESTIMATION (CRITICAL FOR SHIPPING COST):");
+  lines.push("If the packaging does NOT show a weight (oz, g, lb, ml), you MUST estimate the shipping weight based on:");
+  lines.push("1. Product type and what's inside (patches, gummies, pills, liquids, powders)");
+  lines.push("2. Visible size of the container in the photo");
+  lines.push("3. Typical weights for similar products:");
+  lines.push("   - Adhesive patches (30-90 count): 1-2 oz total (very light)");
+  lines.push("   - Gummies (60-90 count): 8-12 oz (gummies + bottle)");
+  lines.push("   - Capsules/pills (30-120 count): 3-6 oz (pills + bottle)");
+  lines.push("   - Mints/gum (90 pieces): 3-5 oz");
+  lines.push("   - Small serum/dropper bottle (1-2 fl oz): 3-4 oz");
+  lines.push("   - Medium liquid bottle (8-16 fl oz): 12-20 oz");
+  lines.push("   - Large liquid bottle (30+ fl oz): 32-40 oz");
+  lines.push("   - Powder tub/pouch (200-500g): 10-20 oz");
+  lines.push("   - Books: estimate by thickness (thin paperback 8oz, thick hardcover 24-32oz)");
+  lines.push("");
+  lines.push("⚠️ ALWAYS provide estimatedWeightOz - never leave it null! A reasonable estimate is better than nothing.");
+  lines.push("");
+  
   lines.push("Response format (JSON) - NOTE: This example shows 15+ aspects filled:");
   lines.push("{");
   if (categories && categories.length > 0) {
@@ -821,7 +839,8 @@ function buildPrompt(
   lines.push('    "Product Line": ["Hair Growth+"]');
   lines.push('  },');
   lines.push('  "price": 34.99,');
-  lines.push('  "condition": "NEW"');
+  lines.push('  "condition": "NEW",');
+  lines.push('  "estimatedWeightOz": 18');
   lines.push("}");
   lines.push("");
   lines.push("⚠️ YOUR RESPONSE MUST HAVE AT LEAST 15 ASPECTS FILLED. The example above shows the minimum quality expected.");
@@ -862,6 +881,7 @@ function parseGptResponse(responseText: string, product: PairedProduct): any {
       aspects: typeof parsed.aspects === 'object' && parsed.aspects !== null ? parsed.aspects : {},
       price: typeof parsed.price === 'number' && parsed.price > 0 ? parsed.price : undefined,
       condition: typeof parsed.condition === 'string' ? parsed.condition : 'NEW',
+      estimatedWeightOz: typeof parsed.estimatedWeightOz === 'number' && parsed.estimatedWeightOz > 0 ? parsed.estimatedWeightOz : null,
     };
   } catch (err) {
     console.error('[GPT] Failed to parse response:', err);
@@ -873,6 +893,7 @@ function parseGptResponse(responseText: string, product: PairedProduct): any {
       aspects: {},
       price: undefined,
       condition: 'NEW',
+      estimatedWeightOz: null,
     };
   }
 }
@@ -1532,6 +1553,13 @@ async function createDraftForProduct(
     }
   }
   
+  // GPT-estimated weight fallback: if no weight from label, Amazon, or title,
+  // use GPT's hypothesis based on product type and visible size
+  if (!finalWeight && parsed.estimatedWeightOz && parsed.estimatedWeightOz > 0) {
+    console.log(`[Draft] 🤖 Using GPT-estimated weight: ${parsed.estimatedWeightOz} oz (based on product type and visible size)`);
+    finalWeight = { value: parsed.estimatedWeightOz, unit: 'OUNCE' };
+  }
+  
   // ========================================
   // BUILD ATTENTION REASONS (track all issues)
   // ========================================
@@ -1608,14 +1636,15 @@ async function createDraftForProduct(
     });
   }
   
-  // Track missing weight - this is a serious issue that affects shipping cost
+  // Track missing weight - now rare since GPT should estimate
+  // Downgrade to warning: 16oz default won't lose money (overestimates shipping), just may lose sales
   if (!finalWeight) {
     attentionReasons.push({
       code: 'MISSING_WEIGHT',
-      message: 'No weight found (AI, Amazon, or title) - will default to 16oz which may cause incorrect shipping cost',
-      severity: 'error', // Upgraded to error - weight is critical for accurate shipping
+      message: 'No weight found (AI, Amazon, title, or GPT estimate) - using 16oz default which may cause higher shipping cost',
+      severity: 'warning', // Warning, not error - can still publish with 16oz default
     });
-    console.log(`[Draft] ❌ MISSING_WEIGHT for ${product.productId}: No weight from AI, Amazon, or title extraction`);
+    console.log(`[Draft] ⚠️ MISSING_WEIGHT for ${product.productId}: No weight from AI, Amazon, title, or GPT estimate - using 16oz default`);
   }
   
   // Track missing images
