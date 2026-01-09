@@ -1636,15 +1636,15 @@ async function createDraftForProduct(
     });
   }
   
-  // Track missing weight - now rare since GPT should estimate
-  // Downgrade to warning: 16oz default won't lose money (overestimates shipping), just may lose sales
+  // Track missing weight - CRITICAL: underestimating weight means WE pay the shipping difference
+  // A 50lb item defaulting to 16oz could cost us hundreds in shipping
   if (!finalWeight) {
     attentionReasons.push({
       code: 'MISSING_WEIGHT',
-      message: 'No weight found (AI, Amazon, title, or GPT estimate) - using 16oz default which may cause higher shipping cost',
-      severity: 'warning', // Warning, not error - can still publish with 16oz default
+      message: 'No weight found - MUST set weight before publishing to avoid shipping losses',
+      severity: 'error', // Blocking - shipping losses can be massive
     });
-    console.log(`[Draft] ⚠️ MISSING_WEIGHT for ${product.productId}: No weight from AI, Amazon, title, or GPT estimate - using 16oz default`);
+    console.log(`[Draft] ❌ MISSING_WEIGHT for ${product.productId}: No weight from AI, Amazon, title, or GPT estimate - BLOCKING`);
   }
   
   // Track missing images
