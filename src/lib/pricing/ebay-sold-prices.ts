@@ -154,12 +154,21 @@ export async function fetchSoldPriceStats(
       const reverseMatchRatio = titleWords.length > 0 ? reverseMatchCount / titleWords.length : 0;
       
       // Pass if EITHER:
-      // 1. 70% of query words appear in title (standard match), OR
-      // 2. 90% of title words appear in query AND title has 2+ meaningful words (subset match)
-      const forwardMatch = forwardMatchRatio >= 0.7;
-      const reverseMatch = reverseMatchRatio >= 0.9 && titleWords.length >= 2;
+      // 1. 60% of query words appear in title (lowered from 70% - sellers use different keywords), OR
+      // 2. 80% of title words appear in query AND title has 2+ meaningful words (subset match), OR
+      // 3. Brand+product core words match (e.g., "Hallosmine Ultra" matches even if other keywords differ)
+      const forwardMatch = forwardMatchRatio >= 0.6;
+      const reverseMatch = reverseMatchRatio >= 0.8 && titleWords.length >= 2;
       
-      return forwardMatch || reverseMatch;
+      // Core word match: if the most distinctive words match, it's likely the same product
+      // Sort by length (longer = more distinctive) and take top 3
+      const coreWords = [...queryWords].sort((a, b) => b.length - a.length).slice(0, 3);
+      const coreMatchCount = coreWords.filter(cw => 
+        titleWords.some(tw => tw.includes(cw) || cw.includes(tw))
+      ).length;
+      const coreMatch = coreWords.length >= 2 && coreMatchCount >= 2; // At least 2 core words must match
+      
+      return forwardMatch || reverseMatch || coreMatch;
     };
 
     // Lot detection patterns - these indicate multi-packs that inflate prices

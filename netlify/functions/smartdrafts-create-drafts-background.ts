@@ -720,13 +720,30 @@ function buildPrompt(
   lines.push("Common mistake: Ketone/electrolyte DRINKS in bottles are LIQUID formulation, not Powder!");
   lines.push("");
   lines.push("TITLE REQUIREMENTS (SEO-CRITICAL):");
-  lines.push("- Must be 60-80 characters (use ALL available space for SEO)");
-  lines.push("- Include: Brand + Product Name + Key Features + Size/Type + FORMULATION");
-  lines.push("- Use keywords buyers search for (e.g., 'Supplement', 'Powder', 'Capsules', 'Support', 'Health')");
-  lines.push("- Example: 'Natural Stacks Dopamine Brain Food 60 Capsules Focus Memory Supplement NEW'");
-  lines.push("- Example: 'MyBrainCo Gut Repair Powder Supplement 310g Natural Berry Flavor NEW'");
-  lines.push("- For books: 'Title by Author - Edition/Format (Hardcover/Paperback) ISBN - Condition'");
-  lines.push("- NO generic titles like 'Natural Stacks Dopamine Brain Food' - add DESCRIPTIVE KEYWORDS!");
+  lines.push("- Must be 60-80 characters (use ALL available space for SEO keywords)");
+  lines.push("");
+  lines.push("⚠️ TITLE OPTIMIZATION RULES:");
+  lines.push("1. DO NOT include brand name - it's already in the Brand aspect (wastes characters)");
+  lines.push("2. DO NOT include capsule/gummy count - it's already in item specifics (wastes characters)");
+  lines.push("3. DO NOT include 'NEW' - condition is a separate listing field");
+  lines.push("4. DO include: Product line name + Active ingredients + Health benefit keywords");
+  lines.push("");
+  lines.push("GOOD TITLE EXAMPLES (SEO-focused, no wasted characters):");
+  lines.push("- 'Hallosmine Ultra Diosmin Hesperidin Vein Supplement Leg Circulation Support'");
+  lines.push("- 'Hair Growth Biotin Collagen Liquid Supplement Skin Elasticity Support'");
+  lines.push("- 'Energy Focus Caffeine L-Theanine Nootropic Gum Mental Clarity Boost'");
+  lines.push("- 'NAD+ Boost Patches Anti-Aging Cellular Energy Metabolism Support'");
+  lines.push("");
+  lines.push("BAD TITLE EXAMPLES (wasted characters):");
+  lines.push("- 'Hallusa Natural Hallosmine Ultra 60 Capsules NEW' ← Brand, count, NEW all wasted");
+  lines.push("- 'NatureWise Hair Growth 15.22 oz Supplement' ← Missing SEO keywords");
+  lines.push("");
+  lines.push("Think like a buyer: What would someone search on eBay to find this product?");
+  lines.push("- Ingredient names: 'Diosmin', 'Hesperidin', 'Biotin', 'Collagen', 'NAD+'");
+  lines.push("- Health benefits: 'Circulation', 'Vein Support', 'Hair Growth', 'Energy', 'Focus'");
+  lines.push("- Product types: 'Supplement', 'Gummies', 'Patches', 'Drops', 'Powder'");
+  lines.push("");
+  lines.push("For books: 'Title by Author - Edition/Format (Hardcover/Paperback)'");
   lines.push("");
   lines.push("DESCRIPTION REQUIREMENTS (CONVERSION-CRITICAL):");
   lines.push("- Must be 200-500 words (detailed paragraph format, NOT one sentence!)");
@@ -831,8 +848,8 @@ function buildPrompt(
   if (categories && categories.length > 0) {
     lines.push('  "categoryId": "12345",');
   }
-  lines.push('  "title": "BrandName Hair Growth+ Liquid Supplement 15.22 oz Pistachio Caramel NEW",');
-  lines.push('  "description": "Discover BrandName Hair Growth+, a premium liquid supplement... [200-500 words]",');
+  lines.push('  "title": "Hair Growth Biotin Collagen Liquid Supplement Skin Elasticity Pistachio Caramel",');
+  lines.push('  "description": "Discover this premium hair growth liquid supplement... [200-500 words]",');
   lines.push('  "bullets": ["Supports healthy hair growth", "Pistachio Caramel flavor", "15.22 FL OZ bottle"],');
   lines.push('  "aspects": {');
   lines.push('    "Brand": ["NatureWise"],');
