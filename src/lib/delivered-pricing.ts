@@ -433,11 +433,19 @@ export function calculateTargetDelivered(
   if (activeFloor !== null) {
     switch (mode) {
       case 'market-match':
-        // Phase 3: Use min(soldMedian, activeFloor) when sold data is strong
+        // Phase 3: Use sold median when strong, but detect outlier floors
         if (soldStrong) {
-          targetCents = Math.min(soldMedian!, activeFloor);
-          if (soldMedian! < activeFloor) {
-            console.log(`[delivered-pricing] Sold median ($${(soldMedian! / 100).toFixed(2)}) < active floor ($${(activeFloor / 100).toFixed(2)}) - using sold`);
+          // If floor is < 70% of sold median, it's likely an outlier (auction end, damaged item, etc)
+          // In that case, use sold median instead of racing to the bottom
+          const floorRatio = activeFloor / soldMedian!;
+          if (floorRatio < 0.70) {
+            targetCents = soldMedian!;
+            console.log(`[delivered-pricing] Floor ($${(activeFloor / 100).toFixed(2)}) is outlier (${Math.round(floorRatio * 100)}% of sold median $${(soldMedian! / 100).toFixed(2)}) - using sold median`);
+          } else {
+            targetCents = Math.min(soldMedian!, activeFloor);
+            if (soldMedian! < activeFloor) {
+              console.log(`[delivered-pricing] Sold median ($${(soldMedian! / 100).toFixed(2)}) < active floor ($${(activeFloor / 100).toFixed(2)}) - using sold`);
+            }
           }
         } else {
           targetCents = activeFloor;

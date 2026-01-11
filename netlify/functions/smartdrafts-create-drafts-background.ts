@@ -726,7 +726,8 @@ function buildPrompt(
   lines.push("1. DO NOT include brand name - it's already in the Brand aspect (wastes characters)");
   lines.push("2. DO NOT include capsule/gummy count - it's already in item specifics (wastes characters)");
   lines.push("3. DO NOT include 'NEW' - condition is a separate listing field");
-  lines.push("4. DO include: Product line name + Active ingredients + Health benefit keywords");
+  lines.push("4. DO NOT include 'Unflavored' for capsules/tablets - only liquids and gummies need flavor specified");
+  lines.push("5. DO include: Product line name + Active ingredients + Health benefit keywords");
   lines.push("");
   lines.push("GOOD TITLE EXAMPLES (SEO-focused, no wasted characters):");
   lines.push("- 'Hallosmine Ultra Diosmin Hesperidin Vein Supplement Leg Circulation Support'");
