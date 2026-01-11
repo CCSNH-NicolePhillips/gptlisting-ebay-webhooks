@@ -335,10 +335,23 @@ describe('image-utils', () => {
 
       it('should throw when no base URL available', () => {
         const url = 'https://example.com/image.jpg';
-        // Clear env var
+        // Clear ALL URL env vars to properly test the throw
+        const savedUrl = process.env.URL;
+        const savedDeployUrl = process.env.DEPLOY_PRIME_URL;
+        const savedAppUrl = process.env.APP_URL;
+        
         delete process.env.URL;
-
-        expect(() => proxyImageUrls([url], '')).toThrow('missing base URL');
+        delete process.env.DEPLOY_PRIME_URL;
+        delete process.env.APP_URL;
+        
+        try {
+          expect(() => proxyImageUrls([url], '')).toThrow('missing base URL');
+        } finally {
+          // Restore env vars
+          if (savedUrl !== undefined) process.env.URL = savedUrl;
+          if (savedDeployUrl !== undefined) process.env.DEPLOY_PRIME_URL = savedDeployUrl;
+          if (savedAppUrl !== undefined) process.env.APP_URL = savedAppUrl;
+        }
       });
 
       it('should handle base URL with multiple trailing slashes', () => {

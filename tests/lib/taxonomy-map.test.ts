@@ -18,9 +18,14 @@ describe('taxonomy-map', () => {
   let mapGroupToDraftWithTaxonomy: any;
   let mockBuildItemSpecifics: jest.Mock;
   let mockPickCategoryForGroup: jest.Mock;
+  let savedDefaultCategoryId: string | undefined;
 
   beforeEach(() => {
     jest.resetModules();
+    
+    // Save and clear environment variable to ensure consistent test behavior
+    savedDefaultCategoryId = process.env.DEFAULT_CATEGORY_ID;
+    delete process.env.DEFAULT_CATEGORY_ID;
     
     // Get mocked functions
     mockBuildItemSpecifics = require('../../src/lib/taxonomy-autofill.js').buildItemSpecifics;
@@ -32,6 +37,13 @@ describe('taxonomy-map', () => {
     
     // Load module under test
     ({ mapGroupToDraftWithTaxonomy } = require('../../src/lib/taxonomy-map'));
+  });
+
+  afterEach(() => {
+    // Restore environment variable
+    if (savedDefaultCategoryId !== undefined) {
+      process.env.DEFAULT_CATEGORY_ID = savedDefaultCategoryId;
+    }
   });
 
   describe('mapGroupToDraftWithTaxonomy', () => {
