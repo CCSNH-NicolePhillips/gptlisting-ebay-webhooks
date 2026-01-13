@@ -1,21 +1,32 @@
 type HeadersRecord = Record<string, string | undefined>;
 
-const ALLOW = (process.env.ALLOWED_ORIGINS || "")
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
+function getAllowedOrigins(): string[] {
+  return (process.env.ALLOWED_ORIGINS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
 
 export function parseAllowedOrigins(): string[] {
-  return ALLOW;
+  return getAllowedOrigins();
 }
 
 export function isOriginAllowed(originHeader?: string): boolean {
-  if (!ALLOW.length) return true;
-  if (!originHeader) return false;
+  const allowed = getAllowedOrigins();
+  if (!allowed.length) return true;  // No restrictions if not configured
+  if (!originHeader) {
+    console.log(`[http] Origin check: no origin header, ALLOWED_ORIGINS=${process.env.ALLOWED_ORIGINS}`);
+    return false;
+  }
   try {
     const validated = new URL(originHeader).origin;
-    return ALLOW.includes(validated);
+    const isAllowed = allowed.includes(validated);
+    if (!isAllowed) {
+      console.log(`[http] Origin rejected: "${validated}" not in [${allowed.join(', ')}]`);
+    }
+    return isAllowed;
   } catch {
+    console.log(`[http] Origin check failed to parse: "${originHeader}"`);
     return false;
   }
 }
@@ -41,8 +52,9 @@ export function getOrigin(headers: HeadersRecord): string | undefined {
 }
 
 export function corsHeaders(originHeader?: string, methods = "GET, POST, OPTIONS") {
+  const allowed = getAllowedOrigins();
   const allowedOrigin =
-    originHeader && isOriginAllowed(originHeader) ? originHeader : ALLOW[0] || "*";
+    originHeader && isOriginAllowed(originHeader) ? originHeader : allowed[0] || "*";
   return {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": allowedOrigin,
