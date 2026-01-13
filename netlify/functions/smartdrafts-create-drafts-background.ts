@@ -1300,7 +1300,30 @@ async function createDraftForProduct(
       console.log(`[smartdrafts-price] Using keyText fallback for title: "${priceLookupTitle}"`);
     }
     
+    // Build SEO context for better search matching
+    // Include categoryPath and relevant keyText terms that help identify the product
+    const seoContextParts: string[] = [];
+    if (product.categoryPath) {
+      seoContextParts.push(product.categoryPath);
+    }
+    if (product.keyText && product.keyText.length > 0) {
+      // Add key descriptive terms (supplement type, form factor, etc.)
+      const seoKeywords = product.keyText
+        .filter(t => t && t.length > 3)
+        .filter(t => !t.toLowerCase().includes(product.brand?.toLowerCase() || '---'))
+        .filter(t => !t.toLowerCase().includes(product.product?.toLowerCase() || '---'))
+        .slice(0, 3); // Top 3 unique terms
+      seoContextParts.push(...seoKeywords);
+    }
+    if (product.size) {
+      seoContextParts.push(product.size);
+    }
+    const seoContext = seoContextParts.filter(Boolean).join(' ').trim() || undefined;
+    
     console.log(`[smartdrafts-price] Looking up price for: ${product.brand || '(no brand)'} ${priceLookupTitle || '(no product name)'}`);
+    if (seoContext) {
+      console.log(`[smartdrafts-price] SEO context: "${seoContext}"`);
+    }
     
     // ========================================
     // Delivered-Price-First Pricing Engine
@@ -1317,7 +1340,8 @@ async function createDraftForProduct(
     deliveredDecision = await getDeliveredPricing(
       product.brand || '',
       priceLookupTitle,
-      deliveredSettings
+      deliveredSettings,
+      seoContext
     );
     
     console.log(`[smartdrafts-price] Result: item=$${(deliveredDecision.finalItemCents / 100).toFixed(2)}, ship=$${(deliveredDecision.finalShipCents / 100).toFixed(2)}, canCompete=${deliveredDecision.canCompete}`);

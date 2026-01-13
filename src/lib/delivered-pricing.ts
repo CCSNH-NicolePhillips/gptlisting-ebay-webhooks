@@ -723,22 +723,27 @@ export function splitDeliveredPrice(
  * @param brand - Product brand
  * @param productName - Product name with size/count
  * @param settings - Pricing settings (optional, uses defaults)
+ * @param additionalContext - Optional SEO terms or category context to improve search matching
  * @returns DeliveredPricingDecision with final item/ship prices and evidence
  */
 export async function getDeliveredPricing(
   brand: string,
   productName: string,
-  settings: Partial<DeliveredPricingSettings> = {}
+  settings: Partial<DeliveredPricingSettings> = {},
+  additionalContext?: string
 ): Promise<DeliveredPricingDecision> {
   const fullSettings: DeliveredPricingSettings = { ...DEFAULT_PRICING_SETTINGS, ...settings };
   const warnings: string[] = [];
 
-  console.log(`[delivered-pricing] Pricing "${brand} ${productName}" in ${fullSettings.mode} mode`);
+  const searchTerms = additionalContext 
+    ? `${brand} ${productName} + context: ${additionalContext}` 
+    : `${brand} ${productName}`;
+  console.log(`[delivered-pricing] Pricing "${searchTerms}" in ${fullSettings.mode} mode`);
 
   // === Step 1: Search Google Shopping for all comps ===
   // Note: eBay Browse API is unreliable/deprecated, so we use Google Shopping
   // which indexes eBay listings along with Amazon, Walmart, etc.
-  const searchResult = await searchGoogleShopping(brand, productName);
+  const searchResult = await searchGoogleShopping(brand, productName, additionalContext);
   
   // Convert to CompetitorPrice format
   const googleComps = searchResult.allResults.map(googleResultToCompetitor);
