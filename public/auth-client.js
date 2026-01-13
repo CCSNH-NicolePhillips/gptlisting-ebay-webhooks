@@ -799,9 +799,12 @@
         statusEl.textContent = 'Opening authorization window...';
         connectBtn.disabled = true;
         
-        // Get token to pass to OAuth
+        // Get token to pass to OAuth, and mark this as a popup flow
         const token = await window.authClient.getToken().catch(() => null);
-        const urlWithToken = token ? `${oauthUrl}?token=${encodeURIComponent(token)}` : oauthUrl;
+        const params = new URLSearchParams();
+        if (token) params.set('token', token);
+        params.set('returnTo', 'popup'); // Tell callback to close popup instead of redirect
+        const urlWithToken = `${oauthUrl}?${params.toString()}`;
         
         // Open OAuth popup
         const w = 500, h = 700;

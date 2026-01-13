@@ -61,6 +61,34 @@ export const handler: Handler = async (event) => {
 	const key = `users/${encodeURIComponent(stateInfo.sub)}/dropbox.json`;
 	await tokens.setJSON(key, { refresh_token: refreshToken });
 
+	// Check if this was opened as a popup
+	const isPopup = stateInfo.returnTo === 'popup';
+	
+	if (isPopup) {
+		// Return HTML that closes the popup window
+		const htmlHeaders = { 'Content-Type': 'text/html; charset=utf-8' } as Record<string, string>;
+		return {
+			statusCode: 200,
+			headers: htmlHeaders,
+			body: `<!DOCTYPE html>
+<html>
+<head><title>Dropbox Connected</title></head>
+<body style="background:#0a0a1a;color:#fff;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
+<div style="text-align:center;">
+<h2 style="color:#4ade80;">✓ Dropbox Connected!</h2>
+<p>This window will close automatically...</p>
+</div>
+<script>
+  if (window.opener) {
+    try { window.opener.postMessage({ type: 'oauth-complete', service: 'dropbox', success: true }, '*'); } catch(e) {}
+  }
+  setTimeout(() => window.close(), 1500);
+</script>
+</body>
+</html>`
+		};
+	}
+
 	const redirectTo = sanitizeReturnTo(stateInfo.returnTo) || '/index.html';
 
 		return { statusCode: 302, headers: { Location: redirectTo } };
