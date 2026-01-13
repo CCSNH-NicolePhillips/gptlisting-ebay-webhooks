@@ -1,6 +1,6 @@
 import type { Handler } from "@netlify/functions";
 import { requireUserAuth } from "../../src/lib/auth-user.js";
-import { getOrigin, isOriginAllowed, json } from "../../src/lib/http.js";
+import { getOrigin, json } from "../../src/lib/http.js";
 import { tokensStore } from "../../src/lib/_blobs.js";
 import { userScopedKey } from "../../src/lib/_auth.js";
 
@@ -12,7 +12,6 @@ export const handler: Handler = async (event) => {
 
   if (event.httpMethod === "OPTIONS") return json(200, {}, originHdr, METHODS);
   if (event.httpMethod !== "GET") return json(405, { error: "Method not allowed" }, originHdr, METHODS);
-  if (!isOriginAllowed(originHdr)) return json(403, { error: "Forbidden" }, originHdr, METHODS);
 
   let user;
   try {
