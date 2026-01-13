@@ -998,7 +998,7 @@
               const { data, timestamp } = JSON.parse(cached);
               if (Date.now() - timestamp < STATUS_CACHE_TTL) {
                 console.log('[Dashboard] Using cached eBay status for user:', userCacheKey);
-                updateUIFromCache(data);
+                await updateUIFromCache(data);
                 return;
               } else {
                 console.log('[Dashboard] Cache expired, fetching fresh status');
@@ -1087,12 +1087,21 @@
           const params = new URLSearchParams(window.location.search);
           const justFromOnboarding = params.get('from') === 'onboarding';
           
-          // Redirect to onboarding if not ready (unless we just came from there)
-          if (!ready && !justFromOnboarding) {
-            console.log('[Dashboard] User not ready, redirecting to onboarding. Ready status:', { connected, policiesReady, locationReady, optedIn });
-            location.replace('/onboarding.html');
-            return;
+          // Instead of redirecting to onboarding, show what's missing inline
+          // Only redirect if eBay is completely disconnected AND not just came from onboarding
+          if (!connected && !justFromOnboarding) {
+            // Show reconnect modal instead of redirecting
+            if (typeof window.showReconnectModal === 'function') {
+              console.log('[Dashboard] eBay not connected, showing reconnect modal');
+              const reconnected = await window.showReconnectModal('ebay', 'Connect your eBay account to start listing products.');
+              if (reconnected) {
+                // Reload to refresh status
+                location.reload();
+                return;
+              }
+            }
           }
+          
           if (ready) {
             // Clear guard when user is ready (not needed anymore but keep for backwards compat)
             sessionStorage.removeItem(SETUP_REDIRECT_GUARD);
@@ -1187,17 +1196,32 @@
   } catch {}
 }
 
-function updateUIFromCache(data) {
+async function updateUIFromCache(data) {
   const { connected, policiesReady, locationReady, optedIn, ready, setupHints } = data;
   
   console.log('[Dashboard] Using cached status:', { connected, policiesReady, locationReady, optedIn, ready });
   
-  // Check if we need to redirect to onboarding
+  // Check if we need to redirect to onboarding or show reconnect modal
   try {
     const params = new URLSearchParams(window.location.search);
     const justFromOnboarding = params.get('from') === 'onboarding';
     
-    if (!ready && !justFromOnboarding) {
+    // If user has policies/location set but just needs to reconnect token, show modal instead of redirecting
+    if (!connected && !justFromOnboarding) {
+      if (typeof window.showReconnectModal === 'function') {
+        console.log('[Dashboard] eBay not connected (from cache), showing reconnect modal');
+        const reconnected = await window.showReconnectModal('ebay', 'Your eBay session has expired. Please reconnect to continue.');
+        if (reconnected) {
+          location.reload();
+          return;
+        }
+      }
+    }
+    
+    // Only redirect to onboarding if user truly hasn't completed setup (missing policies/location/optin)
+    // NOT just because token expired
+    const needsOnboarding = !policiesReady || !locationReady || !optedIn;
+    if (needsOnboarding && !justFromOnboarding) {
       location.replace('/onboarding.html');
       return;
     }

@@ -1553,10 +1553,21 @@
             if (!res.ok) {
               const errorMsg = j.error || j.detail || 'Unknown error';
               
-              // Check for eBay token errors
-              if (errorMsg.includes('invalid_grant') || errorMsg.includes('token refresh failed')) {
-                flash.textContent = '⚠️ eBay token expired - please reconnect eBay on the Connections page';
+              // Check for eBay token errors - show reconnect modal
+              if (errorMsg.includes('invalid_grant') || errorMsg.includes('token refresh failed') || 
+                  errorMsg.includes('ebay-not-connected') || errorMsg.includes('No eBay token')) {
+                flash.textContent = '⚠️ eBay token expired - reconnecting...';
                 console.error('[Delete All] eBay token expired:', j);
+                
+                // Show reconnect modal
+                if (typeof window.showReconnectModal === 'function') {
+                  const reconnected = await window.showReconnectModal('ebay');
+                  if (reconnected) {
+                    flash.textContent = 'eBay reconnected. Please try again.';
+                  } else {
+                    flash.textContent = '⚠️ eBay token expired - please reconnect to continue';
+                  }
+                }
               } else {
                 flash.textContent = `Delete failed: ${errorMsg}`;
                 console.error('[Delete All] Error:', j);

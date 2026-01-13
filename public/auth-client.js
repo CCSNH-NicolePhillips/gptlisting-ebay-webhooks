@@ -708,4 +708,197 @@
       return null;
     }
   };
+
+  // ============================================================================
+  // Reconnect Modal - Smart OAuth reconnection for expired tokens
+  // ============================================================================
+  
+  /**
+   * Show a reconnect modal when eBay or Dropbox tokens expire
+   * Opens OAuth in a popup instead of redirecting the whole page
+   * 
+   * @param {string} service - 'ebay' or 'dropbox'
+   * @param {string} [message] - Optional custom message
+   * @returns {Promise<boolean>} - Resolves true if reconnected, false if cancelled
+   */
+  window.showReconnectModal = function(service, message) {
+    return new Promise((resolve) => {
+      // Remove any existing modal
+      const existing = document.getElementById('reconnect-modal-overlay');
+      if (existing) existing.remove();
+      
+      const serviceName = service === 'ebay' ? 'eBay' : 'Dropbox';
+      const oauthUrl = `/.netlify/functions/${service}-oauth-start`;
+      const defaultMessage = `Your ${serviceName} connection has expired. Please reconnect to continue.`;
+      
+      // Create modal overlay
+      const overlay = document.createElement('div');
+      overlay.id = 'reconnect-modal-overlay';
+      overlay.style.cssText = `
+        position: fixed; inset: 0; background: rgba(0,0,0,0.6); 
+        display: flex; align-items: center; justify-content: center; 
+        z-index: 10000; animation: fadeIn 0.2s ease;
+      `;
+      
+      // Modal content
+      overlay.innerHTML = `
+        <div style="background: #1a1a2e; border-radius: 12px; padding: 28px; max-width: 400px; width: 90%; 
+                    box-shadow: 0 20px 60px rgba(0,0,0,0.4); text-align: center; color: #fff;">
+          <div style="font-size: 48px; margin-bottom: 16px;">${service === 'ebay' ? '🛒' : '📦'}</div>
+          <h2 style="margin: 0 0 12px; font-size: 20px; font-weight: 600;">Reconnect ${serviceName}</h2>
+          <p style="margin: 0 0 24px; color: #a0a0b0; font-size: 14px; line-height: 1.5;">${message || defaultMessage}</p>
+          <div style="display: flex; gap: 12px; justify-content: center;">
+            <button id="reconnect-cancel" style="
+              padding: 10px 24px; border-radius: 8px; border: 1px solid #444; 
+              background: transparent; color: #fff; font-size: 14px; cursor: pointer;
+              transition: background 0.2s;
+            ">Cancel</button>
+            <button id="reconnect-connect" style="
+              padding: 10px 24px; border-radius: 8px; border: none; 
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+              color: #fff; font-size: 14px; font-weight: 600; cursor: pointer;
+              transition: transform 0.2s, box-shadow 0.2s;
+            ">Reconnect ${serviceName}</button>
+          </div>
+          <p id="reconnect-status" style="margin: 16px 0 0; font-size: 12px; color: #888; display: none;"></p>
+        </div>
+      `;
+      
+      document.body.appendChild(overlay);
+      
+      const cancelBtn = document.getElementById('reconnect-cancel');
+      const connectBtn = document.getElementById('reconnect-connect');
+      const statusEl = document.getElementById('reconnect-status');
+      
+      // Close modal helper
+      function closeModal(success) {
+        overlay.remove();
+        resolve(success);
+      }
+      
+      // Cancel button
+      cancelBtn.onclick = () => closeModal(false);
+      
+      // Click outside to cancel
+      overlay.onclick = (e) => {
+        if (e.target === overlay) closeModal(false);
+      };
+      
+      // ESC to cancel
+      const escHandler = (e) => {
+        if (e.key === 'Escape') {
+          document.removeEventListener('keydown', escHandler);
+          closeModal(false);
+        }
+      };
+      document.addEventListener('keydown', escHandler);
+      
+      // Connect button - open popup
+      connectBtn.onclick = async () => {
+        statusEl.style.display = 'block';
+        statusEl.textContent = 'Opening authorization window...';
+        connectBtn.disabled = true;
+        
+        // Get token to pass to OAuth
+        const token = await window.authClient.getToken().catch(() => null);
+        const urlWithToken = token ? `${oauthUrl}?token=${encodeURIComponent(token)}` : oauthUrl;
+        
+        // Open OAuth popup
+        const w = 500, h = 700;
+        const left = (screen.width - w) / 2;
+        const top = (screen.height - h) / 2;
+        const popup = window.open(urlWithToken, `${service}OAuth`, 
+          `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes`);
+        
+        if (!popup) {
+          statusEl.textContent = 'Popup blocked. Please allow popups for this site.';
+          connectBtn.disabled = false;
+          return;
+        }
+        
+        statusEl.textContent = 'Waiting for authorization...';
+        
+        // Poll for popup close and check connection status
+        const checkInterval = setInterval(async () => {
+          if (popup.closed) {
+            clearInterval(checkInterval);
+            statusEl.textContent = 'Checking connection...';
+            
+            // Wait a moment then check status
+            await new Promise(r => setTimeout(r, 1000));
+            
+            try {
+              const res = await window.authClient.authFetch('/.netlify/functions/status');
+              const status = await res.json();
+              const connected = service === 'ebay' ? status.ebay?.connected : status.dropbox?.connected;
+              
+              if (connected) {
+                statusEl.style.color = '#4ade80';
+                statusEl.textContent = `✓ ${serviceName} connected successfully!`;
+                setTimeout(() => closeModal(true), 1500);
+              } else {
+                statusEl.style.color = '#f87171';
+                statusEl.textContent = 'Connection not completed. Please try again.';
+                connectBtn.disabled = false;
+              }
+            } catch (err) {
+              statusEl.style.color = '#f87171';
+              statusEl.textContent = 'Failed to verify connection. Please refresh the page.';
+              connectBtn.disabled = false;
+            }
+          }
+        }, 500);
+      };
+    });
+  };
+
+  /**
+   * Check if an API error indicates expired/missing OAuth token
+   * and show reconnect modal if needed
+   * 
+   * @param {Response|Object} response - Fetch response or error object
+   * @param {string} service - 'ebay' or 'dropbox'
+   * @returns {Promise<boolean>} - True if reconnect was shown and succeeded
+   */
+  window.handleTokenError = async function(response, service) {
+    let errorData = null;
+    
+    if (response instanceof Response) {
+      if (response.status === 401 || response.status === 403) {
+        try {
+          errorData = await response.clone().json();
+        } catch {
+          errorData = { error: await response.clone().text() };
+        }
+      } else {
+        return false;
+      }
+    } else if (typeof response === 'object') {
+      errorData = response;
+    }
+    
+    if (!errorData) return false;
+    
+    const errorStr = JSON.stringify(errorData).toLowerCase();
+    const tokenErrors = [
+      'ebay-not-connected', 'dropbox-not-connected', 
+      'token expired', 'invalid_grant', 'refresh token',
+      'not connected', 'connect ebay', 'connect dropbox',
+      'no ebay token', 'no dropbox token'
+    ];
+    
+    const isTokenError = tokenErrors.some(e => errorStr.includes(e));
+    if (!isTokenError) return false;
+    
+    // Determine which service based on error or parameter
+    let targetService = service;
+    if (!targetService) {
+      if (errorStr.includes('ebay')) targetService = 'ebay';
+      else if (errorStr.includes('dropbox')) targetService = 'dropbox';
+      else return false;
+    }
+    
+    return await window.showReconnectModal(targetService);
+  };
 })();
+

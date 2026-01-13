@@ -1111,28 +1111,36 @@
       }
 
       if (!r.ok) {
-        // Auth redirects
+        // Check for OAuth token errors first - show reconnect modal
+        const errorMsg = data?.error || rawText || '';
+        const errorLower = errorMsg.toLowerCase();
+        
+        // Handle service connection errors with reconnect modal
+        const isDropboxError = errorLower.includes('dropbox') || errorLower.includes('dropbox-not-connected');
+        const isEbayError = errorLower.includes('ebay-not-connected') || errorLower.includes('no ebay token') || errorLower.includes('connect ebay');
+        
+        if ((r.status === 400 || r.status === 401 || r.status === 403) && (isDropboxError || isEbayError)) {
+          const service = isDropboxError ? 'dropbox' : 'ebay';
+          console.warn(`[API] ${service} token error, showing reconnect modal`);
+          
+          // Show reconnect modal - if user reconnects, retry the request
+          if (typeof window.showReconnectModal === 'function') {
+            const reconnected = await window.showReconnectModal(service);
+            if (reconnected) {
+              // Retry the original request
+              console.log(`[API] ${service} reconnected, retrying request...`);
+              return fetchJSON(url, opts);
+            }
+          }
+          
+          throw new Error(`${service === 'ebay' ? 'eBay' : 'Dropbox'} connection required`);
+        }
+        
+        // Auth redirects for other 401/403 errors
         if (r.status === 401 || r.status === 403) {
           sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
           window.location.replace('/login.html');
           throw new Error('Authentication required');
-        }
-        
-        // Handle service connection errors (Dropbox/eBay not connected)
-        const errorMsg = data?.error || rawText || '';
-        if (r.status === 400) {
-          if (errorMsg.includes('Connect Dropbox first') || errorMsg.includes('dropbox-not-connected')) {
-            console.warn('[API] Dropbox not connected, redirecting to onboarding');
-            alert('Your Dropbox connection has expired or is not set up. Please reconnect Dropbox.');
-            window.location.href = '/onboarding.html';
-            throw new Error('Dropbox connection required');
-          }
-          if (errorMsg.includes('Connect eBay first') || errorMsg.includes('ebay-not-connected')) {
-            console.warn('[API] eBay not connected, redirecting to onboarding');
-            alert('Your eBay connection has expired or is not set up. Please reconnect eBay.');
-            window.location.href = '/onboarding.html';
-            throw new Error('eBay connection required');
-          }
         }
 
         // Make the thrown message actually useful

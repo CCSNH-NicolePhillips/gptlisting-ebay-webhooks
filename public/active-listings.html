@@ -1202,8 +1202,16 @@
         const text = await res.text();
 
         if (res.status === 401) {
-          flash.textContent = 'Unauthorized – please sign in and ensure your eBay account is connected.';
+          flash.textContent = 'eBay connection required...';
           flash.className = 'flash error';
+          // Show reconnect modal
+          if (typeof window.showReconnectModal === 'function') {
+            const reconnected = await window.showReconnectModal('ebay', 'Your eBay session has expired. Please reconnect to view your listings.');
+            if (reconnected) {
+              load(); // Retry after reconnection
+              return;
+            }
+          }
           return;
         }
 
@@ -1213,6 +1221,22 @@
         } catch {
           flash.textContent = text || `Error ${res.status}`;
           flash.className = 'flash error';
+          return;
+        }
+
+        // Check for token errors in response body
+        const errorMsg = data?.error || '';
+        if (errorMsg.includes('invalid_grant') || errorMsg.includes('token refresh failed') || 
+            errorMsg.includes('ebay-not-connected') || errorMsg.includes('No eBay token')) {
+          flash.textContent = 'eBay connection expired...';
+          flash.className = 'flash error';
+          if (typeof window.showReconnectModal === 'function') {
+            const reconnected = await window.showReconnectModal('ebay', 'Your eBay session has expired. Please reconnect to view your listings.');
+            if (reconnected) {
+              load(); // Retry after reconnection
+              return;
+            }
+          }
           return;
         }
 
