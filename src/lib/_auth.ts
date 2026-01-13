@@ -15,11 +15,21 @@ export interface OAuthStateRecord {
   returnTo?: string | null;
 }
 
+/**
+ * Get bearer token from Authorization header or query param (for popup OAuth flows)
+ */
 export function getBearerToken(event: HandlerEvent): string | null {
   const h = (event.headers || {}) as any;
   const auth = (h.authorization || h.Authorization || '') as string;
-  if (!auth || !/^Bearer\s+/i.test(auth)) return null;
-  return auth.replace(/^Bearer\s+/i, '').trim();
+  if (auth && /^Bearer\s+/i.test(auth)) {
+    return auth.replace(/^Bearer\s+/i, '').trim();
+  }
+  // Fallback: check for token in query params (used by popup OAuth flows)
+  const queryToken = event.queryStringParameters?.token;
+  if (queryToken && typeof queryToken === 'string' && queryToken.trim()) {
+    return queryToken.trim();
+  }
+  return null;
 }
 
 export function getJwtSubUnverified(event: HandlerEvent): string | null {
