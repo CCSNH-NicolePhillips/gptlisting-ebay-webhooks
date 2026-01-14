@@ -66,7 +66,13 @@ export const handler: Handler = async (event) => {
 		`${host}/oauth2/authorize?client_id=${encodeURIComponent(clientId)}` +
 		`&redirect_uri=${encodeURIComponent(runame)}` +
 		`&response_type=code&state=${state}&scope=${encodeURIComponent(scopes)}`;
-	// Don't force login - eBay will prompt if session expired
+	
+	// For reconnect popup flow, force fresh login so user can choose eBay account
+	// For regular flow (initial setup), allow eBay to use cached session
+	if (returnTo === 'popup') {
+		url += `&prompt=${encodeURIComponent('login')}`;
+	}
+	
 	const wantsJson = /application\/json/i.test(String(event.headers?.accept || '')) || event.queryStringParameters?.mode === 'json';
 	if (wantsJson) {
 		const jsonHeaders = { 'Content-Type': 'application/json' } as Record<string, string>;
