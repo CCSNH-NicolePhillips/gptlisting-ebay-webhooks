@@ -43,6 +43,18 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Legacy OAuth callback redirects (eBay RuName may point to old paths)
+app.get('/api/auth/callback/ebay', (req, res) => {
+  // Preserve query params (code, state, etc.)
+  const queryString = req.originalUrl.split('?')[1] || '';
+  res.redirect(`/.netlify/functions/ebay-oauth-callback${queryString ? '?' + queryString : ''}`);
+});
+
+app.get('/api/auth/callback/dropbox', (req, res) => {
+  const queryString = req.originalUrl.split('?')[1] || '';
+  res.redirect(`/.netlify/functions/dropbox-oauth-callback${queryString ? '?' + queryString : ''}`);
+});
+
 // Static files (public folder)
 // In dev: src/server -> ../../public
 // In prod: dist/src/server -> ../../../public
