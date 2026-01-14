@@ -81,6 +81,28 @@
         padding: 6px 12px;
       }
       
+      .btn-set-default {
+        background: transparent;
+        color: var(--accent, #4f7cff);
+        border: 1px solid rgba(79, 124, 255, 0.3);
+        border-radius: 6px;
+        padding: 6px 12px;
+        cursor: pointer;
+        font-weight: 500;
+        font-size: 0.8125rem;
+        transition: all 0.15s ease;
+      }
+      
+      .btn-set-default:hover {
+        background: rgba(79, 124, 255, 0.1);
+        border-color: var(--accent, #4f7cff);
+      }
+      
+      .btn-set-default:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      
       .btn-delete {
         background: transparent;
         color: #ef4444;
@@ -395,7 +417,6 @@
               </div>
               <div class="header-actions">
                 <button class="dp-btn dp-btn-secondary" id="refreshBtn">Refresh</button>
-                <button class="dp-btn dp-btn-primary" id="setDefaultBtn" disabled>Set as Default</button>
               </div>
             </div>
 
@@ -403,7 +424,7 @@
               <thead>
                 <tr>
                   <th>Name & Address</th>
-                  <th>Status</th>
+                  <th>Default</th>
                   <th style="text-align:right;">Actions</th>
                 </tr>
               </thead>
@@ -602,7 +623,6 @@
         const inspectorJson = document.getElementById('inspectorJson');
         const closeInspectorBtn = document.getElementById('closeInspector');
         const refreshBtn = document.getElementById('refreshBtn');
-        const setDefaultBtn = document.getElementById('setDefaultBtn');
         const createBtn = document.getElementById('createLocation');
         const resetBtn = document.getElementById('resetForm');
 
@@ -634,14 +654,6 @@
             const txt = await res.text();
             throw new Error(txt || 'Failed to save default');
           }
-        }
-
-        function updateDefaultButton() {
-          if (!setDefaultBtn) return;
-          const sel = (state.selectedKey || '').trim();
-          const def = (state.defaultKey || '').trim();
-          setDefaultBtn.disabled = !sel || (def && sel === def);
-          setDefaultBtn.textContent = def && sel === def ? 'Default set' : 'Set as my default';
         }
 
         function setMsg(text, type) {
@@ -708,8 +720,10 @@
             nameTd.appendChild(addressDiv);
             
             const statusTd = document.createElement('td');
-            const statusText = loc.merchantLocationStatus || 'UNKNOWN';
-            statusTd.innerHTML = statusText + (isDefault ? '<span class="default-badge">✓ DEFAULT</span>' : '');
+            const statusText = isDefault ? '✓ DEFAULT' : (loc.merchantLocationStatus || 'UNKNOWN');
+            statusTd.innerHTML = isDefault 
+              ? '<span class="default-badge">✓ DEFAULT</span>' 
+              : '<span style="color: #94a3b8;">—</span>';
             
             const actionsTd = document.createElement('td');
             const actionsDiv = document.createElement('div');
@@ -722,26 +736,27 @@
               state.selectedKey = loc.merchantLocationKey;
               renderLocations();
               renderInspector();
-              updateDefaultButton();
             };
             
-            const enableBtn = document.createElement('button');
-            enableBtn.textContent = 'Enable';
-            enableBtn.className = 'dp-btn-secondary';
-            enableBtn.disabled = (loc.merchantLocationStatus || '').toUpperCase() === 'ENABLED';
-            enableBtn.onclick = async () => {
-              if (!loc.merchantLocationKey) return;
+            // Set as Default button (inline, per-row)
+            const setDefBtn = document.createElement('button');
+            setDefBtn.textContent = isDefault ? 'Default' : 'Set as Default';
+            setDefBtn.className = isDefault ? 'dp-btn-secondary' : 'btn-set-default';
+            setDefBtn.disabled = isDefault;
+            setDefBtn.style.opacity = isDefault ? '0.5' : '1';
+            setDefBtn.onclick = async () => {
+              if (!loc.merchantLocationKey || isDefault) return;
               try {
-                setMsg('Enabling…');
-                const url = new URL('/.netlify/functions/ebay-enable-location', window.location.origin);
-                url.searchParams.set('key', loc.merchantLocationKey);
-                const res = await authClient.authFetch(url.toString(), { method: 'POST' });
-                const text = await res.text();
-                if (!res.ok) throw new Error(text || 'Enable failed');
-                setMsg('Location enabled. Refreshing…');
-                await loadLocations();
+                setDefBtn.disabled = true;
+                setDefBtn.textContent = 'Saving…';
+                await setDefaultLocationKey(loc.merchantLocationKey);
+                state.defaultKey = loc.merchantLocationKey;
+                setMsg('Default location saved.');
+                renderLocations();
               } catch (err) {
-                setMsg('Enable failed: ' + (err?.message || err), 'error');
+                setMsg('Save default failed: ' + (err?.message || err), 'error');
+                setDefBtn.disabled = false;
+                setDefBtn.textContent = 'Set as Default';
               }
             };
             
@@ -766,6 +781,10 @@
                 }
                 setMsg('Deleted. Refreshing…');
                 state.selectedKey = null;
+                // Clear default if we deleted it
+                if (state.defaultKey === loc.merchantLocationKey) {
+                  state.defaultKey = '';
+                }
                 await loadLocations();
               } catch (err) {
                 setMsg('Delete failed: ' + (err?.message || err), 'error');
@@ -773,7 +792,7 @@
             };
             
             actionsDiv.appendChild(inspectBtn);
-            actionsDiv.appendChild(enableBtn);
+            actionsDiv.appendChild(setDefBtn);
             actionsDiv.appendChild(deleteBtn);
             actionsTd.appendChild(actionsDiv);
             
@@ -782,7 +801,6 @@
             tr.appendChild(actionsTd);
             tableBody.appendChild(tr);
           });
-          updateDefaultButton();
         }
 
         async function loadLocations() {
@@ -871,22 +889,6 @@
         }
 
         if (refreshBtn) refreshBtn.onclick = loadLocations;
-        if (setDefaultBtn) setDefaultBtn.onclick = async () => {
-          const key = (state.selectedKey || '').trim();
-          if (!key) return;
-          try {
-            setDefaultBtn.disabled = true;
-            setMsg('Saving default…');
-            await setDefaultLocationKey(key);
-            state.defaultKey = key;
-            setMsg('Default location saved.');
-            renderLocations();
-          } catch (err) {
-            setMsg('Save default failed: ' + (err?.message || err), 'error');
-          } finally {
-            updateDefaultButton();
-          }
-        };
         if (createBtn) createBtn.onclick = handleCreate;
         if (resetBtn) resetBtn.onclick = resetForm;
         if (closeInspectorBtn) closeInspectorBtn.onclick = () => {
