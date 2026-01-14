@@ -821,13 +821,49 @@
         
         statusEl.textContent = 'Waiting for authorization...';
         
-        // Poll for popup close and check connection status
-        const checkInterval = setInterval(async () => {
-          if (popup.closed) {
+        // Listen for postMessage from OAuth callback (works with COOP)
+        let messageReceived = false;
+        const messageHandler = async (event) => {
+          // Accept messages from our own origin or from the popup
+          if (event.data?.type === 'oauth-complete' && event.data?.service === service) {
+            messageReceived = true;
+            window.removeEventListener('message', messageHandler);
             clearInterval(checkInterval);
+            
+            if (event.data.success) {
+              statusEl.style.color = '#4ade80';
+              statusEl.textContent = `✓ ${serviceName} connected successfully!`;
+              setTimeout(() => closeModal(true), 1000);
+            } else {
+              statusEl.style.color = '#f87171';
+              statusEl.textContent = 'Connection failed. Please try again.';
+              connectBtn.disabled = false;
+            }
+          }
+        };
+        window.addEventListener('message', messageHandler);
+        
+        // Fallback: poll for popup close (may not work due to COOP)
+        // Also periodically check status in case postMessage fails
+        let pollCount = 0;
+        const checkInterval = setInterval(async () => {
+          pollCount++;
+          
+          // Try to check if popup is closed (may fail due to COOP)
+          let isClosed = false;
+          try {
+            isClosed = popup.closed;
+          } catch (e) {
+            // COOP blocks this - use fallback
+          }
+          
+          // If we've been waiting a while (30+ seconds) or popup detected as closed
+          // and no message received, check status directly
+          if ((isClosed || pollCount >= 60) && !messageReceived) {
+            clearInterval(checkInterval);
+            window.removeEventListener('message', messageHandler);
             statusEl.textContent = 'Checking connection...';
             
-            // Wait a moment then check status
             await new Promise(r => setTimeout(r, 1000));
             
             try {
@@ -841,7 +877,7 @@
                 setTimeout(() => closeModal(true), 1500);
               } else {
                 statusEl.style.color = '#f87171';
-                statusEl.textContent = 'Connection not completed. Please try again.';
+                statusEl.textContent = 'Connection not completed. Please close the popup and try again.';
                 connectBtn.disabled = false;
               }
             } catch (err) {

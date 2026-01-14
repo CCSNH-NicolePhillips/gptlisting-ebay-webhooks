@@ -44,6 +44,13 @@ export const handler: Handler = async (event) => {
 			getUserStats(sub),
 		]);
 
+		console.log('[status] User status check:', { 
+			sub, 
+			key: userScopedKey(sub, 'ebay.json'),
+			ebayConnected: !!(ebay as any)?.refresh_token,
+			ebayData: ebay ? 'has data' : 'null'
+		});
+
 		return {
 			statusCode: 200,
 			headers: { 'Content-Type': 'application/json' },

@@ -108,7 +108,9 @@ export const handler: Handler = async (event) => {
 
 	const tokens = tokensStore();
 	const key = `users/${encodeURIComponent(stateInfo.sub)}/ebay.json`;
+	console.log('[ebay-oauth-callback] Saving token for user:', { sub: stateInfo.sub, key, hasRefreshToken: !!data.refresh_token });
 	await tokens.setJSON(key, { refresh_token: data.refresh_token });
+	console.log('[ebay-oauth-callback] Token saved successfully');
 		
 		// Auto opt-in to Business Policies after connecting
 		try {
