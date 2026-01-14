@@ -418,12 +418,26 @@
                 <!-- Simple list view -->
                 <div style="display: flex; flex-direction: column; gap: 12px;">
                   <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                    <span style="font-weight: 500;">Dropbox</span>
-                    <span id="dbxStatus" style="color: #10b981; font-size: 14px;">Loading…</span>
+                    <div>
+                      <span style="font-weight: 500;">Dropbox</span>
+                      <span id="dbxEmail" style="color: #94a3b8; font-size: 12px; margin-left: 8px;"></span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <span id="dbxStatus" style="color: #10b981; font-size: 14px;">Loading…</span>
+                      <button id="dbxConnectBtn" onclick="connectDropbox()" style="display: none; padding: 6px 12px; background: #6366f1; color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer;">Connect</button>
+                      <button id="dbxDisconnectBtn" onclick="disconnectDropbox()" style="display: none; padding: 6px 12px; background: transparent; color: #f87171; border: 1px solid #f87171; border-radius: 6px; font-size: 12px; cursor: pointer;">Disconnect</button>
+                    </div>
                   </div>
                   <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0;">
-                    <span style="font-weight: 500;">eBay</span>
-                    <span id="ebayStatus" style="color: #10b981; font-size: 14px;">Loading…</span>
+                    <div>
+                      <span style="font-weight: 500;">eBay</span>
+                      <span id="ebayEmail" style="color: #94a3b8; font-size: 12px; margin-left: 8px;"></span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <span id="ebayStatus" style="color: #10b981; font-size: 14px;">Loading…</span>
+                      <button id="ebayConnectBtn" onclick="connectEbay()" style="display: none; padding: 6px 12px; background: #6366f1; color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer;">Connect</button>
+                      <button id="ebayDisconnectBtn" onclick="disconnectEbay()" style="display: none; padding: 6px 12px; background: transparent; color: #f87171; border: 1px solid #f87171; border-radius: 6px; font-size: 12px; cursor: pointer;">Disconnect</button>
+                    </div>
                   </div>
                   <div id="policyWarning" style="display: none; padding: 12px; margin-top: 8px; background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.3); border-radius: 8px;">
                     <div style="font-size: 13px; color: #fbbf24; margin-bottom: 6px;">⚠️ Action Required</div>
@@ -622,8 +636,33 @@
         try {
           const user = (await (window.auth0 && authClient.ensureAuth ? authClient.ensureAuth() && (authClient && authClient.user) : null)) || null;
         } catch {}
-        dbxStatus.textContent = s.dropbox?.connected ? 'Connected' : 'Not connected';
-        ebayStatus.textContent = s.ebay?.connected ? 'Connected' : 'Not connected';
+        
+        // Update connection status with buttons
+        const dbxConnected = s.dropbox?.connected;
+        const ebayConnected = s.ebay?.connected;
+        
+        dbxStatus.textContent = dbxConnected ? 'Connected ✅' : 'Not connected';
+        dbxStatus.style.color = dbxConnected ? '#10b981' : '#f87171';
+        ebayStatus.textContent = ebayConnected ? 'Connected ✅' : 'Not connected';
+        ebayStatus.style.color = ebayConnected ? '#10b981' : '#f87171';
+        
+        // Show/hide connect/disconnect buttons
+        const dbxConnectBtn = document.getElementById('dbxConnectBtn');
+        const dbxDisconnectBtn = document.getElementById('dbxDisconnectBtn');
+        const ebayConnectBtn = document.getElementById('ebayConnectBtn');
+        const ebayDisconnectBtn = document.getElementById('ebayDisconnectBtn');
+        
+        if (dbxConnectBtn) dbxConnectBtn.style.display = dbxConnected ? 'none' : 'inline-block';
+        if (dbxDisconnectBtn) dbxDisconnectBtn.style.display = dbxConnected ? 'inline-block' : 'none';
+        if (ebayConnectBtn) ebayConnectBtn.style.display = ebayConnected ? 'none' : 'inline-block';
+        if (ebayDisconnectBtn) ebayDisconnectBtn.style.display = ebayConnected ? 'inline-block' : 'none';
+        
+        // Show email for eBay if available (from eBay identity API if we had it)
+        // For now just show logged-in user's email as reference
+        const ebayEmail = document.getElementById('ebayEmail');
+        if (ebayEmail && ebayConnected && s.user?.email) {
+          ebayEmail.textContent = `(${s.user.email})`;
+        }
         
         // Ensure connections section is visible
         const connectionsSection = document.getElementById('connectionsSection');
@@ -1638,6 +1677,67 @@ async function updateUIFromCache(data) {
             userMenu.style.display = 'none';
           }
         });
+      }
+
+      // Connect/Disconnect functions for OAuth services
+      async function connectEbay() {
+        // Use the reconnect modal for a nice popup experience
+        if (typeof window.showReconnectModal === 'function') {
+          const reconnected = await window.showReconnectModal('ebay', 'Connect your eBay account to start listing products.');
+          if (reconnected) {
+            location.reload();
+          }
+        } else {
+          // Fallback: direct redirect
+          window.location.href = '/.netlify/functions/ebay-oauth-start';
+        }
+      }
+      
+      async function disconnectEbay() {
+        if (!confirm('Are you sure you want to disconnect eBay? You will need to reconnect to create listings.')) return;
+        try {
+          const token = await authClient.getToken();
+          const res = await fetch('/.netlify/functions/status?ebay=disconnect', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (res.ok) {
+            location.reload();
+          } else {
+            alert('Failed to disconnect eBay. Please try again.');
+          }
+        } catch (e) {
+          alert('Error disconnecting eBay: ' + e.message);
+        }
+      }
+      
+      async function connectDropbox() {
+        if (typeof window.showReconnectModal === 'function') {
+          const reconnected = await window.showReconnectModal('dropbox', 'Connect your Dropbox account to import product photos.');
+          if (reconnected) {
+            location.reload();
+          }
+        } else {
+          window.location.href = '/.netlify/functions/dropbox-oauth-start';
+        }
+      }
+      
+      async function disconnectDropbox() {
+        if (!confirm('Are you sure you want to disconnect Dropbox?')) return;
+        try {
+          const token = await authClient.getToken();
+          const res = await fetch('/.netlify/functions/status?dropbox=disconnect', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (res.ok) {
+            location.reload();
+          } else {
+            alert('Failed to disconnect Dropbox. Please try again.');
+          }
+        } catch (e) {
+          alert('Error disconnecting Dropbox: ' + e.message);
+        }
       }
 
       // Single boot: show UI immediately, load data progressively

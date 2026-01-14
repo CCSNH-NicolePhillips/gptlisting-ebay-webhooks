@@ -475,16 +475,24 @@
                   <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
                     <div>
                       <span style="font-weight: 500;">Dropbox</span>
+                      <span id="dropboxEmail" style="color: #94a3b8; font-size: 12px; margin-left: 8px;"></span>
                       <span id="dropboxConnectionStatus" style="color: #10b981; font-size: 14px; margin-left: 12px;">Not connected</span>
                     </div>
-                    <button id="dropboxDisconnectBtn" class="dp-btn dp-btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem; display: none;">Disconnect</button>
+                    <div style="display: flex; gap: 8px;">
+                      <button id="dropboxConnectBtn" onclick="connectDropbox()" class="dp-btn dp-btn-primary" style="padding: 0.5rem 1rem; font-size: 0.875rem; display: none;">Connect</button>
+                      <button id="dropboxDisconnectBtn" onclick="disconnectDropbox()" class="dp-btn dp-btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem; display: none;">Disconnect</button>
+                    </div>
                   </div>
                   <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0;">
                     <div>
                       <span style="font-weight: 500;">eBay</span>
+                      <span id="ebayEmail" style="color: #94a3b8; font-size: 12px; margin-left: 8px;"></span>
                       <span id="ebayConnectionStatus" style="color: #10b981; font-size: 14px; margin-left: 12px;">Not connected</span>
                     </div>
-                    <button id="ebayDisconnectBtn" class="dp-btn dp-btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem; display: none;">Disconnect</button>
+                    <div style="display: flex; gap: 8px;">
+                      <button id="ebayConnectBtn" onclick="connectEbay()" class="dp-btn dp-btn-primary" style="padding: 0.5rem 1rem; font-size: 0.875rem; display: none;">Connect</button>
+                      <button id="ebayDisconnectBtn" onclick="disconnectEbay()" class="dp-btn dp-btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem; display: none;">Disconnect</button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -526,28 +534,92 @@
         // Update connection status
         try {
           const dropboxStatus = document.getElementById('dropboxConnectionStatus');
+          const dropboxConnectBtn = document.getElementById('dropboxConnectBtn');
           const dropboxDisconnectBtn = document.getElementById('dropboxDisconnectBtn');
           const ebayStatus = document.getElementById('ebayConnectionStatus');
+          const ebayConnectBtn = document.getElementById('ebayConnectBtn');
           const ebayDisconnectBtn = document.getElementById('ebayDisconnectBtn');
+          const ebayEmail = document.getElementById('ebayEmail');
           
           if (dropboxStatus) {
             const isConnected = s.dropbox?.connected;
-            dropboxStatus.textContent = isConnected ? 'Connected' : 'Not connected';
-            if (isConnected) dropboxStatus.classList.add('connected');
-            if (dropboxDisconnectBtn) {
-              dropboxDisconnectBtn.style.display = isConnected ? 'block' : 'none';
-            }
+            dropboxStatus.textContent = isConnected ? 'Connected ✅' : 'Not connected';
+            dropboxStatus.style.color = isConnected ? '#10b981' : '#f87171';
+            if (dropboxConnectBtn) dropboxConnectBtn.style.display = isConnected ? 'none' : 'inline-block';
+            if (dropboxDisconnectBtn) dropboxDisconnectBtn.style.display = isConnected ? 'inline-block' : 'none';
           }
           
           if (ebayStatus) {
             const isConnected = s.ebay?.connected;
-            ebayStatus.textContent = isConnected ? 'Connected' : 'Not connected';
-            if (isConnected) ebayStatus.classList.add('connected');
-            if (ebayDisconnectBtn) {
-              ebayDisconnectBtn.style.display = isConnected ? 'block' : 'none';
+            ebayStatus.textContent = isConnected ? 'Connected ✅' : 'Not connected';
+            ebayStatus.style.color = isConnected ? '#10b981' : '#f87171';
+            if (ebayConnectBtn) ebayConnectBtn.style.display = isConnected ? 'none' : 'inline-block';
+            if (ebayDisconnectBtn) ebayDisconnectBtn.style.display = isConnected ? 'inline-block' : 'none';
+            // Show user email when connected
+            if (ebayEmail && isConnected && s.user?.email) {
+              ebayEmail.textContent = `(${s.user.email})`;
             }
           }
         } catch {}
+      }
+      
+      // Connect/Disconnect functions for OAuth services
+      async function connectEbay() {
+        if (typeof window.showReconnectModal === 'function') {
+          const reconnected = await window.showReconnectModal('ebay', 'Connect your eBay account to start listing products.');
+          if (reconnected) {
+            location.reload();
+          }
+        } else {
+          window.location.href = '/.netlify/functions/ebay-oauth-start';
+        }
+      }
+      
+      async function disconnectEbay() {
+        if (!confirm('Are you sure you want to disconnect eBay? You will need to reconnect to create listings.')) return;
+        try {
+          const token = await authClient.getToken();
+          const res = await fetch('/.netlify/functions/status?ebay=disconnect', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (res.ok) {
+            location.reload();
+          } else {
+            alert('Failed to disconnect eBay. Please try again.');
+          }
+        } catch (e) {
+          alert('Error disconnecting eBay: ' + e.message);
+        }
+      }
+      
+      async function connectDropbox() {
+        if (typeof window.showReconnectModal === 'function') {
+          const reconnected = await window.showReconnectModal('dropbox', 'Connect your Dropbox account to import product photos.');
+          if (reconnected) {
+            location.reload();
+          }
+        } else {
+          window.location.href = '/.netlify/functions/dropbox-oauth-start';
+        }
+      }
+      
+      async function disconnectDropbox() {
+        if (!confirm('Are you sure you want to disconnect Dropbox?')) return;
+        try {
+          const token = await authClient.getToken();
+          const res = await fetch('/.netlify/functions/status?dropbox=disconnect', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (res.ok) {
+            location.reload();
+          } else {
+            alert('Failed to disconnect Dropbox. Please try again.');
+          }
+        } catch (e) {
+          alert('Error disconnecting Dropbox: ' + e.message);
+        }
       }
       
       // Save settings button handler
