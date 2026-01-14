@@ -57,9 +57,11 @@ app.get('/api/auth/callback/dropbox', (req, res) => {
 
 // Dropbox may be configured to redirect to /lander - catch this
 app.get('/lander', (req, res) => {
+  console.log('[server] /lander route hit with query:', req.query);
   const queryString = req.originalUrl.split('?')[1] || '';
   // If there's a code param, this is a Dropbox OAuth callback
   if (req.query.code) {
+    console.log('[server] Redirecting /lander to dropbox-oauth-callback');
     res.redirect(`/.netlify/functions/dropbox-oauth-callback${queryString ? '?' + queryString : ''}`);
   } else {
     res.redirect('/');
