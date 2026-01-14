@@ -62,17 +62,24 @@ export const handler: Handler = async (event) => {
 	url.searchParams.set('redirect_uri', redirectUri);
 	url.searchParams.set('token_access_type', 'offline');
 	url.searchParams.set('state', userState);
-	// If this user has never connected, force re-auth/consent to avoid reusing another Dropbox session silently
-	try {
-		const store = tokensStore();
-		const existing = (await store.get(userScopedKey(sub, 'dropbox.json'), { type: 'json' })) as any;
-		const firstConnect = !existing || !existing.refresh_token;
-		if (firstConnect) {
-			url.searchParams.set('force_reapprove', 'true');
-			url.searchParams.set('force_reauthentication', 'true');
-			url.searchParams.set('disable_signup', 'false');
-		}
-	} catch {}
+	
+	// For popup reconnect flows, always force re-auth so user can choose account
+	if (returnTo === 'popup') {
+		url.searchParams.set('force_reapprove', 'true');
+		url.searchParams.set('force_reauthentication', 'true');
+	} else {
+		// If this user has never connected, force re-auth/consent to avoid reusing another Dropbox session silently
+		try {
+			const store = tokensStore();
+			const existing = (await store.get(userScopedKey(sub, 'dropbox.json'), { type: 'json' })) as any;
+			const firstConnect = !existing || !existing.refresh_token;
+			if (firstConnect) {
+				url.searchParams.set('force_reapprove', 'true');
+				url.searchParams.set('force_reauthentication', 'true');
+				url.searchParams.set('disable_signup', 'false');
+			}
+		} catch {}
+	}
 	const wantsJson = /application\/json/i.test(String(event.headers?.accept || '')) || event.queryStringParameters?.mode === 'json';
 	if (wantsJson) {
 		const jsonHeaders = { 'Content-Type': 'application/json' } as Record<string, string>;
