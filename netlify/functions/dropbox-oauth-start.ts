@@ -6,6 +6,8 @@ function sanitizeReturnTo(value: unknown): string | null {
 	if (typeof value !== 'string') return null;
 	let candidate = value.trim();
 	if (!candidate) return null;
+	// Allow 'popup' as a special value for popup OAuth flows
+	if (candidate === 'popup') return 'popup';
 	if (/^https?:\/\//i.test(candidate)) {
 		try {
 			const url = new URL(candidate);

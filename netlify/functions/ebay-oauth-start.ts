@@ -5,6 +5,8 @@ function sanitizeReturnTo(value: unknown): string | null {
 	if (typeof value !== 'string') return null;
 	let candidate = value.trim();
 	if (!candidate) return null;
+	// Allow 'popup' as a special value for popup OAuth flows
+	if (candidate === 'popup') return 'popup';
 	if (/^https?:\/\//i.test(candidate)) {
 		try {
 			const url = new URL(candidate);
@@ -64,8 +66,7 @@ export const handler: Handler = async (event) => {
 		`${host}/oauth2/authorize?client_id=${encodeURIComponent(clientId)}` +
 		`&redirect_uri=${encodeURIComponent(runame)}` +
 		`&response_type=code&state=${state}&scope=${encodeURIComponent(scopes)}`;
-	// Always request a fresh login
-	url += `&prompt=${encodeURIComponent('login')}`;
+	// Don't force login - eBay will prompt if session expired
 	const wantsJson = /application\/json/i.test(String(event.headers?.accept || '')) || event.queryStringParameters?.mode === 'json';
 	if (wantsJson) {
 		const jsonHeaders = { 'Content-Type': 'application/json' } as Record<string, string>;
