@@ -441,8 +441,8 @@
                   </div>
                   <div id="policyWarning" style="display: none; padding: 12px; margin-top: 8px; background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.3); border-radius: 8px;">
                     <div style="font-size: 13px; color: #fbbf24; margin-bottom: 6px;">⚠️ Action Required</div>
-                    <div style="font-size: 12px; color: #cbd5e1; margin-bottom: 8px;">Set default eBay policies to create listings</div>
-                    <a href="/policies-manage.html" style="display: inline-block; padding: 6px 12px; background: #fbbf24; color: #0b1020; border-radius: 6px; font-size: 12px; font-weight: 600; text-decoration: none;">Configure Policies</a>
+                    <div id="policyWarningMsg" style="font-size: 12px; color: #cbd5e1; margin-bottom: 8px;">Set default eBay policies to create listings</div>
+                    <a id="policyWarningLink" href="/policies-manage.html" style="display: inline-block; padding: 6px 12px; background: #fbbf24; color: #0b1020; border-radius: 6px; font-size: 12px; font-weight: 600; text-decoration: none;">Configure Policies</a>
                   </div>
                 </div>
               </div>
@@ -697,14 +697,47 @@
         // Check for missing eBay policies if connected
         if (connected) {
           try {
-            const policyRes = await authClient.authFetch('/.netlify/functions/ebay-get-policy-defaults');
-            const policyData = await policyRes.json();
-            const defaults = policyData?.defaults || {};
-            const hasPolicies = defaults.fulfillment && defaults.payment && defaults.return;
+            // Fetch both policy lists and defaults in parallel
+            const [policiesRes, defaultsRes] = await Promise.all([
+              authClient.authFetch('/.netlify/functions/ebay-list-policies'),
+              authClient.authFetch('/.netlify/functions/ebay-get-policy-defaults')
+            ]);
+            const policies = await policiesRes.json();
+            const defaultsData = await defaultsRes.json();
+            const defaults = defaultsData?.defaults || {};
+            
+            // Check if policies exist at all
+            const hasFulfillment = (policies?.fulfillmentPolicies?.length || 0) > 0;
+            const hasPayment = (policies?.paymentPolicies?.length || 0) > 0;
+            const hasReturn = (policies?.returnPolicies?.length || 0) > 0;
+            const policiesExist = hasFulfillment && hasPayment && hasReturn;
+            
+            // Check if defaults are set
+            const hasDefaults = defaults.fulfillment && defaults.payment && defaults.return;
             
             const policyWarning = document.getElementById('policyWarning');
-            if (policyWarning) {
-              policyWarning.style.display = hasPolicies ? 'none' : 'block';
+            const policyWarningMsg = document.getElementById('policyWarningMsg');
+            const policyWarningLink = document.getElementById('policyWarningLink');
+            
+            if (!policiesExist) {
+              // Policies don't exist - need to create them
+              if (policyWarning) policyWarning.style.display = 'block';
+              if (policyWarningMsg) policyWarningMsg.textContent = 'Create eBay policies (fulfillment, payment, return) to list items';
+              if (policyWarningLink) {
+                policyWarningLink.textContent = 'Create Policies';
+                policyWarningLink.href = '/onboarding.html';
+              }
+            } else if (!hasDefaults) {
+              // Policies exist but defaults not set
+              if (policyWarning) policyWarning.style.display = 'block';
+              if (policyWarningMsg) policyWarningMsg.textContent = 'Set default policies in settings to enable Quick List';
+              if (policyWarningLink) {
+                policyWarningLink.textContent = 'Set Defaults';
+                policyWarningLink.href = '/settings.html';
+              }
+            } else {
+              // All good!
+              if (policyWarning) policyWarning.style.display = 'none';
             }
           } catch (e) {
             // If fetch fails, assume policies might be missing and show warning

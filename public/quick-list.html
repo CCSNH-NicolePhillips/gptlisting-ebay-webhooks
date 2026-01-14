@@ -1555,26 +1555,51 @@
     async function checkEbaySetup() {
       // Check if user has required eBay policies and location
       try {
-        const [policiesRes, locationRes] = await Promise.all([
+        const [policiesListRes, defaultsRes, locationRes] = await Promise.all([
+          fetchJSON('/.netlify/functions/ebay-list-policies'),
           fetchJSON('/.netlify/functions/ebay-get-policy-defaults'),
           fetchJSON('/.netlify/functions/ebay-get-location-user')
         ]);
         
-        const missingItems = [];
-        const policies = policiesRes?.defaults || {};
+        const defaults = defaultsRes?.defaults || {};
         
-        if (!policies.fulfillment) missingItems.push('Fulfillment Policy');
-        if (!policies.payment) missingItems.push('Payment Policy');
-        if (!policies.return) missingItems.push('Return Policy');
-        if (!locationRes?.merchantLocationKey) missingItems.push('Inventory Location');
+        // Check if policies exist at all
+        const hasFulfillmentPolicy = (policiesListRes?.fulfillmentPolicies?.length || 0) > 0;
+        const hasPaymentPolicy = (policiesListRes?.paymentPolicies?.length || 0) > 0;
+        const hasReturnPolicy = (policiesListRes?.returnPolicies?.length || 0) > 0;
         
-        if (missingItems.length > 0) {
+        // Check what's missing
+        const missingPolicies = [];
+        const missingDefaults = [];
+        
+        if (!hasFulfillmentPolicy) missingPolicies.push('Fulfillment Policy');
+        else if (!defaults.fulfillment) missingDefaults.push('Fulfillment Policy');
+        
+        if (!hasPaymentPolicy) missingPolicies.push('Payment Policy');
+        else if (!defaults.payment) missingDefaults.push('Payment Policy');
+        
+        if (!hasReturnPolicy) missingPolicies.push('Return Policy');
+        else if (!defaults.return) missingDefaults.push('Return Policy');
+        
+        const missingLocation = !locationRes?.merchantLocationKey;
+        
+        // Build appropriate message based on what's missing
+        if (missingPolicies.length > 0 || missingLocation) {
+          const missingItems = [...missingPolicies];
+          if (missingLocation) missingItems.push('Inventory Location');
           const msg = `❌ Missing required eBay setup:\n\n${missingItems.map(item => '• ' + item).join('\n')}\n\nPlease complete setup before using Quick List.`;
           alert(msg);
-          
-          // Redirect to setup page
           if (confirm('Go to Setup page now?')) {
             window.location.href = '/onboarding.html';
+          }
+          return false;
+        }
+        
+        if (missingDefaults.length > 0) {
+          const msg = `⚠️ Default policies not set:\n\n${missingDefaults.map(item => '• ' + item).join('\n')}\n\nYou have policies but need to set them as defaults in Settings.`;
+          alert(msg);
+          if (confirm('Go to Settings to set defaults?')) {
+            window.location.href = '/settings.html';
           }
           return false;
         }
