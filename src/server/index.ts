@@ -55,6 +55,17 @@ app.get('/api/auth/callback/dropbox', (req, res) => {
   res.redirect(`/.netlify/functions/dropbox-oauth-callback${queryString ? '?' + queryString : ''}`);
 });
 
+// Dropbox may be configured to redirect to /lander - catch this
+app.get('/lander', (req, res) => {
+  const queryString = req.originalUrl.split('?')[1] || '';
+  // If there's a code param, this is a Dropbox OAuth callback
+  if (req.query.code) {
+    res.redirect(`/.netlify/functions/dropbox-oauth-callback${queryString ? '?' + queryString : ''}`);
+  } else {
+    res.redirect('/');
+  }
+});
+
 // Static files (public folder)
 // In dev: src/server -> ../../public
 // In prod: dist/src/server -> ../../../public
