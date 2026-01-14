@@ -27,14 +27,22 @@ export const handler: Handler = async (event) => {
 	const clientId = process.env.DROPBOX_CLIENT_ID;
 	const redirectUri = process.env.DROPBOX_REDIRECT_URI;
 	console.log('[dropbox-oauth-start] Using redirect URI:', redirectUri);
+	console.log('[dropbox-oauth-start] Query params:', JSON.stringify(event.queryStringParameters));
+	console.log('[dropbox-oauth-start] Has token in query:', !!event.queryStringParameters?.token);
 	if (!clientId || !redirectUri) {
 		return { statusCode: 500, body: 'Missing DROPBOX_CLIENT_ID or DROPBOX_REDIRECT_URI' };
 	}
 
 	const bearer = getBearerToken(event);
+	console.log('[dropbox-oauth-start] Bearer token found:', !!bearer, 'length:', bearer?.length);
 	let sub = (await requireAuthVerified(event))?.sub || null;
-	if (!sub) sub = getJwtSubUnverified(event);
+	console.log('[dropbox-oauth-start] Verified sub:', sub);
+	if (!sub) {
+		sub = getJwtSubUnverified(event);
+		console.log('[dropbox-oauth-start] Unverified sub fallback:', sub);
+	}
 	if (!bearer || !sub) {
+		console.log('[dropbox-oauth-start] Auth failed - bearer:', !!bearer, 'sub:', !!sub, '-> redirecting to login');
 		const wantsJson = /application\/json/i.test(String(event.headers?.accept || '')) || event.queryStringParameters?.mode === 'json';
 		if (wantsJson) {
 			const jsonHeaders = { 'Content-Type': 'application/json' } as Record<string, string>;
@@ -42,6 +50,7 @@ export const handler: Handler = async (event) => {
 		}
 		return { statusCode: 302, headers: { Location: '/login.html' } };
 	}
+	console.log('[dropbox-oauth-start] Auth OK, proceeding with OAuth for user:', sub);
 
 	// Bind this OAuth flow to the current user via opaque server-side state
 	let parsedBody: any = null;
