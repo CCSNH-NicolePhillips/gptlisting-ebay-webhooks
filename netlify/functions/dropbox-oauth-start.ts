@@ -26,6 +26,7 @@ function sanitizeReturnTo(value: unknown): string | null {
 export const handler: Handler = async (event) => {
 	const clientId = process.env.DROPBOX_CLIENT_ID;
 	const redirectUri = process.env.DROPBOX_REDIRECT_URI;
+	console.log('[dropbox-oauth-start] Using redirect URI:', redirectUri);
 	if (!clientId || !redirectUri) {
 		return { statusCode: 500, body: 'Missing DROPBOX_CLIENT_ID or DROPBOX_REDIRECT_URI' };
 	}
