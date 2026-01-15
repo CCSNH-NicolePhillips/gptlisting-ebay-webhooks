@@ -204,7 +204,11 @@ export async function searchGoogleShopping(
     // Title matching - verify the result is actually the same product
     // Uses bidirectional matching: checks if query words appear in title OR if title words appear in query
     // This handles cases where Google Shopping returns abbreviated titles (e.g., "Root Sculpt" vs full query)
-    const isTitleMatch = (resultTitle: string, searchQuery: string): boolean => {
+    // 
+    // CRITICAL FIX: REQUIRE BRAND MATCH
+    // Without brand matching, generic words like "Watermelon" or "Hydration" can cause false positives
+    // e.g., "7 Day Hydration Watermelon Fitness Shot Pack" wrongly matching "Pump Sauce Shooters Watermelon"
+    const isTitleMatch = (resultTitle: string, searchQuery: string, searchBrand?: string): boolean => {
       // Normalize both strings
       const normalize = (s: string): string[] => {
         return s.toLowerCase()
@@ -218,6 +222,26 @@ export async function searchGoogleShopping(
       const titleWords = normalize(resultTitle);
       
       if (queryWords.length === 0) return true;
+      
+      // CRITICAL: Check brand match first
+      // If we have a brand, the result MUST contain it (or a close variant)
+      if (searchBrand && searchBrand.length > 0) {
+        const brandWords = normalize(searchBrand);
+        const titleLower = resultTitle.toLowerCase();
+        
+        // Check if ANY brand word appears in title
+        const brandInTitle = brandWords.some(bw => 
+          titleLower.includes(bw) || 
+          titleWords.some(tw => tw.includes(bw) || bw.includes(tw))
+        );
+        
+        if (!brandInTitle) {
+          // Brand not found - this is likely a wrong product
+          // Log for debugging but reject the match
+          console.log(`[google-shopping] ❌ Brand mismatch: "${searchBrand}" not in "${resultTitle.slice(0, 60)}"`);
+          return false;
+        }
+      }
       
       // Count how many query words appear in the title (forward match)
       const forwardMatchCount = queryWords.filter(qw => 
@@ -274,7 +298,7 @@ export async function searchGoogleShopping(
       r.seller?.toLowerCase().includes('amazon') && 
       isFirstPartySeller(r.seller) &&
       !isLotListing(r.title || '') &&
-      isTitleMatch(r.title || '', searchQuery) &&
+      isTitleMatch(r.title || '', searchQuery, brand) &&
       r.extracted_price > 0
     );
     
@@ -282,14 +306,14 @@ export async function searchGoogleShopping(
       r.seller?.toLowerCase().includes('walmart') &&
       isFirstPartySeller(r.seller) &&
       !isLotListing(r.title || '') &&
-      isTitleMatch(r.title || '', searchQuery) &&
+      isTitleMatch(r.title || '', searchQuery, brand) &&
       r.extracted_price > 0
     );
     
     const targetResult = results.find(r => 
       r.seller?.toLowerCase() === 'target' &&
       !isLotListing(r.title || '') &&
-      isTitleMatch(r.title || '', searchQuery) &&
+      isTitleMatch(r.title || '', searchQuery, brand) &&
       r.extracted_price > 0
     );
 
@@ -319,7 +343,7 @@ export async function searchGoogleShopping(
         isMajorRetailer(seller) &&
         isFirstPartySeller(seller) &&
         !isLotListing(title) &&
-        isTitleMatch(title, searchQuery)
+        isTitleMatch(title, searchQuery, brand)
       );
     });
     majorRetailResults.sort((a, b) => a.extracted_price - b.extracted_price);
@@ -337,7 +361,7 @@ export async function searchGoogleShopping(
         !seller.includes('poshmark') &&
         !isLotListing(title) &&
         isFirstPartySeller(r.seller || '') &&
-        isTitleMatch(title, searchQuery)
+        isTitleMatch(title, searchQuery, brand)
       );
     });
 
@@ -377,7 +401,7 @@ export async function searchGoogleShopping(
       const title = r.title || '';
       return r.extracted_price > 0 && 
              !isLotListing(title) && 
-             isTitleMatch(title, searchQuery);
+             isTitleMatch(title, searchQuery, brand);
     });
     
     console.log(`[google-shopping] Filtered ${results.length} results down to ${filteredResults.length} title-matched results`);

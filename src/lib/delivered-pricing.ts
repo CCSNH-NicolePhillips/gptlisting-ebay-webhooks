@@ -491,10 +491,26 @@ export function calculateTargetDelivered(
     const retailPrice = Math.min(knownRetailPrice, allRetailPrices);
     
     if (retailPrice !== Infinity) {
-      // Price at 60% of retail (competitive with eBay sellers)
-      targetCents = Math.round(retailPrice * 0.60);
+      // Determine pricing strategy based on price source
+      // - Amazon/Walmart/Target: 60% (they're typically at MSRP or higher)
+      // - Brand site or niche retailer: 80% (they're selling direct at competitive prices)
+      const hasKnownRetailer = amazonPrice !== null || walmartPrice !== null;
+      
+      // Check if the lowest retail price is from a brand site (seller name contains brand)
+      const lowestRetailComp = retailComps.length > 0 
+        ? retailComps.find(c => c.deliveredCents === allRetailPrices)
+        : null;
+      const isBrandSite = lowestRetailComp && 
+        lowestRetailComp.seller.toLowerCase().includes(
+          // Extract first word of brand as key identifier
+          (retailComps[0] ? '' : '').toLowerCase().split(/\s+/)[0] || ''
+        );
+      
+      // Use 60% for major retailers, 80% for brand sites/niche sellers
+      const discountRatio = hasKnownRetailer ? 0.60 : 0.80;
+      targetCents = Math.round(retailPrice * discountRatio);
       warnings.push('usingRetailFallback');
-      console.log(`[delivered-pricing] Using retail fallback: $${(retailPrice / 100).toFixed(2)} → target $${(targetCents / 100).toFixed(2)} (60%)`);
+      console.log(`[delivered-pricing] Using retail fallback: $${(retailPrice / 100).toFixed(2)} → target $${(targetCents / 100).toFixed(2)} (${Math.round(discountRatio * 100)}%${hasKnownRetailer ? ' major retail' : ' brand/niche site'})`);
     } else {
       // No pricing data at all
       targetCents = 0;
@@ -834,8 +850,13 @@ export async function getDeliveredPricing(
   const retailHasBrand = retailCompsIncludeBrand(retailComps, brand);
   const soldStrong = soldMedianCents !== null && soldCount >= 5;
   
-  if (!hasTrustedRetail && !retailHasBrand && !soldStrong) {
-    console.log(`[delivered-pricing] ⚠️ No brand-matched retail found for "${brand}" - trying Brave Amazon fallback`);
+  // ALWAYS try Brave for Amazon if we didn't find an Amazon price in Google Shopping
+  // This catches cases where:
+  // 1. Google Shopping only finds brand site but Amazon has the product
+  // 2. Brand site shows sale/promo price but Amazon shows true retail
+  // 3. Niche brands not well indexed in Google Shopping
+  if (!amazonPriceCents && !soldStrong) {
+    console.log(`[delivered-pricing] 🔍 No Amazon in Google Shopping - trying Brave Amazon fallback for "${brand} ${productName}"`);
     
     const braveResult = await braveAmazonFallback(brand, productName);
     if (braveResult.priceCents) {
@@ -845,12 +866,13 @@ export async function getDeliveredPricing(
       console.log(`[delivered-pricing] ✓ Brave Amazon fallback: $${(braveAmazonPrice / 100).toFixed(2)}`);
     } else if (braveResult.url) {
       // Found Amazon page but couldn't extract price (likely JS-rendered)
-      // Still flag as needing review since we're using wrong-brand retail as fallback
       warnings.push('braveAmazonNoPriceExtract');
-      warnings.push('nicheBrandNeedsReview');
-      console.log(`[delivered-pricing] ⚠️ Brave found Amazon page but price extraction failed - MANUAL REVIEW REQUIRED`);
-    } else {
-      // Brave didn't find anything - this is a niche brand with no pricing data
+      if (!retailHasBrand) {
+        warnings.push('nicheBrandNeedsReview');
+      }
+      console.log(`[delivered-pricing] ⚠️ Brave found Amazon page but price extraction failed`);
+    } else if (!hasTrustedRetail && !retailHasBrand) {
+      // Brave didn't find anything AND no trusted retail - niche brand
       warnings.push('nicheBrandNeedsReview');
       console.log(`[delivered-pricing] ⚠️ NICHE BRAND: "${brand}" has no reliable pricing data - manual review required`);
     }
