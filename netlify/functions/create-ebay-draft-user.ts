@@ -371,7 +371,7 @@ export const handler: Handler = async (event) => {
           400,
           {
             error: "Invalid merchantLocationKey",
-            detail: `Key '${merchantLocationKey || "(none)"}' not found in ${process.env.EBAY_ENV || "production"}. Please select from available locations or create a new one.`,
+            detail: `The inventory location '${merchantLocationKey || "(none)"}' was not found. Please go to Settings → Inventory Location and set a valid default location.`,
             invalidKey: merchantLocationKey,
             availableKeys: keys,
             groupId,

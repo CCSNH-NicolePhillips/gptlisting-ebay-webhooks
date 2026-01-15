@@ -744,7 +744,13 @@ async function processItem(item: DraftItem, ctx: ProcessContext) {
     });
   }
 
-  const mlkBase = item.merchantLocationKey || ctx.envLocationKey || "default-loc";
+  const mlkBase = item.merchantLocationKey || ctx.envLocationKey;
+  if (!mlkBase) {
+    throw buildError("missing-location", {
+      step: "get-location",
+      detail: "No inventory location specified. Please set a default location in Settings.",
+    });
+  }
   const merchantLocationKey = mlkBase.trim().replace(/\s+/g, "-");
   if (!ctx.locationCache.has(merchantLocationKey)) {
     const locUrl = `${ctx.apiHost}/sell/inventory/v1/location/${encodeURIComponent(
