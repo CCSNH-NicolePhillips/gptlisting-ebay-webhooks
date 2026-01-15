@@ -1765,6 +1765,7 @@
               photoQuantity: pair.photoQuantity || 1, // CHUNK 4: Pass photo quantity from vision analysis
               packCount: pair.packCount ?? null, // CRITICAL: Pass pack count for variant pricing (e.g., 24-pack → $48)
               netWeight: pair.netWeight ?? null, // AI-extracted weight from product label
+              bundleInfo: pair.bundleInfo ?? null, // Bundle/set detection from vision analysis
               heroDisplayUrl: pair.frontUrl || '',
               backDisplayUrl: pair.backUrl || '',
               side1DisplayUrl: pair.side1Url || '',  // Optional 3rd image
@@ -1792,6 +1793,7 @@
                   photoQuantity: item.photoQuantity || 1, // CHUNK 4: Pass photo quantity from vision analysis
                   packCount: item.packCount ?? null, // CRITICAL: Pass pack count for variant pricing
                   netWeight: item.netWeight ?? null, // AI-extracted weight from product label
+                  bundleInfo: item.bundleInfo ?? null, // Bundle/set detection from vision analysis
                   heroDisplayUrl: item.imageUrl,
                   backDisplayUrl: '' // No back image
                 });

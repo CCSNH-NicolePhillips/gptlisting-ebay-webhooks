@@ -48,6 +48,7 @@ type PairedProduct = {
   packCount?: number | null; // Number of units in package (e.g., 24 for 24-pack) - CRITICAL for variant pricing
   packageType?: string; // bottle/jar/tub/pouch/box/sachet/book/unknown - used for formulation inference
   netWeight?: { value: number; unit: string } | null; // AI-extracted weight from product label (e.g., 8 oz, 250 g)
+  bundleInfo?: { isBundle: boolean; bundleType: string | null; bundleProducts: string[] } | null; // Bundle detection for sets/duos/kits
   heroDisplayUrl?: string;
   backDisplayUrl?: string;
   side1DisplayUrl?: string;  // Optional 3rd image (side panel)
@@ -613,6 +614,21 @@ function buildPrompt(
       lines.push('If you see ANY flavor indication, you MUST include it in the Flavor aspect.');
       lines.push('Common mistake: Seeing "Pistachio Caramel" on bottle but NOT including Flavor aspect - THIS IS WRONG!');
     }
+  }
+  
+  // BUNDLE/SET DETECTION - Critical for multi-product listings
+  if (product.bundleInfo?.isBundle && product.bundleInfo.bundleProducts && product.bundleInfo.bundleProducts.length > 0) {
+    lines.push('');
+    lines.push('🎁 BUNDLE/SET DETECTED - THIS IS A MULTI-PRODUCT LISTING 🎁');
+    lines.push(`Bundle Type: ${product.bundleInfo.bundleType || 'Set'}`);
+    lines.push(`Products in Bundle: ${product.bundleInfo.bundleProducts.join(' + ')}`);
+    lines.push('');
+    lines.push('BUNDLE LISTING REQUIREMENTS:');
+    lines.push('1. Title MUST include "Set", "Duo", "Kit", or bundle type (e.g., "Batana Oil Shampoo & Conditioner Set")');
+    lines.push('2. Description MUST list ALL products included in the bundle');
+    lines.push('3. Price should reflect the SET price (both products together), NOT single item price');
+    lines.push('4. Do NOT create separate listings - this is ONE listing for the complete set');
+    lines.push('5. List each product\'s details in bullet points (e.g., "Includes: Shampoo 8oz + Conditioner 8oz")');
   }
   
   if (product.variant) {

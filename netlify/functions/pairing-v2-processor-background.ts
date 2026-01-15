@@ -458,7 +458,7 @@ export const handler: Handler = async (event) => {
           }
           
           const photoQty = p.photoQuantity || 1;
-          console.log(`[pairing-v2-processor] Storing pair: brand=${p.brand}, photoQuantity=${photoQty}, packCount=${p.packCount ?? 'null'}, frontUrl=${frontUrl ? 'OK' : 'MISSING'}`);
+          console.log(`[pairing-v2-processor] Storing pair: brand=${p.brand}, photoQuantity=${photoQty}, packCount=${p.packCount ?? 'null'}, bundleInfo=${p.bundleInfo?.isBundle ? `YES (${p.bundleInfo.bundleType})` : 'no'}, frontUrl=${frontUrl ? 'OK' : 'MISSING'}`);
           
           // 🔍 CRITICAL DEBUG: Log the full pair→URL association to verify correctness
           console.log(`[pairing-v2-processor] 📦 PAIR SUMMARY:`);
@@ -482,6 +482,7 @@ export const handler: Handler = async (event) => {
             categoryPath: p.categoryPath || null,
             photoQuantity: photoQty,
             packCount: p.packCount ?? null,
+            bundleInfo: p.bundleInfo ?? null,
             frontUrl,
             backUrl,
             side1Url,
@@ -508,6 +509,7 @@ export const handler: Handler = async (event) => {
             categoryPath: u.categoryPath || null,
             photoQuantity: u.photoQuantity || 1,
             packCount: u.packCount ?? null,
+            bundleInfo: u.bundleInfo ?? null,
           };
         });
 

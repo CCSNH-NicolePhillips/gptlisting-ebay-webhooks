@@ -34,6 +34,7 @@ export interface PairingResult {
     packCount?: number | null; // Number of units inside package (from label, e.g., "24 packets")
     packageType?: string; // bottle/jar/tub/pouch/box/sachet/book/unknown - used for formulation inference
     netWeight?: { value: number; unit: string } | null; // Product weight from label for shipping
+    bundleInfo?: { isBundle: boolean; bundleType: string | null; bundleProducts: string[] } | null; // Bundle detection
   }>;
   unpaired: Array<{
     imagePath: string;
@@ -50,6 +51,7 @@ export interface PairingResult {
     packCount?: number | null; // Number of units inside package (from label)
     packageType?: string; // bottle/jar/tub/pouch/box/sachet/book/unknown
     netWeight?: { value: number; unit: string } | null; // Product weight from label for shipping
+    bundleInfo?: { isBundle: boolean; bundleType: string | null; bundleProducts: string[] } | null; // Bundle detection
   }>;
   metrics: {
     totals: {
@@ -74,6 +76,13 @@ export interface PairingResult {
 type PanelType = 'front' | 'back' | 'side' | 'unknown';
 type ProductKind = 'product' | 'non_product';
 
+// Bundle detection for products sold as sets (e.g., shampoo + conditioner duo)
+interface BundleInfo {
+  isBundle: boolean; // True if multiple DIFFERENT products are shown together as a sellable set
+  bundleType: 'set' | 'duo' | 'kit' | 'combo' | 'trio' | null; // Type of bundle if detected
+  bundleProducts: string[]; // List of individual product names in the bundle (e.g., ["Shampoo 8oz", "Conditioner 8oz"])
+}
+
 interface ImageClassificationV2 {
   filename: string;
   kind: ProductKind;
@@ -91,6 +100,7 @@ interface ImageClassificationV2 {
   quantityInPhoto: number; // How many of this product are visible in the photo (1-10)
   packCount: number | null; // Number of units inside the package (e.g., 24 for a 24-pack box, null if single unit or unknown)
   netWeight: { value: number; unit: string } | null; // Product weight from label (e.g., 8 oz, 60 capsules, 250g)
+  bundleInfo: BundleInfo | null; // Bundle detection for sets/duos/kits sold together
 }
 
 interface PairingInputItem {
@@ -110,6 +120,7 @@ interface PairingInputItem {
   quantityInPhoto: number;
   packCount: number | null;
   netWeight: { value: number; unit: string } | null;
+  bundleInfo: BundleInfo | null;
 }
 
 interface PairingOutput {
@@ -289,6 +300,38 @@ For each image, provide:
    ⚠️ NEVER return null. If you absolutely cannot determine weight, make your best estimate based on the 
    product category and apparent container size. An estimate is better than no weight.
 
+17. bundleInfo: Detect if this photo shows a BUNDLE/SET of different products sold together
+   ⚠️ CRITICAL FOR CORRECT LISTING: This identifies products sold as sets (e.g., Shampoo + Conditioner Duo)
+   
+   A BUNDLE is when you see TWO OR MORE DIFFERENT PRODUCTS in the SAME PHOTO that are:
+   - From the same brand
+   - Photographed together as if they're sold as a set/duo/kit/combo
+   - NOT the same product (not 2 identical bottles)
+   
+   Examples:
+   * Photo shows "Batana Shampoo" bottle AND "Batana Conditioner" bottle together → BUNDLE (duo)
+   * Photo shows "Hair Oil" + "Hair Serum" + "Hair Mask" from same brand → BUNDLE (kit/trio)
+   * Photo shows 2 identical "Vitamin C" bottles → NOT a bundle (use quantityInPhoto: 2 instead)
+   * Photo shows 1 single bottle alone → NOT a bundle
+   
+   Return bundleInfo object:
+   {
+     "isBundle": true,
+     "bundleType": "duo" | "set" | "kit" | "combo" | "trio",
+     "bundleProducts": ["Batana Shampoo 8oz", "Batana Conditioner 8oz"]
+   }
+   
+   - bundleType choices:
+     * "duo" - exactly 2 different products
+     * "trio" - exactly 3 different products
+     * "set" - 2+ related products (general term)
+     * "kit" - products used together as a system (skincare routine, hair care system)
+     * "combo" - mix of different products bundled together
+   
+   - bundleProducts: List EACH product in the bundle with size if visible
+   
+   - If NOT a bundle: return { "isBundle": false, "bundleType": null, "bundleProducts": [] }
+
 DEFINITIONS:
 - PRODUCT: Clear consumer product packaging (supplement, cosmetic, food, book, etc.)
 - NON_PRODUCT: Not packaging at all (purse, furniture, room, person, pet, random object)
@@ -374,7 +417,8 @@ Respond ONLY with valid JSON:
       "rationale": "Brief explanation of classification choices",
       "quantityInPhoto": 1,
       "packCount": 24 or null,
-      "netWeight": { "value": 8, "unit": "oz" }  // ⚠️ REQUIRED - never null, estimate if needed
+      "netWeight": { "value": 8, "unit": "oz" },  // ⚠️ REQUIRED - never null, estimate if needed
+      "bundleInfo": { "isBundle": false, "bundleType": null, "bundleProducts": [] }  // or { "isBundle": true, "bundleType": "duo", "bundleProducts": ["Shampoo 8oz", "Conditioner 8oz"] }
     }
   ]
 }
@@ -457,6 +501,13 @@ ${JSON.stringify(filenames, null, 2)}`;
     parsed.items?.forEach((item: any) => {
       if (typeof item.quantityInPhoto !== 'number' || item.quantityInPhoto < 1) {
         item.quantityInPhoto = 1;
+      }
+    });
+    
+    // CHUNK 1b: Default bundleInfo if missing from model output
+    parsed.items?.forEach((item: any) => {
+      if (!item.bundleInfo) {
+        item.bundleInfo = { isBundle: false, bundleType: null, bundleProducts: [] };
       }
     });
     
@@ -643,6 +694,7 @@ async function pairChunk(items: ImageClassificationV2[], chunkLabel = ''): Promi
     quantityInPhoto: x.quantityInPhoto || 1,
     packCount: x.packCount ?? null,
     netWeight: x.netWeight ?? null,
+    bundleInfo: x.bundleInfo ?? null,
   }));
   
   const systemMessage = `You are an expert at pairing product package images based on their metadata.
@@ -936,6 +988,7 @@ async function pairVisuallyAggressive(items: ImageClassificationV2[]): Promise<P
       quantityInPhoto: x.quantityInPhoto || 1,
       packCount: x.packCount ?? null,
       netWeight: x.netWeight ?? null,
+      bundleInfo: x.bundleInfo ?? null,
     }));
     
     const systemMessage = `You are doing AGGRESSIVE VISUAL MATCHING for product images that failed strict pairing.
@@ -1303,6 +1356,12 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
       console.log(`[pairing-v2] netWeight detected: ${netWeight.value} ${netWeight.unit} (brand: ${frontClass?.brand})`);
     }
     
+    // CHUNK 6: Extract bundleInfo - take first non-null value, preferring front
+    const bundleInfo = frontClass?.bundleInfo ?? backClass?.bundleInfo ?? side1Class?.bundleInfo ?? side2Class?.bundleInfo ?? null;
+    if (bundleInfo?.isBundle) {
+      console.log(`[pairing-v2] Bundle detected: ${bundleInfo.bundleType} with ${bundleInfo.bundleProducts.length} products (brand: ${frontClass?.brand})`);
+    }
+    
     return {
       front: p.front,
       back: p.back,
@@ -1319,6 +1378,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
       packCount,
       packageType: frontClass?.packageType || backClass?.packageType || 'unknown',
       netWeight,
+      bundleInfo,
     };
   });
   
@@ -1358,6 +1418,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
         packCount: classification?.packCount ?? null,
         packageType: classification?.packageType || 'unknown',
         netWeight: classification?.netWeight ?? null,
+        bundleInfo: classification?.bundleInfo ?? null,
       };
     }),
     ...rejectedPairs
@@ -1382,6 +1443,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
             packCount: frontClass?.packCount ?? null,
             packageType: frontClass?.packageType || 'unknown',
             netWeight: frontClass?.netWeight ?? null,
+            bundleInfo: frontClass?.bundleInfo ?? null,
           },
           {
             imagePath: p.back,
@@ -1398,6 +1460,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
           packCount: backClass?.packCount ?? null,
           packageType: backClass?.packageType || 'unknown',
           netWeight: backClass?.netWeight ?? null,
+          bundleInfo: backClass?.bundleInfo ?? null,
         },
       ];
     }),
