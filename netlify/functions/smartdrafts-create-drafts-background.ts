@@ -1342,6 +1342,28 @@ async function createDraftForProduct(
     }
     
     // ========================================
+    // BUNDLE PRICING STRATEGY
+    // ========================================
+    // For bundles/sets:
+    // 1. First try to find an official set price (e.g., "Brand Shampoo Conditioner Set")
+    // 2. If no set price found, sum individual product prices
+    // ========================================
+    
+    const isBundle = product.bundleInfo?.isBundle && product.bundleInfo.bundleProducts?.length > 1;
+    let bundlePriceLookupTitle = priceLookupTitle;
+    
+    if (isBundle) {
+      // Build a bundle-aware search title
+      const bundleProducts = product.bundleInfo!.bundleProducts;
+      const bundleType = product.bundleInfo!.bundleType || 'Set';
+      
+      // Try searching for the set/duo/kit explicitly
+      bundlePriceLookupTitle = `${bundleProducts.join(' ')} ${bundleType}`;
+      console.log(`[smartdrafts-price] 🎁 BUNDLE DETECTED: ${bundleProducts.length} products`);
+      console.log(`[smartdrafts-price] Bundle search title: "${product.brand} ${bundlePriceLookupTitle}"`);
+    }
+    
+    // ========================================
     // Delivered-Price-First Pricing Engine
     // ========================================
     
@@ -1353,12 +1375,56 @@ async function createDraftForProduct(
       useSmartShipping: true,
     };
     
+    // For bundles, first try the set price
     deliveredDecision = await getDeliveredPricing(
       product.brand || '',
-      priceLookupTitle,
+      isBundle ? bundlePriceLookupTitle : priceLookupTitle,
       deliveredSettings,
       seoContext
     );
+    
+    // If bundle pricing failed or returned low confidence, try summing individual prices
+    if (isBundle && (!deliveredDecision.canCompete || deliveredDecision.finalItemCents < 1000)) {
+      console.log(`[smartdrafts-price] 🎁 Set price not found or too low, trying individual product sum...`);
+      
+      let totalCents = 0;
+      const bundleProducts = product.bundleInfo!.bundleProducts;
+      
+      for (const individualProduct of bundleProducts) {
+        try {
+          const individualDecision = await getDeliveredPricing(
+            product.brand || '',
+            individualProduct,
+            deliveredSettings,
+            seoContext
+          );
+          
+          if (individualDecision.finalItemCents > 0) {
+            totalCents += individualDecision.finalItemCents;
+            console.log(`[smartdrafts-price]   + ${individualProduct}: $${(individualDecision.finalItemCents / 100).toFixed(2)}`);
+          }
+        } catch (e) {
+          console.warn(`[smartdrafts-price]   ⚠️ Failed to price "${individualProduct}": ${e}`);
+        }
+      }
+      
+      // If we got individual prices that sum to more than the set price, use the sum
+      if (totalCents > deliveredDecision.finalItemCents) {
+        // Apply a small bundle discount (5%) to incentivize set purchases
+        const bundleDiscountCents = Math.round(totalCents * 0.05);
+        const bundlePriceCents = totalCents - bundleDiscountCents;
+        
+        console.log(`[smartdrafts-price] 🎁 Bundle sum: $${(totalCents / 100).toFixed(2)} - 5% discount = $${(bundlePriceCents / 100).toFixed(2)}`);
+        
+        // Override the delivered decision with summed pricing
+        // Cast to any to allow custom compsSource for internal tracking
+        deliveredDecision = {
+          ...deliveredDecision,
+          finalItemCents: bundlePriceCents,
+          warnings: [...(deliveredDecision.warnings || []), 'bundlePriceSummed'],
+        } as typeof deliveredDecision;
+      }
+    }
     
     console.log(`[smartdrafts-price] Result: item=$${(deliveredDecision.finalItemCents / 100).toFixed(2)}, ship=$${(deliveredDecision.finalShipCents / 100).toFixed(2)}, canCompete=${deliveredDecision.canCompete}`);
     
@@ -1591,11 +1657,24 @@ async function createDraftForProduct(
   // Use AI-powered pricing decision (already computed above)
   
   // Calculate shipping weight from AI-extracted netWeight
-  const shippingWeight = calculateShippingWeight(product.netWeight, product.packageType);
+  let shippingWeight = calculateShippingWeight(product.netWeight, product.packageType);
   if (shippingWeight) {
     console.log(`[Draft] ✓ AI-extracted weight for ${product.productId}: ${product.netWeight?.value} ${product.netWeight?.unit} → shipping weight ${shippingWeight.value} oz`);
   } else if (product.netWeight) {
     console.log(`[Draft] ⚠️ Could not calculate shipping weight from netWeight: ${JSON.stringify(product.netWeight)}`);
+  }
+  
+  // For bundles, multiply weight by number of products (approximation)
+  // Since bundle products may have different weights, this is a safe estimate
+  const isBundleProduct = product.bundleInfo?.isBundle && product.bundleInfo.bundleProducts?.length > 1;
+  if (isBundleProduct && shippingWeight) {
+    const bundleCount = product.bundleInfo!.bundleProducts.length;
+    const originalWeight = shippingWeight.value;
+    shippingWeight = {
+      ...shippingWeight,
+      value: Math.round(originalWeight * bundleCount * 10) / 10, // Round to 1 decimal
+    };
+    console.log(`[Draft] 🎁 Bundle weight: ${originalWeight} oz × ${bundleCount} products = ${shippingWeight.value} oz`);
   }
   
   // Fallback to Amazon weight if no AI weight available
@@ -1636,6 +1715,28 @@ async function createDraftForProduct(
   // BUILD ATTENTION REASONS (track all issues)
   // ========================================
   const attentionReasons: AttentionReason[] = [];
+  
+  // Flag bundles for review since pricing is estimated from sum of individuals
+  if (isBundleProduct) {
+    const bundleCount = product.bundleInfo!.bundleProducts.length;
+    const bundleType = product.bundleInfo!.bundleType || 'set';
+    const wasSummed = deliveredDecision?.warnings?.includes('bundlePriceSummed');
+    
+    if (wasSummed) {
+      attentionReasons.push({
+        code: 'PRICE_ESTIMATED',
+        message: `Bundle of ${bundleCount} products - price is sum of individuals (${product.bundleInfo!.bundleProducts.join(' + ')}). Verify bundle pricing.`,
+        severity: 'warning',
+      });
+    } else {
+      // Found a set price, but still flag for review
+      attentionReasons.push({
+        code: 'PRICE_ESTIMATED',
+        message: `${bundleType.charAt(0).toUpperCase() + bundleType.slice(1)} listing (${bundleCount} products). Verify price includes all items.`,
+        severity: 'warning',
+      });
+    }
+  }
   
   // Track pricing issues
   let resolvedPrice: number = finalPrice ?? FALLBACK_PRICE_FLOOR;
