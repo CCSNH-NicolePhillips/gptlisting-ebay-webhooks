@@ -1563,10 +1563,10 @@
         
         const defaults = defaultsRes?.defaults || {};
         
-        // Check if policies exist at all
-        const hasFulfillmentPolicy = (policiesListRes?.fulfillmentPolicies?.length || 0) > 0;
-        const hasPaymentPolicy = (policiesListRes?.paymentPolicies?.length || 0) > 0;
-        const hasReturnPolicy = (policiesListRes?.returnPolicies?.length || 0) > 0;
+        // Check if policies exist at all (API returns nested structure: fulfillment.json.fulfillmentPolicies)
+        const hasFulfillmentPolicy = (policiesListRes?.fulfillment?.json?.fulfillmentPolicies?.length || 0) > 0;
+        const hasPaymentPolicy = (policiesListRes?.payment?.json?.paymentPolicies?.length || 0) > 0;
+        const hasReturnPolicy = (policiesListRes?.returns?.json?.returnPolicies?.length || 0) > 0;
         
         // Check what's missing
         const missingPolicies = [];

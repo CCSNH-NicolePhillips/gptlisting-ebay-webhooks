@@ -706,10 +706,10 @@
             const defaultsData = await defaultsRes.json();
             const defaults = defaultsData?.defaults || {};
             
-            // Check if policies exist at all
-            const hasFulfillment = (policies?.fulfillmentPolicies?.length || 0) > 0;
-            const hasPayment = (policies?.paymentPolicies?.length || 0) > 0;
-            const hasReturn = (policies?.returnPolicies?.length || 0) > 0;
+            // Check if policies exist at all (API returns nested structure: fulfillment.json.fulfillmentPolicies)
+            const hasFulfillment = (policies?.fulfillment?.json?.fulfillmentPolicies?.length || 0) > 0;
+            const hasPayment = (policies?.payment?.json?.paymentPolicies?.length || 0) > 0;
+            const hasReturn = (policies?.returns?.json?.returnPolicies?.length || 0) > 0;
             const policiesExist = hasFulfillment && hasPayment && hasReturn;
             
             // Check if defaults are set
