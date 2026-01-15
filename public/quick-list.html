@@ -885,6 +885,20 @@
     </div>
 
     <div class="results" id="results">
+      <!-- Attention/Warnings section (shown when drafts have warnings) -->
+      <div id="attentionWarnings" style="display: none; margin-bottom: 1rem; padding: 1rem; background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.5); border-radius: 8px;">
+        <h4 style="margin: 0 0 0.75rem 0; color: #B45309; display: flex; align-items: center; gap: 0.5rem;">
+          <span>⚠️</span>
+          <span>Review Needed</span>
+        </h4>
+        <div id="attentionList" style="font-size: 0.875rem; color: #92400E;">
+          <!-- Populated dynamically -->
+        </div>
+        <p style="margin: 0.75rem 0 0 0; font-size: 0.8rem; color: #666;">
+          These items were created but may need price verification before publishing.
+        </p>
+      </div>
+
       <div class="dp-card" style="background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(34, 197, 94, 0.05) 100%); border-color: var(--success);">
         <h3 style="margin-top: 0; color: var(--success); display: flex; align-items: center; gap: 0.5rem;">
           <span style="font-size: 1.5rem;">🎉</span>
@@ -2045,6 +2059,34 @@
         const published = pubRes.created || 0;
         console.log('[Quick List] Published', published, 'drafts to eBay');
 
+        // Collect and display attention warnings from drafts
+        const allWarnings = [];
+        drafts.forEach((draft, idx) => {
+          if (!draft) return;
+          const reasons = draft.attentionReasons || [];
+          const warnings = reasons.filter(r => r?.severity === 'warning');
+          warnings.forEach(w => {
+            allWarnings.push({
+              product: draft.brand && draft.product ? `${draft.brand} ${draft.product}` : draft.title || `Product ${idx + 1}`,
+              message: w.message
+            });
+          });
+        });
+
+        if (allWarnings.length > 0) {
+          console.log('[Quick List] ⚠️ Attention warnings:', allWarnings);
+          const listHtml = allWarnings.map(w => 
+            `<div style="margin-bottom: 0.5rem; padding-left: 1rem; border-left: 2px solid #F59E0B;">
+              <strong>${w.product}</strong><br>
+              <span style="color: #78716C;">${w.message}</span>
+            </div>`
+          ).join('');
+          $('attentionList').innerHTML = listHtml;
+          $('attentionWarnings').style.display = 'block';
+        } else {
+          $('attentionWarnings').style.display = 'none';
+        }
+
         // Clear drafts page cache so new drafts appear immediately when user visits /drafts.html
         try {
           sessionStorage.removeItem('drafts-cache');
@@ -2110,6 +2152,9 @@
 
       // Hide orphans warning
       $('orphansWarning').style.display = 'none';
+      
+      // Hide attention warnings
+      $('attentionWarnings').style.display = 'none';
 
       $('progressBar').style.width = '0%';
       $('results').classList.remove('show');
