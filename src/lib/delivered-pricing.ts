@@ -977,11 +977,15 @@ export async function getDeliveredPricing(
 
   console.log(`[delivered-pricing] Final: item $${(splitResult.itemCents / 100).toFixed(2)} + ship $${(splitResult.shipCents / 100).toFixed(2)}`);
 
-  // Determine confidence based on comp count
+  // Determine confidence based on comp count (active eBay + sold data)
+  // Strong sold data (5+ samples) is reliable market data
   let matchConfidence: 'high' | 'medium' | 'low' = 'low';
-  if (ebayComps.length >= 5) {
+  if (ebayComps.length >= 5 || targetResult.soldStrong) {
     matchConfidence = 'high';
   } else if (ebayComps.length >= 3 || (ebayComps.length >= 1 && retailComps.length >= 2)) {
+    matchConfidence = 'medium';
+  } else if (retailComps.length >= 3) {
+    // Multiple retail sources without eBay data is at least medium confidence
     matchConfidence = 'medium';
   }
 
