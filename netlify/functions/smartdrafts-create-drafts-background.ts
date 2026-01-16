@@ -1351,16 +1351,40 @@ async function createDraftForProduct(
     
     const isBundle = product.bundleInfo?.isBundle && product.bundleInfo.bundleProducts?.length > 1;
     let bundlePriceLookupTitle = priceLookupTitle;
+    let simpleBundleTitle = ''; // Simplified search for eBay Sold fallback
     
     if (isBundle) {
       // Build a bundle-aware search title
       const bundleProducts = product.bundleInfo!.bundleProducts;
       const bundleType = product.bundleInfo!.bundleType || 'Set';
       
-      // Try searching for the set/duo/kit explicitly
+      // Full query: "Batana Oil Nourishing Shampoo 12 fl oz Batana Oil Soft Conditioner 12 fl oz duo"
       bundlePriceLookupTitle = `${bundleProducts.join(' ')} ${bundleType}`;
+      
+      // Simplified query for niche brands: "Shampoo Conditioner" (extract just product types)
+      // This catches manufacturer sets sold on eBay under simpler titles
+      const productTypes = bundleProducts
+        .map(p => {
+          // Extract the core product type from full name
+          const lower = p.toLowerCase();
+          if (lower.includes('shampoo')) return 'Shampoo';
+          if (lower.includes('conditioner')) return 'Conditioner';
+          if (lower.includes('serum')) return 'Serum';
+          if (lower.includes('cream')) return 'Cream';
+          if (lower.includes('mask')) return 'Mask';
+          if (lower.includes('oil')) return 'Oil';
+          if (lower.includes('mist')) return 'Mist';
+          if (lower.includes('essence')) return 'Essence';
+          // Fallback: use first meaningful word
+          return p.split(' ')[0];
+        })
+        .filter((v, i, a) => a.indexOf(v) === i); // Dedupe
+      
+      simpleBundleTitle = productTypes.join(' ');
+      
       console.log(`[smartdrafts-price] 🎁 BUNDLE DETECTED: ${bundleProducts.length} products`);
       console.log(`[smartdrafts-price] Bundle search title: "${product.brand} ${bundlePriceLookupTitle}"`);
+      console.log(`[smartdrafts-price] Simple bundle query: "${product.brand} ${simpleBundleTitle}"`);
     }
     
     // ========================================
@@ -1375,7 +1399,7 @@ async function createDraftForProduct(
       useSmartShipping: true,
     };
     
-    // For bundles, first try the set price
+    // For bundles, first try the set price with full query
     deliveredDecision = await getDeliveredPricing(
       product.brand || '',
       isBundle ? bundlePriceLookupTitle : priceLookupTitle,
@@ -1383,7 +1407,26 @@ async function createDraftForProduct(
       seoContext
     );
     
-    // If bundle pricing failed or returned low confidence, try summing individual prices
+    // If full bundle query failed, try simplified query (e.g., "Brand Shampoo Conditioner")
+    // This catches manufacturer sets sold under simpler titles on eBay
+    if (isBundle && simpleBundleTitle && (!deliveredDecision.canCompete || deliveredDecision.finalItemCents < 1000)) {
+      console.log(`[smartdrafts-price] 🎁 Full bundle query failed, trying simplified: "${product.brand} ${simpleBundleTitle}"`);
+      
+      const simplifiedDecision = await getDeliveredPricing(
+        product.brand || '',
+        simpleBundleTitle,
+        deliveredSettings,
+        seoContext
+      );
+      
+      // Use simplified result if it found better data
+      if (simplifiedDecision.canCompete && simplifiedDecision.finalItemCents >= 1000) {
+        console.log(`[smartdrafts-price] 🎁 Simplified query found SET price: $${(simplifiedDecision.finalItemCents / 100).toFixed(2)}`);
+        deliveredDecision = simplifiedDecision;
+      }
+    }
+    
+    // If bundle pricing still failed, try summing individual prices
     if (isBundle && (!deliveredDecision.canCompete || deliveredDecision.finalItemCents < 1000)) {
       console.log(`[smartdrafts-price] 🎁 Set price not found or too low, trying individual product sum...`);
       
