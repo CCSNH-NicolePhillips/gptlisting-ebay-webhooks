@@ -280,6 +280,51 @@ async function start() {
   // Register all function routes first
   await registerRoutes();
   
+  // ============================================================================
+  // Scheduled Jobs - Replace Netlify scheduled functions
+  // ============================================================================
+  
+  // Import promotion worker handler for scheduled execution
+  try {
+    const promotionWorkerPath = path.join(__dirname, '../../netlify/functions', 'promotion-worker.js');
+    const promotionWorkerUrl = `file://${promotionWorkerPath.replace(/\\/g, '/')}`;
+    const promotionWorkerModule = await import(promotionWorkerUrl);
+    
+    if (promotionWorkerModule.handler) {
+      // Run promotion worker every minute
+      const PROMOTION_INTERVAL_MS = 60 * 1000; // 1 minute
+      
+      const runPromotionWorker = async () => {
+        try {
+          console.log('[scheduler] Running promotion-worker...');
+          const fakeEvent = {
+            httpMethod: 'POST',
+            path: '/.netlify/functions/promotion-worker',
+            headers: { 'x-scheduler': 'internal' },
+            body: null,
+            queryStringParameters: {},
+            rawUrl: 'http://localhost/.netlify/functions/promotion-worker',
+            rawQuery: '',
+            isBase64Encoded: false,
+          };
+          await promotionWorkerModule.handler(fakeEvent, {});
+          console.log('[scheduler] promotion-worker completed');
+        } catch (err) {
+          console.error('[scheduler] promotion-worker error:', err);
+        }
+      };
+      
+      // Start the interval
+      setInterval(runPromotionWorker, PROMOTION_INTERVAL_MS);
+      console.log('[scheduler] Promotion worker scheduled to run every minute');
+      
+      // Run immediately on startup after a short delay (let server stabilize)
+      setTimeout(runPromotionWorker, 10000);
+    }
+  } catch (err) {
+    console.error('[scheduler] Failed to initialize promotion worker:', err);
+  }
+  
   // Fallback for SPA routing (serve index.html for non-API routes)
   // Must come AFTER route registration
   app.get('*', (req, res) => {
