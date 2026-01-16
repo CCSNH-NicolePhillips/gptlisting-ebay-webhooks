@@ -205,9 +205,10 @@ export async function searchGoogleShopping(
     // Uses bidirectional matching: checks if query words appear in title OR if title words appear in query
     // This handles cases where Google Shopping returns abbreviated titles (e.g., "Root Sculpt" vs full query)
     // 
-    // CRITICAL FIX: REQUIRE BRAND MATCH
-    // Without brand matching, generic words like "Watermelon" or "Hydration" can cause false positives
-    // e.g., "7 Day Hydration Watermelon Fitness Shot Pack" wrongly matching "Pump Sauce Shooters Watermelon"
+    // CRITICAL FIX: REQUIRE BRAND MATCH + PRODUCT TYPE MATCH
+    // Without proper matching, similar products get confused:
+    // - "Undereye Masks" wrongly matching "Undereye Balm" (different product types)
+    // - "Watermelon Hydration" wrongly matching unrelated watermelon products
     const isTitleMatch = (resultTitle: string, searchQuery: string, searchBrand?: string): boolean => {
       // Normalize both strings
       const normalize = (s: string): string[] => {
@@ -239,6 +240,53 @@ export async function searchGoogleShopping(
           // Brand not found - this is likely a wrong product
           // Log for debugging but reject the match
           console.log(`[google-shopping] ❌ Brand mismatch: "${searchBrand}" not in "${resultTitle.slice(0, 60)}"`);
+          return false;
+        }
+      }
+      
+      // CRITICAL: Check product type match
+      // Common confusions: masks vs balm, gummies vs capsules, powder vs liquid
+      // Normalize plurals: masks/mask, gummies/gummy, etc.
+      const PRODUCT_TYPE_GROUPS = [
+        ['mask', 'masks'],
+        ['balm', 'balms'],
+        ['cream', 'creams'],
+        ['serum', 'serums'],
+        ['lotion', 'lotions'],
+        ['gel', 'gels'],
+        ['oil', 'oils'],
+        ['spray', 'sprays'],
+        ['gummy', 'gummies'],
+        ['capsule', 'capsules'],
+        ['tablet', 'tablets'],
+        ['pill', 'pills'],
+        ['powder', 'powders'],
+        ['liquid', 'liquids'],
+        ['drop', 'drops'],
+        ['patch', 'patches'],
+        ['bar', 'bars'],
+        ['drink', 'drinks'],
+        ['shot', 'shots'],
+      ];
+      
+      // Normalize type word to base form
+      const normalizeType = (word: string): string => {
+        for (const group of PRODUCT_TYPE_GROUPS) {
+          if (group.includes(word)) return group[0]; // Return base form
+        }
+        return word;
+      };
+      
+      const ALL_PRODUCT_TYPES = PRODUCT_TYPE_GROUPS.flat();
+      
+      const queryTypes = queryWords.filter(w => ALL_PRODUCT_TYPES.includes(w)).map(normalizeType);
+      const titleTypes = titleWords.filter(w => ALL_PRODUCT_TYPES.includes(w)).map(normalizeType);
+      
+      // If query specifies a product type, the result MUST have a matching type
+      if (queryTypes.length > 0 && titleTypes.length > 0) {
+        const typesMatch = queryTypes.some(qt => titleTypes.includes(qt));
+        if (!typesMatch) {
+          console.log(`[google-shopping] ❌ Product type mismatch: query has "${queryTypes.join(',')}" but title has "${titleTypes.join(',')}": "${resultTitle.slice(0, 60)}"`);
           return false;
         }
       }

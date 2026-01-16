@@ -519,12 +519,20 @@ export function calculateTargetDelivered(
   }
   
   // Apply retail cap - never price above 80% of best retail price
-  // This ensures we stay competitive with Amazon/Walmart/brand sites
-  // Note: This was previously disabled due to title matching issues, but those are now fixed
+  // BUT: Don't cap below eBay floor when we have eBay comps (eBay floor is real market data)
+  // Random discount sites (Editorialist, etc.) shouldn't cap below what items are listed for on eBay
   if (retailCapCents !== null && targetCents > retailCapCents) {
-    console.log(`[delivered-pricing] Applying retail cap: $${(targetCents / 100).toFixed(2)} → $${(retailCapCents / 100).toFixed(2)}`);
-    warnings.push('retailCapApplied');
-    targetCents = retailCapCents;
+    // Sanity check: If eBay floor exists and is higher than the retail cap,
+    // use eBay floor instead (market is clearly supporting that price)
+    if (activeFloor !== null && activeFloor > retailCapCents) {
+      console.log(`[delivered-pricing] ⚠️ Retail cap ($${(retailCapCents / 100).toFixed(2)}) is below eBay floor ($${(activeFloor / 100).toFixed(2)}) - using eBay floor instead`);
+      targetCents = activeFloor;
+      warnings.push('retailCapBelowEbayFloor');
+    } else {
+      console.log(`[delivered-pricing] Applying retail cap: $${(targetCents / 100).toFixed(2)} → $${(retailCapCents / 100).toFixed(2)}`);
+      warnings.push('retailCapApplied');
+      targetCents = retailCapCents;
+    }
   }
 
   return { targetCents, fallbackUsed, soldStrong, warnings };
