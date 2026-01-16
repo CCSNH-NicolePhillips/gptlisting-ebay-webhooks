@@ -400,8 +400,25 @@ export function calculateTargetDelivered(
     console.log(`[delivered-pricing] Retail cap: $${(retailCapCents / 100).toFixed(2)} (80% of $${(lowestRetailCents / 100).toFixed(2)})`);
   } else if (!soldStrong) {
     // No trusted retail AND weak sold data - use Google Shopping with caution
+    // EXCLUDE discount/liquidation sites - they don't represent true retail value
+    const discountSites = [
+      'editorialist', 'overstock', 'nordstrom rack', 'hautelook', 'gilt', 
+      'poshmark', 'mercari', 'whatnot', 'ebay', 'tjmaxx', 'marshalls',
+      'burlington', 'ross', 'bluefly', 'yoox', 'the realreal', 'therealreal',
+      'tradesy', 'vestiaire', 'grailed', 'depop', 'offerup', 'craigslist',
+      'facebook marketplace', 'letgo', 'wish', 'temu', 'shein', 'aliexpress'
+    ];
+    
     const retailPrices = retailComps
       .filter(c => c.inStock)
+      .filter(c => {
+        const sellerLower = c.seller.toLowerCase();
+        const isDiscount = discountSites.some(s => sellerLower.includes(s));
+        if (isDiscount) {
+          console.log(`[delivered-pricing] Excluding discount site from retail cap: ${c.seller} @ $${(c.deliveredCents / 100).toFixed(2)}`);
+        }
+        return !isDiscount;
+      })
       .map(c => c.deliveredCents)
       .filter((p): p is number => p !== null && p >= minValidRetailCents);
     
@@ -518,21 +535,13 @@ export function calculateTargetDelivered(
     }
   }
   
-  // Apply retail cap - never price above 80% of best retail price
-  // BUT: Don't cap below eBay floor when we have eBay comps (eBay floor is real market data)
-  // Random discount sites (Editorialist, etc.) shouldn't cap below what items are listed for on eBay
+  // Apply retail cap - never price above discounted retail
+  // The retail cap IS the deal (80% of retail = 20% off for buyers)
+  // We WANT to beat eBay competition, not match them
   if (retailCapCents !== null && targetCents > retailCapCents) {
-    // Sanity check: If eBay floor exists and is higher than the retail cap,
-    // use eBay floor instead (market is clearly supporting that price)
-    if (activeFloor !== null && activeFloor > retailCapCents) {
-      console.log(`[delivered-pricing] ⚠️ Retail cap ($${(retailCapCents / 100).toFixed(2)}) is below eBay floor ($${(activeFloor / 100).toFixed(2)}) - using eBay floor instead`);
-      targetCents = activeFloor;
-      warnings.push('retailCapBelowEbayFloor');
-    } else {
-      console.log(`[delivered-pricing] Applying retail cap: $${(targetCents / 100).toFixed(2)} → $${(retailCapCents / 100).toFixed(2)}`);
-      warnings.push('retailCapApplied');
-      targetCents = retailCapCents;
-    }
+    console.log(`[delivered-pricing] Applying retail cap: $${(targetCents / 100).toFixed(2)} → $${(retailCapCents / 100).toFixed(2)} (deal price)`);
+    warnings.push('retailCapApplied');
+    targetCents = retailCapCents;
   }
 
   return { targetCents, fallbackUsed, soldStrong, warnings };
