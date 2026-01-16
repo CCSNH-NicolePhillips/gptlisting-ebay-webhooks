@@ -209,7 +209,11 @@ export async function searchGoogleShopping(
     // Without proper matching, similar products get confused:
     // - "Undereye Masks" wrongly matching "Undereye Balm" (different product types)
     // - "Watermelon Hydration" wrongly matching unrelated watermelon products
-    const isTitleMatch = (resultTitle: string, searchQuery: string, searchBrand?: string): boolean => {
+    //
+    // 2025-01 FIX: Brand sites often omit brand name from product titles
+    // (e.g., pumpsauce.com shows "Watermelon Marg 12 x 2 fl oz" not "Pump Sauce Watermelon...")
+    // If sellerUrl contains brand name, trust it even without brand in title
+    const isTitleMatch = (resultTitle: string, searchQuery: string, searchBrand?: string, sellerUrl?: string): boolean => {
       // Normalize both strings
       const normalize = (s: string): string[] => {
         return s.toLowerCase()
@@ -236,11 +240,41 @@ export async function searchGoogleShopping(
           titleWords.some(tw => tw.includes(bw) || bw.includes(tw))
         );
         
-        if (!brandInTitle) {
-          // Brand not found - this is likely a wrong product
-          // Log for debugging but reject the match
+        // NEW: Check if seller URL contains brand name
+        // Brand sites often omit their name from product titles
+        // e.g., pumpsauce.com shows "Watermelon Marg" not "Pump Sauce Watermelon Marg"
+        let brandInSellerUrl = false;
+        if (sellerUrl) {
+          const urlLower = sellerUrl.toLowerCase();
+          // Extract domain from URL
+          const domainMatch = urlLower.match(/(?:https?:\/\/)?(?:www\.)?([^\/]+)/);
+          const domain = domainMatch?.[1] || urlLower;
+          
+          // Check if any brand word appears in the domain
+          // Normalize brand for domain matching: "Pump Sauce" → "pumpsauce"
+          const brandSlug = searchBrand.toLowerCase().replace(/[^a-z0-9]/g, '');
+          const brandWordsNormalized = brandWords.map(w => w.replace(/[^a-z0-9]/g, ''));
+          
+          brandInSellerUrl = domain.includes(brandSlug) || 
+                             brandWordsNormalized.some(bw => bw.length > 3 && domain.includes(bw));
+          
+          if (brandInSellerUrl && !brandInTitle) {
+            console.log(`[google-shopping] ✅ Brand "${searchBrand}" found in seller URL (${domain}) - trusting despite title mismatch`);
+          }
+        }
+        
+        if (!brandInTitle && !brandInSellerUrl) {
+          // Brand not found in title OR URL - this is likely a wrong product
           console.log(`[google-shopping] ❌ Brand mismatch: "${searchBrand}" not in "${resultTitle.slice(0, 60)}"`);
           return false;
+        }
+        
+        // NEW: If brand was verified via URL (official brand site), trust it for pricing
+        // Brand sites are authoritative and may use different product names than retailers
+        // e.g., pumpsauce.com "Watermelon Marg" vs search "Pump Sauce 12-Pack"
+        if (brandInSellerUrl && !brandInTitle) {
+          console.log(`[google-shopping] ✅ Brand site detected - auto-approving for pricing`);
+          return true;  // Trust the brand's own site
         }
       }
       
@@ -346,7 +380,7 @@ export async function searchGoogleShopping(
       r.seller?.toLowerCase().includes('amazon') && 
       isFirstPartySeller(r.seller) &&
       !isLotListing(r.title || '') &&
-      isTitleMatch(r.title || '', searchQuery, brand) &&
+      isTitleMatch(r.title || '', searchQuery, brand, r.link || r.product_link) &&
       r.extracted_price > 0
     );
     
@@ -354,14 +388,14 @@ export async function searchGoogleShopping(
       r.seller?.toLowerCase().includes('walmart') &&
       isFirstPartySeller(r.seller) &&
       !isLotListing(r.title || '') &&
-      isTitleMatch(r.title || '', searchQuery, brand) &&
+      isTitleMatch(r.title || '', searchQuery, brand, r.link || r.product_link) &&
       r.extracted_price > 0
     );
     
     const targetResult = results.find(r => 
       r.seller?.toLowerCase() === 'target' &&
       !isLotListing(r.title || '') &&
-      isTitleMatch(r.title || '', searchQuery, brand) &&
+      isTitleMatch(r.title || '', searchQuery, brand, r.link || r.product_link) &&
       r.extracted_price > 0
     );
 
@@ -386,12 +420,13 @@ export async function searchGoogleShopping(
     const majorRetailResults = results.filter(r => {
       const seller = r.seller || '';
       const title = r.title || '';
+      const url = r.link || r.product_link || '';
       return (
         r.extracted_price > 0 &&
         isMajorRetailer(seller) &&
         isFirstPartySeller(seller) &&
         !isLotListing(title) &&
-        isTitleMatch(title, searchQuery, brand)
+        isTitleMatch(title, searchQuery, brand, url)
       );
     });
     majorRetailResults.sort((a, b) => a.extracted_price - b.extracted_price);
@@ -402,6 +437,7 @@ export async function searchGoogleShopping(
     const retailResults = results.filter(r => {
       const seller = r.seller?.toLowerCase() || '';
       const title = r.title || '';
+      const url = r.link || r.product_link || '';
       return (
         r.extracted_price > 0 &&
         !seller.includes('ebay') &&
@@ -409,7 +445,7 @@ export async function searchGoogleShopping(
         !seller.includes('poshmark') &&
         !isLotListing(title) &&
         isFirstPartySeller(r.seller || '') &&
-        isTitleMatch(title, searchQuery, brand)
+        isTitleMatch(title, searchQuery, brand, url)
       );
     });
 
@@ -447,9 +483,10 @@ export async function searchGoogleShopping(
     // This prevents mismatched products (like $2.99 accessories) from being used as eBay comps
     const filteredResults = results.filter(r => {
       const title = r.title || '';
+      const url = r.link || r.product_link || '';
       return r.extracted_price > 0 && 
              !isLotListing(title) && 
-             isTitleMatch(title, searchQuery, brand);
+             isTitleMatch(title, searchQuery, brand, url);
     });
     
     console.log(`[google-shopping] Filtered ${results.length} results down to ${filteredResults.length} title-matched results`);
