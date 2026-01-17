@@ -1241,6 +1241,51 @@
               console.log('[Drafts] Filtered offers after broad fetch:', offers.length);
             }
             
+            // WORKAROUND: If still no offers, check for recently created offers from Quick List
+            // and fetch them directly by SKU (bypasses the 25707 error that blocks status-filtered listing)
+            if (!offers.length) {
+              try {
+                const recentJson = sessionStorage.getItem('recent-created-offers');
+                if (recentJson) {
+                  const recentOffers = JSON.parse(recentJson);
+                  const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+                  const validRecent = recentOffers.filter(r => r.createdAt > fiveMinutesAgo);
+                  
+                  if (validRecent.length > 0) {
+                    console.log('[Drafts] Found', validRecent.length, 'recently created offers, fetching directly by SKU...');
+                    
+                    for (const recent of validRecent) {
+                      try {
+                        const skuRes = await fetchJSON(`/.netlify/functions/ebay-list-offers?sku=${encodeURIComponent(recent.sku)}&limit=10`);
+                        if (skuRes.ok && skuRes.offers && skuRes.offers.length > 0) {
+                          for (const o of skuRes.offers) {
+                            // Only add if not already in list and is UNPUBLISHED/DRAFT/INACTIVE
+                            const st = String(o?.status || '').toUpperCase();
+                            const alreadyExists = offers.some(existing => existing.offerId === o.offerId);
+                            if (!alreadyExists && ['UNPUBLISHED', 'DRAFT', 'INACTIVE'].includes(st)) {
+                              console.log('[Drafts] ✓ Found recent offer:', o.sku, o.status, o.offerId);
+                              offers.push(o);
+                            }
+                          }
+                        }
+                      } catch (e) {
+                        console.warn('[Drafts] Failed to fetch recent offer by SKU:', recent.sku, e);
+                      }
+                    }
+                    
+                    console.log('[Drafts] After fetching recent offers:', offers.length);
+                    
+                    // Clear the recent offers cache if we found them
+                    if (offers.length > 0) {
+                      sessionStorage.removeItem('recent-created-offers');
+                    }
+                  }
+                }
+              } catch (e) {
+                console.warn('[Drafts] Failed to check recent offers:', e);
+              }
+            }
+            
             // Cache the results
             try {
               sessionStorage.setItem(cacheKey, JSON.stringify(offers));

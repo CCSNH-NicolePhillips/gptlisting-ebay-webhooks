@@ -2101,6 +2101,17 @@
           sessionStorage.removeItem('drafts-cache');
           sessionStorage.removeItem('drafts-cache-time');
           console.log('[Quick List] Cleared drafts cache for fresh load');
+          
+          // Store newly created offers so drafts.html can fetch them directly if the main listing fails
+          if (pubRes.results && pubRes.results.length > 0) {
+            const recentOffers = pubRes.results.map(r => ({
+              sku: r.sku,
+              offerId: r.offerId,
+              createdAt: Date.now()
+            }));
+            sessionStorage.setItem('recent-created-offers', JSON.stringify(recentOffers));
+            console.log('[Quick List] Stored', recentOffers.length, 'recently created offers for drafts page');
+          }
         } catch (e) {
           console.warn('[Quick List] Failed to clear drafts cache:', e);
         }
