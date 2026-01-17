@@ -364,7 +364,8 @@ export function calculateTargetDelivered(
   undercutCents: number,
   minDeliveredCents: number,
   retailComps: CompetitorPrice[] = [],
-  targetPrice: number | null = null  // Target.com price
+  targetPrice: number | null = null,  // Target.com price
+  brandSitePrice: number | null = null  // Brand's official website price (most authoritative)
 ): { targetCents: number; fallbackUsed: boolean; soldStrong: boolean; warnings: string[] } {
   const warnings: string[] = [];
   let fallbackUsed = false;
@@ -386,19 +387,24 @@ export function calculateTargetDelivered(
   const minValidRetailCents = soldStrong ? Math.round(soldMedian! * 0.50) : 500; // At least $5 or 50% of sold median
   
   // RETAIL CAP LOGIC:
-  // Only apply retail cap when we have HIGH CONFIDENCE retail data (Amazon, Walmart, or Target)
+  // Only apply retail cap when we have HIGH CONFIDENCE retail data (Brand Site, Amazon, Walmart, or Target)
+  // Brand site is MOST authoritative - it's the official MSRP
   // Google Shopping often returns wrong variants (8-count box vs 30 oz bottle) which pollute pricing
   // When sold data is strong, we trust the sold median as the true market price
-  const trustedRetailPrices = [amazonPrice, walmartPrice, targetPrice].filter((p): p is number => p !== null && p > 0 && p >= minValidRetailCents);
+  const trustedRetailPrices = [brandSitePrice, amazonPrice, walmartPrice, targetPrice].filter((p): p is number => p !== null && p > 0 && p >= minValidRetailCents);
   
   let retailCapCents: number | null = null;
   let lowestRetailCents: number | null = null;
   
   if (trustedRetailPrices.length > 0) {
-    // We have Amazon/Walmart/Target - use that for cap (high confidence)
+    // We have Brand Site/Amazon/Walmart/Target - use that for cap (high confidence)
     lowestRetailCents = Math.min(...trustedRetailPrices);
     retailCapCents = Math.round(lowestRetailCents * RETAIL_CAP_RATIO);
-    console.log(`[delivered-pricing] Using trusted retail (Amazon/Walmart/Target) for cap: $${(lowestRetailCents / 100).toFixed(2)}`);
+    const capSource = brandSitePrice === lowestRetailCents ? 'brand site' 
+      : amazonPrice === lowestRetailCents ? 'Amazon'
+      : walmartPrice === lowestRetailCents ? 'Walmart' 
+      : 'Target';
+    console.log(`[delivered-pricing] Using trusted retail (${capSource}) for cap: $${(lowestRetailCents / 100).toFixed(2)}`);
     console.log(`[delivered-pricing] Retail cap: $${(retailCapCents / 100).toFixed(2)} (80% of $${(lowestRetailCents / 100).toFixed(2)})`);
   } else if (!soldStrong) {
     // No trusted retail AND weak sold data - use Google Shopping with caution
@@ -803,7 +809,8 @@ export async function getDeliveredPricing(
     console.log(`[delivered-pricing] eBay floor: $${(activeFloor / 100).toFixed(2)}, median: $${(activeMedian! / 100).toFixed(2)}`);
   }
 
-  // Get trusted retail prices (Amazon, Walmart, Target)
+  // Get trusted retail prices (Amazon, Walmart, Target, Brand Site)
+  // Brand site is MOST authoritative - it's the official MSRP
   const amazonComp = allComps.find(c => c.source === 'amazon');
   const walmartComp = allComps.find(c => c.source === 'walmart');
   const targetComp = allComps.find(c => c.source === 'target');
@@ -811,8 +818,18 @@ export async function getDeliveredPricing(
   const walmartPriceCents = walmartComp?.deliveredCents ?? null;
   const targetPriceCents = targetComp?.deliveredCents ?? null;
   
-  // Get the LOWEST trusted retail price (Amazon/Walmart/Target)
-  const trustedRetailPrices = [amazonPriceCents, walmartPriceCents, targetPriceCents].filter(p => p !== null) as number[];
+  // Brand site price from Google Shopping (most authoritative retail price)
+  const brandSitePriceCents = searchResult.brandSitePrice 
+    ? Math.round(searchResult.brandSitePrice * 100) 
+    : null;
+  
+  if (brandSitePriceCents) {
+    console.log(`[delivered-pricing] 🏪 Brand site: $${(brandSitePriceCents / 100).toFixed(2)} from ${searchResult.brandSiteSeller}`);
+  }
+  
+  // Get the LOWEST trusted retail price (Brand Site > Amazon > Walmart > Target)
+  // Brand site is included because it's the most authoritative source
+  const trustedRetailPrices = [brandSitePriceCents, amazonPriceCents, walmartPriceCents, targetPriceCents].filter(p => p !== null) as number[];
   const lowestTrustedRetailCents = trustedRetailPrices.length > 0 ? Math.min(...trustedRetailPrices) : null;
 
   if (amazonPriceCents) {
@@ -945,7 +962,8 @@ export async function getDeliveredPricing(
     fullSettings.undercutCents,
     minDeliveredCents,
     retailComps,
-    targetPriceCents  // Pass Target.com price
+    targetPriceCents,  // Pass Target.com price
+    brandSitePriceCents  // Pass brand's official website price (most authoritative)
   );
   warnings.push(...targetResult.warnings);
 

@@ -51,6 +51,10 @@ export interface PriceLookupResult {
   walmartUrl: string | null;
   targetPrice: number | null;
   targetUrl: string | null;
+  /** Price from brand's official website (most authoritative source for MSRP) */
+  brandSitePrice: number | null;
+  brandSiteSeller: string | null;
+  brandSiteUrl: string | null;
   /** Lowest price from any major chain retailer (Ulta, CVS, Walgreens, etc.) */
   lowestRetailPrice: number | null;
   lowestRetailSource: string | null;
@@ -61,6 +65,30 @@ export interface PriceLookupResult {
   allResults: GoogleShoppingResult[];
   confidence: 'high' | 'medium' | 'low';
   reasoning: string;
+}
+
+/** Helper to create an empty/default PriceLookupResult */
+function emptyPriceLookupResult(reasoning: string): PriceLookupResult {
+  return {
+    amazonPrice: null,
+    amazonUrl: null,
+    walmartPrice: null,
+    walmartUrl: null,
+    targetPrice: null,
+    targetUrl: null,
+    brandSitePrice: null,
+    brandSiteSeller: null,
+    brandSiteUrl: null,
+    lowestRetailPrice: null,
+    lowestRetailSource: null,
+    lowestRetailUrl: null,
+    bestPrice: null,
+    bestPriceSource: null,
+    bestPriceUrl: null,
+    allResults: [],
+    confidence: 'low',
+    reasoning,
+  };
 }
 
 /**
@@ -77,23 +105,7 @@ export async function searchGoogleShopping(
 ): Promise<PriceLookupResult> {
   if (!SEARCHAPI_KEY) {
     console.log('[google-shopping] No SEARCHAPI_KEY configured, skipping');
-    return {
-      amazonPrice: null,
-      amazonUrl: null,
-      walmartPrice: null,
-      walmartUrl: null,
-      targetPrice: null,
-      targetUrl: null,
-      lowestRetailPrice: null,
-      lowestRetailSource: null,
-      lowestRetailUrl: null,
-      bestPrice: null,
-      bestPriceSource: null,
-      bestPriceUrl: null,
-      allResults: [],
-      confidence: 'low',
-      reasoning: 'SEARCHAPI_KEY not configured',
-    };
+    return emptyPriceLookupResult('SEARCHAPI_KEY not configured');
   }
 
   // Build search query - brand + product name
@@ -118,69 +130,21 @@ export async function searchGoogleShopping(
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`[google-shopping] API Error ${response.status}: ${errorText}`);
-      return {
-        amazonPrice: null,
-        amazonUrl: null,
-        walmartPrice: null,
-        walmartUrl: null,
-        targetPrice: null,
-        targetUrl: null,
-        lowestRetailPrice: null,
-        lowestRetailSource: null,
-        lowestRetailUrl: null,
-        bestPrice: null,
-        bestPriceSource: null,
-        bestPriceUrl: null,
-        allResults: [],
-        confidence: 'low',
-        reasoning: `API error: ${response.status}`,
-      };
+      return emptyPriceLookupResult(`API error: ${response.status}`);
     }
 
     const data: GoogleShoppingResponse = await response.json();
 
     if (data.error) {
       console.error(`[google-shopping] API returned error: ${data.error}`);
-      return {
-        amazonPrice: null,
-        amazonUrl: null,
-        walmartPrice: null,
-        walmartUrl: null,
-        targetPrice: null,
-        targetUrl: null,
-        lowestRetailPrice: null,
-        lowestRetailSource: null,
-        lowestRetailUrl: null,
-        bestPrice: null,
-        bestPriceSource: null,
-        bestPriceUrl: null,
-        allResults: [],
-        confidence: 'low',
-        reasoning: data.error,
-      };
+      return emptyPriceLookupResult(data.error);
     }
 
     const results = data.shopping_results || [];
     
     if (results.length === 0) {
       console.log('[google-shopping] No results found');
-      return {
-        amazonPrice: null,
-        amazonUrl: null,
-        walmartPrice: null,
-        walmartUrl: null,
-        targetPrice: null,
-        targetUrl: null,
-        lowestRetailPrice: null,
-        lowestRetailSource: null,
-        lowestRetailUrl: null,
-        bestPrice: null,
-        bestPriceSource: null,
-        bestPriceUrl: null,
-        allResults: [],
-        confidence: 'low',
-        reasoning: 'No products found in search results',
-      };
+      return emptyPriceLookupResult('No products found in search results');
     }
 
     console.log(`[google-shopping] Found ${results.length} results`);
@@ -623,6 +587,9 @@ export async function searchGoogleShopping(
       walmartUrl: walmartResult?.link || walmartResult?.product_link || null,
       targetPrice: targetResult?.extracted_price || null,
       targetUrl: targetResult?.link || targetResult?.product_link || null,
+      brandSitePrice: brandResult?.extracted_price || null,
+      brandSiteSeller: brandResult?.seller || null,
+      brandSiteUrl: brandResult?.link || brandResult?.product_link || null,
       lowestRetailPrice: lowestRetailResult?.extracted_price || null,
       lowestRetailSource: lowestRetailResult?.seller || null,
       lowestRetailUrl: lowestRetailResult?.link || lowestRetailResult?.product_link || null,
@@ -636,23 +603,7 @@ export async function searchGoogleShopping(
 
   } catch (error) {
     console.error('[google-shopping] Error:', error);
-    return {
-      amazonPrice: null,
-      amazonUrl: null,
-      walmartPrice: null,
-      walmartUrl: null,
-      targetPrice: null,
-      targetUrl: null,
-      lowestRetailPrice: null,
-      lowestRetailSource: null,
-      lowestRetailUrl: null,
-      bestPrice: null,
-      bestPriceSource: null,
-      bestPriceUrl: null,
-      allResults: [],
-      confidence: 'low',
-      reasoning: `Error: ${error instanceof Error ? error.message : String(error)}`,
-    };
+    return emptyPriceLookupResult(`Error: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
