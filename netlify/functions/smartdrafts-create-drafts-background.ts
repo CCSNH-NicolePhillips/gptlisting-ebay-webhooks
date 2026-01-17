@@ -927,6 +927,14 @@ function parseGptResponse(responseText: string, product: PairedProduct): any {
     if (product.brand && product.brand !== 'Unknown' && product.packageType !== 'book') {
       const brandLower = product.brand.toLowerCase();
       const titleLower = title.toLowerCase();
+      
+      // Fix: Remove duplicate brand if title starts with "Brand Brand ..." (Vision API bug)
+      const duplicateBrandPattern = new RegExp(`^${product.brand}\\s+${product.brand}\\s+`, 'i');
+      if (duplicateBrandPattern.test(title)) {
+        title = title.replace(duplicateBrandPattern, `${product.brand} `);
+        console.log(`[GPT] Fixed title - removed duplicate brand "${product.brand}"`);
+      }
+      
       // Check if brand is missing from title
       if (!titleLower.startsWith(brandLower) && !titleLower.includes(brandLower)) {
         // Prepend brand to title
@@ -948,10 +956,15 @@ function parseGptResponse(responseText: string, product: PairedProduct): any {
     };
   } catch (err) {
     console.error('[GPT] Failed to parse response:', err);
+    // Build fallback title without duplication
+    let fallbackTitle = `${product.brand} ${product.product}`;
+    if (product.brand && product.product?.toLowerCase().startsWith(product.brand.toLowerCase())) {
+      fallbackTitle = product.product; // Product already includes brand
+    }
     return {
       categoryId: undefined,
-      title: `${product.brand} ${product.product}`.slice(0, 80),
-      description: `${product.brand} ${product.product}`,
+      title: fallbackTitle.slice(0, 80),
+      description: fallbackTitle,
       bullets: [],
       aspects: {},
       price: undefined,
