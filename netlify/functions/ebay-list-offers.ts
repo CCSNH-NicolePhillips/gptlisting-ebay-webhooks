@@ -138,17 +138,22 @@ export const handler: Handler = async (event) => {
 			let pageOffset = 0;
 			const pageLimit = Math.min(Math.max(limit, 20), 200);
 			const fallbackStart = Date.now();
-			const HARD_LIMIT_MS = 7000; // 7 seconds - prevent Netlify timeout
+			// Railway has longer timeout than Netlify - use 25s for Railway, 7s for Netlify
+			const isRailway = process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID;
+			const HARD_LIMIT_MS = isRailway ? 25000 : 7000;
+			console.log(`[ebay-list-offers] safeAggregate starting, timeout=${HARD_LIMIT_MS}ms, isRailway=${!!isRailway}`);
 			
 			// Build an allow-list of statuses if provided (supports comma-separated)
 			const allowStatuses = String(status || '')
 				.split(',')
 				.map((s) => s.trim().toUpperCase())
 				.filter(Boolean);
+			console.log(`[ebay-list-offers] safeAggregate filtering for statuses: ${JSON.stringify(allowStatuses)}`);
+			
 			for (let pages = 0; pages < 10; pages++) {
 				// Check timeout before each iteration
 				if (Date.now() - fallbackStart > HARD_LIMIT_MS) {
-					console.warn('[ebay-list-offers] Soft timeout at 7s — returning partial results');
+					console.warn(`[ebay-list-offers] Soft timeout at ${HARD_LIMIT_MS}ms — returning partial results (found ${agg.length} offers)`);
 					break;
 				}
 				// cap pages to avoid runaway
@@ -168,6 +173,7 @@ export const handler: Handler = async (event) => {
 				attempts.push({ url: invUrl, status: invRes.status, body: invJson });
 				if (!invRes.ok) break;
 				const items = Array.isArray(invJson?.inventoryItems) ? invJson.inventoryItems : [];
+				console.log(`[ebay-list-offers] safeAggregate page ${pages}: ${items.length} inventory items`);
 				if (!items.length) break;
 				for (const it of items) {
 					const s = it?.sku as string | undefined;
@@ -185,9 +191,17 @@ export const handler: Handler = async (event) => {
 					attempts.push({ url, status: r.status, body: j });
 					if (!r.ok) continue;
 					const arr = Array.isArray(j?.offers) ? j.offers : [];
+					// Log what we find for each SKU
+					if (arr.length > 0) {
+						const statuses = arr.map((o: any) => o?.status).join(', ');
+						console.log(`[ebay-list-offers] SKU ${s}: ${arr.length} offers with statuses: ${statuses}`);
+					}
 					for (const o of arr) {
 						const st = String(o?.status || '').toUpperCase();
-						if (!allowStatuses.length || allowStatuses.includes(st)) agg.push(o);
+						if (!allowStatuses.length || allowStatuses.includes(st)) {
+							console.log(`[ebay-list-offers] ✓ Found matching offer: SKU=${s}, status=${st}, offerId=${o?.offerId}`);
+							agg.push(o);
+						}
 					}
 					if (agg.length >= limit) break;
 				}
