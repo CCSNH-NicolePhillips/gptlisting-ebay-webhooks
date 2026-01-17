@@ -252,81 +252,15 @@ export const handler: Handler = async (event) => {
 			const code = Number((r.body?.errors && r.body.errors[0]?.errorId) || 0);
 			if (r.status === 400 && code === 25707) {
 				console.warn('[ebay-list-offers] ⚠️ Error 25707 detected: Invalid SKU in inventory');
-				console.log('[ebay-list-offers] Scanning inventory to find and delete broken SKUs...');
+				console.log('[ebay-list-offers] Skipping cleanup (disabled) - using safe aggregation instead');
 				
-				// Find and delete inventory items with invalid SKUs
-				let deletedCount = 0;
-				let scannedCount = 0;
-				let scanOffset = 0;
-				const scanLimit = 100;
-				const maxScanPages = 10;
-				
-				for (let page = 0; page < maxScanPages; page++) {
-					const scanUrl = `${apiHost}/sell/inventory/v1/inventory_item?limit=${scanLimit}&offset=${scanOffset}`;
-					const scanRes = await fetch(scanUrl, { headers });
-					
-					if (!scanRes.ok) {
-						console.error('[ebay-list-offers] Failed to scan inventory:', scanRes.status);
-						break;
-					}
-					
-					const scanData = await scanRes.json();
-					const items = Array.isArray(scanData?.inventoryItems) ? scanData.inventoryItems : [];
-					
-					if (!items.length) break;
-					
-					for (const item of items) {
-						scannedCount++;
-						const sku = item.sku;
-						
-						// Log ALL SKUs for diagnostics (first 20 only to avoid log spam)
-						if (scannedCount <= 20) {
-							const skuDisplay = sku === undefined ? '<undefined>' : sku === null ? '<null>' : sku === '' ? '<empty>' : `"${sku}"`;
-							const skuBytes = typeof sku === 'string' ? Array.from(sku).map(c => c.charCodeAt(0)).join(',') : 'N/A';
-							console.log(`[ebay-list-offers] 📋 SKU #${scannedCount}: ${skuDisplay} (len=${String(sku || '').length}, bytes=[${skuBytes}], valid=${SKU_OK(sku || '')})`);
-						}
-						
-						// More aggressive check: empty, null, undefined, or whitespace-only SKUs
-						const isInvalid = !sku || !SKU_OK(sku) || sku.trim() !== sku || sku.length === 0;
-						
-						if (isInvalid) {
-							console.log(`[ebay-list-offers] 🗑️ Deleting invalid SKU: "${sku}" (${item.product?.title || 'no title'})`);
-							
-							// Delete the inventory item
-							const deleteUrl = `${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
-							const deleteRes = await fetch(deleteUrl, {
-								method: 'DELETE',
-								headers
-							});
-							
-							if (deleteRes.ok || deleteRes.status === 204) {
-								deletedCount++;
-								console.log(`[ebay-list-offers] ✓ Deleted invalid SKU: "${sku}"`);
-							} else {
-								const deleteErr = await deleteRes.text();
-								console.error(`[ebay-list-offers] ✗ Failed to delete SKU "${sku}":`, deleteRes.status, deleteErr);
-							}
-						}
-					}
-					
-					if (items.length < scanLimit) break;
-					scanOffset += scanLimit;
-				}
-				
-				console.log(`[ebay-list-offers] Scan complete: ${scannedCount} items scanned, ${deletedCount} invalid SKUs deleted`);
-				if (scannedCount > 20) {
-					console.log(`[ebay-list-offers] (Only first 20 SKUs were logged for brevity)`);
-				}
+				// DISABLED: Auto-delete was too aggressive and deleted valid listings
+				// Just use safe aggregation which fetches offers per-SKU instead
 				
 				// Now use safe aggregation to return valid offers
 				const safe = await safeAggregateByInventory();
 				const partial = (Date.now() - startTime) > 6500;
 				const note = safe.offers.length ? (partial ? 'safe-aggregate-partial' : 'safe-aggregate') : 'safe-aggregate-empty';
-				const warning = deletedCount > 0
-					? `Automatically cleaned up ${deletedCount} invalid SKU(s). ${safe.offers.length} valid draft(s) found.`
-					: (safe.offers.length 
-						? (partial ? 'Timeout protection: showing partial results.' : undefined)
-						: 'No valid drafts found after SKU cleanup.');
 				
 				return {
 					statusCode: 200,
@@ -338,8 +272,6 @@ export const handler: Handler = async (event) => {
 						offers: safe.offers,
 						attempts: [...attempts, ...safe.attempts],
 						note,
-						warning,
-						cleaned: deletedCount > 0 ? { scanned: scannedCount, deleted: deletedCount } : undefined
 					}),
 				};
 			}
