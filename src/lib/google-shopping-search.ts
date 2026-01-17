@@ -291,6 +291,7 @@ export async function searchGoogleShopping(
         ['oil', 'oils'],
         ['spray', 'sprays'],
         ['gummy', 'gummies'],
+        ['chew', 'chews'],      // Heart Chews vs Heart Tablets
         ['capsule', 'capsules'],
         ['tablet', 'tablets'],
         ['pill', 'pills'],
@@ -301,6 +302,11 @@ export async function searchGoogleShopping(
         ['bar', 'bars'],
         ['drink', 'drinks'],
         ['shot', 'shots'],
+        ['kit', 'kits'],       // Discovery Kit vs individual products
+        ['set', 'sets'],       // Gift Set vs individual items
+        ['bundle', 'bundles'],
+        ['shampoo', 'shampoos'],
+        ['conditioner', 'conditioners'],
       ];
       
       // Normalize type word to base form
@@ -410,6 +416,48 @@ export async function searchGoogleShopping(
       'best buy', 'staples', 'office depot',
     ];
 
+    // Sellers that often sell different variants (sample sizes, counterfeits, gray market)
+    // These should NOT be used for pricing comparisons
+    const UNTRUSTED_SELLERS = [
+      // Discount/gray market sellers
+      'shein',
+      'aliexpress',
+      'temu',
+      'wish',
+      'dhgate',
+      'banggood',
+      'gearbest',
+      'lightinthebox',
+      'miniinthebox',
+      // Delivery services (not actual prices)
+      'instacart',  // Often shows per-unit prices not pack prices
+      'gopuff',     // Convenience store markup/different sizes
+      'shipt',      // Delivery service, not retailer
+      'ubereats',
+      'doordash',
+      // K-beauty/Asian beauty resellers (often sell different pack sizes)
+      'pinkseoul',
+      'yesstyle',
+      'stylevana',
+      'jolse',
+      'holiholic',
+      'sokoglam',
+      'style korean',
+      'stylekorean',
+      'beautytap',
+      'masksheets',
+      'miss a',
+      'missa',
+      // Sample size sellers
+      'beauty barn',
+      'sample',
+    ];
+
+    const isUntrustedSeller = (seller: string): boolean => {
+      const s = seller.toLowerCase();
+      return UNTRUSTED_SELLERS.some(u => s.includes(u));
+    };
+
     const isMajorRetailer = (seller: string): boolean => {
       const s = seller.toLowerCase();
       return MAJOR_RETAILERS.some(r => s.includes(r));
@@ -432,7 +480,48 @@ export async function searchGoogleShopping(
     majorRetailResults.sort((a, b) => a.extracted_price - b.extracted_price);
     const lowestRetailResult = majorRetailResults[0];
 
-    // Find best price among any retailers (excluding eBay, marketplaces, and lots)
+    // Find brand's official website price (highest trust for pricing)
+    // Brand sites often omit brand name from titles but have brand in URL
+    // STRICT: Only match if brand name is a significant portion of seller name
+    const brandResult = brand ? results.find(r => {
+      const url = r.link || r.product_link || '';
+      const seller = r.seller || '';
+      const title = r.title || '';
+      
+      // Skip untrusted sellers even if they match brand name
+      if (isUntrustedSeller(seller)) return false;
+      
+      // Check if seller name matches brand name (strict matching)
+      const brandSlug = brand.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const sellerSlug = seller.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const urlLower = url.toLowerCase();
+      
+      // For brand matching, require high similarity (not just substring)
+      // e.g., "Humann" seller for "HumanN" brand = OK
+      // e.g., "Stylevana" seller for "Biodance" brand = NOT OK
+      const isBrandSite = (
+        // Seller contains brand slug (brand must be at least 4 chars)
+        (brandSlug.length >= 4 && sellerSlug.includes(brandSlug)) ||
+        // Brand contains seller slug (seller must be at least 4 chars)
+        (sellerSlug.length >= 4 && brandSlug.includes(sellerSlug)) ||
+        // URL domain contains brand
+        urlLower.includes(brandSlug + '.') ||  // e.g., milamend.com
+        urlLower.includes('//' + brandSlug)     // e.g., //milamend.
+      );
+      
+      return (
+        r.extracted_price > 0 &&
+        isBrandSite &&
+        !isLotListing(title) &&
+        isFirstPartySeller(seller)
+      );
+    }) : null;
+
+    if (brandResult) {
+      console.log(`[google-shopping] 🏪 Brand site found: $${brandResult.extracted_price} from ${brandResult.seller}`);
+    }
+
+    // Find best price among any retailers (excluding eBay, marketplaces, lots, and untrusted sellers)
     // CRITICAL: Title matching prevents using wrong product prices
     const retailResults = results.filter(r => {
       const seller = r.seller?.toLowerCase() || '';
@@ -443,6 +532,7 @@ export async function searchGoogleShopping(
         !seller.includes('ebay') &&
         !seller.includes('mercari') &&
         !seller.includes('poshmark') &&
+        !isUntrustedSeller(seller) &&
         !isLotListing(title) &&
         isFirstPartySeller(r.seller || '') &&
         isTitleMatch(title, searchQuery, brand, url)
@@ -451,7 +541,42 @@ export async function searchGoogleShopping(
 
     // Sort by price to find best deal
     retailResults.sort((a, b) => a.extracted_price - b.extracted_price);
-    const bestResult = retailResults[0];
+    
+    // Get reference price for sanity check (prefer brand site, then major retail)
+    const referencePrice = brandResult?.extracted_price || 
+                           lowestRetailResult?.extracted_price || 
+                           amazonResult?.extracted_price ||
+                           walmartResult?.extracted_price ||
+                           targetResult?.extracted_price;
+    
+    // Filter out suspiciously low prices (likely different product sizes or counterfeits)
+    // If a price is <40% of reference, it's probably wrong
+    let bestResult: GoogleShoppingResult | undefined = retailResults[0];
+    if (referencePrice && bestResult && bestResult.extracted_price < referencePrice * 0.4) {
+      console.log(`[google-shopping] ⚠️ Rejecting suspiciously low price $${bestResult.extracted_price} from ${bestResult.seller} (reference: $${referencePrice})`);
+      // Find next best price that isn't suspiciously low
+      bestResult = retailResults.find(r => r.extracted_price >= referencePrice * 0.4);
+      if (bestResult) {
+        console.log(`[google-shopping] Using $${bestResult.extracted_price} from ${bestResult.seller} instead`);
+      }
+    }
+
+    // If brand site price is available, PREFER it as authoritative MSRP
+    // Brand's own website is the most trusted source for pricing
+    // Only use a cheaper non-brand result if it's from a major retailer AND within 30% of brand price
+    // (Major retailers can have legitimate sales, but gray market sellers often have wrong products)
+    if (brandResult) {
+      const isMajorRetailerResult = bestResult && isMajorRetailer(bestResult.seller);
+      const isWithinSaleRange = bestResult && bestResult.extracted_price >= brandResult.extracted_price * 0.7;
+      
+      if (!isMajorRetailerResult || !isWithinSaleRange) {
+        // Use brand site price - it's authoritative
+        if (bestResult && bestResult.extracted_price < brandResult.extracted_price) {
+          console.log(`[google-shopping] 📍 Preferring brand site $${brandResult.extracted_price} over $${bestResult.extracted_price} from ${bestResult.seller} (not a trusted sale)`);
+        }
+        bestResult = brandResult;
+      }
+    }
 
     // Determine confidence based on result quality
     let confidence: 'high' | 'medium' | 'low' = 'low';
