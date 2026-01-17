@@ -921,9 +921,24 @@ function parseGptResponse(responseText: string, product: PairedProduct): any {
     }
     
     const parsed = JSON.parse(cleanText);
+    
+    // CRITICAL: Ensure title starts with brand name (GPT often forgets this)
+    let title = typeof parsed.title === 'string' ? parsed.title : `${product.brand} ${product.product}`;
+    if (product.brand && product.brand !== 'Unknown' && product.packageType !== 'book') {
+      const brandLower = product.brand.toLowerCase();
+      const titleLower = title.toLowerCase();
+      // Check if brand is missing from title
+      if (!titleLower.startsWith(brandLower) && !titleLower.includes(brandLower)) {
+        // Prepend brand to title
+        title = `${product.brand} ${title}`;
+        console.log(`[GPT] Fixed title - prepended missing brand "${product.brand}"`);
+      }
+    }
+    title = title.slice(0, 80);
+    
     return {
       categoryId: typeof parsed.categoryId === 'string' ? parsed.categoryId.trim() : undefined,
-      title: typeof parsed.title === 'string' ? parsed.title.slice(0, 80) : `${product.brand} ${product.product}`.slice(0, 80),
+      title,
       description: typeof parsed.description === 'string' ? parsed.description.slice(0, 4000) : `${product.brand} ${product.product}`, // Allow up to 4000 chars for eBay
       bullets: Array.isArray(parsed.bullets) ? parsed.bullets.slice(0, 5).map((b: any) => String(b).slice(0, 200)) : [],
       aspects: typeof parsed.aspects === 'object' && parsed.aspects !== null ? parsed.aspects : {},
