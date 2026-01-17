@@ -940,21 +940,37 @@ export function selectPriceSource(input: PriceLookupInput, candidates: PriceSour
   // ============================================
   // PRIORITY 1: AMAZON (Direct or via RapidAPI)
   // This is THE price 98% of the time
+  // SANITY CHECK: If Amazon price is >50% above brand MSRP,
+  // Amazon likely returned the wrong product
   // ============================================
   const amazonDirect = candidates.find(c => c.source === 'amazon');
-  if (amazonDirect) {
+  const brandMsrp = candidates.find(c => c.source === 'brand-msrp');
+  
+  // Sanity check: Is Amazon price suspiciously high compared to brand MSRP?
+  const amazonSuspiciouslyHigh = (amazon: PriceSourceDetail | undefined, brand: PriceSourceDetail | undefined): boolean => {
+    if (!amazon || !brand) return false;
+    // If Amazon is more than 50% above brand MSRP, it's likely wrong product
+    const ratio = amazon.price / brand.price;
+    if (ratio > 1.5) {
+      console.log(`[price] ⚠️ Amazon price ($${amazon.price.toFixed(2)}) is ${((ratio - 1) * 100).toFixed(0)}% above brand MSRP ($${brand.price.toFixed(2)}) - likely wrong product`);
+      return true;
+    }
+    return false;
+  };
+  
+  if (amazonDirect && !amazonSuspiciouslyHigh(amazonDirect, brandMsrp)) {
     return buildResult('amazon', amazonDirect, 'amazon-direct');
   }
   
   const rapidapiAmazon = candidates.find(c => c.source === 'rapidapi-amazon');
-  if (rapidapiAmazon) {
+  if (rapidapiAmazon && !amazonSuspiciouslyHigh(rapidapiAmazon, brandMsrp)) {
     return buildResult('rapidapi-amazon', rapidapiAmazon, 'amazon-via-rapidapi');
   }
 
   // ============================================
   // PRIORITY 2: BRAND MSRP (Official site price)
+  // Also used when Amazon is suspiciously high (wrong product)
   // ============================================
-  const brandMsrp = candidates.find(c => c.source === 'brand-msrp');
   if (brandMsrp) {
     return buildResult('brand-msrp', brandMsrp, 'brand-msrp');
   }

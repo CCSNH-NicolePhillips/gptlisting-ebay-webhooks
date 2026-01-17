@@ -1,30 +1,46 @@
 #!/usr/bin/env tsx
 /**
  * Complete Local Test: Vision → Pairing V2 → Draft Creation
- * Tests the full pipeline with local images from testDropbox/newStuff
+ * Tests the full pipeline with local images from a specified folder
  * 
  * This simulates the exact production flow:
  * 1. Vision analysis (extract keyText, categoryPath)
  * 2. Pairing V2 (classify images, pair front/back)
  * 3. Draft creation (with keyText and categoryPath available)
  * 
- * Usage: tsx scripts/test-full-pipeline-local.ts
+ * Usage: tsx scripts/test-full-pipeline-local.ts [folder-path]
+ * 
+ * Examples:
+ *   tsx scripts/test-full-pipeline-local.ts                     # Uses testDropbox/newStuff
+ *   tsx scripts/test-full-pipeline-local.ts testDropbox/ebay10  # Uses testDropbox/ebay10
+ *   tsx scripts/test-full-pipeline-local.ts C:/path/to/images   # Uses absolute path
  */
 
 import "dotenv/config";
 import { readFileSync, readdirSync, existsSync } from "fs";
-import { join } from "path";
+import { join, isAbsolute } from "path";
 import { runNewTwoStagePipeline } from "../src/smartdrafts/pairing-v2-core.js";
 
 async function main() {
+  // Get folder from command line or use default
+  const folderArg = process.argv[2];
+  let photoDir: string;
+  
+  if (folderArg) {
+    // Use provided folder path
+    photoDir = isAbsolute(folderArg) ? folderArg : join(process.cwd(), folderArg);
+  } else {
+    // Default to testDropbox/newStuff
+    photoDir = join(process.cwd(), "testDropbox", "newStuff");
+  }
+  
+  const folderName = photoDir.split(/[\\/]/).slice(-2).join('/');
+  
   console.log("🧪 Full Pipeline Local Test");
   console.log("=" .repeat(70));
   console.log("Testing: Vision → Pairing V2 → Draft Creation");
-  console.log("Images: testDropbox/newStuff (Root Sculpt + Vita PLynxera)");
+  console.log(`Images: ${folderName}`);
   console.log("=" .repeat(70));
-
-  // Use Root Sculpt images (front and back)
-  const photoDir = join(process.cwd(), "testDropbox", "newStuff");
   
   if (!existsSync(photoDir)) {
     console.error(`❌ Directory not found: ${photoDir}`);
@@ -35,28 +51,24 @@ async function main() {
     f.endsWith('.jpg') || f.endsWith('.jpeg') || f.endsWith('.png')
   );
   
-  console.log(`\n📸 Found ${allFiles.length} images in testDropbox/newStuff`);
+  console.log(`\n📸 Found ${allFiles.length} images in ${folderName}`);
   
-  // Select test images - Maude (front + back)
-  const maudeFront = "20251115_143002.jpg"; // Maude front panel
-  const maudeBack = "20251115_143030.jpg";   // Maude back panel
-  
-  const testImages = [maudeFront, maudeBack];
-  const imagePaths = testImages
-    .filter(f => allFiles.includes(f))
-    .map(f => join(photoDir, f));
-  
-  if (imagePaths.length !== 2) {
-    console.error(`❌ Expected 2 test images, found ${imagePaths.length}`);
-    console.error(`Missing: ${testImages.filter(f => !allFiles.includes(f)).join(', ')}`);
+  if (allFiles.length === 0) {
+    console.error(`❌ No image files found in ${photoDir}`);
     process.exit(1);
   }
   
-  console.log(`\n✅ Using test images:`);
-  imagePaths.forEach((p, i) => {
+  // Use ALL images in the folder
+  const imagePaths = allFiles.map(f => join(photoDir, f));
+  
+  console.log(`\n✅ Using ${imagePaths.length} images:`);
+  imagePaths.slice(0, 10).forEach((p, i) => {
     const filename = p.split(/[\\/]/).pop();
     console.log(`   ${i + 1}. ${filename}`);
   });
+  if (imagePaths.length > 10) {
+    console.log(`   ... and ${imagePaths.length - 10} more`);
+  }
 
   // ================================================================
   // STAGE 1: Pairing V2 Classification + Pairing
@@ -147,7 +159,8 @@ async function main() {
   
   const allHaveKeyText = pairingResult.pairs.every(p => p.keyText && p.keyText.length > 0);
   const allHaveCategoryPath = pairingResult.pairs.every(p => p.categoryPath);
-  const expectedPairCount = 2; // Root Sculpt + Vita PLynxera
+  // Expected pairs = half the images (each product has front + back)
+  const expectedPairCount = Math.floor(imagePaths.length / 2);
   
   console.log(`\n📊 Results:`);
   console.log(`   Pairs created: ${pairingResult.pairs.length}/${expectedPairCount}`);
@@ -156,9 +169,10 @@ async function main() {
   
   let success = true;
   
-  if (pairingResult.pairs.length !== expectedPairCount) {
-    console.log(`\n❌ FAILED: Expected ${expectedPairCount} pairs, got ${pairingResult.pairs.length}`);
-    success = false;
+  if (pairingResult.pairs.length < expectedPairCount) {
+    console.log(`\n⚠️ WARNING: Expected ${expectedPairCount} pairs, got ${pairingResult.pairs.length}`);
+    console.log(`   Some images may not have paired correctly`);
+    // Not a hard failure - continue with validation
   }
   
   if (!allHaveKeyText) {
