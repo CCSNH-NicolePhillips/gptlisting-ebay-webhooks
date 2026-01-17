@@ -2030,6 +2030,15 @@
           })
         });
 
+        // DEBUG: Log the full response from create-ebay-draft-user
+        console.log('[Quick List] create-ebay-draft-user FULL RESPONSE:', JSON.stringify(pubRes, null, 2));
+        if (pubRes.results) {
+          console.log('[Quick List] Created offers:');
+          pubRes.results.forEach((r, i) => {
+            console.log(`  [${i}] SKU: ${r.sku}, OfferId: ${r.offerId}, Warnings: ${JSON.stringify(r.warnings)}`);
+          });
+        }
+
         // Handle merchant location key error with helpful message
         if (!pubRes.ok && pubRes.error === 'Invalid merchantLocationKey') {
           const invalidKey = pubRes.invalidKey || 'unknown';
