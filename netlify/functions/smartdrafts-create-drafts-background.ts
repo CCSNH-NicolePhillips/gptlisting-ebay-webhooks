@@ -2,6 +2,7 @@ import type { Handler } from "@netlify/functions";
 import { putJob } from "../../src/lib/job-store.js";
 import { k } from "../../src/lib/user-keys.js";
 import { recordDraftsCreated } from "../../src/lib/user-stats.js";
+import { createJobLogger, type JobLogger } from "../../src/lib/redis-logger.js";
 
 // Import the draft creation logic from the existing function
 import OpenAI from "openai";
@@ -1303,11 +1304,17 @@ async function createDraftForProduct(
   product: PairedProduct, 
   promotion: { enabled: boolean; rate: number | null }, 
   pricingSettings: PricingSettings,
+  logger: JobLogger,
   retryAttempt: number = 0
 ): Promise<Draft> {
   const startTime = Date.now();
   const retryLabel = retryAttempt > 0 ? ` (retry ${retryAttempt})` : '';
   console.log(`[Draft] Creating for: ${product.productId}${retryLabel}`);
+  logger.info(`Creating draft for ${product.productId}${retryLabel}`, { 
+    brand: product.brand, 
+    product: product.product,
+    title: product.title,
+  });
   console.log(`[Draft] Product data:`, JSON.stringify({ 
     brand: product.brand, 
     product: product.product, 
@@ -1498,6 +1505,21 @@ async function createDraftForProduct(
     }
     
     console.log(`[smartdrafts-price] Result: item=$${(deliveredDecision.finalItemCents / 100).toFixed(2)}, ship=$${(deliveredDecision.finalShipCents / 100).toFixed(2)}, canCompete=${deliveredDecision.canCompete}`);
+    
+    // Log detailed pricing info to Redis for debugging
+    logger.info(`Pricing for ${product.brand} ${priceLookupTitle}`, {
+      finalItemCents: deliveredDecision.finalItemCents,
+      finalShipCents: deliveredDecision.finalShipCents,
+      canCompete: deliveredDecision.canCompete,
+      compsSource: deliveredDecision.compsSource,
+      ebayFloor: deliveredDecision.activeFloorDeliveredCents,
+      soldMedian: deliveredDecision.soldMedianDeliveredCents,
+      soldCount: deliveredDecision.soldCount,
+      amazonPrice: deliveredDecision.amazonPriceCents,
+      walmartPrice: deliveredDecision.walmartPriceCents,
+      retailCompsCount: deliveredDecision.retailComps?.length || 0,
+      warnings: deliveredDecision.warnings,
+    });
     
     // Check for niche brand warning - this is a BLOCKING issue
     const hasNicheBrandWarning = deliveredDecision.warnings?.includes('nicheBrandNeedsReview');
@@ -2007,12 +2029,14 @@ async function createDraftForProduct(
   if (isIncomplete && retryAttempt < 2) {
     console.warn(`[Draft] ⚠️ Incomplete draft for ${product.productId}: category=${hasCategory}, brand=${hasBrand}, aspectsCount=${aspectsCount}`);
     console.warn(`[Draft] 🔄 Retrying draft creation (attempt ${retryAttempt + 1}/2)...`);
+    logger.warn(`Retrying incomplete draft for ${product.productId}`, { hasCategory, hasBrand, aspectsCount });
     await sleep(1000); // Brief delay before retry
-    return createDraftForProduct(product, promotion, pricingSettings, retryAttempt + 1);
+    return createDraftForProduct(product, promotion, pricingSettings, logger, retryAttempt + 1);
   }
   
   if (isIncomplete && retryAttempt >= 2) {
     console.error(`[Draft] ❌ Failed to create complete draft after ${retryAttempt + 1} attempts for ${product.productId}`);
+    logger.error(`Failed to create complete draft after ${retryAttempt + 1} attempts`, { productId: product.productId });
   }
   
   return draft;
@@ -2145,6 +2169,10 @@ export const handler: Handler = async (event) => {
     });
     console.log(`[PERF] Initial writeJob took ${Date.now() - writeJobStart}ms`);
 
+    // Create logger for this job
+    const logger = createJobLogger(jobId, { prefix: 'smartdrafts' });
+    logger.info(`Starting job with ${products.length} products`, { userId, promotion });
+
     const drafts: Draft[] = [];
     const errors: any[] = [];
     
@@ -2181,11 +2209,17 @@ export const handler: Handler = async (event) => {
           console.log(`[PERF] Product ID: ${product.productId}`);
           
           try {
-            const draft = await createDraftForProduct(product, promotion, pricingSettings);
+            const draft = await createDraftForProduct(product, promotion, pricingSettings, logger);
             
             const productTotalTime = Date.now() - productStartTime;
             console.log(`[PERF] Product ${absoluteIndex + 1}/${products.length} TOTAL time: ${productTotalTime}ms`);
             console.log(`[PERF] ========== PRODUCT ${absoluteIndex + 1}/${products.length} END ==========\n`);
+            
+            logger.info(`Completed ${product.productId}`, { 
+              price: draft.price,
+              title: draft.title?.substring(0, 50),
+              timeMs: productTotalTime,
+            });
             
             // Update progress (increment completed count)
             completedCount++;
@@ -2200,6 +2234,10 @@ export const handler: Handler = async (event) => {
             return { success: true, draft };
           } catch (err: any) {
             console.error(`[Draft] Error creating draft for ${product.productId}:`, err);
+            logger.error(`Failed to create draft for ${product.productId}`, {
+              error: err.message || String(err),
+              stack: err.stack?.split('\n').slice(0, 3).join('\n'),
+            });
             completedCount++;
             return {
               success: false,
@@ -2217,6 +2255,9 @@ export const handler: Handler = async (event) => {
       const batchTotalTime = Date.now() - batchStartTime;
       console.log(`[PERF] === Batch ${batchIndex + 1}/${batches.length} completed in ${batchTotalTime}ms ===\n`);
     }
+    
+    // Flush logs before completing
+    await logger.flush();
     
     // Collect results
     for (const result of results) {

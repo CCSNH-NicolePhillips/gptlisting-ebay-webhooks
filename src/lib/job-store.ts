@@ -8,7 +8,7 @@ if (!BASE || !TOKEN) {
   console.warn("⚠️ Upstash Redis env vars missing. Background jobs will fail until configured.");
 }
 
-async function redisCall(...parts: string[]) {
+async function redisCall(...parts: string[]): Promise<{ result: unknown }> {
   if (!BASE || !TOKEN) {
     throw new Error("Upstash Redis not configured");
   }
@@ -28,6 +28,9 @@ async function redisCall(...parts: string[]) {
 
   return res.json() as Promise<{ result: unknown }>;
 }
+
+// Export for use by redis-logger
+export { redisCall };
 
 type JobStoreOptions = {
   key?: string;
