@@ -1,324 +1,393 @@
-// Set up environment before any imports
-process.env.NETLIFY_BLOBS_SITE_ID = '';
-process.env.NETLIFY_BLOBS_TOKEN = '';
-process.env.BLOBS_SITE_ID = '';
-process.env.BLOBS_TOKEN = '';
+/**
+ * Tests for Redis-backed token/cache storage
+ * 
+ * The _blobs module now uses Upstash Redis REST API for storage.
+ * This file tests the RedisStore class behavior via tokensStore() and cacheStore().
+ */
 
-// Mock @netlify/blobs
-const mockGetStore = jest.fn();
-jest.mock('@netlify/blobs', () => ({
-  getStore: mockGetStore
-}));
+// Mock fetch for Redis API calls
+const mockFetch = jest.fn();
+global.fetch = mockFetch;
 
-import { tokensStore, cacheStore } from '../../src/lib/_blobs';
+// Set up environment before imports
+process.env.UPSTASH_REDIS_REST_URL = 'https://test-redis.upstash.io';
+process.env.UPSTASH_REDIS_REST_TOKEN = 'test-token-123';
 
-describe('_blobs', () => {
-  beforeEach(() => {
+// Need to reset module cache to apply env vars
+jest.resetModules();
+
+describe('_blobs (Redis-backed storage)', () => {
+  let tokensStore: () => any;
+  let cacheStore: () => any;
+
+  beforeEach(async () => {
     jest.clearAllMocks();
-    // Reset environment variables
-    delete process.env.NETLIFY_BLOBS_SITE_ID;
-    delete process.env.NETLIFY_BLOBS_TOKEN;
-    delete process.env.BLOBS_SITE_ID;
-    delete process.env.BLOBS_TOKEN;
+    jest.resetModules();
+    
+    // Reset singletons by re-importing
+    process.env.UPSTASH_REDIS_REST_URL = 'https://test-redis.upstash.io';
+    process.env.UPSTASH_REDIS_REST_TOKEN = 'test-token-123';
+    
+    const module = await import('../../src/lib/_blobs.js');
+    tokensStore = module.tokensStore;
+    cacheStore = module.cacheStore;
+    
+    // Default successful response
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ result: null }),
+      text: () => Promise.resolve(''),
+    });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
   });
 
   describe('tokensStore', () => {
-    it('should call getStore with "tokens" name when no credentials provided', () => {
-      tokensStore();
-
-      expect(mockGetStore).toHaveBeenCalledWith('tokens');
+    it('should return a RedisStore instance with correct prefix', () => {
+      const store = tokensStore();
+      
+      expect(store).toBeDefined();
+      expect(typeof store.get).toBe('function');
+      expect(typeof store.set).toBe('function');
+      expect(typeof store.delete).toBe('function');
+      expect(typeof store.list).toBe('function');
     });
 
-    it('should use NETLIFY_BLOBS_SITE_ID and NETLIFY_BLOBS_TOKEN when provided', () => {
-      process.env.NETLIFY_BLOBS_SITE_ID = 'netlify-site-123';
-      process.env.NETLIFY_BLOBS_TOKEN = 'netlify-token-456';
-
-      tokensStore();
-
-      expect(mockGetStore).toHaveBeenCalledWith({
-        name: 'tokens',
-        siteID: 'netlify-site-123',
-        token: 'netlify-token-456'
-      });
+    it('should return the same singleton instance on multiple calls', () => {
+      const store1 = tokensStore();
+      const store2 = tokensStore();
+      
+      expect(store1).toBe(store2);
     });
 
-    it('should use BLOBS_SITE_ID and BLOBS_TOKEN when NETLIFY_ prefixed vars not set', () => {
-      process.env.BLOBS_SITE_ID = 'blobs-site-789';
-      process.env.BLOBS_TOKEN = 'blobs-token-012';
-
-      tokensStore();
-
-      expect(mockGetStore).toHaveBeenCalledWith({
-        name: 'tokens',
-        siteID: 'blobs-site-789',
-        token: 'blobs-token-012'
-      });
-    });
-
-    it('should prioritize NETLIFY_ prefixed vars over non-prefixed vars', () => {
-      process.env.NETLIFY_BLOBS_SITE_ID = 'netlify-site';
-      process.env.NETLIFY_BLOBS_TOKEN = 'netlify-token';
-      process.env.BLOBS_SITE_ID = 'blobs-site';
-      process.env.BLOBS_TOKEN = 'blobs-token';
-
-      tokensStore();
-
-      expect(mockGetStore).toHaveBeenCalledWith({
-        name: 'tokens',
-        siteID: 'netlify-site',
-        token: 'netlify-token'
-      });
-    });
-
-    it('should fall back to default when only siteID is provided', () => {
-      process.env.NETLIFY_BLOBS_SITE_ID = 'netlify-site';
-
-      tokensStore();
-
-      expect(mockGetStore).toHaveBeenCalledWith('tokens');
-    });
-
-    it('should fall back to default when only token is provided', () => {
-      process.env.NETLIFY_BLOBS_TOKEN = 'netlify-token';
-
-      tokensStore();
-
-      expect(mockGetStore).toHaveBeenCalledWith('tokens');
-    });
-
-    it('should handle mixed prefix vars (NETLIFY_SITE_ID + BLOBS_TOKEN)', () => {
-      process.env.NETLIFY_BLOBS_SITE_ID = 'netlify-site';
-      process.env.BLOBS_TOKEN = 'blobs-token';
-
-      tokensStore();
-
-      expect(mockGetStore).toHaveBeenCalledWith({
-        name: 'tokens',
-        siteID: 'netlify-site',
-        token: 'blobs-token'
-      });
-    });
-
-    it('should handle mixed prefix vars (BLOBS_SITE_ID + NETLIFY_TOKEN)', () => {
-      process.env.BLOBS_SITE_ID = 'blobs-site';
-      process.env.NETLIFY_BLOBS_TOKEN = 'netlify-token';
-
-      tokensStore();
-
-      expect(mockGetStore).toHaveBeenCalledWith({
-        name: 'tokens',
-        siteID: 'blobs-site',
-        token: 'netlify-token'
-      });
-    });
-
-    it('should return the result from getStore', () => {
-      const mockStore = { get: jest.fn(), set: jest.fn() };
-      mockGetStore.mockReturnValue(mockStore);
-
-      const result = tokensStore();
-
-      expect(result).toBe(mockStore);
-    });
-
-    it('should handle empty string values as falsy', () => {
-      process.env.NETLIFY_BLOBS_SITE_ID = '';
-      process.env.NETLIFY_BLOBS_TOKEN = '';
-
-      tokensStore();
-
-      expect(mockGetStore).toHaveBeenCalledWith('tokens');
-    });
-
-    it('should handle whitespace-only values', () => {
-      process.env.NETLIFY_BLOBS_SITE_ID = '   ';
-      process.env.NETLIFY_BLOBS_TOKEN = '   ';
-
-      tokensStore();
-
-      // Whitespace strings are truthy, so it will use them
-      expect(mockGetStore).toHaveBeenCalledWith({
-        name: 'tokens',
-        siteID: '   ',
-        token: '   '
-      });
+    it('should use blob:tokens: prefix for keys', async () => {
+      const store = tokensStore();
+      
+      await store.get('my-key');
+      
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('blob%3Atokens%3Amy-key'),
+        expect.any(Object)
+      );
     });
   });
 
   describe('cacheStore', () => {
-    it('should call getStore with "cache" name when no credentials provided', () => {
-      cacheStore();
-
-      expect(mockGetStore).toHaveBeenCalledWith('cache');
+    it('should return a RedisStore instance with correct prefix', () => {
+      const store = cacheStore();
+      
+      expect(store).toBeDefined();
+      expect(typeof store.get).toBe('function');
+      expect(typeof store.set).toBe('function');
+      expect(typeof store.delete).toBe('function');
+      expect(typeof store.list).toBe('function');
     });
 
-    it('should use NETLIFY_BLOBS_SITE_ID and NETLIFY_BLOBS_TOKEN when provided', () => {
-      process.env.NETLIFY_BLOBS_SITE_ID = 'netlify-site-123';
-      process.env.NETLIFY_BLOBS_TOKEN = 'netlify-token-456';
-
-      cacheStore();
-
-      expect(mockGetStore).toHaveBeenCalledWith({
-        name: 'cache',
-        siteID: 'netlify-site-123',
-        token: 'netlify-token-456'
-      });
+    it('should return the same singleton instance on multiple calls', () => {
+      const store1 = cacheStore();
+      const store2 = cacheStore();
+      
+      expect(store1).toBe(store2);
     });
 
-    it('should use BLOBS_SITE_ID and BLOBS_TOKEN when NETLIFY_ prefixed vars not set', () => {
-      process.env.BLOBS_SITE_ID = 'blobs-site-789';
-      process.env.BLOBS_TOKEN = 'blobs-token-012';
-
-      cacheStore();
-
-      expect(mockGetStore).toHaveBeenCalledWith({
-        name: 'cache',
-        siteID: 'blobs-site-789',
-        token: 'blobs-token-012'
-      });
-    });
-
-    it('should prioritize NETLIFY_ prefixed vars over non-prefixed vars', () => {
-      process.env.NETLIFY_BLOBS_SITE_ID = 'netlify-site';
-      process.env.NETLIFY_BLOBS_TOKEN = 'netlify-token';
-      process.env.BLOBS_SITE_ID = 'blobs-site';
-      process.env.BLOBS_TOKEN = 'blobs-token';
-
-      cacheStore();
-
-      expect(mockGetStore).toHaveBeenCalledWith({
-        name: 'cache',
-        siteID: 'netlify-site',
-        token: 'netlify-token'
-      });
-    });
-
-    it('should fall back to default when only siteID is provided', () => {
-      process.env.NETLIFY_BLOBS_SITE_ID = 'netlify-site';
-
-      cacheStore();
-
-      expect(mockGetStore).toHaveBeenCalledWith('cache');
-    });
-
-    it('should fall back to default when only token is provided', () => {
-      process.env.NETLIFY_BLOBS_TOKEN = 'netlify-token';
-
-      cacheStore();
-
-      expect(mockGetStore).toHaveBeenCalledWith('cache');
-    });
-
-    it('should return the result from getStore', () => {
-      const mockStore = { get: jest.fn(), set: jest.fn() };
-      mockGetStore.mockReturnValue(mockStore);
-
-      const result = cacheStore();
-
-      expect(result).toBe(mockStore);
-    });
-
-    it('should handle empty string values as falsy', () => {
-      process.env.NETLIFY_BLOBS_SITE_ID = '';
-      process.env.NETLIFY_BLOBS_TOKEN = '';
-
-      cacheStore();
-
-      expect(mockGetStore).toHaveBeenCalledWith('cache');
+    it('should use blob:cache: prefix for keys', async () => {
+      const store = cacheStore();
+      
+      await store.get('my-cache-key');
+      
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('blob%3Acache%3Amy-cache-key'),
+        expect.any(Object)
+      );
     });
   });
 
-  describe('tokensStore and cacheStore behavior', () => {
-    it('should create different stores for different names', () => {
-      process.env.NETLIFY_BLOBS_SITE_ID = 'site-123';
-      process.env.NETLIFY_BLOBS_TOKEN = 'token-456';
-
-      tokensStore();
-      cacheStore();
-
-      expect(mockGetStore).toHaveBeenCalledTimes(2);
-      expect(mockGetStore).toHaveBeenNthCalledWith(1, {
-        name: 'tokens',
-        siteID: 'site-123',
-        token: 'token-456'
-      });
-      expect(mockGetStore).toHaveBeenNthCalledWith(2, {
-        name: 'cache',
-        siteID: 'site-123',
-        token: 'token-456'
-      });
-    });
-
-    it('should handle sequential calls with changing environment', () => {
-      // First call with no credentials
-      tokensStore();
-      expect(mockGetStore).toHaveBeenLastCalledWith('tokens');
-
-      // Set credentials
-      process.env.NETLIFY_BLOBS_SITE_ID = 'site-123';
-      process.env.NETLIFY_BLOBS_TOKEN = 'token-456';
-
-      // Second call with credentials
-      tokensStore();
-      expect(mockGetStore).toHaveBeenLastCalledWith({
-        name: 'tokens',
-        siteID: 'site-123',
-        token: 'token-456'
-      });
+  describe('tokensStore and cacheStore should be different instances', () => {
+    it('should return different store instances', () => {
+      const tokens = tokensStore();
+      const cache = cacheStore();
+      
+      expect(tokens).not.toBe(cache);
     });
   });
 
-  describe('Edge cases', () => {
-    it('should handle undefined environment variables', () => {
-      delete process.env.NETLIFY_BLOBS_SITE_ID;
-      delete process.env.NETLIFY_BLOBS_TOKEN;
-      delete process.env.BLOBS_SITE_ID;
-      delete process.env.BLOBS_TOKEN;
-
-      tokensStore();
-
-      expect(mockGetStore).toHaveBeenCalledWith('tokens');
+  describe('RedisStore.get()', () => {
+    it('should call Redis GET with correct key', async () => {
+      const store = tokensStore();
+      
+      await store.get('oauth-token');
+      
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://test-redis.upstash.io/GET/blob%3Atokens%3Aoauth-token',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { Authorization: 'Bearer test-token-123' },
+        })
+      );
     });
 
-    it('should handle very long credential strings', () => {
-      const longSiteId = 'a'.repeat(1000);
-      const longToken = 'b'.repeat(1000);
-      process.env.NETLIFY_BLOBS_SITE_ID = longSiteId;
-      process.env.NETLIFY_BLOBS_TOKEN = longToken;
+    it('should return null when key does not exist', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ result: null }),
+      });
+      
+      const store = tokensStore();
+      const result = await store.get('non-existent');
+      
+      expect(result).toBeNull();
+    });
 
-      tokensStore();
+    it('should return string value when key exists', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ result: 'my-value' }),
+      });
+      
+      const store = tokensStore();
+      const result = await store.get('my-key');
+      
+      expect(result).toBe('my-value');
+    });
 
-      expect(mockGetStore).toHaveBeenCalledWith({
-        name: 'tokens',
-        siteID: longSiteId,
-        token: longToken
+    it('should parse JSON when type is json', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ result: '{"foo":"bar","num":42}' }),
+      });
+      
+      const store = tokensStore();
+      const result = await store.get('json-key', { type: 'json' });
+      
+      expect(result).toEqual({ foo: 'bar', num: 42 });
+    });
+
+    it('should return null for invalid JSON when type is json', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ result: 'not-valid-json' }),
+      });
+      
+      const store = tokensStore();
+      const result = await store.get('bad-json', { type: 'json' });
+      
+      expect(result).toBeNull();
+    });
+
+    it('should return null on Redis error', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: () => Promise.resolve('Internal Server Error'),
+      });
+      
+      const store = tokensStore();
+      const result = await store.get('error-key');
+      
+      expect(result).toBeNull();
+    });
+
+    it('should return null on network error', async () => {
+      mockFetch.mockRejectedValue(new Error('Network error'));
+      
+      const store = tokensStore();
+      const result = await store.get('network-error-key');
+      
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('RedisStore.set()', () => {
+    it('should call Redis SETEX with correct parameters for tokens store', async () => {
+      const store = tokensStore();
+      
+      await store.set('my-token', 'token-value');
+      
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringMatching(/SETEX\/blob%3Atokens%3Amy-token\/\d+\/token-value/),
+        expect.objectContaining({
+          method: 'POST',
+          headers: { Authorization: 'Bearer test-token-123' },
+        })
+      );
+    });
+
+    it('should serialize objects to JSON', async () => {
+      const store = tokensStore();
+      const obj = { access_token: 'abc', refresh_token: 'xyz' };
+      
+      await store.set('token-obj', obj);
+      
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining(encodeURIComponent(JSON.stringify(obj))),
+        expect.any(Object)
+      );
+    });
+
+    it('should use 90-day TTL for tokens store', async () => {
+      const store = tokensStore();
+      
+      await store.set('ttl-test', 'value');
+      
+      const call = mockFetch.mock.calls[0][0];
+      // 90 days = 7776000 seconds
+      expect(call).toContain('7776000');
+    });
+
+    it('should use 7-day TTL for cache store', async () => {
+      const store = cacheStore();
+      
+      await store.set('cache-ttl-test', 'value');
+      
+      const call = mockFetch.mock.calls[0][0];
+      // 7 days = 604800 seconds
+      expect(call).toContain('604800');
+    });
+  });
+
+  describe('RedisStore.setJSON()', () => {
+    it('should serialize object to JSON string', async () => {
+      const store = tokensStore();
+      const obj = { key: 'value' };
+      
+      await store.setJSON('json-key', obj);
+      
+      // setJSON calls JSON.stringify(value), then passes to set()
+      // set() checks if value is string - since it is, it uses it directly
+      // So the stored value is just the JSON-serialized object
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining(encodeURIComponent(JSON.stringify(obj))),
+        expect.any(Object)
+      );
+    });
+  });
+
+  describe('RedisStore.delete()', () => {
+    it('should call Redis DEL with correct key', async () => {
+      const store = tokensStore();
+      
+      await store.delete('old-token');
+      
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://test-redis.upstash.io/DEL/blob%3Atokens%3Aold-token',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { Authorization: 'Bearer test-token-123' },
+        })
+      );
+    });
+  });
+
+  describe('RedisStore.list()', () => {
+    it('should call Redis KEYS with pattern', async () => {
+      const store = tokensStore();
+      
+      await store.list();
+      
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://test-redis.upstash.io/KEYS/blob%3Atokens%3A*',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { Authorization: 'Bearer test-token-123' },
+        })
+      );
+    });
+
+    it('should return blobs array with keys stripped of prefix', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({
+          result: [
+            'blob:tokens:user1',
+            'blob:tokens:user2',
+            'blob:tokens:user3',
+          ],
+        }),
+      });
+      
+      const store = tokensStore();
+      const result = await store.list();
+      
+      expect(result).toEqual({
+        blobs: [
+          { key: 'user1' },
+          { key: 'user2' },
+          { key: 'user3' },
+        ],
       });
     });
 
-    it('should handle special characters in credentials', () => {
-      process.env.NETLIFY_BLOBS_SITE_ID = 'site-123!@#$%';
-      process.env.NETLIFY_BLOBS_TOKEN = 'token-456&*()';
-
-      tokensStore();
-
-      expect(mockGetStore).toHaveBeenCalledWith({
-        name: 'tokens',
-        siteID: 'site-123!@#$%',
-        token: 'token-456&*()'
+    it('should return empty blobs array when no keys exist', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ result: [] }),
       });
+      
+      const store = tokensStore();
+      const result = await store.list();
+      
+      expect(result).toEqual({ blobs: [] });
     });
 
-    it('should handle numeric-looking string credentials', () => {
-      process.env.NETLIFY_BLOBS_SITE_ID = '12345';
-      process.env.NETLIFY_BLOBS_TOKEN = '67890';
+    it('should return empty blobs array on error', async () => {
+      mockFetch.mockRejectedValue(new Error('Redis error'));
+      
+      const store = tokensStore();
+      const result = await store.list();
+      
+      expect(result).toEqual({ blobs: [] });
+    });
+  });
 
-      cacheStore();
+  describe('Error handling', () => {
+    it('should handle missing Redis URL gracefully in get', async () => {
+      jest.resetModules();
+      delete process.env.UPSTASH_REDIS_REST_URL;
+      process.env.UPSTASH_REDIS_REST_TOKEN = 'test-token';
+      
+      const module = await import('../../src/lib/_blobs.js');
+      const store = module.tokensStore();
+      
+      const result = await store.get('test');
+      expect(result).toBeNull();
+    });
 
-      expect(mockGetStore).toHaveBeenCalledWith({
-        name: 'cache',
-        siteID: '12345',
-        token: '67890'
-      });
+    it('should handle missing Redis token gracefully in get', async () => {
+      jest.resetModules();
+      process.env.UPSTASH_REDIS_REST_URL = 'https://test.upstash.io';
+      delete process.env.UPSTASH_REDIS_REST_TOKEN;
+      
+      const module = await import('../../src/lib/_blobs.js');
+      const store = module.tokensStore();
+      
+      const result = await store.get('test');
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('Special characters in keys', () => {
+    it('should URL-encode special characters in keys', async () => {
+      const store = tokensStore();
+      
+      await store.get('user:123:token');
+      
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('blob%3Atokens%3Auser%3A123%3Atoken'),
+        expect.any(Object)
+      );
+    });
+
+    it('should handle keys with slashes', async () => {
+      const store = tokensStore();
+      
+      await store.get('path/to/key');
+      
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('blob%3Atokens%3Apath%2Fto%2Fkey'),
+        expect.any(Object)
+      );
     });
   });
 });

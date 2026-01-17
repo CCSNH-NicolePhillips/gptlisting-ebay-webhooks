@@ -53,6 +53,8 @@ import { searchGoogleShopping, GoogleShoppingResult } from './google-shopping-se
 import { fetchSoldPriceStats, SoldPriceStats } from './pricing/ebay-sold-prices.js';
 import { getShippingEstimate, ShippingEstimate, ShippingSettings, DEFAULT_SHIPPING_SETTINGS } from './shipping-estimates.js';
 import { braveFirstUrl } from './search.js';
+import { searchAmazonWithFallback } from './amazon-search.js';
+import { searchWalmart } from './walmart-search.js';
 import { extractPriceWithShipping } from './html-price.js';
 
 // ============================================================================
@@ -895,6 +897,41 @@ export async function getDeliveredPricing(
     }
   }
 
+  // === Step 5: Direct Amazon/Walmart API Fallback ===
+  // If we still don't have a trusted retail price, try SearchAPI direct endpoints
+  // This catches products that aren't indexed in Google Shopping
+  let effectiveWalmartPriceCents = walmartPriceCents;
+  
+  if (!effectiveAmazonPriceCents && !effectiveWalmartPriceCents && !soldStrong) {
+    console.log(`[delivered-pricing] 🔍 No retail prices found - trying direct Amazon/Walmart API fallback`);
+    
+    try {
+      // Try Amazon direct search with brand-only fallback
+      const amazonResult = await searchAmazonWithFallback(brand, productName, true);
+      if (amazonResult.price !== null && amazonResult.confidence !== 'low') {
+        effectiveAmazonPriceCents = Math.round(amazonResult.price * 100);
+        warnings.push('usedDirectAmazonAPI');
+        console.log(`[delivered-pricing] ✓ Direct Amazon API: $${amazonResult.price.toFixed(2)}`);
+      }
+    } catch (err) {
+      console.log(`[delivered-pricing] Direct Amazon API error: ${err}`);
+    }
+    
+    // Also try Walmart if Amazon didn't work
+    if (!effectiveAmazonPriceCents) {
+      try {
+        const walmartResult = await searchWalmart(brand, productName);
+        if (walmartResult.price !== null && walmartResult.confidence !== 'low') {
+          effectiveWalmartPriceCents = Math.round(walmartResult.price * 100);
+          warnings.push('usedDirectWalmartAPI');
+          console.log(`[delivered-pricing] ✓ Direct Walmart API: $${walmartResult.price.toFixed(2)}`);
+        }
+      } catch (err) {
+        console.log(`[delivered-pricing] Direct Walmart API error: ${err}`);
+      }
+    }
+  }
+
   // Calculate target delivered price
   const minDeliveredCents = fullSettings.minItemCents + fullSettings.shippingEstimateCents;
   const targetResult = calculateTargetDelivered(
@@ -903,8 +940,8 @@ export async function getDeliveredPricing(
     activeMedian,
     soldMedianCents,
     soldCount,
-    effectiveAmazonPriceCents, // Use Brave-found Amazon price if available
-    walmartPriceCents,
+    effectiveAmazonPriceCents, // Use Brave/Direct API Amazon price if available
+    effectiveWalmartPriceCents, // Use Direct API Walmart price if available
     fullSettings.undercutCents,
     minDeliveredCents,
     retailComps,
@@ -924,7 +961,7 @@ export async function getDeliveredPricing(
       activeFloorDeliveredCents: activeFloor,
       activeMedianDeliveredCents: activeMedian,
       amazonPriceCents: effectiveAmazonPriceCents,
-      walmartPriceCents,
+      walmartPriceCents: effectiveWalmartPriceCents,
       soldMedianDeliveredCents: soldMedianCents,
       soldCount,
       soldStrong: targetResult.soldStrong,
@@ -1030,7 +1067,7 @@ export async function getDeliveredPricing(
     activeFloorDeliveredCents: activeFloor,
     activeMedianDeliveredCents: activeMedian,
     amazonPriceCents: effectiveAmazonPriceCents,
-    walmartPriceCents,
+    walmartPriceCents: effectiveWalmartPriceCents,
     soldMedianDeliveredCents: soldMedianCents,
     soldCount,
     soldStrong: targetResult.soldStrong,
