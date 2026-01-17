@@ -1207,6 +1207,7 @@
           
           // Fetch fresh data if no cache
           if (!offers) {
+            console.log('[Drafts] Fetching fresh data from API...');
             // Prefer explicit status queries to ensure UNPUBLISHED/DRAFT/INACTIVE are returned on accounts
             // where the upstream API does not include them by default without offer_status.
             const rawSku = new URL(location.href).searchParams.get('sku') || '';
@@ -1216,15 +1217,21 @@
               (skuOk ? '&sku=' + encodeURIComponent(rawSku) : '');
 
             // Single aggregated query to rely on server-side multi-status handling and safe-aggregate fallback
+            console.log('[Drafts] Calling:', base + '&status=UNPUBLISHED,DRAFT,INACTIVE');
             const agg = await fetchJSON(base + '&status=' + encodeURIComponent('UNPUBLISHED,DRAFT,INACTIVE'));
+            console.log('[Drafts] API Response:', JSON.stringify(agg, null, 2).substring(0, 2000));
             offers = Array.isArray(agg?.offers) ? agg.offers : [];
+            console.log('[Drafts] Offers from primary call:', offers.length);
 
             // Fallback: if explicit queries yielded nothing, do a broad fetch and client-filter
             if (!offers.length) {
+              console.log('[Drafts] No offers found, trying broad fetch...');
               const j = await fetchJSON(base);
+              console.log('[Drafts] Broad fetch response:', JSON.stringify(j, null, 2).substring(0, 2000));
               const all = Array.isArray(j.offers) ? j.offers : [];
               const allowed = new Set(['UNPUBLISHED', 'DRAFT', 'INACTIVE']);
               offers = all.filter((o) => allowed.has(String(o?.status || '').toUpperCase()));
+              console.log('[Drafts] Filtered offers after broad fetch:', offers.length);
             }
             
             // Cache the results
