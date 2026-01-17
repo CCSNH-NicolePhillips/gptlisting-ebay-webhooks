@@ -1229,6 +1229,13 @@
               const j = await fetchJSON(base);
               console.log('[Drafts] Broad fetch response:', JSON.stringify(j, null, 2).substring(0, 2000));
               const all = Array.isArray(j.offers) ? j.offers : [];
+              
+              // DEBUG: Log ALL offer statuses to understand what's in the account
+              console.log('[Drafts] DEBUG: All offers in account:');
+              all.forEach((o, idx) => {
+                console.log(`  [${idx}] SKU: ${o?.sku}, Status: ${o?.status}, OfferId: ${o?.offerId}`);
+              });
+              
               const allowed = new Set(['UNPUBLISHED', 'DRAFT', 'INACTIVE']);
               offers = all.filter((o) => allowed.has(String(o?.status || '').toUpperCase()));
               console.log('[Drafts] Filtered offers after broad fetch:', offers.length);
