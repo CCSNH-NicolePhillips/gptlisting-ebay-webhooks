@@ -1241,13 +1241,13 @@
               console.log('[Drafts] Filtered offers after broad fetch:', offers.length);
             }
             
-            // WORKAROUND: If still no offers, check for recently created offers from Quick List
-            // and fetch them directly by SKU (bypasses the 25707 error that blocks status-filtered listing)
-            if (!offers.length) {
-              try {
-                const recentJson = sessionStorage.getItem('recent-created-offers');
-                if (recentJson) {
-                  const recentOffers = JSON.parse(recentJson);
+            // ALWAYS check for recently created offers from Quick List and merge them in
+            // This ensures newly created offers appear even if eBay API is slow to reflect them
+            // (eBay can take up to 30 seconds to index new offers in their listing API)
+            try {
+              const recentJson = sessionStorage.getItem('recent-created-offers');
+              if (recentJson) {
+                const recentOffers = JSON.parse(recentJson);
                   const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
                   const validRecent = recentOffers.filter(r => r.createdAt > fiveMinutesAgo);
                   
@@ -1284,7 +1284,6 @@
               } catch (e) {
                 console.warn('[Drafts] Failed to check recent offers:', e);
               }
-            }
             
             // Cache the results
             try {
