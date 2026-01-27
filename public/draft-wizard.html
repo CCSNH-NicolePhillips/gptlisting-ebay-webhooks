@@ -342,6 +342,51 @@
       // Global to store last created draft data for debugging
       let lastDraftData = null;
       
+      // Promotion processing timeout reference
+      let promotionProcessingTimeout = null;
+      
+      /**
+       * Schedule promotion processing after a short delay to allow eBay sync.
+       * eBay needs ~60 seconds to sync new listings before they can be promoted.
+       */
+      function schedulePromotionProcessing() {
+        // Clear any existing timeout to avoid duplicate calls
+        if (promotionProcessingTimeout) {
+          clearTimeout(promotionProcessingTimeout);
+        }
+        
+        // Wait 70 seconds (eBay needs ~60s sync time) then trigger promotion processing
+        promotionProcessingTimeout = setTimeout(async () => {
+          try {
+            console.log('[Promotion] Triggering promotion-process after publish delay');
+            const exec = (window.authClient && typeof window.authClient.authFetch === 'function') 
+              ? window.authClient.authFetch 
+              : fetch;
+            
+            const response = await exec('/.netlify/functions/promotion-process', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({}),
+            });
+            
+            if (response.ok) {
+              const data = await response.json();
+              console.log('[Promotion] Processing result:', data);
+              
+              // If there are still pending jobs, schedule another run
+              if (data.stats?.stillPending > 0) {
+                console.log(`[Promotion] ${data.stats.stillPending} jobs still pending, scheduling another run`);
+                schedulePromotionProcessing();
+              }
+            } else {
+              console.warn('[Promotion] Processing failed:', response.status);
+            }
+          } catch (err) {
+            console.error('[Promotion] Error triggering promotion-process:', err);
+          }
+        }, 70000); // 70 seconds
+      }
+      
       // Edit mode detection
       const urlParams = new URLSearchParams(window.location.search);
       const IS_EDIT_MODE = urlParams.get('edit') === 'true';
@@ -796,6 +841,10 @@
             const data = await r.json();
             if (r.ok && data.ok) {
               msg.textContent = `Published: ${offerId}`;
+              
+              // Schedule promotion processing after eBay sync delay
+              schedulePromotionProcessing();
+              
               try {
                 // Defer cleanup: when user leaves this page, delete any leftover UNPUBLISHED drafts for this SKU (excluding this offerId)
                 var skuEl = document.getElementById('sku');

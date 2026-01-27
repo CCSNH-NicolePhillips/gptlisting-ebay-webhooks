@@ -680,6 +680,47 @@
       // Global user promotion settings (loaded on init)
       let globalPromoSettings = { enabled: false, rate: 5 };
       
+      // Track pending promotion processing (eBay needs ~60s to sync before promotion works)
+      let promotionProcessingTimeout = null;
+      
+      /**
+       * Schedule promotion processing after publish
+       * eBay needs ~60-90 seconds before a newly published listing can be promoted.
+       * We wait 70 seconds then call promotion-process to process queued jobs.
+       */
+      function schedulePromotionProcessing() {
+        // Clear any existing timeout
+        if (promotionProcessingTimeout) {
+          clearTimeout(promotionProcessingTimeout);
+        }
+        
+        // Wait 70 seconds then process promotions
+        promotionProcessingTimeout = setTimeout(async () => {
+          try {
+            console.log('[Drafts] Processing queued promotions...');
+            const exec = window.authClient && typeof window.authClient.authFetch === 'function' 
+              ? window.authClient.authFetch 
+              : fetch;
+            const res = await exec('/.netlify/functions/promotion-process');
+            const data = await res.json();
+            console.log('[Drafts] Promotion processing result:', data);
+            
+            if (data.succeeded > 0) {
+              console.log(`[Drafts] ✓ ${data.succeeded} promotion(s) applied successfully`);
+            }
+            if (data.retrying > 0) {
+              // Schedule another retry in 60 seconds
+              console.log(`[Drafts] ${data.retrying} promotion(s) still pending, will retry...`);
+              schedulePromotionProcessing();
+            }
+          } catch (err) {
+            console.error('[Drafts] Promotion processing error:', err);
+          }
+        }, 70000); // 70 seconds
+        
+        console.log('[Drafts] Scheduled promotion processing in 70 seconds');
+      }
+      
       async function loadUserPromoSettings() {
         try {
           const exec = window.authClient && typeof window.authClient.authFetch === 'function' 
@@ -896,6 +937,9 @@
               sessionStorage.removeItem('drafts-cache-time');
               el.remove();
               flash.textContent = `Published ${offer.offerId}`;
+              
+              // Schedule promotion processing after eBay sync delay
+              schedulePromotionProcessing();
               
               // Check if all drafts are now gone
               checkAndShowEmptyState();
@@ -1850,6 +1894,11 @@
         
         updateBulkActionBar();
         checkAndShowEmptyState();
+        
+        if (successCount > 0) {
+          // Schedule promotion processing after eBay sync delay
+          schedulePromotionProcessing();
+        }
         
         if (errorCount === 0) {
           flash.textContent = `✓ Successfully published ${successCount} draft(s)`;
