@@ -1,5 +1,5 @@
 import type { Handler } from '@netlify/functions';
-import { accessTokenFromRefresh } from '../../src/lib/_common.js';
+import { accessTokenFromRefresh, tokenHosts } from '../../src/lib/_common.js';
 import { tokensStore } from '../../src/lib/_blobs.js';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
 
@@ -64,7 +64,7 @@ export const handler: Handler = async (event) => {
         return { statusCode: 400, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' }, body: JSON.stringify({ error: 'Invalid SKU detected. This listing cannot be updated through the Inventory API.' }) };
       }
 
-      const { apiHost } = require('../../src/lib/_common.js').tokenHosts(process.env.EBAY_ENV);
+      const { apiHost } = tokenHosts(process.env.EBAY_ENV);
       const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || 'EBAY_US';
       
       // STEP 1: Update Inventory Item (title, description, images, aspects)
