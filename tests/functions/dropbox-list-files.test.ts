@@ -7,7 +7,7 @@ import { handler } from '../../netlify/functions/dropbox-list-files.js';
 import type { HandlerEvent } from '@netlify/functions';
 
 // Mock dependencies
-jest.mock('../../src/lib/_blobs.js', () => ({
+jest.mock('../../src/lib/redis-store.js', () => ({
 	tokensStore: jest.fn(),
 }));
 
@@ -35,7 +35,7 @@ describe('dropbox-list-files', () => {
 		mockGet = jest.fn();
 		mockStore = { get: mockGet };
 
-		const { tokensStore } = require('../../src/lib/_blobs.js');
+		const { tokensStore } = require('../../src/lib/redis-store.js');
 		tokensStore.mockReturnValue(mockStore);
 
 		const auth = require('../../src/lib/_auth.js');

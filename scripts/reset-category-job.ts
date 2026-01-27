@@ -3,7 +3,7 @@
  * Run with: npx tsx scripts/reset-category-job.ts <jobId>
  */
 
-import { getStore } from '@netlify/blobs';
+import { cacheStore } from '../src/lib/redis-store.js';
 
 const jobId = process.argv[2];
 if (!jobId) {
@@ -11,7 +11,7 @@ if (!jobId) {
   process.exit(1);
 }
 
-const store = getStore('category-taxonomy');
+const store = cacheStore();
 
 async function resetJob() {
   try {
@@ -32,7 +32,7 @@ async function resetJob() {
     const index = await store.get('category-fetch-index.json', { type: 'json' }) as any;
     if (index?.activeJobs) {
       const activeJobs = (index.activeJobs as string[]).filter(id => id !== jobId);
-      await store.setJSON('category-fetch-index.json', { activeJobs });
+      await store.set('category-fetch-index.json', JSON.stringify({ activeJobs }));
       console.log(`✓ Removed ${jobId} from active jobs`);
     }
     

@@ -6,7 +6,7 @@
 import { Handler } from "@netlify/functions";
 import { requireUserAuth } from "../../src/lib/auth-user.js";
 import { schedulePairingV2Job } from "../../src/lib/pairingV2Jobs.js";
-import { tokensStore } from "../../src/lib/_blobs.js";
+import { tokensStore } from "../../src/lib/redis-store.js";
 import { userScopedKey } from "../../src/lib/_auth.js";
 import fetch from "node-fetch";
 

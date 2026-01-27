@@ -3,7 +3,7 @@
  * This prevents wasting money re-fetching categories we already have
  */
 
-import { tokensStore } from '../src/lib/_blobs.js';
+import { tokensStore } from '../src/lib/redis-store.js';
 
 const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL?.replace(/\/$/, '');
 const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;

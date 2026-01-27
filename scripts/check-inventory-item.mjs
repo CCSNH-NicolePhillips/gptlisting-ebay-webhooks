@@ -3,7 +3,7 @@
  * Usage: node scripts/check-inventory-item.mjs <SKU>
  */
 
-import { tokensStore } from '../dist/src/lib/_blobs.js';
+import { tokensStore } from '../dist/src/lib/redis-store.js';
 import { accessTokenFromRefresh } from '../dist/src/lib/_common.js';
 
 const sku = process.argv[2];

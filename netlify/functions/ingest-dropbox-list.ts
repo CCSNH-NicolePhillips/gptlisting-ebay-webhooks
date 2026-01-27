@@ -9,7 +9,7 @@
 
 import type { Handler } from '@netlify/functions';
 import { getJwtSubUnverified, getBearerToken, userScopedKey } from '../../src/lib/_auth.js';
-import { tokensStore } from '../../src/lib/_blobs.js';
+import { tokensStore } from '../../src/lib/redis-store.js';
 import { ingestFiles, IngestError, IngestErrorCode } from '../../src/ingestion/index.js';
 
 const CORS_HEADERS = {

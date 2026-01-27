@@ -8,7 +8,7 @@ import { handler as getHandler } from '../../netlify/functions/user-settings-get
 import type { HandlerEvent } from '@netlify/functions';
 
 // Mock dependencies
-jest.mock('../../src/lib/_blobs.js', () => ({
+jest.mock('../../src/lib/redis-store.js', () => ({
   tokensStore: jest.fn(),
 }));
 
@@ -36,7 +36,7 @@ describe('User Settings Persistence', () => {
     mockSet = jest.fn();
     mockStore = { get: mockGet, set: mockSet };
     
-    const { tokensStore } = require('../../src/lib/_blobs.js');
+    const { tokensStore } = require('../../src/lib/redis-store.js');
     tokensStore.mockReturnValue(mockStore);
     
     const auth = require('../../src/lib/_auth.js');

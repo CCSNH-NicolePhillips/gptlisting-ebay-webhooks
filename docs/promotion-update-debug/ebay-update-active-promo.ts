@@ -1,6 +1,6 @@
 import type { Handler } from '@netlify/functions';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
-import { tokensStore } from '../../src/lib/_blobs.js';
+import { tokensStore } from '../../src/lib/redis-store.js';
 import { getCampaigns, getAds, createAds, updateAdRate } from '../../src/lib/ebay-promote.js';
 
 function normalizeRate(input: any): number | null {

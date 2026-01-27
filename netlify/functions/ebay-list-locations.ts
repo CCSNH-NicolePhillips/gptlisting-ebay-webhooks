@@ -1,6 +1,6 @@
 import type { Handler } from '@netlify/functions';
 import { accessTokenFromRefresh, tokenHosts } from '../../src/lib/_common.js';
-import { tokensStore } from '../../src/lib/_blobs.js';
+import { tokensStore } from '../../src/lib/redis-store.js';
 import { getJwtSubUnverified, userScopedKey, getBearerToken } from '../../src/lib/_auth.js';
 
 export const handler: Handler = async (event) => {

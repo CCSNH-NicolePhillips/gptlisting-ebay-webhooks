@@ -32,7 +32,7 @@ jest.mock('../../src/lib/job-store.js', () => ({
   getJob: mockGetJob,
 }));
 
-jest.mock('../../src/lib/_blobs.js', () => ({
+jest.mock('../../src/lib/redis-store.js', () => ({
   tokensStore: mockTokensStore,
 }));
 

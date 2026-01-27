@@ -8,7 +8,7 @@ import { computeRoleConfidenceBatch, crossCheckGroupRoles, type RoleConfidence }
 import { urlKey } from "../utils/urlKey.js";
 import { sanitizeInsightUrl } from "../utils/urlSanitize.js";
 import { userScopedKey } from "./_auth.js";
-import { tokensStore } from "./_blobs.js";
+import { tokensStore } from "./redis-store.js";
 import { runAnalysis } from "./analyze-core.js";
 import { clipImageEmbedding, clipProviderInfo, clipTextEmbedding, cosine } from "./clip-client-split.js";
 import type { ImageInsight } from "./image-insight.js";

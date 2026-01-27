@@ -1,6 +1,6 @@
 import type { Handler } from '@netlify/functions';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
-import { tokensStore } from '../../src/lib/_blobs.js';
+import { tokensStore } from '../../src/lib/redis-store.js';
 
 function json(status: number, body: any) {
   return { statusCode: status, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };

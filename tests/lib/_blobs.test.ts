@@ -28,7 +28,7 @@ describe('_blobs (Redis-backed storage)', () => {
     process.env.UPSTASH_REDIS_REST_URL = 'https://test-redis.upstash.io';
     process.env.UPSTASH_REDIS_REST_TOKEN = 'test-token-123';
     
-    const module = await import('../../src/lib/_blobs.js');
+    const module = await import('../../src/lib/redis-store.js');
     tokensStore = module.tokensStore;
     cacheStore = module.cacheStore;
     
@@ -347,7 +347,7 @@ describe('_blobs (Redis-backed storage)', () => {
       delete process.env.UPSTASH_REDIS_REST_URL;
       process.env.UPSTASH_REDIS_REST_TOKEN = 'test-token';
       
-      const module = await import('../../src/lib/_blobs.js');
+      const module = await import('../../src/lib/redis-store.js');
       const store = module.tokensStore();
       
       const result = await store.get('test');
@@ -359,7 +359,7 @@ describe('_blobs (Redis-backed storage)', () => {
       process.env.UPSTASH_REDIS_REST_URL = 'https://test.upstash.io';
       delete process.env.UPSTASH_REDIS_REST_TOKEN;
       
-      const module = await import('../../src/lib/_blobs.js');
+      const module = await import('../../src/lib/redis-store.js');
       const store = module.tokensStore();
       
       const result = await store.get('test');

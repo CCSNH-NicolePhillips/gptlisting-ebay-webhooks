@@ -1,5 +1,5 @@
 import type { Handler } from '@netlify/functions';
-import { tokensStore } from '../../src/lib/_blobs.js';
+import { tokensStore } from '../../src/lib/redis-store.js';
 import { getJwtSubUnverified, userScopedKey, getBearerToken, requireAuthVerified } from '../../src/lib/_auth.js';
 import { getUserStats } from '../../src/lib/user-stats.js';
 

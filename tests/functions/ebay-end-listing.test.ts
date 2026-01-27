@@ -6,7 +6,7 @@ jest.mock('../../src/lib/_common.js', () => ({
   tokenHosts: jest.fn(() => ({ apiHost: 'https://api.ebay.com' })),
 }));
 
-jest.mock('../../src/lib/_blobs.js', () => ({
+jest.mock('../../src/lib/redis-store.js', () => ({
   tokensStore: jest.fn(() => ({
     get: jest.fn(),
   })),
@@ -25,7 +25,7 @@ global.fetch = mockFetch;
 
 import { handler } from '../../netlify/functions/ebay-end-listing.js';
 import { accessTokenFromRefresh, tokenHosts } from '../../src/lib/_common.js';
-import { tokensStore } from '../../src/lib/_blobs.js';
+import { tokensStore } from '../../src/lib/redis-store.js';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified } from '../../src/lib/_auth.js';
 import type { HandlerEvent, HandlerContext } from '@netlify/functions';
 

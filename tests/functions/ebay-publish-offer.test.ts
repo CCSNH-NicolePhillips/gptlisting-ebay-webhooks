@@ -15,7 +15,7 @@ jest.mock('../../src/lib/_common.js', () => ({
   })),
 }));
 
-jest.mock('../../src/lib/_blobs.js', () => {
+jest.mock('../../src/lib/redis-store.js', () => {
   const mockStore = {
     get: jest.fn(),
     set: jest.fn(),
@@ -47,7 +47,7 @@ const mockFetch = jest.fn() as jest.MockedFunction<typeof fetch>;
 global.fetch = mockFetch as any;
 
 // Import mocked modules
-import { tokensStore } from '../../src/lib/_blobs.js';
+import { tokensStore } from '../../src/lib/redis-store.js';
 import { queuePromotionJob } from '../../src/lib/promotion-queue.js';
 
 // Get mock store instance

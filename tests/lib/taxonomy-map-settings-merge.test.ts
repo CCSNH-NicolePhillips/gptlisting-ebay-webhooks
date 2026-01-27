@@ -12,7 +12,7 @@ jest.mock('../../src/lib/taxonomy-select.js', () => ({
   pickCategoryForGroup: jest.fn(),
 }));
 
-jest.mock('../../src/lib/_blobs.js', () => ({
+jest.mock('../../src/lib/redis-store.js', () => ({
   tokensStore: jest.fn(),
 }));
 
@@ -37,7 +37,7 @@ describe('taxonomy-map: Pricing Settings Merge', () => {
     // Get mocked functions
     mockBuildItemSpecifics = require('../../src/lib/taxonomy-autofill.js').buildItemSpecifics;
     mockPickCategoryForGroup = require('../../src/lib/taxonomy-select.js').pickCategoryForGroup;
-    mockTokensStore = require('../../src/lib/_blobs.js').tokensStore;
+    mockTokensStore = require('../../src/lib/redis-store.js').tokensStore;
     mockComputeEbayItemPriceCents = require('../../src/lib/pricing-compute.js').computeEbayItemPriceCents;
     mockComputeEbayOfferPricingCents = require('../../src/lib/pricing-compute.js').computeEbayOfferPricingCents;
     

@@ -33,7 +33,7 @@ jest.mock('../../src/lib/openai.js', () => ({
 }));
 
 // Mock other dependencies
-jest.mock('../../src/lib/_blobs.js', () => ({
+jest.mock('../../src/lib/redis-store.js', () => ({
   tokensStore: jest.fn(() => ({
     get: jest.fn(),
     set: jest.fn(),

@@ -63,14 +63,14 @@ Returns `PairingResult` with:
 - `metrics`: pair rates, brand breakdown, reason histogram
 
 ### Storage & Caching
-- **Netlify Blobs** (`src/lib/_blobs.ts`): OAuth tokens (`tokensStore()`), taxonomy cache (`cacheStore()`)
+- **Upstash Redis REST** (`src/lib/redis-store.ts`): OAuth tokens (`tokensStore()`), taxonomy cache (`cacheStore()`)
 - **Upstash Redis REST** (`src/lib/job-store.ts`): Job state, price cache, user settings
-- **Redis TTL**: 48 hours for jobs, 7 days for price cache
+- **Redis TTL**: 90 days for OAuth tokens, 7 days for cache, 48 hours for jobs
 - **User-scoped keys** (`src/lib/user-keys.ts`): `job:{userId}:{jobId}`, `price:{userId}:{jobId}:{groupId}`
 
 ### eBay API Integration
 - **Inventory API** (`src/lib/ebay-sell.ts`): Create inventory items + offers (primary API)
-- **Token management** (`src/lib/ebay-auth.ts`): Refresh tokens stored in Blobs, access tokens cached in-memory
+- **Token management** (`src/lib/ebay-auth.ts`): Refresh tokens stored in Redis, access tokens cached in-memory
 - **Marketing API** (`src/lib/ebay-promote.ts`): Promoted Listings auto-creation
 - **Location check** (`ensureInventoryLocation()`): Validates merchant location before offer creation
 - **Error handling**: eBay returns 200 with `errors[]` array - always check payload structure
@@ -196,12 +196,10 @@ Use `tsx` to run TypeScript directly:
 - `VISION_CONCURRENCY`: Parallel vision requests (default: 2, max: 16)
 - `PAIR_CANDIDATE_K`: Top-K candidates per front (default: 8)
 - `MAX_FILES_PER_BATCH`: Max images per scan job (default: 200)
-- `NETLIFY_BLOBS_SITE_ID`, `NETLIFY_BLOBS_TOKEN`: Netlify Blobs credentials (auto-provisioned in production)
 
 ### Storage Providers
-- **Netlify Blobs**: Token storage, taxonomy cache (`tokensStore()`, `cacheStore()`)
-- **Upstash Redis**: Job state, pricing cache, user settings (48hr TTL for jobs)
-- **AWS S3/R2**: Image staging for ingestion pipeline (via `AWS_*` env vars)
+- **Upstash Redis**: All persistent storage - OAuth tokens, taxonomy cache, job state, pricing cache, user settings
+- **AWS S3**: Image staging for ingestion pipeline (via `STORAGE_*` env vars)
 
 ### Full List
 See `configs/prod.env.example` for complete environment variable reference

@@ -27,7 +27,7 @@ describe("ebay-auth", () => {
       tokenHosts: mockTokenHosts,
     }));
     
-    jest.mock("../../src/lib/_blobs.js", () => ({
+    jest.mock("../../src/lib/redis-store.js", () => ({
       tokensStore: mockTokensStore,
     }));
     

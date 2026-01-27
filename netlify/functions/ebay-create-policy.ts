@@ -1,7 +1,7 @@
 import type { Handler } from '@netlify/functions';
 import { json, userScopedKey, getBearerToken, getJwtSubUnverified, requireAuthVerified } from '../../src/lib/_auth.js';
 import { getUserAccessToken, apiHost, headers } from '../../src/lib/_ebay.js';
-import { tokensStore } from '../../src/lib/_blobs.js';
+import { tokensStore } from '../../src/lib/redis-store.js';
 
 function normalizeMoney(input: any, fallbackCurrency = 'USD', fallbackValue = '0.00') {
 	if (!input || typeof input !== 'object') {

@@ -1,7 +1,7 @@
 import type { Handler } from '@netlify/functions';
 import { putInventoryItem } from '../../src/lib/ebay-sell.js';
 import { accessTokenFromRefresh, tokenHosts } from '../../src/lib/_common.js';
-import { tokensStore } from '../../src/lib/_blobs.js';
+import { tokensStore } from '../../src/lib/redis-store.js';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
 import { getOrigin, isAuthorized, isOriginAllowed, jsonResponse } from '../../src/lib/http.js';
 import { maybeRequireUserAuth } from '../../src/lib/auth-user.js';

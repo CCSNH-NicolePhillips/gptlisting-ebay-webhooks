@@ -1,5 +1,5 @@
 import { accessTokenFromRefresh, tokenHosts } from "./_common.js";
-import { tokensStore } from "./_blobs.js";
+import { tokensStore } from "./redis-store.js";
 import { userScopedKey } from "./_auth.js";
 
 export type EbayAccessToken = {

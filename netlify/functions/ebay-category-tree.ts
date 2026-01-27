@@ -1,6 +1,6 @@
 import type { Handler } from '@netlify/functions';
 import { tokenHosts, appAccessToken } from '../../src/lib/_common.js';
-import { cacheStore } from '../../src/lib/_blobs.js';
+import { cacheStore } from '../../src/lib/redis-store.js';
 
 export const handler: Handler = async (event) => {
 	try {

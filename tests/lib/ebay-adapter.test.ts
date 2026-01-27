@@ -13,7 +13,7 @@ import { fetchOffer, updateOfferPrice } from '../../src/lib/ebay-adapter.js';
 global.fetch = jest.fn();
 
 // Mock _blobs module
-jest.mock('../../src/lib/_blobs.js', () => ({
+jest.mock('../../src/lib/redis-store.js', () => ({
   tokensStore: jest.fn()
 }));
 
@@ -23,7 +23,7 @@ jest.mock('../../src/lib/_common.js', () => ({
   tokenHosts: jest.fn(() => ({ apiHost: 'https://api.ebay.com' }))
 }));
 
-import { tokensStore } from '../../src/lib/_blobs.js';
+import { tokensStore } from '../../src/lib/redis-store.js';
 import { accessTokenFromRefresh } from '../../src/lib/_common.js';
 
 describe('ebay-adapter', () => {

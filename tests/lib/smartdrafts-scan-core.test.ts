@@ -1,5 +1,11 @@
 import { jest } from "@jest/globals";
-import type { Store } from "@netlify/blobs";
+
+// Mock Store interface (was from @netlify/blobs, now we use redis-store)
+interface Store {
+  get(key: string, options?: { type?: 'json' | 'text' | 'blob' }): Promise<any>;
+  set(key: string, value: unknown): Promise<void>;
+  delete(key: string): Promise<void>;
+}
 
 // Mock external dependencies
 jest.mock("node-fetch");
@@ -11,7 +17,7 @@ import type { IngestedFile } from "../../src/ingestion/types.js";
 import type { AnalysisResult } from "../../src/lib/analyze-core.js";
 
 type RunAnalysisFn = typeof import("../../src/lib/analyze-core.js")['runAnalysis'];
-type TokensStoreFn = typeof import("../../src/lib/_blobs.js")['tokensStore'];
+type TokensStoreFn = typeof import("../../src/lib/redis-store.js")['tokensStore'];
 type CanConsumeFn = typeof import("../../src/lib/quota.js")['canConsumeImages'];
 type ConsumeImagesFn = typeof import("../../src/lib/quota.js")['consumeImages'];
 type SanitizeUrlsFn = typeof import("../../src/lib/merge.js")['sanitizeUrls'];
@@ -93,7 +99,7 @@ jest.mock("../../src/utils/urlSanitize.js", () => ({ sanitizeInsightUrl: mockSan
 jest.mock("../../src/lib/_auth.js", () => ({
   userScopedKey: jest.fn((user: string, key: string) => `${user}:${key}`),
 }));
-jest.mock("../../src/lib/_blobs.js", () => ({ tokensStore: mockTokensStore }));
+jest.mock("../../src/lib/redis-store.js", () => ({ tokensStore: mockTokensStore }));
 jest.mock("../../src/lib/analyze-core.js", () => ({ runAnalysis: mockRunAnalysis }));
 jest.mock("../../src/lib/clip-client-split.js", () => ({
   clipImageEmbedding: jest.fn(async () => [0.1, 0.2, 0.3]),

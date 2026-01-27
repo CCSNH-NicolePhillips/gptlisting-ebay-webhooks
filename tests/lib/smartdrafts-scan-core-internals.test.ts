@@ -41,7 +41,7 @@ jest.mock("../../src/utils/urlSanitize.js", () => ({
 jest.mock("../../src/lib/_auth.js", () => ({
   userScopedKey: jest.fn((user: string, key: string) => `${user}:${key}`),
 }));
-jest.mock("../../src/lib/_blobs.js", () => ({ 
+jest.mock("../../src/lib/redis-store.js", () => ({ 
   tokensStore: jest.fn(() => ({ get: jest.fn() })) 
 }));
 jest.mock("../../src/lib/analyze-core.js", () => ({ 

@@ -1,6 +1,6 @@
 import type { Handler } from '@netlify/functions';
 import { accessTokenFromRefresh, tokenHosts } from '../../src/lib/_common.js';
-import { tokensStore } from '../../src/lib/_blobs.js';
+import { tokensStore } from '../../src/lib/redis-store.js';
 import { putCategory, getCategoryById } from '../../src/lib/taxonomy-store.js';
 import type { CategoryDef, ItemSpecific } from '../../src/lib/taxonomy-schema.js';
 

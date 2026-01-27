@@ -5,7 +5,7 @@
 import { mapGroupToDraftWithTaxonomy } from '../../src/lib/taxonomy-map.js';
 
 // Mock dependencies
-jest.mock('../../src/lib/_blobs', () => ({
+jest.mock('../../src/lib/redis-store', () => ({
   getBlob: jest.fn(),
   setBlob: jest.fn(),
 }));

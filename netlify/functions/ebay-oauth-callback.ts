@@ -1,5 +1,5 @@
 import type { Handler } from '@netlify/functions';
-import { tokensStore } from '../../src/lib/_blobs.js';
+import { tokensStore } from '../../src/lib/redis-store.js';
 import { consumeOAuthState } from '../../src/lib/_auth.js';
 
 function sanitizeReturnTo(value: unknown): string | null {

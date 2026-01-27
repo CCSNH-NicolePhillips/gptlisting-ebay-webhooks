@@ -12,7 +12,7 @@ import { type PriceDecision } from "../../src/lib/price-lookup.js";
 import { getDeliveredPricing, type DeliveredPricingDecision, type DeliveredPricingSettings } from "../../src/lib/delivered-pricing.js";
 import { getBrandMetadata } from "../../src/lib/brand-map.js";
 import { getDefaultPricingSettings, type PricingSettings } from "../../src/lib/pricing-config.js";
-import { tokensStore } from "../../src/lib/_blobs.js";
+import { tokensStore } from "../../src/lib/redis-store.js";
 import { fetchCategoryAspects, formatAspectsForPrompt, type CategoryAspectsResult } from "../../src/lib/ebay-category-aspects.js";
 
 const GPT_TIMEOUT_MS = 30_000;

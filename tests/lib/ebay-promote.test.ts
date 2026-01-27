@@ -16,7 +16,7 @@ jest.mock('../../src/lib/ebay-auth.js', () => ({
   getEbayAccessToken: jest.fn(),
 }));
 
-jest.mock('../../src/lib/_blobs.js', () => ({
+jest.mock('../../src/lib/redis-store.js', () => ({
   tokensStore: jest.fn(() => ({
     get: jest.fn(),
     put: jest.fn(),
@@ -45,7 +45,7 @@ jest.mock('../../src/config.js', () => ({
 global.fetch = jest.fn() as jest.MockedFunction<typeof fetch>;
 
 import { getEbayAccessToken } from '../../src/lib/ebay-auth.js';
-import { tokensStore } from '../../src/lib/_blobs.js';
+import { tokensStore } from '../../src/lib/redis-store.js';
 import { accessTokenFromRefresh } from '../../src/lib/_common.js';
 
 describe('ebay-promote', () => {

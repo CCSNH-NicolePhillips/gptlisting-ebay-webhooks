@@ -1,6 +1,6 @@
 import type { Handler } from '@netlify/functions';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
-import { tokensStore } from '../../src/lib/_blobs.js';
+import { tokensStore } from '../../src/lib/redis-store.js';
 import { getCampaigns, getAds, deleteAd } from '../../src/lib/ebay-promote.js';
 
 export const handler: Handler = async (event) => {

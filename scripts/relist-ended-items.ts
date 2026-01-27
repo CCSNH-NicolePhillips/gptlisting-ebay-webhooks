@@ -12,7 +12,7 @@
 
 import 'dotenv/config';
 import { accessTokenFromRefresh } from '../src/lib/_common.js';
-import { tokensStore } from '../src/lib/_blobs.js';
+import { tokensStore } from '../src/lib/redis-store.js';
 import { userScopedKey } from '../src/lib/_auth.js';
 
 const USER_SUB = process.env.DEV_USER_ID || 'google-oauth2|108767599998494531403';

@@ -7,7 +7,7 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import type { HandlerEvent } from '@netlify/functions';
 
 // Mock dependencies
-jest.mock('../../src/lib/_blobs.js', () => ({
+jest.mock('../../src/lib/redis-store.js', () => ({
 	tokensStore: jest.fn(() => ({
 		get: jest.fn(),
 		set: jest.fn(),
@@ -37,7 +37,7 @@ jest.mock('../../src/lib/_ebay.js', () => ({
 }));
 
 // Import after mocks
-import { tokensStore } from '../../src/lib/_blobs.js';
+import { tokensStore } from '../../src/lib/redis-store.js';
 import { userScopedKey } from '../../src/lib/_auth.js';
 
 describe('Policy Defaults Persistence', () => {

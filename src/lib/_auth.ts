@@ -1,6 +1,6 @@
 import type { HandlerEvent } from '@netlify/functions';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
-import { tokensStore } from './_blobs.js';
+import { tokensStore } from './redis-store.js';
 
 const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN;
 const AUTH0_CLIENT_ID = process.env.AUTH0_CLIENT_ID;

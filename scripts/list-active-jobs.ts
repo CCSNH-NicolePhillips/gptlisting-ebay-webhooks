@@ -2,7 +2,7 @@
  * List all active category fetch jobs
  */
 
-import { tokensStore } from '../src/lib/_blobs.js';
+import { tokensStore } from '../src/lib/redis-store.js';
 
 async function main() {
   const store = tokensStore();

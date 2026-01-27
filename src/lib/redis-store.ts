@@ -1,8 +1,8 @@
 /**
- * Token/Cache Storage - Redis-backed (migrated from Netlify Blobs)
+ * Token/Cache Storage - Redis-backed
  * 
  * Uses Upstash Redis REST API for persistent storage.
- * Drop-in replacement for Netlify Blobs getStore() API.
+ * Provides tokensStore() and cacheStore() singletons for user data storage.
  */
 
 const BASE = (process.env.UPSTASH_REDIS_REST_URL || "").replace(/\/$/, "");
@@ -34,7 +34,7 @@ async function redisCall(...parts: string[]): Promise<{ result: unknown }> {
 }
 
 /**
- * Redis-backed store that mimics Netlify Blobs API
+ * Redis-backed key-value store for tokens and cache data
  */
 class RedisStore {
   private prefix: string;

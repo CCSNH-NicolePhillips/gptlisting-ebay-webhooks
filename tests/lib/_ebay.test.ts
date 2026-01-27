@@ -1,10 +1,10 @@
 // Mock dependencies
-jest.mock("../../src/lib/_blobs.js");
+jest.mock("../../src/lib/redis-store.js");
 jest.mock("../../src/lib/_common.js");
 jest.mock("../../src/lib/_auth.js");
 
 import { getUserAccessToken, apiHost, headers } from "../../src/lib/_ebay";
-import { tokensStore } from "../../src/lib/_blobs.js";
+import { tokensStore } from "../../src/lib/redis-store.js";
 import { accessTokenFromRefresh, tokenHosts } from "../../src/lib/_common.js";
 import { userScopedKey } from "../../src/lib/_auth.js";
 

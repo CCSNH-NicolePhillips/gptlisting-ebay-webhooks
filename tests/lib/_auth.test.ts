@@ -33,7 +33,7 @@ describe("_auth", () => {
       jwtVerify: mockJwtVerify,
     }));
     
-    jest.mock("../../src/lib/_blobs.js", () => ({
+    jest.mock("../../src/lib/redis-store.js", () => ({
       tokensStore: mockTokensStore,
     }));
     
