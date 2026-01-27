@@ -95,6 +95,20 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       'X-EBAY-C-MARKETPLACE-ID': MARKETPLACE_ID,
     };
     
+    // Validate image URLs - eBay only accepts HTTPS URLs, not base64 data URLs
+    const imageUrls: string[] = draft.images || [];
+    const invalidImages = imageUrls.filter((url: string) => url && url.startsWith('data:'));
+    if (invalidImages.length > 0) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ 
+          ok: false, 
+          error: `${invalidImages.length} image(s) are invalid. Images must be uploaded to get HTTPS URLs - base64 data URLs are not supported by eBay.` 
+        }),
+      };
+    }
+    
     // Fetch current offer to get SKU
     const offerRes = await fetch(`${apiHost}/sell/inventory/v1/offer/${offerId}`, {
       headers: ebayHeaders,
@@ -117,7 +131,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         title: draft.title,
         description: draft.description,
         aspects: draft.aspects || {},
-        imageUrls: draft.images || currentOffer.listing?.imageUrls || [],
+        imageUrls: imageUrls.length > 0 ? imageUrls : (currentOffer.listing?.imageUrls || []),
       },
       condition: draft.condition || 'NEW',
       availability: currentOffer.availability || {

@@ -1258,38 +1258,70 @@
       preview.appendChild(uploadBox);
     }
     
+    /**
+     * Uploads base64 images to R2/S3 via ingest-local-upload function
+     * Returns array of HTTPS URLs that eBay can access
+     */
+    async function uploadImagesToStorage(files) {
+      // Convert files to the format expected by ingest-local-upload
+      const fileData = [];
+      for (const file of files) {
+        const reader = new FileReader();
+        const base64 = await new Promise((resolve, reject) => {
+          reader.onload = (e) => {
+            // Remove data URL prefix to get pure base64
+            const result = e.target.result;
+            const base64Data = result.split(',')[1];
+            resolve(base64Data);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+        fileData.push({
+          name: file.name,
+          mime: file.type || 'image/jpeg',
+          data: base64,
+        });
+      }
+      
+      // Upload to R2/S3
+      const res = await fetchJSON('/.netlify/functions/ingest-local-upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ files: fileData }),
+      });
+      
+      if (!res.ok) {
+        throw new Error(res.error || 'Failed to upload images');
+      }
+      
+      // Return the staged URLs (signed HTTPS URLs)
+      return res.files.map(f => f.stagedUrl);
+    }
+
     async function handleImageUpload(event) {
       const files = event.target.files;
       if (!files || files.length === 0) return;
       
       try {
-        showFlash('Uploading images...', 'success');
+        showFlash('Uploading images to storage...', 'success');
         
-        // Convert files to base64 data URLs
-        const newImages = [];
-        for (const file of files) {
-          const reader = new FileReader();
-          const dataUrl = await new Promise((resolve, reject) => {
-            reader.onload = (e) => resolve(e.target.result);
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-          });
-          newImages.push(dataUrl);
-        }
+        // Upload images to R2/S3 and get HTTPS URLs
+        const uploadedUrls = await uploadImagesToStorage(Array.from(files));
         
         // Add new images to the preview (before the upload box)
         const preview = $('imagesPreview');
         const uploadBox = preview.querySelector('.image-upload-box');
         
-        newImages.forEach((dataUrl, index) => {
+        uploadedUrls.forEach((url, index) => {
           const currentImageCount = document.querySelectorAll('.image-thumb').length;
           const div = document.createElement('div');
           div.className = 'image-thumb';
           div.draggable = true;
-          div.dataset.url = dataUrl;
+          div.dataset.url = url; // Store the HTTPS URL, not base64
           div.innerHTML = `
             <div class="image-order">${currentImageCount + index + 1}</div>
-            <img src="${dataUrl}" alt="Product image" />
+            <img src="${url}" alt="Product image" />
           `;
           
           // Drag and drop event handlers
@@ -1302,7 +1334,7 @@
           preview.insertBefore(div, uploadBox);
         });
         
-        showFlash(`Added ${newImages.length} image(s)`, 'success');
+        showFlash(`Added ${uploadedUrls.length} image(s)`, 'success');
         
         // Clear the file input
         event.target.value = '';
@@ -1335,6 +1367,12 @@
         
         // Collect images in their current order
         const images = Array.from(document.querySelectorAll('.image-thumb')).map(el => el.dataset.url);
+        
+        // Validate that all images are proper HTTPS URLs (not base64 data URLs)
+        const invalidImages = images.filter(url => url && url.startsWith('data:'));
+        if (invalidImages.length > 0) {
+          throw new Error(`${invalidImages.length} image(s) failed to upload. Please remove them and try adding again.`);
+        }
         
         // Collect promotion settings
         const promotionEnabled = $('promotionEnabled').checked;
