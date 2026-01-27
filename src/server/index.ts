@@ -210,6 +210,7 @@ async function registerRoutes() {
     'promote-drafts',
     'promotion-process',
     'promotion-status',
+    'promotion-test',
     'promotion-worker',
     'queue-promotion',
     'show-my-ebay-token',
