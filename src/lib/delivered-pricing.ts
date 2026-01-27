@@ -396,6 +396,15 @@ export function calculateTargetDelivered(
   let retailCapCents: number | null = null;
   let lowestRetailCents: number | null = null;
   
+  // EXCLUDE discount/liquidation sites - they don't represent true retail value
+  const discountSites = [
+    'editorialist', 'overstock', 'nordstrom rack', 'hautelook', 'gilt', 
+    'poshmark', 'mercari', 'whatnot', 'ebay', 'tjmaxx', 'marshalls',
+    'burlington', 'ross', 'bluefly', 'yoox', 'the realreal', 'therealreal',
+    'tradesy', 'vestiaire', 'grailed', 'depop', 'offerup', 'craigslist',
+    'facebook marketplace', 'letgo', 'wish', 'temu', 'shein', 'aliexpress'
+  ];
+  
   if (trustedRetailPrices.length > 0) {
     // We have Brand Site/Amazon/Walmart/Target - use that for cap (high confidence)
     lowestRetailCents = Math.min(...trustedRetailPrices);
@@ -408,14 +417,6 @@ export function calculateTargetDelivered(
     console.log(`[delivered-pricing] Retail cap: $${(retailCapCents / 100).toFixed(2)} (80% of $${(lowestRetailCents / 100).toFixed(2)})`);
   } else if (!soldStrong) {
     // No trusted retail AND weak sold data - use Google Shopping with caution
-    // EXCLUDE discount/liquidation sites - they don't represent true retail value
-    const discountSites = [
-      'editorialist', 'overstock', 'nordstrom rack', 'hautelook', 'gilt', 
-      'poshmark', 'mercari', 'whatnot', 'ebay', 'tjmaxx', 'marshalls',
-      'burlington', 'ross', 'bluefly', 'yoox', 'the realreal', 'therealreal',
-      'tradesy', 'vestiaire', 'grailed', 'depop', 'offerup', 'craigslist',
-      'facebook marketplace', 'letgo', 'wish', 'temu', 'shein', 'aliexpress'
-    ];
     
     const retailPrices = retailComps
       .filter(c => c.inStock)
@@ -439,8 +440,41 @@ export function calculateTargetDelivered(
   } else {
     // Strong sold data but no Amazon/Walmart - SKIP retail cap from Google Shopping
     // Google Shopping often has wrong variants that would incorrectly cap our price
-    console.log(`[delivered-pricing] Strong sold data (${soldCount} samples) - skipping Google Shopping retail cap (unreliable variants)`);
-    console.log(`[delivered-pricing] Trusting sold median: $${(soldMedian! / 100).toFixed(2)}`);
+    // HOWEVER: If sold median is 3x+ higher than retail, trust retail (sold data is likely contaminated)
+    
+    // Get reliable retail prices (excluding discount sites, eBay)
+    const reliableRetailPrices = retailComps
+      .filter(c => c.inStock)
+      .filter(c => {
+        const sellerLower = c.seller.toLowerCase();
+        // Exclude discount sites AND eBay sellers from this check
+        const isDiscount = discountSites.some(s => sellerLower.includes(s));
+        const isEbay = c.source === 'ebay';
+        return !isDiscount && !isEbay;
+      })
+      .map(c => c.deliveredCents)
+      .filter((p): p is number => p !== null && p >= minValidRetailCents);
+    
+    if (reliableRetailPrices.length >= 2 && soldMedian) {
+      const lowestReliableRetail = Math.min(...reliableRetailPrices);
+      const medianReliableRetail = reliableRetailPrices.sort((a, b) => a - b)[Math.floor(reliableRetailPrices.length / 2)];
+      
+      // If sold median is 2.5x+ higher than retail median, sold data is likely contaminated
+      // This catches cases where sold data includes multi-packs that weren't filtered
+      if (soldMedian > medianReliableRetail * 2.5) {
+        console.log(`[delivered-pricing] ⚠️ Sold median ($${(soldMedian / 100).toFixed(2)}) is ${(soldMedian / medianReliableRetail).toFixed(1)}x retail median ($${(medianReliableRetail / 100).toFixed(2)})`);
+        console.log(`[delivered-pricing] Sold data likely contaminated with multi-packs - using retail cap instead`);
+        lowestRetailCents = lowestReliableRetail;
+        retailCapCents = Math.round(lowestRetailCents * RETAIL_CAP_RATIO);
+        console.log(`[delivered-pricing] Retail cap: $${(retailCapCents / 100).toFixed(2)} (80% of $${(lowestRetailCents / 100).toFixed(2)})`);
+      } else {
+        console.log(`[delivered-pricing] Strong sold data (${soldCount} samples) - skipping Google Shopping retail cap (unreliable variants)`);
+        console.log(`[delivered-pricing] Trusting sold median: $${(soldMedian / 100).toFixed(2)}`);
+      }
+    } else {
+      console.log(`[delivered-pricing] Strong sold data (${soldCount} samples) - skipping Google Shopping retail cap (unreliable variants)`);
+      console.log(`[delivered-pricing] Trusting sold median: $${(soldMedian! / 100).toFixed(2)}`);
+    }
   }
   
   // Log retail prices for debugging

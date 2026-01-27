@@ -182,11 +182,28 @@ export async function fetchSoldPriceStats(
       /\b(\d+)\s*bottles?\b/i,         // "2 bottles"
       /\b(\d+)\s*pieces?\b/i,          // "2 pieces" (but not "90 pieces" for gum)
       /\bmulti[-\s]?pack/i,            // "multi-pack", "multipack"
+      /\b(\d+)\s*boxes?\s*(of\s*)?\d+/i, // "2 boxes of 6", "6 boxes 6"
+      /\bcase\s*(of\s*)?\d+/i,         // "case of 12", "case 24"
     ];
     
-    function isLotListing(title: string): boolean {
+    function isLotListing(title: string, searchTitle?: string): boolean {
       if (!title) return false;
       const lower = title.toLowerCase();
+      
+      // NEW: If the search is for a specific pack size (e.g., "6 pack"),
+      // detect if the listing has a DIFFERENT pack size
+      if (searchTitle) {
+        const searchPackMatch = searchTitle.match(/\b(\d+)\s*pack\b/i);
+        const titlePackMatch = title.match(/\b(\d+)\s*pack\b/i);
+        if (searchPackMatch && titlePackMatch) {
+          const searchPack = parseInt(searchPackMatch[1], 10);
+          const titlePack = parseInt(titlePackMatch[1], 10);
+          // If the listing's pack size is different from search, it's wrong
+          if (titlePack !== searchPack && titlePack > 1) {
+            return true;
+          }
+        }
+      }
       
       for (const pattern of LOT_PATTERNS) {
         const match = title.match(pattern);
@@ -214,7 +231,8 @@ export async function fetchSoldPriceStats(
     
     for (const item of data.organic_results) {
       // Skip lot listings - they inflate prices
-      if (isLotListing(item.title)) {
+      // Pass the search keywords to detect pack size mismatches
+      if (isLotListing(item.title, keywords)) {
         lotsSkipped++;
         continue;
       }

@@ -194,15 +194,45 @@ export async function searchGoogleShopping(
       
       // CRITICAL: Check brand match first
       // If we have a brand, the result MUST contain it (or a close variant)
+      // 
+      // ENHANCEMENT: Also accept product line names as brand matches
+      // e.g., brand="HVMN", productName="Ketone-IQ Energy Shot" → accept "Ketone-IQ" as brand
+      // This handles parent company vs product line branding differences
       if (searchBrand && searchBrand.length > 0) {
         const brandWords = normalize(searchBrand);
         const titleLower = resultTitle.toLowerCase();
+        
+        // Extract potential product line brand from search query
+        // Look for distinctive hyphenated names or capitalized multi-word patterns
+        // e.g., "Ketone-IQ" from "HVMN Ketone-IQ Energy Shot"
+        const productLineBrands: string[] = [];
+        const hyphenatedMatch = searchQuery.match(/\b([A-Za-z]+-[A-Za-z0-9]+)\b/g);
+        if (hyphenatedMatch) {
+          hyphenatedMatch.forEach(match => {
+            const normalized = match.toLowerCase().replace(/-/g, '');
+            if (normalized.length > 4 && !['sugar-free', 'zero-sugar', 'non-gmo', 'gluten-free'].includes(match.toLowerCase())) {
+              productLineBrands.push(match.toLowerCase());
+              productLineBrands.push(normalized); // Also add without hyphen
+            }
+          });
+        }
         
         // Check if ANY brand word appears in title
         const brandInTitle = brandWords.some(bw => 
           titleLower.includes(bw) || 
           titleWords.some(tw => tw.includes(bw) || bw.includes(tw))
         );
+        
+        // NEW: Check if product line brand appears in title
+        // e.g., "Ketone-IQ" appears even though "HVMN" doesn't
+        const productLineInTitle = productLineBrands.length > 0 && productLineBrands.some(plb => {
+          const found = titleLower.includes(plb) || 
+                        titleLower.replace(/-/g, '').includes(plb.replace(/-/g, ''));
+          if (found && !brandInTitle) {
+            console.log(`[google-shopping] ✅ Product line "${plb}" found in title (parent brand "${searchBrand}" not found)`);
+          }
+          return found;
+        });
         
         // NEW: Check if seller URL contains brand name
         // Brand sites often omit their name from product titles
@@ -227,8 +257,8 @@ export async function searchGoogleShopping(
           }
         }
         
-        if (!brandInTitle && !brandInSellerUrl) {
-          // Brand not found in title OR URL - this is likely a wrong product
+        if (!brandInTitle && !brandInSellerUrl && !productLineInTitle) {
+          // Brand not found in title, URL, or as product line - this is likely a wrong product
           console.log(`[google-shopping] ❌ Brand mismatch: "${searchBrand}" not in "${resultTitle.slice(0, 60)}"`);
           return false;
         }
