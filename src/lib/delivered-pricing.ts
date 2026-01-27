@@ -372,7 +372,7 @@ export function calculateTargetDelivered(
   let targetCents: number;
   
   // Sold data is "strong" if we have 5+ samples
-  const soldStrong = soldMedian !== null && soldCount >= 5;
+  let soldStrong = soldMedian !== null && soldCount >= 5;
   
   if (soldStrong) {
     console.log(`[delivered-pricing] Sold data is STRONG (${soldCount} samples, median $${(soldMedian! / 100).toFixed(2)})`);
@@ -455,18 +455,31 @@ export function calculateTargetDelivered(
       .map(c => c.deliveredCents)
       .filter((p): p is number => p !== null && p >= minValidRetailCents);
     
+    console.log(`[delivered-pricing] Reliable retail prices (non-eBay, non-discount, >= $${(minValidRetailCents / 100).toFixed(2)}): ${reliableRetailPrices.map(p => '$' + (p / 100).toFixed(2)).join(', ') || 'none'}`);
+    
     if (reliableRetailPrices.length >= 2 && soldMedian) {
-      const lowestReliableRetail = Math.min(...reliableRetailPrices);
-      const medianReliableRetail = reliableRetailPrices.sort((a, b) => a - b)[Math.floor(reliableRetailPrices.length / 2)];
+      // Sort prices ascending to find lowest cluster
+      const sortedRetail = [...reliableRetailPrices].sort((a, b) => a - b);
+      const lowestReliableRetail = sortedRetail[0];
       
-      // If sold median is 2.5x+ higher than retail median, sold data is likely contaminated
+      // Use the average of the two lowest prices as "expected retail" 
+      // This avoids being thrown off by international pricing or bundles
+      const lowestClusterAvg = (sortedRetail[0] + sortedRetail[1]) / 2;
+      
+      // If sold median is 1.5x+ higher than lowest retail cluster, sold data is likely contaminated
       // This catches cases where sold data includes multi-packs that weren't filtered
-      if (soldMedian > medianReliableRetail * 2.5) {
-        console.log(`[delivered-pricing] ⚠️ Sold median ($${(soldMedian / 100).toFixed(2)}) is ${(soldMedian / medianReliableRetail).toFixed(1)}x retail median ($${(medianReliableRetail / 100).toFixed(2)})`);
-        console.log(`[delivered-pricing] Sold data likely contaminated with multi-packs - using retail cap instead`);
+      if (soldMedian > lowestClusterAvg * 1.5) {
+        console.log(`[delivered-pricing] ⚠️ Sold median ($${(soldMedian / 100).toFixed(2)}) is ${(soldMedian / lowestClusterAvg).toFixed(1)}x lowest retail cluster ($${(lowestClusterAvg / 100).toFixed(2)})`);
+        console.log(`[delivered-pricing] Sold data likely contaminated with multi-packs - ignoring sold data`);
+        
+        // Mark sold data as NOT strong since it's contaminated
+        soldStrong = false;
+        
+        // Use retail as the cap, but with a smaller discount (95% not 80%)
+        // This allows competitive pricing at/just below retail without excessive discounting
         lowestRetailCents = lowestReliableRetail;
-        retailCapCents = Math.round(lowestRetailCents * RETAIL_CAP_RATIO);
-        console.log(`[delivered-pricing] Retail cap: $${(retailCapCents / 100).toFixed(2)} (80% of $${(lowestRetailCents / 100).toFixed(2)})`);
+        retailCapCents = Math.round(lowestRetailCents * 0.95);
+        console.log(`[delivered-pricing] Retail cap: $${(retailCapCents / 100).toFixed(2)} (95% of $${(lowestRetailCents / 100).toFixed(2)})`);
       } else {
         console.log(`[delivered-pricing] Strong sold data (${soldCount} samples) - skipping Google Shopping retail cap (unreliable variants)`);
         console.log(`[delivered-pricing] Trusting sold median: $${(soldMedian / 100).toFixed(2)}`);
