@@ -1200,6 +1200,19 @@ export async function lookupPrice(
         searchQuery,
         'amazon.com'
       );
+
+      // Fallback: If nothing found, try a trimmed query (brand + first 6 words)
+      if (!amazonUrlFound) {
+        const trimmedTitle = (input.title || '').split(/\s+/).slice(0, 6).join(' ').trim();
+        const fallbackQuery = `${input.brand} ${trimmedTitle}`.trim();
+        if (fallbackQuery && fallbackQuery !== searchQuery) {
+          console.log(`[price-debug] Amazon search fallback query: "${fallbackQuery}"`);
+          amazonUrlFound = await braveFirstUrl(
+            fallbackQuery,
+            'amazon.com'
+          );
+        }
+      }
     }
     
     if (amazonUrlFound) {
