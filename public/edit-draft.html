@@ -1065,6 +1065,8 @@
           // Single selection - use regular dropdown
           const selectedValue = existingValues[0] || '';
           const isFreeText = mode === 'FREE_TEXT';
+          // Allow custom entry for Brand even when eBay marks it selection-only
+          const allowCustom = isFreeText || key?.toLowerCase() === 'brand';
           
           // Check if selected value is in the predefined list
           const valueInList = aspectMetadata.aspectValues.some(av => av.localizedValue === selectedValue);
@@ -1083,7 +1085,7 @@
           }).join('');
           
           // For FREE_TEXT mode, also add a custom input option
-          const customInputOption = isFreeText ? `<option value="__custom__">Enter custom value...</option>` : '';
+          const customInputOption = allowCustom ? `<option value="__custom__">Enter custom value...</option>` : '';
           
           valueInput = `<select class="aspect-value aspect-dropdown-with-custom" data-free-text="${isFreeText}" ${isRequired ? 'required' : ''}>
             <option value="">Select ${key}...</option>
