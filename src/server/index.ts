@@ -121,6 +121,7 @@ async function registerRoutes() {
     'diag-privileges',
     'diag-whoami',
     'disconnect',
+    'draft-logs-get',
     'dropbox-get-thumbnails',
     'dropbox-list-files',
     'dropbox-list-folders',
