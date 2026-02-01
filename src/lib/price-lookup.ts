@@ -1239,18 +1239,12 @@ export async function lookupPrice(
           let productMatches = false;
           if (input.keyText && input.keyText.length > 0) {
             const keyTerms = input.keyText
-              .filter(t => t && t.length > 3) // Skip short/generic terms
+              .filter(t => t && t.trim().length >= 2) // Keep short model tokens like "v4"
               .map(t => normalizeBrand(t))
               .filter((t): t is string => Boolean(t));
             
             productMatches = keyTerms.some(term => normalizedTitle?.includes(term));
             console.log(`[price-debug] Amazon product match check: keyTerms=${JSON.stringify(keyTerms)}, matches=${productMatches}`);
-            
-            // FIX 1B: If keyText doesn't match but brand does, accept it anyway (Relaxed Product Matching)
-            if (!productMatches && brandMatches) {
-              console.log(`[price] ⚠️ Amazon keyText mismatch but brand matches - accepting anyway`);
-              productMatches = true;
-            }
           } else {
             // No keyText - just use brand match
             productMatches = true;
@@ -1281,7 +1275,7 @@ export async function lookupPrice(
           }
 
           // REMOVED !isTermMismatch from the condition below to allow matches with missing terms
-          if (skipValidation || (brandMatches && productMatches && !isBundleMismatch && !isSizeMismatch)) {
+          if (skipValidation || (brandMatches && productMatches && !isBundleMismatch && !isSizeMismatch && !isTermMismatch)) {
             amazonPrice = priceData.amazonItemPrice;
             amazonUrl = amazonUrlFound;
             amazonWeight = priceData.amazonWeight || null; // Capture weight data
