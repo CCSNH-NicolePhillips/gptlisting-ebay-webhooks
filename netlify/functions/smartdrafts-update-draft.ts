@@ -125,12 +125,26 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     const currentOffer = await offerRes.json();
     const sku = currentOffer.sku;
     
+    // Sanitize aspects: eBay requires single value for some (e.g., Flavor). Keep first value only.
+    const sanitizedAspects: Record<string, any> = { ...(draft.aspects || {}) };
+    for (const key of Object.keys(sanitizedAspects)) {
+      const lower = key.toLowerCase();
+      const val = sanitizedAspects[key];
+      if (lower === 'flavor') {
+        if (Array.isArray(val) && val.length > 1) {
+          sanitizedAspects[key] = [val[0]];
+        } else if (typeof val === 'string' && val.includes(',')) {
+          sanitizedAspects[key] = [val.split(',')[0].trim()].filter(Boolean);
+        }
+      }
+    }
+
     // Update the inventory item first (title, description, aspects, images, weight)
     const inventoryPayload: Record<string, unknown> = {
       product: {
         title: draft.title,
         description: draft.description,
-        aspects: draft.aspects || {},
+        aspects: sanitizedAspects,
         imageUrls: imageUrls.length > 0 ? imageUrls : (currentOffer.listing?.imageUrls || []),
       },
       condition: draft.condition || 'NEW',
