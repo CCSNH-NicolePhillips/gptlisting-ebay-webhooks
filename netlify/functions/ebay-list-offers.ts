@@ -2,6 +2,7 @@ import type { Handler } from '@netlify/functions';
 import { accessTokenFromRefresh, tokenHosts } from '../../src/lib/_common.js';
 import { tokensStore } from '../../src/lib/redis-store.js';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
+import { getPromotionIntent } from '../../src/lib/promotion-queue.js';
 
 export const handler: Handler = async (event) => {
 	// Log immediately to confirm function is invoked
@@ -500,6 +501,29 @@ export const handler: Handler = async (event) => {
 			const enrichStart = Date.now();
 			await enrichWithInventoryData(final);
 			console.log('[ebay-list-offers] Inventory data enrichment took', Date.now() - enrichStart, 'ms');
+		}
+
+		// Enrich offers with cached promotion intent from Redis (eBay does not persist merchantData)
+		if (final.length > 0) {
+			try {
+				const intents = await Promise.all(
+					final.map(async (offer) => {
+						const offerId = offer?.offerId;
+						if (!offerId) return null;
+						return getPromotionIntent(offerId);
+					})
+				);
+
+				intents.forEach((intent, idx) => {
+					if (!intent || !intent.enabled) return;
+					const target = final[idx];
+					target.merchantData = target.merchantData || {};
+					target.merchantData.autoPromote = true;
+					target.merchantData.autoPromoteAdRate = intent.adRate;
+				});
+			} catch (promoErr) {
+				console.warn('[ebay-list-offers] Failed to enrich promotion intent:', promoErr);
+			}
 		}
 		
 		// 🔍 DEBUG: Log image URLs in offers for debugging
