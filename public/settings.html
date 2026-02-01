@@ -463,6 +463,29 @@
               </div>
             </section>
             
+            <!-- Developer Settings Card -->
+            <section class="dp-card">
+              <div class="dp-card__header">
+                <h3 class="dp-card__title">🔧 Developer Settings</h3>
+                <p class="dp-card__subtitle">Debug tools for troubleshooting pricing and AI decisions</p>
+              </div>
+              
+              <div class="dp-card__content">
+                <label class="dp-form-label">
+                  <input type="checkbox" id="showPricingLogs" style="margin-right: 8px; vertical-align: middle;" />
+                  <span>Show pricing logs on Edit Draft page</span>
+                </label>
+                <p style="font-size: 0.875rem; color: var(--text-muted); margin-top: 0.5rem; padding-left: 1.5rem;">
+                  When enabled, displays detailed pricing decision logs including: AI product detection reasoning, 
+                  price source comparisons (Amazon, Walmart, eBay), calculation breakdown with formulas, 
+                  and final pricing math.
+                </p>
+                
+                <button id="devSettingsSaveButton" class="dp-btn dp-btn-primary" style="margin-top: 24px;">Save developer settings</button>
+                <p id="devSettingsSaveMessage" class="dp-muted" style="text-align: center; margin-top: 12px; min-height: 20px;"></p>
+              </div>
+            </section>
+            
             <!-- Connections Card -->
             <section class="dp-card">
               <div class="dp-card__header">
@@ -1155,6 +1178,61 @@
         location.href = '/login.html';
       };
       
+      // Developer settings save handler
+      const devSettingsSaveBtn = document.getElementById('devSettingsSaveButton');
+      if (devSettingsSaveBtn) {
+        devSettingsSaveBtn.onclick = async () => {
+          const msg = document.getElementById('devSettingsSaveMessage');
+          const showPricingLogs = document.getElementById('showPricingLogs')?.checked || false;
+          
+          if (msg) msg.textContent = 'Saving...';
+          
+          try {
+            const response = await authClient.authFetch('/.netlify/functions/user-settings-save', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                showPricingLogs
+              })
+            });
+            
+            if (response.ok) {
+              if (msg) {
+                msg.textContent = '✓ Developer settings saved!';
+                msg.style.color = '#10b981';
+                setTimeout(() => { msg.textContent = ''; msg.style.color = ''; }, 3000);
+              }
+            } else {
+              throw new Error('Failed to save');
+            }
+          } catch (err) {
+            console.error('[Settings] Failed to save developer settings:', err);
+            if (msg) {
+              msg.textContent = 'Failed to save settings';
+              msg.style.color = '#ef4444';
+              setTimeout(() => { msg.textContent = ''; msg.style.color = ''; }, 3000);
+            }
+          }
+        };
+      }
+      
+      // Load developer settings
+      async function loadDevSettings() {
+        try {
+          const response = await authClient.authFetch('/.netlify/functions/user-settings-get');
+          if (response.ok) {
+            const settings = await response.json();
+            
+            const showPricingLogsCheckbox = document.getElementById('showPricingLogs');
+            if (showPricingLogsCheckbox && settings.showPricingLogs !== undefined) {
+              showPricingLogsCheckbox.checked = settings.showPricingLogs;
+            }
+          }
+        } catch (err) {
+          console.error('[Settings] Failed to load developer settings:', err);
+        }
+      }
+      
       function initUserMenu() {
         const userCard = document.getElementById('userCard');
         const userMenu = document.getElementById('userMenu');
@@ -1187,6 +1265,7 @@
           loadPromotionSettings().catch(() => {}),
           loadPricingSettings().catch(() => {}),
           loadAutoPriceSettings().catch(() => {}),
+          loadDevSettings().catch(() => {}),
         ];
         await Promise.all(loads);
         

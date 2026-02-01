@@ -822,6 +822,7 @@
           offer?.pricingSummary?.price?.value,
           offer?.pricingSummary?.price?.currency
         );
+        const priceValue = parseFloat(offer?.pricingSummary?.price?.value || '0');
         
         // Check for pricing status from custom merchant data
         const pricingStatus = offer?.merchantData?.pricingStatus;
@@ -857,6 +858,24 @@
   badge.className = 'badge';
   const st = String(offer?.status || 'UNPUBLISHED');
   badge.innerHTML = `<span class="dot"></span> ${st}`;
+  
+        // Create promo indicator badge (shown above the promo controls for visibility)
+        const hasExplicitPromo = offer.merchantData?.autoPromote !== undefined;
+        const isPromoted = hasExplicitPromo 
+          ? offer.merchantData?.autoPromote 
+          : globalPromoSettings.enabled;
+        const promoRate = offer.merchantData?.autoPromoteAdRate || globalPromoSettings.rate || 5;
+        
+        let promoBadge = null;
+        if (isPromoted && priceValue >= 3.00) {
+          promoBadge = document.createElement('div');
+          promoBadge.className = 'badge';
+          promoBadge.style.background = 'rgba(99, 102, 241, 0.15)';
+          promoBadge.style.borderColor = 'rgba(99, 102, 241, 0.4)';
+          promoBadge.style.color = '#a5b4fc';
+          promoBadge.innerHTML = `📢 Promoted at ${promoRate}%`;
+        }
+        
         const row = document.createElement('div');
         row.className = 'row';
         
@@ -882,11 +901,40 @@
         del.className = 'btn danger';
         del.textContent = 'Delete';
 
-        edit.onclick = () => {
+        edit.onclick = async () => {
           if (!offer.offerId) {
             flash.textContent = 'Cannot edit: Offer ID not found';
             return;
           }
+          
+          // Auto-persist promotion settings before navigating to edit page
+          // This ensures the 5% default (or user's setting) is saved automatically
+          const hasExplicitPromo = offer.merchantData?.autoPromote !== undefined;
+          if (!hasExplicitPromo && globalPromoSettings.enabled) {
+            try {
+              edit.disabled = true;
+              edit.textContent = 'Loading...';
+              
+              const exec = (window.authClient && typeof window.authClient.authFetch === 'function') 
+                ? window.authClient.authFetch 
+                : fetch;
+              
+              await exec('/.netlify/functions/ebay-update-draft-promo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  offerId: offer.offerId,
+                  autoPromote: true,
+                  autoPromoteAdRate: globalPromoSettings.rate || 5,
+                }),
+              });
+              console.log(`[Drafts] Auto-applied promotion settings to ${offer.offerId}: ${globalPromoSettings.rate}%`);
+            } catch (e) {
+              console.error('[Drafts] Failed to auto-apply promo settings:', e);
+              // Don't block navigation on error
+            }
+          }
+          
           window.location.href = `/edit-draft.html?offerId=${encodeURIComponent(offer.offerId)}`;
         };
 
@@ -1057,8 +1105,7 @@
         
         // Check if price is below eBay's minimum for promotion ($3.00)
         const MIN_PROMOTABLE_PRICE = 3.00;
-        const itemPrice = parseFloat(offer?.pricingSummary?.price?.value || '0');
-        const canPromote = itemPrice >= MIN_PROMOTABLE_PRICE;
+        const canPromote = priceValue >= MIN_PROMOTABLE_PRICE;
         
         if (!canPromote) {
           // Price too low - show warning instead of promotion controls
@@ -1199,6 +1246,9 @@
           body.appendChild(attentionReasonsEl);
         }
         body.appendChild(badge);
+        if (promoBadge) {
+          body.appendChild(promoBadge);
+        }
         body.appendChild(promoControls);
         body.appendChild(row);
         el.appendChild(th);

@@ -3,6 +3,7 @@ import { putJob } from "../../src/lib/job-store.js";
 import { k } from "../../src/lib/user-keys.js";
 import { recordDraftsCreated } from "../../src/lib/user-stats.js";
 import { createJobLogger, type JobLogger } from "../../src/lib/redis-logger.js";
+import { storeDraftLogs, buildPricingCalculations, type PricingSourceLog } from "../../src/lib/draft-logs.js";
 
 // Import the draft creation logic from the existing function
 import OpenAI from "openai";
@@ -1305,6 +1306,7 @@ async function createDraftForProduct(
   promotion: { enabled: boolean; rate: number | null }, 
   pricingSettings: PricingSettings,
   logger: JobLogger,
+  userId: string,
   retryAttempt: number = 0
 ): Promise<Draft> {
   const startTime = Date.now();
@@ -2031,12 +2033,136 @@ async function createDraftForProduct(
     console.warn(`[Draft] 🔄 Retrying draft creation (attempt ${retryAttempt + 1}/2)...`);
     logger.warn(`Retrying incomplete draft for ${product.productId}`, { hasCategory, hasBrand, aspectsCount });
     await sleep(1000); // Brief delay before retry
-    return createDraftForProduct(product, promotion, pricingSettings, logger, retryAttempt + 1);
+    return createDraftForProduct(product, promotion, pricingSettings, logger, userId, retryAttempt + 1);
   }
   
   if (isIncomplete && retryAttempt >= 2) {
     console.error(`[Draft] ❌ Failed to create complete draft after ${retryAttempt + 1} attempts for ${product.productId}`);
     logger.error(`Failed to create complete draft after ${retryAttempt + 1} attempts`, { productId: product.productId });
+  }
+  
+  // ========================================
+  // Store Draft Logs for Debugging/Transparency
+  // ========================================
+  // Capture pricing decision, sources, and calculations for display on edit-draft page
+  try {
+    const pricingSourceLogs: PricingSourceLog[] = [];
+    
+    // Build eBay source log from comps
+    if (deliveredDecision?.ebayComps && deliveredDecision.ebayComps.length > 0) {
+      pricingSourceLogs.push({
+        source: 'eBay Active',
+        query: `${product.brand || ''} ${product.product}`.trim(),
+        results: deliveredDecision.ebayComps.slice(0, 5).map(c => ({
+          title: c.title || 'eBay Listing',
+          price: (c.itemCents || 0) / 100,
+          shipping: (c.shipCents || 0) / 100,
+          total: (c.deliveredCents || 0) / 100,
+          url: c.url || undefined,
+          seller: c.seller,
+        })),
+        selectedResult: deliveredDecision.activeFloorDeliveredCents ? {
+          title: 'Lowest eBay Active',
+          price: deliveredDecision.activeFloorDeliveredCents / 100,
+          reason: 'Price floor from active listings',
+        } : undefined,
+      });
+    }
+    
+    // Build retail sources log
+    if (deliveredDecision?.amazonPriceCents || deliveredDecision?.walmartPriceCents) {
+      pricingSourceLogs.push({
+        source: 'Retail (Amazon/Walmart)',
+        query: `${product.brand || ''} ${product.product}`.trim(),
+        results: [
+          ...(deliveredDecision.amazonPriceCents ? [{
+            title: 'Amazon',
+            price: deliveredDecision.amazonPriceCents / 100,
+            shipping: 0,
+            total: deliveredDecision.amazonPriceCents / 100,
+          }] : []),
+          ...(deliveredDecision.walmartPriceCents ? [{
+            title: 'Walmart',
+            price: deliveredDecision.walmartPriceCents / 100,
+            shipping: 0,
+            total: deliveredDecision.walmartPriceCents / 100,
+          }] : []),
+        ],
+      });
+    }
+    
+    // Build calculations from delivered decision
+    const calculations = deliveredDecision ? buildPricingCalculations(
+      {
+        targetDeliveredCents: deliveredDecision.targetDeliveredCents,
+        finalItemCents: deliveredDecision.finalItemCents,
+        finalShipCents: deliveredDecision.finalShipCents,
+        freeShipApplied: deliveredDecision.freeShipApplied,
+        subsidyCents: deliveredDecision.subsidyCents,
+        shippingEstimateCents: pricingSettings.templateShippingEstimateCents || 600,
+        ebayComps: deliveredDecision.ebayComps,
+        retailComps: deliveredDecision.retailComps,
+        activeFloorDeliveredCents: deliveredDecision.activeFloorDeliveredCents,
+        amazonPriceCents: deliveredDecision.amazonPriceCents,
+        walmartPriceCents: deliveredDecision.walmartPriceCents,
+      },
+      {
+        discountPercent: 5,
+        shippingEstimateCents: pricingSettings.templateShippingEstimateCents || 600,
+      }
+    ) : [];
+    
+    // Determine confidence level
+    let confidence: 'high' | 'medium' | 'low' = 'low';
+    if (deliveredDecision?.canCompete && (deliveredDecision.soldCount || 0) >= 3) {
+      confidence = 'high';
+    } else if (deliveredDecision?.canCompete || (deliveredDecision?.soldCount || 0) >= 1) {
+      confidence = 'medium';
+    }
+    
+    await storeDraftLogs(userId, product.productId, {
+      pricing: {
+        timestamp: new Date().toISOString(),
+        brand: product.brand || '',
+        productName: product.product,
+        sources: pricingSourceLogs,
+        finalPrice: draft.price,
+        finalShipping: (deliveredDecision?.finalShipCents || 0) / 100,
+        freeShippingApplied: deliveredDecision?.freeShipApplied || false,
+        calculations,
+        reasoning: deliveredDecision?.compsSource 
+          ? `Price based on ${deliveredDecision.compsSource} data. ${deliveredDecision.canCompete ? 'Competitive' : 'May need adjustment'}.`
+          : 'No market data available - using fallback pricing.',
+        confidence,
+        warnings: deliveredDecision?.warnings || [],
+        competitorSummary: {
+          lowestDeliveredPrice: deliveredDecision?.activeFloorDeliveredCents 
+            ? deliveredDecision.activeFloorDeliveredCents / 100 
+            : undefined,
+          medianDeliveredPrice: deliveredDecision?.soldMedianDeliveredCents 
+            ? deliveredDecision.soldMedianDeliveredCents / 100 
+            : undefined,
+          amazonPrice: deliveredDecision?.amazonPriceCents 
+            ? deliveredDecision.amazonPriceCents / 100 
+            : undefined,
+          walmartPrice: deliveredDecision?.walmartPriceCents 
+            ? deliveredDecision.walmartPriceCents / 100 
+            : undefined,
+          ebayActiveCount: deliveredDecision?.ebayComps?.length,
+          ebaySoldCount: deliveredDecision?.soldCount,
+        },
+      },
+      promotion: promotion.enabled ? {
+        enabled: true,
+        rate: promotion.rate || 5,
+        reason: 'User-configured promotion rate',
+      } : undefined,
+    });
+    
+    console.log(`[Draft] ✓ Stored pricing logs for ${product.productId}`);
+  } catch (logErr) {
+    // Non-fatal - don't break draft creation if logging fails
+    console.error(`[Draft] ⚠️ Failed to store pricing logs for ${product.productId}:`, logErr);
   }
   
   return draft;
@@ -2209,7 +2335,7 @@ export const handler: Handler = async (event) => {
           console.log(`[PERF] Product ID: ${product.productId}`);
           
           try {
-            const draft = await createDraftForProduct(product, promotion, pricingSettings, logger);
+            const draft = await createDraftForProduct(product, promotion, pricingSettings, logger, userId);
             
             const productTotalTime = Date.now() - productStartTime;
             console.log(`[PERF] Product ${absoluteIndex + 1}/${products.length} TOTAL time: ${productTotalTime}ms`);

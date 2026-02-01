@@ -434,6 +434,149 @@
     .image-thumb {
       cursor: pointer;
     }
+    
+    /* AI Decision Logs styles */
+    .logs-section {
+      margin-top: 0;
+    }
+    .logs-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      cursor: pointer;
+      user-select: none;
+      padding: 0.5rem 0;
+    }
+    .logs-header:hover .logs-toggle {
+      background: var(--accent-soft);
+    }
+    .logs-toggle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      background: var(--bg-base);
+      transition: background 0.2s, transform 0.2s;
+    }
+    .logs-toggle.open {
+      transform: rotate(90deg);
+    }
+    .logs-content {
+      display: none;
+      margin-top: 1rem;
+    }
+    .logs-content.open {
+      display: block;
+    }
+    .logs-subsection {
+      background: var(--bg-base);
+      border-radius: var(--radius-md);
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+    .logs-subsection h4 {
+      margin: 0 0 0.75rem 0;
+      font-size: 0.9rem;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .logs-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+    .logs-table th,
+    .logs-table td {
+      text-align: left;
+      padding: 0.5rem;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .logs-table th {
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    .logs-table tr:last-child td {
+      border-bottom: none;
+    }
+    .logs-calculation {
+      background: rgba(99, 102, 241, 0.1);
+      border-radius: 6px;
+      padding: 0.75rem;
+      margin-bottom: 0.5rem;
+    }
+    .logs-calculation .step {
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 0.25rem;
+    }
+    .logs-calculation .formula {
+      font-family: monospace;
+      background: var(--bg-card);
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+    .logs-calculation .result {
+      margin-top: 0.5rem;
+      font-size: 0.9rem;
+    }
+    .logs-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .logs-badge--high {
+      background: rgba(34, 197, 94, 0.2);
+      color: #22c55e;
+    }
+    .logs-badge--medium {
+      background: rgba(234, 179, 8, 0.2);
+      color: #eab308;
+    }
+    .logs-badge--low {
+      background: rgba(239, 68, 68, 0.2);
+      color: #ef4444;
+    }
+    .logs-summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0.75rem;
+      margin-top: 0.75rem;
+    }
+    .logs-summary-item {
+      background: var(--bg-card);
+      padding: 0.5rem 0.75rem;
+      border-radius: 6px;
+      text-align: center;
+    }
+    .logs-summary-item .label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+    .logs-summary-item .value {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .logs-warning {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem;
+      background: rgba(234, 179, 8, 0.1);
+      border-radius: 4px;
+      font-size: 0.85rem;
+      color: #eab308;
+      margin-top: 0.5rem;
+    }
   </style>
 </head>
 <body>
@@ -749,6 +892,60 @@
           <h3 style="margin-top: 0; margin-bottom: 1rem; color: var(--text-primary);">📸 Images</h3>
           <input type="file" id="imageUploadInput" accept="image/*" multiple style="display: none;" />
           <div class="images-preview" id="imagesPreview"></div>
+        </div>
+        
+        <!-- AI Decision Logs (Developer feature) -->
+        <div class="dp-card dp-card--full logs-section" id="logsSection" style="display: none;">
+          <div class="logs-header" onclick="toggleLogs()">
+            <span class="logs-toggle" id="logsToggle">▶</span>
+            <h3 style="margin: 0; color: var(--text-primary);">🧠 AI Decision Logs</h3>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">(Developer)</span>
+          </div>
+          <div class="logs-content" id="logsContent">
+            <div id="logsLoading" style="text-align: center; padding: 1rem; color: var(--text-muted);">
+              Loading logs...
+            </div>
+            <div id="logsData" style="display: none;">
+              <!-- Pricing Decision -->
+              <div class="logs-subsection" id="logsPricing">
+                <h4>💰 Pricing Decision</h4>
+                <div id="pricingReasoning"></div>
+                <div class="logs-summary" id="pricingSummary"></div>
+              </div>
+              
+              <!-- Competitor Data -->
+              <div class="logs-subsection" id="logsCompetitors">
+                <h4>🏪 Competitor Prices</h4>
+                <table class="logs-table" id="competitorTable">
+                  <thead>
+                    <tr>
+                      <th>Source</th>
+                      <th>Title</th>
+                      <th>Price</th>
+                      <th>Shipping</th>
+                      <th>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody id="competitorTableBody"></tbody>
+                </table>
+              </div>
+              
+              <!-- Calculation Breakdown -->
+              <div class="logs-subsection" id="logsCalculations">
+                <h4>🧮 Calculation Breakdown</h4>
+                <div id="calculationSteps"></div>
+              </div>
+              
+              <!-- Warnings -->
+              <div class="logs-subsection" id="logsWarnings" style="display: none;">
+                <h4>⚠️ Warnings</h4>
+                <div id="warningsList"></div>
+              </div>
+            </div>
+            <div id="logsEmpty" style="display: none; text-align: center; padding: 1rem; color: var(--text-muted);">
+              No logs available for this draft. Logs are only available for drafts created after this feature was enabled.
+            </div>
+          </div>
         </div>
         
         <!-- Actions -->
@@ -1516,6 +1713,9 @@
         }
         
         await loadDraft();
+        
+        // Load AI decision logs if enabled in settings
+        await checkAndLoadLogs();
       } catch (e) {
         console.error('Bootstrap failed', e);
         showFlash(`Failed to load: ${e.message}`, 'error');
@@ -1547,6 +1747,192 @@
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') closeLightbox();
     });
+    
+    // ========================================
+    // AI Decision Logs Functions
+    // ========================================
+    
+    let logsOpen = false;
+    
+    function toggleLogs() {
+      logsOpen = !logsOpen;
+      const toggle = $('logsToggle');
+      const content = $('logsContent');
+      if (logsOpen) {
+        toggle.classList.add('open');
+        content.classList.add('open');
+      } else {
+        toggle.classList.remove('open');
+        content.classList.remove('open');
+      }
+    }
+    
+    async function checkAndLoadLogs() {
+      // First check if user has logs enabled in settings
+      try {
+        const settings = await fetchJSON('/.netlify/functions/user-settings-get');
+        if (!settings.showPricingLogs) {
+          // Setting not enabled, keep section hidden
+          return;
+        }
+        
+        // Show the section (collapsed by default)
+        $('logsSection').style.display = 'block';
+        
+        // Load the logs when expanded (lazy load)
+        // For now, load immediately
+        await loadDraftLogs();
+      } catch (err) {
+        console.error('Failed to check logs setting:', err);
+      }
+    }
+    
+    async function loadDraftLogs() {
+      if (!originalDraft?.sku) {
+        console.log('No SKU available for logs');
+        $('logsLoading').style.display = 'none';
+        $('logsEmpty').style.display = 'block';
+        return;
+      }
+      
+      try {
+        const res = await fetchJSON(`/.netlify/functions/draft-logs-get?sku=${encodeURIComponent(originalDraft.sku)}`);
+        
+        $('logsLoading').style.display = 'none';
+        
+        if (!res.ok || !res.logs) {
+          $('logsEmpty').style.display = 'block';
+          return;
+        }
+        
+        const logs = res.logs;
+        $('logsData').style.display = 'block';
+        
+        // Render pricing decision
+        renderPricingDecision(logs.pricing);
+        
+      } catch (err) {
+        console.error('Failed to load draft logs:', err);
+        $('logsLoading').style.display = 'none';
+        $('logsEmpty').style.display = 'block';
+        $('logsEmpty').textContent = `Failed to load logs: ${err.message}`;
+      }
+    }
+    
+    function renderPricingDecision(pricing) {
+      if (!pricing) {
+        $('logsPricing').style.display = 'none';
+        $('logsCompetitors').style.display = 'none';
+        $('logsCalculations').style.display = 'none';
+        return;
+      }
+      
+      // Reasoning and confidence
+      const confidenceBadge = pricing.confidence 
+        ? `<span class="logs-badge logs-badge--${pricing.confidence}">${pricing.confidence.toUpperCase()}</span>` 
+        : '';
+      
+      $('pricingReasoning').innerHTML = `
+        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem;">
+          <span style="font-size: 1.25rem; font-weight: 600; color: var(--text-primary);">$${pricing.finalPrice?.toFixed(2) || '0.00'}</span>
+          ${confidenceBadge}
+          ${pricing.freeShippingApplied ? '<span style="background: rgba(34, 197, 94, 0.2); color: #22c55e; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem;">FREE SHIPPING</span>' : ''}
+        </div>
+        <p style="color: var(--text-muted); font-size: 0.9rem; margin: 0;">${escapeHtml(pricing.reasoning || 'No reasoning available')}</p>
+      `;
+      
+      // Summary stats
+      const summary = pricing.competitorSummary || {};
+      let summaryHtml = '';
+      if (summary.lowestDeliveredPrice) {
+        summaryHtml += `<div class="logs-summary-item"><div class="label">Lowest eBay</div><div class="value">$${summary.lowestDeliveredPrice.toFixed(2)}</div></div>`;
+      }
+      if (summary.medianDeliveredPrice) {
+        summaryHtml += `<div class="logs-summary-item"><div class="label">Median Sold</div><div class="value">$${summary.medianDeliveredPrice.toFixed(2)}</div></div>`;
+      }
+      if (summary.amazonPrice) {
+        summaryHtml += `<div class="logs-summary-item"><div class="label">Amazon</div><div class="value">$${summary.amazonPrice.toFixed(2)}</div></div>`;
+      }
+      if (summary.walmartPrice) {
+        summaryHtml += `<div class="logs-summary-item"><div class="label">Walmart</div><div class="value">$${summary.walmartPrice.toFixed(2)}</div></div>`;
+      }
+      if (summary.ebayActiveCount) {
+        summaryHtml += `<div class="logs-summary-item"><div class="label">eBay Active</div><div class="value">${summary.ebayActiveCount}</div></div>`;
+      }
+      if (summary.ebaySoldCount) {
+        summaryHtml += `<div class="logs-summary-item"><div class="label">eBay Sold</div><div class="value">${summary.ebaySoldCount}</div></div>`;
+      }
+      $('pricingSummary').innerHTML = summaryHtml;
+      
+      // Competitor table
+      if (pricing.sources && pricing.sources.length > 0) {
+        let tableHtml = '';
+        pricing.sources.forEach(source => {
+          if (source.results && source.results.length > 0) {
+            source.results.forEach(result => {
+              tableHtml += `
+                <tr>
+                  <td>${escapeHtml(source.source)}</td>
+                  <td title="${escapeHtml(result.title)}">${escapeHtml(result.title?.substring(0, 50) || '—')}${result.title?.length > 50 ? '...' : ''}</td>
+                  <td>$${result.price?.toFixed(2) || '—'}</td>
+                  <td>${result.shipping > 0 ? '$' + result.shipping.toFixed(2) : 'Free'}</td>
+                  <td style="font-weight: 600;">$${result.total?.toFixed(2) || '—'}</td>
+                </tr>
+              `;
+            });
+          }
+        });
+        
+        if (tableHtml) {
+          $('competitorTableBody').innerHTML = tableHtml;
+          $('logsCompetitors').style.display = 'block';
+        } else {
+          $('logsCompetitors').style.display = 'none';
+        }
+      } else {
+        $('logsCompetitors').style.display = 'none';
+      }
+      
+      // Calculation steps
+      if (pricing.calculations && pricing.calculations.length > 0) {
+        let calcHtml = '';
+        pricing.calculations.forEach(calc => {
+          const inputsHtml = Object.entries(calc.input || {})
+            .map(([k, v]) => `<span style="color: var(--text-muted);">${k}:</span> ${v}`)
+            .join(' · ');
+          const outputsHtml = Object.entries(calc.output || {})
+            .map(([k, v]) => `<span style="color: var(--accent);">${k}:</span> <strong>${v}</strong>`)
+            .join(' · ');
+          
+          calcHtml += `
+            <div class="logs-calculation">
+              <div class="step">${escapeHtml(calc.step)}</div>
+              ${calc.formula ? `<div class="formula">${escapeHtml(calc.formula)}</div>` : ''}
+              <div class="result">
+                ${inputsHtml ? `<div style="font-size: 0.8rem; margin-bottom: 0.25rem;">${inputsHtml}</div>` : ''}
+                <div>${outputsHtml}</div>
+              </div>
+              ${calc.notes ? `<div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem;">💡 ${escapeHtml(calc.notes)}</div>` : ''}
+            </div>
+          `;
+        });
+        $('calculationSteps').innerHTML = calcHtml;
+        $('logsCalculations').style.display = 'block';
+      } else {
+        $('logsCalculations').style.display = 'none';
+      }
+      
+      // Warnings
+      if (pricing.warnings && pricing.warnings.length > 0) {
+        const warningsHtml = pricing.warnings.map(w => `
+          <div class="logs-warning">⚠️ ${escapeHtml(w)}</div>
+        `).join('');
+        $('warningsList').innerHTML = warningsHtml;
+        $('logsWarnings').style.display = 'block';
+      } else {
+        $('logsWarnings').style.display = 'none';
+      }
+    }
     
     initUserMenu();
     bootstrap();

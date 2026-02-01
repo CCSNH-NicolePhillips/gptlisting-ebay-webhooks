@@ -47,6 +47,7 @@ export const handler: Handler = async (event) => {
     const pricing = body.pricing as Partial<PricingSettings> | undefined;
     const autoPrice = body.autoPrice as AutoPriceSettings | undefined;
     const bestOffer = body.bestOffer as BestOfferSettings | undefined;
+    const showPricingLogs = body.showPricingLogs as boolean | undefined;
 
     // Validate promotion rate if provided
     if (defaultPromotionRate !== undefined && defaultPromotionRate !== null) {
@@ -233,6 +234,11 @@ export const handler: Handler = async (event) => {
         autoDeclinePercent: bestOffer.autoDeclinePercent ?? 60,  // default auto-decline below 60% of price
         autoAcceptPercent: bestOffer.autoAcceptPercent ?? 90     // default auto-accept at 90% of price
       };
+    }
+
+    // Update show pricing logs setting
+    if (showPricingLogs !== undefined) {
+      settings.showPricingLogs = showPricingLogs;
     }
 
     // Save to blob store

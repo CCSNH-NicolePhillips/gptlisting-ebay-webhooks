@@ -63,7 +63,9 @@ export const handler: Handler = async (event) => {
           minPriceType: settings.autoPrice?.minPriceType ?? defaultAutoPrice.minPriceType,
           minPrice: settings.autoPrice?.minPrice ?? defaultAutoPrice.minPrice,
           minPercent: settings.autoPrice?.minPercent ?? defaultAutoPrice.minPercent,
-        }
+        },
+        // Dev/debug settings
+        showPricingLogs: settings.showPricingLogs ?? false,
       })
     };
   } catch (e: any) {
