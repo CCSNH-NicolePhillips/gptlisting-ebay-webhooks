@@ -1,6 +1,7 @@
 import type { Handler } from '@netlify/functions';
 import { tokensStore } from '../../src/lib/redis-store.js';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
+import { getDraftLogs } from '../../src/lib/draft-logs.js';
 
 /**
  * GET /.netlify/functions/draft-logs-get?sku=xxx
@@ -73,24 +74,17 @@ export const handler: Handler = async (event) => {
       };
     }
 
-    // Get logs for this SKU
-    const logsKey = sku 
-      ? userScopedKey(sub, `draft-logs:${sku}`)
-      : userScopedKey(sub, `draft-logs-offer:${offerId}`);
-    
+    // Get logs for this SKU using the same key format as storage
     let logs: any = null;
-    try {
-      logs = await store.get(logsKey, { type: 'json' });
-    } catch {}
-
-    if (!logs) {
-      // Try alternate key formats
-      const altKey = sku
-        ? `draft-logs:${sub}:${sku}`
-        : `draft-logs-offer:${sub}:${offerId}`;
-      try {
-        logs = await store.get(altKey, { type: 'json' });
-      } catch {}
+    
+    if (sku) {
+      logs = await getDraftLogs(sub, sku);
+    }
+    
+    // Also try offerId lookup if no SKU logs found
+    if (!logs && offerId) {
+      const { getDraftLogsByOfferId } = await import('../../src/lib/draft-logs.js');
+      logs = await getDraftLogsByOfferId(sub, offerId);
     }
 
     return {
