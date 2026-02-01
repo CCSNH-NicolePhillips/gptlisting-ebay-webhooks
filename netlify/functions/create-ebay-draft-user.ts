@@ -3,6 +3,7 @@ import { requireUserAuth } from "../../src/lib/auth-user.js";
 import { getOrigin, isOriginAllowed, json } from "../../src/lib/http.js";
 import { mapGroupToDraft, type TaxonomyMappedDraft } from "../../src/lib/map-group-to-draft.js";
 import { putBinding } from "../../src/lib/bind-store.js";
+import { updateDraftLogsOfferId } from "../../src/lib/draft-logs.js";
 import { getEbayAccessTokenStrict } from "../../src/lib/ebay-auth.js";
 import { tokensStore } from "../../src/lib/redis-store.js";
 import { userScopedKey } from "../../src/lib/_auth.js";
@@ -525,6 +526,8 @@ export const handler: Handler = async (event) => {
                   warnings: [],
                   createdAt: Date.now(),
                 });
+                // Index logs by offerId so frontend can fetch without SKU→groupId lookup
+                await updateDraftLogsOfferId(user.userId, groupId, existingOfferId);
               } catch (bindErr) {
                 console.warn("[create-ebay-draft-user] failed to persist binding (existing)", bindErr);
               }
@@ -554,6 +557,8 @@ export const handler: Handler = async (event) => {
           warnings: offerResult.warnings,
           createdAt: Date.now(),
         });
+        // Index logs by offerId so frontend can fetch without SKU→groupId lookup
+        await updateDraftLogsOfferId(user.userId, groupId, offerResult.offerId);
       } catch (bindErr) {
         console.warn("[create-ebay-draft-user] failed to persist binding", bindErr);
       }

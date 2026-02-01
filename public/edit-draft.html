@@ -1796,7 +1796,11 @@
       }
       
       try {
-        const res = await fetchJSON(`/.netlify/functions/draft-logs-get?sku=${encodeURIComponent(originalDraft.sku)}`);
+        const params = new URLSearchParams({
+          sku: originalDraft.sku,
+          ...(currentOfferId ? { offerId: currentOfferId } : {}),
+        });
+        const res = await fetchJSON(`/.netlify/functions/draft-logs-get?${params.toString()}`);
         
         $('logsLoading').style.display = 'none';
         
