@@ -25,9 +25,20 @@ function bindKey(userId: string, jobId: string, groupId: string) {
   return `map:${userId}:${jobId}:${groupId}`;
 }
 
+function skuIndexKey(userId: string, sku: string) {
+  return `sku-idx:${userId}:${sku}`;
+}
+
 export async function putBinding(userId: string, jobId: string, groupId: string, payload: any) {
   const key = bindKey(userId, jobId, groupId);
   await call(["SET", key, JSON.stringify({ ...payload, updatedAt: Date.now() })]);
+  
+  // Also store a reverse index: sku → groupId for efficient lookups
+  if (payload.sku) {
+    const skuKey = skuIndexKey(userId, payload.sku);
+    await call(["SET", skuKey, groupId]);
+  }
+  
   return key;
 }
 
@@ -52,28 +63,17 @@ export async function getBindingsForJob(userId: string, jobId: string) {
 }
 
 /**
- * Find binding by SKU across all jobs for a user.
+ * Find groupId by SKU using direct index lookup.
  * Returns the groupId for this SKU if found.
  */
 export async function getGroupIdBySku(userId: string, sku: string): Promise<string | null> {
-  // Search all bindings for this user
-  const pattern = `map:${userId}:*`;
-  const keys = await call(["KEYS", pattern]);
+  // Direct lookup using the sku-idx key (no KEYS scan needed)
+  const skuKey = skuIndexKey(userId, sku);
+  const groupId = await call(["GET", skuKey]);
   
-  if (!Array.isArray(keys)) return null;
-
-  for (const key of keys) {
-    try {
-      const raw = await call(["GET", String(key)]);
-      if (typeof raw !== "string" || !raw) continue;
-      const binding = JSON.parse(raw);
-      if (binding.sku === sku) {
-        return binding.groupId || null;
-      }
-    } catch (err) {
-      // Skip invalid bindings
-    }
+  if (typeof groupId === "string" && groupId) {
+    return groupId;
   }
-
+  
   return null;
 }
