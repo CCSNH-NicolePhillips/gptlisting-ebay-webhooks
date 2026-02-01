@@ -1,7 +1,8 @@
 import type { Handler } from '@netlify/functions';
 import { tokensStore } from '../../src/lib/redis-store.js';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
-import { getDraftLogs } from '../../src/lib/draft-logs.js';
+import { getDraftLogs, getDraftLogsByOfferId } from '../../src/lib/draft-logs.js';
+import { getGroupIdBySku } from '../../src/lib/bind-store.js';
 
 /**
  * GET /.netlify/functions/draft-logs-get?sku=xxx
@@ -78,12 +79,23 @@ export const handler: Handler = async (event) => {
     let logs: any = null;
     
     if (sku) {
+      // First try direct lookup by SKU (in case logs were stored with SKU)
       logs = await getDraftLogs(sub, sku);
+      
+      // If not found, the SKU might be the eBay-generated one
+      // Look up the binding to find the original groupId/productId
+      if (!logs) {
+        console.log(`[draft-logs-get] No logs for SKU ${sku}, looking up groupId from binding...`);
+        const groupId = await getGroupIdBySku(sub, sku);
+        if (groupId) {
+          console.log(`[draft-logs-get] Found groupId ${groupId} for SKU ${sku}`);
+          logs = await getDraftLogs(sub, groupId);
+        }
+      }
     }
     
     // Also try offerId lookup if no SKU logs found
     if (!logs && offerId) {
-      const { getDraftLogsByOfferId } = await import('../../src/lib/draft-logs.js');
       logs = await getDraftLogsByOfferId(sub, offerId);
     }
 

@@ -50,3 +50,30 @@ export async function getBindingsForJob(userId: string, jobId: string) {
 
   return rows;
 }
+
+/**
+ * Find binding by SKU across all jobs for a user.
+ * Returns the groupId for this SKU if found.
+ */
+export async function getGroupIdBySku(userId: string, sku: string): Promise<string | null> {
+  // Search all bindings for this user
+  const pattern = `map:${userId}:*`;
+  const keys = await call(["KEYS", pattern]);
+  
+  if (!Array.isArray(keys)) return null;
+
+  for (const key of keys) {
+    try {
+      const raw = await call(["GET", String(key)]);
+      if (typeof raw !== "string" || !raw) continue;
+      const binding = JSON.parse(raw);
+      if (binding.sku === sku) {
+        return binding.groupId || null;
+      }
+    } catch (err) {
+      // Skip invalid bindings
+    }
+  }
+
+  return null;
+}
