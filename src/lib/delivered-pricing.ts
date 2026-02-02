@@ -352,6 +352,7 @@ export function getActiveMedianDelivered(comps: CompetitorPrice[]): number | nul
  */
 
 const RETAIL_CAP_RATIO = 0.80; // Never price above 80% of best retail
+const RETAIL_FLOOR_RATIO = 0.65; // Don't price below 65% of trusted retail when sold data may be noisy
 
 export function calculateTargetDelivered(
   mode: PricingMode,
@@ -597,6 +598,18 @@ export function calculateTargetDelivered(
     console.log(`[delivered-pricing] Applying retail cap: $${(targetCents / 100).toFixed(2)} → $${(retailCapCents / 100).toFixed(2)} (deal price)`);
     warnings.push('retailCapApplied');
     targetCents = retailCapCents;
+  }
+
+  // Apply a retail floor when we have trusted retail and strong sold data but the target is too low
+  // This catches cases where sold comps include cheaper variants (e.g., older model/OG) that drag the median down
+  if (lowestRetailCents !== null && soldStrong) {
+    const retailFloorCents = Math.round(lowestRetailCents * RETAIL_FLOOR_RATIO);
+    const newTarget = Math.max(targetCents, retailFloorCents, minDeliveredCents);
+    if (newTarget > targetCents) {
+      console.log(`[delivered-pricing] Applying retail floor: $${(targetCents / 100).toFixed(2)} → $${(newTarget / 100).toFixed(2)} (floor ${Math.round(RETAIL_FLOOR_RATIO * 100)}% of trusted retail $${(lowestRetailCents / 100).toFixed(2)})`);
+      warnings.push('retailFloorApplied');
+      targetCents = newTarget;
+    }
   }
 
   return { targetCents, fallbackUsed, soldStrong, warnings };
