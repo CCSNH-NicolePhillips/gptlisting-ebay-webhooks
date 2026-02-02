@@ -42,6 +42,13 @@ export const handler: Handler = async (event) => {
       minPercent: 50    // 50%
     };
 
+    // Default best offer settings
+    const defaultBestOffer = {
+      enabled: false,
+      autoDeclinePercent: 60,  // auto-decline below 60% of price
+      autoAcceptPercent: 90    // auto-accept at 90% of price
+    };
+
     // Return with defaults
     return {
       statusCode: 200,
@@ -63,6 +70,11 @@ export const handler: Handler = async (event) => {
           minPriceType: settings.autoPrice?.minPriceType ?? defaultAutoPrice.minPriceType,
           minPrice: settings.autoPrice?.minPrice ?? defaultAutoPrice.minPrice,
           minPercent: settings.autoPrice?.minPercent ?? defaultAutoPrice.minPercent,
+        },
+        bestOffer: {
+          enabled: settings.bestOffer?.enabled ?? defaultBestOffer.enabled,
+          autoDeclinePercent: settings.bestOffer?.autoDeclinePercent ?? defaultBestOffer.autoDeclinePercent,
+          autoAcceptPercent: settings.bestOffer?.autoAcceptPercent ?? defaultBestOffer.autoAcceptPercent,
         },
         // Dev/debug settings
         showPricingLogs: settings.showPricingLogs ?? false,
