@@ -766,7 +766,13 @@
           <div class="form-row">
             <div class="form-field">
               <label for="price">Price USD</label>
-              <input type="number" id="price" step="0.01" min="0" />
+              <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <input type="number" id="price" step="0.01" min="0" style="flex: 1;" />
+                <button type="button" class="dp-btn dp-btn-secondary" id="btnReprice" onclick="repriceDraft()" title="Re-calculate price using current market data" style="white-space: nowrap; padding: 0.5rem 0.75rem;">
+                  🔄 Reprice
+                </button>
+              </div>
+              <small class="muted-hint" id="repriceStatus" style="display: none;"></small>
             </div>
             
             <div class="form-field">
@@ -1545,6 +1551,86 @@
     
     // Attach upload handler
     $('imageUploadInput').addEventListener('change', handleImageUpload);
+    
+    // Reprice function - recalculates price using current market data
+    async function repriceDraft() {
+      const btn = $('btnReprice');
+      const status = $('repriceStatus');
+      
+      try {
+        btn.disabled = true;
+        btn.textContent = '⏳ Checking...';
+        status.style.display = 'block';
+        status.textContent = 'Fetching market prices...';
+        status.style.color = 'var(--text-muted)';
+        
+        // Extract brand from aspects
+        let brand = '';
+        document.querySelectorAll('.aspect-item').forEach(item => {
+          const key = item.querySelector('.aspect-key').value.trim().toLowerCase();
+          if (key === 'brand') {
+            brand = item.querySelector('.aspect-value').value.trim();
+          }
+        });
+        
+        // Use title as product name, minus the brand if present
+        let productName = $('title').value.trim();
+        if (brand && productName.toLowerCase().startsWith(brand.toLowerCase())) {
+          productName = productName.substring(brand.length).trim();
+        }
+        // Strip leading dashes or hyphens
+        productName = productName.replace(/^[-–—\s]+/, '');
+        
+        console.log('[reprice] Request:', { brand, productName });
+        
+        if (!brand && !productName) {
+          throw new Error('Need brand or title to calculate price');
+        }
+        
+        const res = await fetchJSON('/.netlify/functions/reprice', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ brand, productName }),
+        });
+        
+        console.log('[reprice] Response:', res);
+        
+        if (!res.success) {
+          throw new Error(res.error || 'Reprice failed');
+        }
+        
+        const oldPrice = parseFloat($('price').value) || 0;
+        const newPrice = res.suggestedPrice;
+        
+        // Update price field
+        $('price').value = newPrice.toFixed(2);
+        
+        // Show status with price change info
+        const diff = newPrice - oldPrice;
+        const diffStr = diff > 0 ? `+$${diff.toFixed(2)}` : diff < 0 ? `-$${Math.abs(diff).toFixed(2)}` : 'no change';
+        const confidenceEmoji = res.matchConfidence === 'high' ? '🎯' : res.matchConfidence === 'medium' ? '✓' : '⚠️';
+        
+        status.innerHTML = `${confidenceEmoji} New price: <strong>$${newPrice.toFixed(2)}</strong> (${diffStr})`;
+        if (!res.canCompete) {
+          status.innerHTML += ' <span style="color: #fbbf24;">⚠️ May be overpriced</span>';
+        }
+        if (res.debug?.warnings?.length > 0) {
+          status.innerHTML += `<br><span style="font-size: 0.8rem; color: var(--text-muted);">${res.debug.warnings.join(', ')}</span>`;
+        }
+        status.style.color = diff >= 0 ? '#4ade80' : '#fbbf24';
+        
+        showFlash(`Price updated to $${newPrice.toFixed(2)}`, 'success');
+        
+      } catch (err) {
+        console.error('[reprice] Error:', err);
+        status.textContent = `❌ ${err.message}`;
+        status.style.color = '#ef4444';
+        showFlash(`Reprice failed: ${err.message}`, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🔄 Reprice';
+      }
+    }
     
     async function saveDraft() {
       try {
