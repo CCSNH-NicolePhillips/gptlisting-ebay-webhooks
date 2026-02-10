@@ -392,7 +392,33 @@ export function calculateTargetDelivered(
   // Brand site is MOST authoritative - it's the official MSRP
   // Google Shopping often returns wrong variants (8-count box vs 30 oz bottle) which pollute pricing
   // When sold data is strong, we trust the sold median as the true market price
-  const trustedRetailPrices = [brandSitePrice, amazonPrice, walmartPrice, targetPrice].filter((p): p is number => p !== null && p > 0 && p >= minValidRetailCents);
+  
+  // VARIANT DETECTION: If brand site exists and other retail is <50% of brand site, 
+  // those lower prices are almost certainly different variants (single servings, trial sizes, etc.)
+  // In this case, prefer brand site as the authoritative MSRP
+  let effectiveBrandSitePrice = brandSitePrice;
+  let effectiveAmazonPrice = amazonPrice;
+  let effectiveWalmartPrice = walmartPrice;
+  let effectiveTargetPrice = targetPrice;
+  
+  if (brandSitePrice && brandSitePrice >= minValidRetailCents) {
+    const variantThreshold = brandSitePrice * 0.50; // 50% of brand site = likely different variant
+    
+    if (amazonPrice !== null && amazonPrice < variantThreshold) {
+      console.log(`[delivered-pricing] ⚠️ Amazon $${(amazonPrice / 100).toFixed(2)} is <50% of brand site $${(brandSitePrice / 100).toFixed(2)} - likely different variant, ignoring`);
+      effectiveAmazonPrice = null;
+    }
+    if (walmartPrice !== null && walmartPrice < variantThreshold) {
+      console.log(`[delivered-pricing] ⚠️ Walmart $${(walmartPrice / 100).toFixed(2)} is <50% of brand site $${(brandSitePrice / 100).toFixed(2)} - likely different variant, ignoring`);
+      effectiveWalmartPrice = null;
+    }
+    if (targetPrice !== null && targetPrice < variantThreshold) {
+      console.log(`[delivered-pricing] ⚠️ Target $${(targetPrice / 100).toFixed(2)} is <50% of brand site $${(brandSitePrice / 100).toFixed(2)} - likely different variant, ignoring`);
+      effectiveTargetPrice = null;
+    }
+  }
+  
+  const trustedRetailPrices = [effectiveBrandSitePrice, effectiveAmazonPrice, effectiveWalmartPrice, effectiveTargetPrice].filter((p): p is number => p !== null && p > 0 && p >= minValidRetailCents);
   
   let retailCapCents: number | null = null;
   let lowestRetailCents: number | null = null;
@@ -410,9 +436,9 @@ export function calculateTargetDelivered(
     // We have Brand Site/Amazon/Walmart/Target - use that for cap (high confidence)
     lowestRetailCents = Math.min(...trustedRetailPrices);
     retailCapCents = Math.round(lowestRetailCents * RETAIL_CAP_RATIO);
-    const capSource = brandSitePrice === lowestRetailCents ? 'brand site' 
-      : amazonPrice === lowestRetailCents ? 'Amazon'
-      : walmartPrice === lowestRetailCents ? 'Walmart' 
+    const capSource = effectiveBrandSitePrice === lowestRetailCents ? 'brand site' 
+      : effectiveAmazonPrice === lowestRetailCents ? 'Amazon'
+      : effectiveWalmartPrice === lowestRetailCents ? 'Walmart' 
       : 'Target';
     console.log(`[delivered-pricing] Using trusted retail (${capSource}) for cap: $${(lowestRetailCents / 100).toFixed(2)}`);
     console.log(`[delivered-pricing] Retail cap: $${(retailCapCents / 100).toFixed(2)} (80% of $${(lowestRetailCents / 100).toFixed(2)})`);
