@@ -283,6 +283,7 @@ export async function createOffer(
   }
 
   // Add Best Offer settings if enabled
+  console.log(`[createOffer] Best Offer input for SKU ${input.sku}:`, JSON.stringify(input.bestOffer));
   if (input.bestOffer?.enabled) {
     const listingPolicies = payload.listingPolicies as Record<string, unknown>;
     const bestOfferTerms: Record<string, unknown> = {
@@ -296,6 +297,7 @@ export async function createOffer(
         currency: "USD",
         value: autoDeclinePrice.toFixed(2),
       };
+      console.log(`[createOffer] Auto-decline: ${input.bestOffer.autoDeclinePercent}% of $${price} = $${autoDeclinePrice.toFixed(2)}`);
     }
     
     // Calculate auto-accept price (auto-accept offers at or above this)
@@ -305,10 +307,13 @@ export async function createOffer(
         currency: "USD",
         value: autoAcceptPrice.toFixed(2),
       };
+      console.log(`[createOffer] Auto-accept: ${input.bestOffer.autoAcceptPercent}% of $${price} = $${autoAcceptPrice.toFixed(2)}`);
     }
     
     listingPolicies.bestOfferTerms = bestOfferTerms;
-    console.log(`[createOffer] Best Offer enabled for SKU ${input.sku}:`, bestOfferTerms);
+    console.log(`[createOffer] Best Offer enabled for SKU ${input.sku}:`, JSON.stringify(bestOfferTerms));
+  } else {
+    console.log(`[createOffer] Best Offer NOT enabled for SKU ${input.sku} (enabled=${input.bestOffer?.enabled})`);
   }
 
   const url = `${apiHost}/sell/inventory/v1/offer`;

@@ -133,6 +133,27 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     
     // Build draft-like object from offer + inventory data
     // Inventory has product.title, product.description, product.aspects, product.imageUrls
+    
+    // Extract Best Offer settings from eBay offer
+    const bestOfferTerms = offer.listingPolicies?.bestOfferTerms;
+    let bestOffer = null;
+    if (bestOfferTerms?.bestOfferEnabled) {
+      const price = parseFloat(offer.pricingSummary?.price?.value || 0);
+      bestOffer = {
+        enabled: true,
+        // Calculate percent from the actual prices if they exist
+        autoDeclinePercent: bestOfferTerms.autoDeclinePrice?.value && price > 0
+          ? Math.round((parseFloat(bestOfferTerms.autoDeclinePrice.value) / price) * 100)
+          : 60,  // default
+        autoAcceptPercent: bestOfferTerms.autoAcceptPrice?.value && price > 0
+          ? Math.round((parseFloat(bestOfferTerms.autoAcceptPrice.value) / price) * 100)
+          : 90,  // default
+      };
+      console.log('[smartdrafts-get-draft] Best Offer extracted:', bestOffer, 'from:', JSON.stringify(bestOfferTerms));
+    } else {
+      bestOffer = { enabled: false };
+    }
+    
     const draft = {
       sku: offer.sku,
       title: inventory.product?.title || offer.title || '',
@@ -146,6 +167,8 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       categoryAspects: categoryAspects?.aspects || [], // Available aspects for this category
       // Include weight from inventory item
       weight: inventory.packageWeightAndSize?.weight || null,
+      // Include Best Offer settings
+      bestOffer,
     };
     
     // Debug: Check cardinality values
