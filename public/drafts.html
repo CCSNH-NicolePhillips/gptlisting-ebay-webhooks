@@ -1679,106 +1679,81 @@
       document.getElementById('btnClean')?.addEventListener('click', async () => {
         const sure = confirm('Delete ALL UNPUBLISHED drafts? This cannot be undone.');
         if (!sure) return;
-        let queryParams = '?deleteAll=true&deleteInventory=true';
         
-        let totalDeleted = 0;
-        let attempts = 0;
-        const maxAttempts = 10; // Safety limit
+        const exec = (window.authClient && typeof window.authClient.authFetch === 'function')
+          ? window.authClient.authFetch
+          : fetch;
+        
+        // Collect all visible draft offerIds from the DOM (already loaded)
+        const allCards = Array.from(document.querySelectorAll('#readyList .card, #needsList .card'));
+        const offerIds = allCards.map(c => c.dataset.offerId).filter(Boolean);
+        
+        if (offerIds.length === 0) {
+          flash.textContent = 'No drafts to delete';
+          return;
+        }
+        
+        flash.textContent = `Deleting ${offerIds.length} drafts…`;
+        
+        let deleted = 0;
+        let errors = 0;
         
         try {
-          flash.textContent = 'Deleting drafts…';
-          
-          // Loop until no more deletions (handles partial batches due to timeout)
-          while (attempts < maxAttempts) {
-            attempts++;
-            const res = await fetch('/.netlify/functions/ebay-clean-broken-drafts' + queryParams);
-            
-            // Handle 502 Gateway Timeout - deletions likely succeeded
-            if (res.status === 502) {
-              console.log('[Delete All] 502 timeout - waiting and retrying to check remaining drafts...');
-              flash.textContent = `Processing... (batch ${attempts})`;
-              await new Promise(resolve => setTimeout(resolve, 2000));
-              continue; // Try again to see if there are more drafts
-            }
-            
-            // Handle empty or non-JSON responses
-            let j;
-            try {
-              const text = await res.text();
-              j = text ? JSON.parse(text) : {};
-            } catch (parseErr) {
-              console.error('[Delete All] JSON parse error:', parseErr);
-              flash.textContent = 'Checking results...';
-              // Wait and continue to next iteration to verify deletions
-              await new Promise(resolve => setTimeout(resolve, 2000));
-              continue;
-            }
-            
-            if (!res.ok) {
-              const errorMsg = j.error || j.detail || 'Unknown error';
-              
-              // Check for eBay token errors - show reconnect modal
-              if (errorMsg.includes('invalid_grant') || errorMsg.includes('token refresh failed') || 
-                  errorMsg.includes('ebay-not-connected') || errorMsg.includes('No eBay token')) {
-                flash.textContent = '⚠️ eBay token expired - reconnecting...';
-                console.error('[Delete All] eBay token expired:', j);
-                
-                // Show reconnect modal
-                if (typeof window.showReconnectModal === 'function') {
-                  const reconnected = await window.showReconnectModal('ebay');
-                  if (reconnected) {
-                    flash.textContent = 'eBay reconnected. Please try again.';
-                  } else {
-                    flash.textContent = '⚠️ eBay token expired - please reconnect to continue';
-                  }
+          // Delete all offers in parallel (concurrency = 5) using direct API calls
+          // This is much faster than the old approach which routed through a server-side
+          // scanner that listed + filtered + deleted sequentially with 20s timeouts
+          const concurrency = 5;
+          let idx = 0;
+          async function worker() {
+            while (idx < offerIds.length) {
+              const id = offerIds[idx++];
+              try {
+                const res = await exec(
+                  `/.netlify/functions/ebay-delete-offer?offerId=${encodeURIComponent(id)}`,
+                  { method: 'DELETE' }
+                );
+                if (res.ok) {
+                  deleted++;
+                  const card = document.querySelector(`.card[data-offer-id="${id}"]`);
+                  card?.remove();
+                } else {
+                  errors++;
+                  console.warn('[Delete All] Failed to delete offer', id, res.status);
                 }
-              } else {
-                flash.textContent = `Delete failed: ${errorMsg}`;
-                console.error('[Delete All] Error:', j);
+              } catch (err) {
+                errors++;
+                console.warn('[Delete All] Error deleting offer', id, err);
               }
-              break;
+              flash.textContent = `Deleting… ${deleted}/${offerIds.length}`;
             }
-            
-            const deleted = j.deletedOffers?.length || 0;
-            totalDeleted += deleted;
-            
-            // If server says to skip fast scan on next retry, add the flag
-            if (j.skipFastScan) {
-              queryParams = '?deleteAll=true&deleteInventory=true&skipFastScan=true';
-            }
-            
-            flash.textContent = `Deleted ${totalDeleted} drafts so far…`;
-            
-            // Check if there are more to delete
-            if (!j.summary?.hasMore && !j.timedOut) {
-              // All done - show no drafts message without reloading
-              flash.textContent = `✓ Deleted ${totalDeleted} drafts total`;
-              const readyList = document.getElementById('readyList');
-              const needsList = document.getElementById('needsList');
-              $('needsAttention').style.display = 'none';
-              $('readySection').style.display = 'none';
-              if (readyList) readyList.innerHTML =
-                '<div class="empty">No drafts found (UNPUBLISHED/DRAFT/INACTIVE). Create your first listing draft from the wizard.</div>';
-              if (needsList) needsList.innerHTML = '';
-              break;
-            }
-            
-            // Wait a bit before next batch
-            await new Promise(resolve => setTimeout(resolve, 1000));
           }
+          await Promise.all(Array.from({ length: Math.min(concurrency, offerIds.length) }, worker));
           
-          if (attempts >= maxAttempts) {
-            flash.textContent = `Deleted ${totalDeleted} drafts (stopped after ${maxAttempts} batches)`;
-            // Show no drafts message without reloading
-            const readyList = document.getElementById('readyList');
-            const needsList = document.getElementById('needsList');
+          // Update UI
+          checkAndShowEmptyState();
+          if (!document.querySelectorAll('#readyList .card, #needsList .card').length) {
             $('needsAttention').style.display = 'none';
             $('readySection').style.display = 'none';
-            if (readyList) readyList.innerHTML =
+            const rl = document.getElementById('readyList');
+            if (rl) rl.innerHTML =
               '<div class="empty">No drafts found (UNPUBLISHED/DRAFT/INACTIVE). Create your first listing draft from the wizard.</div>';
-            if (needsList) needsList.innerHTML = '';
+            const nl = document.getElementById('needsList');
+            if (nl) nl.innerHTML = '';
           }
           
+          flash.textContent = errors
+            ? `Deleted ${deleted} drafts (${errors} failed)`
+            : `✓ Deleted ${deleted} drafts`;
+          
+          // Clear cache
+          sessionStorage.removeItem('drafts-cache');
+          sessionStorage.removeItem('drafts-cache-time');
+          
+          // Background: clean up orphaned inventory items (fire-and-forget)
+          if (deleted > 0) {
+            exec('/.netlify/functions/ebay-clean-broken-drafts?orphans=true&force=true&deleteInventory=true')
+              .catch(() => {}); // non-blocking
+          }
         } catch (e) {
           flash.textContent = 'Delete error: ' + (e?.message || String(e));
           console.error('[Delete All] Exception:', e);
@@ -1988,24 +1963,31 @@
           ? window.authClient.authFetch 
           : fetch;
         
-        for (const offer of offers) {
-          try {
-            const res = await exec(`/.netlify/functions/ebay-delete-offer?offerId=${encodeURIComponent(offer.offerId)}`, {
-              method: 'DELETE',
-            });
-            
-            if (res.ok) {
-              successCount++;
-              // Remove card from grid
-              const card = document.querySelector(`.card[data-offer-id="${offer.offerId}"]`);
-              card?.remove();
-            } else {
+        // Delete in parallel with concurrency limit
+        const concurrency = 5;
+        let idx = 0;
+        async function worker() {
+          while (idx < offers.length) {
+            const offer = offers[idx++];
+            try {
+              const res = await exec(`/.netlify/functions/ebay-delete-offer?offerId=${encodeURIComponent(offer.offerId)}`, {
+                method: 'DELETE',
+              });
+              
+              if (res.ok) {
+                successCount++;
+                const card = document.querySelector(`.card[data-offer-id="${offer.offerId}"]`);
+                card?.remove();
+              } else {
+                errorCount++;
+              }
+            } catch {
               errorCount++;
             }
-          } catch {
-            errorCount++;
+            flash.textContent = `Deleting… ${successCount}/${offers.length}`;
           }
         }
+        await Promise.all(Array.from({ length: Math.min(concurrency, offers.length) }, worker));
         
         updateBulkActionBar();
         checkAndShowEmptyState();

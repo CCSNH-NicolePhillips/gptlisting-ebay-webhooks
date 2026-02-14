@@ -327,15 +327,31 @@ export const handler: Handler = async (event) => {
 				const offers = page.offers;
 				if (!offers.length) break;
 				
-				for (const o of offers) {
-					const status = String(o?.status || '').toUpperCase();
-					if (status === 'UNPUBLISHED') {
-						await deleteOffer(o.offerId);
-						totalDeleted++;
+				// Collect unpublished offers, then delete in parallel batches
+				const toDelete = offers
+					.filter((o: any) => String(o?.status || '').toUpperCase() === 'UNPUBLISHED')
+					.map((o: any) => ({ offerId: o.offerId, sku: o.sku }))
+					.filter((o: any) => o.offerId);
+				
+				const DEL_BATCH = 10;
+				for (let b = 0; b < toDelete.length; b += DEL_BATCH) {
+					if (Date.now() - startTime > INTERNAL_LIMIT) { timedOut = true; break; }
+					const batch = toDelete.slice(b, b + DEL_BATCH);
+					await Promise.all(batch.map(o => deleteOffer(o.offerId)));
+					totalDeleted += batch.length;
+				}
+				
+				// Also delete inventory items in parallel if requested
+				if (deleteInventory && toDelete.length > 0 && !timedOut) {
+					const skus = [...new Set(toDelete.map(o => o.sku).filter(Boolean))];
+					for (let b = 0; b < skus.length; b += DEL_BATCH) {
+						if (Date.now() - startTime > INTERNAL_LIMIT) { timedOut = true; break; }
+						const batch = skus.slice(b, b + DEL_BATCH);
+						await Promise.all(batch.map(s => deleteInventoryItem(s)));
 					}
 				}
 				
-				if (!page.next) break;
+				if (timedOut || !page.next) break;
 				else offerOffset += 100;
 			} catch (err) {
 				console.error('[clean-broken-drafts] Direct offer listing failed:', err);
@@ -444,45 +460,40 @@ export const handler: Handler = async (event) => {
 		const items: any[] = page.items;
 		if (!items.length) break;
 		
-		console.log(`[clean-broken-drafts] Processing batch: offset=${invOffset}, count=${items.length}, total scanned so far=${scanned}`);		for (const it of items) {
-			const sku: string = it?.sku;
-			scanned++;
-			const bad = !validSku(sku);
+		console.log(`[clean-broken-drafts] Processing batch: offset=${invOffset}, count=${items.length}, total scanned so far=${scanned}`);		// Process items in parallel batches for speed
+		const SCAN_BATCH = 10;
+		for (let b = 0; b < items.length; b += SCAN_BATCH) {
+			if (Date.now() - startTime > INTERNAL_LIMIT) { timedOut = true; break; }
+			const batch = items.slice(b, b + SCAN_BATCH);
+			scanned += batch.length;
 			
-			if (bad) {
-				console.log(`🚫 Found invalid SKU: ${sku}`);
-				// Delete invalid SKU immediately (with its offers)
-				const badOffers = await listOffersForSku(sku);
-				for (const o of badOffers) {
-					await deleteOffer(o.offerId);
+			await Promise.all(batch.map(async (it: any) => {
+				const sku: string = it?.sku;
+				const bad = !validSku(sku);
+				
+				if (bad) {
+					console.log(`🚫 Found invalid SKU: ${sku}`);
+					const badOffers = await listOffersForSku(sku);
+					await Promise.all(badOffers.map(o => deleteOffer(o.offerId)));
+					if (deleteInventory) {
+						await deleteInventoryItem(sku);
+						console.log(`✅ Deleted invalid SKU: ${sku}`);
+					}
+					return;
 				}
-				if (deleteInventory) {
-					await deleteInventoryItem(sku);
-					console.log(`✅ Deleted invalid SKU: ${sku}`);
+				
+				if (!deleteAllUnpublished) return;
+				
+				const offersForSku = await listOffersForSku(sku);
+				const unpublished = offersForSku.filter((o: any) =>
+					String(o?.status || '').toUpperCase() === 'UNPUBLISHED'
+				);
+				
+				if (unpublished.length > 0) {
+					await Promise.all(unpublished.map(o => deleteOffer(o.offerId)));
+					if (deleteInventory) await deleteInventoryItem(sku);
 				}
-				continue; // Skip to next item
-			}
-			
-			// Only process valid SKUs if deleteAllUnpublished is true
-			if (!deleteAllUnpublished) continue;
-			
-			// Get offers for this SKU
-			const offersForSku = await listOffersForSku(sku);
-			
-			// Delete UNPUBLISHED offers
-			let hasUnpublishedOffer = false;
-			for (const o of offersForSku) {
-				const status = String(o?.status || '').toUpperCase();
-				if (status === 'UNPUBLISHED') {
-					await deleteOffer(o.offerId);
-					hasUnpublishedOffer = true;
-				}
-			}
-			
-			// Delete inventory item if we deleted an unpublished offer
-			if (deleteInventory && hasUnpublishedOffer) {
-				await deleteInventoryItem(sku);
-			}
+			}));
 		}			if (!page.next) break;
 			else invOffset += 200;
 		}
