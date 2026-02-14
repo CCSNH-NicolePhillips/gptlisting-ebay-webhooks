@@ -302,6 +302,86 @@ describe('delivered-pricing', () => {
       expect(result.targetCents).toBe(2295); // sold median wins
       expect(result.soldStrong).toBe(true);
     });
+
+    // ================================================================
+    // Fix: Sold median contamination guard (Moon Brew bug)
+    // When sold median >> active floor AND no retail validation,
+    // cap target at 1.5x floor to prevent wildly inflated prices
+    // ================================================================
+    it('caps sold median at 1.5x floor when no retail validation (Moon Brew bug)', () => {
+      // Moon Brew scenario: floor=$24, soldMedian=$80, no Amazon/Walmart/brandSite
+      const result = calculateTargetDelivered(
+        'market-match',
+        2400, // activeFloor ($24 eBay listing)
+        2400, // activeMedian (same, only 1 comp)
+        8005, // soldMedian (~$80, contaminated with multi-packs)
+        8,    // soldCount (strong: >= 5)
+        null, // NO amazon
+        null, // NO walmart
+        100,
+        minDelivered,
+        [],   // no retail comps
+        null, // no Target
+        null  // no brand site
+      );
+      // Should cap at 1.5x floor = $36.00, NOT use soldMedian $80.05
+      expect(result.targetCents).toBe(3600); // 2400 * 1.5
+      expect(result.warnings).toContain('soldMedianCappedNoRetail');
+    });
+
+    it('uses sold median when retail validates it (outlier floor is real)', () => {
+      // When Amazon confirms high price, trust soldMedian over floor
+      const result = calculateTargetDelivered(
+        'market-match',
+        2400, // activeFloor ($24 - true outlier/auction)
+        2400, // activeMedian
+        8000, // soldMedian ($80)
+        8,    // soldCount (strong)
+        7500, // Amazon $75 - validates that soldMedian is correct
+        null, // no walmart
+        100,
+        minDelivered,
+        [],   // no retail comps
+        null, // no Target
+        null  // no brand site
+      );
+      // Amazon validates → retail cap = 80% of $75 = $60
+      // soldMedian ($80) would be capped by retail cap ($60)
+      expect(result.targetCents).toBeLessThanOrEqual(6000);
+      expect(result.warnings).not.toContain('soldMedianCappedNoRetail');
+    });
+
+    it('detects contamination with single retail comp (relaxed from 2+)', () => {
+      // Even 1 reliable retail comp at $48 should catch $80 sold median as contaminated
+      const retailComps: CompetitorPrice[] = [{
+        source: 'other',
+        itemCents: 4800,
+        shipCents: 0,
+        deliveredCents: 4800,
+        title: 'Moon Brew Mind Hot Cocoa',
+        url: null,
+        inStock: true,
+        seller: 'Moon Brew Official',
+      }];
+      const result = calculateTargetDelivered(
+        'market-match',
+        2400, // activeFloor ($24)
+        2400, // activeMedian
+        8000, // soldMedian ($80 - 1.67x of $48 retail > 1.5x threshold)
+        8,    // soldCount (strong)
+        null, // no Amazon
+        null, // no Walmart
+        100,
+        minDelivered,
+        retailComps, // 1 retail comp at $48
+        null, // no Target
+        null  // no brand site
+      );
+      // Sold data should be marked contaminated, soldStrong reset to false
+      // With soldStrong=false, should fall back to activeFloor
+      expect(result.soldStrong).toBe(false);
+      expect(result.targetCents).toBeLessThanOrEqual(4800); // Should not exceed retail
+    });
   });
 
   // ========================================================================

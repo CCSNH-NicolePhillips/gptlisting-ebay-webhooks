@@ -1260,6 +1260,16 @@
   el._sk = sk;
   // @ts-ignore
   el._title = title;
+  // If server already provided image URL, render it immediately (no thumb proxy needed)
+  if (offer?._imageUrl) {
+    el._directImageUrl = offer._imageUrl;
+    img.alt = 'Draft image';
+    img.onload = () => { img.classList.add('loaded'); sk.remove(); };
+    img.onerror = () => { sk.remove(); };
+    // eBay CDN images can be loaded directly, others need proxy to avoid CORS
+    const isEbayCdn = offer._imageUrl.includes('ebayimg.com') || offer._imageUrl.includes('ebaystatic.com');
+    img.src = isEbayCdn ? offer._imageUrl : proxied(offer._imageUrl);
+  }
   return el;
       }
 
@@ -1528,6 +1538,8 @@
         for (const n of nodes) {
           const offerId = n.dataset.offerId;
           if (!offerId) continue;
+          // Skip if image was already loaded from server-side enrichment
+          if (n._directImageUrl) continue;
           q.push(async () => {
             // Prefer server-side offer thumb to avoid client CORS/SKU issues
             const url = `/.netlify/functions/ebay-offer-thumb?offerId=${encodeURIComponent(offerId)}&_cb=${cacheBuster}`;
@@ -1593,8 +1605,8 @@
             }
           });
         }
-        // run with limited concurrency - REDUCED TO 1 TO DEBUG RACE CONDITION
-        const concurrency = 1;
+        // Concurrency for remaining thumbs that weren't enriched server-side
+        const concurrency = 4;
         let i = 0;
         async function next() {
           const fn = q[i++];

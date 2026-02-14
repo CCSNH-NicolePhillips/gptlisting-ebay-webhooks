@@ -484,14 +484,17 @@ export function calculateTargetDelivered(
     
     console.log(`[delivered-pricing] Reliable retail prices (non-eBay, non-discount, >= $${(minValidRetailCents / 100).toFixed(2)}): ${reliableRetailPrices.map(p => '$' + (p / 100).toFixed(2)).join(', ') || 'none'}`);
     
-    if (reliableRetailPrices.length >= 2 && soldMedian) {
+    if (reliableRetailPrices.length >= 1 && soldMedian) {
       // Sort prices ascending to find lowest cluster
       const sortedRetail = [...reliableRetailPrices].sort((a, b) => a - b);
       const lowestReliableRetail = sortedRetail[0];
       
-      // Use the average of the two lowest prices as "expected retail" 
-      // This avoids being thrown off by international pricing or bundles
-      const lowestClusterAvg = (sortedRetail[0] + sortedRetail[1]) / 2;
+      // Use the average of the two lowest prices as "expected retail"
+      // If only 1 comp, use it directly — even a single retail data point
+      // can indicate contamination when sold median is wildly different
+      const lowestClusterAvg = sortedRetail.length >= 2
+        ? (sortedRetail[0] + sortedRetail[1]) / 2
+        : sortedRetail[0];
       
       // If sold median is 1.5x+ higher than lowest retail cluster, sold data is likely contaminated
       // This catches cases where sold data includes multi-packs that weren't filtered
@@ -538,8 +541,24 @@ export function calculateTargetDelivered(
           // In that case, use sold median instead of racing to the bottom
           const floorRatio = activeFloor / soldMedian!;
           if (floorRatio < 0.70) {
-            targetCents = soldMedian!;
-            console.log(`[delivered-pricing] Floor ($${(activeFloor / 100).toFixed(2)}) is outlier (${Math.round(floorRatio * 100)}% of sold median $${(soldMedian! / 100).toFixed(2)}) - using sold median`);
+            // Check if we have ANY retail reference to validate the sold median
+            const hasRetailValidation = (retailCapCents !== null) || 
+              (amazonPrice !== null) || (walmartPrice !== null) || (brandSitePrice !== null);
+            
+            if (hasRetailValidation) {
+              // Have retail data to cross-check — trust sold median over floor
+              targetCents = soldMedian!;
+              console.log(`[delivered-pricing] Floor ($${(activeFloor / 100).toFixed(2)}) is outlier (${Math.round(floorRatio * 100)}% of sold median $${(soldMedian! / 100).toFixed(2)}) - using sold median (retail validated)`);
+            } else {
+              // NO retail data to validate — sold median could be contaminated
+              // with multi-packs, bundles, or wrong variants.
+              // Cap at 1.5x active floor to prevent wildly inflated prices.
+              const maxUplift = Math.round(activeFloor * 1.50);
+              targetCents = Math.min(soldMedian!, maxUplift);
+              warnings.push('soldMedianCappedNoRetail');
+              console.log(`[delivered-pricing] ⚠️ Floor ($${(activeFloor / 100).toFixed(2)}) is ${Math.round(floorRatio * 100)}% of sold median ($${(soldMedian! / 100).toFixed(2)}) but NO retail validation`);
+              console.log(`[delivered-pricing] ⚠️ Sold median may be contaminated (multi-packs?) - capping at $${(maxUplift / 100).toFixed(2)} (1.5x floor)`);
+            }
           } else {
             targetCents = Math.min(soldMedian!, activeFloor);
             if (soldMedian! < activeFloor) {
@@ -972,13 +991,15 @@ export async function getDeliveredPricing(
   const retailHasBrand = retailCompsIncludeBrand(retailComps, brand);
   const soldStrong = soldMedianCents !== null && soldCount >= 5;
   
-  // ALWAYS try Brave for Amazon if we didn't find an Amazon price in Google Shopping
-  // This catches cases where:
-  // 1. Google Shopping only finds brand site but Amazon has the product
-  // 2. Brand site shows sale/promo price but Amazon shows true retail
-  // 3. Niche brands not well indexed in Google Shopping
-  if (!amazonPriceCents && !soldStrong) {
-    console.log(`[delivered-pricing] 🔍 No Amazon in Google Shopping - trying Brave Amazon fallback for "${brand} ${productName}"`);
+  // Try Brave for Amazon when we have NO retail reference at all.
+  // Previously gated by !soldStrong, but soldStrong doesn't mean the data is CORRECT:
+  // sold comps can be contaminated with multi-packs/bundles, and without a retail
+  // reference there's no safety net to catch inflated prices.
+  // We still skip if we already have Amazon/Walmart/Target or brand site pricing.
+  const hasAnyRetailRef = hasTrustedRetail || brandSitePriceCents !== null;
+  
+  if (!amazonPriceCents && !hasAnyRetailRef) {
+    console.log(`[delivered-pricing] 🔍 No Amazon and no retail reference - trying Brave Amazon fallback for "${brand} ${productName}"`);
     
     const braveResult = await braveAmazonFallback(brand, productName);
     if (braveResult.priceCents) {
@@ -1002,10 +1023,12 @@ export async function getDeliveredPricing(
 
   // === Step 5: Direct Amazon/Walmart API Fallback ===
   // If we still don't have a trusted retail price, try SearchAPI direct endpoints
-  // This catches products that aren't indexed in Google Shopping
+  // This catches products that aren't indexed in Google Shopping.
+  // Previously gated by !soldStrong, but we need retail as a safety net even WITH
+  // strong sold data — sold comps can be contaminated with multi-packs/bundles.
   let effectiveWalmartPriceCents = walmartPriceCents;
   
-  if (!effectiveAmazonPriceCents && !effectiveWalmartPriceCents && !soldStrong) {
+  if (!effectiveAmazonPriceCents && !effectiveWalmartPriceCents && !hasAnyRetailRef) {
     console.log(`[delivered-pricing] 🔍 No retail prices found - trying direct Amazon/Walmart API fallback`);
     
     try {

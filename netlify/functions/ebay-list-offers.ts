@@ -228,6 +228,57 @@ export const handler: Handler = async (event) => {
 		// Helper to read offers length safely
 		const getOffers = (body: any) => (Array.isArray(body?.offers) ? body.offers : []);
 
+		// Enrich offers with inventory item titles, weight, and image URLs
+		// Defined early so it can be used in all return paths (including early returns)
+		const enrichWithInventoryData = async (offerList: any[]) => {
+			const concurrency = 10;
+			const queue = offerList.map((offer, index) => async () => {
+				const sku = offer?.sku;
+				if (!sku) return;
+				
+				try {
+					const invUrl = `${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
+					const invRes = await fetch(invUrl, { headers });
+					if (invRes.ok) {
+						const invTxt = await invRes.text();
+						const invJson = JSON.parse(invTxt);
+						const title = invJson?.product?.title || invJson?.title;
+						if (title) {
+							offerList[index]._enrichedTitle = title;
+						}
+						// Include weight info for "needs attention" detection
+						const weight = invJson?.packageWeightAndSize?.weight;
+						if (weight?.value && weight?.value > 0) {
+							offerList[index]._hasWeight = true;
+							offerList[index]._weight = { value: weight.value, unit: weight.unit || 'OUNCE' };
+						} else {
+							offerList[index]._hasWeight = false;
+						}
+						// Include first image URL so frontend can render thumbs immediately
+						// without a separate ebay-offer-thumb call per card
+						const imgs = invJson?.product?.imageUrls || invJson?.product?.images || invJson?.product?.image || [];
+						const imgArr = Array.isArray(imgs) ? imgs : imgs ? [imgs] : [];
+						if (imgArr.length > 0) {
+							offerList[index]._imageUrl = imgArr[0];
+						}
+					}
+				} catch {
+					// Skip on error, title will show as SKU
+				}
+			});
+			
+			let i = 0;
+			const next = async (): Promise<void> => {
+				const fn = queue[i++];
+				if (!fn) return;
+				await fn();
+				return next();
+			};
+			
+			const workers = Array.from({ length: Math.min(concurrency, queue.length) }, next);
+			await Promise.all(workers);
+		};
+
 		// For multiple statuses, try a single call first and filter client-side
 		// This is much faster than multiple API calls
 		if (normalizedStatuses.length > 0) {
@@ -290,6 +341,33 @@ export const handler: Handler = async (event) => {
 				console.log('[ebay-list-offers] Filtered to', filtered.length, 'offers matching', allowStatuses);
 				
 				if (filtered.length > 0) {
+					// Enrich with titles, weights, and image URLs before returning
+					// This prevents the frontend from making per-offer API calls for each card
+					if (filtered.length <= 50) {
+						const enrichStart = Date.now();
+						await enrichWithInventoryData(filtered);
+						console.log('[ebay-list-offers] Inventory enrichment took', Date.now() - enrichStart, 'ms for', filtered.length, 'offers');
+					}
+					
+					// Also enrich with promotion intent
+					try {
+						const intents = await Promise.all(
+							filtered.map(async (offer: any) => {
+								const offerId = offer?.offerId;
+								if (!offerId) return null;
+								return getPromotionIntent(offerId);
+							})
+						);
+						intents.forEach((intent, idx) => {
+							if (!intent || !intent.enabled) return;
+							filtered[idx].merchantData = filtered[idx].merchantData || {};
+							filtered[idx].merchantData.autoPromote = true;
+							filtered[idx].merchantData.autoPromoteAdRate = intent.adRate;
+						});
+					} catch (promoErr) {
+						console.warn('[ebay-list-offers] Promo enrichment error:', promoErr);
+					}
+					
 					const elapsed = Date.now() - startTime;
 					console.log('[ebay-list-offers] Success in', elapsed, 'ms');
 					return {
@@ -452,51 +530,7 @@ export const handler: Handler = async (event) => {
 				)
 			: offers;
 		
-		// Enrich offers with inventory item titles and weight for faster frontend display
-		// Fetch data in parallel with limited concurrency to avoid timeout
-		const enrichWithInventoryData = async (offerList: any[]) => {
-			const concurrency = 10;
-			const queue = offerList.map((offer, index) => async () => {
-				const sku = offer?.sku;
-				if (!sku) return;
-				
-				try {
-					const invUrl = `${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
-					const invRes = await fetch(invUrl, { headers });
-					if (invRes.ok) {
-						const invTxt = await invRes.text();
-						const invJson = JSON.parse(invTxt);
-						const title = invJson?.product?.title || invJson?.title;
-						if (title) {
-							offerList[index]._enrichedTitle = title;
-						}
-						// Include weight info for "needs attention" detection
-						const weight = invJson?.packageWeightAndSize?.weight;
-						if (weight?.value && weight?.value > 0) {
-							offerList[index]._hasWeight = true;
-							offerList[index]._weight = { value: weight.value, unit: weight.unit || 'OUNCE' };
-						} else {
-							offerList[index]._hasWeight = false;
-						}
-					}
-				} catch {
-					// Skip on error, title will show as SKU
-				}
-			});
-			
-			let i = 0;
-			const next = async (): Promise<void> => {
-				const fn = queue[i++];
-				if (!fn) return;
-				await fn();
-				return next();
-			};
-			
-			const workers = Array.from({ length: Math.min(concurrency, queue.length) }, next);
-			await Promise.all(workers);
-		};
-		
-		// Only enrich if we have a reasonable number of offers (prevent timeout)
+		// Enrich the final list with inventory data (titles, weights, images)
 		if (final.length > 0 && final.length <= 50) {
 			const enrichStart = Date.now();
 			await enrichWithInventoryData(final);
