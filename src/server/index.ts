@@ -214,6 +214,7 @@ async function registerRoutes() {
     'promotion-test',
     'promotion-worker',
     'queue-promotion',
+    'reprice',
     'show-my-ebay-token',
     'smartdrafts-analyze',
     'smartdrafts-create-drafts',
