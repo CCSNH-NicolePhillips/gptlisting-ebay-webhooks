@@ -57,6 +57,15 @@ import { searchAmazonWithFallback } from './amazon-search.js';
 import { searchWalmart } from './walmart-search.js';
 import { extractPriceWithShipping } from './html-price.js';
 
+// v2 pricing modules
+import { computeRobustStats, isFloorOutlier, isSoldStrong, isActiveStrong, sellThrough, type RobustStats, type CompSample } from './pricing/robust-stats.js';
+import { buildIdentity, type CanonicalIdentity } from './pricing/identity-model.js';
+import { matchComps, filterMatches, filterMatchesAndAmbiguous, type CompCandidate, type MatchResult } from './pricing/comp-matcher.js';
+import { enforceSafetyFloor, estimateProfit, DEFAULT_FEE_MODEL, DEFAULT_SAFETY_INPUTS, type SafetyFloorInputs, type SafetyFloorResult } from './pricing/safety-floors.js';
+import { pricingFlags } from './pricing/feature-flags.js';
+import { computeConfidence, checkCrossSignal, type ConfidenceInputs, type ConfidenceResult } from './pricing/confidence-scoring.js';
+import { searchEbayComps, type EbayCompetitor, type EbayCompsResult } from './ebay-browse-search.js';
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -856,15 +865,214 @@ export function splitDeliveredPrice(
 }
 
 // ============================================================================
+// v2 Target Selection (percentile-based)
+// ============================================================================
+
+/**
+ * v2 target price selection using robust percentile stats.
+ * 
+ * Pseudocode from plan:
+ *   If soldStrong: base = soldStats.P35
+ *   Else if activeStrong: base = activeStats.P20
+ *   Else if retailAnchor: base = retailAnchor * 0.70
+ *   Else: MANUAL_REVIEW_REQUIRED
+ * 
+ *   Caps: min(base, activeP65), min(base, 0.80 * lowestTrustedRetail)
+ *   Floor guard: ignore single lowest active if it's an outlier
+ */
+export function calculateTargetDeliveredV2(
+  mode: PricingMode,
+  soldStats: RobustStats | null,
+  activeStats: RobustStats | null,
+  lowestTrustedRetailCents: number | null,
+  undercutCents: number,
+  minDeliveredCents: number,
+): { targetCents: number; fallbackUsed: boolean; soldStrong: boolean; activeStrong: boolean; warnings: string[] } {
+  const warnings: string[] = [];
+  let fallbackUsed = false;
+
+  const soldStrong = soldStats !== null && isSoldStrong(soldStats);
+  const activeStrong = activeStats !== null && isActiveStrong(activeStats);
+
+  let base: number;
+
+  // === Primary target selection ===
+  if (soldStrong) {
+    switch (mode) {
+      case 'market-match':
+        base = soldStats!.p35;
+        console.log(`[pricing-v2] SoldStrong → base = SoldP35 = $${(base / 100).toFixed(2)}`);
+        break;
+      case 'fast-sale': {
+        const fastBase = activeStrong
+          ? Math.min(activeStats!.p20, soldStats!.p35)
+          : soldStats!.p35;
+        base = Math.max(fastBase - undercutCents, minDeliveredCents);
+        console.log(`[pricing-v2] Fast-sale → base = $${(base / 100).toFixed(2)}`);
+        break;
+      }
+      case 'max-margin':
+        base = activeStrong
+          ? Math.min(soldStats!.p50, activeStats!.p35)
+          : soldStats!.p50;
+        console.log(`[pricing-v2] Max-margin → base = $${(base / 100).toFixed(2)}`);
+        break;
+    }
+  } else if (activeStrong) {
+    switch (mode) {
+      case 'market-match':
+        base = activeStats!.p20;
+        console.log(`[pricing-v2] ActiveStrong (no sold) → base = ActiveP20 = $${(base / 100).toFixed(2)}`);
+        break;
+      case 'fast-sale':
+        base = Math.max(activeStats!.p20 - undercutCents, minDeliveredCents);
+        console.log(`[pricing-v2] Fast-sale (active only) → base = $${(base / 100).toFixed(2)}`);
+        break;
+      case 'max-margin':
+        base = activeStats!.p35;
+        console.log(`[pricing-v2] Max-margin (active only) → base = ActiveP35 = $${(base / 100).toFixed(2)}`);
+        break;
+    }
+  } else if (lowestTrustedRetailCents !== null) {
+    base = Math.round(lowestTrustedRetailCents * 0.70);
+    fallbackUsed = true;
+    warnings.push('usingRetailAnchorOnly');
+    console.log(`[pricing-v2] No strong sold/active → retail anchor * 0.70 = $${(base / 100).toFixed(2)}`);
+  } else {
+    // No reliable signal
+    base = 0;
+    fallbackUsed = true;
+    warnings.push('manualReviewRequired');
+    warnings.push('noPricingData');
+    console.log(`[pricing-v2] No pricing signal → MANUAL_REVIEW_REQUIRED`);
+    return { targetCents: 0, fallbackUsed, soldStrong, activeStrong, warnings };
+  }
+
+  // === Caps ===
+  // Active cap: don't exceed ActiveP65 unless sold data justifies it
+  if (activeStrong) {
+    const activeCap = activeStats!.p65;
+    if (base > activeCap && !(soldStrong && sellThrough(soldStats!.count, activeStats!.count)! > 0.40)) {
+      console.log(`[pricing-v2] Active cap: $${(base / 100).toFixed(2)} → $${(activeCap / 100).toFixed(2)} (ActiveP65)`);
+      warnings.push('activeCapApplied');
+      base = activeCap;
+    }
+  }
+
+  // Retail cap: 80% of lowest trusted retail
+  if (lowestTrustedRetailCents !== null) {
+    const retailCap = Math.round(lowestTrustedRetailCents * RETAIL_CAP_RATIO);
+    if (base > retailCap) {
+      console.log(`[pricing-v2] Retail cap: $${(base / 100).toFixed(2)} → $${(retailCap / 100).toFixed(2)} (80% of $${(lowestTrustedRetailCents / 100).toFixed(2)})`);
+      warnings.push('retailCapApplied');
+      base = retailCap;
+    }
+  }
+
+  // Floor guard: if single lowest active is an outlier, flag it
+  if (activeStrong && isFloorOutlier(activeStats!)) {
+    warnings.push('floorOutlierIgnored');
+    console.log(`[pricing-v2] Floor outlier detected: active min $${(activeStats!.min / 100).toFixed(2)} < 80% of P20 $${(activeStats!.p20 / 100).toFixed(2)}`);
+  }
+
+  // Uplift guard: sold vs active mismatch
+  if (soldStrong && activeStrong) {
+    const soldP35 = soldStats!.p35;
+    const activeP35 = activeStats!.p35;
+    if (activeP35 > 0 && soldP35 > activeP35 * 1.25) {
+      warnings.push('soldActiveMismatch');
+      console.log(`[pricing-v2] ⚠️ SoldP35 ($${(soldP35 / 100).toFixed(2)}) > 1.25x ActiveP35 ($${(activeP35 / 100).toFixed(2)}) — possible sold contamination`);
+    }
+  }
+
+  // Enforce minimum
+  base = Math.max(base, minDeliveredCents);
+
+  return { targetCents: base, fallbackUsed, soldStrong, activeStrong, warnings };
+}
+
+// ============================================================================
+// v2 Comp Conversion Helpers
+// ============================================================================
+
+/**
+ * Convert CompetitorPrice[] to CompSample[] for robust stats.
+ */
+function toCompSamples(comps: CompetitorPrice[]): CompSample[] {
+  return comps
+    .filter(c => c.inStock && c.deliveredCents > 0)
+    .map(c => ({
+      itemCents: c.itemCents,
+      shipCents: c.shipCents,
+      deliveredCents: c.deliveredCents,
+    }));
+}
+
+/**
+ * Convert EbayCompetitor[] (from Browse API) to CompCandidate[] for matcher.
+ */
+function browseToCompCandidates(comps: EbayCompetitor[]): CompCandidate[] {
+  return comps.map(c => ({
+    id: c.itemId,
+    title: c.title,
+    condition: c.condition,
+    priceCents: c.itemPriceCents,
+    shippingCents: c.shippingCents,
+    deliveredCents: c.deliveredCents,
+    url: c.url,
+  }));
+}
+
+/**
+ * Convert CompetitorPrice[] to CompCandidate[] for matcher.
+ */
+function competitorToCompCandidates(comps: CompetitorPrice[]): CompCandidate[] {
+  return comps.map((c, i) => ({
+    id: `comp-${i}`,
+    title: c.title,
+    condition: 'New', // Google Shopping comps are generally new
+    priceCents: c.itemCents,
+    shippingCents: c.shipCents,
+    deliveredCents: c.deliveredCents,
+    url: c.url ?? undefined,
+  }));
+}
+
+/**
+ * Convert MatchResult[] back to CompetitorPrice[] (for downstream compatibility).
+ */
+function matchResultsToCompetitors(results: MatchResult[], source: CompetitorPrice['source'] = 'ebay'): CompetitorPrice[] {
+  return results.map(r => ({
+    source,
+    itemCents: r.candidate.priceCents,
+    shipCents: r.candidate.shippingCents,
+    deliveredCents: r.candidate.deliveredCents,
+    title: r.candidate.title,
+    url: r.candidate.url ?? null,
+    inStock: true,
+    seller: 'ebay',
+  }));
+}
+
+// ============================================================================
 // Main Function
 // ============================================================================
 
 /**
  * Get delivered-price-first competitive pricing for a product
  * 
- * This is the main entry point for the v2 pricing engine.
- * Uses Google Shopping to find eBay and retail comps, then calculates
- * the optimal price based on the selected mode.
+ * This is the main entry point for the pricing engine.
+ * 
+ * When DP_PRICING_V2=true:
+ *   - Uses percentile-based targeting (P35/P20) with IQR outlier rejection
+ *   - Identity-based comp filtering (when DP_IDENTITY_FILTER=true)
+ *   - eBay Browse API for active comps (when DP_EBAY_BROWSE_ACTIVE=true)
+ *   - Safety floor enforcement (when DP_SAFETY_FLOOR=true)
+ *   - Confidence scoring with review triggers (when DP_CONFIDENCE_SCORING=true)
+ * 
+ * When DP_PRICING_V2=false (default):
+ *   - Legacy floor/median targeting via calculateTargetDelivered()
+ *   - Google Shopping for comps
  * 
  * @param brand - Product brand
  * @param productName - Product name with size/count
@@ -880,11 +1088,23 @@ export async function getDeliveredPricing(
 ): Promise<DeliveredPricingDecision> {
   const fullSettings: DeliveredPricingSettings = { ...DEFAULT_PRICING_SETTINGS, ...settings };
   const warnings: string[] = [];
+  const flags = pricingFlags();
 
   const searchTerms = additionalContext 
     ? `${brand} ${productName} + context: ${additionalContext}` 
     : `${brand} ${productName}`;
-  console.log(`[delivered-pricing] Pricing "${searchTerms}" in ${fullSettings.mode} mode`);
+  console.log(`[delivered-pricing] Pricing "${searchTerms}" in ${fullSettings.mode} mode${flags.v2Enabled ? ' [v2]' : ''}`);
+
+  // ========================================================================
+  // v2 PIPELINE — percentile-based with identity filtering
+  // ========================================================================
+  if (flags.v2Enabled) {
+    return getDeliveredPricingV2(brand, productName, fullSettings, additionalContext, flags);
+  }
+
+  // ========================================================================
+  // LEGACY PIPELINE — floor/median targeting via Google Shopping
+  // ========================================================================
 
   // === Step 1: Search Google Shopping for all comps ===
   // Note: eBay Browse API is unreliable/deprecated, so we use Google Shopping
@@ -1210,6 +1430,370 @@ export async function getDeliveredPricing(
     matchConfidence,
     fallbackUsed: targetResult.fallbackUsed,
     compsSource: finalCompsSource,
+    warnings,
+  };
+}
+
+// ============================================================================
+// v2 Pipeline Implementation
+// ============================================================================
+
+/**
+ * v2 pricing pipeline: percentile-based with identity filtering, safety floors,
+ * confidence scoring, and optional eBay Browse API for active comps.
+ * 
+ * This is called when DP_PRICING_V2=true.
+ */
+async function getDeliveredPricingV2(
+  brand: string,
+  productName: string,
+  fullSettings: DeliveredPricingSettings,
+  additionalContext: string | undefined,
+  flags: ReturnType<typeof pricingFlags>
+): Promise<DeliveredPricingDecision> {
+  const warnings: string[] = [];
+
+  // --- Build product identity ---
+  const identity = buildIdentity({ brand, productName });
+  console.log(`[pricing-v2] Identity: ${identity.brand} | ${identity.productLine} | size=${identity.size ? `${identity.size.value}${identity.size.unit}` : 'none'} | pack=${identity.packCount}`);
+
+  // === Step 1: Fetch comps from all sources ===
+
+  // 1a. Google Shopping (always — provides retail anchors + eBay comps as fallback)
+  const searchResult = await searchGoogleShopping(brand, productName, additionalContext);
+  const googleComps = searchResult.allResults.map(googleResultToCompetitor);
+  const retailComps = googleComps.filter(c => c.source !== 'ebay');
+  let ebayComps = googleComps.filter(c => c.source === 'ebay');
+
+  console.log(`[pricing-v2] Google Shopping: ${ebayComps.length} eBay, ${retailComps.length} retail`);
+
+  // 1b. eBay Browse API for active comps (replaces Google Shopping eBay comps)
+  let compsSource: DeliveredPricingDecision['compsSource'] = 'google-shopping';
+  let browseComps: EbayCompetitor[] = [];
+
+  if (flags.ebayBrowseActiveEnabled) {
+    try {
+      const browseResult = await searchEbayComps(brand, productName);
+      if (browseResult.ok && browseResult.competitors.length > 0) {
+        browseComps = browseResult.competitors;
+        compsSource = 'ebay-browse';
+        console.log(`[pricing-v2] Browse API: ${browseComps.length} active comps`);
+      } else {
+        console.log(`[pricing-v2] Browse API: no results, falling back to Google Shopping eBay comps`);
+      }
+    } catch (err) {
+      console.log(`[pricing-v2] Browse API error: ${err} — falling back to Google Shopping`);
+      warnings.push('browseApiError');
+    }
+  }
+
+  // 1c. Sold comps
+  let soldSamples: CompSample[] = [];
+  let soldMedianCents: number | null = null;
+  let soldCount = 0;
+
+  try {
+    const soldResult = await fetchSoldPriceStats({ title: productName, brand, condition: 'NEW' });
+    if (soldResult.ok && soldResult.samplesCount && soldResult.samples.length > 0) {
+      soldSamples = soldResult.samples.map(s => ({
+        itemCents: Math.round(s.price * 100),
+        shipCents: Math.round(s.shipping * 100),
+        deliveredCents: Math.round(s.deliveredPrice * 100),
+      }));
+      soldCount = soldResult.samplesCount;
+      soldMedianCents = soldResult.deliveredMedian
+        ? Math.round(soldResult.deliveredMedian * 100)
+        : soldResult.median
+          ? Math.round(soldResult.median * 100) + fullSettings.shippingEstimateCents
+          : null;
+      console.log(`[pricing-v2] Sold: ${soldCount} samples, delivered median $${soldMedianCents ? (soldMedianCents / 100).toFixed(2) : 'n/a'}`);
+    }
+  } catch (err) {
+    console.log(`[pricing-v2] Sold comps error: ${err}`);
+    warnings.push('soldCompsError');
+  }
+
+  // === Step 2: Identity-based comp filtering ===
+  let activeCompSamples: CompSample[];
+
+  if (flags.identityFilterEnabled) {
+    if (compsSource === 'ebay-browse' && browseComps.length > 0) {
+      const candidates = browseToCompCandidates(browseComps);
+      const matchResults = matchComps(identity, candidates);
+      const matched = filterMatches(matchResults);
+      const ambiguous = matchResults.filter(r => r.verdict === 'ambiguous');
+      const rejected = matchResults.filter(r => r.verdict === 'reject');
+      
+      console.log(`[pricing-v2] Active comp filter: ${matched.length} match, ${ambiguous.length} ambiguous, ${rejected.length} reject`);
+      
+      // Use matches; keep ambiguous for potential LLM disambiguation
+      const validResults = flags.matchingLlmEnabled
+        ? filterMatchesAndAmbiguous(matchResults) // TODO: actually run LLM on ambiguous
+        : matched;
+      
+      activeCompSamples = validResults.map(r => ({
+        itemCents: r.candidate.priceCents,
+        shipCents: r.candidate.shippingCents,
+        deliveredCents: r.candidate.deliveredCents,
+      }));
+      
+      // Convert back to CompetitorPrice for the decision output
+      ebayComps = matchResultsToCompetitors(validResults);
+    } else {
+      // Filter Google Shopping eBay comps through identity matcher
+      const candidates = competitorToCompCandidates(ebayComps);
+      const matchResults = matchComps(identity, candidates);
+      const matched = flags.matchingLlmEnabled
+        ? filterMatchesAndAmbiguous(matchResults)
+        : filterMatches(matchResults);
+
+      console.log(`[pricing-v2] GS eBay filter: ${matched.length} of ${ebayComps.length} passed identity filter`);
+      
+      activeCompSamples = matched.map(r => ({
+        itemCents: r.candidate.priceCents,
+        shipCents: r.candidate.shippingCents,
+        deliveredCents: r.candidate.deliveredCents,
+      }));
+      ebayComps = matchResultsToCompetitors(matched);
+    }
+
+    // Filter sold comps too (if we have samples with titles — but sold samples don't have titles in current model)
+    // For now, use all sold samples — identity filtering for sold is handled by ebay-sold-prices.ts title matching
+  } else {
+    // No identity filtering — use raw eBay comps
+    activeCompSamples = toCompSamples(ebayComps);
+  }
+
+  // === Step 3: Compute robust stats ===
+  const activeStats = activeCompSamples.length > 0
+    ? computeRobustStats(activeCompSamples)
+    : null;
+  const soldStats = soldSamples.length > 0
+    ? computeRobustStats(soldSamples)
+    : null;
+
+  if (activeStats) {
+    console.log(`[pricing-v2] Active stats: ${activeStats.count}/${activeStats.rawCount} (after outlier removal), P20=$${(activeStats.p20 / 100).toFixed(2)}, P35=$${(activeStats.p35 / 100).toFixed(2)}, P50=$${(activeStats.p50 / 100).toFixed(2)}, IQR=$${(activeStats.iqr / 100).toFixed(2)}`);
+  }
+  if (soldStats) {
+    console.log(`[pricing-v2] Sold stats: ${soldStats.count}/${soldStats.rawCount} (after outlier removal), P35=$${(soldStats.p35 / 100).toFixed(2)}, P50=$${(soldStats.p50 / 100).toFixed(2)}, IQR=$${(soldStats.iqr / 100).toFixed(2)}`);
+  }
+
+  // === Step 4: Retail anchors ===
+  const amazonComp = googleComps.find(c => c.source === 'amazon');
+  const walmartComp = googleComps.find(c => c.source === 'walmart');
+  const targetComp = googleComps.find(c => c.source === 'target');
+  const amazonPriceCents = amazonComp?.deliveredCents ?? null;
+  const walmartPriceCents = walmartComp?.deliveredCents ?? null;
+  const targetPriceCents = targetComp?.deliveredCents ?? null;
+  const brandSitePriceCents = searchResult.brandSitePrice
+    ? Math.round(searchResult.brandSitePrice * 100)
+    : null;
+
+  const trustedRetailPrices = [brandSitePriceCents, amazonPriceCents, walmartPriceCents, targetPriceCents]
+    .filter((p): p is number => p !== null && p > 0);
+  const lowestTrustedRetailCents = trustedRetailPrices.length > 0 ? Math.min(...trustedRetailPrices) : null;
+
+  // Brave/API fallbacks for retail (same as legacy)
+  let effectiveAmazonPriceCents = amazonPriceCents;
+  let effectiveWalmartPriceCents = walmartPriceCents;
+  const hasAnyRetailRef = trustedRetailPrices.length > 0 || brandSitePriceCents !== null;
+
+  if (!effectiveAmazonPriceCents && !hasAnyRetailRef) {
+    try {
+      const braveResult = await braveAmazonFallback(brand, productName);
+      if (braveResult.priceCents) {
+        effectiveAmazonPriceCents = braveResult.priceCents;
+        warnings.push('usedBraveAmazonFallback');
+      }
+    } catch { /* ignore */ }
+  }
+
+  if (!effectiveAmazonPriceCents && !effectiveWalmartPriceCents && !hasAnyRetailRef) {
+    try {
+      const amazonResult = await searchAmazonWithFallback(brand, productName, true);
+      if (amazonResult.price !== null && amazonResult.confidence !== 'low') {
+        effectiveAmazonPriceCents = Math.round(amazonResult.price * 100);
+        warnings.push('usedDirectAmazonAPI');
+      }
+    } catch { /* ignore */ }
+
+    if (!effectiveAmazonPriceCents) {
+      try {
+        const walmartResult = await searchWalmart(brand, productName);
+        if (walmartResult.price !== null && walmartResult.confidence !== 'low') {
+          effectiveWalmartPriceCents = Math.round(walmartResult.price * 100);
+          warnings.push('usedDirectWalmartAPI');
+        }
+      } catch { /* ignore */ }
+    }
+  }
+
+  const effectiveRetailPrices = [brandSitePriceCents, effectiveAmazonPriceCents, effectiveWalmartPriceCents, targetPriceCents]
+    .filter((p): p is number => p !== null && p > 0);
+  const effectiveLowestRetail = effectiveRetailPrices.length > 0 ? Math.min(...effectiveRetailPrices) : null;
+
+  // === Step 5: v2 target selection ===
+  const minDeliveredCents = fullSettings.minItemCents + fullSettings.shippingEstimateCents;
+  const targetResult = calculateTargetDeliveredV2(
+    fullSettings.mode,
+    soldStats,
+    activeStats,
+    effectiveLowestRetail,
+    fullSettings.undercutCents,
+    minDeliveredCents,
+  );
+  warnings.push(...targetResult.warnings);
+
+  // Handle no pricing data
+  if (targetResult.targetCents === 0) {
+    console.log(`[pricing-v2] No pricing data — returning minimum prices`);
+    return {
+      brand, productName, ebayComps, retailComps,
+      activeFloorDeliveredCents: activeStats?.min ?? null,
+      activeMedianDeliveredCents: activeStats?.p50 ?? null,
+      amazonPriceCents: effectiveAmazonPriceCents,
+      walmartPriceCents: effectiveWalmartPriceCents,
+      soldMedianDeliveredCents: soldMedianCents,
+      soldCount,
+      soldStrong: targetResult.soldStrong,
+      mode: fullSettings.mode,
+      targetDeliveredCents: 0,
+      finalItemCents: fullSettings.minItemCents,
+      finalShipCents: fullSettings.shippingEstimateCents,
+      freeShipApplied: false, subsidyCents: 0,
+      shippingEstimateSource: 'fixed',
+      skipListing: fullSettings.lowPriceMode === 'AUTO_SKIP',
+      canCompete: false,
+      matchConfidence: 'low',
+      fallbackUsed: true, compsSource: 'fallback',
+      warnings,
+    };
+  }
+
+  // === Step 6: Safety floor enforcement ===
+  let finalTargetCents = targetResult.targetCents;
+
+  if (flags.safetyFloorEnabled) {
+    const safetyInputs: SafetyFloorInputs = {
+      ...DEFAULT_SAFETY_INPUTS,
+      shippingCostEstimateCents: fullSettings.shippingEstimateCents,
+    };
+    const safetyResult = enforceSafetyFloor(finalTargetCents, safetyInputs);
+
+    if (safetyResult.floorWasBinding) {
+      console.log(`[pricing-v2] Safety floor: $${(finalTargetCents / 100).toFixed(2)} → $${(safetyResult.minDeliveredCents / 100).toFixed(2)} (uplift ${safetyResult.upliftPercent.toFixed(1)}%)`);
+      warnings.push('safetyFloorApplied');
+      finalTargetCents = safetyResult.minDeliveredCents;
+    }
+  }
+
+  console.log(`[pricing-v2] Target delivered: $${(finalTargetCents / 100).toFixed(2)}`);
+
+  // === Step 7: Smart shipping ===
+  let effectiveShippingCents = fullSettings.shippingEstimateCents;
+  let shippingEstimateSource: DeliveredPricingDecision['shippingEstimateSource'] = 'fixed';
+
+  if (fullSettings.useSmartShipping) {
+    const shippingEstimate = getShippingEstimate(
+      brand, productName, ebayComps,
+      fullSettings.shippingSettings || DEFAULT_SHIPPING_SETTINGS
+    );
+    effectiveShippingCents = shippingEstimate.cents;
+    shippingEstimateSource = shippingEstimate.source;
+    console.log(`[pricing-v2] Smart shipping: $${(effectiveShippingCents / 100).toFixed(2)} (${shippingEstimateSource})`);
+  }
+
+  const effectiveSettings: DeliveredPricingSettings = { ...fullSettings, shippingEstimateCents: effectiveShippingCents };
+
+  // === Step 8: Split into item + shipping ===
+  const splitResult = splitDeliveredPrice(finalTargetCents, effectiveSettings, shippingEstimateSource);
+  warnings.push(...splitResult.warnings);
+
+  console.log(`[pricing-v2] Final: item $${(splitResult.itemCents / 100).toFixed(2)} + ship $${(splitResult.shipCents / 100).toFixed(2)}`);
+
+  // === Step 9: Confidence scoring ===
+  let matchConfidence: DeliveredPricingDecision['matchConfidence'] = 'low';
+
+  if (flags.confidenceScoringEnabled) {
+    const crossSignal = checkCrossSignal(soldStats, activeStats);
+    const safetyUplift = flags.safetyFloorEnabled
+      ? Math.max(0, ((finalTargetCents - targetResult.targetCents) / Math.max(targetResult.targetCents, 1)) * 100)
+      : 0;
+    
+    const confidenceResult = computeConfidence({
+      upcMatch: identity.upc !== null,
+      identitySource: identity.upc ? 'upc' : 'structured-attributes',
+      soldStats,
+      activeStats,
+      crossSignalAgreement: crossSignal,
+      hasRetailAnchor: effectiveLowestRetail !== null,
+      llmConfidenceLow: false, // TODO: wire LLM confidence
+      packSizeAmbiguous: false, // TODO: detect from matchResults
+      safetyFloorUpliftPercent: safetyUplift,
+      shippingGapCents: 0, // TODO: carrier cost - displayed charge
+      shippingSubsidyCapCents: fullSettings.freeShippingMaxSubsidyCents,
+    });
+
+    console.log(`[pricing-v2] Confidence: ${confidenceResult.score}/100 | hard: [${confidenceResult.hardTriggers.join(', ')}] | soft: [${confidenceResult.softTriggers.join(', ')}]`);
+
+    if (confidenceResult.score >= 60) matchConfidence = 'high';
+    else if (confidenceResult.score >= 35) matchConfidence = 'medium';
+
+    if (confidenceResult.requiresManualReview) {
+      warnings.push('manualReviewRequired');
+      warnings.push(...confidenceResult.hardTriggers);
+    }
+    if (confidenceResult.softTriggers.length > 0) {
+      warnings.push(...confidenceResult.softTriggers);
+    }
+  } else {
+    // Legacy confidence
+    if (ebayComps.length >= 5 || targetResult.soldStrong) matchConfidence = 'high';
+    else if (ebayComps.length >= 3) matchConfidence = 'medium';
+  }
+
+  // === Step 10: Structured log ===
+  console.log(`[pricing-v2] decision`, JSON.stringify({
+    version: 'v2',
+    targetDeliveredTotalCents: finalTargetCents,
+    mode: fullSettings.mode,
+    shippingChargeCents: splitResult.shipCents,
+    itemPriceCents: splitResult.itemCents,
+    freeShipApplied: splitResult.freeShipApplied,
+    canCompete: splitResult.canCompete,
+    soldCount: soldStats?.count ?? 0,
+    activeCount: activeStats?.count ?? 0,
+    soldP35: soldStats?.p35 ?? null,
+    activeP20: activeStats?.p20 ?? null,
+    lowestRetail: effectiveLowestRetail,
+    compsSource,
+    matchConfidence,
+    warnings,
+  }));
+
+  return {
+    brand, productName,
+    ebayComps, retailComps,
+    activeFloorDeliveredCents: activeStats?.min ?? null,
+    activeMedianDeliveredCents: activeStats?.p50 ?? null,
+    amazonPriceCents: effectiveAmazonPriceCents,
+    walmartPriceCents: effectiveWalmartPriceCents,
+    soldMedianDeliveredCents: soldStats?.p50 ?? soldMedianCents,
+    soldCount,
+    soldStrong: targetResult.soldStrong,
+    mode: fullSettings.mode,
+    targetDeliveredCents: finalTargetCents,
+    finalItemCents: splitResult.itemCents,
+    finalShipCents: splitResult.shipCents,
+    freeShipApplied: splitResult.freeShipApplied,
+    subsidyCents: splitResult.subsidyCents,
+    shippingEstimateSource: splitResult.shippingEstimateSource,
+    skipListing: splitResult.skipListing,
+    canCompete: splitResult.canCompete,
+    matchConfidence,
+    fallbackUsed: targetResult.fallbackUsed,
+    compsSource,
     warnings,
   };
 }
