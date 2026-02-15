@@ -53,18 +53,41 @@ export const handler: Handler = async (event) => {
       return json(404, { error: "Job not found" }, originHdr);
     }
 
-    // If job is pending and needs work, trigger processor (but not if already processing)
+    // If job is pending and needs work, trigger processor
+    // Also detect stale "processing" jobs that crashed without updating status
     const totalImages = (status.dropboxPaths || status.stagedUrls || []).length;
     const needsWork = status.processedCount < totalImages;
+    const STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+    const isStale = status.status === "processing" && (Date.now() - status.updatedAt) > STALE_THRESHOLD_MS;
     
     console.log(`[pairing-v2-status] Job ${jobId} status check:`, {
       status: status.status,
       totalImages,
       processedCount: status.processedCount,
       needsWork,
+      isStale,
+      ageMs: Date.now() - status.updatedAt,
     });
     
-    // Only trigger if pending (not already processing) - reduces noise
+    // Reset stale "processing" jobs back to "pending" so they can be re-triggered
+    if (isStale) {
+      console.warn(`[pairing-v2-status] ⚠️ Job ${jobId} stuck in processing for ${Math.round((Date.now() - status.updatedAt) / 1000)}s — resetting to pending`);
+      status.status = "pending";
+      status.updatedAt = Date.now();
+      // Update Redis directly
+      const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
+      const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+      if (redisUrl && redisToken) {
+        const key = `pairing-v2-job:${jobId}`;
+        fetch(`${redisUrl}/setex/${encodeURIComponent(key)}/3600/${encodeURIComponent(JSON.stringify(status))}`, {
+          headers: { Authorization: `Bearer ${redisToken}` },
+        }).catch((err) => {
+          console.error(`[pairing-v2-status] Failed to reset stale job:`, err);
+        });
+      }
+    }
+    
+    // Trigger processor for pending jobs (including freshly-reset stale ones)
     if (needsWork && status.status === "pending") {
       const baseUrl = process.env.APP_URL || 'https://ebaywebhooks.netlify.app';
       const processorUrl = `${baseUrl}/.netlify/functions/pairing-v2-processor-background?jobId=${jobId}`;
@@ -76,6 +99,7 @@ export const handler: Handler = async (event) => {
       // - Client polls every few seconds (retries if trigger fails)
       // - Redis locks prevent duplicate processing
       // - Idempotent processor design
+      // - Stale jobs are auto-reset above
       fetch(processorUrl, { method: 'POST' }).catch((err) => {
         console.error(`[pairing-v2-status] Failed to trigger processor:`, err);
       });

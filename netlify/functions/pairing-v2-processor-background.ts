@@ -198,7 +198,9 @@ async function redisGet(key: string): Promise<string | null> {
 
 const JOB_TTL = 3600;
 const JOB_KEY_PREFIX = "pairing-v2-job:";
-const LOCK_TTL = 120; // 2 minutes for full pipeline
+const LOCK_TTL = 300; // 5 minutes for full pipeline (images + Vision + pairing + verification)
+const FETCH_TIMEOUT_MS = 30000; // 30 seconds per image download
+const PIPELINE_TIMEOUT_MS = 8 * 60 * 1000; // 8 minute hard limit for entire pipeline
 
 // Redis lock helpers
 async function acquireLock(key: string, ttl: number): Promise<boolean> {
@@ -285,6 +287,15 @@ export const handler: Handler = async (event) => {
     try {
       console.log(`[pairing-v2-processor] Downloading all ${totalImages} images (${uploadMethod} mode)...`);
       
+      // Global pipeline timeout — abort if total processing exceeds limit
+      const pipelineStart = Date.now();
+      const checkPipelineTimeout = () => {
+        const elapsed = Date.now() - pipelineStart;
+        if (elapsed > PIPELINE_TIMEOUT_MS) {
+          throw new Error(`Pipeline timeout: exceeded ${PIPELINE_TIMEOUT_MS / 1000}s (elapsed ${Math.round(elapsed / 1000)}s)`);
+        }
+      };
+
       // If needsTempLinks is true, we need to fetch temp links from Dropbox paths
       let imageSources = job.stagedUrls || job.dropboxPaths || [];
       
@@ -349,7 +360,19 @@ export const handler: Handler = async (event) => {
 
           const localPath = path.join(workDir, filename);
 
-          const response = await fetch(imageUrl);
+          const controller = new AbortController();
+          const downloadTimeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+          let response: Response;
+          try {
+            response = await fetch(imageUrl, { signal: controller.signal });
+          } catch (err: any) {
+            clearTimeout(downloadTimeout);
+            if (err.name === 'AbortError') {
+              throw new Error(`Download timeout for ${filename} after ${FETCH_TIMEOUT_MS / 1000}s`);
+            }
+            throw err;
+          }
+          clearTimeout(downloadTimeout);
 
           if (!response.ok) {
             throw new Error(`Failed to download ${filename}: ${response.status}`);
@@ -410,6 +433,9 @@ export const handler: Handler = async (event) => {
         }
 
         console.log(`[pairing-v2-processor] Downloaded ${localPaths.length} images, running pipeline...`);
+
+        // Bail out if we've already consumed most of the budget on downloads
+        checkPipelineTimeout();
 
         // Run complete pipeline (handles batching internally for cross-image inference)
         let result: PairingResult;
