@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
-import type { HandlerEvent } from '@netlify/functions';
+import type { HandlerEvent, HandlerResponse } from '../../src/types/api-handler.js';
 
 // Mock dependencies
 jest.mock('../../src/lib/redis-store.js', () => ({
@@ -69,7 +69,7 @@ describe('Policy Defaults Persistence', () => {
 
 			const response = await handler(event as HandlerEvent, {} as any);
 			if (!response) throw new Error('No response');
-			const typedResponse = response as import('@netlify/functions').HandlerResponse;
+			const typedResponse = response as HandlerResponse;
 
 			expect(typedResponse.statusCode).toBe(200);
 			expect(mockStore.set).toHaveBeenCalledWith(
@@ -95,7 +95,7 @@ describe('Policy Defaults Persistence', () => {
 
 			const response = await handler(event as HandlerEvent, {} as any);
 			if (!response) throw new Error('No response');
-			const typedResponse = response as import('@netlify/functions').HandlerResponse;
+			const typedResponse = response as HandlerResponse;
 
 			expect(typedResponse.statusCode).toBe(200);
 			expect(mockStore.set).toHaveBeenCalledWith(
@@ -121,7 +121,7 @@ describe('Policy Defaults Persistence', () => {
 
 			const response = await handler(event as HandlerEvent, {} as any);
 			if (!response) throw new Error('No response');
-			const typedResponse = response as import('@netlify/functions').HandlerResponse;
+			const typedResponse = response as HandlerResponse;
 
 			expect(typedResponse.statusCode).toBe(200);
 			expect(mockStore.set).toHaveBeenCalledWith(
@@ -150,7 +150,7 @@ describe('Policy Defaults Persistence', () => {
 
 			const response = await handler(event as HandlerEvent, {} as any);
 			if (!response) throw new Error('No response');
-			const typedResponse = response as import('@netlify/functions').HandlerResponse;
+			const typedResponse = response as HandlerResponse;
 
 			expect(typedResponse.statusCode).toBe(200);
 			expect(mockStore.set).toHaveBeenCalledWith(
@@ -176,7 +176,7 @@ describe('Policy Defaults Persistence', () => {
 
 			const response = await handler(event as HandlerEvent, {} as any);
 			if (!response) throw new Error('No response');
-			const typedResponse = response as import('@netlify/functions').HandlerResponse;
+			const typedResponse = response as HandlerResponse;
 
 			// Should still succeed by creating new defaults object
 			expect(typedResponse.statusCode).toBe(200);
@@ -199,7 +199,7 @@ describe('Policy Defaults Persistence', () => {
 
 			const response = await handler(event as HandlerEvent, {} as any);
 			if (!response) throw new Error('No response');
-			const typedResponse = response as import('@netlify/functions').HandlerResponse;
+			const typedResponse = response as HandlerResponse;
 
 			expect(typedResponse.statusCode).toBe(200);
 			const body = JSON.parse(typedResponse.body!);
@@ -220,7 +220,7 @@ describe('Policy Defaults Persistence', () => {
 
 			const response = await handler(event as HandlerEvent, {} as any);
 			if (!response) throw new Error('No response');
-			const typedResponse = response as import('@netlify/functions').HandlerResponse;
+			const typedResponse = response as HandlerResponse;
 
 			expect(typedResponse.statusCode).toBe(200);
 			const body = JSON.parse(typedResponse.body!);
@@ -240,7 +240,7 @@ describe('Policy Defaults Persistence', () => {
 
 			const response = await handler(event as HandlerEvent, {} as any);
 			if (!response) throw new Error('No response');
-			const typedResponse = response as import('@netlify/functions').HandlerResponse;
+			const typedResponse = response as HandlerResponse;
 
 			expect(typedResponse.statusCode).toBe(200);
 			const body = JSON.parse(typedResponse.body!);
@@ -264,7 +264,7 @@ describe('Policy Defaults Persistence', () => {
 
 			const response = await handler(event as HandlerEvent, {} as any);
 			if (!response) throw new Error('No response');
-			const typedResponse = response as import('@netlify/functions').HandlerResponse;
+			const typedResponse = response as HandlerResponse;
 
 			expect(typedResponse.statusCode).toBe(200);
 			const body = JSON.parse(typedResponse.body!);
@@ -287,7 +287,7 @@ describe('Policy Defaults Persistence', () => {
 
 			const response = await handler(event as HandlerEvent, {} as any);
 			if (!response) throw new Error('No response');
-			const typedResponse = response as import('@netlify/functions').HandlerResponse;
+			const typedResponse = response as HandlerResponse;
 
 			expect(typedResponse.statusCode).toBe(200);
 			const body = JSON.parse(typedResponse.body!);
@@ -306,7 +306,7 @@ describe('Policy Defaults Persistence', () => {
 
 			const response = await handler(event as HandlerEvent, {} as any);
 			if (!response) throw new Error('No response');
-			const typedResponse = response as import('@netlify/functions').HandlerResponse;
+			const typedResponse = response as HandlerResponse;
 
 			expect(typedResponse.statusCode).toBe(401);
 		});
@@ -345,7 +345,7 @@ describe('Policy Defaults Persistence', () => {
 
 			const response = await handler(event as HandlerEvent, {} as any);
 			if (!response) throw new Error('No response');
-			const typedResponse = response as import('@netlify/functions').HandlerResponse;
+			const typedResponse = response as HandlerResponse;
 
 			expect(typedResponse.statusCode).toBe(200);
 			const body = JSON.parse(typedResponse.body!);
@@ -388,7 +388,7 @@ describe('Policy Defaults Persistence', () => {
 
 			const response = await handler(event as HandlerEvent, {} as any);
 			if (!response) throw new Error('No response');
-			const typedResponse = response as import('@netlify/functions').HandlerResponse;
+			const typedResponse = response as HandlerResponse;
 
 			expect(typedResponse.statusCode).toBe(200);
 			const body = JSON.parse(typedResponse.body!);
@@ -425,7 +425,7 @@ describe('Policy Defaults Persistence', () => {
 
 			const response = await handler(event as HandlerEvent, {} as any);
 			if (!response) throw new Error('No response');
-			const typedResponse = response as import('@netlify/functions').HandlerResponse;
+			const typedResponse = response as HandlerResponse;
 
 			expect(typedResponse.statusCode).toBe(200);
 			const body = JSON.parse(typedResponse.body!);
@@ -452,7 +452,7 @@ describe('Policy Defaults Persistence', () => {
 
 			const response = await handler(event as HandlerEvent, {} as any);
 			if (!response) throw new Error('No response');
-			const typedResponse = response as import('@netlify/functions').HandlerResponse;
+			const typedResponse = response as HandlerResponse;
 
 			expect(typedResponse.statusCode).toBe(200);
 			const body = JSON.parse(typedResponse.body!);
@@ -485,7 +485,7 @@ describe('Policy Defaults Persistence', () => {
 
 			const response = await handler(event as HandlerEvent, {} as any);
 			if (!response) throw new Error('No response');
-			const typedResponse = response as import('@netlify/functions').HandlerResponse;
+			const typedResponse = response as HandlerResponse;
 
 			expect(typedResponse.statusCode).toBe(200);
 			const setCall = mockStore.set.mock.calls[0];
@@ -516,7 +516,7 @@ describe('Policy Defaults Persistence', () => {
 
 			const response = await handler(event as HandlerEvent, {} as any);
 			if (!response) throw new Error('No response');
-			const typedResponse = response as import('@netlify/functions').HandlerResponse;
+			const typedResponse = response as HandlerResponse;
 
 			// Should still succeed - policy was created on eBay
 			expect(typedResponse.statusCode).toBe(200);

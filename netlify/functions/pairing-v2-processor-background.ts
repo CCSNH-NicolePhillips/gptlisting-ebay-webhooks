@@ -3,7 +3,7 @@
  * This function is called directly by the scheduler to process a specific job
  */
 
-import { Handler } from "@netlify/functions";
+import type { Handler } from '../../src/types/api-handler.js';
 import { getPairingV2JobStatus } from "../../src/lib/pairingV2Jobs.js";
 import { runNewTwoStagePipeline, type PairingResult } from "../../src/smartdrafts/pairing-v2-core.js";
 import { uploadBufferToStaging } from "../../src/lib/storage.js";

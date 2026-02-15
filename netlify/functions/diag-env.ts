@@ -1,4 +1,4 @@
-import type { Handler } from '@netlify/functions';
+import type { Handler } from '../../src/types/api-handler.js';
 import { resolveEbayEnv } from '../../src/lib/_common.js';
 
 export const handler: Handler = async () => {

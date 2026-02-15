@@ -1,4 +1,4 @@
-import type { Handler } from '@netlify/functions';
+import type { Handler } from '../../src/types/api-handler.js';
 
 function escapeHtml(s: string) {
 	return s.replace(/[&<>"]+/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] || c));

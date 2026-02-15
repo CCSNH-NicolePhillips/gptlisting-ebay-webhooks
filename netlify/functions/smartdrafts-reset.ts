@@ -1,4 +1,4 @@
-import type { Handler } from "@netlify/functions";
+import type { Handler } from '../../src/types/api-handler.js';
 import { getOrigin, isOriginAllowed, jsonResponse } from "../../src/lib/http.js";
 import { clearUserJobs } from "../../src/lib/job-store.js";
 import { requireUserAuth } from "../../src/lib/auth-user.js";

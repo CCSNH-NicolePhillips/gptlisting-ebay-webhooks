@@ -1,4 +1,4 @@
-import type { Handler } from "@netlify/functions";
+import type { Handler } from '../../src/types/api-handler.js';
 import { requireUserAuth } from "../../src/lib/auth-user.js";
 import { getOrigin, isOriginAllowed, json } from "../../src/lib/http.js";
 import { k } from "../../src/lib/user-keys.js";

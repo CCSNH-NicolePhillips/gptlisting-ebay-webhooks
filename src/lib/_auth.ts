@@ -1,4 +1,4 @@
-import type { HandlerEvent } from '@netlify/functions';
+import type { HandlerEvent } from '../types/api-handler.js';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { tokensStore } from './redis-store.js';
 

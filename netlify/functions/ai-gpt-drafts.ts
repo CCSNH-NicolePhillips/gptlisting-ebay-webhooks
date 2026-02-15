@@ -1,4 +1,4 @@
-import type { Handler } from "@netlify/functions";
+import type { Handler } from '../../src/types/api-handler.js';
 import { requireUserAuth } from "../../src/lib/auth-user.js";
 import { getOrigin, jsonResponse } from "../../src/lib/http.js";
 import { pickCategoryForGroup } from "../../src/lib/taxonomy-select.js";

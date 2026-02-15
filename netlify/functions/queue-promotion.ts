@@ -5,7 +5,7 @@
  * Queues jobs for background processing with retry logic.
  */
 
-import type { Handler, HandlerEvent } from '@netlify/functions';
+import type { Handler, HandlerEvent } from '../../src/types/api-handler.js';
 import { requireAuthVerified } from '../../src/lib/_auth.js';
 import { queuePromotionJob, queuePromotionBatch, getJobStatus } from '../../src/lib/promotion-queue.js';
 

@@ -6,7 +6,6 @@
 import { jest } from '@jest/globals';
 
 // Mock all dependencies BEFORE importing
-jest.mock('@netlify/functions');
 jest.mock('../../src/lib/_common.js', () => ({
   accessTokenFromRefresh: jest.fn(async () => ({ access_token: 'mock-access-token' })),
   tokenHosts: jest.fn(() => ({

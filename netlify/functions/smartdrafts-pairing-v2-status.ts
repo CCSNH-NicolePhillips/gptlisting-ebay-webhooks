@@ -1,4 +1,4 @@
-import { Handler } from "@netlify/functions";
+import type { Handler } from '../../src/types/api-handler.js';
 import { requireUserAuth } from "../../src/lib/auth-user.js";
 import { getPairingV2JobStatus } from "../../src/lib/pairingV2Jobs.js";
 

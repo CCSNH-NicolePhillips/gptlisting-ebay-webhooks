@@ -11,7 +11,7 @@
  */
 
 import { jest } from '@jest/globals';
-import type { HandlerEvent, HandlerContext, HandlerResponse } from '@netlify/functions';
+import type { Handler, HandlerEvent, HandlerResponse } from '../../src/types/api-handler.js';
 
 // Mock dependencies with proper typing
 const mockRequireUserAuth = jest.fn<() => Promise<{ userId: string; email: string }>>();

@@ -1,4 +1,4 @@
-import type { Handler } from '@netlify/functions';
+import type { Handler } from '../../src/types/api-handler.js';
 import { createHash } from 'crypto';
 import { tokensStore } from '../../src/lib/redis-store.js';
 import { userScopedKey } from '../../src/lib/_auth.js';

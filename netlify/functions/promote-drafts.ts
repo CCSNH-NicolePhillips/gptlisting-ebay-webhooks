@@ -1,4 +1,4 @@
-import type { Handler, HandlerEvent, HandlerContext } from '@netlify/functions';
+import type { Handler, HandlerEvent } from '../../src/types/api-handler.js';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified } from '../../src/lib/_auth.js';
 import { promoteSkusForUser } from '../../src/lib/ebay-promote.js';
 
@@ -12,7 +12,7 @@ import { promoteSkusForUser } from '../../src/lib/ebay-promote.js';
  * 
  * Returns: { ok: true, campaignId: string, promotedCount: number, results: [...] }
  */
-const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
+const handler: Handler = async (event: HandlerEvent) => {
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',

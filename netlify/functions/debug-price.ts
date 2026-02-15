@@ -4,7 +4,7 @@
  * GET /.netlify/functions/debug-price?brand=X&title=Y&skipCache=true
  */
 
-import type { Handler, HandlerEvent } from '@netlify/functions';
+import type { Handler, HandlerEvent } from '../../src/types/api-handler.js';
 import { lookupPrice } from '../../src/lib/price-lookup.js';
 import { deleteCachedPrice, makePriceSig } from '../../src/lib/price-cache.js';
 

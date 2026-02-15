@@ -3,7 +3,7 @@
  * GET /.netlify/functions/admin-list-user-images?userId=xxx
  */
 
-import { Handler } from "@netlify/functions";
+import type { Handler } from '../../src/types/api-handler.js';
 import { S3Client, ListObjectsV2Command, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 

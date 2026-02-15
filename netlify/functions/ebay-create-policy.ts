@@ -1,4 +1,4 @@
-import type { Handler } from '@netlify/functions';
+import type { Handler } from '../../src/types/api-handler.js';
 import { json, userScopedKey, getBearerToken, getJwtSubUnverified, requireAuthVerified } from '../../src/lib/_auth.js';
 import { getUserAccessToken, apiHost, headers } from '../../src/lib/_ebay.js';
 import { tokensStore } from '../../src/lib/redis-store.js';

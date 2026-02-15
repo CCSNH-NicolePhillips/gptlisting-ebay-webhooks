@@ -1,4 +1,4 @@
-import type { Handler } from '@netlify/functions';
+import type { Handler } from '../../src/types/api-handler.js';
 import { generateSignedGetUrl } from '../../src/lib/storage.js';
 
 /**

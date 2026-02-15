@@ -3,7 +3,7 @@
  * This endpoint bridges Quick List (which uses scan jobs) with pairing-v2
  */
 
-import { Handler } from "@netlify/functions";
+import type { Handler } from '../../src/types/api-handler.js';
 import { requireUserAuth } from "../../src/lib/auth-user.js";
 import { schedulePairingV2Job } from "../../src/lib/pairingV2Jobs.js";
 import { tokensStore } from "../../src/lib/redis-store.js";

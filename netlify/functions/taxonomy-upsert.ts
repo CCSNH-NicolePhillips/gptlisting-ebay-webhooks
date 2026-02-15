@@ -1,4 +1,4 @@
-import type { Handler } from "@netlify/functions";
+import type { Handler } from '../../src/types/api-handler.js';
 import { getOrigin, isAuthorized, isOriginAllowed, jsonResponse } from "../../src/lib/http.js";
 import type { CategoryDef, ItemSpecific } from "../../src/lib/taxonomy-schema.js";
 import { putCategory } from "../../src/lib/taxonomy-store.js";

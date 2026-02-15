@@ -1,4 +1,4 @@
-import type { Handler } from "@netlify/functions";
+import type { Handler } from '../../src/types/api-handler.js';
 import { listJobs } from "../../src/lib/job-store.js";
 import { getAllPriceKeys, getPriceState } from "../../src/lib/price-store.js";
 import { requireAdminAuth } from "../../src/lib/auth-admin.js";

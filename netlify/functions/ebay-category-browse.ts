@@ -1,4 +1,4 @@
-import type { Handler } from '@netlify/functions';
+import type { Handler } from '../../src/types/api-handler.js';
 import { tokenHosts, appAccessToken } from '../../src/lib/_common.js';
 
 type BrowseNode = { id: string; name: string; path: string; leaf: boolean };

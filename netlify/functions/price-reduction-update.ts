@@ -1,4 +1,4 @@
-import type { Handler } from "@netlify/functions";
+import type { Handler } from '../../src/types/api-handler.js';
 import { getListingBinding, updateBinding } from "../../src/lib/price-store.js";
 import { getOrigin, isAuthorized, isOriginAllowed, jsonResponse } from "../../src/lib/http.js";
 import { maybeRequireUserAuth, type UserAuth } from "../../src/lib/auth-user.js";

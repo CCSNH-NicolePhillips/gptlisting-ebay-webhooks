@@ -1,4 +1,4 @@
-import type { Handler } from "@netlify/functions";
+import type { Handler } from '../../src/types/api-handler.js';
 import { createHash } from "crypto";
 import { USE_CLIP, USE_NEW_SORTER, USE_ROLE_SORTING } from "../../src/config.js";
 import { config } from "../../src/config/smartdrafts.js";

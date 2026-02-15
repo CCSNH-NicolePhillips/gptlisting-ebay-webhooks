@@ -5,7 +5,7 @@
  * This avoids the timeout issues with separate polling loops
  */
 
-import { Handler } from "@netlify/functions";
+import type { Handler } from '../../src/types/api-handler.js';
 import { requireUserAuth } from "../../src/lib/auth-user.js";
 import { randomUUID } from "crypto";
 

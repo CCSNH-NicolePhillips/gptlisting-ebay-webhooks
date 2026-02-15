@@ -1,4 +1,4 @@
-import type { Handler, HandlerEvent, HandlerContext } from '@netlify/functions';
+import type { Handler, HandlerEvent } from '../../src/types/api-handler.js';
 import { accessTokenFromRefresh, tokenHosts } from '../../src/lib/_common.js';
 import { tokensStore } from '../../src/lib/redis-store.js';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
@@ -9,7 +9,7 @@ import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey
  * Updates an eBay offer with edited draft data.
  * Body: { offerId, draft: { title, description, price, condition, aspects, ... } }
  */
-const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
+const handler: Handler = async (event: HandlerEvent) => {
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',

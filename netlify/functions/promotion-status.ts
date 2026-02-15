@@ -2,7 +2,7 @@
  * Promotion Job Status - Check status of queued promotion jobs
  */
 
-import type { Handler, HandlerEvent } from '@netlify/functions';
+import type { Handler, HandlerEvent } from '../../src/types/api-handler.js';
 import { requireAuthVerified } from '../../src/lib/_auth.js';
 import { getJobStatus, getQueueStats } from '../../src/lib/promotion-queue.js';
 

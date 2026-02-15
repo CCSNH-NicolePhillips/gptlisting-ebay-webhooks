@@ -1,8 +1,8 @@
 /**
- * Express Server - Railway Deployment
+ * Express Server — Railway Deployment
  * 
- * Consolidates all Netlify functions into a single Express server.
- * Each function becomes a route at /.netlify/functions/{name}
+ * Each API handler becomes a route at /.netlify/functions/{name}
+ * (path kept for backward compatibility with frontend)
  */
 
 import express from 'express';

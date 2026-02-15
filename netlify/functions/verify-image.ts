@@ -1,4 +1,4 @@
-import type { Handler } from '@netlify/functions';
+import type { Handler } from '../../src/types/api-handler.js';
 
 export const handler: Handler = async (event) => {
 	const url = event.queryStringParameters?.url;

@@ -1,4 +1,4 @@
-import type { Handler } from '@netlify/functions';
+import type { Handler } from '../../src/types/api-handler.js';
 import { tokenHosts, appAccessToken } from '../../src/lib/_common.js';
 import { cacheStore } from '../../src/lib/redis-store.js';
 

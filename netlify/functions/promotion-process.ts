@@ -12,7 +12,7 @@
  *   Forces processing of a specific job by jobId
  */
 
-import type { Handler, HandlerEvent } from '@netlify/functions';
+import type { Handler, HandlerEvent } from '../../src/types/api-handler.js';
 import { requireAuthVerified } from '../../src/lib/_auth.js';
 import { getReadyJobs, updateJob, getQueueStats, getJobStatus } from '../../src/lib/promotion-queue.js';
 import {

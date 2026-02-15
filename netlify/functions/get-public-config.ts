@@ -1,4 +1,4 @@
-import type { Handler } from "@netlify/functions";
+import type { Handler } from '../../src/types/api-handler.js';
 
 // Expose minimal public auth config to the frontend.
 // Configure via environment variables in Netlify:

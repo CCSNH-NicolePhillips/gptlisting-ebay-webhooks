@@ -1,4 +1,4 @@
-import type { Handler } from "@netlify/functions";
+import type { Handler } from '../../src/types/api-handler.js';
 import { runAnalysis } from "../../src/lib/analyze-core.js";
 import { putJob } from "../../src/lib/job-store.js";
 import { k } from "../../src/lib/user-keys.js";

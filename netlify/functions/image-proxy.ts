@@ -1,4 +1,4 @@
-import type { Handler } from '@netlify/functions';
+import type { Handler } from '../../src/types/api-handler.js';
 import sharp from 'sharp';
 
 // Netlify Functions have a 6MB response limit, base64 encoding adds ~33% overhead

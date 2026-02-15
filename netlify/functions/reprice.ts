@@ -12,7 +12,7 @@
  * }
  */
 
-import type { Handler, HandlerEvent } from '@netlify/functions';
+import type { Handler, HandlerEvent } from '../../src/types/api-handler.js';
 import { getBearerToken, requireAuthVerified, getJwtSubUnverified } from '../../src/lib/_auth.js';
 import { getDeliveredPricing, type DeliveredPricingDecision, type DeliveredPricingSettings } from '../../src/lib/delivered-pricing.js';
 

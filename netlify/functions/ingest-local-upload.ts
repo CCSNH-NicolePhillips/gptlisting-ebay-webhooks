@@ -10,7 +10,7 @@
  * Returns: { keys: string[] }
  */
 
-import type { Handler } from '@netlify/functions';
+import type { Handler } from '../../src/types/api-handler.js';
 import { getJwtSubUnverified, getBearerToken } from '../../src/lib/_auth.js';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';

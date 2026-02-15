@@ -3,7 +3,7 @@
  * Returns a job ID that can be polled for results
  */
 
-import { Handler } from "@netlify/functions";
+import type { Handler } from '../../src/types/api-handler.js';
 import { requireUserAuth } from "../../src/lib/auth-user.js";
 import { schedulePairingV2Job } from "../../src/lib/pairingV2Jobs.js";
 

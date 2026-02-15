@@ -1,4 +1,4 @@
-import type { Handler } from '@netlify/functions';
+import type { Handler } from '../../src/types/api-handler.js';
 import { requireAuthVerified } from '../../src/lib/_auth.js';
 
 export const handler: Handler = async (event) => {

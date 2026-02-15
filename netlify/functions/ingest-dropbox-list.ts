@@ -7,7 +7,7 @@
  * Returns: { files: IngestedFile[] }
  */
 
-import type { Handler } from '@netlify/functions';
+import type { Handler } from '../../src/types/api-handler.js';
 import { getJwtSubUnverified, getBearerToken, userScopedKey } from '../../src/lib/_auth.js';
 import { tokensStore } from '../../src/lib/redis-store.js';
 import { ingestFiles, IngestError, IngestErrorCode } from '../../src/ingestion/index.js';

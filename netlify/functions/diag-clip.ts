@@ -1,4 +1,4 @@
-import type { Handler } from "@netlify/functions";
+import type { Handler } from '../../src/types/api-handler.js';
 import { clipTextEmbedding, clipImageEmbedding, cosine, clipProviderInfo } from "../../src/lib/clip-client-split.js";
 
 export const handler: Handler = async (evt) => {

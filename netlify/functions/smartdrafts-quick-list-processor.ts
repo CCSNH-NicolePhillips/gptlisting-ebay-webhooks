@@ -4,7 +4,7 @@
  * Processes Quick List jobs: Pairing-v2 → Trigger Draft Creation
  */
 
-import { Handler } from "@netlify/functions";
+import type { Handler } from '../../src/types/api-handler.js';
 import { runNewTwoStagePipeline } from "../../src/smartdrafts/pairing-v2-core.js";
 import { recordDraftsCreated } from "../../src/lib/user-stats.js";
 import * as fs from "fs";

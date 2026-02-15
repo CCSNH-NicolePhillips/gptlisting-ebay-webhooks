@@ -1,4 +1,4 @@
-import type { Handler } from '@netlify/functions';
+import type { Handler } from '../../src/types/api-handler.js';
 import { createOAuthStateForUser, getJwtSubUnverified, getBearerToken, requireAuthVerified } from '../../src/lib/_auth.js';
 
 function sanitizeReturnTo(value: unknown): string | null {

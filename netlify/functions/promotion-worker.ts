@@ -9,7 +9,7 @@
  *   schedule = "* * * * *"
  */
 
-import type { Handler, HandlerEvent } from '@netlify/functions';
+import type { Handler, HandlerEvent } from '../../src/types/api-handler.js';
 import { getReadyJobs, updateJob, getQueueStats } from '../../src/lib/promotion-queue.js';
 import {
   createAds,

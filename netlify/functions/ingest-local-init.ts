@@ -7,7 +7,7 @@
  * Returns: { uploads: [{ url, key, mime }] }
  */
 
-import type { Handler } from '@netlify/functions';
+import type { Handler } from '../../src/types/api-handler.js';
 import { getJwtSubUnverified, getBearerToken } from '../../src/lib/_auth.js';
 import { stageUpload, IngestError, IngestErrorCode } from '../../src/ingestion/index.js';
 

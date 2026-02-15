@@ -1,4 +1,4 @@
-import type { Handler } from '@netlify/functions';
+import type { Handler } from '../../src/types/api-handler.js';
 import { getBearerToken, getJwtSubUnverified, requireAuthVerified, userScopedKey } from '../../src/lib/_auth.js';
 import { tokensStore } from '../../src/lib/redis-store.js';
 import { getCampaigns, getAds, deleteAd } from '../../src/lib/ebay-promote.js';

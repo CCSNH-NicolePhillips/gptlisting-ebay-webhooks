@@ -1,4 +1,4 @@
-import type { Handler } from "@netlify/functions";
+import type { Handler } from '../../src/types/api-handler.js';
 
 // Proxies the Auth0 SPA JS SDK through same-origin so strict CSP (script-src 'self') still works.
 // Usage: <script src="/.netlify/functions/cdn-auth0-spa?v=2.5"></script>

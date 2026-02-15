@@ -5,7 +5,7 @@
 
 import { handler as saveHandler } from '../../netlify/functions/user-settings-save.js';
 import { handler as getHandler } from '../../netlify/functions/user-settings-get.js';
-import type { HandlerEvent } from '@netlify/functions';
+import type { HandlerEvent } from '../../src/types/api-handler.js';
 
 // Mock dependencies
 jest.mock('../../src/lib/redis-store.js', () => ({
@@ -70,7 +70,7 @@ describe('User Settings Persistence', () => {
       
       const result = await saveHandler(event as HandlerEvent, {} as any);
       	if (!result) throw new Error('No response');
-      	const typedResult = result as import('@netlify/functions').HandlerResponse;
+      	const typedResult = result as import('../../src/types/api-handler.js').HandlerResponse;
 
       expect(typedResult.statusCode).toBe(200);
       expect(mockSet).toHaveBeenCalledWith(
@@ -112,7 +112,7 @@ describe('User Settings Persistence', () => {
       
       const result = await saveHandler(event as HandlerEvent, {} as any);
       	if (!result) throw new Error('No response');
-      	const typedResult = result as import('@netlify/functions').HandlerResponse;
+      	const typedResult = result as import('../../src/types/api-handler.js').HandlerResponse;
 
       expect(typedResult.statusCode).toBe(200);
       const savedData = JSON.parse(mockSet.mock.calls[0][1]);
@@ -144,7 +144,7 @@ describe('User Settings Persistence', () => {
       
       const result = await saveHandler(event as HandlerEvent, {} as any);
       	if (!result) throw new Error('No response');
-      	const typedResult = result as import('@netlify/functions').HandlerResponse;
+      	const typedResult = result as import('../../src/types/api-handler.js').HandlerResponse;
 
       expect(typedResult.statusCode).toBe(200);
       const savedData = JSON.parse(mockSet.mock.calls[0][1]);
@@ -168,7 +168,7 @@ describe('User Settings Persistence', () => {
       
       const result = await saveHandler(event as HandlerEvent, {} as any);
       	if (!result) throw new Error('No response');
-      	const typedResult = result as import('@netlify/functions').HandlerResponse;
+      	const typedResult = result as import('../../src/types/api-handler.js').HandlerResponse;
 
       expect(typedResult.statusCode).toBe(200);
       const savedData = JSON.parse(mockSet.mock.calls[0][1]);
@@ -190,7 +190,7 @@ describe('User Settings Persistence', () => {
       
       const result = await saveHandler(event as HandlerEvent, {} as any);
       	if (!result) throw new Error('No response');
-      	const typedResult = result as import('@netlify/functions').HandlerResponse;
+      	const typedResult = result as import('../../src/types/api-handler.js').HandlerResponse;
 
       expect(typedResult.statusCode).toBe(400);
       expect(typedResult.body).toContain('discountPercent must be between 0 and 50');
@@ -210,7 +210,7 @@ describe('User Settings Persistence', () => {
       
       const result = await saveHandler(event as HandlerEvent, {} as any);
       	if (!result) throw new Error('No response');
-      	const typedResult = result as import('@netlify/functions').HandlerResponse;
+      	const typedResult = result as import('../../src/types/api-handler.js').HandlerResponse;
 
       expect(typedResult.statusCode).toBe(400);
       expect(typedResult.body).toContain('shippingStrategy must be one of');
@@ -233,7 +233,7 @@ describe('User Settings Persistence', () => {
         
         const result = await saveHandler(event as HandlerEvent, {} as any);
         	if (!result) throw new Error('No response');
-        	const typedResult = result as import('@netlify/functions').HandlerResponse;
+        	const typedResult = result as import('../../src/types/api-handler.js').HandlerResponse;
 
         expect(typedResult.statusCode).toBe(400);
       }
@@ -258,7 +258,7 @@ describe('User Settings Persistence', () => {
       
       const result = await getHandler(event as HandlerEvent, {} as any);
       	if (!result) throw new Error('No response');
-      	const typedResult = result as import('@netlify/functions').HandlerResponse;
+      	const typedResult = result as import('../../src/types/api-handler.js').HandlerResponse;
 
       expect(typedResult.statusCode).toBe(200);
       const data = JSON.parse(result.body as string);
@@ -281,7 +281,7 @@ describe('User Settings Persistence', () => {
       
       const result = await getHandler(event as HandlerEvent, {} as any);
       	if (!result) throw new Error('No response');
-      	const typedResult = result as import('@netlify/functions').HandlerResponse;
+      	const typedResult = result as import('../../src/types/api-handler.js').HandlerResponse;
 
       expect(typedResult.statusCode).toBe(200);
       const data = JSON.parse(result.body as string);
@@ -307,7 +307,7 @@ describe('User Settings Persistence', () => {
       
       const result = await getHandler(event as HandlerEvent, {} as any);
       	if (!result) throw new Error('No response');
-      	const typedResult = result as import('@netlify/functions').HandlerResponse;
+      	const typedResult = result as import('../../src/types/api-handler.js').HandlerResponse;
 
       expect(typedResult.statusCode).toBe(200);
       const data = JSON.parse(result.body as string);
@@ -332,7 +332,7 @@ describe('User Settings Persistence', () => {
       
       const result = await getHandler(event as HandlerEvent, {} as any);
       	if (!result) throw new Error('No response');
-      	const typedResult = result as import('@netlify/functions').HandlerResponse;
+      	const typedResult = result as import('../../src/types/api-handler.js').HandlerResponse;
 
       expect(typedResult.statusCode).toBe(200);
       const data = JSON.parse(result.body as string);
@@ -356,7 +356,7 @@ describe('User Settings Persistence', () => {
       
       const result = await getHandler(event as HandlerEvent, {} as any);
       	if (!result) throw new Error('No response');
-      	const typedResult = result as import('@netlify/functions').HandlerResponse;
+      	const typedResult = result as import('../../src/types/api-handler.js').HandlerResponse;
 
       expect(typedResult.statusCode).toBe(200);
       const data = JSON.parse(result.body as string);
@@ -386,7 +386,7 @@ describe('User Settings Persistence', () => {
       
       const saveResult = await saveHandler(saveEvent as HandlerEvent, {} as any);
       if (!saveResult) throw new Error('No response');
-      const typedSaveResult = saveResult as import('@netlify/functions').HandlerResponse;
+      const typedSaveResult = saveResult as import('../../src/types/api-handler.js').HandlerResponse;
       expect(typedSaveResult.statusCode).toBe(200);
       
       // Simulate loading saved data
@@ -400,7 +400,7 @@ describe('User Settings Persistence', () => {
       
       const loadResult = await getHandler(loadEvent as HandlerEvent, {} as any);
       if (!loadResult) throw new Error('No response');
-      const typedLoadResult = loadResult as import('@netlify/functions').HandlerResponse;
+      const typedLoadResult = loadResult as import('../../src/types/api-handler.js').HandlerResponse;
       expect(typedLoadResult.statusCode).toBe(200);
       
       const loadedData = JSON.parse(typedLoadResult.body!);
@@ -426,7 +426,7 @@ describe('User Settings Persistence', () => {
       
       const saveResult = await saveHandler(saveEvent as HandlerEvent, {} as any);
       if (!saveResult) throw new Error('No response');
-      const typedSaveResult = saveResult as import('@netlify/functions').HandlerResponse;
+      const typedSaveResult = saveResult as import('../../src/types/api-handler.js').HandlerResponse;
       expect(typedSaveResult.statusCode).toBe(200);
       
       // Storage has cents
@@ -441,7 +441,7 @@ describe('User Settings Persistence', () => {
       
       const loadResult = await getHandler(loadEvent as HandlerEvent, {} as any);
       if (!loadResult) throw new Error('No response');
-      const typedLoadResult = loadResult as import('@netlify/functions').HandlerResponse;
+      const typedLoadResult = loadResult as import('../../src/types/api-handler.js').HandlerResponse;
       const loadedData = JSON.parse(typedLoadResult.body!);
       
       // UI converts back to dollars

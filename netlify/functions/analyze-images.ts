@@ -1,4 +1,4 @@
-import type { Handler } from "@netlify/functions";
+import type { Handler } from '../../src/types/api-handler.js';
 import { runAnalysis } from "../../src/lib/analyze-core.js";
 import { sanitizeUrls, toDirectDropbox } from "../../src/lib/merge.js";
 import { getOrigin, isAuthorized, isOriginAllowed, jsonResponse } from "../../src/lib/http.js";

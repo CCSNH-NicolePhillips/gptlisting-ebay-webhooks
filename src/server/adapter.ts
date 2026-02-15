@@ -1,17 +1,16 @@
 /**
- * Netlify-to-Express Adapter
+ * API Handler → Express Adapter
  * 
- * Wraps Netlify function handlers to work with Express routes.
- * Minimal changes required to existing handlers.
+ * Wraps API handlers to work as Express route handlers.
  */
 
 import type { Request, Response } from 'express';
-import type { Handler, HandlerEvent, HandlerContext, HandlerResponse } from '@netlify/functions';
+import type { Handler, HandlerEvent, HandlerResponse } from '../types/api-handler.js';
 
 /**
- * Convert Express request to Netlify HandlerEvent
+ * Convert Express request to HandlerEvent
  */
-function toNetlifyEvent(req: Request): HandlerEvent {
+function toEvent(req: Request): HandlerEvent {
   // Build headers record
   const headers: Record<string, string> = {};
   for (const [key, value] of Object.entries(req.headers)) {
@@ -72,35 +71,15 @@ function toNetlifyEvent(req: Request): HandlerEvent {
 }
 
 /**
- * Create a mock Netlify context
+ * Send handler response through Express
  */
-function createContext(): HandlerContext {
-  return {
-    callbackWaitsForEmptyEventLoop: true,
-    functionName: 'express-adapter',
-    functionVersion: '1.0.0',
-    invokedFunctionArn: '',
-    memoryLimitInMB: '1024',
-    awsRequestId: crypto.randomUUID(),
-    logGroupName: '',
-    logStreamName: '',
-    getRemainingTimeInMillis: () => 300000, // 5 minutes
-    done: () => {},
-    fail: () => {},
-    succeed: () => {},
-  };
-}
-
-/**
- * Send Netlify response through Express
- */
-function sendResponse(res: Response, netlifyResponse: HandlerResponse): void {
+function sendResponse(res: Response, handlerResponse: HandlerResponse): void {
   // Set status code
-  res.status(netlifyResponse.statusCode || 200);
+  res.status(handlerResponse.statusCode || 200);
 
   // Set headers
-  if (netlifyResponse.headers) {
-    for (const [key, value] of Object.entries(netlifyResponse.headers)) {
+  if (handlerResponse.headers) {
+    for (const [key, value] of Object.entries(handlerResponse.headers)) {
       if (value !== undefined) {
         res.setHeader(key, String(value));
       }
@@ -108,8 +87,8 @@ function sendResponse(res: Response, netlifyResponse: HandlerResponse): void {
   }
 
   // Set multi-value headers
-  if (netlifyResponse.multiValueHeaders) {
-    for (const [key, values] of Object.entries(netlifyResponse.multiValueHeaders)) {
+  if (handlerResponse.multiValueHeaders) {
+    for (const [key, values] of Object.entries(handlerResponse.multiValueHeaders)) {
       if (values) {
         res.setHeader(key, values.map(String));
       }
@@ -117,11 +96,11 @@ function sendResponse(res: Response, netlifyResponse: HandlerResponse): void {
   }
 
   // Send body
-  if (netlifyResponse.body) {
-    if (netlifyResponse.isBase64Encoded) {
-      res.send(Buffer.from(netlifyResponse.body, 'base64'));
+  if (handlerResponse.body) {
+    if (handlerResponse.isBase64Encoded) {
+      res.send(Buffer.from(handlerResponse.body, 'base64'));
     } else {
-      res.send(netlifyResponse.body);
+      res.send(handlerResponse.body);
     }
   } else {
     res.end();
@@ -129,22 +108,21 @@ function sendResponse(res: Response, netlifyResponse: HandlerResponse): void {
 }
 
 /**
- * Wrap a Netlify handler to work as an Express route handler
+ * Wrap an API handler as an Express route handler
  */
 export function wrapHandler(handler: Handler): (req: Request, res: Response) => Promise<void> {
   return async (req: Request, res: Response): Promise<void> => {
     try {
-      const event = toNetlifyEvent(req);
-      const context = createContext();
+      const event = toEvent(req);
       
-      const result = await handler(event, context);
+      const result = await handler(event);
       
       if (!result) {
         res.status(500).json({ error: 'Handler returned no response' });
         return;
       }
 
-      sendResponse(res, result);
+      sendResponse(res, result as HandlerResponse);
     } catch (error) {
       console.error('[adapter] Handler error:', error);
       res.status(500).json({ 
@@ -156,19 +134,17 @@ export function wrapHandler(handler: Handler): (req: Request, res: Response) => 
 }
 
 /**
- * Background handler wrapper - runs async without waiting
- * Used for long-running background jobs
+ * Background handler wrapper — responds 202 immediately, runs handler async
  */
 export function wrapBackgroundHandler(handler: Handler): (req: Request, res: Response) => void {
   return (req: Request, res: Response): void => {
-    const event = toNetlifyEvent(req);
-    const context = createContext();
+    const event = toEvent(req);
     
     // Immediately respond with 202 Accepted
     res.status(202).json({ accepted: true, message: 'Background job started' });
     
     // Run handler in background (don't await)
-    const result = handler(event, context);
+    const result = handler(event);
     if (result && typeof result.catch === 'function') {
       result.catch((error: Error) => {
         console.error('[adapter] Background handler error:', error);
