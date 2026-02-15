@@ -229,54 +229,71 @@ export const handler: Handler = async (event) => {
 		const getOffers = (body: any) => (Array.isArray(body?.offers) ? body.offers : []);
 
 		// Enrich offers with inventory item titles, weight, and image URLs
-		// Defined early so it can be used in all return paths (including early returns)
+		// Uses bulkGetInventoryItem API (up to 25 SKUs per call) instead of per-SKU calls
 		const enrichWithInventoryData = async (offerList: any[]) => {
-			const concurrency = 10;
-			const queue = offerList.map((offer, index) => async () => {
-				const sku = offer?.sku;
-				if (!sku) return;
-				
+			// Collect unique SKUs with their indices
+			const skuToIndices = new Map<string, number[]>();
+			for (let i = 0; i < offerList.length; i++) {
+				const sku = offerList[i]?.sku;
+				if (!sku) continue;
+				const existing = skuToIndices.get(sku) || [];
+				existing.push(i);
+				skuToIndices.set(sku, existing);
+			}
+
+			const uniqueSkus = Array.from(skuToIndices.keys());
+			if (uniqueSkus.length === 0) return;
+
+			// Process in chunks of 25 (bulkGetInventoryItem limit)
+			const CHUNK_SIZE = 25;
+			for (let start = 0; start < uniqueSkus.length; start += CHUNK_SIZE) {
+				const chunk = uniqueSkus.slice(start, start + CHUNK_SIZE);
 				try {
-					const invUrl = `${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
-					const invRes = await fetch(invUrl, { headers });
-					if (invRes.ok) {
-						const invTxt = await invRes.text();
-						const invJson = JSON.parse(invTxt);
-						const title = invJson?.product?.title || invJson?.title;
-						if (title) {
-							offerList[index]._enrichedTitle = title;
-						}
-						// Include weight info for "needs attention" detection
-						const weight = invJson?.packageWeightAndSize?.weight;
-						if (weight?.value && weight?.value > 0) {
-							offerList[index]._hasWeight = true;
-							offerList[index]._weight = { value: weight.value, unit: weight.unit || 'OUNCE' };
-						} else {
-							offerList[index]._hasWeight = false;
-						}
-						// Include first image URL so frontend can render thumbs immediately
-						// without a separate ebay-offer-thumb call per card
-						const imgs = invJson?.product?.imageUrls || invJson?.product?.images || invJson?.product?.image || [];
+					const bulkUrl = `${apiHost}/sell/inventory/v1/bulk_get_inventory_item`;
+					const bulkRes = await fetch(bulkUrl, {
+						method: 'POST',
+						headers: { ...headers, 'Content-Type': 'application/json' },
+						body: JSON.stringify({ requests: chunk.map(sku => ({ sku })) }),
+					});
+					if (!bulkRes.ok) {
+						console.warn('[ebay-list-offers] bulkGetInventoryItem failed, status:', bulkRes.status);
+						continue;
+					}
+					const bulkJson = await bulkRes.json() as any;
+					const responses = Array.isArray(bulkJson?.responses) ? bulkJson.responses : [];
+
+					for (const resp of responses) {
+						if (resp.statusCode !== 200) continue;
+						const sku = resp.sku;
+						const inv = resp.inventoryItem;
+						if (!sku || !inv) continue;
+
+						const indices = skuToIndices.get(sku);
+						if (!indices) continue;
+
+						const title = inv?.product?.title || inv?.title;
+						const weight = inv?.packageWeightAndSize?.weight;
+						const imgs = inv?.product?.imageUrls || inv?.product?.images || inv?.product?.image || [];
 						const imgArr = Array.isArray(imgs) ? imgs : imgs ? [imgs] : [];
-						if (imgArr.length > 0) {
-							offerList[index]._imageUrl = imgArr[0];
+
+						for (const idx of indices) {
+							if (title) offerList[idx]._enrichedTitle = title;
+							if (weight?.value && weight.value > 0) {
+								offerList[idx]._hasWeight = true;
+								offerList[idx]._weight = { value: weight.value, unit: weight.unit || 'OUNCE' };
+							} else {
+								offerList[idx]._hasWeight = false;
+							}
+							if (imgArr.length > 0) {
+								offerList[idx]._imageUrl = imgArr[0];
+							}
 						}
 					}
-				} catch {
-					// Skip on error, title will show as SKU
+				} catch (err) {
+					console.warn('[ebay-list-offers] bulkGetInventoryItem error:', err);
+					// Skip chunk on error, titles will show as SKU
 				}
-			});
-			
-			let i = 0;
-			const next = async (): Promise<void> => {
-				const fn = queue[i++];
-				if (!fn) return;
-				await fn();
-				return next();
-			};
-			
-			const workers = Array.from({ length: Math.min(concurrency, queue.length) }, next);
-			await Promise.all(workers);
+			}
 		};
 
 		// For multiple statuses, try a single call first and filter client-side
