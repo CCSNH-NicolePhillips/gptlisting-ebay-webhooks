@@ -39,8 +39,10 @@ app.use((req, res, next) => {
 });
 
 // Health check
+const BUILD_TIME = new Date().toISOString();
+const GIT_SHA = process.env.RAILWAY_GIT_COMMIT_SHA || process.env.COMMIT_SHA || 'unknown';
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({ status: 'ok', timestamp: new Date().toISOString(), buildTime: BUILD_TIME, gitSha: GIT_SHA });
 });
 
 // Legacy OAuth callback redirects (eBay RuName may point to old paths)
