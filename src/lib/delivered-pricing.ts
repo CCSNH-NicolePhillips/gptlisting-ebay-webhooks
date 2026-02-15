@@ -1676,19 +1676,22 @@ async function getDeliveredPricingV2(
     warnings.push('usedDirectWalmartAPI');
   }
 
-  // Minimum retail price sanity check
+  // Minimum retail price sanity check — reject retail prices that are absurdly low
+  // compared to what the product actually sells for on eBay (soldP50).
+  // 30% of soldP50 catches wrong-product matches (e.g., Walmart $3.00 for a $20+ product)
   const MIN_RETAIL_ABSOLUTE_CENTS = 200;
   const soldMedianForSanity = soldStats?.p50 ?? null;
-  const soldBasedFloor = soldMedianForSanity ? Math.round(soldMedianForSanity * 0.15) : 0;
+  const soldBasedFloor = soldMedianForSanity ? Math.round(soldMedianForSanity * 0.30) : 0;
   const retailSanityFloor = Math.max(MIN_RETAIL_ABSOLUTE_CENTS, soldBasedFloor);
+  console.log(`[pricing-v2] Retail sanity floor: $${(retailSanityFloor / 100).toFixed(2)} (30% of soldP50 $${(soldMedianForSanity ? (soldMedianForSanity / 100).toFixed(2) : 'N/A')}, abs min $${(MIN_RETAIL_ABSOLUTE_CENTS / 100).toFixed(2)})`);
 
-  if (effectiveAmazonPriceCents !== null && effectiveAmazonPriceCents < retailSanityFloor) {
-    console.log(`[pricing-v2] ❌ Amazon $${(effectiveAmazonPriceCents / 100).toFixed(2)} below sanity floor $${(retailSanityFloor / 100).toFixed(2)} — rejecting`);
+  if (effectiveAmazonPriceCents !== null && effectiveAmazonPriceCents <= retailSanityFloor) {
+    console.log(`[pricing-v2] ❌ Amazon $${(effectiveAmazonPriceCents / 100).toFixed(2)} at/below sanity floor $${(retailSanityFloor / 100).toFixed(2)} — rejecting`);
     effectiveAmazonPriceCents = null;
     warnings.push('amazonPriceBelowSanityFloor');
   }
-  if (effectiveWalmartPriceCents !== null && effectiveWalmartPriceCents < retailSanityFloor) {
-    console.log(`[pricing-v2] ❌ Walmart $${(effectiveWalmartPriceCents / 100).toFixed(2)} below sanity floor $${(retailSanityFloor / 100).toFixed(2)} — rejecting`);
+  if (effectiveWalmartPriceCents !== null && effectiveWalmartPriceCents <= retailSanityFloor) {
+    console.log(`[pricing-v2] ❌ Walmart $${(effectiveWalmartPriceCents / 100).toFixed(2)} at/below sanity floor $${(retailSanityFloor / 100).toFixed(2)} — rejecting`);
     effectiveWalmartPriceCents = null;
     warnings.push('walmartPriceBelowSanityFloor');
   }
@@ -1706,31 +1709,41 @@ async function getDeliveredPricingV2(
     } catch { /* ignore */ }
   }
 
-  // Variant detection: if brand site exists and other retail is <50% of brand site,
-  // those lower prices are almost certainly different variants (single servings, trial sizes, etc.)
-  // This matches the legacy pipeline's variant filtering logic.
+  // Variant detection: exclude retail prices that are likely wrong products/variants.
+  // Two anchors: (1) brand site price, (2) sold median (fallback when no brand site).
   let effectiveTargetPriceCents = targetPriceCents;
   let effectiveAmazonForRetail = effectiveAmazonPriceCents;
   let effectiveWalmartForRetail = effectiveWalmartPriceCents;
 
-  if (brandSitePriceCents && brandSitePriceCents > 0) {
-    const variantThreshold = brandSitePriceCents * 0.50;
+  // Primary anchor: brand site price (most reliable)
+  const variantAnchor = brandSitePriceCents && brandSitePriceCents > 0
+    ? brandSitePriceCents
+    : (soldMedianForSanity && soldMedianForSanity > 0 ? soldMedianForSanity : null);
+  const variantAnchorSource = brandSitePriceCents && brandSitePriceCents > 0 ? 'brand site' : 'soldP50';
+
+  if (variantAnchor) {
+    // Use 50% of brand site, or 30% of soldP50 (sold is a lower anchor so we use a tighter threshold)
+    const variantRatio = variantAnchorSource === 'brand site' ? 0.50 : 0.30;
+    const variantThreshold = Math.round(variantAnchor * variantRatio);
+    console.log(`[pricing-v2] Variant detection anchor: $${(variantAnchor / 100).toFixed(2)} (${variantAnchorSource}), threshold: $${(variantThreshold / 100).toFixed(2)} (${(variantRatio * 100).toFixed(0)}%)`);
 
     if (effectiveAmazonForRetail !== null && effectiveAmazonForRetail < variantThreshold) {
-      console.log(`[pricing-v2] ⚠️ Amazon $${(effectiveAmazonForRetail / 100).toFixed(2)} is <50% of brand site $${(brandSitePriceCents / 100).toFixed(2)} - likely different variant, excluding from retail cap`);
+      console.log(`[pricing-v2] ⚠️ Amazon $${(effectiveAmazonForRetail / 100).toFixed(2)} is <${(variantRatio * 100).toFixed(0)}% of ${variantAnchorSource} $${(variantAnchor / 100).toFixed(2)} - likely different variant, excluding from retail cap`);
       effectiveAmazonForRetail = null;
       warnings.push('amazonVariantExcluded');
     }
     if (effectiveWalmartForRetail !== null && effectiveWalmartForRetail < variantThreshold) {
-      console.log(`[pricing-v2] ⚠️ Walmart $${(effectiveWalmartForRetail / 100).toFixed(2)} is <50% of brand site $${(brandSitePriceCents / 100).toFixed(2)} - likely different variant, excluding from retail cap`);
+      console.log(`[pricing-v2] ⚠️ Walmart $${(effectiveWalmartForRetail / 100).toFixed(2)} is <${(variantRatio * 100).toFixed(0)}% of ${variantAnchorSource} $${(variantAnchor / 100).toFixed(2)} - likely different variant, excluding from retail cap`);
       effectiveWalmartForRetail = null;
       warnings.push('walmartVariantExcluded');
     }
     if (effectiveTargetPriceCents !== null && effectiveTargetPriceCents < variantThreshold) {
-      console.log(`[pricing-v2] ⚠️ Target $${(effectiveTargetPriceCents / 100).toFixed(2)} is <50% of brand site $${(brandSitePriceCents / 100).toFixed(2)} - likely different variant, excluding from retail cap`);
+      console.log(`[pricing-v2] ⚠️ Target $${(effectiveTargetPriceCents / 100).toFixed(2)} is <${(variantRatio * 100).toFixed(0)}% of ${variantAnchorSource} $${(variantAnchor / 100).toFixed(2)} - likely different variant, excluding from retail cap`);
       effectiveTargetPriceCents = null;
       warnings.push('targetVariantExcluded');
     }
+  } else {
+    console.log(`[pricing-v2] ⚠️ No variant detection anchor (no brand site or sold data)`);
   }
 
   const effectiveRetailPrices = [brandSitePriceCents, effectiveAmazonForRetail, effectiveWalmartForRetail, effectiveTargetPriceCents]
