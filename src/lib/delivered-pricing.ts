@@ -58,7 +58,7 @@ import { searchWalmart } from './walmart-search.js';
 import { extractPriceWithShipping } from './html-price.js';
 
 // v2 pricing modules
-import { computeRobustStats, isFloorOutlier, isSoldStrong, isActiveStrong, sellThrough, type RobustStats, type CompSample } from './pricing/robust-stats.js';
+import { computeRobustStats, isFloorOutlier, isSoldStrong, isActiveStrong, isSoldWeak, isActiveWeak, sellThrough, type RobustStats, type CompSample } from './pricing/robust-stats.js';
 import { buildIdentity, type CanonicalIdentity } from './pricing/identity-model.js';
 import { matchComps, filterMatches, filterMatchesAndAmbiguous, type CompCandidate, type MatchResult } from './pricing/comp-matcher.js';
 import { enforceSafetyFloor, estimateProfit, DEFAULT_FEE_MODEL, DEFAULT_SAFETY_INPUTS, type SafetyFloorInputs, type SafetyFloorResult } from './pricing/safety-floors.js';
@@ -871,11 +871,19 @@ export function splitDeliveredPrice(
 /**
  * v2 target price selection using robust percentile stats.
  * 
- * Pseudocode from plan:
- *   If soldStrong: base = soldStats.P35
- *   Else if activeStrong: base = activeStats.P20
- *   Else if retailAnchor: base = retailAnchor * 0.70
- *   Else: MANUAL_REVIEW_REQUIRED
+ * Graduated tiers (post-IQR-cleaned sample counts):
+ * 
+ *   STRONG (≥5 cleaned):
+ *     Sold:   base = soldStats.P35 (aggressive)
+ *     Active: base = activeStats.P20 (aggressive)
+ * 
+ *   WEAK (3-4 cleaned):
+ *     Sold:   base = soldStats.P50 (conservative — median)
+ *     Active: base = activeStats.P35 (conservative)
+ * 
+ *   NONE (<3 cleaned):
+ *     If retailAnchor: base = retailAnchor * 0.70
+ *     Else: MANUAL_REVIEW_REQUIRED
  * 
  *   Caps: min(base, activeP65), min(base, 0.80 * lowestTrustedRetail)
  *   Floor guard: ignore single lowest active if it's an outlier
@@ -892,54 +900,99 @@ export function calculateTargetDeliveredV2(
   let fallbackUsed = false;
 
   const soldStrong = soldStats !== null && isSoldStrong(soldStats);
+  const soldWeak = soldStats !== null && isSoldWeak(soldStats);
   const activeStrong = activeStats !== null && isActiveStrong(activeStats);
+  const activeWeak = activeStats !== null && isActiveWeak(activeStats);
 
   let base: number;
 
-  // === Primary target selection ===
+  // === Primary target selection (graduated tiers) ===
+
+  // ── Tier 1: Sold STRONG (≥5 cleaned) — aggressive percentile pricing ──
   if (soldStrong) {
     switch (mode) {
       case 'market-match':
         base = soldStats!.p35;
-        console.log(`[pricing-v2] SoldStrong → base = SoldP35 = $${(base / 100).toFixed(2)}`);
+        console.log(`[pricing-v2] SoldStrong (${soldStats!.count} cleaned) → base = SoldP35 = $${(base / 100).toFixed(2)}`);
         break;
       case 'fast-sale': {
         const fastBase = activeStrong
           ? Math.min(activeStats!.p20, soldStats!.p35)
           : soldStats!.p35;
         base = Math.max(fastBase - undercutCents, minDeliveredCents);
-        console.log(`[pricing-v2] Fast-sale → base = $${(base / 100).toFixed(2)}`);
+        console.log(`[pricing-v2] Fast-sale SoldStrong → base = $${(base / 100).toFixed(2)}`);
         break;
       }
       case 'max-margin':
         base = activeStrong
           ? Math.min(soldStats!.p50, activeStats!.p35)
           : soldStats!.p50;
-        console.log(`[pricing-v2] Max-margin → base = $${(base / 100).toFixed(2)}`);
+        console.log(`[pricing-v2] Max-margin SoldStrong → base = $${(base / 100).toFixed(2)}`);
         break;
     }
+
+  // ── Tier 2: Sold WEAK (3-4 cleaned) — conservative median pricing ──
+  } else if (soldWeak) {
+    warnings.push('soldDataWeak');
+    switch (mode) {
+      case 'market-match':
+        base = soldStats!.p50; // Use median, not P35 — more conservative with limited data
+        console.log(`[pricing-v2] SoldWeak (${soldStats!.count} cleaned) → base = SoldP50 (median) = $${(base / 100).toFixed(2)}`);
+        break;
+      case 'fast-sale':
+        base = Math.max(soldStats!.p50 - undercutCents, minDeliveredCents);
+        console.log(`[pricing-v2] Fast-sale SoldWeak → base = SoldP50 - undercut = $${(base / 100).toFixed(2)}`);
+        break;
+      case 'max-margin':
+        base = soldStats!.p50;
+        console.log(`[pricing-v2] Max-margin SoldWeak → base = SoldP50 = $${(base / 100).toFixed(2)}`);
+        break;
+    }
+
+  // ── Tier 3: Active STRONG (≥5 cleaned) — aggressive active pricing ──
   } else if (activeStrong) {
     switch (mode) {
       case 'market-match':
         base = activeStats!.p20;
-        console.log(`[pricing-v2] ActiveStrong (no sold) → base = ActiveP20 = $${(base / 100).toFixed(2)}`);
+        console.log(`[pricing-v2] ActiveStrong (${activeStats!.count} cleaned, no sold) → base = ActiveP20 = $${(base / 100).toFixed(2)}`);
         break;
       case 'fast-sale':
         base = Math.max(activeStats!.p20 - undercutCents, minDeliveredCents);
-        console.log(`[pricing-v2] Fast-sale (active only) → base = $${(base / 100).toFixed(2)}`);
+        console.log(`[pricing-v2] Fast-sale ActiveStrong → base = $${(base / 100).toFixed(2)}`);
         break;
       case 'max-margin':
         base = activeStats!.p35;
-        console.log(`[pricing-v2] Max-margin (active only) → base = ActiveP35 = $${(base / 100).toFixed(2)}`);
+        console.log(`[pricing-v2] Max-margin ActiveStrong → base = ActiveP35 = $${(base / 100).toFixed(2)}`);
         break;
     }
+
+  // ── Tier 4: Active WEAK (3-4 cleaned) — conservative active pricing ──
+  } else if (activeWeak) {
+    warnings.push('activeDataWeak');
+    switch (mode) {
+      case 'market-match':
+        base = activeStats!.p35; // P35 not P20 — more conservative with limited data
+        console.log(`[pricing-v2] ActiveWeak (${activeStats!.count} cleaned, no sold) → base = ActiveP35 = $${(base / 100).toFixed(2)}`);
+        break;
+      case 'fast-sale':
+        base = Math.max(activeStats!.p35 - undercutCents, minDeliveredCents);
+        console.log(`[pricing-v2] Fast-sale ActiveWeak → base = $${(base / 100).toFixed(2)}`);
+        break;
+      case 'max-margin':
+        base = activeStats!.p50;
+        console.log(`[pricing-v2] Max-margin ActiveWeak → base = ActiveP50 = $${(base / 100).toFixed(2)}`);
+        break;
+    }
+
+  // ── Tier 5: Retail anchor only (no usable sold/active) ──
   } else if (lowestTrustedRetailCents !== null) {
     base = Math.round(lowestTrustedRetailCents * 0.70);
     fallbackUsed = true;
     warnings.push('usingRetailAnchorOnly');
-    console.log(`[pricing-v2] No strong sold/active → retail anchor * 0.70 = $${(base / 100).toFixed(2)}`);
+    console.log(`[pricing-v2] No usable sold/active → retail anchor * 0.70 = $${(base / 100).toFixed(2)}`);
+
+  // ── Tier 6: No data ──
   } else {
-    // No reliable signal
     base = 0;
     fallbackUsed = true;
     warnings.push('manualReviewRequired');
@@ -959,11 +1012,28 @@ export function calculateTargetDeliveredV2(
     }
   }
 
-  // Retail cap: 80% of lowest trusted retail
+  // Retail cap: prevent pricing above retail — but respect strong sold data.
+  //
+  // When we have ≥20 cleaned sold samples, the sold data is very reliable.
+  // A potentially-mismatched retail price (e.g. Walmart returning "Gummies"
+  // for a "Chews" query) shouldn't crush a well-established sold target.
+  //
+  // Strategy:
+  //   - soldStrong with ≥20 samples: cap at 100% of retail (just don't exceed it)
+  //   - soldStrong with 5-19 samples: cap at 90% of retail
+  //   - otherwise (weak/no sold data): cap at 80% of retail (aggressive, buyers need value)
   if (lowestTrustedRetailCents !== null) {
-    const retailCap = Math.round(lowestTrustedRetailCents * RETAIL_CAP_RATIO);
+    const SOLD_VERY_STRONG_THRESHOLD = 20;
+    const effectiveCapRatio = soldStrong && soldStats!.count >= SOLD_VERY_STRONG_THRESHOLD
+      ? 1.00
+      : soldStrong
+        ? 0.90
+        : RETAIL_CAP_RATIO; // 0.80
+
+    const retailCap = Math.round(lowestTrustedRetailCents * effectiveCapRatio);
     if (base > retailCap) {
-      console.log(`[pricing-v2] Retail cap: $${(base / 100).toFixed(2)} → $${(retailCap / 100).toFixed(2)} (80% of $${(lowestTrustedRetailCents / 100).toFixed(2)})`);
+      const ratioLabel = effectiveCapRatio === 1.00 ? '100%' : effectiveCapRatio === 0.90 ? '90%' : '80%';
+      console.log(`[pricing-v2] Retail cap: $${(base / 100).toFixed(2)} → $${(retailCap / 100).toFixed(2)} (${ratioLabel} of $${(lowestTrustedRetailCents / 100).toFixed(2)}, sold=${soldStats?.count ?? 0} cleaned)`);
       warnings.push('retailCapApplied');
       base = retailCap;
     }

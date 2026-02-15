@@ -4,6 +4,8 @@ import {
   isFloorOutlier,
   isSoldStrong,
   isActiveStrong,
+  isSoldWeak,
+  isActiveWeak,
   sellThrough,
   CompSample,
   RobustStats,
@@ -194,26 +196,70 @@ describe('isFloorOutlier', () => {
 });
 
 describe('isSoldStrong', () => {
-  it('21. count=10 → true', () => {
+  it('21. count=5 → true (threshold lowered from 10 to 5)', () => {
+    expect(isSoldStrong(makeStats({ count: 5 }))).toBe(true);
+  });
+
+  it('22. count=4 → false', () => {
+    expect(isSoldStrong(makeStats({ count: 4 }))).toBe(false);
+  });
+
+  it('23. count=10 → true (still passes with plenty of data)', () => {
     expect(isSoldStrong(makeStats({ count: 10 }))).toBe(true);
   });
 
-  it('22. count=9 → false', () => {
-    expect(isSoldStrong(makeStats({ count: 9 }))).toBe(false);
-  });
-
-  it('23. custom minCount=5, count=5 → true', () => {
-    expect(isSoldStrong(makeStats({ count: 5 }), 5)).toBe(true);
+  it('23b. custom minCount=8, count=7 → false', () => {
+    expect(isSoldStrong(makeStats({ count: 7 }), 8)).toBe(false);
   });
 });
 
 describe('isActiveStrong', () => {
-  it('24. count=12 → true', () => {
-    expect(isActiveStrong(makeStats({ count: 12 }))).toBe(true);
+  it('24. count=5 → true (threshold lowered from 12 to 5)', () => {
+    expect(isActiveStrong(makeStats({ count: 5 }))).toBe(true);
   });
 
-  it('25. count=11 → false', () => {
-    expect(isActiveStrong(makeStats({ count: 11 }))).toBe(false);
+  it('25. count=4 → false', () => {
+    expect(isActiveStrong(makeStats({ count: 4 }))).toBe(false);
+  });
+
+  it('25b. count=12 → true (still passes with plenty of data)', () => {
+    expect(isActiveStrong(makeStats({ count: 12 }))).toBe(true);
+  });
+});
+
+describe('isSoldWeak', () => {
+  it('weak-1. count=3 → true (3-4 = weak tier)', () => {
+    expect(isSoldWeak(makeStats({ count: 3 }))).toBe(true);
+  });
+
+  it('weak-2. count=4 → true', () => {
+    expect(isSoldWeak(makeStats({ count: 4 }))).toBe(true);
+  });
+
+  it('weak-3. count=5 → false (strong, not weak)', () => {
+    expect(isSoldWeak(makeStats({ count: 5 }))).toBe(false);
+  });
+
+  it('weak-4. count=2 → false (too few)', () => {
+    expect(isSoldWeak(makeStats({ count: 2 }))).toBe(false);
+  });
+});
+
+describe('isActiveWeak', () => {
+  it('weak-5. count=3 → true', () => {
+    expect(isActiveWeak(makeStats({ count: 3 }))).toBe(true);
+  });
+
+  it('weak-6. count=4 → true', () => {
+    expect(isActiveWeak(makeStats({ count: 4 }))).toBe(true);
+  });
+
+  it('weak-7. count=5 → false (strong)', () => {
+    expect(isActiveWeak(makeStats({ count: 5 }))).toBe(false);
+  });
+
+  it('weak-8. count=1 → false (too few)', () => {
+    expect(isActiveWeak(makeStats({ count: 1 }))).toBe(false);
   });
 });
 

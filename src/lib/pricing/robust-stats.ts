@@ -143,12 +143,37 @@ export function isFloorOutlier(stats: RobustStats, threshold = 0.80): boolean {
   return stats.count >= 3 && stats.min < threshold * stats.p20;
 }
 
-export function isSoldStrong(stats: RobustStats, minCount = 10): boolean {
+/**
+ * Sold data is "strong" — enough cleaned samples for aggressive percentile pricing (P35).
+ * Lowered from 10 → 5 to match V1's ≥5 threshold while still benefiting from IQR outlier removal.
+ * Products with 5+ cleaned sold comps have reliable market price signals.
+ */
+export function isSoldStrong(stats: RobustStats, minCount = 5): boolean {
   return stats.count >= minCount;
 }
 
-export function isActiveStrong(stats: RobustStats, minCount = 12): boolean {
+/**
+ * Active data is "strong" — enough cleaned samples for aggressive percentile pricing (P20).
+ * Lowered from 12 → 5 to prevent niche products from falling through to retail-only pricing.
+ */
+export function isActiveStrong(stats: RobustStats, minCount = 5): boolean {
   return stats.count >= minCount;
+}
+
+/**
+ * Sold data is "weak" — 3-4 cleaned samples. Enough for conservative median pricing (P50)
+ * but not enough for aggressive P35. Better than falling through to retail × 0.70.
+ */
+export function isSoldWeak(stats: RobustStats): boolean {
+  return stats.count >= 3 && !isSoldStrong(stats);
+}
+
+/**
+ * Active data is "weak" — 3-4 cleaned samples. Enough for conservative P35 pricing
+ * but not enough for aggressive P20.
+ */
+export function isActiveWeak(stats: RobustStats): boolean {
+  return stats.count >= 3 && !isActiveStrong(stats);
 }
 
 export function sellThrough(soldCount: number, activeCount: number): number | null {
