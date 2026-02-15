@@ -1706,7 +1706,34 @@ async function getDeliveredPricingV2(
     } catch { /* ignore */ }
   }
 
-  const effectiveRetailPrices = [brandSitePriceCents, effectiveAmazonPriceCents, effectiveWalmartPriceCents, targetPriceCents]
+  // Variant detection: if brand site exists and other retail is <50% of brand site,
+  // those lower prices are almost certainly different variants (single servings, trial sizes, etc.)
+  // This matches the legacy pipeline's variant filtering logic.
+  let effectiveTargetPriceCents = targetPriceCents;
+  let effectiveAmazonForRetail = effectiveAmazonPriceCents;
+  let effectiveWalmartForRetail = effectiveWalmartPriceCents;
+
+  if (brandSitePriceCents && brandSitePriceCents > 0) {
+    const variantThreshold = brandSitePriceCents * 0.50;
+
+    if (effectiveAmazonForRetail !== null && effectiveAmazonForRetail < variantThreshold) {
+      console.log(`[pricing-v2] ⚠️ Amazon $${(effectiveAmazonForRetail / 100).toFixed(2)} is <50% of brand site $${(brandSitePriceCents / 100).toFixed(2)} - likely different variant, excluding from retail cap`);
+      effectiveAmazonForRetail = null;
+      warnings.push('amazonVariantExcluded');
+    }
+    if (effectiveWalmartForRetail !== null && effectiveWalmartForRetail < variantThreshold) {
+      console.log(`[pricing-v2] ⚠️ Walmart $${(effectiveWalmartForRetail / 100).toFixed(2)} is <50% of brand site $${(brandSitePriceCents / 100).toFixed(2)} - likely different variant, excluding from retail cap`);
+      effectiveWalmartForRetail = null;
+      warnings.push('walmartVariantExcluded');
+    }
+    if (effectiveTargetPriceCents !== null && effectiveTargetPriceCents < variantThreshold) {
+      console.log(`[pricing-v2] ⚠️ Target $${(effectiveTargetPriceCents / 100).toFixed(2)} is <50% of brand site $${(brandSitePriceCents / 100).toFixed(2)} - likely different variant, excluding from retail cap`);
+      effectiveTargetPriceCents = null;
+      warnings.push('targetVariantExcluded');
+    }
+  }
+
+  const effectiveRetailPrices = [brandSitePriceCents, effectiveAmazonForRetail, effectiveWalmartForRetail, effectiveTargetPriceCents]
     .filter((p): p is number => p !== null && p > 0);
   const effectiveLowestRetail = effectiveRetailPrices.length > 0 ? Math.min(...effectiveRetailPrices) : null;
 
