@@ -1201,80 +1201,109 @@ export async function getDeliveredPricing(
     warnings.push('soldCompsError');
   }
 
-  // === Step 4: Brave Amazon Fallback for Niche Brands ===
-  // When Google Shopping doesn't find brand-matched retail AND no trusted retailers,
-  // try Brave to find the Amazon product page directly
-  let braveAmazonPrice: number | null = null;
+  // === Step 4: ALWAYS call direct Amazon/Walmart APIs ===
+  // Google Shopping returns pre-scraped data that can be stale or wrong
+  // (e.g., Walmart "add to cart to see price" returns garbage like $3.00).
+  // Direct SearchAPI endpoints hit each retailer's actual search API and are
+  // far more reliable. We run them unconditionally and cross-validate.
   let effectiveAmazonPriceCents = amazonPriceCents;
-  
-  const hasTrustedRetail = amazonPriceCents !== null || walmartPriceCents !== null || targetPriceCents !== null;
+  let effectiveWalmartPriceCents = walmartPriceCents;
   const retailHasBrand = retailCompsIncludeBrand(retailComps, brand);
   const soldStrong = soldMedianCents !== null && soldCount >= 5;
-  
-  // Try Brave for Amazon when we have NO retail reference at all.
-  // Previously gated by !soldStrong, but soldStrong doesn't mean the data is CORRECT:
-  // sold comps can be contaminated with multi-packs/bundles, and without a retail
-  // reference there's no safety net to catch inflated prices.
-  // We still skip if we already have Amazon/Walmart/Target or brand site pricing.
-  const hasAnyRetailRef = hasTrustedRetail || brandSitePriceCents !== null;
-  
-  if (!amazonPriceCents && !hasAnyRetailRef) {
-    console.log(`[delivered-pricing] 🔍 No Amazon and no retail reference - trying Brave Amazon fallback for "${brand} ${productName}"`);
-    
-    const braveResult = await braveAmazonFallback(brand, productName);
-    if (braveResult.priceCents) {
-      braveAmazonPrice = braveResult.priceCents;
-      effectiveAmazonPriceCents = braveAmazonPrice;
-      warnings.push('usedBraveAmazonFallback');
-      console.log(`[delivered-pricing] ✓ Brave Amazon fallback: $${(braveAmazonPrice / 100).toFixed(2)}`);
-    } else if (braveResult.url) {
-      // Found Amazon page but couldn't extract price (likely JS-rendered)
-      warnings.push('braveAmazonNoPriceExtract');
-      if (!retailHasBrand) {
-        warnings.push('nicheBrandNeedsReview');
-      }
-      console.log(`[delivered-pricing] ⚠️ Brave found Amazon page but price extraction failed`);
-    } else if (!hasTrustedRetail && !retailHasBrand) {
-      // Brave didn't find anything AND no trusted retail - niche brand
-      warnings.push('nicheBrandNeedsReview');
-      console.log(`[delivered-pricing] ⚠️ NICHE BRAND: "${brand}" has no reliable pricing data - manual review required`);
-    }
+
+  // Always call direct APIs — they're the most reliable data source
+  const [directAmazonResult, directWalmartResult] = await Promise.allSettled([
+    searchAmazonWithFallback(brand, productName, true),
+    searchWalmart(brand, productName),
+  ]);
+
+  const directAmazonPrice = directAmazonResult.status === 'fulfilled' 
+    && directAmazonResult.value.price !== null 
+    && directAmazonResult.value.confidence !== 'low'
+    ? Math.round(directAmazonResult.value.price * 100) : null;
+  const directWalmartPrice = directWalmartResult.status === 'fulfilled'
+    && directWalmartResult.value.price !== null
+    && directWalmartResult.value.confidence !== 'low'
+    ? Math.round(directWalmartResult.value.price * 100) : null;
+
+  if (directAmazonPrice) {
+    console.log(`[delivered-pricing] 🔎 Direct Amazon API: $${(directAmazonPrice / 100).toFixed(2)}`);
+  }
+  if (directWalmartPrice) {
+    console.log(`[delivered-pricing] 🔎 Direct Walmart API: $${(directWalmartPrice / 100).toFixed(2)}`);
   }
 
-  // === Step 5: Direct Amazon/Walmart API Fallback ===
-  // If we still don't have a trusted retail price, try SearchAPI direct endpoints
-  // This catches products that aren't indexed in Google Shopping.
-  // Previously gated by !soldStrong, but we need retail as a safety net even WITH
-  // strong sold data — sold comps can be contaminated with multi-packs/bundles.
-  let effectiveWalmartPriceCents = walmartPriceCents;
+  // Cross-validate Google Shopping vs direct API prices.
+  // If both exist and diverge by more than 40%, trust the direct API —
+  // Google Shopping often scrapes wrong variants, sample sizes, or
+  // "add to cart" placeholder prices.
+  const CROSS_VALIDATE_THRESHOLD = 0.40; // 40% divergence = suspect
+
+  if (amazonPriceCents && directAmazonPrice) {
+    const ratio = Math.abs(amazonPriceCents - directAmazonPrice) / Math.max(amazonPriceCents, directAmazonPrice);
+    if (ratio > CROSS_VALIDATE_THRESHOLD) {
+      console.log(`[delivered-pricing] ⚠️ Amazon cross-validation: Google=$${(amazonPriceCents / 100).toFixed(2)} vs Direct=$${(directAmazonPrice / 100).toFixed(2)} (${(ratio * 100).toFixed(0)}% divergence) → using Direct`);
+      effectiveAmazonPriceCents = directAmazonPrice;
+      warnings.push('amazonCrossValidated');
+    }
+  } else if (!amazonPriceCents && directAmazonPrice) {
+    effectiveAmazonPriceCents = directAmazonPrice;
+    warnings.push('usedDirectAmazonAPI');
+    console.log(`[delivered-pricing] ✓ Amazon from Direct API: $${(directAmazonPrice / 100).toFixed(2)} (Google Shopping had none)`);
+  }
+
+  if (walmartPriceCents && directWalmartPrice) {
+    const ratio = Math.abs(walmartPriceCents - directWalmartPrice) / Math.max(walmartPriceCents, directWalmartPrice);
+    if (ratio > CROSS_VALIDATE_THRESHOLD) {
+      console.log(`[delivered-pricing] ⚠️ Walmart cross-validation: Google=$${(walmartPriceCents / 100).toFixed(2)} vs Direct=$${(directWalmartPrice / 100).toFixed(2)} (${(ratio * 100).toFixed(0)}% divergence) → using Direct`);
+      effectiveWalmartPriceCents = directWalmartPrice;
+      warnings.push('walmartCrossValidated');
+    }
+  } else if (!walmartPriceCents && directWalmartPrice) {
+    effectiveWalmartPriceCents = directWalmartPrice;
+    warnings.push('usedDirectWalmartAPI');
+    console.log(`[delivered-pricing] ✓ Walmart from Direct API: $${(directWalmartPrice / 100).toFixed(2)} (Google Shopping had none)`);
+  }
+
+  // Minimum retail price sanity check: reject any retail price below $2.00
+  // or below 15% of eBay sold median (catches travel sizes, wrong variants, scraping errors)
+  const MIN_RETAIL_ABSOLUTE_CENTS = 200; // $2.00 absolute minimum
+  const MIN_RETAIL_VS_SOLD_RATIO = 0.15; // 15% of sold median
+  const soldBasedFloor = soldMedianCents ? Math.round(soldMedianCents * MIN_RETAIL_VS_SOLD_RATIO) : 0;
+  const retailSanityFloor = Math.max(MIN_RETAIL_ABSOLUTE_CENTS, soldBasedFloor);
+
+  if (effectiveAmazonPriceCents !== null && effectiveAmazonPriceCents < retailSanityFloor) {
+    console.log(`[delivered-pricing] ❌ Amazon $${(effectiveAmazonPriceCents / 100).toFixed(2)} below sanity floor $${(retailSanityFloor / 100).toFixed(2)} — rejecting (likely wrong variant/size)`);
+    effectiveAmazonPriceCents = null;
+    warnings.push('amazonPriceBelowSanityFloor');
+  }
+  if (effectiveWalmartPriceCents !== null && effectiveWalmartPriceCents < retailSanityFloor) {
+    console.log(`[delivered-pricing] ❌ Walmart $${(effectiveWalmartPriceCents / 100).toFixed(2)} below sanity floor $${(retailSanityFloor / 100).toFixed(2)} — rejecting (likely wrong variant/size)`);
+    effectiveWalmartPriceCents = null;
+    warnings.push('walmartPriceBelowSanityFloor');
+  }
+
+  // Brave Amazon fallback — only if we STILL have no Amazon price after direct API
+  const hasAnyRetailRef = (effectiveAmazonPriceCents !== null || effectiveWalmartPriceCents !== null || targetPriceCents !== null || brandSitePriceCents !== null);
   
-  if (!effectiveAmazonPriceCents && !effectiveWalmartPriceCents && !hasAnyRetailRef) {
-    console.log(`[delivered-pricing] 🔍 No retail prices found - trying direct Amazon/Walmart API fallback`);
+  if (!effectiveAmazonPriceCents && !hasAnyRetailRef) {
+    console.log(`[delivered-pricing] 🔍 No retail reference after direct APIs - trying Brave Amazon fallback`);
     
     try {
-      // Try Amazon direct search with brand-only fallback
-      const amazonResult = await searchAmazonWithFallback(brand, productName, true);
-      if (amazonResult.price !== null && amazonResult.confidence !== 'low') {
-        effectiveAmazonPriceCents = Math.round(amazonResult.price * 100);
-        warnings.push('usedDirectAmazonAPI');
-        console.log(`[delivered-pricing] ✓ Direct Amazon API: $${amazonResult.price.toFixed(2)}`);
+      const braveResult = await braveAmazonFallback(brand, productName);
+      if (braveResult.priceCents && braveResult.priceCents >= retailSanityFloor) {
+        effectiveAmazonPriceCents = braveResult.priceCents;
+        warnings.push('usedBraveAmazonFallback');
+        console.log(`[delivered-pricing] ✓ Brave Amazon fallback: $${(braveResult.priceCents / 100).toFixed(2)}`);
+      } else if (braveResult.url) {
+        warnings.push('braveAmazonNoPriceExtract');
+        console.log(`[delivered-pricing] ⚠️ Brave found Amazon page but price extraction failed`);
       }
-    } catch (err) {
-      console.log(`[delivered-pricing] Direct Amazon API error: ${err}`);
-    }
-    
-    // Also try Walmart if Amazon didn't work
-    if (!effectiveAmazonPriceCents) {
-      try {
-        const walmartResult = await searchWalmart(brand, productName);
-        if (walmartResult.price !== null && walmartResult.confidence !== 'low') {
-          effectiveWalmartPriceCents = Math.round(walmartResult.price * 100);
-          warnings.push('usedDirectWalmartAPI');
-          console.log(`[delivered-pricing] ✓ Direct Walmart API: $${walmartResult.price.toFixed(2)}`);
-        }
-      } catch (err) {
-        console.log(`[delivered-pricing] Direct Walmart API error: ${err}`);
-      }
+    } catch { /* ignore */ }
+
+    if (!effectiveAmazonPriceCents && !hasAnyRetailRef && !retailHasBrand) {
+      warnings.push('nicheBrandNeedsReview');
+      console.log(`[delivered-pricing] ⚠️ NICHE BRAND: "${brand}" has no reliable pricing data - manual review required`);
     }
   }
 
@@ -1594,39 +1623,87 @@ async function getDeliveredPricingV2(
     .filter((p): p is number => p !== null && p > 0);
   const lowestTrustedRetailCents = trustedRetailPrices.length > 0 ? Math.min(...trustedRetailPrices) : null;
 
-  // Brave/API fallbacks for retail (same as legacy)
+  // Brave/API fallbacks for retail — ALWAYS call direct APIs and cross-validate
   let effectiveAmazonPriceCents = amazonPriceCents;
   let effectiveWalmartPriceCents = walmartPriceCents;
-  const hasAnyRetailRef = trustedRetailPrices.length > 0 || brandSitePriceCents !== null;
+
+  // Always call direct APIs — they're more reliable than Google Shopping
+  const [directAmazonResult, directWalmartResult] = await Promise.allSettled([
+    searchAmazonWithFallback(brand, productName, true),
+    searchWalmart(brand, productName),
+  ]);
+
+  const directAmazonPrice = directAmazonResult.status === 'fulfilled'
+    && directAmazonResult.value.price !== null
+    && directAmazonResult.value.confidence !== 'low'
+    ? Math.round(directAmazonResult.value.price * 100) : null;
+  const directWalmartPrice = directWalmartResult.status === 'fulfilled'
+    && directWalmartResult.value.price !== null
+    && directWalmartResult.value.confidence !== 'low'
+    ? Math.round(directWalmartResult.value.price * 100) : null;
+
+  if (directAmazonPrice) {
+    console.log(`[pricing-v2] 🔎 Direct Amazon API: $${(directAmazonPrice / 100).toFixed(2)}`);
+  }
+  if (directWalmartPrice) {
+    console.log(`[pricing-v2] 🔎 Direct Walmart API: $${(directWalmartPrice / 100).toFixed(2)}`);
+  }
+
+  // Cross-validate Google Shopping vs direct API (40% divergence = suspect)
+  const CROSS_VALIDATE_THRESHOLD = 0.40;
+
+  if (amazonPriceCents && directAmazonPrice) {
+    const ratio = Math.abs(amazonPriceCents - directAmazonPrice) / Math.max(amazonPriceCents, directAmazonPrice);
+    if (ratio > CROSS_VALIDATE_THRESHOLD) {
+      console.log(`[pricing-v2] ⚠️ Amazon cross-validation: Google=$${(amazonPriceCents / 100).toFixed(2)} vs Direct=$${(directAmazonPrice / 100).toFixed(2)} → using Direct`);
+      effectiveAmazonPriceCents = directAmazonPrice;
+      warnings.push('amazonCrossValidated');
+    }
+  } else if (!amazonPriceCents && directAmazonPrice) {
+    effectiveAmazonPriceCents = directAmazonPrice;
+    warnings.push('usedDirectAmazonAPI');
+  }
+
+  if (walmartPriceCents && directWalmartPrice) {
+    const ratio = Math.abs(walmartPriceCents - directWalmartPrice) / Math.max(walmartPriceCents, directWalmartPrice);
+    if (ratio > CROSS_VALIDATE_THRESHOLD) {
+      console.log(`[pricing-v2] ⚠️ Walmart cross-validation: Google=$${(walmartPriceCents / 100).toFixed(2)} vs Direct=$${(directWalmartPrice / 100).toFixed(2)} → using Direct`);
+      effectiveWalmartPriceCents = directWalmartPrice;
+      warnings.push('walmartCrossValidated');
+    }
+  } else if (!walmartPriceCents && directWalmartPrice) {
+    effectiveWalmartPriceCents = directWalmartPrice;
+    warnings.push('usedDirectWalmartAPI');
+  }
+
+  // Minimum retail price sanity check
+  const MIN_RETAIL_ABSOLUTE_CENTS = 200;
+  const soldMedianForSanity = soldStats?.p50 ?? null;
+  const soldBasedFloor = soldMedianForSanity ? Math.round(soldMedianForSanity * 0.15) : 0;
+  const retailSanityFloor = Math.max(MIN_RETAIL_ABSOLUTE_CENTS, soldBasedFloor);
+
+  if (effectiveAmazonPriceCents !== null && effectiveAmazonPriceCents < retailSanityFloor) {
+    console.log(`[pricing-v2] ❌ Amazon $${(effectiveAmazonPriceCents / 100).toFixed(2)} below sanity floor $${(retailSanityFloor / 100).toFixed(2)} — rejecting`);
+    effectiveAmazonPriceCents = null;
+    warnings.push('amazonPriceBelowSanityFloor');
+  }
+  if (effectiveWalmartPriceCents !== null && effectiveWalmartPriceCents < retailSanityFloor) {
+    console.log(`[pricing-v2] ❌ Walmart $${(effectiveWalmartPriceCents / 100).toFixed(2)} below sanity floor $${(retailSanityFloor / 100).toFixed(2)} — rejecting`);
+    effectiveWalmartPriceCents = null;
+    warnings.push('walmartPriceBelowSanityFloor');
+  }
+
+  // Brave fallback — only if we STILL have no retail
+  const hasAnyRetailRef = (effectiveAmazonPriceCents !== null || effectiveWalmartPriceCents !== null || targetPriceCents !== null || brandSitePriceCents !== null);
 
   if (!effectiveAmazonPriceCents && !hasAnyRetailRef) {
     try {
       const braveResult = await braveAmazonFallback(brand, productName);
-      if (braveResult.priceCents) {
+      if (braveResult.priceCents && braveResult.priceCents >= retailSanityFloor) {
         effectiveAmazonPriceCents = braveResult.priceCents;
         warnings.push('usedBraveAmazonFallback');
       }
     } catch { /* ignore */ }
-  }
-
-  if (!effectiveAmazonPriceCents && !effectiveWalmartPriceCents && !hasAnyRetailRef) {
-    try {
-      const amazonResult = await searchAmazonWithFallback(brand, productName, true);
-      if (amazonResult.price !== null && amazonResult.confidence !== 'low') {
-        effectiveAmazonPriceCents = Math.round(amazonResult.price * 100);
-        warnings.push('usedDirectAmazonAPI');
-      }
-    } catch { /* ignore */ }
-
-    if (!effectiveAmazonPriceCents) {
-      try {
-        const walmartResult = await searchWalmart(brand, productName);
-        if (walmartResult.price !== null && walmartResult.confidence !== 'low') {
-          effectiveWalmartPriceCents = Math.round(walmartResult.price * 100);
-          warnings.push('usedDirectWalmartAPI');
-        }
-      } catch { /* ignore */ }
-    }
   }
 
   const effectiveRetailPrices = [brandSitePriceCents, effectiveAmazonPriceCents, effectiveWalmartPriceCents, targetPriceCents]
