@@ -81,7 +81,87 @@ export async function fetchSoldPriceStats(
   try {
     // Build search query
     const keywords = [query.brand, query.title].filter(Boolean).join(' ');
-    console.log(`[ebay-sold] Searching sold items via SearchAPI.io: "${keywords}"`);
+    
+    // Try full query first
+    const result = await searchSoldItems(keywords, query.condition, apiKey);
+    
+    // If rate limited or API error, return immediately (don't retry)
+    if (result.rateLimited !== undefined) {
+      return result;
+    }
+    
+    if (result.ok && result.samplesCount && result.samplesCount > 0) {
+      return result;
+    }
+
+    // If no results, retry with a shorter/simpler query
+    // eBay search is literal — too many keywords often returns 0 results
+    const shorterKeywords = buildShorterQuery(query.brand, query.title);
+    if (shorterKeywords && shorterKeywords !== keywords) {
+      console.log(`[ebay-sold] Retrying with shorter query: "${shorterKeywords}"`);
+      const retryResult = await searchSoldItems(shorterKeywords, query.condition, apiKey);
+      if (retryResult.rateLimited !== undefined) {
+        return retryResult;
+      }
+      // Return retry result even if <3 samples (better than nothing)
+      if (retryResult.samples.length > 0) {
+        return retryResult;
+      }
+    }
+    
+    // Return the original result (may have partial data)
+    return result.samples.length > 0 ? result : empty;
+  } catch (err) {
+    console.error('[ebay-sold] Error fetching sold prices:', err);
+    return empty;
+  }
+}
+
+/**
+ * Build a shorter search query by removing noise words and trimming to core terms.
+ * eBay search is literal — long product names with filler words return 0 results.
+ */
+function buildShorterQuery(brand: string | undefined, title: string | undefined): string | null {
+  if (!title) return null;
+
+  // Remove common filler words that hurt eBay search
+  const FILLER_WORDS = new Set([
+    'wraps', 'wrap', 'supplement', 'supplements', 'capsules', 'tablets', 'softgels', 'gummies',
+    'organic', 'organics', 'natural', 'premium', 'advanced', 'professional', 'original',
+    'enhanced', 'formula', 'complex', 'blend', 'extract', 'dietary', 'vegan', 'non-gmo',
+    'gluten-free', 'support', 'health', 'care', 'daily', 'essential', 'plus', 'ultra', 'max',
+    'pro', 'extra', 'strength', 'maximum', 'complete', 'total', 'super',
+  ]);
+
+  // Simplify brand name: "MaryRuth Organics" → "MaryRuth"
+  const brandWords = (brand || '').split(/\s+/).filter(Boolean);
+  const simpleBrand = brandWords.filter(w => !FILLER_WORDS.has(w.toLowerCase())).join(' ');
+
+  // Keep only distinctive title words (not in filler set, length > 2)
+  const titleWords = (title || '').split(/\s+/)
+    .filter(w => w.length > 2)
+    .filter(w => !FILLER_WORDS.has(w.toLowerCase()))
+    // Also remove words already in simplified brand
+    .filter(w => !simpleBrand.toLowerCase().includes(w.toLowerCase()));
+
+  // Take the first 4-5 distinctive words from the title
+  const coreTitle = titleWords.slice(0, 5).join(' ');
+  
+  const shorter = [simpleBrand, coreTitle].filter(Boolean).join(' ').trim();
+  return shorter || null;
+}
+
+/**
+ * Internal: Execute a sold items search against SearchAPI.io and parse results.
+ */
+async function searchSoldItems(
+  keywords: string,
+  condition: string | undefined,
+  apiKey: string
+): Promise<SoldPriceStats> {
+  const empty: SoldPriceStats = { ok: false, samples: [] };
+  
+  console.log(`[ebay-sold] Searching sold items via SearchAPI.io: "${keywords}"`);
 
     const params = new URLSearchParams({
       engine: 'ebay_search',
@@ -90,9 +170,9 @@ export async function fetchSoldPriceStats(
       ebay_tbs: 'LH_Complete:1,LH_Sold:1', // Sold/completed items filter
     });
 
-    if (query.condition === 'NEW') {
+    if (condition === 'NEW') {
       params.append('ebay_tbs', 'LH_ItemCondition:1000');
-    } else if (query.condition === 'USED') {
+    } else if (condition === 'USED') {
       params.append('ebay_tbs', 'LH_ItemCondition:3000');
     }
 
@@ -338,9 +418,4 @@ export async function fetchSoldPriceStats(
     });
 
     return result;
-
-  } catch (error: any) {
-    console.error('[ebay-sold] Error fetching sold prices:', error.message);
-    return empty;
-  }
 }

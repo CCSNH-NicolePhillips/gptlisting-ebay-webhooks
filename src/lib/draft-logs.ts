@@ -214,6 +214,10 @@ export function buildPricingCalculations(
     activeFloorDeliveredCents?: number | null;
     amazonPriceCents?: number | null;
     walmartPriceCents?: number | null;
+    soldMedianDeliveredCents?: number | null;
+    soldCount?: number;
+    soldStrong?: boolean;
+    fallbackUsed?: boolean;
   },
   settings: {
     discountPercent?: number;
@@ -247,19 +251,45 @@ export function buildPricingCalculations(
 
   // Step 2: Calculate target delivered price
   if (decision.targetDeliveredCents) {
+    // Show the actual pricing method used, not a generic formula
+    const soldMedianStr = decision.soldMedianDeliveredCents
+      ? `$${(decision.soldMedianDeliveredCents / 100).toFixed(2)}`
+      : 'N/A';
+    const soldCountStr = decision.soldCount ?? 0;
+    const isSoldBased = decision.soldStrong && decision.soldMedianDeliveredCents;
+    const isRetailFallback = decision.fallbackUsed;
+
+    let formula: string;
+    let notes: string;
+    if (isSoldBased) {
+      formula = `Target = Sold market data (${soldCountStr} recent sales, median ${soldMedianStr})`;
+      notes = 'Price based on actual eBay sold data — what buyers are paying';
+    } else if (decision.activeFloorDeliveredCents) {
+      formula = `Target = Lowest active eBay listing ($${(decision.activeFloorDeliveredCents / 100).toFixed(2)})`;
+      notes = 'No strong sold data — matching lowest active competitor';
+    } else if (isRetailFallback) {
+      formula = `Target = Retail price × 70% (no eBay sold/active data)`;
+      notes = 'No eBay data available — using discounted retail as fallback';
+    } else {
+      formula = `Target = Market-based pricing`;
+      notes = 'Price determined from available market data';
+    }
+
     logs.push({
       step: '2. Calculate Target Delivered Price',
       input: {
+        soldCount: soldCountStr,
+        soldMedian: soldMedianStr,
+        soldStrong: decision.soldStrong ?? false,
         competitorFloor: decision.activeFloorDeliveredCents 
           ? `$${(decision.activeFloorDeliveredCents / 100).toFixed(2)}`
           : 'N/A',
-        discountPercent: settings.discountPercent || 0,
       },
       output: {
         targetDeliveredPrice: `$${(decision.targetDeliveredCents / 100).toFixed(2)}`,
       },
-      formula: `Target = CompetitorPrice × (1 - ${settings.discountPercent || 0}%)`,
-      notes: 'Price below competitors to be competitive',
+      formula,
+      notes,
     });
   }
 

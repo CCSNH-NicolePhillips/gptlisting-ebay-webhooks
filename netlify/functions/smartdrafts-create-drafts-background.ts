@@ -2105,6 +2105,10 @@ async function createDraftForProduct(
         activeFloorDeliveredCents: deliveredDecision.activeFloorDeliveredCents,
         amazonPriceCents: deliveredDecision.amazonPriceCents,
         walmartPriceCents: deliveredDecision.walmartPriceCents,
+        soldMedianDeliveredCents: deliveredDecision.soldMedianDeliveredCents,
+        soldCount: deliveredDecision.soldCount,
+        soldStrong: deliveredDecision.soldStrong,
+        fallbackUsed: deliveredDecision.fallbackUsed,
       },
       {
         discountPercent: 5,
