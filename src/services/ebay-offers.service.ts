@@ -224,10 +224,9 @@ export async function listOffers(
     const r = await listOnce(false, true);
     attempts.push(r);
 
-    // 25707 = invalid SKU → safe aggregation
+    // 25707 = invalid SKU; 25702 = no offers for seller; any other eBay 400 → safe aggregation
     if (!r.ok) {
-      const code = Number(r.body?.errors?.[0]?.errorId ?? 0);
-      if (r.status === 400 && code === 25707) {
+      if (r.status === 400) {
         const safe = await safeAggregateByInventory();
         const partial = Date.now() - startTime > 6_500;
         return {
@@ -302,8 +301,8 @@ export async function listOffers(
   }
 
   if (!res.ok) {
-    const code = Number(res.body?.errors?.[0]?.errorId ?? 0);
-    if (res.status === 400 && code === 25707) {
+    if (res.status === 400) {
+      // Any eBay 400 (no offers, invalid SKU, etc.) → safe aggregate or empty
       const safe = await safeAggregateByInventory();
       return {
         ok: true,
