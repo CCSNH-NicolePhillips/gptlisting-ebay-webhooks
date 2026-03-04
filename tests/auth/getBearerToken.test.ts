@@ -1,4 +1,4 @@
-import type { HandlerEvent } from '@netlify/functions';
+import type { HandlerEvent } from '../../src/types/api-handler.js';
 import { getBearerToken, getJwtSubUnverified } from '../../src/lib/_auth.js';
 
 describe('getBearerToken', () => {

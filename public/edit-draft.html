@@ -1587,7 +1587,7 @@
           throw new Error('Need brand or title to calculate price');
         }
         
-        const res = await fetchJSON('/.netlify/functions/reprice', {
+        const res = await fetchJSON('/api/pricing/reprice', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ brand, productName }),
@@ -1700,13 +1700,10 @@
         };
         
         // Save to backend
-        const res = await fetchJSON('/.netlify/functions/smartdrafts-update-draft', {
-          method: 'POST',
+        const res = await fetchJSON(`/api/smartdrafts/drafts/${currentOfferId}`, {
+          method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            offerId: currentOfferId,
-            draft: updatedDraft,
-          }),
+          body: JSON.stringify(updatedDraft),
         });
         
         if (res.ok) {
@@ -1858,7 +1855,7 @@
     async function checkAndLoadLogs() {
       // First check if user has logs enabled in settings
       try {
-        const settings = await fetchJSON('/.netlify/functions/user-settings-get');
+        const settings = await fetchJSON('/api/settings');
         if (!settings.showPricingLogs) {
           // Setting not enabled, keep section hidden
           return;

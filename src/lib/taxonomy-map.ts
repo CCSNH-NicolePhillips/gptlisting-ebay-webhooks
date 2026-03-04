@@ -1,7 +1,7 @@
 import { buildItemSpecifics } from "./taxonomy-autofill.js";
 import type { CategoryDef } from "./taxonomy-schema.js";
 import { pickCategoryForGroup } from "./taxonomy-select.js";
-import { computeEbayItemPriceCents, computeEbayOfferPricingCents, formatPricingLogLine } from "./pricing-compute.js";
+import { computeEbayItemPriceCents, computeEbayOfferPricingCents, formatPricingLogLine } from "./pricing/legacy-compute.js";
 import { getDefaultPricingSettings, type PricingSettings } from "./pricing-config.js";
 import { tokensStore } from "./redis-store.js";
 import { proxyImageUrls } from "./image-utils.js";

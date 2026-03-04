@@ -16,7 +16,7 @@ jest.mock('../../src/lib/redis-store.js', () => ({
   tokensStore: jest.fn(),
 }));
 
-jest.mock('../../src/lib/pricing-compute.js', () => ({
+jest.mock('../../src/lib/pricing/legacy-compute.js', () => ({
   computeEbayItemPriceCents: jest.fn(),
   computeEbayOfferPricingCents: jest.fn(),
   formatPricingLogLine: jest.fn(() => '[pricing] mock log line'),
@@ -38,8 +38,8 @@ describe('taxonomy-map: Pricing Settings Merge', () => {
     mockBuildItemSpecifics = require('../../src/lib/taxonomy-autofill.js').buildItemSpecifics;
     mockPickCategoryForGroup = require('../../src/lib/taxonomy-select.js').pickCategoryForGroup;
     mockTokensStore = require('../../src/lib/redis-store.js').tokensStore;
-    mockComputeEbayItemPriceCents = require('../../src/lib/pricing-compute.js').computeEbayItemPriceCents;
-    mockComputeEbayOfferPricingCents = require('../../src/lib/pricing-compute.js').computeEbayOfferPricingCents;
+    mockComputeEbayItemPriceCents = require('../../src/lib/pricing/legacy-compute.js').computeEbayItemPriceCents;
+    mockComputeEbayOfferPricingCents = require('../../src/lib/pricing/legacy-compute.js').computeEbayOfferPricingCents;
     
     // Setup default mocks
     mockBuildItemSpecifics.mockReturnValue({ Brand: ['TestBrand'] });

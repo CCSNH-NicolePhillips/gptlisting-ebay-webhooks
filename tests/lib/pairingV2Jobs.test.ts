@@ -78,7 +78,7 @@ describe('pairingV2Jobs', () => {
 
       // Check processor trigger call
       const processorCall = (global.fetch as jest.Mock).mock.calls[1];
-      expect(processorCall[0]).toContain('https://test-app.com/.netlify/functions/pairing-v2-processor-background');
+      expect(processorCall[0]).toContain('https://test-app.com/api/smartdrafts/pairing/background');
       expect(processorCall[0]).toContain(`jobId=${jobId}`);
       expect(processorCall[1]).toEqual({ method: 'POST' });
     });

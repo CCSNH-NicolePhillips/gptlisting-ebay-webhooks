@@ -307,7 +307,7 @@
         }
       }
 
-      // PHASE 2: Implement handleStart() to call /.netlify/functions/smartdrafts-pairing-v2-start
+      // PHASE 2: Implement handleStart() to call /api/smartdrafts/pairing/v2/start
       async function handleStart() {
         const folder = folderInput.value.trim();
         
@@ -332,7 +332,7 @@
         try {
           const token = await window.authClient.getToken();
           
-          const res = await fetch('/.netlify/functions/smartdrafts-pairing-v2-start', {
+          const res = await fetch('/api/smartdrafts/pairing/v2/start', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -383,7 +383,7 @@
           const token = await window.authClient.getToken();
           
           const res = await fetch(
-            `/.netlify/functions/smartdrafts-pairing-v2-status?jobId=${jobId}`,
+            `/api/smartdrafts/pairing/v2/status?jobId=${jobId}`,
             {
               headers: {
                 'Authorization': `Bearer ${token}`,
@@ -697,7 +697,7 @@
         try {
           // Start background draft creation job
           const token = await window.authClient.getToken();
-          const bgResponse = await fetch('/.netlify/functions/smartdrafts-create-drafts-bg', {
+          const bgResponse = await fetch('/api/smartdrafts/create-drafts/start', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -743,7 +743,7 @@
             
             draftStatus.innerHTML = `<p class="muted">🔄 Creating drafts (${processed}/${total})...</p>`;
             
-            if (job.state === 'completed') {
+            if (job.status === 'completed' || job.state === 'completed') {
               const drafts = job.drafts || [];
               
               // Auto-publish drafts to eBay
@@ -754,7 +754,7 @@
               
               try {
                 console.log('[Pairing v2] Auto-publishing drafts to eBay...');
-                const publishResponse = await fetch('/.netlify/functions/create-ebay-draft-user', {
+                const publishResponse = await fetch('/api/drafts', {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
@@ -807,7 +807,7 @@
               return;
             }
             
-            if (job.state === 'error') {
+            if (job.status === 'failed' || job.state === 'error') {
               throw new Error(job.error || 'Draft creation failed');
             }
           }

@@ -457,8 +457,6 @@ describe('pricing-v2-graduated-tiers', () => {
 
   // ────────────────────────────────────────────────────
   // Product 1: MaryRuth's — THE KNOWN BUG
-  // 8 sold comps, Amazon $38.97. V2 old: $11.09. V2 fixed: ~$29
-  // ────────────────────────────────────────────────────
   describe('MaryRuth Organics Multivitamin (8 sold comps)', () => {
     // Realistic sold prices for MaryRuth's Women's Multivitamin (cents)
     const soldPrices = [2400, 2600, 2900, 3200, 3500, 3800, 4200, 5500];
@@ -466,19 +464,21 @@ describe('pricing-v2-graduated-tiers', () => {
     const retailCents = 3897; // Amazon $38.97
     const minDelivered = 1099; // $4.99 item + $6.00 ship
 
-    it('has 7-8 cleaned sold samples (passes Strong ≥5 threshold)', () => {
+    it('has 7-8 cleaned sold samples (Weak tier, 3-9 range)', () => {
       // IQR should keep most/all samples — range is reasonable
-      expect(soldStats.count).toBeGreaterThanOrEqual(5);
-      expect(soldStats.count).toBeLessThanOrEqual(8);
+      expect(soldStats.count).toBeGreaterThanOrEqual(3);
+      expect(soldStats.count).toBeLessThan(10);
     });
 
-    it('market-match: uses SoldP35, not retail×0.70', () => {
+    it('market-match: uses SoldP50 (weak tier), not retail×0.70', () => {
       const result = calculateTargetDeliveredV2(
         'market-match', soldStats, null, retailCents, 100, minDelivered
       );
 
-      // SoldP35 should be around $29 (35th percentile of cleaned sold)
-      expect(result.soldStrong).toBe(true);
+      // 8 cleaned → soldWeak (3-9 range) → uses P50 not P35
+      expect(result.soldStrong).toBe(false);
+      expect(result.selectedAnchor).toBe('SOLD_DELIVERED_MEDIAN');
+      expect(result.warnings).toContain('soldDataWeak');
       expect(result.fallbackUsed).toBe(false);
       expect(result.targetCents).toBeGreaterThanOrEqual(2500); // At least $25
       expect(result.targetCents).toBeLessThanOrEqual(3500);    // At most $35
@@ -486,13 +486,13 @@ describe('pricing-v2-graduated-tiers', () => {
       expect(result.targetCents).toBeGreaterThan(2000);
     });
 
-    it('retail cap prevents pricing above 90% of Amazon (8 sold = soldStrong < 20)', () => {
+    it('retail cap uses 80% (soldWeak, not strong)', () => {
       const result = calculateTargetDeliveredV2(
         'market-match', soldStats, null, retailCents, 100, minDelivered
       );
       
-      // 8 sold (soldStrong, < 20) → 90% retail cap = ~$35.07
-      const retailCap = Math.round(retailCents * 0.90);
+      // 8 sold (soldWeak) → 80% retail cap = ~$31.18
+      const retailCap = Math.round(retailCents * 0.80);
       expect(result.targetCents).toBeLessThanOrEqual(retailCap);
     });
 
@@ -519,21 +519,24 @@ describe('pricing-v2-graduated-tiers', () => {
     const soldStats = computeRobustStats(makeSamples(soldPrices));
     const retailCents = 1996; // Amazon $19.96
 
-    it('6 cleaned → soldStrong=true', () => {
-      expect(soldStats.count).toBeGreaterThanOrEqual(5);
+    it('6 cleaned → soldWeak=true (6 is in the 3-9 range)', () => {
+      expect(soldStats.count).toBeGreaterThanOrEqual(3);
+      expect(soldStats.count).toBeLessThan(10);
     });
 
-    it('market-match prices at SoldP35, capped by retail at 90%', () => {
+    it('market-match prices at SoldP50 (weak tier), capped by retail at 80%', () => {
       const result = calculateTargetDeliveredV2(
         'market-match', soldStats, null, retailCents, 100, 1099
       );
 
-      expect(result.soldStrong).toBe(true);
+      expect(result.soldStrong).toBe(false);
+      expect(result.selectedAnchor).toBe('SOLD_DELIVERED_MEDIAN');
+      expect(result.warnings).toContain('soldDataWeak');
       expect(result.fallbackUsed).toBe(false);
-      // P35 of [1400,1550,1700,1850,1950,2100] ≈ $15-17
-      // 6 sold (soldStrong, < 20) → 90% retail cap = $17.96
+      // P50 of [1400,1550,1700,1850,1950,2100] ≈ $17.00
+      // 6 sold (soldWeak) → 80% retail cap = $15.97
       expect(result.targetCents).toBeGreaterThanOrEqual(1400);
-      expect(result.targetCents).toBeLessThanOrEqual(Math.round(retailCents * 0.90));
+      expect(result.targetCents).toBeLessThanOrEqual(Math.round(retailCents * 0.80));
     });
   });
 
@@ -683,10 +686,10 @@ describe('pricing-v2-graduated-tiers', () => {
   // Cap & floor behavior
   // ────────────────────────────────────────────────────
   describe('V2 caps and floors', () => {
-    it('retail cap: 90% for soldStrong 5-19 samples', () => {
+    it('retail cap: 90% for soldStrong 10-19 samples', () => {
       // Sold data is high (comps are expensive), retail is lower
-      // 5 sold samples → soldStrong but < 20 → 90% retail cap
-      const soldPrices = [4000, 4200, 4500, 4800, 5000];
+      // 10 sold samples → soldStrong but < 20 → 90% retail cap
+      const soldPrices = [4000, 4100, 4200, 4300, 4400, 4500, 4600, 4700, 4800, 5000];
       const soldStats = computeRobustStats(makeSamples(soldPrices));
       const retailCents = 3500; // Retail is lower than sold
 
@@ -769,9 +772,9 @@ describe('pricing-v2-graduated-tiers', () => {
   // ────────────────────────────────────────────────────
   describe('tier priority', () => {
     it('sold strong wins over active strong', () => {
-      const soldPrices = [2000, 2200, 2400, 2600, 2800];
+      const soldPrices = [2000, 2100, 2200, 2300, 2400, 2500, 2600, 2700, 2800, 2900];
       const soldStats = computeRobustStats(makeSamples(soldPrices));
-      const activePrices = [3000, 3200, 3400, 3600, 3800];
+      const activePrices = [3000, 3100, 3200, 3300, 3400, 3500, 3600, 3700, 3800, 3900];
       const activeStats = computeRobustStats(makeSamples(activePrices));
 
       const result = calculateTargetDeliveredV2(
@@ -810,6 +813,61 @@ describe('pricing-v2-graduated-tiers', () => {
 
       expect(result.activeStrong).toBe(true);
       expect(result.targetCents).toBe(activeStats.p20);
+    });
+  });
+
+  // ────────────────────────────────────────────────────
+  // Chunk 3 acceptance: soldCleanCount threshold gating
+  // ────────────────────────────────────────────────────
+  describe('Chunk 3: soldCleanCount threshold gating', () => {
+    /** Build a RobustStats object where count is exactly `n` by providing n identical samples. */
+    function soldStatsWithCount(n: number, priceEach = 2000): RobustStats {
+      return computeRobustStats(makeSamples(Array(n).fill(priceEach)));
+    }
+
+    it('soldCleanCount=10 → selectedAnchor=SOLD_DELIVERED_P35 (strong tier)', () => {
+      const soldStats = soldStatsWithCount(10);
+      const result = calculateTargetDeliveredV2('market-match', soldStats, null, 5000, 100, 1099);
+      expect(result.soldCleanCount).toBeGreaterThanOrEqual(10);
+      expect(result.selectedAnchor).toBe('SOLD_DELIVERED_P35');
+      expect(result.soldStrong).toBe(true);
+      expect(result.warnings).not.toContain('soldDataWeak');
+    });
+
+    it('soldCleanCount=9 → selectedAnchor=SOLD_DELIVERED_MEDIAN (weak tier)', () => {
+      // 9 varied prices so IQR keeps all 9 after outlier removal
+      const prices = [1800, 1900, 2000, 2100, 2200, 2300, 2400, 2500, 2600];
+      const soldStats = computeRobustStats(makeSamples(prices));
+      const result = calculateTargetDeliveredV2('market-match', soldStats, null, 5000, 100, 1099);
+      // IQR may reduce to 7-9; all should be < 10
+      expect(result.soldCleanCount).toBeGreaterThanOrEqual(3);
+      expect(result.soldCleanCount).toBeLessThan(10);
+      expect(result.selectedAnchor).toBe('SOLD_DELIVERED_MEDIAN');
+      expect(result.soldStrong).toBe(false);
+      expect(result.warnings).toContain('soldDataWeak');
+    });
+
+    it('soldCleanCount=3 → selectedAnchor=SOLD_DELIVERED_MEDIAN (weak tier)', () => {
+      const prices = [1800, 2000, 2200];
+      const soldStats = computeRobustStats(makeSamples(prices));
+      const result = calculateTargetDeliveredV2('market-match', soldStats, null, 5000, 100, 1099);
+      expect(result.soldCleanCount).toBe(3);
+      expect(result.selectedAnchor).toBe('SOLD_DELIVERED_MEDIAN');
+      expect(result.soldStrong).toBe(false);
+      expect(result.warnings).toContain('soldDataWeak');
+    });
+
+    it('soldCleanCount=2 → selectedAnchor=NONE (insufficient — falls through to retail/active)', () => {
+      const prices = [1800, 2200];
+      const soldStats = computeRobustStats(makeSamples(prices));
+      const result = calculateTargetDeliveredV2('market-match', soldStats, null, 5000, 100, 1099);
+      // 2 samples → neither strong nor weak → NONE
+      expect(result.soldCleanCount).toBeLessThan(3);
+      expect(result.selectedAnchor).toBe('NONE');
+      expect(result.soldStrong).toBe(false);
+      expect(result.warnings).not.toContain('soldDataWeak');
+      // Falls to retail anchor (usingRetailAnchorOnly)
+      expect(result.warnings).toContain('usingRetailAnchorOnly');
     });
   });
 });

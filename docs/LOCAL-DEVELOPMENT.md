@@ -235,6 +235,41 @@ rm -rf .netlify/cache
 # Open http://localhost:4040 in browser (ngrok inspector)
 ```
 
+## Getting eBay Access Tokens for Testing
+
+Tokens are stored in Upstash Redis and not directly accessible. Three ways to get one:
+
+### Option A: Extract from Browser (Fastest)
+
+1. Open your DraftPilot site and log in
+2. Open DevTools (F12) → **Network** tab
+3. Navigate to a page that calls eBay (Active Listings, Create Draft)
+4. Find a request to `api.ebay.com` and click it
+5. Copy the value after `Authorization: Bearer ` in the request headers
+
+```powershell
+$env:EBAY_TOKEN = "paste_your_token_here"
+tsx scripts/test-ebay-price-check.ts
+```
+
+### Option B: Generate via eBay Developer Portal
+
+1. Go to https://developer.ebay.com/my/auth/?env=production
+2. Select OAuth scopes:
+   - `https://api.ebay.com/oauth/api_scope`
+   - `https://api.ebay.com/oauth/api_scope/sell.inventory`
+   - `https://api.ebay.com/oauth/api_scope/sell.account`
+3. Click **Get a User Token** — copy the **refresh token** (not the access token)
+4. Set as `EBAY_REFRESH_TOKEN` in your `.env` for use by local scripts
+
+### Option C: Upstash Redis (Production Tokens)
+
+1. Open [Upstash Console](https://console.upstash.com) → your Redis database
+2. Look up the key: `user:{your-user-id}:ebay.json`
+3. Copy the `refresh_token` field from the JSON value
+
+---
+
 ## Environment Variables Reference
 
 See `configs/prod.env.example` for complete list of environment variables.

@@ -1,10 +1,10 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Create draft · Wizard</title>
-    <link rel="stylesheet" href="/draftpilot.css">
+    <meta charset="utf-8" .>
+    <meta name="viewport" content="width=device-width, initial-scale=1" .>
+    <title>Create draft · Wizard<.title>
+    <link rel="stylesheet" href=".draftpilot.css">
     <style>
       body {
         font-family:
@@ -29,7 +29,7 @@
       }
       .filter-box { display: none; }
 
-      /* Responsive grid for category/aspect listings */
+      .* Responsive grid for category.aspect listings *.
       .row {
         display: grid;
         gap: 1rem;
@@ -37,7 +37,7 @@
         margin-bottom: 0.75rem;
       }
       .col { min-width: 0; }
-      /* Structured row layout for the Step 2 form */
+      .* Structured row layout for the Step 2 form *.
       .form-row {
         display: flex;
         flex-wrap: wrap;
@@ -136,7 +136,7 @@
           transform: rotate(360deg);
         }
       }
-      /* Modal layout */
+      .* Modal layout *.
       .modal {
         position: fixed;
         inset: 0;
@@ -146,37 +146,37 @@
         z-index: 9999;
         background: rgba(0, 0, 0, 0.6);
       }
-    </style>
-  </head>
+    <.style>
+  <.head>
   <body>
-    <script src="/auth-client.js"></script>
+    <script src=".auth-client.js"><.script>
     <script>
       authClient.requireAuth();
-    </script>
+    <.script>
     <script>
-      // TEMPORARY: Redirect to Quick List until ChatGPT guided wizard is ready
-      // TODO: Remove this redirect when implementing ChatGPT chat box feature
+      .. TEMPORARY: Redirect to Quick List until ChatGPT guided wizard is ready
+      .. TODO: Remove this redirect when implementing ChatGPT chat box feature
       if (!window.location.search.includes('dev')) {
-        window.location.href = '/quick-list.html';
+        window.location.href = '.quick-list.html';
       }
-    </script>
+    <.script>
     <div id="pageLoader" class="overlay hide" role="status" aria-live="polite">
       <div class="overlay-box">
-        <div class="spinner-lg" aria-hidden="true"></div>
-        <div class="muted" style="font-size:.9rem;">Loading…</div>
-      </div>
-    </div>
+        <div class="spinner-lg" aria-hidden="true"><.div>
+        <div class="muted" style="font-size:.9rem;">Loading…<.div>
+      <.div>
+    <.div>
     <div class="card">
-      <a class="secondary" href="/">← Back</a>
-      <h2>Create draft – Step 1: Pick category</h2>
+      <a class="secondary" href=".">← Back<.a>
+      <h2>Create draft – Step 1: Pick category<.h2>
       <p class="muted">
         Start with a category so we can populate the right required and optional fields.
-      </p>
+      <.p>
       <!-- Step 1 is category-only: choose a leaf via Browse; raw IDs are hidden -->
       <div class="row" style="margin-top: -0.25rem">
-        <div class="col"><button id="btnBrowse" class="secondary">Browse categories</button></div>
-      </div>
-      <div id="categoryPreview" class="muted" style="margin: 0.25rem 0 0.25rem"></div>
+        <div class="col"><button id="btnBrowse" class="secondary">Browse categories<.button><.div>
+      <.div>
+      <div id="categoryPreview" class="muted" style="margin: 0.25rem 0 0.25rem"><.div>
       <div id="browseModal" class="modal hide" role="dialog" aria-modal="true">
         <div
           id="browsePanel"
@@ -192,69 +192,69 @@
           "
         >
           <div style="display: flex; justify-content: space-between; align-items: center">
-            <h3 style="margin: 0.2rem 0">Browse categories</h3>
-            <button id="browseClose" type="button" class="secondary">Close</button>
-          </div>
-          <div id="crumbs" class="muted" style="margin: 0.4rem 0 0.6rem"></div>
-          <div id="browseList" class="row"></div>
-        </div>
-      </div>
+            <h3 style="margin: 0.2rem 0">Browse categories<.h3>
+            <button id="browseClose" type="button" class="secondary">Close<.button>
+          <.div>
+          <div id="crumbs" class="muted" style="margin: 0.4rem 0 0.6rem"><.div>
+          <div id="browseList" class="row"><.div>
+        <.div>
+      <.div>
       <div
         style="margin: 0.5rem 0; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap"
       >
-        <button id="btnNext" disabled>Next →</button>
-        <span id="msg1" class="muted"></span>
-      </div>
-    </div>
+        <button id="btnNext" disabled>Next →<.button>
+        <span id="msg1" class="muted"><.span>
+      <.div>
+    <.div>
 
     <div id="step2" class="card hide">
-      <h2>Step 2: Details and create</h2>
-      <p id="catPath" class="muted"></p>
+      <h2>Step 2: Details and create<.h2>
+      <p id="catPath" class="muted"><.p>
       <div class="form-row">
         <div class="form-field wide">
-          <label>Title<input id="title" placeholder="Type your listing title" /></label>
-        </div>
-      </div>
+          <label>Title<input id="title" placeholder="Type your listing title" .><.label>
+        <.div>
+      <.div>
       <div class="form-row">
         <div class="form-field">
           <label>SKU
-            <input id="sku" placeholder="SKU123" maxlength="50" />
-            <small id="skuHint" class="muted">Use 1-50 letters or numbers. No spaces or punctuation.</small>
-          </label>
-        </div>
+            <input id="sku" placeholder="SKU123" maxlength="50" .>
+            <small id="skuHint" class="muted">Use 1-50 letters or numbers. No spaces or punctuation.<.small>
+          <.label>
+        <.div>
         <div class="form-field compact">
-          <label>Price USD<input id="price" class="compact-input" type="number" inputmode="decimal" min="0" step="0.01" placeholder="19.99" /></label>
-        </div>
+          <label>Price USD<input id="price" class="compact-input" type="number" inputmode="decimal" min="0" step="0.01" placeholder="19.99" .><.label>
+        <.div>
         <div class="form-field compact">
-          <label>Qty<input id="qty" class="compact-input" type="number" inputmode="numeric" min="1" step="1" value="1" /></label>
-        </div>
-      </div>
+          <label>Qty<input id="qty" class="compact-input" type="number" inputmode="numeric" min="1" step="1" value="1" .><.label>
+        <.div>
+      <.div>
       <div class="form-row">
         <div class="form-field wide">
-          <label>Images</label>
-          <input id="images" type="hidden" />
+          <label>Images<.label>
+          <input id="images" type="hidden" .>
           <div id="imgPicker" class="dp-dropdown" style="margin-top:.25rem">
             <div id="imgDropdown" class="dp-dropdown__trigger">
-              <span id="imgPlaceholder" class="dp-dropdown__trigger-text placeholder"><span id="imgPhText">Choose images…</span><span id="imgSpinner" style="display:none;margin-left:8px" aria-hidden="true">⏳</span></span>
+              <span id="imgPlaceholder" class="dp-dropdown__trigger-text placeholder"><span id="imgPhText">Choose images…<.span><span id="imgSpinner" style="display:none;margin-left:8px" aria-hidden="true">⏳<.span><.span>
               <svg class="dp-dropdown__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="6 9 12 15 18 9"></polyline>
-              </svg>
-            </div>
-            <div id="imgOptions" class="dp-dropdown__panel"></div>
-            <div id="imgChips" class="dp-dropdown__chips"></div>
-            <div id="imgGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-top:.5rem"></div>
-          </div>
-          <small class="muted" id="imgTip"></small>
-        </div>
-      </div>
+                <polyline points="6 9 12 15 18 9"><.polyline>
+              <.svg>
+            <.div>
+            <div id="imgOptions" class="dp-dropdown__panel"><.div>
+            <div id="imgChips" class="dp-dropdown__chips"><.div>
+            <div id="imgGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-top:.5rem"><.div>
+          <.div>
+          <small class="muted" id="imgTip"><.small>
+        <.div>
+      <.div>
       <div class="form-row">
         <div class="form-field compact">
-          <label>Weight (lbs)<input id="weightLbs" class="compact-input" type="number" step="0.01" min="0" placeholder="1.0" /></label>
-        </div>
+          <label>Weight (lbs)<input id="weightLbs" class="compact-input" type="number" step="0.01" min="0" placeholder="1.0" .><.label>
+        <.div>
         <div class="form-field compact">
-          <label>Weight (oz)<input id="weightOz" class="compact-input" type="number" step="0.1" min="0" placeholder="16" /></label>
-        </div>
-      </div>
+          <label>Weight (oz)<input id="weightOz" class="compact-input" type="number" step="0.1" min="0" placeholder="16" .><.label>
+        <.div>
+      <.div>
       <div class="form-row">
         <div class="form-field wide">
           <label
@@ -262,61 +262,61 @@
               id="description"
               rows="3"
               placeholder="Describe the item, ingredients, material, etc."
-            ></textarea>
-          </label>
-        </div>
-      </div>
+            ><.textarea>
+          <.label>
+        <.div>
+      <.div>
       <div class="form-row">
         <div class="form-field">
-          <label>Condition<select id="condition"></select></label>
-        </div>
+          <label>Condition<select id="condition"><.select><.label>
+        <.div>
         <div class="form-field">
-          <label>Location<select id="location"></select></label>
-        </div>
-      </div>
-      <div class="hr"></div>
+          <label>Location<select id="location"><.select><.label>
+        <.div>
+      <.div>
+      <div class="hr"><.div>
       <div id="reqAspectsWrap" class="hide">
-        <h3 style="margin: 0.2rem 0">Required specifics</h3>
-        <div id="reqAspects" class="row"></div>
-      </div>
+        <h3 style="margin: 0.2rem 0">Required specifics<.h3>
+        <div id="reqAspects" class="row"><.div>
+      <.div>
       <details style="margin-top: 0.6rem">
-        <summary>Optional specifics</summary>
-        <div id="optAspects" class="row" style="margin-top: 0.4rem"></div>
-      </details>
+        <summary>Optional specifics<.summary>
+        <div id="optAspects" class="row" style="margin-top: 0.4rem"><.div>
+      <.details>
       <div style="margin: 0.8rem 0 0.2rem; display: flex; gap: 0.5rem; align-items: center">
-        <button id="btnCreate">Create draft</button>
-        <button id="btnPublish" class="secondary" disabled>Publish now</button>
-        <button id="btnShowDebug" class="secondary" style="margin-left: auto">🐛 Debug</button>
-        <span id="msg2" class="muted"></span>
-      </div>
+        <button id="btnCreate">Create draft<.button>
+        <button id="btnPublish" class="secondary" disabled>Publish now<.button>
+        <button id="btnShowDebug" class="secondary" style="margin-left: auto">🐛 Debug<.button>
+        <span id="msg2" class="muted"><.span>
+      <.div>
       
       <!-- Debug Panel -->
       <details id="debugPanel" style="margin-top: 1rem; display: none">
         <summary style="cursor: pointer; font-weight: bold; color: #0066cc">
           🐛 Debug Info (Draft Data Being Sent)
-        </summary>
+        <.summary>
         <div style="margin-top: 0.5rem; background: #f5f5f5; padding: 1rem; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">
           <div style="margin-bottom: 0.5rem">
-            <strong>Group Data:</strong>
-            <pre id="debugGroup" style="background: white; padding: 0.5rem; overflow-x: auto; margin: 0.25rem 0"></pre>
-          </div>
+            <strong>Group Data:<.strong>
+            <pre id="debugGroup" style="background: white; padding: 0.5rem; overflow-x: auto; margin: 0.25rem 0"><.pre>
+          <.div>
           <div style="margin-bottom: 0.5rem">
-            <strong>Mapped Draft (Inventory):</strong>
-            <pre id="debugInventory" style="background: white; padding: 0.5rem; overflow-x: auto; margin: 0.25rem 0"></pre>
-          </div>
+            <strong>Mapped Draft (Inventory):<.strong>
+            <pre id="debugInventory" style="background: white; padding: 0.5rem; overflow-x: auto; margin: 0.25rem 0"><.pre>
+          <.div>
           <div>
-            <strong>Offer Data:</strong>
-            <pre id="debugOffer" style="background: white; padding: 0.5rem; overflow-x: auto; margin: 0.25rem 0"></pre>
-          </div>
-        </div>
-      </details>
-    </div>
+            <strong>Offer Data:<.strong>
+            <pre id="debugOffer" style="background: white; padding: 0.5rem; overflow-x: auto; margin: 0.25rem 0"><.pre>
+          <.div>
+        <.div>
+      <.details>
+    <.div>
 
     <script>
       const $ = (id) => document.getElementById(id);
       const catPreview = $('categoryPreview');
       const titleEl = $('title');
-      // removed search input
+      .. removed search input
       const nextBtn = $('btnNext');
       const step2 = $('step2');
       const msg1 = $('msg1');
@@ -337,25 +337,25 @@
       const skuInput = $('sku');
       const skuHintEl = $('skuHint');
       const skuDefaultHint = 'Use 1-50 letters or numbers. No spaces or punctuation.';
-      const skuPattern = /^[A-Za-z0-9]{1,50}$/;
+      const skuPattern = .^[A-Za-z0-9]{1,50}$.;
       
-      // Global to store last created draft data for debugging
+      .. Global to store last created draft data for debugging
       let lastDraftData = null;
       
-      // Promotion processing timeout reference
+      .. Promotion processing timeout reference
       let promotionProcessingTimeout = null;
       
-      /**
+      .**
        * Schedule promotion processing after a short delay to allow eBay sync.
        * eBay needs ~60 seconds to sync new listings before they can be promoted.
-       */
+       *.
       function schedulePromotionProcessing() {
-        // Clear any existing timeout to avoid duplicate calls
+        .. Clear any existing timeout to avoid duplicate calls
         if (promotionProcessingTimeout) {
           clearTimeout(promotionProcessingTimeout);
         }
         
-        // Wait 70 seconds (eBay needs ~60s sync time) then trigger promotion processing
+        .. Wait 70 seconds (eBay needs ~60s sync time) then trigger promotion processing
         promotionProcessingTimeout = setTimeout(async () => {
           try {
             console.log('[Promotion] Triggering promotion-process after publish delay');
@@ -363,9 +363,9 @@
               ? window.authClient.authFetch 
               : fetch;
             
-            const response = await exec('/.netlify/functions/promotion-process', {
+            const response = await exec('..netlify.functions.promotion-process', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application.json' },
               body: JSON.stringify({}),
             });
             
@@ -373,7 +373,7 @@
               const data = await response.json();
               console.log('[Promotion] Processing result:', data);
               
-              // If there are still pending jobs, schedule another run
+              .. If there are still pending jobs, schedule another run
               if (data.stats?.stillPending > 0) {
                 console.log(`[Promotion] ${data.stats.stillPending} jobs still pending, scheduling another run`);
                 schedulePromotionProcessing();
@@ -384,10 +384,10 @@
           } catch (err) {
             console.error('[Promotion] Error triggering promotion-process:', err);
           }
-        }, 70000); // 70 seconds
+        }, 70000); .. 70 seconds
       }
       
-      // Edit mode detection
+      .. Edit mode detection
       const urlParams = new URLSearchParams(window.location.search);
       const IS_EDIT_MODE = urlParams.get('edit') === 'true';
       const EDIT_OFFER_ID = urlParams.get('offerId');
@@ -409,7 +409,7 @@
         }
       }
       if (skuInput) {
-        const sanitizeSku = (raw) => (raw || '').replace(/[^A-Za-z0-9]/g, '');
+        const sanitizeSku = (raw) => (raw || '').replace(.[^A-Za-z0-9].g, '');
         const syncSku = (raw) => {
           const clean = sanitizeSku(raw);
           if (skuInput.value !== clean) {
@@ -425,13 +425,13 @@
         skuInput.addEventListener('input', () => syncSku(skuInput.value));
         skuInput.addEventListener('blur', () => syncSku(skuInput.value));
       }
-      // Internal category selection state (browse-only flow)
+      .. Internal category selection state (browse-only flow)
       let SELECTED_CATEGORY_ID = '';
       let SELECTED_CATEGORY_PATH = '';
-      // Category CSV data (if available)
-      let CAT_ROWS = null; // Array of {categoryId, categoryName, categoryPath}
-      let CAT_TREE = null; // Tree built from CSV paths
-      let ID_INDEX = null; // Map of id -> { leaf, path, name }
+      .. Category CSV data (if available)
+      let CAT_ROWS = null; .. Array of {categoryId, categoryName, categoryPath}
+      let CAT_TREE = null; .. Tree built from CSV paths
+      let ID_INDEX = null; .. Map of id -> { leaf, path, name }
 
       async function fetchJSON(url, opts) {
         const r = await fetch(url, opts);
@@ -445,7 +445,7 @@
           throw Object.assign(new Error('HTTP ' + r.status), { response: j, status: r.status });
         return j;
       }
-      // No free-text picker in Step 1; category chosen via Browse only.
+      .. No free-text picker in Step 1; category chosen via Browse only.
       const debounce = (fn, ms = 300) => {
         let t;
         return (...a) => {
@@ -455,8 +455,8 @@
       };
       async function loadCategoriesCsv() {
         if (CAT_ROWS) return CAT_ROWS;
-        // Prefer relative (served from public/) then absolute
-        const tryUrls = ['taxonomy-categories-EBAY_US.csv', '/taxonomy-categories-EBAY_US.csv'];
+        .. Prefer relative (served from public.) then absolute
+        const tryUrls = ['taxonomy-categories-EBAY_US.csv', '.taxonomy-categories-EBAY_US.csv'];
         let text = null;
         for (const url of tryUrls) {
           try {
@@ -470,8 +470,8 @@
         if (!text) {
           return null;
         }
-        // parse CSV (3 columns: categoryId,categoryName,categoryPath), quoted
-        const lines = text.split(/\r?\n/).filter(Boolean);
+        .. parse CSV (3 columns: categoryId,categoryName,categoryPath), quoted
+        const lines = text.split(.\r?\n.).filter(Boolean);
         const rows = [];
         for (let i = 1; i < lines.length; i++) {
           const line = lines[i];
@@ -498,7 +498,7 @@
           }
         }
         CAT_ROWS = rows;
-        // build tree
+        .. build tree
         const root = { name: 'Root', children: new Map(), path: '', leaf: false };
         const idIndex = new Map();
         rows.forEach((r) => {
@@ -517,7 +517,7 @@
               });
             node = node.children.get(part);
           }
-          // mark leaf and attach id
+          .. mark leaf and attach id
           node.leaf = true;
           node.id = r.categoryId;
           node.path = r.categoryPath || pathAcc.join(' > ');
@@ -532,11 +532,11 @@
         return rows;
       }
 
-      // Step 1 intentionally has no Title/Photo inputs; browse-only selection.
+      .. Step 1 intentionally has no Title.Photo inputs; browse-only selection.
 
       async function loadLocations() {
         try {
-          const j = await fetchJSON('/.netlify/functions/ebay-list-locations');
+          const j = await fetchJSON('.api.ebay.locations');
           const list = j.locations || [];
           locationSel.innerHTML = '';
           list.forEach((loc) => {
@@ -558,7 +558,7 @@
       function renderAspect(containerId, aspect, required) {
         const wrap = document.createElement('div');
         wrap.className = 'col';
-        const id = 'asp_' + (aspect.localizedAspectName || aspect.aspectName).replace(/\s+/g, '_');
+        const id = 'asp_' + (aspect.localizedAspectName || aspect.aspectName).replace(.\s+.g, '_');
         const label = document.createElement('label');
         label.textContent =
           (aspect.localizedAspectName || aspect.aspectName) + (required ? ' *' : '');
@@ -607,27 +607,27 @@
         nextBtn.disabled = true;
         msg1.textContent = 'Loading requirements…';
         try {
-          // Resolve taxonomy treeId first for reliability
+          .. Resolve taxonomy treeId first for reliability
           let treeId = '0';
           try {
-            const t = await fetchJSON('/.netlify/functions/ebay-taxonomy-tree-id');
+            const t = await fetchJSON('..netlify.functions.ebay-taxonomy-tree-id');
             treeId = String(t.categoryTreeId || '0');
           } catch {}
-          // Call requirements with treeId and retry once on transient 502
+          .. Call requirements with treeId and retry once on transient 502
           let req;
           try {
             req = await fetchJSON(
-              `/.netlify/functions/ebay-category-requirements?treeId=${encodeURIComponent(treeId)}&categoryId=${encodeURIComponent(cid)}`
+              `..netlify.functions.ebay-category-requirements?treeId=${encodeURIComponent(treeId)}&categoryId=${encodeURIComponent(cid)}`
             );
           } catch (e) {
             if (e?.status === 502) {
               await new Promise((r) => setTimeout(r, 400));
               req = await fetchJSON(
-                `/.netlify/functions/ebay-category-requirements?treeId=${encodeURIComponent(treeId)}&categoryId=${encodeURIComponent(cid)}`
+                `..netlify.functions.ebay-category-requirements?treeId=${encodeURIComponent(treeId)}&categoryId=${encodeURIComponent(cid)}`
               );
             } else throw e;
           }
-          // render path and condition
+          .. render path and condition
           $('catPath').textContent = SELECTED_CATEGORY_PATH
             ? 'Category: ' + SELECTED_CATEGORY_PATH
             : 'Category selected';
@@ -640,7 +640,7 @@
               o.textContent = `${c.conditionId} — ${c.conditionDescription}`;
               conditionSel.appendChild(o);
             });
-            // Default-select New (1000) if present, otherwise first
+            .. Default-select New (1000) if present, otherwise first
             const prefer = conds.find((c) => String(c.conditionId) === '1000');
             conditionSel.value = prefer
               ? String(prefer.conditionId)
@@ -651,7 +651,7 @@
             o.textContent = '(none)';
             conditionSel.appendChild(o);
           }
-          // render aspects
+          .. render aspects
           const reqWrap = $('reqAspectsWrap');
           $('reqAspects').innerHTML = '';
           $('optAspects').innerHTML = '';
@@ -665,7 +665,7 @@
           await loadLocations();
           step2.classList.remove('hide');
           msg1.textContent = '';
-          // Update image tip with default Dropbox folder
+          .. Update image tip with default Dropbox folder
           try {
             const def = localStorage.getItem('dbxDefaultFolder') || '';
             const tip = document.getElementById('imgTip');
@@ -674,7 +674,7 @@
                 ? `Default Dropbox folder: ${def}. Images will be easiest to pick from that folder in the selector pages.`
                 : 'Tip: Use the Select Images page to pick proxied URLs, or paste direct image links.';
           } catch {}
-          // Auto-load images from default folder into the inline picker
+          .. Auto-load images from default folder into the inline picker
           try { ImagePickerWizard.loadDefault(); } catch {}
           window.scrollTo({ top: step2.offsetTop - 10, behavior: 'smooth' });
         } catch (e) {
@@ -725,7 +725,7 @@
         const description = ($('description') || { value: '' }).value.trim();
         const merchantLocationKey = (locationSel || { value: '' }).value.trim();
         const categoryId = (SELECTED_CATEGORY_ID || '').trim();
-        const condition = (conditionSel || { value: '' }).value.trim(); // numeric string like '1000'
+        const condition = (conditionSel || { value: '' }).value.trim(); .. numeric string like '1000'
         if (!skuRaw) {
           updateSkuHint(skuRaw);
           msg.textContent = 'SKU is required and must be alphanumeric.';
@@ -755,7 +755,7 @@
         }
         const aspects = collectAspects();
         
-        // Store draft data for debugging
+        .. Store draft data for debugging
         lastDraftData = {
           sku,
           title,
@@ -774,9 +774,9 @@
         try {
           const weightLbs = (document.getElementById('weightLbs') || { value: '' }).value.trim();
           const weightOz = (document.getElementById('weightOz') || { value: '' }).value.trim();
-          const r = await authClient.authFetch('/.netlify/functions/ebay-create-draft', {
+          const r = await authClient.authFetch('..netlify.functions.ebay-create-draft', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application.json' },
             body: JSON.stringify(lastDraftData),
           });
           const data = await r.json();
@@ -789,15 +789,15 @@
             const status = (first?.status || data.status || 'UNPUBLISHED').toString();
             const sUp = status.toUpperCase();
             const draftStatuses = new Set(['UNPUBLISHED','DRAFT','INACTIVE']);
-            // Redirect to drafts page listing all drafts; include created id for flash if we have an id
+            .. Redirect to drafts page listing all drafts; include created id for flash if we have an id
             if (offerId) {
-              // Set a quick message before redirect (best-effort)
+              .. Set a quick message before redirect (best-effort)
               if (draftStatuses.has(sUp)) msg.textContent = `Draft created: Offer ${offerId} (status: ${sUp})`;
               else msg.textContent = `Offer status: ${sUp} (Offer ${offerId})`;
-              location.href = `/drafts.html?created=${encodeURIComponent(offerId)}`;
+              location.href = `.drafts.html?created=${encodeURIComponent(offerId)}`;
               return;
             }
-            // No offerId came back; summarize outcome
+            .. No offerId came back; summarize outcome
             const parts = [];
             if (resultsCount) parts.push(`${resultsCount} draft${resultsCount>1?'s':''} created`);
             if (failuresCount) parts.push(`${failuresCount} failed`);
@@ -818,7 +818,7 @@
         }
       });
 
-      // Publish button handler
+      .. Publish button handler
       (function () {
         const btnPub = document.getElementById('btnPublish');
         if (!btnPub) return;
@@ -833,32 +833,32 @@
           btnPub.disabled = true;
           try {
             const cond = (document.getElementById('condition') || { value: '' }).value;
-            const r = await authClient.authFetch('/.netlify/functions/ebay-publish-offer', {
+            const r = await authClient.authFetch('..netlify.functions.ebay-publish-offer', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application.json' },
               body: JSON.stringify({ offerId, condition: cond ? Number(cond) : undefined }),
             });
             const data = await r.json();
             if (r.ok && data.ok) {
               msg.textContent = `Published: ${offerId}`;
               
-              // Schedule promotion processing after eBay sync delay
+              .. Schedule promotion processing after eBay sync delay
               schedulePromotionProcessing();
               
               try {
-                // Defer cleanup: when user leaves this page, delete any leftover UNPUBLISHED drafts for this SKU (excluding this offerId)
+                .. Defer cleanup: when user leaves this page, delete any leftover UNPUBLISHED drafts for this SKU (excluding this offerId)
                 var skuEl = document.getElementById('sku');
                 var sku = skuEl && skuEl.value ? skuEl.value : '';
                 const payload = JSON.stringify({ items: [{ sku, excludeOfferId: offerId }] });
-                const url = '/.netlify/functions/ebay-clean-drafts';
-                // Prefer beacon for background cleanup; fallback to fetch if beacon unsupported
-                if (!navigator.sendBeacon || !navigator.sendBeacon(url, new Blob([payload], { type: 'application/json' }))) {
+                const url = '..netlify.functions.ebay-clean-drafts';
+                .. Prefer beacon for background cleanup; fallback to fetch if beacon unsupported
+                if (!navigator.sendBeacon || !navigator.sendBeacon(url, new Blob([payload], { type: 'application.json' }))) {
                   window.addEventListener('beforeunload', () => {
-                    fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload }).catch(() => {});
+                    fetch(url, { method: 'POST', headers: { 'Content-Type': 'application.json' }, body: payload }).catch(() => {});
                   }, { once: true });
                 } else {
                   window.addEventListener('beforeunload', () => {
-                    navigator.sendBeacon(url, new Blob([payload], { type: 'application/json' }));
+                    navigator.sendBeacon(url, new Blob([payload], { type: 'application.json' }));
                   }, { once: true });
                 }
               } catch {}
@@ -880,10 +880,10 @@
         });
       })();
 
-      // No free-text category picker; Next is enabled only after a leaf is chosen in Browse.
+      .. No free-text category picker; Next is enabled only after a leaf is chosen in Browse.
 
       function renderBrowseLocal(node, trail) {
-        // breadcrumbs
+        .. breadcrumbs
         const parts = [];
         const rootA = document.createElement('a');
         rootA.href = '#';
@@ -909,7 +909,7 @@
         });
         crumbs.innerHTML = '';
         parts.forEach((x) => crumbs.appendChild(x));
-        // list (chunked render to reduce lag)
+        .. list (chunked render to reduce lag)
         browseList.innerHTML = '';
         const entries = Array.from(node.children?.entries?.() || []);
         const step = 60;
@@ -962,13 +962,13 @@
           renderBrowseLocal(CAT_TREE, []);
           return;
         }
-        // fallback to remote
+        .. fallback to remote
         try {
           const url =
-            '/.netlify/functions/ebay-category-browse' +
+            '..netlify.functions.ebay-category-browse' +
             (categoryId ? '?categoryId=' + encodeURIComponent(categoryId) : '');
           const j = await fetchJSON(url);
-          // crumbs (clickable)
+          .. crumbs (clickable)
           const bc = j.breadcrumbs || [];
           const parts = [];
           const rootA = document.createElement('a');
@@ -994,7 +994,7 @@
           });
           crumbs.innerHTML = '';
           parts.forEach((el) => crumbs.appendChild(el));
-          // list
+          .. list
           browseList.innerHTML = '';
           const children = j.children || [];
           const step = 60;
@@ -1057,7 +1057,7 @@
             } catch {}
           }, 0);
         };
-      // Backdrop click closes (use currentTarget for safety)
+      .. Backdrop click closes (use currentTarget for safety)
       if (modal)
         modal.addEventListener('click', (e) => {
           if (e.currentTarget === e.target) {
@@ -1070,7 +1070,7 @@
           }
         });
       if (browsePanel) browsePanel.addEventListener('click', (e) => e.stopPropagation());
-      // Escape key closes
+      .. Escape key closes
       window.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && !modal.classList.contains('hide')) {
           modal.classList.add('hide');
@@ -1082,7 +1082,7 @@
         }
       });
 
-      // Inline Dropbox image picker for Step 2
+      .. Inline Dropbox image picker for Step 2
       const ImagePickerWizard = (() => {
         const byId = (id) => document.getElementById(id);
         const dd = byId('imgDropdown');
@@ -1095,7 +1095,7 @@
         const picker = byId('imgPicker');
         const pageLoader = document.getElementById('pageLoader');
         let items = [];
-        const selected = new Map(); // proxiedUrl -> item
+        const selected = new Map(); .. proxiedUrl -> item
         let isLoading = false;
 
         function setLoading(v) {
@@ -1110,12 +1110,12 @@
               try { document.body.style.overflow = ''; } catch {}
             }
           }
-          // Provide a loading placeholder inside the dropdown options
+          .. Provide a loading placeholder inside the dropdown options
           if (v) {
             picker.classList.remove('open');
-            ddOpts.innerHTML = '<div style="padding:.75rem" class="muted">Loading images…</div>';
+            ddOpts.innerHTML = '<div style="padding:.75rem" class="muted">Loading images…<.div>';
           } else if (!items.length) {
-            // If nothing loaded, keep it empty but hide to reduce confusion
+            .. If nothing loaded, keep it empty but hide to reduce confusion
             picker.classList.remove('open');
             ddOpts.innerHTML = '';
           }
@@ -1130,7 +1130,7 @@
           img.src = it.proxiedUrl; img.alt = it.name; img.width = 48; img.height = 48; img.loading = 'lazy';
           const meta = document.createElement('div');
           meta.className = 'dp-dropdown__option-content';
-          meta.innerHTML = `<div class="dp-dropdown__option-title">${it.name}</div><div class="dp-dropdown__option-subtitle">${it.path}</div>`;
+          meta.innerHTML = `<div class="dp-dropdown__option-title">${it.name}<.div><div class="dp-dropdown__option-subtitle">${it.path}<.div>`;
           const cb = document.createElement('input');
           cb.type = 'checkbox'; cb.style.marginLeft = 'auto'; cb.style.accentColor = 'var(--accent)';
           cb.checked = selected.has(it.proxiedUrl);
@@ -1164,15 +1164,15 @@
         }
 
         function refresh() {
-          // options list (preserve scroll)
+          .. options list (preserve scroll)
           const scrollTop = ddOpts.scrollTop;
           ddOpts.innerHTML = '';
           items.forEach((it) => ddOpts.appendChild(optionRow(it)));
           ddOpts.scrollTop = scrollTop;
-          // chips/grid
+          .. chips.grid
           chips.innerHTML = ''; grid.innerHTML = '';
           Array.from(selected.values()).forEach((it) => { chips.appendChild(chip(it)); grid.appendChild(card(it)); });
-          // update hidden images input
+          .. update hidden images input
           imagesInput.value = Array.from(selected.keys()).join(',');
           ddPh.textContent = selected.size ? `${selected.size} selected` : 'Choose images…';
         }
@@ -1190,7 +1190,7 @@
           }
           setLoading(true);
           ddPh.textContent = 'Loading images…';
-          const url = new URL('/.netlify/functions/dropbox-list-images', window.location.origin);
+          const url = new URL('..netlify.functions.dropbox-list-images', window.location.origin);
           url.searchParams.set('path', path);
           if (recursive) url.searchParams.set('recursive', '1');
           if (limit) url.searchParams.set('limit', String(limit));
@@ -1207,7 +1207,7 @@
           picker.classList.remove('open');
         }
 
-        // dropdown open/close
+        .. dropdown open.close
         dd.addEventListener('click', () => {
           picker.classList.toggle('open');
         });
@@ -1221,14 +1221,14 @@
               const def = localStorage.getItem('dbxDefaultFolder') || '';
               loadFrom(def);
             } catch {
-              // ignore
+              .. ignore
             }
           },
           loadFrom,
         };
       })();
       
-      // Debug button handler
+      .. Debug button handler
       if (btnShowDebug) {
         btnShowDebug.addEventListener('click', () => {
           if (!lastDraftData) {
@@ -1236,19 +1236,19 @@
             return;
           }
           
-          // Show the debug panel
+          .. Show the debug panel
           debugPanel.style.display = 'block';
           debugPanel.setAttribute('open', '');
           
-          // Populate debug info
+          .. Populate debug info
           debugGroup.textContent = JSON.stringify(lastDraftData, null, 2);
           debugInventory.textContent = 'Create draft to see what gets sent to eBay API...';
           debugOffer.textContent = 'After draft is created, offerId will appear here.';
           
-          // Scroll to it
+          .. Scroll to it
           debugPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         });
       }
-    </script>
-  </body>
-</html>
+    <.script>
+  <.body>
+<.html>

@@ -330,7 +330,7 @@ describe('taxonomy-map', () => {
         const result = await mapGroupToDraftWithTaxonomy(group);
         
         // imageUrls should contain proxy path and NOT contain dropbox.com
-        expect(result.inventory.product.imageUrls[0]).toContain('/.netlify/functions/image-proxy?url=');
+        expect(result.inventory.product.imageUrls[0]).toContain('/api/images/proxy?url=');
         expect(result.inventory.product.imageUrls[0]).not.toContain('dropbox.com');
       });
 
@@ -366,7 +366,7 @@ describe('taxonomy-map', () => {
         
         expect(result.inventory.product.imageUrls).toHaveLength(1);
         // URLs are now proxied through image-proxy
-        expect(result.inventory.product.imageUrls[0]).toContain('/.netlify/functions/image-proxy?url=');
+        expect(result.inventory.product.imageUrls[0]).toContain('/api/images/proxy?url=');
         expect(result.inventory.product.imageUrls[0]).toContain(encodeURIComponent('https://example.com/valid.jpg'));
       });
 
@@ -381,7 +381,7 @@ describe('taxonomy-map', () => {
         const result = await mapGroupToDraftWithTaxonomy(group);
         
         // All external URLs are now proxied for eBay compatibility
-        expect(result.inventory.product.imageUrls[0]).toContain('/.netlify/functions/image-proxy?url=');
+        expect(result.inventory.product.imageUrls[0]).toContain('/api/images/proxy?url=');
         expect(result.inventory.product.imageUrls[0]).toContain(encodeURIComponent('https://example.com/img1.jpg'));
       });
     });

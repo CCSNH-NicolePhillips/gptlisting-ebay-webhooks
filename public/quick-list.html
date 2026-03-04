@@ -1572,7 +1572,7 @@
         const [policiesListRes, defaultsRes, locationRes] = await Promise.all([
           fetchJSON('/.netlify/functions/ebay-list-policies'),
           fetchJSON('/.netlify/functions/ebay-get-policy-defaults'),
-          fetchJSON('/.netlify/functions/ebay-get-location-user')
+          fetchJSON('/api/ebay/locations/user')
         ]);
         
         const defaults = defaultsRes?.defaults || {};
@@ -1721,7 +1721,7 @@
             requestBody.files = selectedDropboxFiles.map(f => f.path);
           }
 
-          const pairStartRes = await fetchJSON('/.netlify/functions/smartdrafts-pairing-v2-start', {
+          const pairStartRes = await fetchJSON('/api/smartdrafts/pairing/v2/start', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestBody)
@@ -1755,7 +1755,7 @@
           const pollDelay = pairAttempts <= 20 ? 3000 : pairAttempts <= 44 ? 5000 : 10000;
           await new Promise(resolve => setTimeout(resolve, pollDelay));
 
-          const statusRes = await fetchJSON(`/.netlify/functions/smartdrafts-pairing-v2-status?jobId=${currentJobId}`);
+          const statusRes = await fetchJSON(`/api/smartdrafts/pairing/v2/status?jobId=${currentJobId}`);
 
           if (statusRes.status === 'completed') {
             pairingComplete = true;
@@ -1907,7 +1907,7 @@
         updateStep(3, 'active');
         $('status3').innerHTML = '<span class="spinner"></span>Starting draft creation...';
 
-        const draftBgRes = await fetchJSON('/.netlify/functions/smartdrafts-create-drafts-bg', {
+        const draftBgRes = await fetchJSON('/api/smartdrafts/create-drafts/start', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
@@ -1942,12 +1942,12 @@
 
           $('status3').innerHTML = `<span class="spinner"></span>Creating drafts (${processed}/${total})...`;
 
-          if (job.state === 'completed') {
+          if (job.status === 'completed' || job.state === 'completed') {
             drafts = job.drafts || [];
             $('totalDrafts').textContent = drafts.length;
             console.log('[Quick List] Drafts complete:', drafts.length);
             break;
-          } else if (job.state === 'error') {
+          } else if (job.status === 'failed' || job.state === 'error') {
             throw new Error(job.error || 'Draft creation failed');
           }
         }
@@ -2021,7 +2021,7 @@
 
         console.log('[Quick List] Publishing', groupsWithDrafts.length, 'drafts to eBay');
 
-        const pubRes = await fetchJSON('/.netlify/functions/create-ebay-draft-user', {
+        const pubRes = await fetchJSON('/api/drafts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2220,7 +2220,7 @@
     // Load user's default promotion settings
     async function loadPromotionSettings() {
       try {
-        const response = await authClient.authFetch('/.netlify/functions/user-settings-get');
+        const response = await authClient.authFetch('/api/settings');
         if (response.ok) {
           const settings = await response.json();
           defaultPromotionSettings = {

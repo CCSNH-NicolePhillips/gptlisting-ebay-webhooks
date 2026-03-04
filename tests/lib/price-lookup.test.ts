@@ -3,7 +3,7 @@
  * Target: 100% code coverage
  */
 
-import { lookupPrice, type PriceLookupInput } from '../../src/lib/price-lookup';
+import { lookupPrice, selectDeliveredSoldCandidate, type PriceLookupInput } from '../../src/lib/price-lookup';
 
 // Mock dependencies
 jest.mock('../../src/lib/html-price', () => ({
@@ -1871,7 +1871,7 @@ describe('price-lookup.ts', () => {
         const input: PriceLookupInput = {
           title: 'Omega Supplement',
           brand: 'TestBrand',
-          keyText: ['great supplement for omega'],
+          keyText: ['omega supplement capsules'], // must match mocked pageTitle 'TestBrand Omega Supplement Capsules'
         };
 
         const result = await lookupPrice(input);
@@ -2350,5 +2350,72 @@ describe('price-lookup.ts', () => {
         });
       });
     });
+  });
+});
+
+// =============================================================================
+// selectDeliveredSoldCandidate unit tests
+// =============================================================================
+describe('selectDeliveredSoldCandidate', () => {
+  const base = { ok: true, samples: [] };
+
+  it('returns deliveredP35 when present', () => {
+    const stats = {
+      ...base,
+      deliveredP35: 24.50,
+      deliveredMedian: 27.00,
+      p35: 19.00,
+    };
+    const result = selectDeliveredSoldCandidate(stats);
+    expect(result).not.toBeNull();
+    expect(result!.value).toBe(24.50);
+    expect(result!.label).toBe('Delivered P35');
+  });
+
+  it('returns deliveredMedian when deliveredP35 is missing', () => {
+    const stats = {
+      ...base,
+      deliveredMedian: 27.00,
+      p35: 19.00,
+    };
+    const result = selectDeliveredSoldCandidate(stats);
+    expect(result).not.toBeNull();
+    expect(result!.value).toBe(27.00);
+    expect(result!.label).toBe('Delivered Median');
+  });
+
+  it('returns deliveredMedian when deliveredP35 is zero', () => {
+    const stats = {
+      ...base,
+      deliveredP35: 0,
+      deliveredMedian: 22.00,
+    };
+    const result = selectDeliveredSoldCandidate(stats);
+    expect(result).not.toBeNull();
+    expect(result!.value).toBe(22.00);
+    expect(result!.label).toBe('Delivered Median');
+  });
+
+  it('returns null when neither deliveredP35 nor deliveredMedian are present', () => {
+    const stats = {
+      ...base,
+      p35: 19.00,
+      median: 21.00,
+    };
+    expect(selectDeliveredSoldCandidate(stats)).toBeNull();
+  });
+
+  it('returns null when ok is false', () => {
+    const stats = {
+      ok: false,
+      samples: [],
+      deliveredP35: 24.50,
+      deliveredMedian: 27.00,
+    };
+    expect(selectDeliveredSoldCandidate(stats)).toBeNull();
+  });
+
+  it('returns null for a completely empty stats object (ok=false)', () => {
+    expect(selectDeliveredSoldCandidate({ ok: false, samples: [] })).toBeNull();
   });
 });

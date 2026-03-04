@@ -120,7 +120,13 @@ export async function listJobs(limit = 50) {
   }
 
   return jobs
-    .filter((job) => ["complete", "error", "running", "pending"].includes(job.state))
+    .filter((job) => {
+      const j = job as Record<string, unknown>;
+      // New pipelines write a `status` field — any non-empty string is valid.
+      if (typeof j.status === 'string' && j.status.length > 0) return true;
+      // Legacy pipelines write a `state` field — only accept known values.
+      return ['pending', 'running', 'complete', 'completed', 'error', 'failed'].includes(j.state as string);
+    })
     .sort((a, b) => {
       const aTime = Number(a.finishedAt ?? a.startedAt ?? a.createdAt ?? 0);
       const bTime = Number(b.finishedAt ?? b.startedAt ?? b.createdAt ?? 0);

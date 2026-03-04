@@ -1,4 +1,4 @@
-import type { HandlerEvent } from "@netlify/functions";
+import type { HandlerEvent } from "../../src/types/api-handler.js";
 
 // Store original env vars
 const originalEnv = { ...process.env };

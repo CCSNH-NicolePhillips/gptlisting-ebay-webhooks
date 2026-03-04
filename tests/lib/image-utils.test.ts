@@ -49,7 +49,7 @@ describe('image-utils', () => {
 
         const result = proxyImageUrls([dropboxUrl]);
 
-        expect(result[0]).toContain('image-proxy');
+        expect(result[0]).toContain('/api/images/proxy');
         // The raw=1 is URL-encoded within the image-proxy URL parameter
         expect(decodeURIComponent(result[0])).toContain('raw=1');
         expect(decodeURIComponent(result[0])).not.toContain('dl=');
@@ -60,7 +60,7 @@ describe('image-utils', () => {
 
         const result = proxyImageUrls([dropboxUrl]);
 
-        expect(result[0]).toContain('image-proxy');
+        expect(result[0]).toContain('/api/images/proxy');
         // The raw=1 is URL-encoded within the image-proxy URL parameter
         expect(decodeURIComponent(result[0])).toContain('raw=1');
       });
@@ -70,7 +70,7 @@ describe('image-utils', () => {
 
         const result = proxyImageUrls([dropboxUrl]);
 
-        expect(result[0]).toContain('image-proxy');
+        expect(result[0]).toContain('/api/images/proxy');
       });
     });
 
@@ -130,7 +130,7 @@ describe('image-utils', () => {
 
         const result = proxyImageUrls([regularUrl]);
 
-        expect(result[0]).toContain('/.netlify/functions/image-proxy');
+        expect(result[0]).toContain('/api/images/proxy');
         expect(result[0]).toContain(encodeURIComponent(regularUrl));
         expect(result[0]).toContain(`v=${mockTimestamp36}`);
       });
@@ -141,7 +141,7 @@ describe('image-utils', () => {
 
         const result = proxyImageUrls([regularUrl], base);
 
-        expect(result[0]).toContain(`${base}/.netlify/functions/image-proxy`);
+        expect(result[0]).toContain(`${base}/api/images/proxy`);
         expect(result[0]).toContain(encodeURIComponent(regularUrl));
       });
 
@@ -150,7 +150,7 @@ describe('image-utils', () => {
 
         const result = proxyImageUrls([urlWithQuery]);
 
-        expect(result[0]).toContain('/.netlify/functions/image-proxy');
+        expect(result[0]).toContain('/api/images/proxy');
         expect(result[0]).toContain(encodeURIComponent(urlWithQuery));
       });
 
@@ -160,8 +160,8 @@ describe('image-utils', () => {
 
         const result = proxyImageUrls([regularUrl], baseWithSlash);
 
-        expect(result[0]).toContain('https://myapp.netlify.app/.netlify/functions/image-proxy');
-        expect(result[0]).not.toContain('https://myapp.netlify.app//.netlify');
+        expect(result[0]).toContain('https://myapp.netlify.app/api/images/proxy');
+        expect(result[0]).not.toContain('https://myapp.netlify.app//api');
       });
     });
 
@@ -171,7 +171,7 @@ describe('image-utils', () => {
 
         const result = proxyImageUrls([invalidUrl]);
 
-        expect(result[0]).toContain('/.netlify/functions/image-proxy');
+        expect(result[0]).toContain('/api/images/proxy');
         expect(result[0]).toContain(encodeURIComponent(invalidUrl));
         expect(result[0]).toContain(`v=${mockTimestamp36}`);
       });
@@ -182,7 +182,7 @@ describe('image-utils', () => {
         const result = proxyImageUrls([invalidUrl]);
 
         // Should still proxy the invalid URL
-        expect(result[0]).toContain('/.netlify/functions/image-proxy');
+        expect(result[0]).toContain('/api/images/proxy');
       });
     });
 
@@ -220,7 +220,7 @@ describe('image-utils', () => {
         // S3 should not be proxied
         expect(result[0]).toBe(urls[0]);
         // Regular URL should be proxied
-        expect(result[1]).toContain('/.netlify/functions/image-proxy');
+        expect(result[1]).toContain('/api/images/proxy');
         // Dropbox should be proxied with raw=1
         expect(decodeURIComponent(result[2])).toContain('raw=1');
         // Already proxied should get cache bust
@@ -239,7 +239,7 @@ describe('image-utils', () => {
         const result = proxyImageUrls([url]);
 
         expect(result).toHaveLength(1);
-        expect(result[0]).toContain('/.netlify/functions/image-proxy');
+        expect(result[0]).toContain('/api/images/proxy');
       });
     });
 
@@ -258,7 +258,7 @@ describe('image-utils', () => {
 
         const result = proxyImageUrls([url]);
 
-        expect(result[0]).toContain('/.netlify/functions/image-proxy');
+        expect(result[0]).toContain('/api/images/proxy');
       });
 
       it('should handle data URLs', () => {
@@ -267,7 +267,7 @@ describe('image-utils', () => {
         const result = proxyImageUrls([dataUrl]);
 
         // Data URLs can't be parsed, so they get proxied via the fallback path
-        expect(result[0]).toContain('/.netlify/functions/image-proxy');
+        expect(result[0]).toContain('/api/images/proxy');
         expect(result[0]).toContain(encodeURIComponent(dataUrl));
       });
 
@@ -276,7 +276,7 @@ describe('image-utils', () => {
 
         const result = proxyImageUrls([url]);
 
-        expect(result[0]).toContain('/.netlify/functions/image-proxy');
+        expect(result[0]).toContain('/api/images/proxy');
       });
 
       it('should handle Dropbox URL that becomes proxied after conversion', () => {
@@ -330,7 +330,7 @@ describe('image-utils', () => {
 
         const result = proxyImageUrls([url], base);
 
-        expect(result[0]).toContain('https://myapp.netlify.app/subpath/.netlify/functions/image-proxy');
+        expect(result[0]).toContain('https://myapp.netlify.app/subpath/api/images/proxy');
       });
 
       it('should throw when no base URL available', () => {
@@ -361,7 +361,7 @@ describe('image-utils', () => {
         const result = proxyImageUrls([url], base);
 
         // Only the last slash should be removed
-        expect(result[0]).toContain('https://myapp.netlify.app///.netlify/functions/image-proxy');
+        expect(result[0]).toContain('https://myapp.netlify.app///api/images/proxy');
       });
     });
   });

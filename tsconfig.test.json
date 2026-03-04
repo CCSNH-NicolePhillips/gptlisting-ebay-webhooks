@@ -3,6 +3,14 @@
   "compilerOptions": {
     "types": ["node", "jest"]
   },
-  "include": ["src/**/*.ts", "netlify/functions/**/*.ts", "tests/**/*.ts"],
+  "include": [
+    "src/**/*.ts",
+    "netlify/functions/**/*.ts",
+    "tests/**/*.ts",
+    "apps/api/src/**/*.ts",
+    "apps/web/src/**/*.ts",
+    "packages/core/src/**/*.ts",
+    "packages/shared/src/**/*.ts"
+  ],
   "exclude": ["dist", "node_modules"]
 }

@@ -992,7 +992,7 @@
           throw new Error('Need brand or title to calculate price');
         }
         
-        const res = await fetchJSON('/.netlify/functions/reprice', {
+        const res = await fetchJSON('/api/pricing/reprice', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ brand, productName }),
@@ -1088,8 +1088,8 @@
         console.log('Saving listing:', updatedListing);
         
         // Save to backend
-        const res = await fetchJSON('/.netlify/functions/ebay-update-active-item', {
-          method: 'POST',
+        const res = await fetchJSON(`/api/ebay/listings/${currentItemId}`, {
+          method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(updatedListing),
         });

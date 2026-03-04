@@ -2,7 +2,7 @@
 // - Auth0 Universal Login (Google, Apple, Email) via AUTH0_DOMAIN/CLIENT_ID
 // - Netlify Identity widget fallback (Email + social providers configured in Netlify)
 //
-// Public config is fetched from /.netlify/functions/get-public-config
+// Public config is fetched from /api/config
 // Pages can call authClient.requireAuth() to enforce login and get an access token.
 (function () {
   const state = {
@@ -60,7 +60,7 @@
     // Start new load
     configLoadingPromise = (async () => {
       try {
-        const res = await fetch('/.netlify/functions/get-public-config');
+        const res = await fetch('/api/config');
         const j = await res.json();
         if (!res.ok) throw new Error(j.error || 'config');
         state.cfg = j;
@@ -867,7 +867,7 @@
             await new Promise(r => setTimeout(r, 1000));
             
             try {
-              const res = await window.authClient.authFetch('/.netlify/functions/status');
+              const res = await window.authClient.authFetch('/api/status');
               const status = await res.json();
               const connected = service === 'ebay' ? status.ebay?.connected : status.dropbox?.connected;
               

@@ -143,7 +143,7 @@
             if (b) b.style.display = 'none';
             // Verify the backend also sees our session; hide banner on success
             try {
-              const r = await authClient.authFetch('/.netlify/functions/me');
+              const r = await authClient.authFetch('/api/me');
               if (r.ok) { const b2 = document.getElementById('authBanner'); if (b2) b2.style.display = 'none'; }
             } catch {}
           }
@@ -562,7 +562,7 @@
             const t = await authClient.getToken?.();
             if (t) headers = Object.assign(headers, { Authorization: `Bearer ${t}` });
           } catch {}
-          const res = await authClient.authFetch('/.netlify/functions/status', { headers });
+          const res = await authClient.authFetch('/api/status', { headers });
           s = await res.json().catch(() => null);
         } catch (e) {
           console.error('[FAQ] Failed to load status:', e);

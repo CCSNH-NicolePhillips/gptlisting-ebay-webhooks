@@ -726,7 +726,7 @@
           const exec = window.authClient && typeof window.authClient.authFetch === 'function' 
             ? window.authClient.authFetch 
             : fetch;
-          const response = await exec('/.netlify/functions/user-settings-get');
+          const response = await exec('/api/settings');
           if (response.ok) {
             const settings = await response.json();
             globalPromoSettings = {

@@ -107,7 +107,7 @@
         // Check auth status but do NOT auto-redirect; keep the login screen visible
         // so users can intentionally choose to continue or switch accounts.
     const ok = await authClient.ensureAuth();
-  const cfgRes = await fetch('/.netlify/functions/get-public-config').catch(() => null);
+  const cfgRes = await fetch('/api/config').catch(() => null);
   const cfg = cfgRes && (await cfgRes.json());
   const rawMode = (cfg?.AUTH_MODE_RAW || cfg?.AUTH_MODE || 'none').toLowerCase();
   const hasAuth0 = Boolean(cfg?.AUTH0_DOMAIN && cfg?.AUTH0_CLIENT_ID);

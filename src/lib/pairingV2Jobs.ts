@@ -132,7 +132,7 @@ export async function schedulePairingV2Job(
   // Trigger processor immediately (fire-and-forget)
   // Client polls will re-trigger if this fails
   const baseUrl = process.env.APP_URL || 'https://ebaywebhooks.netlify.app';
-  const processorUrl = `${baseUrl}/.netlify/functions/pairing-v2-processor-background?jobId=${jobId}`;
+  const processorUrl = `${baseUrl}/api/smartdrafts/pairing/background?jobId=${jobId}`;
   
   console.log(`[schedulePairingV2Job] Triggering processor: ${processorUrl}`);
   

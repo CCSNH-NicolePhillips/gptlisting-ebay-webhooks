@@ -1,4 +1,4 @@
-import { parseItemIdsFromXml, checkXmlForErrors, shouldExcludeActiveItem, extractItemIdsFromContainer, buildUnsoldListRequest, shouldApplyUnsoldFilter } from '../../netlify/functions/ebay-list-active-trading';
+import { parseItemIdsFromXml, checkXmlForErrors, shouldExcludeActiveItem, extractItemIdsFromContainer, buildUnsoldListRequest, shouldApplyUnsoldFilter } from '../../src/lib/active-trading-xml';
 
 describe('ebay-list-active-trading helpers', () => {
   describe('shouldApplyUnsoldFilter', () => {

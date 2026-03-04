@@ -215,7 +215,7 @@ window.DraftPilotShell = {
     if (window.authClient) {
       authClient.ensureAuth().then(ok => {
         if (ok) {
-          authClient.authFetch('/.netlify/functions/me').then(r => r.json()).then(data => {
+          authClient.authFetch('/api/me').then(r => r.json()).then(data => {
             const nameEl = document.getElementById('dpUserName');
             const avatarEl = document.getElementById('dpUserAvatar');
             if (data.email && nameEl) {

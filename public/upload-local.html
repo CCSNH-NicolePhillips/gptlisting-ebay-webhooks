@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Local Upload - SmartDrafts</title>
-  <script src="/auth-client.js"></script>
+  <title>Local Upload - SmartDrafts<.title>
+  <script src=".auth-client.js"><.script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { 
@@ -169,45 +169,45 @@
       color: #084298;
       border: 1px solid #b6d4fe;
     }
-  </style>
-</head>
+  <.style>
+<.head>
 <body>
   <div class="container">
-    <h1>📤 Local Upload</h1>
-    <p class="subtitle">Drag and drop images or click to browse</p>
+    <h1>📤 Local Upload<.h1>
+    <p class="subtitle">Drag and drop images or click to browse<.p>
     
     <div class="drop-zone" id="dropZone">
-      <div class="drop-zone-icon">📸</div>
-      <div class="drop-zone-text">Drop images here</div>
-      <div class="drop-zone-hint">or click to select files (up to 200 images)</div>
-    </div>
+      <div class="drop-zone-icon">📸<.div>
+      <div class="drop-zone-text">Drop images here<.div>
+      <div class="drop-zone-hint">or click to select files (up to 200 images)<.div>
+    <.div>
     
-    <input type="file" id="fileInput" multiple accept="image/*" />
+    <input type="file" id="fileInput" multiple accept="image.*" .>
     
-    <div id="fileList" class="file-list" style="display: none;"></div>
+    <div id="fileList" class="file-list" style="display: none;"><.div>
     
     <div class="progress-bar" id="progressBar" style="display: none;">
-      <div class="progress-fill" id="progressFill" style="width: 0%"></div>
-    </div>
+      <div class="progress-fill" id="progressFill" style="width: 0%"><.div>
+    <.div>
     
-    <button id="uploadBtn" style="display: none;">Upload & Process</button>
-    <button id="clearBtn" style="display: none; margin-top: 0.5rem; background: #6c757d;">Clear Files</button>
+    <button id="uploadBtn" style="display: none;">Upload & Process<.button>
+    <button id="clearBtn" style="display: none; margin-top: 0.5rem; background: #6c757d;">Clear Files<.button>
     
-    <div id="statusMessage"></div>
-  </div>
+    <div id="statusMessage"><.div>
+  <.div>
 
   <script type="module">
-    // Wait for auth client to initialize and require auth
+    .. Wait for auth client to initialize and require auth
     async function initAuth() {
       if (!window.authClient) {
         console.error('Auth client not loaded');
         sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
-        window.location.href = '/login.html';
+        window.location.href = '.login.html';
         return false;
       }
       
       try {
-        // requireAuth will redirect to login if not authenticated
+        .. requireAuth will redirect to login if not authenticated
         await window.authClient.requireAuth();
         return true;
       } catch (error) {
@@ -227,13 +227,13 @@
     
     let selectedFiles = [];
     
-    // Check auth on page load
+    .. Check auth on page load
     initAuth().then(isAuth => {
       if (!isAuth) return;
       console.log('Authenticated, ready to upload');
     });
     
-    // Drag and drop handlers
+    .. Drag and drop handlers
     dropZone.addEventListener('click', () => fileInput.click());
     
     dropZone.addEventListener('dragover', (e) => {
@@ -256,7 +256,7 @@
     });
     
     function handleFiles(files) {
-      const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+      const imageFiles = Array.from(files).filter(f => f.type.startsWith('image.'));
       
       if (imageFiles.length === 0) {
         showStatus('error', 'No image files selected');
@@ -283,33 +283,33 @@
         const item = document.createElement('div');
         item.className = 'file-item';
         
-        // Create thumbnail
+        .. Create thumbnail
         const thumbnail = document.createElement('img');
         thumbnail.className = 'file-thumbnail';
         thumbnail.alt = file.name;
         
-        // Generate thumbnail from file
+        .. Generate thumbnail from file
         const reader = new FileReader();
         reader.onload = (e) => {
           thumbnail.src = e.target.result;
         };
         reader.readAsDataURL(file);
         
-        // File info
+        .. File info
         const info = document.createElement('div');
         info.className = 'file-info';
         info.innerHTML = `
-          <div class="file-name">${escapeHtml(file.name)}</div>
-          <div class="file-size">${formatBytes(file.size)}</div>
+          <div class="file-name">${escapeHtml(file.name)}<.div>
+          <div class="file-size">${formatBytes(file.size)}<.div>
         `;
         
-        // Status badge
+        .. Status badge
         const status = document.createElement('div');
         status.className = 'file-status status-ready';
         status.id = `status-${i}`;
         status.textContent = 'Ready';
         
-        // Delete button
+        .. Delete button
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'file-delete';
         deleteBtn.innerHTML = '×';
@@ -335,7 +335,7 @@
         uploadBtn.style.display = 'none';
         clearBtn.style.display = 'none';
         statusMessage.style.display = 'none';
-        fileInput.value = ''; // Reset file input so user can select files again
+        fileInput.value = ''; .. Reset file input so user can select files again
       } else {
         renderFileList();
         showStatus('info', `${selectedFiles.length} image(s) ready to upload`);
@@ -346,8 +346,8 @@
       if (bytes === 0) return '0 Bytes';
       const k = 1024;
       const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-      const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+      const i = Math.floor(Math.log(bytes) . Math.log(k));
+      return Math.round(bytes . Math.pow(k, i) * 100) . 100 + ' ' + sizes[i];
     }
     
     function escapeHtml(text) {
@@ -360,7 +360,7 @@
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => {
-          const base64 = reader.result.split(',')[1]; // Remove data:image/...;base64, prefix
+          const base64 = reader.result.split(',')[1]; .. Remove data:image....;base64, prefix
           resolve(base64);
         };
         reader.onerror = reject;
@@ -396,65 +396,57 @@
         showStatus('info', 'Uploading files...');
         updateProgress(0);
         
-        // Check auth
+        .. Check auth
         if (!window.authClient?.authFetch) {
           throw new Error('Auth client not available. Please refresh the page.');
         }
         
-        // Convert files to base64
+        .. Collect file metadata (no base64 conversion needed — use FormData/multipart)
         showStatus('info', 'Preparing files...');
         const fileData = [];
         for (let i = 0; i < selectedFiles.length; i++) {
           const file = selectedFiles[i];
-          const base64 = await fileToBase64(file);
-          fileData.push({
-            name: file.name,
-            mime: file.type,
-            data: base64,
-            size: file.size,
-            base64Size: base64.length
-          });
-          updateProgress(((i + 1) / selectedFiles.length) * 20); // 0-20% for prep
+          fileData.push({ name: file.name, mime: file.type, size: file.size, file });
+          updateProgress(((i + 1) / selectedFiles.length) * 20); .. 0-20% for prep
         }
         
-        // Smart batching: group files to stay under 4MB per batch
-        // Base64 adds ~33% overhead, so we use conservative 4MB limit
-        const MAX_BATCH_SIZE_BYTES = 4 * 1024 * 1024; // 4MB
+        .. Smart batching: group files to stay under 8MB binary per batch
+        const MAX_BATCH_SIZE_BYTES = 8 * 1024 * 1024; .. 8MB
         const batches = [];
         let currentBatch = [];
         let currentBatchSize = 0;
         
         for (const file of fileData) {
-          // If single file is huge (>4MB base64), upload it alone
-          if (file.base64Size > MAX_BATCH_SIZE_BYTES) {
+          .. If single file is huge (>8MB), upload it alone
+          if (file.size > MAX_BATCH_SIZE_BYTES) {
             if (currentBatch.length > 0) {
               batches.push(currentBatch);
               currentBatch = [];
               currentBatchSize = 0;
             }
-            batches.push([file]); // Upload this file alone
+            batches.push([file]); .. Upload this file alone
             continue;
           }
           
-          // If adding this file would exceed limit, start new batch
-          if (currentBatchSize + file.base64Size > MAX_BATCH_SIZE_BYTES && currentBatch.length > 0) {
+          .. If adding this file would exceed limit, start new batch
+          if (currentBatchSize + file.size > MAX_BATCH_SIZE_BYTES && currentBatch.length > 0) {
             batches.push(currentBatch);
             currentBatch = [];
             currentBatchSize = 0;
           }
           
           currentBatch.push(file);
-          currentBatchSize += file.base64Size;
+          currentBatchSize += file.size;
         }
         
-        // Add last batch
+        .. Add last batch
         if (currentBatch.length > 0) {
           batches.push(currentBatch);
         }
         
         console.log(`[upload] Created ${batches.length} batches for ${fileData.length} files`);
         batches.forEach((batch, i) => {
-          const totalSize = batch.reduce((sum, f) => sum + f.base64Size, 0);
+          const totalSize = batch.reduce((sum, f) => sum + f.size, 0);
           console.log(`[upload] Batch ${i + 1}: ${batch.length} files, ${(totalSize / 1024 / 1024).toFixed(2)}MB`);
         });
         
@@ -468,32 +460,34 @@
           const batch = batches[batchIdx];
           const batchIndices = [];
           
-          // Find indices of files in this batch
+          .. Find indices of files in this batch
           for (const batchFile of batch) {
             const idx = fileData.indexOf(batchFile);
             batchIndices.push(idx);
           }
           
-          // Update status for this batch
+          .. Update status for this batch
           batchIndices.forEach(i => {
             statusEls[i].className = 'file-status status-uploading';
             statusEls[i].textContent = 'Uploading...';
           });
           
-          // Remove size info before sending (server doesn't need it)
-          const batchToSend = batch.map(({ name, mime, data }) => ({ name, mime, data }));
+          .. Build FormData — browser sets multipart/form-data boundary automatically
+          const formData = new FormData();
+          for (const batchFile of batch) {
+            formData.append('files', batchFile.file, batchFile.name);
+          }
           
-          const uploadRes = await window.authClient.authFetch('/.netlify/functions/ingest-local-upload', {
+          const uploadRes = await window.authClient.authFetch('/api/ingest/local/upload', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ files: batchToSend }),
+            body: formData,
           });
           
           if (!uploadRes.ok) {
             let errorMessage = `Upload failed: ${uploadRes.status}`;
             const contentType = uploadRes.headers.get('content-type');
             
-            if (contentType && contentType.includes('application/json')) {
+            if (contentType && contentType.includes('application.json')) {
               try {
                 const error = await uploadRes.json();
                 errorMessage = error.error || error.message || errorMessage;
@@ -501,10 +495,10 @@
                 errorMessage = `Server error (${uploadRes.status}). Could not parse error response.`;
               }
             } else {
-              // Response is not JSON (probably HTML error page)
+              .. Response is not JSON (probably HTML error page)
               const text = await uploadRes.text();
               console.error('Server returned non-JSON error:', text.substring(0, 500));
-              errorMessage = `Server error (${uploadRes.status}). Batch ${batchIdx + 1}/${batches.length} failed. Check function logs.`;
+              errorMessage = `Server error (${uploadRes.status}). Batch ${batchIdx + 1}.${batches.length} failed. Check function logs.`;
             }
             throw new Error(errorMessage);
           }
@@ -513,7 +507,7 @@
           const batchFiles = uploadData.files || [];
           allUploadedFiles.push(...batchFiles);
           
-          // Mark batch as complete
+          .. Mark batch as complete
           batchIndices.forEach(i => {
             statusEls[i].className = 'file-status status-complete';
             statusEls[i].textContent = 'Complete';
@@ -521,25 +515,25 @@
           
           filesUploaded += batch.length;
           
-          // Update progress (20% prep + 70% upload)
-          const uploadProgress = (filesUploaded / fileData.length) * 70;
+          .. Update progress (20% prep + 70% upload)
+          const uploadProgress = (filesUploaded . fileData.length) * 70;
           updateProgress(20 + uploadProgress);
         }
         
         showStatus('info', 'Processing images...');
         updateProgress(90);
         
-        // Files now have stagedUrl from upload response
+        .. Files now have stagedUrl from upload response
         const files = allUploadedFiles;
         
-        // Start vision scan job
+        .. Start vision scan job
         showStatus('info', 'Starting vision analysis...');
         
         const stagedUrls = files.map(f => f.stagedUrl);
         
-        const scanRes = await window.authClient.authFetch('/.netlify/functions/smartdrafts-scan-bg', {
+        const scanRes = await window.authClient.authFetch('.api.smartdrafts.scan.start', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application.json' },
           body: JSON.stringify({ stagedUrls }),
         });
         
@@ -553,9 +547,9 @@
         
         showStatus('success', `✅ ${files.length} file(s) uploaded! Analysis started (Job: ${jobId})`);
         
-        // Redirect to scan status page after 2 seconds
+        .. Redirect to scan status page after 2 seconds
         setTimeout(() => {
-          window.location.href = `/quick-list.html?jobId=${jobId}`;
+          window.location.href = `.quick-list.html?jobId=${jobId}`;
         }, 2000);
         
       } catch (error) {
@@ -565,6 +559,6 @@
         clearBtn.disabled = false;
       }
     });
-  </script>
-</body>
-</html>
+  <.script>
+<.body>
+<.html>

@@ -442,18 +442,18 @@ async function pollJob(jobId, pollHeaders){
     }
 
     const payload = await resp.json();
-    const state = payload.state;
+    const state = payload.status ?? payload.state;
 
-    if (state === "pending" || state === "running") {
-  renderJobStatus(status, jobId, state === "running" ? "Running…" : "Pending…");
+    if (state === "pending" || state === "running" || state === "processing") {
+  renderJobStatus(status, jobId, (state === "running" || state === "processing") ? "Running…" : "Pending…");
       return;
     }
 
     stopPolling();
 
-    if (state === "complete") {
+    if (state === "complete" || state === "completed") {
       renderResult(payload, { jobId, statusMessage: payload.info || "Complete." });
-    } else if (state === "error") {
+    } else if (state === "error" || state === "failed") {
       renderJobStatus(status, jobId, `failed: ${payload.error || "unknown"}`);
     } else {
       renderJobStatus(status, jobId, `status: ${state || "unknown"}`);
@@ -818,7 +818,7 @@ function renderJobDetail(job) {
   detailEl.innerHTML = `
     <div class="job-summary-card">
   <div><strong>Job ${escapeHtml(job.jobId || "unknown")}</strong></div>
-  <div>Status: ${escapeHtml(job.state || "unknown")}</div>
+  <div>Status: ${escapeHtml(job.status || job.state || "unknown")}</div>
       <div>Created: ${job.createdAt ? formatTime(job.createdAt) : "—"}</div>
       <div>Started: ${job.startedAt ? formatTime(job.startedAt) : "—"}, Finished: ${job.finishedAt ? formatTime(job.finishedAt) : "—"}</div>
       <div>Duration: ${job.durationMs ? (job.durationMs / 1000).toFixed(1) + "s" : "—"}</div>

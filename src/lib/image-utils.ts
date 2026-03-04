@@ -60,7 +60,7 @@ export function proxyImageUrls(urls: string[], appBase?: string): string[] {
   base = base.replace(/\/$/, "");
   console.log("[image] proxy base:", base);
   
-  const isProxy = (u: string) => /\/\.netlify\/functions\/image-proxy/i.test(u);
+  const isProxy = (u: string) => /\/\.netlify\/functions\/image-proxy|\/api\/images\/proxy/i.test(u);
   
   const absolutizeProxy = (u: string) => {
     if (u.startsWith("/") && base) return `${base}${u}`;
@@ -95,9 +95,9 @@ export function proxyImageUrls(urls: string[], appBase?: string): string[] {
         // URL format: https://bucket.s3.region.amazonaws.com/staging/user/job/hash-file.jpg?X-Amz-...
         const key = decodeURIComponent(url.pathname.replace(/^\//, ''));
         if (key && key.startsWith('staging/')) {
-          // Use short redirect URL: /.netlify/functions/img?k=staging/user/job/hash-file.jpg
+          // Use short redirect URL: /api/img?k=staging/user/job/hash-file.jpg
           // This is ~100-150 chars vs 550+ chars for presigned URL
-          const shortUrl = `${base}/.netlify/functions/img?k=${encodeURIComponent(key)}`;
+          const shortUrl = `${base}/api/img?k=${encodeURIComponent(key)}`;
           console.log('[proxyImageUrls] S3 URL → short redirect:', shortUrl.length, 'chars');
           return shortUrl;
         }
@@ -113,12 +113,12 @@ export function proxyImageUrls(urls: string[], appBase?: string): string[] {
     try {
       const url = new URL(direct);
       const prox = base
-        ? `${base}/.netlify/functions/image-proxy?url=${encodeURIComponent(direct)}`
-        : `/.netlify/functions/image-proxy?url=${encodeURIComponent(direct)}`;
+        ? `${base}/api/images/proxy?url=${encodeURIComponent(direct)}`
+        : `/api/images/proxy?url=${encodeURIComponent(direct)}`;
       return addBust(absolutizeProxy(prox));
     } catch {
       // If URL parsing fails, still try to proxy it
-      const prox = `/.netlify/functions/image-proxy?url=${encodeURIComponent(direct)}`;
+      const prox = `/api/images/proxy?url=${encodeURIComponent(direct)}`;
       return addBust(prox);
     }
   };

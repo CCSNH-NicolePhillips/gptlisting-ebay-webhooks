@@ -48,7 +48,7 @@
             if (b) b.style.display = 'none';
             // Verify the backend also sees our session; hide banner on success
             try {
-              const r = await authClient.authFetch('/.netlify/functions/me');
+              const r = await authClient.authFetch('/api/me');
               if (r.ok) { const b2 = document.getElementById('authBanner'); if (b2) b2.style.display = 'none'; }
             } catch {}
           }
@@ -576,7 +576,7 @@
             const t = await authClient.getToken?.();
             if (t) headers = Object.assign(headers, { Authorization: `Bearer ${t}` });
           } catch {}
-          const res = await authClient.authFetch('/.netlify/functions/status', { headers });
+          const res = await authClient.authFetch('/api/status', { headers });
           statusCode = res.status;
           s = await res.json().catch(() => null);
         } catch (e) {
@@ -825,11 +825,11 @@
       wireConnectLink('dbxConnect', '/.netlify/functions/dropbox-oauth-start');
       wireConnectLink('ebayConnect', '/.netlify/functions/ebay-oauth-start');
       document.getElementById('dbxDisconnect').onclick = async () => {
-        await authClient.authFetch('/.netlify/functions/status?dropbox=disconnect', { method: 'POST' });
+        await authClient.authFetch('/api/status?dropbox=disconnect', { method: 'POST' });
         refreshStatus();
       };
       document.getElementById('ebayDisconnect').onclick = async () => {
-        await authClient.authFetch('/.netlify/functions/status?ebay=disconnect', { method: 'POST' });
+        await authClient.authFetch('/api/status?ebay=disconnect', { method: 'POST' });
         refreshStatus();
       };
       const bannerLoginBtn = document.getElementById('bannerLogin');
@@ -1138,7 +1138,7 @@
             setupHints.push('Create your payment, shipping, and return policies on the setup page.');
           }
           try {
-            const loc = await (await authClient.authFetch('/.netlify/functions/ebay-list-locations')).json();
+            const loc = await (await authClient.authFetch('/api/ebay/locations')).json();
             const list = loc?.locations || [];
             locationReady = Array.isArray(list) && list.length > 0;
             if (!locationReady) setupHints.push('Add an inventory location from the setup page.');
@@ -1589,7 +1589,7 @@ async function updateUIFromCache(data) {
         try {
           const exec = authClient && typeof authClient.authFetch === 'function' ? authClient.authFetch : fetch;
           // Use Trading API endpoint which returns actual seller listings
-          const response = await exec('/.netlify/functions/ebay-list-active-trading');
+          const response = await exec('/api/ebay/listings/active');
           
           if (loadingEl) loadingEl.style.display = 'none';
           
@@ -1730,7 +1730,7 @@ async function updateUIFromCache(data) {
         if (!confirm('Are you sure you want to disconnect eBay? You will need to reconnect to create listings.')) return;
         try {
           const token = await authClient.getToken();
-          const res = await fetch('/.netlify/functions/status?ebay=disconnect', {
+          const res = await fetch('/api/status?ebay=disconnect', {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}` }
           });
@@ -1759,7 +1759,7 @@ async function updateUIFromCache(data) {
         if (!confirm('Are you sure you want to disconnect Dropbox?')) return;
         try {
           const token = await authClient.getToken();
-          const res = await fetch('/.netlify/functions/status?dropbox=disconnect', {
+          const res = await fetch('/api/status?dropbox=disconnect', {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}` }
           });

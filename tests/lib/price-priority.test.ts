@@ -494,10 +494,11 @@ describe('selectPriceSource - Priority Logic', () => {
           const higherPriority = allSources[i];
           const lowerPriority = allSources[j];
           
-          // Create candidates with lower priority first (to test order independence)
+          // Create candidates with equal prices so the amazonSuspiciouslyHigh
+          // guard (>1.5x ratio) doesn't override pure priority ordering
           const candidates = [
-            makeCandidate(lowerPriority, 15.00, 'high'),
-            makeCandidate(higherPriority, 30.00, 'medium'),
+            makeCandidate(lowerPriority, 20.00, 'high'),
+            makeCandidate(higherPriority, 20.00, 'medium'),
           ];
           
           const result = selectPriceSource(testInput, candidates);

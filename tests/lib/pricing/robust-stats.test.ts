@@ -196,15 +196,15 @@ describe('isFloorOutlier', () => {
 });
 
 describe('isSoldStrong', () => {
-  it('21. count=5 → true (threshold lowered from 10 to 5)', () => {
-    expect(isSoldStrong(makeStats({ count: 5 }))).toBe(true);
+  it('21. count=5 → false (threshold raised to 10)', () => {
+    expect(isSoldStrong(makeStats({ count: 5 }))).toBe(false);
   });
 
   it('22. count=4 → false', () => {
     expect(isSoldStrong(makeStats({ count: 4 }))).toBe(false);
   });
 
-  it('23. count=10 → true (still passes with plenty of data)', () => {
+  it('23. count=10 → true (at the new threshold)', () => {
     expect(isSoldStrong(makeStats({ count: 10 }))).toBe(true);
   });
 
@@ -228,7 +228,7 @@ describe('isActiveStrong', () => {
 });
 
 describe('isSoldWeak', () => {
-  it('weak-1. count=3 → true (3-4 = weak tier)', () => {
+  it('weak-1. count=3 → true (3-9 = weak tier)', () => {
     expect(isSoldWeak(makeStats({ count: 3 }))).toBe(true);
   });
 
@@ -236,11 +236,19 @@ describe('isSoldWeak', () => {
     expect(isSoldWeak(makeStats({ count: 4 }))).toBe(true);
   });
 
-  it('weak-3. count=5 → false (strong, not weak)', () => {
-    expect(isSoldWeak(makeStats({ count: 5 }))).toBe(false);
+  it('weak-3. count=5 → true (now Weak tier, not Strong — threshold is 10)', () => {
+    expect(isSoldWeak(makeStats({ count: 5 }))).toBe(true);
   });
 
-  it('weak-4. count=2 → false (too few)', () => {
+  it('weak-3b. count=9 → true (top of weak range)', () => {
+    expect(isSoldWeak(makeStats({ count: 9 }))).toBe(true);
+  });
+
+  it('weak-3c. count=10 → false (now Strong)', () => {
+    expect(isSoldWeak(makeStats({ count: 10 }))).toBe(false);
+  });
+
+  it('weak-4. count=2 → false (too few for any tier)', () => {
     expect(isSoldWeak(makeStats({ count: 2 }))).toBe(false);
   });
 });

@@ -80,3 +80,30 @@ export async function requireUserAuth(authHeader?: string): Promise<UserAuth> {
   }
   return auth;
 }
+
+/** Same as requireUserAuth but also returns the full JWT claims (email, name, etc.) */
+export async function requireUserAuthFull(
+  authHeader?: string,
+): Promise<{ userId: string; claims: Record<string, unknown> }> {
+  if (MODE !== "user" && MODE !== "mixed") {
+    throw new Error("User authentication not enabled (AUTH_MODE must be 'user' or 'mixed')");
+  }
+  if (!JWKS) {
+    throw new Error("Auth0 not configured (missing AUTH0_DOMAIN)");
+  }
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    throw new Error("Missing or invalid Authorization header");
+  }
+  const token = authHeader.slice(7).trim();
+  if (!token) throw new Error("Empty bearer token");
+
+  const audiences = [AUD, CLIENT].filter(Boolean) as string[];
+  const verifyOptions: Parameters<typeof jwtVerify>[2] = { issuer: ISS || undefined };
+  if (audiences.length === 1) verifyOptions.audience = audiences[0];
+  else if (audiences.length > 1) verifyOptions.audience = audiences;
+
+  const { payload } = await jwtVerify(token, JWKS, verifyOptions);
+  const sub = String(payload.sub ?? "").trim();
+  if (!sub) throw new Error("Token missing 'sub' claim");
+  return { userId: sub, claims: payload as Record<string, unknown> };
+}

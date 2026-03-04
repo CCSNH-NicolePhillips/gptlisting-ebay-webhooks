@@ -77,7 +77,7 @@
             if (b) b.style.display = 'none';
             // Verify the backend also sees our session; hide banner on success
             try {
-              const r = await authClient.authFetch('/.netlify/functions/me');
+              const r = await authClient.authFetch('/api/me');
               if (r.ok) { const b2 = document.getElementById('authBanner'); if (b2) b2.style.display = 'none'; }
             } catch {}
           }
@@ -540,7 +540,7 @@
             const t = await authClient.getToken?.();
             if (t) headers = Object.assign(headers, { Authorization: `Bearer ${t}` });
           } catch {}
-          const res = await authClient.authFetch('/.netlify/functions/status', { headers });
+          const res = await authClient.authFetch('/api/status', { headers });
           s = await res.json().catch(() => null);
         } catch (e) {
           console.error('[Settings] Failed to load status:', e);
@@ -602,7 +602,7 @@
         if (!confirm('Are you sure you want to disconnect eBay? You will need to reconnect to create listings.')) return;
         try {
           const token = await authClient.getToken();
-          const res = await fetch('/.netlify/functions/status?ebay=disconnect', {
+          const res = await fetch('/api/status?ebay=disconnect', {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}` }
           });
@@ -631,7 +631,7 @@
         if (!confirm('Are you sure you want to disconnect Dropbox?')) return;
         try {
           const token = await authClient.getToken();
-          const res = await fetch('/.netlify/functions/status?dropbox=disconnect', {
+          const res = await fetch('/api/status?dropbox=disconnect', {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}` }
           });
@@ -702,7 +702,7 @@
           if (msg) msg.textContent = 'Saving...';
           
           try {
-            const response = await authClient.authFetch('/.netlify/functions/user-settings-save', {
+            const response = await authClient.authFetch('/api/settings', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -740,7 +740,7 @@
       // Load promotion settings
       async function loadPromotionSettings() {
         try {
-          const response = await authClient.authFetch('/.netlify/functions/user-settings-get');
+          const response = await authClient.authFetch('/api/settings');
           if (response.ok) {
             const settings = await response.json();
             
@@ -844,7 +844,7 @@
           if (msg) msg.textContent = 'Saving...';
           
           try {
-            const response = await authClient.authFetch('/.netlify/functions/user-settings-save', {
+            const response = await authClient.authFetch('/api/settings', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -933,7 +933,7 @@
               ? Math.round(parseFloat(shippingSubsidyCapInput) * 100)
               : null;
             
-            const response = await authClient.authFetch('/.netlify/functions/user-settings-save', {
+            const response = await authClient.authFetch('/api/settings', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -970,7 +970,7 @@
       // Load pricing settings
       async function loadPricingSettings() {
         try {
-          const response = await authClient.authFetch('/.netlify/functions/user-settings-get');
+          const response = await authClient.authFetch('/api/settings');
           if (response.ok) {
             const settings = await response.json();
             const pricing = settings.pricing || {};
@@ -1081,7 +1081,7 @@
           if (msg) msg.textContent = 'Saving...';
           
           try {
-            const response = await authClient.authFetch('/.netlify/functions/user-settings-save', {
+            const response = await authClient.authFetch('/api/settings', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -1119,7 +1119,7 @@
       // Load auto-price settings
       async function loadAutoPriceSettings() {
         try {
-          const response = await authClient.authFetch('/.netlify/functions/user-settings-get');
+          const response = await authClient.authFetch('/api/settings');
           if (response.ok) {
             const settings = await response.json();
             const autoPrice = settings.autoPrice || {};
@@ -1188,7 +1188,7 @@
           if (msg) msg.textContent = 'Saving...';
           
           try {
-            const response = await authClient.authFetch('/.netlify/functions/user-settings-save', {
+            const response = await authClient.authFetch('/api/settings', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -1219,7 +1219,7 @@
       // Load developer settings
       async function loadDevSettings() {
         try {
-          const response = await authClient.authFetch('/.netlify/functions/user-settings-get');
+          const response = await authClient.authFetch('/api/settings');
           if (response.ok) {
             const settings = await response.json();
             

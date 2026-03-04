@@ -162,7 +162,7 @@
       }
 
       async function ensureConnected() {
-        const r = await authClient.authFetch('/.netlify/functions/status');
+        const r = await authClient.authFetch('/api/status');
         const s = await r.json();
         if (!s.ebay?.connected) {
           document.getElementById('msg').textContent = 'Connect eBay first.';

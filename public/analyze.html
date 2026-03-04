@@ -195,7 +195,7 @@
         let st = {};
         try { st = await r.json(); } catch { st = { parse: 'failed', text: await r.text().catch(()=> '') }; }
         dbg('analyze.bg.poll', { endpoint, status: r.status, ok: r.ok, body: st });
-        if (st.state === 'complete' || st.state === 'error') return st;
+        if (st.status === 'completed' || st.status === 'failed' || st.state === 'complete' || st.state === 'completed' || st.state === 'error') return st;
       }
       throw new Error('Timed out waiting for job.');
     }
@@ -204,7 +204,7 @@
       try {
         const t = await getToken();
         if (!t) return '';
-        const r = await fetch('/.netlify/functions/ebay-get-location-user', {
+        const r = await fetch('/api/ebay/locations/user', {
           headers: { Authorization: `Bearer ${t}` },
         });
         if (!r.ok) return '';
@@ -337,7 +337,7 @@
             try {
               const tkn = await getToken();
               if (!tkn) return;
-              const r = await fetch('/.netlify/functions/ebay-list-locations', { headers: { Authorization: `Bearer ${tkn}` } });
+              const r = await fetch('/api/ebay/locations', { headers: { Authorization: `Bearer ${tkn}` } });
               const j = await r.json().catch(() => ({}));
               const list = Array.isArray(j?.locations) ? j.locations : (Array.isArray(j?.locationResponses) ? j.locationResponses : []);
               const options = [];
@@ -387,7 +387,7 @@
       if (!t) throw new Error('Not authenticated');
       const hdr = { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` };
       const body = JSON.stringify({ merchantLocationKey });
-      const r = await fetch('/.netlify/functions/ebay-set-location-user', { method: 'POST', headers: hdr, body });
+      const r = await fetch('/api/ebay/locations/user', { method: 'POST', headers: hdr, body });
       if (!r.ok) throw new Error(`set default failed: ${await r.text()}`);
     }
 
@@ -431,7 +431,7 @@
         if (!t) throw new Error('Not authenticated');
         const hdr = { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` };
         const body = JSON.stringify({ jobId: window._currentJobId || 'adhoc', groups: picked });
-        const endpoint = '/.netlify/functions/create-ebay-draft-user';
+        const endpoint = '/api/drafts';
         const r = await fetch(endpoint, { method: 'POST', headers: hdr, body });
         let data = {};
         try { data = await r.json(); } catch { data = { parse: 'failed', text: await r.text().catch(()=> '') }; }

@@ -4,7 +4,7 @@ import { getBrandUrls, setBrandUrls } from "./brand-map.js";
 import { fetchSoldPriceStats, type SoldPriceStats } from "./pricing/ebay-sold-prices.js";
 import { openai } from "./openai.js";
 import { getCachedPrice, setCachedPrice, makePriceSig } from "./price-cache.js";
-import { computeEbayItemPrice } from "./pricing-compute.js";
+import { computeEbayItemPrice } from "./pricing/ebay-price-math.js";
 import { getDefaultPricingSettings, type PricingSettings } from "./pricing-config.js";
 
 // ============================================================================
@@ -755,11 +755,14 @@ ${candidates.map((c, i) => `${i + 1}. ${c.source}: $${c.price.toFixed(2)} ${c.co
 
 ${soldStats && soldStats.ok ? `
 RECENT SOLD PRICES (last 30 days):
-- Median: $${soldStats.median?.toFixed(2) || 'N/A'}
-- 35th percentile: $${soldStats.p35?.toFixed(2) || 'N/A'}
-- 10th percentile: $${soldStats.p10?.toFixed(2) || 'N/A'}
-- 90th percentile: $${soldStats.p90?.toFixed(2) || 'N/A'}
-- Sample count: ${soldStats.samples.length}
+- Delivered Median (item+ship): $${soldStats.deliveredMedian?.toFixed(2) || 'N/A'}
+- Delivered P35   (item+ship): $${soldStats.deliveredP35?.toFixed(2)   || 'N/A'}
+- Delivered P10   (item+ship): $${soldStats.deliveredP10?.toFixed(2)   || 'N/A'}
+- Delivered P90   (item+ship): $${soldStats.deliveredP90?.toFixed(2)   || 'N/A'}
+- Item-only Median: $${soldStats.median?.toFixed(2) || 'N/A'}
+- Item-only P35:   $${soldStats.p35?.toFixed(2)    || 'N/A'}
+- Avg Shipping:    $${soldStats.avgShipping?.toFixed(2) || 'N/A'}
+- Sample count: ${soldStats.samplesCount ?? soldStats.samples.length}
 ` : ''}
 
 PRICING RULES (STRICT PRIORITY ORDER):
@@ -1040,6 +1043,33 @@ export function selectPriceSource(input: PriceLookupInput, candidates: PriceSour
 }
 
 /**
+ * Select the best delivered-price stat from a SoldPriceStats object for use
+ * as a pricing candidate.  Prefers delivered (item + shipping) stats over
+ * item-only stats so pricing accounts for shipping costs paid by buyers:
+ *
+ *   1. deliveredP35   — 35th-percentile of (item + shipping) – preferred
+ *   2. deliveredMedian — median of (item + shipping)           – fallback
+ *   3. null            — no delivered stats available
+ *
+ * The returned `label` is used in candidate notes and log messages.
+ *
+ * @public Exported for unit testing
+ */
+export function selectDeliveredSoldCandidate(
+  soldStats: SoldPriceStats
+): { value: number; label: string } | null {
+  if (!soldStats.ok) return null;
+
+  if (soldStats.deliveredP35 && soldStats.deliveredP35 > 0) {
+    return { value: soldStats.deliveredP35, label: 'Delivered P35' };
+  }
+  if (soldStats.deliveredMedian && soldStats.deliveredMedian > 0) {
+    return { value: soldStats.deliveredMedian, label: 'Delivered Median' };
+  }
+  return null;
+}
+
+/**
  * MAIN ENTRY POINT: Tiered price lookup with AI arbitration
  * 
  * Tier 1: eBay sold/completed prices (most reliable)
@@ -1127,16 +1157,35 @@ export async function lookupPrice(
 
   if (soldStats.rateLimited) {
     console.warn('[price] ⚠️  eBay sold prices rate limited - skipping to brand MSRP');
-  } else if (soldStats.ok && soldStats.p35) {
-    candidates.push({
-      source: 'ebay-sold',
-      price: soldStats.p35,
-      currency: 'USD',
-      notes: `35th percentile of ${soldStats.samples.length} recent sold items`,
-    });
-    console.log(`[price] ✓ eBay sold price: $${soldStats.p35.toFixed(2)} (median: $${soldStats.median?.toFixed(2)})`);
   } else {
-    console.log('[price] ✗ No eBay sold price data available');
+    const deliveredCandidate = selectDeliveredSoldCandidate(soldStats);
+    if (deliveredCandidate) {
+      candidates.push({
+        source: 'ebay-sold',
+        price: deliveredCandidate.value,
+        currency: 'USD',
+        notes: `${deliveredCandidate.label} of ${soldStats.samplesCount ?? soldStats.samples.length} recent sold items (item+shipping)`,
+      });
+      console.log(
+        `[price] ✓ eBay sold price (${deliveredCandidate.label}): $${deliveredCandidate.value.toFixed(2)}` +
+        ` (item-only p35: $${soldStats.p35?.toFixed(2) ?? 'N/A'},` +
+        ` avg shipping: $${soldStats.avgShipping?.toFixed(2) ?? 'N/A'})`,
+      );
+    } else if (soldStats.ok && soldStats.p35) {
+      // Fallback: no delivered stats available — use item-only p35 with a warning
+      candidates.push({
+        source: 'ebay-sold',
+        price: soldStats.p35,
+        currency: 'USD',
+        notes: `Item-only P35 of ${soldStats.samplesCount ?? soldStats.samples.length} recent sold items (no delivered stats)`,
+      });
+      console.warn(
+        `[price] ⚠️ eBay sold price using item-only P35 (no delivered stats): $${soldStats.p35.toFixed(2)}` +
+        ` — price may undercount shipping`,
+      );
+    } else {
+      console.log('[price] ✗ No eBay sold price data available');
+    }
   }
 
   // ========================================

@@ -1,3 +1,4 @@
+﻿/* eslint-disable no-irregular-whitespace */
 /**
  * Delivered-Price-First Pricing Engine (v2)
  * 
@@ -59,12 +60,16 @@ import { extractPriceWithShipping } from './html-price.js';
 
 // v2 pricing modules
 import { computeRobustStats, isFloorOutlier, isSoldStrong, isActiveStrong, isSoldWeak, isActiveWeak, sellThrough, type RobustStats, type CompSample } from './pricing/robust-stats.js';
-import { buildIdentity, type CanonicalIdentity } from './pricing/identity-model.js';
-import { matchComps, filterMatches, filterMatchesAndAmbiguous, type CompCandidate, type MatchResult } from './pricing/comp-matcher.js';
+import { buildIdentity, extractIdentity, type CanonicalIdentity } from './pricing/identity-model.js';
+import { matchComps, filterMatches, filterMatchesAndAmbiguous, strictMatchIdentity, type CompCandidate, type MatchResult } from './pricing/comp-matcher.js';
 import { enforceSafetyFloor, estimateProfit, DEFAULT_FEE_MODEL, DEFAULT_SAFETY_INPUTS, type SafetyFloorInputs, type SafetyFloorResult } from './pricing/safety-floors.js';
 import { pricingFlags } from './pricing/feature-flags.js';
 import { computeConfidence, checkCrossSignal, type ConfidenceInputs, type ConfidenceResult } from './pricing/confidence-scoring.js';
 import { searchEbayComps, type EbayCompetitor, type EbayCompsResult } from './ebay-browse-search.js';
+import { serpFallbackLookup, shouldUseSerpFallback } from './pricing/serp-fallback.js';
+// Shared types (breaks circular dep with shipping-estimates.ts)
+import type { CompetitorPrice } from './pricing/shared-types.js';
+export type { CompetitorPrice };
 
 // ============================================================================
 // Types
@@ -79,17 +84,6 @@ export type PricingMode = 'market-match' | 'fast-sale' | 'max-margin';
  * - ALLOW_ANYWAY: Create listing even if overpriced (user's choice)
  */
 export type LowPriceMode = 'FLAG_ONLY' | 'AUTO_SKIP' | 'ALLOW_ANYWAY';
-
-export interface CompetitorPrice {
-  source: 'amazon' | 'walmart' | 'ebay' | 'target' | 'other';
-  itemCents: number;
-  shipCents: number;        // 0 if free shipping
-  deliveredCents: number;   // item + ship
-  title: string;
-  url: string | null;
-  inStock: boolean;
-  seller: string;
-}
 
 export interface DeliveredPricingSettings {
   mode: PricingMode;
@@ -319,7 +313,7 @@ async function braveAmazonFallback(brand: string, productName: string): Promise<
     // Use item + shipping for total delivered price
     const totalPrice = result.amazonItemPrice + (result.amazonShippingPrice || 0);
     const priceCents = Math.round(totalPrice * 100);
-    console.log(`[delivered-pricing] Brave Amazon price: $${result.amazonItemPrice.toFixed(2)} + $${(result.amazonShippingPrice || 0).toFixed(2)} ship = $${totalPrice.toFixed(2)} → ${priceCents} cents`);
+    console.log(`[delivered-pricing] Brave Amazon price: $${result.amazonItemPrice.toFixed(2)} + $${(result.amazonShippingPrice || 0).toFixed(2)} ship = $${totalPrice.toFixed(2)} â†’ ${priceCents} cents`);
     return { priceCents, url: amazonUrl };
   }
   
@@ -414,15 +408,15 @@ export function calculateTargetDelivered(
     const variantThreshold = brandSitePrice * 0.50; // 50% of brand site = likely different variant
     
     if (amazonPrice !== null && amazonPrice < variantThreshold) {
-      console.log(`[delivered-pricing] ⚠️ Amazon $${(amazonPrice / 100).toFixed(2)} is <50% of brand site $${(brandSitePrice / 100).toFixed(2)} - likely different variant, ignoring`);
+      console.log(`[delivered-pricing] âš ï¸ Amazon $${(amazonPrice / 100).toFixed(2)} is <50% of brand site $${(brandSitePrice / 100).toFixed(2)} - likely different variant, ignoring`);
       effectiveAmazonPrice = null;
     }
     if (walmartPrice !== null && walmartPrice < variantThreshold) {
-      console.log(`[delivered-pricing] ⚠️ Walmart $${(walmartPrice / 100).toFixed(2)} is <50% of brand site $${(brandSitePrice / 100).toFixed(2)} - likely different variant, ignoring`);
+      console.log(`[delivered-pricing] âš ï¸ Walmart $${(walmartPrice / 100).toFixed(2)} is <50% of brand site $${(brandSitePrice / 100).toFixed(2)} - likely different variant, ignoring`);
       effectiveWalmartPrice = null;
     }
     if (targetPrice !== null && targetPrice < variantThreshold) {
-      console.log(`[delivered-pricing] ⚠️ Target $${(targetPrice / 100).toFixed(2)} is <50% of brand site $${(brandSitePrice / 100).toFixed(2)} - likely different variant, ignoring`);
+      console.log(`[delivered-pricing] âš ï¸ Target $${(targetPrice / 100).toFixed(2)} is <50% of brand site $${(brandSitePrice / 100).toFixed(2)} - likely different variant, ignoring`);
       effectiveTargetPrice = null;
     }
   }
@@ -499,7 +493,7 @@ export function calculateTargetDelivered(
       const lowestReliableRetail = sortedRetail[0];
       
       // Use the average of the two lowest prices as "expected retail"
-      // If only 1 comp, use it directly — even a single retail data point
+      // If only 1 comp, use it directly â€” even a single retail data point
       // can indicate contamination when sold median is wildly different
       const lowestClusterAvg = sortedRetail.length >= 2
         ? (sortedRetail[0] + sortedRetail[1]) / 2
@@ -508,7 +502,7 @@ export function calculateTargetDelivered(
       // If sold median is 1.5x+ higher than lowest retail cluster, sold data is likely contaminated
       // This catches cases where sold data includes multi-packs that weren't filtered
       if (soldMedian > lowestClusterAvg * 1.5) {
-        console.log(`[delivered-pricing] ⚠️ Sold median ($${(soldMedian / 100).toFixed(2)}) is ${(soldMedian / lowestClusterAvg).toFixed(1)}x lowest retail cluster ($${(lowestClusterAvg / 100).toFixed(2)})`);
+        console.log(`[delivered-pricing] âš ï¸ Sold median ($${(soldMedian / 100).toFixed(2)}) is ${(soldMedian / lowestClusterAvg).toFixed(1)}x lowest retail cluster ($${(lowestClusterAvg / 100).toFixed(2)})`);
         console.log(`[delivered-pricing] Sold data likely contaminated with multi-packs - ignoring sold data`);
         
         // Mark sold data as NOT strong since it's contaminated
@@ -555,18 +549,18 @@ export function calculateTargetDelivered(
               (amazonPrice !== null) || (walmartPrice !== null) || (brandSitePrice !== null);
             
             if (hasRetailValidation) {
-              // Have retail data to cross-check — trust sold median over floor
+              // Have retail data to cross-check â€” trust sold median over floor
               targetCents = soldMedian!;
               console.log(`[delivered-pricing] Floor ($${(activeFloor / 100).toFixed(2)}) is outlier (${Math.round(floorRatio * 100)}% of sold median $${(soldMedian! / 100).toFixed(2)}) - using sold median (retail validated)`);
             } else {
-              // NO retail data to validate — sold median could be contaminated
+              // NO retail data to validate â€” sold median could be contaminated
               // with multi-packs, bundles, or wrong variants.
               // Cap at 1.5x active floor to prevent wildly inflated prices.
               const maxUplift = Math.round(activeFloor * 1.50);
               targetCents = Math.min(soldMedian!, maxUplift);
               warnings.push('soldMedianCappedNoRetail');
-              console.log(`[delivered-pricing] ⚠️ Floor ($${(activeFloor / 100).toFixed(2)}) is ${Math.round(floorRatio * 100)}% of sold median ($${(soldMedian! / 100).toFixed(2)}) but NO retail validation`);
-              console.log(`[delivered-pricing] ⚠️ Sold median may be contaminated (multi-packs?) - capping at $${(maxUplift / 100).toFixed(2)} (1.5x floor)`);
+              console.log(`[delivered-pricing] âš ï¸ Floor ($${(activeFloor / 100).toFixed(2)}) is ${Math.round(floorRatio * 100)}% of sold median ($${(soldMedian! / 100).toFixed(2)}) but NO retail validation`);
+              console.log(`[delivered-pricing] âš ï¸ Sold median may be contaminated (multi-packs?) - capping at $${(maxUplift / 100).toFixed(2)} (1.5x floor)`);
             }
           } else {
             targetCents = Math.min(soldMedian!, activeFloor);
@@ -637,7 +631,7 @@ export function calculateTargetDelivered(
       const discountRatio = hasKnownRetailer ? 0.60 : 0.80;
       targetCents = Math.round(retailPrice * discountRatio);
       warnings.push('usingRetailFallback');
-      console.log(`[delivered-pricing] Using retail fallback: $${(retailPrice / 100).toFixed(2)} → target $${(targetCents / 100).toFixed(2)} (${Math.round(discountRatio * 100)}%${hasKnownRetailer ? ' major retail' : ' brand/niche site'})`);
+      console.log(`[delivered-pricing] Using retail fallback: $${(retailPrice / 100).toFixed(2)} â†’ target $${(targetCents / 100).toFixed(2)} (${Math.round(discountRatio * 100)}%${hasKnownRetailer ? ' major retail' : ' brand/niche site'})`);
     } else {
       // No pricing data at all
       targetCents = 0;
@@ -649,7 +643,7 @@ export function calculateTargetDelivered(
   // The retail cap IS the deal (80% of retail = 20% off for buyers)
   // We WANT to beat eBay competition, not match them
   if (retailCapCents !== null && targetCents > retailCapCents) {
-    console.log(`[delivered-pricing] Applying retail cap: $${(targetCents / 100).toFixed(2)} → $${(retailCapCents / 100).toFixed(2)} (deal price)`);
+    console.log(`[delivered-pricing] Applying retail cap: $${(targetCents / 100).toFixed(2)} â†’ $${(retailCapCents / 100).toFixed(2)} (deal price)`);
     warnings.push('retailCapApplied');
     targetCents = retailCapCents;
   }
@@ -660,7 +654,7 @@ export function calculateTargetDelivered(
     const retailFloorCents = Math.round(lowestRetailCents * RETAIL_FLOOR_RATIO);
     const newTarget = Math.max(targetCents, retailFloorCents, minDeliveredCents);
     if (newTarget > targetCents) {
-      console.log(`[delivered-pricing] Applying retail floor: $${(targetCents / 100).toFixed(2)} → $${(newTarget / 100).toFixed(2)} (floor ${Math.round(RETAIL_FLOOR_RATIO * 100)}% of trusted retail $${(lowestRetailCents / 100).toFixed(2)})`);
+      console.log(`[delivered-pricing] Applying retail floor: $${(targetCents / 100).toFixed(2)} â†’ $${(newTarget / 100).toFixed(2)} (floor ${Math.round(RETAIL_FLOOR_RATIO * 100)}% of trusted retail $${(lowestRetailCents / 100).toFixed(2)})`);
       warnings.push('retailFloorApplied');
       targetCents = newTarget;
     }
@@ -696,25 +690,25 @@ export function calculateTargetDelivered(
  * INVARIANT: totalDelivered === finalItemCents + finalShipCents (always)
  * ============================================================================
  * 
- * WORKED EXAMPLE A — Normal buyer-pays-shipping (OK):
+ * WORKED EXAMPLE A â€” Normal buyer-pays-shipping (OK):
  *   Input:  targetDeliveredCents=2038 ($20.38), buyerShippingChargeCents=600, minItemCents=499
  *   Calc:   rawItem = 2038 - 600 = 1438 ($14.38)
- *   Check:  1438 >= 499? YES → canCompete=true
+ *   Check:  1438 >= 499? YES â†’ canCompete=true
  *   Output: finalItem=1438, finalShip=600, total=2038, canCompete=true
  * 
- * WORKED EXAMPLE B — Buyer-pays-shipping triggers cannotCompete:
+ * WORKED EXAMPLE B â€” Buyer-pays-shipping triggers cannotCompete:
  *   Input:  targetDeliveredCents=900 ($9.00), buyerShippingChargeCents=600, minItemCents=499
  *   Calc:   rawItem = 900 - 600 = 300 ($3.00)
- *   Check:  300 >= 499? NO → clamp to 499
- *   Total:  499 + 600 = 1099 > 900 → cannotCompete
+ *   Check:  300 >= 499? NO â†’ clamp to 499
+ *   Total:  499 + 600 = 1099 > 900 â†’ cannotCompete
  *   Output: finalItem=499, finalShip=600, total=1099, canCompete=false
  * 
- * WORKED EXAMPLE C — Auto free-shipping fallback fixes it:
+ * WORKED EXAMPLE C â€” Auto free-shipping fallback fixes it:
  *   Input:  targetDeliveredCents=900, buyerShippingChargeCents=600, minItemCents=499,
  *           allowAutoFreeShippingOnLowPrice=true
- *   Calc:   rawItem = 900 - 600 = 300 < 499 → try free shipping
+ *   Calc:   rawItem = 900 - 600 = 300 < 499 â†’ try free shipping
  *   Free:   finalItem = 900 (= targetDelivered), finalShip = 0
- *   Check:  900 >= 499? YES → canCompete=true
+ *   Check:  900 >= 499? YES â†’ canCompete=true
  *   Output: finalItem=900, finalShip=0, total=900, canCompete=true,
  *           warning='autoFreeShippingOnLowPrice'
  * 
@@ -743,7 +737,7 @@ export function splitDeliveredPrice(
   const shippingChargeCents = settings.shippingEstimateCents;
   const minItemCents = settings.minItemCents;
   
-  console.log(`[split-price] ── SPLIT CALCULATION ──`);
+  console.log(`[split-price] â”€â”€ SPLIT CALCULATION â”€â”€`);
   console.log(`[split-price] Input: targetDelivered=$${(targetDeliveredCents / 100).toFixed(2)}, shippingCharge=$${(shippingChargeCents / 100).toFixed(2)}, minItem=$${(minItemCents / 100).toFixed(2)}`);
   
   // Calculate what item price would be with buyer-pays shipping
@@ -752,10 +746,10 @@ export function splitDeliveredPrice(
   
   // ========================================================================
   // Case 1: Normal split works (item >= min)
-  // INVARIANT: naiveItemCents + shippingChargeCents === targetDeliveredCents ✓
+  // INVARIANT: naiveItemCents + shippingChargeCents === targetDeliveredCents âœ“
   // ========================================================================
   if (naiveItemCents >= minItemCents) {
-    console.log(`[split-price] ✅ Case 1: Normal split works (item $${(naiveItemCents / 100).toFixed(2)} >= min $${(minItemCents / 100).toFixed(2)})`);
+    console.log(`[split-price] âœ… Case 1: Normal split works (item $${(naiveItemCents / 100).toFixed(2)} >= min $${(minItemCents / 100).toFixed(2)})`);
     console.log(`[split-price] Result: item=$${(naiveItemCents / 100).toFixed(2)} + ship=$${(shippingChargeCents / 100).toFixed(2)} = $${((naiveItemCents + shippingChargeCents) / 100).toFixed(2)}`);
     return {
       itemCents: naiveItemCents,
@@ -769,7 +763,7 @@ export function splitDeliveredPrice(
     };
   }
   
-  console.log(`[split-price] ⚠️ Item $${(naiveItemCents / 100).toFixed(2)} < min $${(minItemCents / 100).toFixed(2)} - trying free shipping fallback`);
+  console.log(`[split-price] âš ï¸ Item $${(naiveItemCents / 100).toFixed(2)} < min $${(minItemCents / 100).toFixed(2)} - trying free shipping fallback`);
   
   // ========================================================================
   // Case 2: Item price would be below min floor
@@ -780,7 +774,7 @@ export function splitDeliveredPrice(
     console.log(`[split-price] Free shipping allowed, subsidy needed: $${(subsidyNeeded / 100).toFixed(2)} (max: $${(settings.freeShippingMaxSubsidyCents / 100).toFixed(2)})`);
     
     // With free shipping: shippingChargeCents = 0, itemCents = targetDelivered
-    // INVARIANT: targetDeliveredCents + 0 === targetDeliveredCents ✓
+    // INVARIANT: targetDeliveredCents + 0 === targetDeliveredCents âœ“
     const freeShipItemCents = targetDeliveredCents;
     console.log(`[split-price] With free ship: item would be $${(freeShipItemCents / 100).toFixed(2)} (= targetDelivered)`);
     
@@ -789,7 +783,7 @@ export function splitDeliveredPrice(
     // below minItemCents, switch to FREE_SHIPPING mode if allowed. This lets
     // us compete on low-price items without violating the min floor.
     if (subsidyNeeded <= settings.freeShippingMaxSubsidyCents && freeShipItemCents >= minItemCents) {
-      console.log(`[split-price] ✅ Case 2: Free shipping works! item=$${(freeShipItemCents / 100).toFixed(2)} + ship=$0 = $${(freeShipItemCents / 100).toFixed(2)}`);
+      console.log(`[split-price] âœ… Case 2: Free shipping works! item=$${(freeShipItemCents / 100).toFixed(2)} + ship=$0 = $${(freeShipItemCents / 100).toFixed(2)}`);
       warnings.push('autoFreeShippingOnLowPrice');
       return {
         itemCents: freeShipItemCents,
@@ -805,14 +799,14 @@ export function splitDeliveredPrice(
     
     // Free shipping would help but subsidy exceeds our cap
     if (freeShipItemCents >= minItemCents && subsidyNeeded > settings.freeShippingMaxSubsidyCents) {
-      console.log(`[split-price] ❌ Subsidy $${(subsidyNeeded / 100).toFixed(2)} exceeds cap $${(settings.freeShippingMaxSubsidyCents / 100).toFixed(2)}`);
+      console.log(`[split-price] âŒ Subsidy $${(subsidyNeeded / 100).toFixed(2)} exceeds cap $${(settings.freeShippingMaxSubsidyCents / 100).toFixed(2)}`);
       warnings.push('subsidyExceedsCap');
       // Fall through to cannotCompete
     }
     
     // Item price still below min even with free shipping
     if (freeShipItemCents < minItemCents) {
-      console.log(`[split-price] ❌ Even with free ship, item $${(freeShipItemCents / 100).toFixed(2)} < min $${(minItemCents / 100).toFixed(2)}`);
+      console.log(`[split-price] âŒ Even with free ship, item $${(freeShipItemCents / 100).toFixed(2)} < min $${(minItemCents / 100).toFixed(2)}`);
     }
   }
   
@@ -822,8 +816,8 @@ export function splitDeliveredPrice(
   // ========================================================================
   // CLAMP TO MIN: rawItem was below minItemCents, and free-ship fallback
   // either wasn't allowed or subsidy exceeded cap. We must use minItemCents.
-  // totalDelivered will now EXCEED targetDeliveredCents → cannotCompete.
-  console.log(`[split-price] 🚫 Case 3: CANNOT COMPETE - market price too low`);
+  // totalDelivered will now EXCEED targetDeliveredCents â†’ cannotCompete.
+  console.log(`[split-price] ðŸš« Case 3: CANNOT COMPETE - market price too low`);
   warnings.push('minItemFloorHit');
   warnings.push('cannotCompete');
   
@@ -873,15 +867,15 @@ export function splitDeliveredPrice(
  * 
  * Graduated tiers (post-IQR-cleaned sample counts):
  * 
- *   STRONG (≥5 cleaned):
+ *   STRONG (â‰¥10 cleaned):              selectedAnchor = SOLD_DELIVERED_P35
  *     Sold:   base = soldStats.P35 (aggressive)
  *     Active: base = activeStats.P20 (aggressive)
  * 
- *   WEAK (3-4 cleaned):
- *     Sold:   base = soldStats.P50 (conservative — median)
+ *   WEAK (3-9 cleaned):                selectedAnchor = SOLD_DELIVERED_MEDIAN
+ *     Sold:   base = soldStats.P50 (conservative â€” median)
  *     Active: base = activeStats.P35 (conservative)
  * 
- *   NONE (<3 cleaned):
+ *   NONE (<3 cleaned):                 selectedAnchor = NONE
  *     If retailAnchor: base = retailAnchor * 0.70
  *     Else: MANUAL_REVIEW_REQUIRED
  * 
@@ -895,7 +889,7 @@ export function calculateTargetDeliveredV2(
   lowestTrustedRetailCents: number | null,
   undercutCents: number,
   minDeliveredCents: number,
-): { targetCents: number; fallbackUsed: boolean; soldStrong: boolean; activeStrong: boolean; warnings: string[] } {
+): { targetCents: number; fallbackUsed: boolean; soldStrong: boolean; activeStrong: boolean; soldCleanCount: number; selectedAnchor: 'SOLD_DELIVERED_P35' | 'SOLD_DELIVERED_MEDIAN' | 'NONE'; warnings: string[] } {
   const warnings: string[] = [];
   let fallbackUsed = false;
 
@@ -904,101 +898,111 @@ export function calculateTargetDeliveredV2(
   const activeStrong = activeStats !== null && isActiveStrong(activeStats);
   const activeWeak = activeStats !== null && isActiveWeak(activeStats);
 
+  const soldCleanCount = soldStats?.count ?? 0;
+  let selectedAnchor: 'SOLD_DELIVERED_P35' | 'SOLD_DELIVERED_MEDIAN' | 'NONE' = 'NONE';
+
   let base: number;
 
   // === Primary target selection (graduated tiers) ===
 
-  // ── Tier 1: Sold STRONG (≥5 cleaned) — aggressive percentile pricing ──
+  // â”€â”€ Tier 1: Sold STRONG (â‰¥10 cleaned) â€” aggressive percentile pricing â”€â”€
   if (soldStrong) {
     switch (mode) {
       case 'market-match':
         base = soldStats!.p35;
-        console.log(`[pricing-v2] SoldStrong (${soldStats!.count} cleaned) → base = SoldP35 = $${(base / 100).toFixed(2)}`);
+        selectedAnchor = 'SOLD_DELIVERED_P35';
+        console.log(`[pricing-v2] SoldStrong (${soldStats!.count} cleaned) â†’ base = SoldP35 = $${(base / 100).toFixed(2)}`);
         break;
       case 'fast-sale': {
         const fastBase = activeStrong
           ? Math.min(activeStats!.p20, soldStats!.p35)
           : soldStats!.p35;
         base = Math.max(fastBase - undercutCents, minDeliveredCents);
-        console.log(`[pricing-v2] Fast-sale SoldStrong → base = $${(base / 100).toFixed(2)}`);
+        selectedAnchor = 'SOLD_DELIVERED_P35';
+        console.log(`[pricing-v2] Fast-sale SoldStrong â†’ base = $${(base / 100).toFixed(2)}`);
         break;
       }
       case 'max-margin':
         base = activeStrong
           ? Math.min(soldStats!.p50, activeStats!.p35)
           : soldStats!.p50;
-        console.log(`[pricing-v2] Max-margin SoldStrong → base = $${(base / 100).toFixed(2)}`);
+        selectedAnchor = 'SOLD_DELIVERED_MEDIAN';
+        console.log(`[pricing-v2] Max-margin SoldStrong â†’ base = $${(base / 100).toFixed(2)}`);
         break;
     }
 
-  // ── Tier 2: Sold WEAK (3-4 cleaned) — conservative median pricing ──
+  // â”€â”€ Tier 2: Sold WEAK (3-9 cleaned) â€” conservative median pricing â”€â”€
   } else if (soldWeak) {
     warnings.push('soldDataWeak');
     switch (mode) {
       case 'market-match':
-        base = soldStats!.p50; // Use median, not P35 — more conservative with limited data
-        console.log(`[pricing-v2] SoldWeak (${soldStats!.count} cleaned) → base = SoldP50 (median) = $${(base / 100).toFixed(2)}`);
+        base = soldStats!.p50; // Use median, not P35 â€” more conservative with limited data
+        selectedAnchor = 'SOLD_DELIVERED_MEDIAN';
+        console.log(`[pricing-v2] SoldWeak (${soldStats!.count} cleaned) â†’ base = SoldP50 (median) = $${(base / 100).toFixed(2)}`);
         break;
       case 'fast-sale':
         base = Math.max(soldStats!.p50 - undercutCents, minDeliveredCents);
-        console.log(`[pricing-v2] Fast-sale SoldWeak → base = SoldP50 - undercut = $${(base / 100).toFixed(2)}`);
+        selectedAnchor = 'SOLD_DELIVERED_MEDIAN';
+        console.log(`[pricing-v2] Fast-sale SoldWeak â†’ base = SoldP50 - undercut = $${(base / 100).toFixed(2)}`);
         break;
       case 'max-margin':
         base = soldStats!.p50;
-        console.log(`[pricing-v2] Max-margin SoldWeak → base = SoldP50 = $${(base / 100).toFixed(2)}`);
+        selectedAnchor = 'SOLD_DELIVERED_MEDIAN';
+        console.log(`[pricing-v2] Max-margin SoldWeak â†’ base = SoldP50 = $${(base / 100).toFixed(2)}`);
         break;
     }
 
-  // ── Tier 3: Active STRONG (≥5 cleaned) — aggressive active pricing ──
+  // â”€â”€ Tier 3: Active STRONG (â‰¥5 cleaned) â€” aggressive active pricing â”€â”€
   } else if (activeStrong) {
     switch (mode) {
       case 'market-match':
         base = activeStats!.p20;
-        console.log(`[pricing-v2] ActiveStrong (${activeStats!.count} cleaned, no sold) → base = ActiveP20 = $${(base / 100).toFixed(2)}`);
+        console.log(`[pricing-v2] ActiveStrong (${activeStats!.count} cleaned, no sold) â†’ base = ActiveP20 = $${(base / 100).toFixed(2)}`);
         break;
       case 'fast-sale':
         base = Math.max(activeStats!.p20 - undercutCents, minDeliveredCents);
-        console.log(`[pricing-v2] Fast-sale ActiveStrong → base = $${(base / 100).toFixed(2)}`);
+        console.log(`[pricing-v2] Fast-sale ActiveStrong â†’ base = $${(base / 100).toFixed(2)}`);
         break;
       case 'max-margin':
         base = activeStats!.p35;
-        console.log(`[pricing-v2] Max-margin ActiveStrong → base = ActiveP35 = $${(base / 100).toFixed(2)}`);
+        console.log(`[pricing-v2] Max-margin ActiveStrong â†’ base = ActiveP35 = $${(base / 100).toFixed(2)}`);
         break;
     }
 
-  // ── Tier 4: Active WEAK (3-4 cleaned) — conservative active pricing ──
+  // â”€â”€ Tier 4: Active WEAK (3-4 cleaned) â€” conservative active pricing â”€â”€
   } else if (activeWeak) {
     warnings.push('activeDataWeak');
     switch (mode) {
       case 'market-match':
-        base = activeStats!.p35; // P35 not P20 — more conservative with limited data
-        console.log(`[pricing-v2] ActiveWeak (${activeStats!.count} cleaned, no sold) → base = ActiveP35 = $${(base / 100).toFixed(2)}`);
+        base = activeStats!.p35; // P35 not P20 â€” more conservative with limited data
+        console.log(`[pricing-v2] ActiveWeak (${activeStats!.count} cleaned, no sold) â†’ base = ActiveP35 = $${(base / 100).toFixed(2)}`);
         break;
       case 'fast-sale':
         base = Math.max(activeStats!.p35 - undercutCents, minDeliveredCents);
-        console.log(`[pricing-v2] Fast-sale ActiveWeak → base = $${(base / 100).toFixed(2)}`);
+        console.log(`[pricing-v2] Fast-sale ActiveWeak â†’ base = $${(base / 100).toFixed(2)}`);
         break;
       case 'max-margin':
         base = activeStats!.p50;
-        console.log(`[pricing-v2] Max-margin ActiveWeak → base = ActiveP50 = $${(base / 100).toFixed(2)}`);
+        console.log(`[pricing-v2] Max-margin ActiveWeak â†’ base = ActiveP50 = $${(base / 100).toFixed(2)}`);
         break;
     }
 
-  // ── Tier 5: Retail anchor only (no usable sold/active) ──
+  // â”€â”€ Tier 5: Retail anchor only (no usable sold/active) â”€â”€
   } else if (lowestTrustedRetailCents !== null) {
     base = Math.round(lowestTrustedRetailCents * 0.70);
     fallbackUsed = true;
     warnings.push('usingRetailAnchorOnly');
-    console.log(`[pricing-v2] No usable sold/active → retail anchor * 0.70 = $${(base / 100).toFixed(2)}`);
+    console.log(`[pricing-v2] No usable sold/active â†’ retail anchor * 0.70 = $${(base / 100).toFixed(2)}`);
 
-  // ── Tier 6: No data ──
+  // â”€â”€ Tier 6: No data â”€â”€
   } else {
     base = 0;
     fallbackUsed = true;
     warnings.push('manualReviewRequired');
     warnings.push('noPricingData');
-    console.log(`[pricing-v2] No pricing signal → MANUAL_REVIEW_REQUIRED`);
-    return { targetCents: 0, fallbackUsed, soldStrong, activeStrong, warnings };
+    console.log(`[pricing-v2] No pricing signal â†’ MANUAL_REVIEW_REQUIRED`);
+    console.log(`[pricing-v2] Anchor selection summary: soldCleanCount=${soldCleanCount}, selectedAnchor=NONE, finalBase=$0.00`);
+    return { targetCents: 0, fallbackUsed, soldStrong, activeStrong, soldCleanCount, selectedAnchor: 'NONE', warnings };
   }
 
   // === Caps ===
@@ -1006,20 +1010,20 @@ export function calculateTargetDeliveredV2(
   if (activeStrong) {
     const activeCap = activeStats!.p65;
     if (base > activeCap && !(soldStrong && sellThrough(soldStats!.count, activeStats!.count)! > 0.40)) {
-      console.log(`[pricing-v2] Active cap: $${(base / 100).toFixed(2)} → $${(activeCap / 100).toFixed(2)} (ActiveP65)`);
+      console.log(`[pricing-v2] Active cap: $${(base / 100).toFixed(2)} â†’ $${(activeCap / 100).toFixed(2)} (ActiveP65)`);
       warnings.push('activeCapApplied');
       base = activeCap;
     }
   }
 
-  // Retail cap: prevent pricing above retail — but respect strong sold data.
+  // Retail cap: prevent pricing above retail â€” but respect strong sold data.
   //
-  // When we have ≥20 cleaned sold samples, the sold data is very reliable.
+  // When we have â‰¥20 cleaned sold samples, the sold data is very reliable.
   // A potentially-mismatched retail price (e.g. Walmart returning "Gummies"
   // for a "Chews" query) shouldn't crush a well-established sold target.
   //
   // Strategy:
-  //   - soldStrong with ≥20 samples: cap at 100% of retail (just don't exceed it)
+  //   - soldStrong with â‰¥20 samples: cap at 100% of retail (just don't exceed it)
   //   - soldStrong with 5-19 samples: cap at 90% of retail
   //   - otherwise (weak/no sold data): cap at 80% of retail (aggressive, buyers need value)
   if (lowestTrustedRetailCents !== null) {
@@ -1033,7 +1037,7 @@ export function calculateTargetDeliveredV2(
     const retailCap = Math.round(lowestTrustedRetailCents * effectiveCapRatio);
     if (base > retailCap) {
       const ratioLabel = effectiveCapRatio === 1.00 ? '100%' : effectiveCapRatio === 0.90 ? '90%' : '80%';
-      console.log(`[pricing-v2] Retail cap: $${(base / 100).toFixed(2)} → $${(retailCap / 100).toFixed(2)} (${ratioLabel} of $${(lowestTrustedRetailCents / 100).toFixed(2)}, sold=${soldStats?.count ?? 0} cleaned)`);
+      console.log(`[pricing-v2] Retail cap: $${(base / 100).toFixed(2)} â†’ $${(retailCap / 100).toFixed(2)} (${ratioLabel} of $${(lowestTrustedRetailCents / 100).toFixed(2)}, sold=${soldStats?.count ?? 0} cleaned)`);
       warnings.push('retailCapApplied');
       base = retailCap;
     }
@@ -1051,14 +1055,16 @@ export function calculateTargetDeliveredV2(
     const activeP35 = activeStats!.p35;
     if (activeP35 > 0 && soldP35 > activeP35 * 1.25) {
       warnings.push('soldActiveMismatch');
-      console.log(`[pricing-v2] ⚠️ SoldP35 ($${(soldP35 / 100).toFixed(2)}) > 1.25x ActiveP35 ($${(activeP35 / 100).toFixed(2)}) — possible sold contamination`);
+      console.log(`[pricing-v2] âš ï¸ SoldP35 ($${(soldP35 / 100).toFixed(2)}) > 1.25x ActiveP35 ($${(activeP35 / 100).toFixed(2)}) â€” possible sold contamination`);
     }
   }
 
   // Enforce minimum
   base = Math.max(base, minDeliveredCents);
 
-  return { targetCents: base, fallbackUsed, soldStrong, activeStrong, warnings };
+  console.log(`[pricing-v2] Anchor selection summary: soldCleanCount=${soldCleanCount}, selectedAnchor=${selectedAnchor}, finalBase=$${(base / 100).toFixed(2)}`);
+
+  return { targetCents: base, fallbackUsed, soldStrong, activeStrong, soldCleanCount, selectedAnchor, warnings };
 }
 
 // ============================================================================
@@ -1149,6 +1155,11 @@ function matchResultsToCompetitors(results: MatchResult[], source: CompetitorPri
  * @param settings - Pricing settings (optional, uses defaults)
  * @param additionalContext - Optional SEO terms or category context to improve search matching
  * @returns DeliveredPricingDecision with final item/ship prices and evidence
+ *
+ * @deprecated Prefer {@link getPricingDecision} from `src/lib/pricing/index.ts` which
+ *             handles DELIVERED_PRICING_V2 routing, NEEDS_REVIEW gating, and the legacy
+ *             fallback in one call. Direct use of this function is still fine for internal
+ *             or bundle-pricing scenarios that need the raw DeliveredPricingDecision.
  */
 export async function getDeliveredPricing(
   brand: string,
@@ -1163,374 +1174,13 @@ export async function getDeliveredPricing(
   const searchTerms = additionalContext 
     ? `${brand} ${productName} + context: ${additionalContext}` 
     : `${brand} ${productName}`;
-  console.log(`[delivered-pricing] Pricing "${searchTerms}" in ${fullSettings.mode} mode${flags.v2Enabled ? ' [v2]' : ''}`);
+  console.log(`[delivered-pricing] Pricing "${searchTerms}" in ${fullSettings.mode} mode [v2]`);
 
-  // ========================================================================
-  // v2 PIPELINE — percentile-based with identity filtering
-  // ========================================================================
-  if (flags.v2Enabled) {
-    return getDeliveredPricingV2(brand, productName, fullSettings, additionalContext, flags);
-  }
+  // Always use the v2 pipeline. PRICING_MODE routing (legacy vs delivered_v2) is
+  // controlled upstream in src/lib/pricing/index.ts. Callers wanting the legacy
+  // retail-discount formula should use getPricingDecision() from pricing/index.ts.
+  return getDeliveredPricingV2(brand, productName, fullSettings, additionalContext, flags);
 
-  // ========================================================================
-  // LEGACY PIPELINE — floor/median targeting via Google Shopping
-  // ========================================================================
-
-  // === Step 1: Search Google Shopping for all comps ===
-  // Note: eBay Browse API is unreliable/deprecated, so we use Google Shopping
-  // which indexes eBay listings along with Amazon, Walmart, etc.
-  const searchResult = await searchGoogleShopping(brand, productName, additionalContext);
-  
-  // Convert to CompetitorPrice format
-  const googleComps = searchResult.allResults.map(googleResultToCompetitor);
-  
-  // Separate eBay comps from retail comps
-  const ebayComps = googleComps.filter(c => c.source === 'ebay');
-  const retailComps = googleComps.filter(c => c.source !== 'ebay');
-  const compsSource: 'ebay' | 'ebay-browse' | 'google-shopping' | 'fallback' = 'google-shopping';
-  
-  console.log(`[delivered-pricing] Google Shopping: ${ebayComps.length} eBay comps, ${retailComps.length} retail comps`);
-
-  // Calculate metrics using eBay comps
-  const allComps = [...ebayComps, ...retailComps];
-  const activeFloor = ebayComps.length > 0 
-    ? Math.min(...ebayComps.map(c => c.deliveredCents))
-    : null;
-  const activeMedian = ebayComps.length > 0
-    ? median(ebayComps.map(c => c.deliveredCents))
-    : null;
-  
-  if (activeFloor !== null) {
-    console.log(`[delivered-pricing] eBay floor: $${(activeFloor / 100).toFixed(2)}, median: $${(activeMedian! / 100).toFixed(2)}`);
-  }
-
-  // Get trusted retail prices (Amazon, Walmart, Target, Brand Site)
-  // Brand site is MOST authoritative - it's the official MSRP
-  const amazonComp = allComps.find(c => c.source === 'amazon');
-  const walmartComp = allComps.find(c => c.source === 'walmart');
-  const targetComp = allComps.find(c => c.source === 'target');
-  const amazonPriceCents = amazonComp?.deliveredCents ?? null;
-  const walmartPriceCents = walmartComp?.deliveredCents ?? null;
-  const targetPriceCents = targetComp?.deliveredCents ?? null;
-  
-  // Brand site price from Google Shopping (most authoritative retail price)
-  const brandSitePriceCents = searchResult.brandSitePrice 
-    ? Math.round(searchResult.brandSitePrice * 100) 
-    : null;
-  
-  if (brandSitePriceCents) {
-    console.log(`[delivered-pricing] 🏪 Brand site: $${(brandSitePriceCents / 100).toFixed(2)} from ${searchResult.brandSiteSeller}`);
-  }
-  
-  // Get the LOWEST trusted retail price (Brand Site > Amazon > Walmart > Target)
-  // Brand site is included because it's the most authoritative source
-  const trustedRetailPrices = [brandSitePriceCents, amazonPriceCents, walmartPriceCents, targetPriceCents].filter(p => p !== null) as number[];
-  const lowestTrustedRetailCents = trustedRetailPrices.length > 0 ? Math.min(...trustedRetailPrices) : null;
-
-  if (amazonPriceCents) {
-    console.log(`[delivered-pricing] Amazon: $${(amazonPriceCents / 100).toFixed(2)} delivered`);
-  }
-  if (walmartPriceCents) {
-    console.log(`[delivered-pricing] Walmart: $${(walmartPriceCents / 100).toFixed(2)} delivered`);
-  }
-  if (targetPriceCents) {
-    console.log(`[delivered-pricing] Target: $${(targetPriceCents / 100).toFixed(2)} delivered`);
-  }
-  if (lowestTrustedRetailCents) {
-    console.log(`[delivered-pricing] Lowest trusted retail: $${(lowestTrustedRetailCents / 100).toFixed(2)}`);
-  }
-
-  // === Step 3: Fetch sold comps (Phase 3) ===
-  let soldMedianCents: number | null = null;
-  let soldCount = 0;
-  
-  try {
-    const soldResult = await fetchSoldPriceStats({
-      title: productName,
-      brand: brand,
-      condition: 'NEW',
-    });
-    
-    if (soldResult.ok && soldResult.samplesCount && soldResult.deliveredMedian) {
-      // Use TRUE delivered median (item + actual shipping) - no more guessing!
-      soldMedianCents = Math.round(soldResult.deliveredMedian * 100);
-      soldCount = soldResult.samplesCount;
-      const avgShip = soldResult.avgShipping ? `$${soldResult.avgShipping.toFixed(2)}` : 'n/a';
-      console.log(`[delivered-pricing] Sold comps: ${soldCount} samples, delivered median $${(soldMedianCents / 100).toFixed(2)} (avg shipping ${avgShip})`);
-    } else if (soldResult.ok && soldResult.samplesCount && soldResult.median) {
-      // Fallback: old-style data without shipping - estimate
-      soldMedianCents = Math.round(soldResult.median * 100) + fullSettings.shippingEstimateCents;
-      soldCount = soldResult.samplesCount;
-      console.log(`[delivered-pricing] Sold comps: ${soldCount} samples, item median $${soldResult.median.toFixed(2)} + est shipping = $${(soldMedianCents / 100).toFixed(2)}`);
-      warnings.push('soldShippingEstimated');
-    } else {
-      console.log(`[delivered-pricing] No sold comps found`);
-    }
-  } catch (err) {
-    console.log(`[delivered-pricing] Sold comps error: ${err}`);
-    warnings.push('soldCompsError');
-  }
-
-  // === Step 4: ALWAYS call direct Amazon/Walmart APIs ===
-  // Google Shopping returns pre-scraped data that can be stale or wrong
-  // (e.g., Walmart "add to cart to see price" returns garbage like $3.00).
-  // Direct SearchAPI endpoints hit each retailer's actual search API and are
-  // far more reliable. We run them unconditionally and cross-validate.
-  let effectiveAmazonPriceCents = amazonPriceCents;
-  let effectiveWalmartPriceCents = walmartPriceCents;
-  const retailHasBrand = retailCompsIncludeBrand(retailComps, brand);
-  const soldStrong = soldMedianCents !== null && soldCount >= 5;
-
-  // Always call direct APIs — they're the most reliable data source
-  const [directAmazonResult, directWalmartResult] = await Promise.allSettled([
-    searchAmazonWithFallback(brand, productName, true),
-    searchWalmart(brand, productName),
-  ]);
-
-  const directAmazonPrice = directAmazonResult.status === 'fulfilled' 
-    && directAmazonResult.value.price !== null 
-    && directAmazonResult.value.confidence !== 'low'
-    ? Math.round(directAmazonResult.value.price * 100) : null;
-  const directWalmartPrice = directWalmartResult.status === 'fulfilled'
-    && directWalmartResult.value.price !== null
-    && directWalmartResult.value.confidence !== 'low'
-    ? Math.round(directWalmartResult.value.price * 100) : null;
-
-  if (directAmazonPrice) {
-    console.log(`[delivered-pricing] 🔎 Direct Amazon API: $${(directAmazonPrice / 100).toFixed(2)}`);
-  }
-  if (directWalmartPrice) {
-    console.log(`[delivered-pricing] 🔎 Direct Walmart API: $${(directWalmartPrice / 100).toFixed(2)}`);
-  }
-
-  // Cross-validate Google Shopping vs direct API prices.
-  // If both exist and diverge by more than 40%, trust the direct API —
-  // Google Shopping often scrapes wrong variants, sample sizes, or
-  // "add to cart" placeholder prices.
-  const CROSS_VALIDATE_THRESHOLD = 0.40; // 40% divergence = suspect
-
-  if (amazonPriceCents && directAmazonPrice) {
-    const ratio = Math.abs(amazonPriceCents - directAmazonPrice) / Math.max(amazonPriceCents, directAmazonPrice);
-    if (ratio > CROSS_VALIDATE_THRESHOLD) {
-      console.log(`[delivered-pricing] ⚠️ Amazon cross-validation: Google=$${(amazonPriceCents / 100).toFixed(2)} vs Direct=$${(directAmazonPrice / 100).toFixed(2)} (${(ratio * 100).toFixed(0)}% divergence) → using Direct`);
-      effectiveAmazonPriceCents = directAmazonPrice;
-      warnings.push('amazonCrossValidated');
-    }
-  } else if (!amazonPriceCents && directAmazonPrice) {
-    effectiveAmazonPriceCents = directAmazonPrice;
-    warnings.push('usedDirectAmazonAPI');
-    console.log(`[delivered-pricing] ✓ Amazon from Direct API: $${(directAmazonPrice / 100).toFixed(2)} (Google Shopping had none)`);
-  }
-
-  if (walmartPriceCents && directWalmartPrice) {
-    const ratio = Math.abs(walmartPriceCents - directWalmartPrice) / Math.max(walmartPriceCents, directWalmartPrice);
-    if (ratio > CROSS_VALIDATE_THRESHOLD) {
-      console.log(`[delivered-pricing] ⚠️ Walmart cross-validation: Google=$${(walmartPriceCents / 100).toFixed(2)} vs Direct=$${(directWalmartPrice / 100).toFixed(2)} (${(ratio * 100).toFixed(0)}% divergence) → using Direct`);
-      effectiveWalmartPriceCents = directWalmartPrice;
-      warnings.push('walmartCrossValidated');
-    }
-  } else if (!walmartPriceCents && directWalmartPrice) {
-    effectiveWalmartPriceCents = directWalmartPrice;
-    warnings.push('usedDirectWalmartAPI');
-    console.log(`[delivered-pricing] ✓ Walmart from Direct API: $${(directWalmartPrice / 100).toFixed(2)} (Google Shopping had none)`);
-  }
-
-  // Minimum retail price sanity check: reject any retail price below $2.00
-  // or below 15% of eBay sold median (catches travel sizes, wrong variants, scraping errors)
-  const MIN_RETAIL_ABSOLUTE_CENTS = 200; // $2.00 absolute minimum
-  const MIN_RETAIL_VS_SOLD_RATIO = 0.15; // 15% of sold median
-  const soldBasedFloor = soldMedianCents ? Math.round(soldMedianCents * MIN_RETAIL_VS_SOLD_RATIO) : 0;
-  const retailSanityFloor = Math.max(MIN_RETAIL_ABSOLUTE_CENTS, soldBasedFloor);
-
-  if (effectiveAmazonPriceCents !== null && effectiveAmazonPriceCents < retailSanityFloor) {
-    console.log(`[delivered-pricing] ❌ Amazon $${(effectiveAmazonPriceCents / 100).toFixed(2)} below sanity floor $${(retailSanityFloor / 100).toFixed(2)} — rejecting (likely wrong variant/size)`);
-    effectiveAmazonPriceCents = null;
-    warnings.push('amazonPriceBelowSanityFloor');
-  }
-  if (effectiveWalmartPriceCents !== null && effectiveWalmartPriceCents < retailSanityFloor) {
-    console.log(`[delivered-pricing] ❌ Walmart $${(effectiveWalmartPriceCents / 100).toFixed(2)} below sanity floor $${(retailSanityFloor / 100).toFixed(2)} — rejecting (likely wrong variant/size)`);
-    effectiveWalmartPriceCents = null;
-    warnings.push('walmartPriceBelowSanityFloor');
-  }
-
-  // Brave Amazon fallback — only if we STILL have no Amazon price after direct API
-  const hasAnyRetailRef = (effectiveAmazonPriceCents !== null || effectiveWalmartPriceCents !== null || targetPriceCents !== null || brandSitePriceCents !== null);
-  
-  if (!effectiveAmazonPriceCents && !hasAnyRetailRef) {
-    console.log(`[delivered-pricing] 🔍 No retail reference after direct APIs - trying Brave Amazon fallback`);
-    
-    try {
-      const braveResult = await braveAmazonFallback(brand, productName);
-      if (braveResult.priceCents && braveResult.priceCents >= retailSanityFloor) {
-        effectiveAmazonPriceCents = braveResult.priceCents;
-        warnings.push('usedBraveAmazonFallback');
-        console.log(`[delivered-pricing] ✓ Brave Amazon fallback: $${(braveResult.priceCents / 100).toFixed(2)}`);
-      } else if (braveResult.url) {
-        warnings.push('braveAmazonNoPriceExtract');
-        console.log(`[delivered-pricing] ⚠️ Brave found Amazon page but price extraction failed`);
-      }
-    } catch { /* ignore */ }
-
-    if (!effectiveAmazonPriceCents && !hasAnyRetailRef && !retailHasBrand) {
-      warnings.push('nicheBrandNeedsReview');
-      console.log(`[delivered-pricing] ⚠️ NICHE BRAND: "${brand}" has no reliable pricing data - manual review required`);
-    }
-  }
-
-  // Calculate target delivered price
-  const minDeliveredCents = fullSettings.minItemCents + fullSettings.shippingEstimateCents;
-  const targetResult = calculateTargetDelivered(
-    fullSettings.mode,
-    activeFloor,
-    activeMedian,
-    soldMedianCents,
-    soldCount,
-    effectiveAmazonPriceCents, // Use Brave/Direct API Amazon price if available
-    effectiveWalmartPriceCents, // Use Direct API Walmart price if available
-    fullSettings.undercutCents,
-    minDeliveredCents,
-    retailComps,
-    targetPriceCents,  // Pass Target.com price
-    brandSitePriceCents  // Pass brand's official website price (most authoritative)
-  );
-  warnings.push(...targetResult.warnings);
-
-  // Handle no pricing data
-  if (targetResult.targetCents === 0) {
-    console.log(`[delivered-pricing] No pricing data found, using minimum prices`);
-    const skipListing = fullSettings.lowPriceMode === 'AUTO_SKIP';
-    return {
-      brand,
-      productName,
-      ebayComps,
-      retailComps,
-      activeFloorDeliveredCents: activeFloor,
-      activeMedianDeliveredCents: activeMedian,
-      amazonPriceCents: effectiveAmazonPriceCents,
-      walmartPriceCents: effectiveWalmartPriceCents,
-      soldMedianDeliveredCents: soldMedianCents,
-      soldCount,
-      soldStrong: targetResult.soldStrong,
-      mode: fullSettings.mode,
-      targetDeliveredCents: 0,
-      finalItemCents: fullSettings.minItemCents,
-      finalShipCents: fullSettings.shippingEstimateCents,
-      freeShipApplied: false,
-      subsidyCents: 0,
-      shippingEstimateSource: 'fixed',
-      skipListing,
-      canCompete: false,
-      matchConfidence: 'low',
-      fallbackUsed: true,
-      compsSource: 'fallback',
-      warnings,
-    };
-  }
-
-  console.log(`[delivered-pricing] Target delivered: $${(targetResult.targetCents / 100).toFixed(2)}`);
-
-  // === Phase 4: Smart Shipping ===
-  let effectiveShippingCents = fullSettings.shippingEstimateCents;
-  let shippingEstimateSource: 'default' | 'flat' | 'category' | 'size-heuristic' | 'comps' | 'comp-median' | 'fixed' = 'fixed';
-  
-  if (fullSettings.useSmartShipping) {
-    // Get smart shipping estimate
-    const shippingEstimate = getShippingEstimate(
-      brand,
-      productName,
-      ebayComps,
-      fullSettings.shippingSettings || DEFAULT_SHIPPING_SETTINGS
-    );
-    
-    effectiveShippingCents = shippingEstimate.cents;
-    shippingEstimateSource = shippingEstimate.source;
-    
-    console.log(`[delivered-pricing] Smart shipping: $${(effectiveShippingCents / 100).toFixed(2)} (source: ${shippingEstimateSource}, confidence: ${shippingEstimate.confidence})`);
-  }
-
-  // Update settings with smart shipping
-  const effectiveSettings: DeliveredPricingSettings = {
-    ...fullSettings,
-    shippingEstimateCents: effectiveShippingCents,
-  };
-
-  // Split into item + shipping
-  const splitResult = splitDeliveredPrice(targetResult.targetCents, effectiveSettings, shippingEstimateSource);
-  warnings.push(...splitResult.warnings);
-
-  console.log(`[delivered-pricing] Final: item $${(splitResult.itemCents / 100).toFixed(2)} + ship $${(splitResult.shipCents / 100).toFixed(2)}`);
-
-  // Determine confidence based on comp count (active eBay + sold data)
-  // Strong sold data (5+ samples) is reliable market data
-  let matchConfidence: 'high' | 'medium' | 'low' = 'low';
-  if (ebayComps.length >= 5 || targetResult.soldStrong) {
-    matchConfidence = 'high';
-  } else if (ebayComps.length >= 3 || (ebayComps.length >= 1 && retailComps.length >= 2)) {
-    matchConfidence = 'medium';
-  } else if (retailComps.length >= 3) {
-    // Multiple retail sources without eBay data is at least medium confidence
-    matchConfidence = 'medium';
-  }
-
-  // Determine final comps source
-  let finalCompsSource: 'ebay' | 'ebay-browse' | 'google-shopping' | 'fallback' = compsSource;
-  if (targetResult.fallbackUsed && ebayComps.length === 0) {
-    finalCompsSource = 'fallback';
-  }
-
-  // Log compete status
-  if (!splitResult.canCompete) {
-    console.log(`[delivered-pricing] ⚠️ Cannot compete: market $${(targetResult.targetCents / 100).toFixed(2)} vs our min $${((splitResult.itemCents + splitResult.shipCents) / 100).toFixed(2)}`);
-    if (splitResult.skipListing) {
-      console.log(`[delivered-pricing] 🚫 Skipping listing (lowPriceMode: AUTO_SKIP)`);
-    }
-  }
-
-  if (warnings.length > 0) {
-    console.log(`[delivered-pricing] Warnings: ${warnings.join(', ')}`);
-  }
-
-  // ========================================================================
-  // STRUCTURED LOG LINE (required by pricing fix spec)
-  // Shows buyer-facing split, cost estimate separately, and warnings
-  // ========================================================================
-  console.log(`[delivered-pricing] decision`, JSON.stringify({
-    targetDeliveredTotalCents: targetResult.targetCents,
-    mode: fullSettings.mode,
-    shippingChargeCents: splitResult.shipCents,
-    itemPriceCents: splitResult.itemCents,
-    shippingCostEstimateCents: effectiveShippingCents, // carrier cost (NOT buyer-facing)
-    freeShipApplied: splitResult.freeShipApplied,
-    canCompete: splitResult.canCompete,
-    warnings,
-  }));
-
-  return {
-    brand,
-    productName,
-    ebayComps,
-    retailComps,
-    activeFloorDeliveredCents: activeFloor,
-    activeMedianDeliveredCents: activeMedian,
-    amazonPriceCents: effectiveAmazonPriceCents,
-    walmartPriceCents: effectiveWalmartPriceCents,
-    soldMedianDeliveredCents: soldMedianCents,
-    soldCount,
-    soldStrong: targetResult.soldStrong,
-    mode: fullSettings.mode,
-    targetDeliveredCents: targetResult.targetCents,
-    finalItemCents: splitResult.itemCents,
-    finalShipCents: splitResult.shipCents,
-    freeShipApplied: splitResult.freeShipApplied,
-    subsidyCents: splitResult.subsidyCents,
-    shippingEstimateSource: splitResult.shippingEstimateSource,
-    skipListing: splitResult.skipListing,
-    canCompete: splitResult.canCompete,
-    matchConfidence,
-    fallbackUsed: targetResult.fallbackUsed,
-    compsSource: finalCompsSource,
-    warnings,
-  };
 }
 
 // ============================================================================
@@ -1540,8 +1190,10 @@ export async function getDeliveredPricing(
 /**
  * v2 pricing pipeline: percentile-based with identity filtering, safety floors,
  * confidence scoring, and optional eBay Browse API for active comps.
- * 
- * This is called when DP_PRICING_V2=true.
+ *
+ * This is always called by {@link getDeliveredPricing} (DP_PRICING_V2 routing removed).
+ * Higher-level routing between delivered_v2 and legacy is handled by
+ * `getPricingDecision()` in `src/lib/pricing/index.ts`.
  */
 async function getDeliveredPricingV2(
   brand: string,
@@ -1558,7 +1210,7 @@ async function getDeliveredPricingV2(
 
   // === Step 1: Fetch comps from all sources ===
 
-  // 1a. Google Shopping (always — provides retail anchors + eBay comps as fallback)
+  // 1a. Google Shopping (always â€” provides retail anchors + eBay comps as fallback)
   const searchResult = await searchGoogleShopping(brand, productName, additionalContext);
   const googleComps = searchResult.allResults.map(googleResultToCompetitor);
   const retailComps = googleComps.filter(c => c.source !== 'ebay');
@@ -1581,7 +1233,7 @@ async function getDeliveredPricingV2(
         console.log(`[pricing-v2] Browse API: no results, falling back to Google Shopping eBay comps`);
       }
     } catch (err) {
-      console.log(`[pricing-v2] Browse API error: ${err} — falling back to Google Shopping`);
+      console.log(`[pricing-v2] Browse API error: ${err} â€” falling back to Google Shopping`);
       warnings.push('browseApiError');
     }
   }
@@ -1594,12 +1246,36 @@ async function getDeliveredPricingV2(
   try {
     const soldResult = await fetchSoldPriceStats({ title: productName, brand, condition: 'NEW' });
     if (soldResult.ok && soldResult.samplesCount && soldResult.samples.length > 0) {
-      soldSamples = soldResult.samples.map(s => ({
+      let rawSamples = soldResult.samples;
+
+      // Identity filter on sold comps (when title is available on each sample)
+      if (flags.identityFilterEnabled) {
+        const queryIdentity = extractIdentity(`${brand} ${productName}`);
+        const rawCount = rawSamples.length;
+        const rejectionTally: Record<string, number> = {};
+
+        rawSamples = rawSamples.filter(s => {
+          if (!s.title) return true; // no title â†’ benefit of doubt
+          const { pass, rejectionReasons } = strictMatchIdentity(queryIdentity, s.title);
+          if (!pass) {
+            for (const r of rejectionReasons) {
+              rejectionTally[r] = (rejectionTally[r] ?? 0) + 1;
+            }
+          }
+          return pass;
+        });
+
+        const kept = rawSamples.length;
+        const rejected = rawCount - kept;
+        console.log(`[pricing-v2] Sold identity filter: ${rawCount} raw â†’ ${kept} kept, ${rejected} rejected`, rejected > 0 ? rejectionTally : '');
+      }
+
+      soldSamples = rawSamples.map(s => ({
         itemCents: Math.round(s.price * 100),
         shipCents: Math.round(s.shipping * 100),
         deliveredCents: Math.round(s.deliveredPrice * 100),
       }));
-      soldCount = soldResult.samplesCount;
+      soldCount = rawSamples.length;
       soldMedianCents = soldResult.deliveredMedian
         ? Math.round(soldResult.deliveredMedian * 100)
         : soldResult.median
@@ -1656,11 +1332,44 @@ async function getDeliveredPricingV2(
       ebayComps = matchResultsToCompetitors(matched);
     }
 
-    // Filter sold comps too (if we have samples with titles — but sold samples don't have titles in current model)
-    // For now, use all sold samples — identity filtering for sold is handled by ebay-sold-prices.ts title matching
+    // Filter sold comps too (if we have samples with titles â€” but sold samples don't have titles in current model)
+    // For now, use all sold samples â€” identity filtering for sold is handled by ebay-sold-prices.ts title matching
   } else {
-    // No identity filtering — use raw eBay comps
+    // No identity filtering â€” use raw eBay comps
     activeCompSamples = toCompSamples(ebayComps);
+  }
+
+  // === Step 2.5: SERP fallback â€” supplement weak active comps ===
+  // Only used when:
+  //   - identityFilterEnabled (so we have a meaningful query identity)
+  //   - soldCleanCount < 10 (sold data is insufficient for strong P35 pricing)
+  //   - activeCompSamples.length < 5 (active comps sparse after filtering)
+  const soldCleanCountPreStats = soldSamples.length;
+  if (flags.identityFilterEnabled
+    && shouldUseSerpFallback(soldCleanCountPreStats, activeCompSamples.length)) {
+
+    const shortQuery = `${brand} ${productName}`.slice(0, 100);
+    const serpResult = await serpFallbackLookup(shortQuery);
+
+    if (serpResult.candidates.length > 0) {
+      const queryIdentityForSerp = extractIdentity(`${brand} ${productName}`);
+      let serpKept = 0;
+      for (const c of serpResult.candidates) {
+        const { pass } = strictMatchIdentity(queryIdentityForSerp, c.title);
+        if (pass) {
+          activeCompSamples.push({
+            itemCents: c.priceCents,
+            shipCents: c.shipCents,
+            deliveredCents: c.priceCents + c.shipCents,
+          });
+          serpKept++;
+        }
+      }
+      console.log(`[pricing-v2] SERP fallback: ${serpResult.candidates.length} raw â†’ ${serpKept} kept after identity filter (active pool now ${activeCompSamples.length})`);
+      if (serpKept > 0) warnings.push('serpFallbackUsed');
+    } else if (serpResult.quotaExceeded) {
+      warnings.push('serpQuotaExceeded');
+    }
   }
 
   // === Step 3: Compute robust stats ===
@@ -1693,11 +1402,11 @@ async function getDeliveredPricingV2(
     .filter((p): p is number => p !== null && p > 0);
   const lowestTrustedRetailCents = trustedRetailPrices.length > 0 ? Math.min(...trustedRetailPrices) : null;
 
-  // Brave/API fallbacks for retail — ALWAYS call direct APIs and cross-validate
+  // Brave/API fallbacks for retail â€” ALWAYS call direct APIs and cross-validate
   let effectiveAmazonPriceCents = amazonPriceCents;
   let effectiveWalmartPriceCents = walmartPriceCents;
 
-  // Always call direct APIs — they're more reliable than Google Shopping
+  // Always call direct APIs â€” they're more reliable than Google Shopping
   const [directAmazonResult, directWalmartResult] = await Promise.allSettled([
     searchAmazonWithFallback(brand, productName, true),
     searchWalmart(brand, productName),
@@ -1713,10 +1422,10 @@ async function getDeliveredPricingV2(
     ? Math.round(directWalmartResult.value.price * 100) : null;
 
   if (directAmazonPrice) {
-    console.log(`[pricing-v2] 🔎 Direct Amazon API: $${(directAmazonPrice / 100).toFixed(2)}`);
+    console.log(`[pricing-v2] ðŸ”Ž Direct Amazon API: $${(directAmazonPrice / 100).toFixed(2)}`);
   }
   if (directWalmartPrice) {
-    console.log(`[pricing-v2] 🔎 Direct Walmart API: $${(directWalmartPrice / 100).toFixed(2)}`);
+    console.log(`[pricing-v2] ðŸ”Ž Direct Walmart API: $${(directWalmartPrice / 100).toFixed(2)}`);
   }
 
   // Cross-validate Google Shopping vs direct API (40% divergence = suspect)
@@ -1725,7 +1434,7 @@ async function getDeliveredPricingV2(
   if (amazonPriceCents && directAmazonPrice) {
     const ratio = Math.abs(amazonPriceCents - directAmazonPrice) / Math.max(amazonPriceCents, directAmazonPrice);
     if (ratio > CROSS_VALIDATE_THRESHOLD) {
-      console.log(`[pricing-v2] ⚠️ Amazon cross-validation: Google=$${(amazonPriceCents / 100).toFixed(2)} vs Direct=$${(directAmazonPrice / 100).toFixed(2)} → using Direct`);
+      console.log(`[pricing-v2] âš ï¸ Amazon cross-validation: Google=$${(amazonPriceCents / 100).toFixed(2)} vs Direct=$${(directAmazonPrice / 100).toFixed(2)} â†’ using Direct`);
       effectiveAmazonPriceCents = directAmazonPrice;
       warnings.push('amazonCrossValidated');
     }
@@ -1737,7 +1446,7 @@ async function getDeliveredPricingV2(
   if (walmartPriceCents && directWalmartPrice) {
     const ratio = Math.abs(walmartPriceCents - directWalmartPrice) / Math.max(walmartPriceCents, directWalmartPrice);
     if (ratio > CROSS_VALIDATE_THRESHOLD) {
-      console.log(`[pricing-v2] ⚠️ Walmart cross-validation: Google=$${(walmartPriceCents / 100).toFixed(2)} vs Direct=$${(directWalmartPrice / 100).toFixed(2)} → using Direct`);
+      console.log(`[pricing-v2] âš ï¸ Walmart cross-validation: Google=$${(walmartPriceCents / 100).toFixed(2)} vs Direct=$${(directWalmartPrice / 100).toFixed(2)} â†’ using Direct`);
       effectiveWalmartPriceCents = directWalmartPrice;
       warnings.push('walmartCrossValidated');
     }
@@ -1746,7 +1455,7 @@ async function getDeliveredPricingV2(
     warnings.push('usedDirectWalmartAPI');
   }
 
-  // Minimum retail price sanity check — reject retail prices that are absurdly low
+  // Minimum retail price sanity check â€” reject retail prices that are absurdly low
   // compared to what the product actually sells for on eBay (soldP50).
   // 30% of soldP50 catches wrong-product matches (e.g., Walmart $3.00 for a $20+ product)
   const MIN_RETAIL_ABSOLUTE_CENTS = 200;
@@ -1756,17 +1465,17 @@ async function getDeliveredPricingV2(
   console.log(`[pricing-v2] Retail sanity floor: $${(retailSanityFloor / 100).toFixed(2)} (30% of soldP50 $${(soldMedianForSanity ? (soldMedianForSanity / 100).toFixed(2) : 'N/A')}, abs min $${(MIN_RETAIL_ABSOLUTE_CENTS / 100).toFixed(2)})`);
 
   if (effectiveAmazonPriceCents !== null && effectiveAmazonPriceCents <= retailSanityFloor) {
-    console.log(`[pricing-v2] ❌ Amazon $${(effectiveAmazonPriceCents / 100).toFixed(2)} at/below sanity floor $${(retailSanityFloor / 100).toFixed(2)} — rejecting`);
+    console.log(`[pricing-v2] âŒ Amazon $${(effectiveAmazonPriceCents / 100).toFixed(2)} at/below sanity floor $${(retailSanityFloor / 100).toFixed(2)} â€” rejecting`);
     effectiveAmazonPriceCents = null;
     warnings.push('amazonPriceBelowSanityFloor');
   }
   if (effectiveWalmartPriceCents !== null && effectiveWalmartPriceCents <= retailSanityFloor) {
-    console.log(`[pricing-v2] ❌ Walmart $${(effectiveWalmartPriceCents / 100).toFixed(2)} at/below sanity floor $${(retailSanityFloor / 100).toFixed(2)} — rejecting`);
+    console.log(`[pricing-v2] âŒ Walmart $${(effectiveWalmartPriceCents / 100).toFixed(2)} at/below sanity floor $${(retailSanityFloor / 100).toFixed(2)} â€” rejecting`);
     effectiveWalmartPriceCents = null;
     warnings.push('walmartPriceBelowSanityFloor');
   }
 
-  // Brave fallback — only if we STILL have no retail
+  // Brave fallback â€” only if we STILL have no retail
   const hasAnyRetailRef = (effectiveAmazonPriceCents !== null || effectiveWalmartPriceCents !== null || targetPriceCents !== null || brandSitePriceCents !== null);
 
   if (!effectiveAmazonPriceCents && !hasAnyRetailRef) {
@@ -1798,22 +1507,22 @@ async function getDeliveredPricingV2(
     console.log(`[pricing-v2] Variant detection anchor: $${(variantAnchor / 100).toFixed(2)} (${variantAnchorSource}), threshold: $${(variantThreshold / 100).toFixed(2)} (${(variantRatio * 100).toFixed(0)}%)`);
 
     if (effectiveAmazonForRetail !== null && effectiveAmazonForRetail < variantThreshold) {
-      console.log(`[pricing-v2] ⚠️ Amazon $${(effectiveAmazonForRetail / 100).toFixed(2)} is <${(variantRatio * 100).toFixed(0)}% of ${variantAnchorSource} $${(variantAnchor / 100).toFixed(2)} - likely different variant, excluding from retail cap`);
+      console.log(`[pricing-v2] âš ï¸ Amazon $${(effectiveAmazonForRetail / 100).toFixed(2)} is <${(variantRatio * 100).toFixed(0)}% of ${variantAnchorSource} $${(variantAnchor / 100).toFixed(2)} - likely different variant, excluding from retail cap`);
       effectiveAmazonForRetail = null;
       warnings.push('amazonVariantExcluded');
     }
     if (effectiveWalmartForRetail !== null && effectiveWalmartForRetail < variantThreshold) {
-      console.log(`[pricing-v2] ⚠️ Walmart $${(effectiveWalmartForRetail / 100).toFixed(2)} is <${(variantRatio * 100).toFixed(0)}% of ${variantAnchorSource} $${(variantAnchor / 100).toFixed(2)} - likely different variant, excluding from retail cap`);
+      console.log(`[pricing-v2] âš ï¸ Walmart $${(effectiveWalmartForRetail / 100).toFixed(2)} is <${(variantRatio * 100).toFixed(0)}% of ${variantAnchorSource} $${(variantAnchor / 100).toFixed(2)} - likely different variant, excluding from retail cap`);
       effectiveWalmartForRetail = null;
       warnings.push('walmartVariantExcluded');
     }
     if (effectiveTargetPriceCents !== null && effectiveTargetPriceCents < variantThreshold) {
-      console.log(`[pricing-v2] ⚠️ Target $${(effectiveTargetPriceCents / 100).toFixed(2)} is <${(variantRatio * 100).toFixed(0)}% of ${variantAnchorSource} $${(variantAnchor / 100).toFixed(2)} - likely different variant, excluding from retail cap`);
+      console.log(`[pricing-v2] âš ï¸ Target $${(effectiveTargetPriceCents / 100).toFixed(2)} is <${(variantRatio * 100).toFixed(0)}% of ${variantAnchorSource} $${(variantAnchor / 100).toFixed(2)} - likely different variant, excluding from retail cap`);
       effectiveTargetPriceCents = null;
       warnings.push('targetVariantExcluded');
     }
   } else {
-    console.log(`[pricing-v2] ⚠️ No variant detection anchor (no brand site or sold data)`);
+    console.log(`[pricing-v2] âš ï¸ No variant detection anchor (no brand site or sold data)`);
   }
 
   const effectiveRetailPrices = [brandSitePriceCents, effectiveAmazonForRetail, effectiveWalmartForRetail, effectiveTargetPriceCents]
@@ -1834,7 +1543,7 @@ async function getDeliveredPricingV2(
 
   // Handle no pricing data
   if (targetResult.targetCents === 0) {
-    console.log(`[pricing-v2] No pricing data — returning minimum prices`);
+    console.log(`[pricing-v2] No pricing data â€” returning minimum prices`);
     return {
       brand, productName, ebayComps, retailComps,
       activeFloorDeliveredCents: activeStats?.min ?? null,
@@ -1869,7 +1578,7 @@ async function getDeliveredPricingV2(
     const safetyResult = enforceSafetyFloor(finalTargetCents, safetyInputs);
 
     if (safetyResult.floorWasBinding) {
-      console.log(`[pricing-v2] Safety floor: $${(finalTargetCents / 100).toFixed(2)} → $${(safetyResult.minDeliveredCents / 100).toFixed(2)} (uplift ${safetyResult.upliftPercent.toFixed(1)}%)`);
+      console.log(`[pricing-v2] Safety floor: $${(finalTargetCents / 100).toFixed(2)} â†’ $${(safetyResult.minDeliveredCents / 100).toFixed(2)} (uplift ${safetyResult.upliftPercent.toFixed(1)}%)`);
       warnings.push('safetyFloorApplied');
       finalTargetCents = safetyResult.minDeliveredCents;
     }
