@@ -396,7 +396,43 @@
                 <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1.5rem;">
                   Minimum item price floor (default: $1.99). Prevents negative or unrealistically low pricing.
                 </p>
-                
+
+                <label class="dp-form-label">Shipping Mode</label>
+                <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 0.5rem;">
+                  <label style="display: flex; align-items: start; cursor: pointer;">
+                    <input type="radio" name="ebayShippingMode" value="BUYER_PAYS_SHIPPING" id="shipModeBuyerPays" style="margin-top: 2px; margin-right: 8px;" checked />
+                    <div>
+                      <span style="font-weight: 500;">Buyer pays shipping</span>
+                      <p style="font-size: 0.8125rem; color: var(--text-muted); margin: 4px 0 0 0;">
+                        Item price + shipping shown separately on eBay. Most common.
+                      </p>
+                    </div>
+                  </label>
+                  <label style="display: flex; align-items: start; cursor: pointer;">
+                    <input type="radio" name="ebayShippingMode" value="FREE_SHIPPING" id="shipModeFree" style="margin-top: 2px; margin-right: 8px;" />
+                    <div>
+                      <span style="font-weight: 500;">Free shipping (baked in)</span>
+                      <p style="font-size: 0.8125rem; color: var(--text-muted); margin: 4px 0 0 0;">
+                        Shipping cost absorbed into item price. Buyer sees $0 shipping.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+                <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1.5rem;">
+                  Matches your eBay fulfillment policy. Pricing will adjust item price accordingly.
+                </p>
+
+                <label class="dp-form-label">Preferred Carrier</label>
+                <select id="preferredCarrier" class="dp-input" style="width: 200px; margin-bottom: 0.5rem;">
+                  <option value="auto">Auto (cheapest per weight)</option>
+                  <option value="usps">USPS (Ground Advantage / First Class)</option>
+                  <option value="fedex">FedEx (Ground Economy)</option>
+                  <option value="ups">UPS Ground</option>
+                </select>
+                <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1.5rem;">
+                  Used when calculating estimated shipping cost. "Auto" always picks the cheapest carrier for the item's weight.
+                </p>
+
                 <button id="pricingSaveButton" class="dp-btn dp-btn-primary" style="margin-top: 12px;">Save pricing settings</button>
                 <p id="pricingSaveMessage" class="dp-muted" style="text-align: center; margin-top: 12px; min-height: 20px;"></p>
               </div>
@@ -887,6 +923,9 @@
           const templateShippingEstimate = parseFloat(document.getElementById('templateShippingEstimate')?.value || '6.00');
           const shippingSubsidyCapInput = document.getElementById('shippingSubsidyCap')?.value;
           const minItemPrice = parseFloat(document.getElementById('minItemPrice')?.value || '1.99');
+          const ebayShippingMode = document.querySelector('input[name="ebayShippingMode"]:checked')?.value || 'BUYER_PAYS_SHIPPING';
+          const buyerShippingCharge = ebayShippingMode === 'FREE_SHIPPING' ? 0 : templateShippingEstimate;
+          const preferredCarrier = document.getElementById('preferredCarrier')?.value || 'auto';
           
           // Validation
           if (discountPercent < 0 || discountPercent > 50) {
@@ -942,7 +981,10 @@
                   shippingStrategy,
                   templateShippingEstimateCents: Math.round(templateShippingEstimate * 100),
                   shippingSubsidyCapCents: shippingSubsidyCap,
-                  minItemPriceCents: Math.round(minItemPrice * 100)
+                  minItemPriceCents: Math.round(minItemPrice * 100),
+                  ebayShippingMode,
+                  buyerShippingChargeCents: Math.round(buyerShippingCharge * 100),
+                  preferredCarrier,
                 }
               })
             });
@@ -981,6 +1023,9 @@
             const shippingEstimateInput = document.getElementById('templateShippingEstimate');
             const subsidyCapInput = document.getElementById('shippingSubsidyCap');
             const minItemPriceInput = document.getElementById('minItemPrice');
+            const shipModeBuyerPays = document.getElementById('shipModeBuyerPays');
+            const shipModeFree = document.getElementById('shipModeFree');
+            const preferredCarrierSelect = document.getElementById('preferredCarrier');
             
             if (discountInput && pricing.discountPercent !== undefined) {
               discountInput.value = pricing.discountPercent;
@@ -1004,6 +1049,18 @@
             
             if (minItemPriceInput && pricing.minItemPriceCents !== undefined) {
               minItemPriceInput.value = (pricing.minItemPriceCents / 100).toFixed(2);
+            }
+
+            if (shipModeBuyerPays && shipModeFree && pricing.ebayShippingMode) {
+              if (pricing.ebayShippingMode === 'FREE_SHIPPING') {
+                shipModeFree.checked = true;
+              } else {
+                shipModeBuyerPays.checked = true;
+              }
+            }
+
+            if (preferredCarrierSelect && pricing.preferredCarrier) {
+              preferredCarrierSelect.value = pricing.preferredCarrier;
             }
           }
         } catch (err) {

@@ -9,7 +9,7 @@
 import { tokensStore } from '../lib/redis-store.js';
 import { userScopedKey } from '../lib/_auth.js';
 import { getDefaultPricingSettings } from '../lib/pricing-config.js';
-import type { PricingSettings, ShippingStrategy } from '../lib/pricing-config.js';
+import type { PricingSettings, ShippingStrategy, EbayShippingMode } from '../lib/pricing-config.js';
 
 // ── types ────────────────────────────────────────────────────────────────────
 
@@ -37,6 +37,9 @@ export interface UserSettingsResponse {
     templateShippingEstimateCents: number;
     shippingSubsidyCapCents: number | null;
     minItemPriceCents: number;
+    ebayShippingMode: EbayShippingMode;
+    buyerShippingChargeCents: number;
+    preferredCarrier: 'auto' | 'usps' | 'ups' | 'fedex';
   };
   autoPrice: Required<AutoPriceSettings>;
   bestOffer: Required<BestOfferSettings>;
@@ -92,6 +95,23 @@ export function validateSaveInput(input: SaveSettingsInput): ValidationError | n
     if (pricing.minItemPriceCents !== undefined) {
       if (typeof pricing.minItemPriceCents !== 'number' || pricing.minItemPriceCents < 0) {
         return { error: 'minItemPriceCents must be >= 0' };
+      }
+    }
+    if (pricing.ebayShippingMode !== undefined) {
+      const validModes: EbayShippingMode[] = ['FREE_SHIPPING', 'BUYER_PAYS_SHIPPING'];
+      if (!validModes.includes(pricing.ebayShippingMode as EbayShippingMode)) {
+        return { error: `ebayShippingMode must be one of: ${validModes.join(', ')}` };
+      }
+    }
+    if (pricing.buyerShippingChargeCents !== undefined) {
+      if (typeof pricing.buyerShippingChargeCents !== 'number' || pricing.buyerShippingChargeCents < 0) {
+        return { error: 'buyerShippingChargeCents must be >= 0' };
+      }
+    }
+    if (pricing.preferredCarrier !== undefined) {
+      const validCarriers = ['auto', 'usps', 'ups', 'fedex'];
+      if (!validCarriers.includes(pricing.preferredCarrier as string)) {
+        return { error: `preferredCarrier must be one of: ${validCarriers.join(', ')}` };
       }
     }
   }
@@ -174,6 +194,12 @@ export async function getUserSettings(sub: string): Promise<UserSettingsResponse
         settings.pricing?.shippingSubsidyCapCents ?? defaultPricing.shippingSubsidyCapCents,
       minItemPriceCents:
         settings.pricing?.minItemPriceCents ?? defaultPricing.minItemPriceCents,
+      ebayShippingMode:
+        settings.pricing?.ebayShippingMode ?? defaultPricing.ebayShippingMode,
+      buyerShippingChargeCents:
+        settings.pricing?.buyerShippingChargeCents ?? defaultPricing.buyerShippingChargeCents,
+      preferredCarrier:
+        settings.pricing?.preferredCarrier ?? defaultPricing.preferredCarrier,
     },
     autoPrice: {
       enabled: settings.autoPrice?.enabled ?? false,
@@ -222,6 +248,12 @@ export async function saveUserSettings(
       settings.pricing.shippingSubsidyCapCents = pricing.shippingSubsidyCapCents;
     if (pricing.minItemPriceCents !== undefined)
       settings.pricing.minItemPriceCents = pricing.minItemPriceCents;
+    if (pricing.ebayShippingMode !== undefined)
+      settings.pricing.ebayShippingMode = pricing.ebayShippingMode;
+    if (pricing.buyerShippingChargeCents !== undefined)
+      settings.pricing.buyerShippingChargeCents = pricing.buyerShippingChargeCents;
+    if (pricing.preferredCarrier !== undefined)
+      settings.pricing.preferredCarrier = pricing.preferredCarrier;
   }
 
   if (autoPrice !== undefined) {

@@ -14,3 +14,8 @@ export * from './jobs/job-status.js';
 // Shipping estimates
 export * from './shipping/shipping-estimates.js';
 
+// Carrier rate tables (domestic + international)
+export * from './shipping/carrier-rates.js';
+
+// Net-weight → shipping-weight converter
+export * from './shipping/shipping-weight.js';

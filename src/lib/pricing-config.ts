@@ -123,6 +123,13 @@ export interface PricingSettings {
    * Default: true
    */
   allowAutoFreeShippingOnLowPrice: boolean;
+
+  /**
+   * Preferred carrier for shipping cost estimation (CARRIER_RATE mode).
+   * 'auto' = always pick the cheapest carrier for the weight.
+   * Default: 'auto'
+   */
+  preferredCarrier: 'auto' | 'usps' | 'ups' | 'fedex';
 }
 
 /**
@@ -156,5 +163,6 @@ export function getDefaultPricingSettings(): PricingSettings {
     ebayShippingMode: 'BUYER_PAYS_SHIPPING',
     buyerShippingChargeCents: 600,
     allowAutoFreeShippingOnLowPrice: true,
+    preferredCarrier: 'auto',
   };
 }

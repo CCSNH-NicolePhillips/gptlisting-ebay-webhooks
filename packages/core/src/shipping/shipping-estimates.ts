@@ -10,13 +10,17 @@
  */
 
 import type { CompetitorPrice } from '../pricing/shared-types.js';
+import { estimateDomesticRate } from './carrier-rates.js';
+import type { PreferredCarrier } from './carrier-rates.js';
+import { estimateShippingWeightOz } from './shipping-weight.js';
+import type { NetWeight } from './shipping-weight.js';
 
 // ============================================================================
 // Types
 // ============================================================================
 
 /** Shipping strategy mode */
-export type ShippingMode = 'FLAT' | 'CATEGORY_ESTIMATE';
+export type ShippingMode = 'FLAT' | 'CATEGORY_ESTIMATE' | 'CARRIER_RATE';
 
 /** Source of shipping estimate (for logging/debugging) */
 export type ShippingSource = 'flat' | 'category' | 'size-heuristic' | 'comps' | 'comp-median' | 'default';
@@ -58,6 +62,11 @@ export interface ShippingConfig {
   // Free shipping
   freeShippingEnabled?: boolean;
   freeShippingSubsidyCapCents?: number;
+
+  // CARRIER_RATE mode
+  preferredCarrier?: PreferredCarrier;   // 'auto' | 'usps' | 'ups' | 'fedex'
+  netWeight?: NetWeight | null;          // From vision classification (label text)
+  productCategory?: string;              // For weight fallback
 }
 
 /** Legacy settings interface (for backward compatibility) */
@@ -405,6 +414,25 @@ export function getShippingByMode(
       cents,
       source: 'flat',
       confidence: 'high',  // User explicitly set this
+    };
+  }
+
+  // CARRIER_RATE mode — real carrier rate from weight
+  if (c.mode === 'CARRIER_RATE') {
+    const weightOz = estimateShippingWeightOz(c.netWeight, c.productCategory);
+    const rate = estimateDomesticRate(weightOz, c.preferredCarrier ?? 'auto');
+    const cents = Math.max(c.minCents, Math.min(rate.cents, c.maxCents));
+    return {
+      cents,
+      source: 'size-heuristic',
+      confidence: c.netWeight ? 'medium' : 'low',
+      sizeSignal: {
+        signalType: c.netWeight ? 'weight' : 'unknown',
+        value: c.netWeight?.value ?? 0,
+        unit: c.netWeight?.unit ?? '',
+        band: 'unknown',
+        bandCents: cents,
+      },
     };
   }
   
