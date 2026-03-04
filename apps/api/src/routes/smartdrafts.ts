@@ -28,6 +28,9 @@ import {
   InvalidPairingParamsError,
 } from '../../../../packages/core/src/services/smartdrafts/pairing-v2.js';
 import { EbayNotConnectedError } from '../../../../src/lib/ebay-client.js';
+import { schedulePairingV2Job } from '../../../../src/lib/pairingV2Jobs.js';
+import { tokensStore } from '../../../../src/lib/redis-store.js';
+import { userScopedKey } from '../../../../src/lib/_auth.js';
 import { ok, badRequest, serverError } from '../http/respond.js';
 import { runDirectScan } from '../../../../packages/core/src/services/smartdrafts/scan-direct.service.js';
 import {
@@ -255,25 +258,115 @@ router.put('/drafts/:offerId', async (req, res) => {
 
 // ---------------------------------------------------------------------------
 // POST /api/smartdrafts/pairing/v2/start
-// Start a background pairing-v2 job.
+// Start a background pairing-v2 job from a Dropbox folder.
 //
 // Mirrors: /.netlify/functions/smartdrafts-pairing-v2-start
 //
-// Body: { jobId: string, items: ClassifiedItem[], ... }
-// Response 202: { ok: true, jobId }
+// Body: { folder: string, files?: string[] }
+// Response 202: { ok: true, jobId, imageCount }
 // ---------------------------------------------------------------------------
+
+async function dropboxAccessTokenFromRefresh(refreshToken: string): Promise<string> {
+  const clientId = process.env.DROPBOX_CLIENT_ID;
+  const clientSecret = process.env.DROPBOX_CLIENT_SECRET;
+  if (!clientId || !clientSecret) throw new Error('Dropbox client credentials not configured');
+  const response = await fetch('https://api.dropboxapi.com/oauth2/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: clientId, client_secret: clientSecret }).toString(),
+  });
+  if (!response.ok) throw new Error(`Dropbox token refresh failed: ${response.status} ${await response.text()}`);
+  const data: any = await response.json();
+  return data.access_token;
+}
+
+async function listDropboxImages(accessToken: string, folder: string): Promise<string[]> {
+  const response = await fetch('https://api.dropboxapi.com/2/files/list_folder', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: folder === '/' ? '' : folder, recursive: false }),
+  });
+  if (!response.ok) throw new Error(`Dropbox list_folder failed: ${response.status} ${await response.text()}`);
+  const data: any = await response.json();
+  const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
+  return (data.entries || [])
+    .filter((e: any) => e['.tag'] === 'file' && imageExtensions.includes(e.name.toLowerCase().slice(e.name.lastIndexOf('.'))))
+    .map((e: any) => e.path_display || e.path_lower);
+}
+
+async function getDropboxTemporaryLinks(accessToken: string, paths: string[]): Promise<string[]> {
+  const links: string[] = [];
+  for (let i = 0; i < paths.length; i += 25) {
+    const batch = paths.slice(i, i + 25);
+    const results = await Promise.all(batch.map(async (path) => {
+      try {
+        const r = await fetch('https://api.dropboxapi.com/2/files/get_temporary_link', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path }),
+        });
+        if (!r.ok) return '';
+        const d: any = await r.json();
+        return d.link || '';
+      } catch { return ''; }
+    }));
+    links.push(...results);
+  }
+  return links;
+}
+
 router.post('/pairing/v2/start', async (req, res) => {
   try {
     const { userId } = await requireUserAuth(req.headers.authorization || '');
     const body = req.body as Record<string, unknown>;
-    const jobId = (body.jobId as string | undefined)?.trim() ?? '';
-    if (!jobId) return badRequest(res, 'jobId required');
-    const result = await startPairingV2Job(userId, body as any);
-    return res.status(202).json({ ok: true, jobId: result.jobId });
-  } catch (err) {
-    if (err instanceof InvalidPairingParamsError) {
-      return res.status(400).json({ ok: false, error: err.message });
+    const folder = (body.folder as string | undefined)?.trim() ?? '';
+    if (!folder) return badRequest(res, 'folder required');
+
+    const selectedFiles: string[] | undefined = Array.isArray(body.files)
+      ? (body.files as string[]).filter(f => typeof f === 'string')
+      : undefined;
+
+    // Load Dropbox refresh token from Redis
+    const dropboxData = await tokensStore().get(userScopedKey(userId, 'dropbox.json'), { type: 'json' }) as any;
+    if (!dropboxData?.refresh_token) {
+      return res.status(400).json({ error: 'Dropbox not connected. Please connect your Dropbox account first.' });
     }
+
+    const accessToken = await dropboxAccessTokenFromRefresh(dropboxData.refresh_token);
+
+    let imagePaths = await listDropboxImages(accessToken, folder);
+
+    if (selectedFiles && selectedFiles.length > 0) {
+      const selectedLower = new Set(selectedFiles.map(p => p.toLowerCase()));
+      imagePaths = imagePaths.filter(p => selectedLower.has(p.toLowerCase()));
+    }
+
+    if (imagePaths.length === 0) {
+      return res.status(400).json({ error: 'No images found in folder' });
+    }
+
+    const originalFilenames = imagePaths.map(p => p.split('/').pop() || 'unknown.jpg');
+
+    let linksOrPaths: string[];
+    let needsTempLinks = false;
+
+    if (imagePaths.length <= 25) {
+      const tempLinks = await getDropboxTemporaryLinks(accessToken, imagePaths);
+      if (!tempLinks.some(l => l)) {
+        return res.status(500).json({ error: 'Failed to get temporary links for any images' });
+      }
+      linksOrPaths = tempLinks;
+    } else {
+      linksOrPaths = imagePaths;
+      needsTempLinks = true;
+    }
+
+    const jobId = await schedulePairingV2Job(
+      userId, folder, linksOrPaths, accessToken, originalFilenames, needsTempLinks, imagePaths
+    );
+
+    return res.status(202).json({ ok: true, jobId, message: 'Pairing-v2 job started', imageCount: linksOrPaths.length });
+  } catch (err) {
     if (err instanceof Error && err.message.toLowerCase().includes('auth')) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
