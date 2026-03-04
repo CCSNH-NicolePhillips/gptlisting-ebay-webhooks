@@ -51,8 +51,10 @@ export async function getEbayClient(userId: string): Promise<EbayClient> {
 
   const headers: Record<string, string> = {
     Authorization: `Bearer ${access_token}`,
-    'Content-Language': 'en-US',
     Accept: 'application/json',
+    'Accept-Language': 'en-US',
+    'Content-Language': 'en-US',
+    'X-EBAY-C-MARKETPLACE-ID': process.env.EBAY_MARKETPLACE_ID || 'EBAY_US',
   };
 
   return { access_token, apiHost, headers };
