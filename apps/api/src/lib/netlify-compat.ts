@@ -131,6 +131,7 @@ const MAP: Record<string, string | ParamsFn> = {
 
   // ── eBay Campaigns / Promotions ──────────────────────────────────────────
   'ebay-list-campaigns': '/ebay/campaigns',
+  'ebay-list-active-trading': '/ebay/listings/active',
   'ebay-remove-promo': '/ebay/promotions/remove',
   'ebay-update-active-promo': '/ebay/promotions/active',
   'ebay-update-draft-promo': '/ebay/promotions/draft',

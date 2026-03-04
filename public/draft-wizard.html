@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -29,7 +29,7 @@
       }
       .filter-box { display: none; }
 
-      .* Responsive grid for category.aspect listings *.
+      /* Responsive grid for category/aspect listings */
       .row {
         display: grid;
         gap: 1rem;
@@ -37,7 +37,7 @@
         margin-bottom: 0.75rem;
       }
       .col { min-width: 0; }
-      .* Structured row layout for the Step 2 form *.
+      /* Structured row layout for the Step 2 form */
       .form-row {
         display: flex;
         flex-wrap: wrap;
@@ -136,7 +136,7 @@
           transform: rotate(360deg);
         }
       }
-      .* Modal layout *.
+      /* Modal layout */
       .modal {
         position: fixed;
         inset: 0;
@@ -157,7 +157,7 @@
       // TEMPORARY: Redirect to Quick List until ChatGPT guided wizard is ready
       // TODO: Remove this redirect when implementing ChatGPT chat box feature
       if (!window.location.search.includes('dev')) {
-        window.location.href = '.quick-list.html';
+        window.location.href = '/quick-list.html';
       }
     </script>
     <div id="pageLoader" class="overlay hide" role="status" aria-live="polite">
@@ -167,7 +167,7 @@
       </div>
     </div>
     <div class="card">
-      <a class="secondary" href=".">← Back</a>
+      <a class="secondary" href="/">← Back</a>
       <h2>Create draft – Step 1: Pick category</h2>
       <p class="muted">
         Start with a category so we can populate the right required and optional fields.
@@ -337,55 +337,10 @@
       const skuInput = $('sku');
       const skuHintEl = $('skuHint');
       const skuDefaultHint = 'Use 1-50 letters or numbers. No spaces or punctuation.';
-      const skuPattern = .^[A-Za-z0-9]{1,50}$.;
+      const skuPattern = /^[A-Za-z0-9]{1,50}$/;
       
       // Global to store last created draft data for debugging
       let lastDraftData = null;
-      
-      // Promotion processing timeout reference
-      let promotionProcessingTimeout = null;
-      
-      .**
-       * Schedule promotion processing after a short delay to allow eBay sync.
-       * eBay needs ~60 seconds to sync new listings before they can be promoted.
-       *.
-      function schedulePromotionProcessing() {
-        // Clear any existing timeout to avoid duplicate calls
-        if (promotionProcessingTimeout) {
-          clearTimeout(promotionProcessingTimeout);
-        }
-        
-        // Wait 70 seconds (eBay needs ~60s sync time) then trigger promotion processing
-        promotionProcessingTimeout = setTimeout(async () => {
-          try {
-            console.log('[Promotion] Triggering promotion-process after publish delay');
-            const exec = (window.authClient && typeof window.authClient.authFetch === 'function') 
-              ? window.authClient.authFetch 
-              : fetch;
-            
-            const response = await exec('..netlify.functions.promotion-process', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application.json' },
-              body: JSON.stringify({}),
-            });
-            
-            if (response.ok) {
-              const data = await response.json();
-              console.log('[Promotion] Processing result:', data);
-              
-              // If there are still pending jobs, schedule another run
-              if (data.stats?.stillPending > 0) {
-                console.log(`[Promotion] ${data.stats.stillPending} jobs still pending, scheduling another run`);
-                schedulePromotionProcessing();
-              }
-            } else {
-              console.warn('[Promotion] Processing failed:', response.status);
-            }
-          } catch (err) {
-            console.error('[Promotion] Error triggering promotion-process:', err);
-          }
-        }, 70000); // 70 seconds
-      }
       
       // Edit mode detection
       const urlParams = new URLSearchParams(window.location.search);
@@ -409,7 +364,7 @@
         }
       }
       if (skuInput) {
-        const sanitizeSku = (raw) => (raw || '').replace(.[^A-Za-z0-9].g, '');
+        const sanitizeSku = (raw) => (raw || '').replace(/[^A-Za-z0-9]/g, '');
         const syncSku = (raw) => {
           const clean = sanitizeSku(raw);
           if (skuInput.value !== clean) {
@@ -455,8 +410,8 @@
       };
       async function loadCategoriesCsv() {
         if (CAT_ROWS) return CAT_ROWS;
-        // Prefer relative (served from public.) then absolute
-        const tryUrls = ['taxonomy-categories-EBAY_US.csv', '.taxonomy-categories-EBAY_US.csv'];
+        // Prefer relative (served from public/) then absolute
+        const tryUrls = ['taxonomy-categories-EBAY_US.csv', '/taxonomy-categories-EBAY_US.csv'];
         let text = null;
         for (const url of tryUrls) {
           try {
@@ -471,7 +426,7 @@
           return null;
         }
         // parse CSV (3 columns: categoryId,categoryName,categoryPath), quoted
-        const lines = text.split(.\r?\n.).filter(Boolean);
+        const lines = text.split(/\r?\n/).filter(Boolean);
         const rows = [];
         for (let i = 1; i < lines.length; i++) {
           const line = lines[i];
@@ -532,11 +487,11 @@
         return rows;
       }
 
-      // Step 1 intentionally has no Title.Photo inputs; browse-only selection.
+      // Step 1 intentionally has no Title/Photo inputs; browse-only selection.
 
       async function loadLocations() {
         try {
-          const j = await fetchJSON('.api.ebay.locations');
+          const j = await fetchJSON('/.netlify/functions/ebay-list-locations');
           const list = j.locations || [];
           locationSel.innerHTML = '';
           list.forEach((loc) => {
@@ -558,7 +513,7 @@
       function renderAspect(containerId, aspect, required) {
         const wrap = document.createElement('div');
         wrap.className = 'col';
-        const id = 'asp_' + (aspect.localizedAspectName || aspect.aspectName).replace(.\s+.g, '_');
+        const id = 'asp_' + (aspect.localizedAspectName || aspect.aspectName).replace(/\s+/g, '_');
         const label = document.createElement('label');
         label.textContent =
           (aspect.localizedAspectName || aspect.aspectName) + (required ? ' *' : '');
@@ -610,20 +565,20 @@
           // Resolve taxonomy treeId first for reliability
           let treeId = '0';
           try {
-            const t = await fetchJSON('..netlify.functions.ebay-taxonomy-tree-id');
+            const t = await fetchJSON('/.netlify/functions/ebay-taxonomy-tree-id');
             treeId = String(t.categoryTreeId || '0');
           } catch {}
           // Call requirements with treeId and retry once on transient 502
           let req;
           try {
             req = await fetchJSON(
-              `..netlify.functions.ebay-category-requirements?treeId=${encodeURIComponent(treeId)}&categoryId=${encodeURIComponent(cid)}`
+              `/.netlify/functions/ebay-category-requirements?treeId=${encodeURIComponent(treeId)}&categoryId=${encodeURIComponent(cid)}`
             );
           } catch (e) {
             if (e?.status === 502) {
               await new Promise((r) => setTimeout(r, 400));
               req = await fetchJSON(
-                `..netlify.functions.ebay-category-requirements?treeId=${encodeURIComponent(treeId)}&categoryId=${encodeURIComponent(cid)}`
+                `/.netlify/functions/ebay-category-requirements?treeId=${encodeURIComponent(treeId)}&categoryId=${encodeURIComponent(cid)}`
               );
             } else throw e;
           }
@@ -774,9 +729,9 @@
         try {
           const weightLbs = (document.getElementById('weightLbs') || { value: '' }).value.trim();
           const weightOz = (document.getElementById('weightOz') || { value: '' }).value.trim();
-          const r = await authClient.authFetch('..netlify.functions.ebay-create-draft', {
+          const r = await authClient.authFetch('/.netlify/functions/ebay-create-draft', {
             method: 'POST',
-            headers: { 'Content-Type': 'application.json' },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(lastDraftData),
           });
           const data = await r.json();
@@ -794,7 +749,7 @@
               // Set a quick message before redirect (best-effort)
               if (draftStatuses.has(sUp)) msg.textContent = `Draft created: Offer ${offerId} (status: ${sUp})`;
               else msg.textContent = `Offer status: ${sUp} (Offer ${offerId})`;
-              location.href = `.drafts.html?created=${encodeURIComponent(offerId)}`;
+              location.href = `/drafts.html?created=${encodeURIComponent(offerId)}`;
               return;
             }
             // No offerId came back; summarize outcome
@@ -833,32 +788,28 @@
           btnPub.disabled = true;
           try {
             const cond = (document.getElementById('condition') || { value: '' }).value;
-            const r = await authClient.authFetch('..netlify.functions.ebay-publish-offer', {
+            const r = await authClient.authFetch('/.netlify/functions/ebay-publish-offer', {
               method: 'POST',
-              headers: { 'Content-Type': 'application.json' },
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ offerId, condition: cond ? Number(cond) : undefined }),
             });
             const data = await r.json();
             if (r.ok && data.ok) {
               msg.textContent = `Published: ${offerId}`;
-              
-              // Schedule promotion processing after eBay sync delay
-              schedulePromotionProcessing();
-              
               try {
                 // Defer cleanup: when user leaves this page, delete any leftover UNPUBLISHED drafts for this SKU (excluding this offerId)
                 var skuEl = document.getElementById('sku');
                 var sku = skuEl && skuEl.value ? skuEl.value : '';
                 const payload = JSON.stringify({ items: [{ sku, excludeOfferId: offerId }] });
-                const url = '..netlify.functions.ebay-clean-drafts';
+                const url = '/.netlify/functions/ebay-clean-drafts';
                 // Prefer beacon for background cleanup; fallback to fetch if beacon unsupported
-                if (!navigator.sendBeacon || !navigator.sendBeacon(url, new Blob([payload], { type: 'application.json' }))) {
+                if (!navigator.sendBeacon || !navigator.sendBeacon(url, new Blob([payload], { type: 'application/json' }))) {
                   window.addEventListener('beforeunload', () => {
-                    fetch(url, { method: 'POST', headers: { 'Content-Type': 'application.json' }, body: payload }).catch(() => {});
+                    fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload }).catch(() => {});
                   }, { once: true });
                 } else {
                   window.addEventListener('beforeunload', () => {
-                    navigator.sendBeacon(url, new Blob([payload], { type: 'application.json' }));
+                    navigator.sendBeacon(url, new Blob([payload], { type: 'application/json' }));
                   }, { once: true });
                 }
               } catch {}
@@ -965,7 +916,7 @@
         // fallback to remote
         try {
           const url =
-            '..netlify.functions.ebay-category-browse' +
+            '/.netlify/functions/ebay-category-browse' +
             (categoryId ? '?categoryId=' + encodeURIComponent(categoryId) : '');
           const j = await fetchJSON(url);
           // crumbs (clickable)
@@ -1169,7 +1120,7 @@
           ddOpts.innerHTML = '';
           items.forEach((it) => ddOpts.appendChild(optionRow(it)));
           ddOpts.scrollTop = scrollTop;
-          // chips.grid
+          // chips/grid
           chips.innerHTML = ''; grid.innerHTML = '';
           Array.from(selected.values()).forEach((it) => { chips.appendChild(chip(it)); grid.appendChild(card(it)); });
           // update hidden images input
@@ -1190,7 +1141,7 @@
           }
           setLoading(true);
           ddPh.textContent = 'Loading images…';
-          const url = new URL('..netlify.functions.dropbox-list-images', window.location.origin);
+          const url = new URL('/.netlify/functions/dropbox-list-images', window.location.origin);
           url.searchParams.set('path', path);
           if (recursive) url.searchParams.set('recursive', '1');
           if (limit) url.searchParams.set('limit', String(limit));
@@ -1207,7 +1158,7 @@
           picker.classList.remove('open');
         }
 
-        // dropdown open.close
+        // dropdown open/close
         dd.addEventListener('click', () => {
           picker.classList.toggle('open');
         });

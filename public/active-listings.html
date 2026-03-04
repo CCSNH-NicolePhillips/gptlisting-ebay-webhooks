@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -202,7 +202,7 @@
       margin-bottom: 0.5rem;
       color: var(--text-primary);
     }
-    .* Multi-select styles *.
+    /* Multi-select styles */
     .card-checkbox {
       position: absolute;
       top: 0.6rem;
@@ -275,7 +275,7 @@
       font-size: 0.85rem;
     }
     
-    .* Image Lightbox *.
+    /* Image Lightbox */
     .image-lightbox {
       display: none;
       position: fixed;
@@ -656,11 +656,11 @@
       filteredOffers = filtered;
       const sorted = sortOffers(filtered, sortSelect.value);
       
-      // Update counts to show filtered.total
+      // Update counts to show filtered/total
       updateCounts();
       
       if (sorted.length === 0 && offers.length > 0) {
-        grid.innerHTML = '<div style="grid-column: 1.-1; text-align: center; padding: 3rem; color: var(--muted);">No listings match your search</div>';
+        grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--muted);">No listings match your search</div>';
         return;
       }
       
@@ -921,9 +921,9 @@
           
           try {
             const exec = getAuthFetch();
-            const res = await exec('..netlify.functions.ebay-update-active-promo', {
+            const res = await exec('/.netlify/functions/ebay-update-active-promo', {
               method: 'POST',
-              headers: { 'Content-Type': 'application.json' },
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ 
                 listingId: o.listingId, 
                 offerId: o.offerId, 
@@ -972,9 +972,9 @@
           
           try {
             const exec = getAuthFetch();
-            const res = await exec('..netlify.functions.ebay-remove-promo', {
+            const res = await exec('/.netlify/functions/ebay-remove-promo', {
               method: 'POST',
-              headers: { 'Content-Type': 'application.json' },
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ 
                 listingId: o.listingId, 
                 offerId: o.offerId, 
@@ -1076,9 +1076,9 @@
           
           try {
             const exec = getAuthFetch();
-            const res = await exec('..netlify.functions.ebay-update-active-promo', {
+            const res = await exec('/.netlify/functions/ebay-update-active-promo', {
               method: 'POST',
-              headers: { 'Content-Type': 'application.json' },
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ 
                 listingId: o.listingId, 
                 offerId: o.offerId, 
@@ -1126,7 +1126,7 @@
           isInventoryListing: o.isInventoryListing ? '1' : '0',
           sku: o.sku || ''
         });
-        window.location.href = `.edit-active-listing.html?${params.toString()}`;
+        window.location.href = `/edit-active-listing.html?${params.toString()}`;
       });
       btnRow.appendChild(editBtn);
       
@@ -1148,9 +1148,9 @@
         
         try {
           const exec = getAuthFetch();
-          const res = await exec('..netlify.functions.ebay-end-listing', {
+          const res = await exec('/.netlify/functions/ebay-end-listing', {
             method: 'POST',
-            headers: { 'Content-Type': 'application.json' },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               itemId: o.itemId,
               sku: o.sku || '',
@@ -1198,7 +1198,7 @@
       try {
         // Use Trading API endpoint which gets ALL listings (not just Inventory API ones)
         const exec = getAuthFetch();
-        const res = await exec('.api.ebay.listings.active');
+        const res = await exec('/.netlify/functions/ebay-list-active-trading');
         const text = await res.text();
 
         if (res.status === 401) {
@@ -1344,9 +1344,9 @@
       
       for (const listing of listings) {
         try {
-          const res = await exec('..netlify.functions.ebay-update-active-promo', {
+          const res = await exec('/.netlify/functions/ebay-update-active-promo', {
             method: 'POST',
-            headers: { 'Content-Type': 'application.json' },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
               listingId: listing.listingId,
               offerId: listing.offerId,
@@ -1400,9 +1400,9 @@
       
       for (const listing of listings) {
         try {
-          const res = await exec('..netlify.functions.ebay-end-listing', {
+          const res = await exec('/.netlify/functions/ebay-end-listing', {
             method: 'POST',
-            headers: { 'Content-Type': 'application.json' },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ listingId: listing.listingId }),
           });
           

@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -6,7 +6,7 @@
     <title>DraftPilot · Setup</title>
     <link rel="stylesheet" href="/draftpilot.css">
     <style>
-      .* Setup page-specific styles *.
+      /* Setup page-specific styles */
       .muted { color: #a2a9c8; }
       .small { font-size: 0.9rem; }
       .section { margin-top: 1.5rem; }
@@ -245,7 +245,7 @@
             <div class="status" id="optinStatus">Connect eBay to manage Business Policies.</div>
             <div class="actions">
               <button id="btnOptIn">Opt in automatically</button>
-              <a class="btn secondary" href="https:..www.ebay.com.bp.manage" target="_blank" rel="noopener">Open eBay Business Policies ↗</a>
+              <a class="btn secondary" href="https://www.ebay.com/bp/manage" target="_blank" rel="noopener">Open eBay Business Policies ↗</a>
             </div>
             <div class="small muted" id="optinMsg" style="margin-top:0.45rem;"></div>
           </div>
@@ -512,7 +512,7 @@
             const t = await authClient.getToken?.();
             if (t) headers = Object.assign(headers, { Authorization: `Bearer ${t}` });
           } catch {}
-          const res = await authClient.authFetch('.api.status', { headers });
+          const res = await authClient.authFetch('/.netlify/functions/status', { headers });
           if (!res.ok) throw new Error('status');
           const j = await res.json();
           state.dropboxConnected = !!j.dropbox?.connected;
@@ -559,7 +559,7 @@
           return;
         }
         try {
-          const res = await authClient.authFetch('..netlify.functions.ebay-check-optin');
+          const res = await authClient.authFetch('/.netlify/functions/ebay-check-optin');
           const j = await res.json();
           if (res.ok && j?.ok) {
             state.optedIn = computeOptInState(j);
@@ -623,7 +623,7 @@
           return;
         }
         try {
-          const res = await authClient.authFetch('..netlify.functions.ebay-list-policies');
+          const res = await authClient.authFetch('/.netlify/functions/ebay-list-policies');
           const j = await res.json();
           if (res.ok) {
             state.paymentPolicies = j?.payment?.json?.paymentPolicies || [];
@@ -643,7 +643,7 @@
           return;
         }
         try {
-          const res = await authClient.authFetch('.api.ebay.locations');
+          const res = await authClient.authFetch('/.netlify/functions/ebay-list-locations');
           const j = await res.json();
           if (res.ok) state.locations = j?.locations || [];
         } catch {}
@@ -668,7 +668,7 @@
             }
             const r = await authClient.authFetch(fnPath, {
               method: 'POST',
-              headers: { Accept: 'application.json', 'Content-Type': 'application.json' },
+              headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
               body: JSON.stringify({ returnTo: window.location.href }),
             });
             const text = await r.text();
@@ -700,9 +700,9 @@
         button.disabled = true;
         messageEl.textContent = 'Creating…';
         try {
-          const res = await authClient.authFetch('..netlify.functions.ebay-create-policy', {
+          const res = await authClient.authFetch('/.netlify/functions/ebay-create-policy', {
             method: 'POST',
-            headers: { 'Content-Type': 'application.json' },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
           });
           const j = await res.json().catch(() => ({}));
@@ -734,9 +734,9 @@
         btn.disabled = true;
         msg.textContent = 'Deleting…';
         try {
-          const res = await authClient.authFetch('..netlify.functions.ebay-delete-location', {
+          const res = await authClient.authFetch('/.netlify/functions/ebay-delete-location', {
             method: 'POST',
-            headers: { 'Content-Type': 'application.json' },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ key }),
           });
           const j = await res.json().catch(() => ({}));
@@ -760,7 +760,7 @@
         btn.disabled = true;
         msg.textContent = 'Submitting opt-in request…';
         try {
-          const res = await authClient.authFetch('..netlify.functions.ebay-optin', { method: 'POST' });
+          const res = await authClient.authFetch('/.netlify/functions/ebay-optin', { method: 'POST' });
           const raw = await res.text();
           let result = {};
           try { result = JSON.parse(raw); } catch {}
@@ -803,11 +803,11 @@
 
         try {
           const token = await authClient.getToken?.();
-          const res = await fetch('..netlify.functions.ebay-get-marketing-defaults', {
+          const res = await fetch('/.netlify/functions/ebay-get-marketing-defaults', {
             method: 'GET',
             headers: {
               'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application.json'
+              'Content-Type': 'application/json'
             }
           });
 
@@ -871,11 +871,11 @@
           const defaultPromoCampaignId = (campaignInput?.value || '').trim();
           
           const token = await authClient.getToken?.();
-          const res = await fetch('..netlify.functions.ebay-set-marketing-default', {
+          const res = await fetch('/.netlify/functions/ebay-set-marketing-default', {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application.json'
+              'Content-Type': 'application/json'
             },
             body: JSON.stringify({
               defaultPromoPercent,
@@ -929,12 +929,12 @@
       }
 
       function boot() {
-        wireConnectLink('dbxConnect', '..netlify.functions.dropbox-oauth-start');
-        wireConnectLink('ebayConnect', '..netlify.functions.ebay-oauth-start');
+        wireConnectLink('dbxConnect', '/.netlify/functions/dropbox-oauth-start');
+        wireConnectLink('ebayConnect', '/.netlify/functions/ebay-oauth-start');
         const dbxDisconnect = document.getElementById('dbxDisconnect');
-        if (dbxDisconnect) dbxDisconnect.onclick = async () => { await authClient.authFetch('.api.status?dropbox=disconnect', { method: 'POST' }); refreshAll(); };
+        if (dbxDisconnect) dbxDisconnect.onclick = async () => { await authClient.authFetch('/.netlify/functions/status?dropbox=disconnect', { method: 'POST' }); refreshAll(); };
         const ebayDisconnect = document.getElementById('ebayDisconnect');
-        if (ebayDisconnect) ebayDisconnect.onclick = async () => { await authClient.authFetch('.api.status?ebay=disconnect', { method: 'POST' }); refreshAll(); };
+        if (ebayDisconnect) ebayDisconnect.onclick = async () => { await authClient.authFetch('/.netlify/functions/status?ebay=disconnect', { method: 'POST' }); refreshAll(); };
 
         const btnPayment = document.getElementById('createPayment');
         if (btnPayment) btnPayment.onclick = () => createRecommended('payment');
@@ -971,7 +971,7 @@
               try {
                 const r = await authClient.authFetch(pendingConnect, {
                   method: 'POST',
-                  headers: { Accept: 'application.json', 'Content-Type': 'application.json' },
+                  headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
                   body: JSON.stringify({ returnTo: window.location.href }),
                 });
                 const text = await r.text();

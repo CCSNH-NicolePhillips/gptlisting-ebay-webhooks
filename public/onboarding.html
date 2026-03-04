@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -310,7 +310,7 @@
             <div class="info-box" style="margin-top: 1rem; border-left: 3px solid #ff6b6b;">
               <div class="info-box-title">⚠️ Important</div>
               <div class="info-box-text">
-                You must have an eBay account before clicking "Connect eBay". If you don't have one, <a href="https:..www.ebay.com." target="_blank" style="color: #5b7cff;">create your free eBay account first</a>, then come back here.
+                You must have an eBay account before clicking "Connect eBay". If you don't have one, <a href="https://www.ebay.com/" target="_blank" style="color: #5b7cff;">create your free eBay account first</a>, then come back here.
               </div>
             </div>
             
@@ -419,7 +419,7 @@
             <div id="paymentPolicyPreview" class="policy-preview">
               <div class="policy-preview-title">We'll create this policy for you:</div>
               <div class="policy-preview-item">Immediate payment required</div>
-              <div class="policy-preview-item">PayPal and credit.debit cards accepted</div>
+              <div class="policy-preview-item">PayPal and credit/debit cards accepted</div>
               <div class="policy-preview-item">Applies to all categories except motor vehicles</div>
             </div>
           </div>
@@ -617,7 +617,7 @@
       async function checkAllRequirements() {
         try {
           // Check eBay connection
-          const statusRes = await authClient.authFetch('.api.status');
+          const statusRes = await authClient.authFetch('/.netlify/functions/status');
           const status = await statusRes.json();
           setupStatus.ebayConnected = !!status?.ebay?.connected;
           setupStatus.dropboxConnected = !!status?.dropbox?.connected;
@@ -625,7 +625,7 @@
           if (setupStatus.ebayConnected) {
             // Check location
             try {
-              const locRes = await authClient.authFetch('.api.ebay.locations');
+              const locRes = await authClient.authFetch('/.netlify/functions/ebay-list-locations');
               const locations = await locRes.json();
               setupStatus.hasLocation = (locations?.locations || []).length > 0;
             } catch {
@@ -634,7 +634,7 @@
             
             // Check policies
             try {
-              const polRes = await authClient.authFetch('..netlify.functions.ebay-list-policies');
+              const polRes = await authClient.authFetch('/.netlify/functions/ebay-list-policies');
               const policies = await polRes.json();
               const hasFulfillment = (policies?.fulfillment?.json?.fulfillmentPolicies || []).length > 0;
               const hasPayment = (policies?.payment?.json?.paymentPolicies || []).length > 0;
@@ -646,9 +646,9 @@
             
             // Check if defaults are set AND valid
             try {
-              const defRes = await authClient.authFetch('..netlify.functions.ebay-get-policy-defaults');
+              const defRes = await authClient.authFetch('/.netlify/functions/ebay-get-policy-defaults');
               const defaults = await defRes.json();
-              const polRes = await authClient.authFetch('..netlify.functions.ebay-list-policies');
+              const polRes = await authClient.authFetch('/.netlify/functions/ebay-list-policies');
               const policies = await polRes.json();
               
               const paymentDefault = defaults?.defaults?.payment;
@@ -771,7 +771,7 @@
       
       async function checkEbayConnection() {
         try {
-          const res = await authClient.authFetch('.api.status');
+          const res = await authClient.authFetch('/.netlify/functions/status');
           const data = await res.json();
           if (res.ok && data?.ebay?.connected) {
             showStatus('ebayStatus', '✓ eBay account already connected!', 'success');
@@ -796,7 +796,7 @@
       
       async function checkDropboxConnection() {
         try {
-          const res = await authClient.authFetch('.api.status');
+          const res = await authClient.authFetch('/.netlify/functions/status');
           const data = await res.json();
           if (res.ok && data?.dropbox?.connected) {
             showStatus('dropboxStatus', '✓ Dropbox connected successfully!', 'success');
@@ -810,7 +810,7 @@
       
       async function checkLocation() {
         try {
-          const res = await authClient.authFetch('.api.ebay.locations');
+          const res = await authClient.authFetch('/.netlify/functions/ebay-list-locations');
           const data = await res.json();
           const locations = (res.ok && data?.locations) || [];
           if (locations.length > 0) {
@@ -830,7 +830,7 @@
         
         try {
           const providedKey = document.getElementById('locationName').value?.trim() || '';
-          const defaultKey = providedKey ? providedKey.toLowerCase().replace(.\s+.g, '-') : `warehouse-${Date.now().toString(36)}`;
+          const defaultKey = providedKey ? providedKey.toLowerCase().replace(/\s+/g, '-') : `warehouse-${Date.now().toString(36)}`;
           
           const address1 = document.getElementById('locationAddress').value?.trim();
           const city = document.getElementById('locationCity').value?.trim();
@@ -855,7 +855,7 @@
             minimal: 'true'
           });
           
-          const url = `..netlify.functions.ebay-create-location?${qs.toString()}`;
+          const url = `/.netlify/functions/ebay-create-location?${qs.toString()}`;
           const res = await authClient.authFetch(url);
           const text = await res.text();
           const payload = text ? JSON.parse(text) : {};
@@ -876,12 +876,12 @@
       
       async function checkPaymentPolicy() {
         try {
-          const res = await authClient.authFetch('..netlify.functions.ebay-list-policies');
+          const res = await authClient.authFetch('/.netlify/functions/ebay-list-policies');
           const data = await res.json();
           const policies = (res.ok && data?.payment?.json?.paymentPolicies) || [];
           
           // Check if default is set AND valid
-          const defRes = await authClient.authFetch('..netlify.functions.ebay-get-policy-defaults');
+          const defRes = await authClient.authFetch('/.netlify/functions/ebay-get-policy-defaults');
           const defaults = await defRes.json();
           const defaultId = defaults?.defaults?.payment;
           const hasDefault = !!(defRes.ok && defaultId && policies.some(p => p.paymentPolicyId === defaultId));
@@ -922,7 +922,7 @@
           
           if (selector.style.display === 'none') {
             // Create new policy
-            const provisionRes = await authClient.authFetch('..netlify.functions.ebay-provision-policies');
+            const provisionRes = await authClient.authFetch('/.netlify/functions/ebay-provision-policies');
             const provisionData = await provisionRes.json();
             
             if (!provisionRes.ok) {
@@ -930,15 +930,15 @@
             }
             
             // Get the policy that was just created
-            const policiesRes = await authClient.authFetch('..netlify.functions.ebay-list-policies');
+            const policiesRes = await authClient.authFetch('/.netlify/functions/ebay-list-policies');
             const policiesData = await policiesRes.json();
             const paymentPolicy = (policiesData?.payment?.json?.paymentPolicies || [])[0];
             
             if (paymentPolicy) {
               // Set it as default
-              await authClient.authFetch('..netlify.functions.ebay-set-policy-defaults', {
+              await authClient.authFetch('/.netlify/functions/ebay-set-policy-defaults', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application.json' },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ payment: paymentPolicy.paymentPolicyId })
               });
             }
@@ -949,9 +949,9 @@
             const dropdown = document.getElementById('paymentPolicyDropdown');
             const policyId = dropdown.value;
             
-            const res = await authClient.authFetch('..netlify.functions.ebay-set-policy-defaults', {
+            const res = await authClient.authFetch('/.netlify/functions/ebay-set-policy-defaults', {
               method: 'POST',
-              headers: { 'Content-Type': 'application.json' },
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ payment: policyId })
             });
             
@@ -973,12 +973,12 @@
       
       async function checkReturnPolicy() {
         try {
-          const res = await authClient.authFetch('..netlify.functions.ebay-list-policies');
+          const res = await authClient.authFetch('/.netlify/functions/ebay-list-policies');
           const data = await res.json();
           const policies = (res.ok && data?.returns?.json?.returnPolicies) || [];
           
           // Check if default is set AND valid
-          const defRes = await authClient.authFetch('..netlify.functions.ebay-get-policy-defaults');
+          const defRes = await authClient.authFetch('/.netlify/functions/ebay-get-policy-defaults');
           const defaults = await defRes.json();
           const defaultId = defaults?.defaults?.return;
           const hasDefault = !!(defRes.ok && defaultId && policies.some(p => p.returnPolicyId === defaultId));
@@ -1019,21 +1019,21 @@
           
           if (selector.style.display === 'none') {
             // Create new policy
-            const provisionRes = await authClient.authFetch('..netlify.functions.ebay-provision-policies');
+            const provisionRes = await authClient.authFetch('/.netlify/functions/ebay-provision-policies');
             const provisionData = await provisionRes.json();
             
             if (!provisionRes.ok) {
               throw new Error(provisionData?.detail || provisionData?.error || 'Failed to create policy');
             }
             
-            const policiesRes = await authClient.authFetch('..netlify.functions.ebay-list-policies');
+            const policiesRes = await authClient.authFetch('/.netlify/functions/ebay-list-policies');
             const policiesData = await policiesRes.json();
             const returnPolicy = (policiesData?.returns?.json?.returnPolicies || [])[0];
             
             if (returnPolicy) {
-              await authClient.authFetch('..netlify.functions.ebay-set-policy-defaults', {
+              await authClient.authFetch('/.netlify/functions/ebay-set-policy-defaults', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application.json' },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ return: returnPolicy.returnPolicyId })
               });
             }
@@ -1044,9 +1044,9 @@
             const dropdown = document.getElementById('returnPolicyDropdown');
             const policyId = dropdown.value;
             
-            const res = await authClient.authFetch('..netlify.functions.ebay-set-policy-defaults', {
+            const res = await authClient.authFetch('/.netlify/functions/ebay-set-policy-defaults', {
               method: 'POST',
-              headers: { 'Content-Type': 'application.json' },
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ return: policyId })
             });
             
@@ -1068,12 +1068,12 @@
       
       async function checkShippingPolicy() {
         try {
-          const res = await authClient.authFetch('..netlify.functions.ebay-list-policies');
+          const res = await authClient.authFetch('/.netlify/functions/ebay-list-policies');
           const data = await res.json();
           const policies = (res.ok && data?.fulfillment?.json?.fulfillmentPolicies) || [];
           
           // Check if default is set AND valid
-          const defRes = await authClient.authFetch('..netlify.functions.ebay-get-policy-defaults');
+          const defRes = await authClient.authFetch('/.netlify/functions/ebay-get-policy-defaults');
           const defaults = await defRes.json();
           const defaultId = defaults?.defaults?.fulfillment;
           const hasDefault = !!(defRes.ok && defaultId && policies.some(p => p.fulfillmentPolicyId === defaultId));
@@ -1114,21 +1114,21 @@
           
           if (selector.style.display === 'none') {
             // Create new policy
-            const provisionRes = await authClient.authFetch('..netlify.functions.ebay-provision-policies');
+            const provisionRes = await authClient.authFetch('/.netlify/functions/ebay-provision-policies');
             const provisionData = await provisionRes.json();
             
             if (!provisionRes.ok) {
               throw new Error(provisionData?.detail || provisionData?.error || 'Failed to create policy');
             }
             
-            const policiesRes = await authClient.authFetch('..netlify.functions.ebay-list-policies');
+            const policiesRes = await authClient.authFetch('/.netlify/functions/ebay-list-policies');
             const policiesData = await policiesRes.json();
             const fulfillmentPolicy = (policiesData?.fulfillment?.json?.fulfillmentPolicies || [])[0];
             
             if (fulfillmentPolicy) {
-              await authClient.authFetch('..netlify.functions.ebay-set-policy-defaults', {
+              await authClient.authFetch('/.netlify/functions/ebay-set-policy-defaults', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application.json' },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ fulfillment: fulfillmentPolicy.fulfillmentPolicyId })
               });
             }
@@ -1139,9 +1139,9 @@
             const dropdown = document.getElementById('shippingPolicyDropdown');
             const policyId = dropdown.value;
             
-            const res = await authClient.authFetch('..netlify.functions.ebay-set-policy-defaults', {
+            const res = await authClient.authFetch('/.netlify/functions/ebay-set-policy-defaults', {
               method: 'POST',
-              headers: { 'Content-Type': 'application.json' },
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ fulfillment: policyId })
             });
             
