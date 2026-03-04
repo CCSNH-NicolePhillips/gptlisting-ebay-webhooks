@@ -57,8 +57,9 @@ function parseActiveItemFromXml(itemXml: string): ActiveOffer | null {
 
   const title = extractTextBetween(itemXml, 'Title');
   const sku = extractTextBetween(itemXml, 'SKU') || extractTextBetween(itemXml, 'ItemID');
-  // eBay Trading API returns price with currencyID attribute: <StartPrice currencyID="USD">9.99</StartPrice>
-  const priceMatch = itemXml.match(/<StartPrice\s+currencyID="([^"]+)">([^<]+)<\/StartPrice>/);
+  // eBay Trading API returns price as <CurrentPrice currencyID="USD">9.99</CurrentPrice>
+  // (inside <SellingStatus> or at top level — matches either)
+  const priceMatch = itemXml.match(/<CurrentPrice[^>]*currencyID="([^"]+)"[^>]*>([^<]+)<\/CurrentPrice>/);
   const startPriceStr = priceMatch ? priceMatch[2].trim() : '';
   const priceCurrency = priceMatch ? priceMatch[1] : 'USD';
   const quantity = extractTextBetween(itemXml, 'QuantityAvailable');
