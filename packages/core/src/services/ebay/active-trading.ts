@@ -57,11 +57,14 @@ function parseActiveItemFromXml(itemXml: string): ActiveOffer | null {
 
   const title = extractTextBetween(itemXml, 'Title');
   const sku = extractTextBetween(itemXml, 'SKU') || extractTextBetween(itemXml, 'ItemID');
-  const startPriceStr = extractTextBetween(itemXml, 'StartPrice');
+  // eBay Trading API returns price with currencyID attribute: <StartPrice currencyID="USD">9.99</StartPrice>
+  const priceMatch = itemXml.match(/<StartPrice\s+currencyID="([^"]+)">([^<]+)<\/StartPrice>/);
+  const startPriceStr = priceMatch ? priceMatch[2].trim() : '';
+  const priceCurrency = priceMatch ? priceMatch[1] : 'USD';
   const quantity = extractTextBetween(itemXml, 'QuantityAvailable');
   const imageUrl = extractTextBetween(itemXml, 'GalleryURL');
   const startTime = extractTextBetween(itemXml, 'StartTime');
-  const quantitySold = extractTextBetween(itemXml, 'SellingStatus>QuantitySold');
+  const quantitySold = extractTextBetween(itemXml, 'QuantitySold');
   const watchCount = extractTextBetween(itemXml, 'WatchCount');
   const hitCount = extractTextBetween(itemXml, 'HitCount');
 
@@ -76,7 +79,7 @@ function parseActiveItemFromXml(itemXml: string): ActiveOffer | null {
     sku,
     title: title || undefined,
     price: startPriceStr
-      ? { value: startPriceStr, currency: 'USD' }
+      ? { value: startPriceStr, currency: priceCurrency }
       : undefined,
     availableQuantity: quantity ? parseInt(quantity, 10) : undefined,
     listingId: itemId,
