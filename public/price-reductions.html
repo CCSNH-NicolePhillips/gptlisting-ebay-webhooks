@@ -1,8 +1,8 @@
 ﻿<!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8" .>
-    <meta name="viewport" content="width=device-width, initial-scale=1" .>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Price Reductions – DraftPilot</title>
     <link rel="stylesheet" href="/draftpilot.css">
     <style>
@@ -394,19 +394,19 @@
         
         <div class="dp-form-group">
           <label class="dp-form-label">Reduce By ($)</label>
-          <input type="number" class="dp-input" id="editReduceBy" step="0.01" min="0.01" max="100" .>
+          <input type="number" class="dp-input" id="editReduceBy" step="0.01" min="0.01" max="100" />
           <div class="dp-input-hint">Amount to reduce each time</div>
         </div>
         
         <div class="dp-form-group">
           <label class="dp-form-label">Every (days)</label>
-          <input type="number" class="dp-input" id="editEveryDays" step="1" min="1" max="90" .>
+          <input type="number" class="dp-input" id="editEveryDays" step="1" min="1" max="90" />
           <div class="dp-input-hint">How often to reduce</div>
         </div>
         
         <div class="dp-form-group">
           <label class="dp-form-label">Minimum Price ($)</label>
-          <input type="number" class="dp-input" id="editMinPrice" step="0.01" min="0" .>
+          <input type="number" class="dp-input" id="editMinPrice" step="0.01" min="0" />
           <div class="dp-input-hint">Stop reducing at this floor price</div>
         </div>
         
@@ -424,12 +424,12 @@
 
     <script src="/sidebar-shell.js"></script>
     <script>
-      .. Global state
+      // Global state
       let allItems = [];
       let currentFilter = 'all';
       let editingItem = null;
 
-      .. Format helpers
+      // Format helpers
       function formatPrice(val) {
         if (val == null) return '-';
         return '$' + val.toFixed(2);
@@ -467,7 +467,7 @@
         return labels[status] || status;
       }
 
-      .. Toast
+      // Toast
       function showToast(message, type = 'success') {
         const toast = document.getElementById('toast');
         toast.textContent = message;
@@ -477,7 +477,7 @@
         }, 3000);
       }
 
-      .. Render table
+      // Render table
       function renderTable() {
         const tbody = document.getElementById('listingsBody');
         
@@ -551,7 +551,7 @@
           `;
         }).join('');
 
-        .. Attach edit handlers
+        // Attach edit handlers
         document.querySelectorAll('.edit-btn').forEach(btn => {
           btn.addEventListener('click', () => {
             const idx = parseInt(btn.dataset.index, 10);
@@ -560,7 +560,7 @@
         });
       }
 
-      .. Update stats
+      // Update stats
       function updateStats(summary) {
         document.getElementById('statActive').textContent = summary.active || 0;
         document.getElementById('statAtFloor').textContent = summary.atFloor || 0;
@@ -568,7 +568,7 @@
         document.getElementById('statTotalSaved').textContent = formatPrice(summary.totalSaved || 0);
       }
 
-      .. Load data
+      // Load data
       async function loadData() {
         try {
           const resp = await authClient.authFetch('..netlify.functions.price-reduction-list');
@@ -592,7 +592,7 @@
         }
       }
 
-      .. Modal functions
+      // Modal functions
       function openEditModal(item) {
         editingItem = item;
         const modal = document.getElementById('editModal');
@@ -690,16 +690,16 @@
         }
       }
 
-      .. Init
+      // Init
       document.addEventListener('DOMContentLoaded', async () => {
-        .. Init sidebar
+        // Init sidebar
         DraftPilotShell.init({
           title: 'Price Reductions',
           subtitle: 'Manage automatic price reduction settings',
           activePage: 'price-reductions'
         });
 
-        .. Filter buttons
+        // Filter buttons
         document.querySelectorAll('.dp-filter-btn[data-filter]').forEach(btn => {
           btn.addEventListener('click', () => {
             document.querySelectorAll('.dp-filter-btn[data-filter]').forEach(b => b.classList.remove('active'));
@@ -709,21 +709,21 @@
           });
         });
 
-        .. Refresh button
+        // Refresh button
         document.getElementById('refreshBtn').addEventListener('click', loadData);
 
-        .. Modal handlers
+        // Modal handlers
         document.getElementById('closeModal').addEventListener('click', closeEditModal);
         document.getElementById('cancelBtn').addEventListener('click', closeEditModal);
         document.getElementById('saveBtn').addEventListener('click', saveEdit);
         document.getElementById('disableBtn').addEventListener('click', disableReduction);
         
-        .. Close modal on backdrop click
+        // Close modal on backdrop click
         document.getElementById('editModal').addEventListener('click', (e) => {
           if (e.target.id === 'editModal') closeEditModal();
         });
 
-        .. Load data
+        // Load data
         await loadData();
       });
     </script>

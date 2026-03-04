@@ -1,8 +1,8 @@
 ﻿<!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8" .>
-    <meta name="viewport" content="width=device-width, initial-scale=1" .>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Welcome to DraftPilot</title>
     <link rel="stylesheet" href="/draftpilot.css">
     <style>
@@ -616,14 +616,14 @@
       
       async function checkAllRequirements() {
         try {
-          .. Check eBay connection
+          // Check eBay connection
           const statusRes = await authClient.authFetch('.api.status');
           const status = await statusRes.json();
           setupStatus.ebayConnected = !!status?.ebay?.connected;
           setupStatus.dropboxConnected = !!status?.dropbox?.connected;
           
           if (setupStatus.ebayConnected) {
-            .. Check location
+            // Check location
             try {
               const locRes = await authClient.authFetch('.api.ebay.locations');
               const locations = await locRes.json();
@@ -632,7 +632,7 @@
               setupStatus.hasLocation = false;
             }
             
-            .. Check policies
+            // Check policies
             try {
               const polRes = await authClient.authFetch('..netlify.functions.ebay-list-policies');
               const policies = await polRes.json();
@@ -644,7 +644,7 @@
               setupStatus.hasPolicies = false;
             }
             
-            .. Check if defaults are set AND valid
+            // Check if defaults are set AND valid
             try {
               const defRes = await authClient.authFetch('..netlify.functions.ebay-get-policy-defaults');
               const defaults = await defRes.json();
@@ -670,21 +670,21 @@
             }
           }
           
-          .. Determine which step to start on
+          // Determine which step to start on
           if (!setupStatus.ebayConnected) {
-            showStep(2); .. eBay connection
+            showStep(2); // eBay connection
           } else if (!setupStatus.hasLocation) {
-            showStep(3); .. Location
+            showStep(3); // Location
           } else if (!setupStatus.hasPolicies || !setupStatus.hasDefaults) {
-            showStep(4); .. Policies
+            showStep(4); // Policies
           } else if (!setupStatus.dropboxConnected) {
-            showStep(7); .. Dropbox (optional)
+            showStep(7); // Dropbox (optional)
           } else {
-            showStep(8); .. All done
+            showStep(8); // All done
           }
         } catch (err) {
           console.error('[Onboarding] Failed to check requirements:', err);
-          .. Start from beginning if check fails
+          // Start from beginning if check fails
           showStep(1);
         }
       }
@@ -713,7 +713,7 @@
         currentStep = step;
         updateStepIndicator();
         
-        .. Check connection status when showing relevant steps
+        // Check connection status when showing relevant steps
         if (step === 2) checkEbayConnection();
         if (step === 3) checkLocation();
         if (step === 4) checkPaymentPolicy();
@@ -776,7 +776,7 @@
           if (res.ok && data?.ebay?.connected) {
             showStatus('ebayStatus', '✓ eBay account already connected!', 'success');
             setupStatus.ebayConnected = true;
-            .. Auto-advance to next incomplete step
+            // Auto-advance to next incomplete step
             setTimeout(() => {
               if (!setupStatus.hasLocation) {
                 showStep(3);
@@ -815,7 +815,7 @@
           const locations = (res.ok && data?.locations) || [];
           if (locations.length > 0) {
             showStatus('locationStatus', '✓ Shipping location already configured!', 'success');
-            .. Auto-advance if already set up
+            // Auto-advance if already set up
             setTimeout(() => nextStep(), 1500);
           }
         } catch (err) {
@@ -843,7 +843,7 @@
             throw new Error('Please fill in all address fields');
           }
           
-          .. Build query string like location.html does
+          // Build query string like location.html does
           const qs = new URLSearchParams({
             key: defaultKey,
             name,
@@ -880,19 +880,19 @@
           const data = await res.json();
           const policies = (res.ok && data?.payment?.json?.paymentPolicies) || [];
           
-          .. Check if default is set AND valid
+          // Check if default is set AND valid
           const defRes = await authClient.authFetch('..netlify.functions.ebay-get-policy-defaults');
           const defaults = await defRes.json();
           const defaultId = defaults?.defaults?.payment;
           const hasDefault = !!(defRes.ok && defaultId && policies.some(p => p.paymentPolicyId === defaultId));
           
           if (policies.length === 0) {
-            .. No policies - show create button
+            // No policies - show create button
             document.getElementById('paymentPolicySelector').style.display = 'none';
             document.getElementById('paymentPolicyPreview').style.display = 'block';
             document.getElementById('paymentActionBtn').textContent = 'Create Policy →';
           } else if (!hasDefault) {
-            .. Has policies but no default - show dropdown
+            // Has policies but no default - show dropdown
             document.getElementById('paymentPolicyPreview').style.display = 'none';
             document.getElementById('paymentPolicySelector').style.display = 'block';
             const dropdown = document.getElementById('paymentPolicyDropdown');
@@ -902,7 +902,7 @@
             document.getElementById('paymentActionBtn').textContent = 'Set as Default →';
             showStatus('paymentStatus', '⚠️ Select a policy to set as default', 'warning');
           } else {
-            .. Has default - auto-skip
+            // Has default - auto-skip
             showStatus('paymentStatus', '✓ Payment policy configured!', 'success');
             setTimeout(() => nextStep(), 500);
           }
@@ -921,7 +921,7 @@
           const selector = document.getElementById('paymentPolicySelector');
           
           if (selector.style.display === 'none') {
-            .. Create new policy
+            // Create new policy
             const provisionRes = await authClient.authFetch('..netlify.functions.ebay-provision-policies');
             const provisionData = await provisionRes.json();
             
@@ -929,13 +929,13 @@
               throw new Error(provisionData?.detail || provisionData?.error || 'Failed to create policy');
             }
             
-            .. Get the policy that was just created
+            // Get the policy that was just created
             const policiesRes = await authClient.authFetch('..netlify.functions.ebay-list-policies');
             const policiesData = await policiesRes.json();
             const paymentPolicy = (policiesData?.payment?.json?.paymentPolicies || [])[0];
             
             if (paymentPolicy) {
-              .. Set it as default
+              // Set it as default
               await authClient.authFetch('..netlify.functions.ebay-set-policy-defaults', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application.json' },
@@ -945,7 +945,7 @@
             
             showStatus('paymentStatus', '✓ Payment policy created and set as default!', 'success');
           } else {
-            .. Set existing policy as default
+            // Set existing policy as default
             const dropdown = document.getElementById('paymentPolicyDropdown');
             const policyId = dropdown.value;
             
@@ -977,19 +977,19 @@
           const data = await res.json();
           const policies = (res.ok && data?.returns?.json?.returnPolicies) || [];
           
-          .. Check if default is set AND valid
+          // Check if default is set AND valid
           const defRes = await authClient.authFetch('..netlify.functions.ebay-get-policy-defaults');
           const defaults = await defRes.json();
           const defaultId = defaults?.defaults?.return;
           const hasDefault = !!(defRes.ok && defaultId && policies.some(p => p.returnPolicyId === defaultId));
           
           if (policies.length === 0) {
-            .. No policies - show create button
+            // No policies - show create button
             document.getElementById('returnPolicySelector').style.display = 'none';
             document.getElementById('returnPolicyPreview').style.display = 'block';
             document.getElementById('returnActionBtn').textContent = 'Create Policy →';
           } else if (!hasDefault) {
-            .. Has policies but no default - show dropdown
+            // Has policies but no default - show dropdown
             document.getElementById('returnPolicyPreview').style.display = 'none';
             document.getElementById('returnPolicySelector').style.display = 'block';
             const dropdown = document.getElementById('returnPolicyDropdown');
@@ -999,7 +999,7 @@
             document.getElementById('returnActionBtn').textContent = 'Set as Default →';
             showStatus('returnStatus', '⚠️ Select a policy to set as default', 'warning');
           } else {
-            .. Has default - auto-skip
+            // Has default - auto-skip
             showStatus('returnStatus', '✓ Return policy configured!', 'success');
             setTimeout(() => nextStep(), 500);
           }
@@ -1018,7 +1018,7 @@
           const selector = document.getElementById('returnPolicySelector');
           
           if (selector.style.display === 'none') {
-            .. Create new policy
+            // Create new policy
             const provisionRes = await authClient.authFetch('..netlify.functions.ebay-provision-policies');
             const provisionData = await provisionRes.json();
             
@@ -1040,7 +1040,7 @@
             
             showStatus('returnStatus', '✓ Return policy created and set as default!', 'success');
           } else {
-            .. Set existing policy as default
+            // Set existing policy as default
             const dropdown = document.getElementById('returnPolicyDropdown');
             const policyId = dropdown.value;
             
@@ -1072,19 +1072,19 @@
           const data = await res.json();
           const policies = (res.ok && data?.fulfillment?.json?.fulfillmentPolicies) || [];
           
-          .. Check if default is set AND valid
+          // Check if default is set AND valid
           const defRes = await authClient.authFetch('..netlify.functions.ebay-get-policy-defaults');
           const defaults = await defRes.json();
           const defaultId = defaults?.defaults?.fulfillment;
           const hasDefault = !!(defRes.ok && defaultId && policies.some(p => p.fulfillmentPolicyId === defaultId));
           
           if (policies.length === 0) {
-            .. No policies - show create button
+            // No policies - show create button
             document.getElementById('shippingPolicySelector').style.display = 'none';
             document.getElementById('shippingPolicyPreview').style.display = 'block';
             document.getElementById('shippingActionBtn').textContent = 'Create Policy →';
           } else if (!hasDefault) {
-            .. Has policies but no default - show dropdown
+            // Has policies but no default - show dropdown
             document.getElementById('shippingPolicyPreview').style.display = 'none';
             document.getElementById('shippingPolicySelector').style.display = 'block';
             const dropdown = document.getElementById('shippingPolicyDropdown');
@@ -1094,7 +1094,7 @@
             document.getElementById('shippingActionBtn').textContent = 'Set as Default →';
             showStatus('shippingStatus', '⚠️ Select a policy to set as default', 'warning');
           } else {
-            .. Has default - auto-skip
+            // Has default - auto-skip
             showStatus('shippingStatus', '✓ Shipping policy configured!', 'success');
             setTimeout(() => nextStep(), 500);
           }
@@ -1113,7 +1113,7 @@
           const selector = document.getElementById('shippingPolicySelector');
           
           if (selector.style.display === 'none') {
-            .. Create new policy
+            // Create new policy
             const provisionRes = await authClient.authFetch('..netlify.functions.ebay-provision-policies');
             const provisionData = await provisionRes.json();
             
@@ -1135,7 +1135,7 @@
             
             showStatus('shippingStatus', '✓ Shipping policy created and set as default!', 'success');
           } else {
-            .. Set existing policy as default
+            // Set existing policy as default
             const dropdown = document.getElementById('shippingPolicyDropdown');
             const policyId = dropdown.value;
             
@@ -1165,11 +1165,11 @@
         showStep(8);
       }
       
-      .. Handle OAuth redirects
+      // Handle OAuth redirects
       window.addEventListener('load', async () => {
-        .. Ensure user is authenticated before proceeding
+        // Ensure user is authenticated before proceeding
         const isAuth = await authClient.requireAuth();
-        if (!isAuth) return; .. requireAuth will redirect to login if needed
+        if (!isAuth) return; // requireAuth will redirect to login if needed
         
         const params = new URLSearchParams(window.location.search);
         
@@ -1181,7 +1181,7 @@
           checkDropboxConnection();
           setTimeout(() => completeOnboarding(), 2000);
         } else {
-          .. Check requirements on initial load
+          // Check requirements on initial load
           checkAllRequirements();
         }
       });

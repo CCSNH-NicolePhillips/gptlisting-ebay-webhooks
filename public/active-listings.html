@@ -1,8 +1,8 @@
 ﻿<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" .>
-  <meta name="viewport" content="width=device-width, initial-scale=1" .>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Active Listings – DraftPilot</title>
   <link rel="stylesheet" href="/draftpilot.css">
   <style>
@@ -323,7 +323,7 @@
   <!-- Image Lightbox -->
   <div class="image-lightbox" id="imageLightbox">
     <span class="image-lightbox-close" id="lightboxClose">&times;</span>
-    <img src="" alt="Expanded image" id="lightboxImage" .>
+    <img src="" alt="Expanded image" id="lightboxImage" />
   </div>
   
   <!-- Main Dashboard Shell -->
@@ -332,7 +332,7 @@
     <aside class="dp-sidebar">
       <!-- Brand Area -->
       <div class="dp-sidebar__brand">
-        <img src="logo.LogoWhiteText_NoBg.png" alt="DraftPilot - AI Listing Studio" class="dp-brand-logo" .>
+        <img src="logo/LogoWhiteText_NoBg.png" alt="DraftPilot - AI Listing Studio" class="dp-brand-logo" />
       </div>
       
       <!-- Navigation -->
@@ -470,7 +470,7 @@
               <circle cx="11" cy="11" r="8"></circle>
               <path d="m21 21-4.35-4.35"></path>
             </svg>
-            <input type="text" class="dp-search__input" placeholder="Search drafts, SKUs, or notes…" .>
+            <input type="text" class="dp-search__input" placeholder="Search drafts, SKUs, or notes…" />
           </div>
         </div>
         
@@ -512,7 +512,7 @@
           id="searchInput" 
           class="search-input" 
           placeholder="🔍 Search by title or SKU..."
-        .>
+        />
         <select id="sortSelect" style="padding: 0.5rem 0.8rem; border-radius: 6px; background: #0f1529; border: 1px solid #2a335c; color: #f4f6fb; font-size: 0.9rem; cursor: pointer;">
           <option value="newest">Newest First</option>
           <option value="oldest">Oldest First</option>
@@ -578,8 +578,8 @@
     const sortSelect = document.getElementById('sortSelect');
     const searchInput = document.getElementById('searchInput');
 
-    let allOffers = []; .. Store all offers for sorting
-    let filteredOffers = []; .. Store filtered offers for display
+    let allOffers = []; // Store all offers for sorting
+    let filteredOffers = []; // Store filtered offers for display
     
     function getAuthFetch() {
       return (window.authClient && typeof window.authClient.authFetch === 'function') 
@@ -656,7 +656,7 @@
       filteredOffers = filtered;
       const sorted = sortOffers(filtered, sortSelect.value);
       
-      .. Update counts to show filtered.total
+      // Update counts to show filtered.total
       updateCounts();
       
       if (sorted.length === 0 && offers.length > 0) {
@@ -700,18 +700,18 @@
       card.dataset.offerId = o.offerId || '';
       card.dataset.sku = o.sku || '';
 
-      .. Add image thumbnail if available
+      // Add image thumbnail if available
       if (o.imageUrl) {
         const imgContainer = document.createElement('div');
         imgContainer.style.width = '100%';
         imgContainer.style.height = '180px';
         imgContainer.style.marginBottom = '0.8rem';
-        imgContainer.style.overflow = 'visible'; .. Allow checkbox to be visible
+        imgContainer.style.overflow = 'visible'; // Allow checkbox to be visible
         imgContainer.style.borderRadius = '6px';
         imgContainer.style.backgroundColor = '#2a2a2a';
         imgContainer.style.position = 'relative';
         
-        .. Multi-select checkbox (inside image container)
+        // Multi-select checkbox (inside image container)
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
         checkbox.className = 'card-checkbox';
@@ -733,7 +733,7 @@
         img.style.borderRadius = '6px';
         img.style.cursor = 'pointer';
         
-        .. Click image to expand
+        // Click image to expand
         img.addEventListener('click', (e) => {
           e.stopPropagation();
           openLightbox(o.imageUrl);
@@ -742,7 +742,7 @@
         imgContainer.appendChild(img);
         card.appendChild(imgContainer);
       } else {
-        .. No image - add checkbox directly to card with placeholder
+        // No image - add checkbox directly to card with placeholder
         const imgContainer = document.createElement('div');
         imgContainer.style.width = '100%';
         imgContainer.style.height = '180px';
@@ -822,20 +822,20 @@
 
       card.appendChild(badges);
 
-      .. Promotion control
+      // Promotion control
       const promoControl = document.createElement('div');
       promoControl.className = 'promo-control';
 
-      .. Check if price is below eBay's minimum for promotion ($3.00)
+      // Check if price is below eBay's minimum for promotion ($3.00)
       const MIN_PROMOTABLE_PRICE = 3.00;
       const itemPrice = parseFloat(o.price?.value || '0');
       const canPromote = itemPrice >= MIN_PROMOTABLE_PRICE;
 
-      .. Check if already promoted
+      // Check if already promoted
       const isPromoted = o.autoPromote && o.autoPromoteAdRate != null;
       
       if (!canPromote) {
-        .. Price too low - show warning instead of promotion controls
+        // Price too low - show warning instead of promotion controls
         const warningDiv = document.createElement('div');
         warningDiv.className = 'promo-status';
         warningDiv.style.color = 'var(--muted)';
@@ -843,13 +843,13 @@
         warningDiv.innerHTML = `⚠️ Price below $${MIN_PROMOTABLE_PRICE.toFixed(2)} – cannot be promoted on eBay`;
         promoControl.appendChild(warningDiv);
       } else if (isPromoted) {
-        .. Show current promotion status
+        // Show current promotion status
         const statusDiv = document.createElement('div');
         statusDiv.className = 'promo-status';
         statusDiv.innerHTML = `<strong>📢 Promoted at ${o.autoPromoteAdRate}%</strong>`;
         promoControl.appendChild(statusDiv);
         
-        .. Edit form (initially hidden)
+        // Edit form (initially hidden)
         const editForm = document.createElement('div');
         editForm.className = 'promo-edit-form';
         editForm.style.display = 'none';
@@ -876,7 +876,7 @@
         
         promoControl.appendChild(editForm);
         
-        .. Action buttons (initially visible)
+        // Action buttons (initially visible)
         const actionsDiv = document.createElement('div');
         actionsDiv.className = 'promo-edit-form';
         
@@ -892,7 +892,7 @@
         
         promoControl.appendChild(actionsDiv);
         
-        .. Toggle edit mode
+        // Toggle edit mode
         changeBtn.addEventListener('click', () => {
           actionsDiv.style.display = 'none';
           editForm.style.display = 'flex';
@@ -905,7 +905,7 @@
           rateInput.value = String(o.autoPromoteAdRate);
         });
         
-        .. Save changes
+        // Save changes
         saveBtn.addEventListener('click', async () => {
           const val = parseFloat(rateInput.value);
           if (!Number.isFinite(val) || val < 0.1 || val > 100) {
@@ -940,7 +940,7 @@
               return;
             }
             
-            .. Update UI
+            // Update UI
             o.autoPromoteAdRate = val;
             statusDiv.innerHTML = `<strong>📢 Promoted at ${val}%</strong>`;
             editForm.style.display = 'none';
@@ -961,7 +961,7 @@
           }
         });
         
-        .. Remove promotion
+        // Remove promotion
         removeBtn.addEventListener('click', async () => {
           if (!confirm('Remove this listing from promotion?')) return;
           
@@ -990,7 +990,7 @@
               return;
             }
             
-            .. Reload the page to show updated state
+            // Reload the page to show updated state
             localFlash.textContent = '✓ Promotion removed - refreshing...';
             localFlash.className = 'card-flash success';
             setTimeout(() => load(), 1500);
@@ -1004,7 +1004,7 @@
         });
         
       } else {
-        .. Not promoted - show promotion form
+        // Not promoted - show promotion form
         const statusDiv = document.createElement('div');
         statusDiv.className = 'promo-status';
         statusDiv.textContent = 'Not promoted';
@@ -1048,7 +1048,7 @@
         promoteBtn.style.width = '100%';
         promoControl.appendChild(promoteBtn);
         
-        .. Show promotion form
+        // Show promotion form
         promoteBtn.addEventListener('click', () => {
           promoteBtn.style.display = 'none';
           editForm.style.display = 'flex';
@@ -1061,7 +1061,7 @@
           rateInput.value = '5';
         });
         
-        .. Create promotion
+        // Create promotion
         saveBtn.addEventListener('click', async () => {
           const val = parseFloat(rateInput.value);
           if (!Number.isFinite(val) || val < 0.1 || val > 100) {
@@ -1095,7 +1095,7 @@
               return;
             }
             
-            .. Reload to show updated state
+            // Reload to show updated state
             localFlash.textContent = `✓ Promotion created at ${val}% - refreshing...`;
             localFlash.className = 'card-flash success';
             setTimeout(() => load(), 1500);
@@ -1111,11 +1111,11 @@
 
       card.appendChild(promoControl);
       
-      .. Button row container
+      // Button row container
       const btnRow = document.createElement('div');
       btnRow.style.cssText = 'display: flex; gap: 0.5rem; margin-top: 0.75rem;';
       
-      .. Edit button
+      // Edit button
       const editBtn = document.createElement('button');
       editBtn.className = 'btn primary';
       editBtn.textContent = 'Edit';
@@ -1130,7 +1130,7 @@
       });
       btnRow.appendChild(editBtn);
       
-      .. Delete button
+      // Delete button
       const deleteBtn = document.createElement('button');
       deleteBtn.className = 'btn secondary';
       deleteBtn.textContent = 'End';
@@ -1196,7 +1196,7 @@
       emptyState.style.display = 'none';
 
       try {
-        .. Use Trading API endpoint which gets ALL listings (not just Inventory API ones)
+        // Use Trading API endpoint which gets ALL listings (not just Inventory API ones)
         const exec = getAuthFetch();
         const res = await exec('.api.ebay.listings.active');
         const text = await res.text();
@@ -1204,11 +1204,11 @@
         if (res.status === 401) {
           flash.textContent = 'eBay connection required...';
           flash.className = 'flash error';
-          .. Show reconnect modal
+          // Show reconnect modal
           if (typeof window.showReconnectModal === 'function') {
             const reconnected = await window.showReconnectModal('ebay', 'Your eBay session has expired. Please reconnect to view your listings.');
             if (reconnected) {
-              load(); .. Retry after reconnection
+              load(); // Retry after reconnection
               return;
             }
           }
@@ -1224,7 +1224,7 @@
           return;
         }
 
-        .. Check for token errors in response body
+        // Check for token errors in response body
         const errorMsg = data?.error || '';
         if (errorMsg.includes('invalid_grant') || errorMsg.includes('token refresh failed') || 
             errorMsg.includes('ebay-not-connected') || errorMsg.includes('No eBay token')) {
@@ -1233,7 +1233,7 @@
           if (typeof window.showReconnectModal === 'function') {
             const reconnected = await window.showReconnectModal('ebay', 'Your eBay session has expired. Please reconnect to view your listings.');
             if (reconnected) {
-              load(); .. Retry after reconnection
+              load(); // Retry after reconnection
               return;
             }
           }
@@ -1247,8 +1247,8 @@
         }
 
         const offers = Array.isArray(data.offers) ? data.offers : [];
-        allOffers = offers; .. Store for sorting
-        filteredOffers = offers; .. Initially all offers are visible
+        allOffers = offers; // Store for sorting
+        filteredOffers = offers; // Initially all offers are visible
         updateCounts();
         
         if (!offers.length) {
@@ -1267,9 +1267,9 @@
 
     document.getElementById('btnRefresh')?.addEventListener('click', () => load());
     
-    .. ========================================================================
-    .. Multi-select and Bulk Actions
-    .. ========================================================================
+    // ========================================================================
+    // Multi-select and Bulk Actions
+    // ========================================================================
     const bulkActionBar = document.getElementById('bulkActionBar');
     const selectAllCheckbox = document.getElementById('selectAll');
     const selectedCountEl = document.getElementById('selectedCount');
@@ -1301,7 +1301,7 @@
         if (selectAllCheckbox) selectAllCheckbox.checked = false;
       }
       
-      .. Update bar's select all checkbox state
+      // Update bar's select all checkbox state
       const allCheckboxes = grid.querySelectorAll('.card-checkbox');
       const allChecked = allCheckboxes.length > 0 && 
         Array.from(allCheckboxes).every(cb => cb.checked);
@@ -1311,7 +1311,7 @@
       }
     }
     
-    .. Select All in bulk action bar
+    // Select All in bulk action bar
     selectAllCheckbox?.addEventListener('change', () => {
       const checkboxes = grid.querySelectorAll('.card-checkbox');
       checkboxes.forEach(cb => {
@@ -1365,7 +1365,7 @@
         }
       }
       
-      .. Clear selection
+      // Clear selection
       grid.querySelectorAll('.card.selected').forEach(card => {
         card.classList.remove('selected');
         card.querySelector('.card-checkbox').checked = false;
@@ -1380,7 +1380,7 @@
         flash.className = 'flash error';
       }
       
-      .. Reload to show updated promo status
+      // Reload to show updated promo status
       setTimeout(() => load(), 1500);
     });
     
@@ -1408,7 +1408,7 @@
           
           if (res.ok) {
             successCount++;
-            .. Remove card from grid
+            // Remove card from grid
             const card = grid.querySelector(`.card[data-listing-id="${listing.listingId}"]`);
             card?.remove();
           } else {
@@ -1430,7 +1430,7 @@
       }
     });
     
-    .. Lightbox functions
+    // Lightbox functions
     function openLightbox(imageUrl) {
       const lightbox = document.getElementById('imageLightbox');
       const lightboxImg = document.getElementById('lightboxImage');
@@ -1449,14 +1449,14 @@
       }
     }
     
-    .. Close lightbox on click or escape
+    // Close lightbox on click or escape
     document.getElementById('imageLightbox')?.addEventListener('click', closeLightbox);
     document.getElementById('lightboxClose')?.addEventListener('click', closeLightbox);
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') closeLightbox();
     });
     
-    .. Load on page ready
+    // Load on page ready
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', load);
     } else {
