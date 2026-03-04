@@ -2,6 +2,7 @@ import express from 'express';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { router } from './routes/index.js';
+import { netlifyCompatMiddleware } from './lib/netlify-compat.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -17,6 +18,11 @@ app.get('/health', (_req, res) => {
 });
 
 app.use('/api', router);
+
+// Netlify backwards-compatibility: rewrite /.netlify/functions/:name → /api/*
+// Must be mounted AFTER /api so path param parsing works, but the middleware
+// internally dispatches through router (no HTTP redirect, auth headers preserved).
+app.use('/.netlify/functions/:name', netlifyCompatMiddleware(router));
 
 // Redirect rules from public/_redirects
 app.get('/', (_req, res) => res.sendFile(join(publicDir, 'welcome.html')));
