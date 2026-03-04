@@ -1,10 +1,10 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" .>
     <meta name="viewport" content="width=device-width, initial-scale=1" .>
-    <title>Create draft · Wizard<.title>
-    <link rel="stylesheet" href=".draftpilot.css">
+    <title>Create draft · Wizard</title>
+    <link rel="stylesheet" href="/draftpilot.css">
     <style>
       body {
         font-family:
@@ -146,37 +146,37 @@
         z-index: 9999;
         background: rgba(0, 0, 0, 0.6);
       }
-    <.style>
-  <.head>
+    </style>
+  </head>
   <body>
-    <script src=".auth-client.js"><.script>
+    <script src="/auth-client.js"></script>
     <script>
       authClient.requireAuth();
-    <.script>
+    </script>
     <script>
       .. TEMPORARY: Redirect to Quick List until ChatGPT guided wizard is ready
       .. TODO: Remove this redirect when implementing ChatGPT chat box feature
       if (!window.location.search.includes('dev')) {
         window.location.href = '.quick-list.html';
       }
-    <.script>
+    </script>
     <div id="pageLoader" class="overlay hide" role="status" aria-live="polite">
       <div class="overlay-box">
-        <div class="spinner-lg" aria-hidden="true"><.div>
-        <div class="muted" style="font-size:.9rem;">Loading…<.div>
-      <.div>
-    <.div>
+        <div class="spinner-lg" aria-hidden="true"></div>
+        <div class="muted" style="font-size:.9rem;">Loading…</div>
+      </div>
+    </div>
     <div class="card">
-      <a class="secondary" href=".">← Back<.a>
-      <h2>Create draft – Step 1: Pick category<.h2>
+      <a class="secondary" href=".">← Back</a>
+      <h2>Create draft – Step 1: Pick category</h2>
       <p class="muted">
         Start with a category so we can populate the right required and optional fields.
-      <.p>
+      </p>
       <!-- Step 1 is category-only: choose a leaf via Browse; raw IDs are hidden -->
       <div class="row" style="margin-top: -0.25rem">
-        <div class="col"><button id="btnBrowse" class="secondary">Browse categories<.button><.div>
-      <.div>
-      <div id="categoryPreview" class="muted" style="margin: 0.25rem 0 0.25rem"><.div>
+        <div class="col"><button id="btnBrowse" class="secondary">Browse categories</button></div>
+      </div>
+      <div id="categoryPreview" class="muted" style="margin: 0.25rem 0 0.25rem"></div>
       <div id="browseModal" class="modal hide" role="dialog" aria-modal="true">
         <div
           id="browsePanel"
@@ -192,69 +192,69 @@
           "
         >
           <div style="display: flex; justify-content: space-between; align-items: center">
-            <h3 style="margin: 0.2rem 0">Browse categories<.h3>
-            <button id="browseClose" type="button" class="secondary">Close<.button>
-          <.div>
-          <div id="crumbs" class="muted" style="margin: 0.4rem 0 0.6rem"><.div>
-          <div id="browseList" class="row"><.div>
-        <.div>
-      <.div>
+            <h3 style="margin: 0.2rem 0">Browse categories</h3>
+            <button id="browseClose" type="button" class="secondary">Close</button>
+          </div>
+          <div id="crumbs" class="muted" style="margin: 0.4rem 0 0.6rem"></div>
+          <div id="browseList" class="row"></div>
+        </div>
+      </div>
       <div
         style="margin: 0.5rem 0; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap"
       >
-        <button id="btnNext" disabled>Next →<.button>
-        <span id="msg1" class="muted"><.span>
-      <.div>
-    <.div>
+        <button id="btnNext" disabled>Next →</button>
+        <span id="msg1" class="muted"></span>
+      </div>
+    </div>
 
     <div id="step2" class="card hide">
-      <h2>Step 2: Details and create<.h2>
-      <p id="catPath" class="muted"><.p>
+      <h2>Step 2: Details and create</h2>
+      <p id="catPath" class="muted"></p>
       <div class="form-row">
         <div class="form-field wide">
-          <label>Title<input id="title" placeholder="Type your listing title" .><.label>
-        <.div>
-      <.div>
+          <label>Title<input id="title" placeholder="Type your listing title" .></label>
+        </div>
+      </div>
       <div class="form-row">
         <div class="form-field">
           <label>SKU
             <input id="sku" placeholder="SKU123" maxlength="50" .>
-            <small id="skuHint" class="muted">Use 1-50 letters or numbers. No spaces or punctuation.<.small>
-          <.label>
-        <.div>
+            <small id="skuHint" class="muted">Use 1-50 letters or numbers. No spaces or punctuation.</small>
+          </label>
+        </div>
         <div class="form-field compact">
-          <label>Price USD<input id="price" class="compact-input" type="number" inputmode="decimal" min="0" step="0.01" placeholder="19.99" .><.label>
-        <.div>
+          <label>Price USD<input id="price" class="compact-input" type="number" inputmode="decimal" min="0" step="0.01" placeholder="19.99" .></label>
+        </div>
         <div class="form-field compact">
-          <label>Qty<input id="qty" class="compact-input" type="number" inputmode="numeric" min="1" step="1" value="1" .><.label>
-        <.div>
-      <.div>
+          <label>Qty<input id="qty" class="compact-input" type="number" inputmode="numeric" min="1" step="1" value="1" .></label>
+        </div>
+      </div>
       <div class="form-row">
         <div class="form-field wide">
-          <label>Images<.label>
+          <label>Images</label>
           <input id="images" type="hidden" .>
           <div id="imgPicker" class="dp-dropdown" style="margin-top:.25rem">
             <div id="imgDropdown" class="dp-dropdown__trigger">
-              <span id="imgPlaceholder" class="dp-dropdown__trigger-text placeholder"><span id="imgPhText">Choose images…<.span><span id="imgSpinner" style="display:none;margin-left:8px" aria-hidden="true">⏳<.span><.span>
+              <span id="imgPlaceholder" class="dp-dropdown__trigger-text placeholder"><span id="imgPhText">Choose images…</span><span id="imgSpinner" style="display:none;margin-left:8px" aria-hidden="true">⏳</span></span>
               <svg class="dp-dropdown__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="6 9 12 15 18 9"><.polyline>
-              <.svg>
-            <.div>
-            <div id="imgOptions" class="dp-dropdown__panel"><.div>
-            <div id="imgChips" class="dp-dropdown__chips"><.div>
-            <div id="imgGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-top:.5rem"><.div>
-          <.div>
-          <small class="muted" id="imgTip"><.small>
-        <.div>
-      <.div>
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </div>
+            <div id="imgOptions" class="dp-dropdown__panel"></div>
+            <div id="imgChips" class="dp-dropdown__chips"></div>
+            <div id="imgGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-top:.5rem"></div>
+          </div>
+          <small class="muted" id="imgTip"></small>
+        </div>
+      </div>
       <div class="form-row">
         <div class="form-field compact">
-          <label>Weight (lbs)<input id="weightLbs" class="compact-input" type="number" step="0.01" min="0" placeholder="1.0" .><.label>
-        <.div>
+          <label>Weight (lbs)<input id="weightLbs" class="compact-input" type="number" step="0.01" min="0" placeholder="1.0" .></label>
+        </div>
         <div class="form-field compact">
-          <label>Weight (oz)<input id="weightOz" class="compact-input" type="number" step="0.1" min="0" placeholder="16" .><.label>
-        <.div>
-      <.div>
+          <label>Weight (oz)<input id="weightOz" class="compact-input" type="number" step="0.1" min="0" placeholder="16" .></label>
+        </div>
+      </div>
       <div class="form-row">
         <div class="form-field wide">
           <label
@@ -262,55 +262,55 @@
               id="description"
               rows="3"
               placeholder="Describe the item, ingredients, material, etc."
-            ><.textarea>
-          <.label>
-        <.div>
-      <.div>
+            ></textarea>
+          </label>
+        </div>
+      </div>
       <div class="form-row">
         <div class="form-field">
-          <label>Condition<select id="condition"><.select><.label>
-        <.div>
+          <label>Condition<select id="condition"></select></label>
+        </div>
         <div class="form-field">
-          <label>Location<select id="location"><.select><.label>
-        <.div>
-      <.div>
-      <div class="hr"><.div>
+          <label>Location<select id="location"></select></label>
+        </div>
+      </div>
+      <div class="hr"></div>
       <div id="reqAspectsWrap" class="hide">
-        <h3 style="margin: 0.2rem 0">Required specifics<.h3>
-        <div id="reqAspects" class="row"><.div>
-      <.div>
+        <h3 style="margin: 0.2rem 0">Required specifics</h3>
+        <div id="reqAspects" class="row"></div>
+      </div>
       <details style="margin-top: 0.6rem">
-        <summary>Optional specifics<.summary>
-        <div id="optAspects" class="row" style="margin-top: 0.4rem"><.div>
-      <.details>
+        <summary>Optional specifics</summary>
+        <div id="optAspects" class="row" style="margin-top: 0.4rem"></div>
+      </details>
       <div style="margin: 0.8rem 0 0.2rem; display: flex; gap: 0.5rem; align-items: center">
-        <button id="btnCreate">Create draft<.button>
-        <button id="btnPublish" class="secondary" disabled>Publish now<.button>
-        <button id="btnShowDebug" class="secondary" style="margin-left: auto">🐛 Debug<.button>
-        <span id="msg2" class="muted"><.span>
-      <.div>
+        <button id="btnCreate">Create draft</button>
+        <button id="btnPublish" class="secondary" disabled>Publish now</button>
+        <button id="btnShowDebug" class="secondary" style="margin-left: auto">🐛 Debug</button>
+        <span id="msg2" class="muted"></span>
+      </div>
       
       <!-- Debug Panel -->
       <details id="debugPanel" style="margin-top: 1rem; display: none">
         <summary style="cursor: pointer; font-weight: bold; color: #0066cc">
           🐛 Debug Info (Draft Data Being Sent)
-        <.summary>
+        </summary>
         <div style="margin-top: 0.5rem; background: #f5f5f5; padding: 1rem; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">
           <div style="margin-bottom: 0.5rem">
-            <strong>Group Data:<.strong>
-            <pre id="debugGroup" style="background: white; padding: 0.5rem; overflow-x: auto; margin: 0.25rem 0"><.pre>
-          <.div>
+            <strong>Group Data:</strong>
+            <pre id="debugGroup" style="background: white; padding: 0.5rem; overflow-x: auto; margin: 0.25rem 0"></pre>
+          </div>
           <div style="margin-bottom: 0.5rem">
-            <strong>Mapped Draft (Inventory):<.strong>
-            <pre id="debugInventory" style="background: white; padding: 0.5rem; overflow-x: auto; margin: 0.25rem 0"><.pre>
-          <.div>
+            <strong>Mapped Draft (Inventory):</strong>
+            <pre id="debugInventory" style="background: white; padding: 0.5rem; overflow-x: auto; margin: 0.25rem 0"></pre>
+          </div>
           <div>
-            <strong>Offer Data:<.strong>
-            <pre id="debugOffer" style="background: white; padding: 0.5rem; overflow-x: auto; margin: 0.25rem 0"><.pre>
-          <.div>
-        <.div>
-      <.details>
-    <.div>
+            <strong>Offer Data:</strong>
+            <pre id="debugOffer" style="background: white; padding: 0.5rem; overflow-x: auto; margin: 0.25rem 0"></pre>
+          </div>
+        </div>
+      </details>
+    </div>
 
     <script>
       const $ = (id) => document.getElementById(id);
@@ -1113,7 +1113,7 @@
           .. Provide a loading placeholder inside the dropdown options
           if (v) {
             picker.classList.remove('open');
-            ddOpts.innerHTML = '<div style="padding:.75rem" class="muted">Loading images…<.div>';
+            ddOpts.innerHTML = '<div style="padding:.75rem" class="muted">Loading images…</div>';
           } else if (!items.length) {
             .. If nothing loaded, keep it empty but hide to reduce confusion
             picker.classList.remove('open');
@@ -1130,7 +1130,7 @@
           img.src = it.proxiedUrl; img.alt = it.name; img.width = 48; img.height = 48; img.loading = 'lazy';
           const meta = document.createElement('div');
           meta.className = 'dp-dropdown__option-content';
-          meta.innerHTML = `<div class="dp-dropdown__option-title">${it.name}<.div><div class="dp-dropdown__option-subtitle">${it.path}<.div>`;
+          meta.innerHTML = `<div class="dp-dropdown__option-title">${it.name}</div><div class="dp-dropdown__option-subtitle">${it.path}</div>`;
           const cb = document.createElement('input');
           cb.type = 'checkbox'; cb.style.marginLeft = 'auto'; cb.style.accentColor = 'var(--accent)';
           cb.checked = selected.has(it.proxiedUrl);
@@ -1249,6 +1249,6 @@
           debugPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         });
       }
-    <.script>
-  <.body>
-<.html>
+    </script>
+  </body>
+</html>

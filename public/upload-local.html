@@ -1,10 +1,10 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Local Upload - SmartDrafts<.title>
-  <script src=".auth-client.js"><.script>
+  <title>Local Upload - SmartDrafts</title>
+  <script src="/auth-client.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { 
@@ -169,32 +169,32 @@
       color: #084298;
       border: 1px solid #b6d4fe;
     }
-  <.style>
-<.head>
+  </style>
+</head>
 <body>
   <div class="container">
-    <h1>📤 Local Upload<.h1>
-    <p class="subtitle">Drag and drop images or click to browse<.p>
+    <h1>📤 Local Upload</h1>
+    <p class="subtitle">Drag and drop images or click to browse</p>
     
     <div class="drop-zone" id="dropZone">
-      <div class="drop-zone-icon">📸<.div>
-      <div class="drop-zone-text">Drop images here<.div>
-      <div class="drop-zone-hint">or click to select files (up to 200 images)<.div>
-    <.div>
+      <div class="drop-zone-icon">📸</div>
+      <div class="drop-zone-text">Drop images here</div>
+      <div class="drop-zone-hint">or click to select files (up to 200 images)</div>
+    </div>
     
     <input type="file" id="fileInput" multiple accept="image.*" .>
     
-    <div id="fileList" class="file-list" style="display: none;"><.div>
+    <div id="fileList" class="file-list" style="display: none;"></div>
     
     <div class="progress-bar" id="progressBar" style="display: none;">
-      <div class="progress-fill" id="progressFill" style="width: 0%"><.div>
-    <.div>
+      <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+    </div>
     
-    <button id="uploadBtn" style="display: none;">Upload & Process<.button>
-    <button id="clearBtn" style="display: none; margin-top: 0.5rem; background: #6c757d;">Clear Files<.button>
+    <button id="uploadBtn" style="display: none;">Upload & Process</button>
+    <button id="clearBtn" style="display: none; margin-top: 0.5rem; background: #6c757d;">Clear Files</button>
     
-    <div id="statusMessage"><.div>
-  <.div>
+    <div id="statusMessage"></div>
+  </div>
 
   <script type="module">
     .. Wait for auth client to initialize and require auth
@@ -299,8 +299,8 @@
         const info = document.createElement('div');
         info.className = 'file-info';
         info.innerHTML = `
-          <div class="file-name">${escapeHtml(file.name)}<.div>
-          <div class="file-size">${formatBytes(file.size)}<.div>
+          <div class="file-name">${escapeHtml(file.name)}</div>
+          <div class="file-size">${formatBytes(file.size)}</div>
         `;
         
         .. Status badge
@@ -559,6 +559,6 @@
         clearBtn.disabled = false;
       }
     });
-  <.script>
-<.body>
-<.html>
+  </script>
+</body>
+</html>

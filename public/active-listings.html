@@ -1,10 +1,10 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" .>
   <meta name="viewport" content="width=device-width, initial-scale=1" .>
-  <title>Active Listings – DraftPilot<.title>
-  <link rel="stylesheet" href=".draftpilot.css">
+  <title>Active Listings – DraftPilot</title>
+  <link rel="stylesheet" href="/draftpilot.css">
   <style>
     .flash {
       min-height: 1.25rem;
@@ -314,17 +314,17 @@
     .image-lightbox-close:hover {
       opacity: 1;
     }
-  <.style>
-<.head>
+  </style>
+</head>
 <body>
-  <script src=".auth-client.js"><.script>
-  <script src=".sidebar-toggle.js"><.script>
+  <script src="/auth-client.js"></script>
+  <script src="/sidebar-toggle.js"></script>
   
   <!-- Image Lightbox -->
   <div class="image-lightbox" id="imageLightbox">
-    <span class="image-lightbox-close" id="lightboxClose">&times;<.span>
+    <span class="image-lightbox-close" id="lightboxClose">&times;</span>
     <img src="" alt="Expanded image" id="lightboxImage" .>
-  <.div>
+  </div>
   
   <!-- Main Dashboard Shell -->
   <div class="dp-shell" id="mainCard">
@@ -333,106 +333,106 @@
       <!-- Brand Area -->
       <div class="dp-sidebar__brand">
         <img src="logo.LogoWhiteText_NoBg.png" alt="DraftPilot - AI Listing Studio" class="dp-brand-logo" .>
-      <.div>
+      </div>
       
       <!-- Navigation -->
       <nav class="dp-sidebar__nav">
         <!-- Primary Navigation Group -->
         <div class="dp-nav-group">
-          <div class="dp-nav-group__label">APP<.div>
-          <a href=".index.html" class="dp-nav-item">
+          <div class="dp-nav-group__label">APP</div>
+          <a href="/index.html" class="dp-nav-item">
             <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"><.path>
-              <polyline points="9 22 9 12 15 12 15 22"><.polyline>
-            <.svg>
-            <span class="dp-nav-item__label">Overview<.span>
-          <.a>
-          <a href=".quick-list.html" class="dp-nav-item">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+              <polyline points="9 22 9 12 15 12 15 22"></polyline>
+            </svg>
+            <span class="dp-nav-item__label">Overview</span>
+          </a>
+          <a href="/quick-list.html" class="dp-nav-item">
             <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"><.polygon>
-            <.svg>
-            <span class="dp-nav-item__label">Create Listings<.span>
-          <.a>
-          <a href=".drafts.html" class="dp-nav-item">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+            </svg>
+            <span class="dp-nav-item__label">Create Listings</span>
+          </a>
+          <a href="/drafts.html" class="dp-nav-item">
             <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"><.path>
-              <polyline points="14 2 14 8 20 8"><.polyline>
-            <.svg>
-            <span class="dp-nav-item__label">Drafts<.span>
-          <.a>
-          <a href=".active-listings.html" class="dp-nav-item dp-nav-item--active">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+            </svg>
+            <span class="dp-nav-item__label">Drafts</span>
+          </a>
+          <a href="/active-listings.html" class="dp-nav-item dp-nav-item--active">
             <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="2" y="7" width="20" height="14" rx="2" ry="2"><.rect>
-              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"><.path>
-            <.svg>
-            <span class="dp-nav-item__label">Active Listings<.span>
-          <.a>
-        <.div>
+              <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+            </svg>
+            <span class="dp-nav-item__label">Active Listings</span>
+          </a>
+        </div>
 
         <!-- Account Navigation Group -->
         <div class="dp-nav-group">
-          <div class="dp-nav-group__label">ACCOUNT<.div>
-          <a href=".policies-manage.html" class="dp-nav-item">
+          <div class="dp-nav-group__label">ACCOUNT</div>
+          <a href="/policies-manage.html" class="dp-nav-item">
             <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"><.path>
-              <polyline points="14 2 14 8 20 8"><.polyline>
-              <line x1="16" y1="13" x2="8" y2="13"><.line>
-              <line x1="16" y1="17" x2="8" y2="17"><.line>
-              <polyline points="10 9 9 9 8 9"><.polyline>
-            <.svg>
-            <span class="dp-nav-item__label">eBay Policies<.span>
-          <.a>
-          <a href=".location.html" class="dp-nav-item">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+            <span class="dp-nav-item__label">eBay Policies</span>
+          </a>
+          <a href="/location.html" class="dp-nav-item">
             <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"><.path>
-              <circle cx="12" cy="10" r="3"><.circle>
-            <.svg>
-            <span class="dp-nav-item__label">Inventory Locations<.span>
-          <.a>
-          <a href=".settings.html" class="dp-nav-item">
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+              <circle cx="12" cy="10" r="3"></circle>
+            </svg>
+            <span class="dp-nav-item__label">Inventory Locations</span>
+          </a>
+          <a href="/settings.html" class="dp-nav-item">
             <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="3"><.circle>
-              <path d="M12 1v6m0 6v6m5.196-15.196l-4.243 4.243m0 5.656l-4.242 4.243m15.195-5.196l-4.242-4.243m-5.657 0l-4.243-4.243"><.path>
-            <.svg>
-            <span class="dp-nav-item__label">Settings<.span>
-          <.a>
-          <a href=".faq.html" class="dp-nav-item">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M12 1v6m0 6v6m5.196-15.196l-4.243 4.243m0 5.656l-4.242 4.243m15.195-5.196l-4.242-4.243m-5.657 0l-4.243-4.243"></path>
+            </svg>
+            <span class="dp-nav-item__label">Settings</span>
+          </a>
+          <a href="/faq.html" class="dp-nav-item">
             <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"><.circle>
-              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"><.path>
-              <line x1="12" y1="17" x2="12.01" y2="17"><.line>
-            <.svg>
-            <span class="dp-nav-item__label">FAQ<.span>
-          <.a>
-          <a href=".support.html" class="dp-nav-item">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            <span class="dp-nav-item__label">FAQ</span>
+          </a>
+          <a href="/support.html" class="dp-nav-item">
             <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z"><.path>
-            <.svg>
-            <span class="dp-nav-item__label">Support<.span>
-          <.a>
-        <.div>
-      <.nav>
+              <path d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z"></path>
+            </svg>
+            <span class="dp-nav-item__label">Support</span>
+          </a>
+        </div>
+      </nav>
       
       <!-- Sidebar Spacer -->
-      <div class="dp-sidebar__spacer"><.div>
+      <div class="dp-sidebar__spacer"></div>
       
       <!-- User Footer at Bottom -->
       <div class="dp-sidebar__footer">
         <div class="dp-user-card" id="sidebarUserCard">
-          <div class="dp-user-card__avatar" id="sidebarAvatar">U<.div>
+          <div class="dp-user-card__avatar" id="sidebarAvatar">U</div>
           <div class="dp-user-card__info">
-            <div class="dp-user-card__name" id="sidebarUserName">User<.div>
-            <div class="dp-user-card__email" id="sidebarUserEmail">user@example.com<.div>
-          <.div>
-        <.div>
+            <div class="dp-user-card__name" id="sidebarUserName">User</div>
+            <div class="dp-user-card__email" id="sidebarUserEmail">user@example.com</div>
+          </div>
+        </div>
         <div class="dp-user-menu" id="sidebarUserMenu" style="display:none;">
-          <a href=".logout.html" class="dp-user-menu__item">Sign out<.a>
-        <.div>
-      <.div>
-    <.aside>
+          <a href="/logout.html" class="dp-user-menu__item">Sign out</a>
+        </div>
+      </div>
+    </aside>
     
     <!-- Mobile Backdrop -->
-    <div class="dp-backdrop" id="mobileBackdrop"><.div>
+    <div class="dp-backdrop" id="mobileBackdrop"></div>
     
     <!-- Main wrapper (topbar + content) -->
     <div class="dp-main-wrapper">
@@ -449,64 +449,64 @@
             type="button"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="4" y1="6" x2="20" y2="6"><.line>
-              <line x1="4" y1="12" x2="20" y2="12"><.line>
-              <line x1="4" y1="18" x2="20" y2="18"><.line>
-            <.svg>
-          <.button>
+              <line x1="4" y1="6" x2="20" y2="6"></line>
+              <line x1="4" y1="12" x2="20" y2="12"></line>
+              <line x1="4" y1="18" x2="20" y2="18"></line>
+            </svg>
+          </button>
 
           <div class="dp-topbar-heading">
-            <h1 class="dp-topbar__title">Active Listings<.h1>
+            <h1 class="dp-topbar__title">Active Listings</h1>
             <p class="dp-topbar__subtitle">
               Manage your live eBay listings
-            <.p>
-          <.div>
-        <.div>
+            </p>
+          </div>
+        </div>
         
         <!-- Center: Search -->
         <div class="dp-topbar-center">
           <div class="dp-search">
             <svg class="dp-search__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="11" cy="11" r="8"><.circle>
-              <path d="m21 21-4.35-4.35"><.path>
-            <.svg>
+              <circle cx="11" cy="11" r="8"></circle>
+              <path d="m21 21-4.35-4.35"></path>
+            </svg>
             <input type="text" class="dp-search__input" placeholder="Search drafts, SKUs, or notes…" .>
-          <.div>
-        <.div>
+          </div>
+        </div>
         
         <!-- Right: Icon Cluster -->
         <div class="dp-topbar-right">
           <button class="dp-topbar-icon" title="Theme Toggle" aria-label="Toggle theme">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="5"><.circle>
-              <line x1="12" y1="1" x2="12" y2="3"><.line>
-              <line x1="12" y1="21" x2="12" y2="23"><.line>
-              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"><.line>
-              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"><.line>
-              <line x1="1" y1="12" x2="3" y2="12"><.line>
-              <line x1="21" y1="12" x2="23" y2="12"><.line>
-              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"><.line>
-              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"><.line>
-            <.svg>
-          <.button>
+              <circle cx="12" cy="12" r="5"></circle>
+              <line x1="12" y1="1" x2="12" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="23"></line>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+              <line x1="1" y1="12" x2="3" y2="12"></line>
+              <line x1="21" y1="12" x2="23" y2="12"></line>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+          </button>
           <button class="dp-topbar-icon" title="Notifications" aria-label="View notifications">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"><.path>
-              <path d="M13.73 21a2 2 0 0 1-3.46 0"><.path>
-            <.svg>
-          <.button>
-          <div class="dp-topbar-avatar" id="topbarAvatar" title="User menu">U<.div>
-        <.div>
-      <.header>
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            </svg>
+          </button>
+          <div class="dp-topbar-avatar" id="topbarAvatar" title="User menu">U</div>
+        </div>
+      </header>
       
       <!-- Main Content Area -->
       <main class="dp-main">
         <div class="dp-card">
           <div class="dp-card__content">
-      <div class="flash" id="flash"><.div>
+      <div class="flash" id="flash"></div>
       
       <div class="toolbar">
-        <button class="btn secondary" id="btnRefresh">↻ Refresh<.button>
+        <button class="btn secondary" id="btnRefresh">↻ Refresh</button>
         <input 
           type="text" 
           id="searchInput" 
@@ -514,52 +514,52 @@
           placeholder="🔍 Search by title or SKU..."
         .>
         <select id="sortSelect" style="padding: 0.5rem 0.8rem; border-radius: 6px; background: #0f1529; border: 1px solid #2a335c; color: #f4f6fb; font-size: 0.9rem; cursor: pointer;">
-          <option value="newest">Newest First<.option>
-          <option value="oldest">Oldest First<.option>
-          <option value="title-asc">Title (A-Z)<.option>
-          <option value="title-desc">Title (Z-A)<.option>
-          <option value="price-high">Price (High to Low)<.option>
-          <option value="price-low">Price (Low to High)<.option>
-          <option value="sold-high">Most Sold<.option>
-          <option value="sold-low">Least Sold<.option>
-          <option value="popular">Most Popular (Views)<.option>
-          <option value="watched">Most Watched<.option>
-        <.select>
-        <div style="flex: 1;"><.div>
-        <div id="counts" style="color: var(--muted); font-size: 0.9rem;"><.div>
-      <.div>
+          <option value="newest">Newest First</option>
+          <option value="oldest">Oldest First</option>
+          <option value="title-asc">Title (A-Z)</option>
+          <option value="title-desc">Title (Z-A)</option>
+          <option value="price-high">Price (High to Low)</option>
+          <option value="price-low">Price (Low to High)</option>
+          <option value="sold-high">Most Sold</option>
+          <option value="sold-low">Least Sold</option>
+          <option value="popular">Most Popular (Views)</option>
+          <option value="watched">Most Watched</option>
+        </select>
+        <div style="flex: 1;"></div>
+        <div id="counts" style="color: var(--muted); font-size: 0.9rem;"></div>
+      </div>
       
       <!-- Bulk Action Bar -->
       <div id="bulkActionBar" class="bulk-action-bar">
         <div class="select-all-wrap">
           <input type="checkbox" id="selectAll" title="Select all">
-          <label for="selectAll" style="cursor: pointer; color: #cbd5ff;">Select All<.label>
-        <.div>
-        <span class="selected-count" id="selectedCount">0 selected<.span>
+          <label for="selectAll" style="cursor: pointer; color: #cbd5ff;">Select All</label>
+        </div>
+        <span class="selected-count" id="selectedCount">0 selected</span>
         <div class="bulk-actions">
-          <button class="btn" id="bulkPromote" title="Promote selected listings">📢 Promote<.button>
-          <button class="btn danger" id="bulkEnd" title="End selected listings">End Listings<.button>
-        <.div>
-      <.div>
+          <button class="btn" id="bulkPromote" title="Promote selected listings">📢 Promote</button>
+          <button class="btn danger" id="bulkEnd" title="End selected listings">End Listings</button>
+        </div>
+      </div>
       
       <div id="loading" class="loading" style="display:none;">
-        <div class="spinner"><.div>
-        <span>Loading active listings...<.span>
-      <.div>
+        <div class="spinner"></div>
+        <span>Loading active listings...</span>
+      </div>
       
-      <div id="grid" class="grid"><.div>
+      <div id="grid" class="grid"></div>
       
       <div id="emptyState" class="empty-state" style="display:none;">
-        <h3>No Active Listings<.h3>
-        <p>You don't have any published listings on eBay yet.<.p>
+        <h3>No Active Listings</h3>
+        <p>You don't have any published listings on eBay yet.</p>
         <p style="margin-top: 1rem;">
-          <a href=".quick-list.html" class="btn">Create Your First Listing<.a>
-        <.p>
-      <.div>
-    <.div>
-  <.div>
+          <a href="/quick-list.html" class="btn">Create Your First Listing</a>
+        </p>
+      </div>
+    </div>
+  </div>
 
-  <script src=".sidebar-shell.js"><.script>
+  <script src="/sidebar-shell.js"></script>
   <script>
     DraftPilotShell.init({
       title: 'Active Listings',
@@ -567,7 +567,7 @@
       activePage: 'active-listings',
       showSearch: false
     });
-  <.script>
+  </script>
   
   <script type="module">
     const flash = document.getElementById('flash');
@@ -660,7 +660,7 @@
       updateCounts();
       
       if (sorted.length === 0 && offers.length > 0) {
-        grid.innerHTML = '<div style="grid-column: 1.-1; text-align: center; padding: 3rem; color: var(--muted);">No listings match your search<.div>';
+        grid.innerHTML = '<div style="grid-column: 1.-1; text-align: center; padding: 3rem; color: var(--muted);">No listings match your search</div>';
         return;
       }
       
@@ -846,7 +846,7 @@
         .. Show current promotion status
         const statusDiv = document.createElement('div');
         statusDiv.className = 'promo-status';
-        statusDiv.innerHTML = `<strong>📢 Promoted at ${o.autoPromoteAdRate}%<.strong>`;
+        statusDiv.innerHTML = `<strong>📢 Promoted at ${o.autoPromoteAdRate}%</strong>`;
         promoControl.appendChild(statusDiv);
         
         .. Edit form (initially hidden)
@@ -942,7 +942,7 @@
             
             .. Update UI
             o.autoPromoteAdRate = val;
-            statusDiv.innerHTML = `<strong>📢 Promoted at ${val}%<.strong>`;
+            statusDiv.innerHTML = `<strong>📢 Promoted at ${val}%</strong>`;
             editForm.style.display = 'none';
             actionsDiv.style.display = 'flex';
             
@@ -1462,11 +1462,11 @@
     } else {
       load();
     }
-  <.script>
-          <.div>
-        <.div>
-      <.main>
-    <.div>
-  <.div>
-<.body>
-<.html>
+  </script>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,10 +1,10 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" .>
     <meta name="viewport" content="width=device-width, initial-scale=1" .>
-    <title>Welcome to DraftPilot<.title>
-    <link rel="stylesheet" href=".draftpilot.css">
+    <title>Welcome to DraftPilot</title>
+    <link rel="stylesheet" href="/draftpilot.css">
     <style>
       .onboarding-container {
         min-height: 100vh;
@@ -233,41 +233,41 @@
         left: 0;
         color: var(--accent);
       }
-    <.style>
-  <.head>
+    </style>
+  </head>
   <body>
-    <script src=".auth-client.js"><.script>
+    <script src="/auth-client.js"></script>
     
     <div class="onboarding-container">
       <div class="onboarding-card">
         <!-- Step Indicator -->
         <div class="step-indicator" id="stepIndicator">
-          <div class="step-dot active"><.div>
-          <div class="step-dot"><.div>
-          <div class="step-dot"><.div>
-          <div class="step-dot"><.div>
-          <div class="step-dot"><.div>
-          <div class="step-dot"><.div>
-        <.div>
+          <div class="step-dot active"></div>
+          <div class="step-dot"></div>
+          <div class="step-dot"></div>
+          <div class="step-dot"></div>
+          <div class="step-dot"></div>
+          <div class="step-dot"></div>
+        </div>
         
         <!-- Step 1: Welcome -->
         <div class="step-content active" data-step="1">
           <div class="step-header">
             <div class="step-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 2L2 7l10 5 10-5-10-5z"><.path>
-                <path d="M2 17l10 5 10-5M2 12l10 5 10-5"><.path>
-              <.svg>
-            <.div>
-            <h1 class="step-title">Welcome to DraftPilot!<.h1>
+                <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                <path d="M2 17l10 5 10-5M2 12l10 5 10-5"></path>
+              </svg>
+            </div>
+            <h1 class="step-title">Welcome to DraftPilot!</h1>
             <p class="step-description">
               Let's get your account set up in just a few simple steps. This will only take a few minutes.
-            <.p>
-          <.div>
+            </p>
+          </div>
           
           <div class="step-body">
             <div class="info-box">
-              <div class="info-box-title">What we'll set up:<.div>
+              <div class="info-box-title">What we'll set up:</div>
               <div class="info-box-text">
                 1. Connect your eBay account<br>
                 2. Set up your shipping location<br>
@@ -275,333 +275,333 @@
                 4. Create return policy<br>
                 5. Create shipping policy<br>
                 6. (Optional) Connect Dropbox for photos
-              <.div>
-            <.div>
-          <.div>
+              </div>
+            </div>
+          </div>
           
           <div class="step-actions">
-            <button class="dp-btn dp-btn-primary" onclick="nextStep()">Let's Get Started →<.button>
-          <.div>
-        <.div>
+            <button class="dp-btn dp-btn-primary" onclick="nextStep()">Let's Get Started →</button>
+          </div>
+        </div>
         
         <!-- Step 2: Connect eBay -->
         <div class="step-content" data-step="2">
           <div class="step-header">
             <div class="step-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="2" y="7" width="20" height="14" rx="2" ry="2"><.rect>
-                <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"><.path>
-              <.svg>
-            <.div>
-            <h1 class="step-title">Connect eBay<.h1>
+                <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+              </svg>
+            </div>
+            <h1 class="step-title">Connect eBay</h1>
             <p class="step-description">
               Connect your eBay account so DraftPilot can create and manage listings for you.
-            <.p>
-          <.div>
+            </p>
+          </div>
           
           <div class="step-body">
             <div class="info-box">
-              <div class="info-box-title">Why do we need this?<.div>
+              <div class="info-box-title">Why do we need this?</div>
               <div class="info-box-text">
                 DraftPilot needs permission to create draft listings, manage inventory, and set up business policies on your behalf. We'll never list items without your approval.
-              <.div>
-            <.div>
+              </div>
+            </div>
             
             <div class="info-box" style="margin-top: 1rem; border-left: 3px solid #ff6b6b;">
-              <div class="info-box-title">⚠️ Important<.div>
+              <div class="info-box-title">⚠️ Important</div>
               <div class="info-box-text">
-                You must have an eBay account before clicking "Connect eBay". If you don't have one, <a href="https:..www.ebay.com." target="_blank" style="color: #5b7cff;">create your free eBay account first<.a>, then come back here.
-              <.div>
-            <.div>
+                You must have an eBay account before clicking "Connect eBay". If you don't have one, <a href="https:..www.ebay.com." target="_blank" style="color: #5b7cff;">create your free eBay account first</a>, then come back here.
+              </div>
+            </div>
             
             <div id="ebayStatus" class="status-message warning">
               Please connect your eBay account to continue.
-            <.div>
-          <.div>
+            </div>
+          </div>
           
           <div class="step-actions">
-            <button class="dp-btn dp-btn-secondary" onclick="prevStep()">← Back<.button>
-            <a class="dp-btn dp-btn-primary" id="ebayConnectBtn" href="..netlify.functions.ebay-oauth-start">Connect eBay →<.a>
-          <.div>
-        <.div>
+            <button class="dp-btn dp-btn-secondary" onclick="prevStep()">← Back</button>
+            <a class="dp-btn dp-btn-primary" id="ebayConnectBtn" href="/.netlify/functions/ebay-oauth-start">Connect eBay →</a>
+          </div>
+        </div>
         
         <!-- Step 3: Shipping Location -->
         <div class="step-content" data-step="3">
           <div class="step-header">
             <div class="step-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"><.path>
-                <circle cx="12" cy="10" r="3"><.circle>
-              <.svg>
-            <.div>
-            <h1 class="step-title">Shipping Location<.h1>
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                <circle cx="12" cy="10" r="3"></circle>
+              </svg>
+            </div>
+            <h1 class="step-title">Shipping Location</h1>
             <p class="step-description">
               Tell us where you'll be shipping items from. This is usually your home address.
-            <.p>
-          <.div>
+            </p>
+          </div>
           
           <div class="step-body">
             <div class="info-box">
-              <div class="info-box-title">What is a "warehouse"?<.div>
+              <div class="info-box-title">What is a "warehouse"?</div>
               <div class="info-box-text">
                 Don't worry - your home is your warehouse! This is simply where you'll pack and ship items from. eBay calls it a "merchant location" or "warehouse" but for most sellers, this is just your home address.
-              <.div>
-            <.div>
+              </div>
+            </div>
             
-            <div id="locationStatus"><.div>
+            <div id="locationStatus"></div>
             
             <div class="form-group">
-              <label class="form-label" for="locationName">Location Name<.label>
+              <label class="form-label" for="locationName">Location Name</label>
               <input type="text" id="locationName" class="form-input" placeholder="My Home" value="Primary Location">
-            <.div>
+            </div>
             
             <div class="form-group">
-              <label class="form-label" for="locationAddress">Address<.label>
+              <label class="form-label" for="locationAddress">Address</label>
               <input type="text" id="locationAddress" class="form-input" placeholder="123 Main Street">
-            <.div>
+            </div>
             
             <div class="form-group">
-              <label class="form-label" for="locationCity">City<.label>
+              <label class="form-label" for="locationCity">City</label>
               <input type="text" id="locationCity" class="form-input" placeholder="Portland">
-            <.div>
+            </div>
             
             <div class="form-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
               <div>
-                <label class="form-label" for="locationState">State<.label>
+                <label class="form-label" for="locationState">State</label>
                 <input type="text" id="locationState" class="form-input" placeholder="OR" maxlength="2">
-              <.div>
+              </div>
               <div>
-                <label class="form-label" for="locationZip">ZIP Code<.label>
+                <label class="form-label" for="locationZip">ZIP Code</label>
                 <input type="text" id="locationZip" class="form-input" placeholder="97201">
-              <.div>
-            <.div>
-          <.div>
+              </div>
+            </div>
+          </div>
           
           <div class="step-actions">
-            <button class="dp-btn dp-btn-secondary" onclick="prevStep()">← Back<.button>
-            <button class="dp-btn dp-btn-primary" onclick="createLocation()">Save & Continue →<.button>
-          <.div>
-        <.div>
+            <button class="dp-btn dp-btn-secondary" onclick="prevStep()">← Back</button>
+            <button class="dp-btn dp-btn-primary" onclick="createLocation()">Save & Continue →</button>
+          </div>
+        </div>
         
         <!-- Step 4: Payment Policy -->
         <div class="step-content" data-step="4">
           <div class="step-header">
             <div class="step-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="1" y="4" width="22" height="16" rx="2" ry="2"><.rect>
-                <line x1="1" y1="10" x2="23" y2="10"><.line>
-              <.svg>
-            <.div>
-            <h1 class="step-title">Payment Policy<.h1>
+                <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+                <line x1="1" y1="10" x2="23" y2="10"></line>
+              </svg>
+            </div>
+            <h1 class="step-title">Payment Policy</h1>
             <p class="step-description">
               Set up how you'll receive payments from buyers.
-            <.p>
-          <.div>
+            </p>
+          </div>
           
           <div class="step-body">
             <div class="info-box">
-              <div class="info-box-title">What is this?<.div>
+              <div class="info-box-title">What is this?</div>
               <div class="info-box-text">
                 Your payment policy tells buyers how they can pay you. We'll use eBay's recommended settings that require immediate payment for a smooth transaction.
-              <.div>
-            <.div>
+              </div>
+            </div>
             
-            <div id="paymentStatus"><.div>
+            <div id="paymentStatus"></div>
             
             <div id="paymentPolicySelector" style="display:none; margin-top:1rem;">
-              <label class="form-label">Select Payment Policy<.label>
-              <select id="paymentPolicyDropdown" class="form-input"><.select>
+              <label class="form-label">Select Payment Policy</label>
+              <select id="paymentPolicyDropdown" class="form-input"></select>
               <div style="margin-top:0.5rem;">
-                <a href=".policy-create.html?type=payment" target="_blank" style="color:#5b7cff; font-size:0.9rem;">+ Create new policy<.a>
-              <.div>
-            <.div>
+                <a href="/policy-create.html?type=payment" target="_blank" style="color:#5b7cff; font-size:0.9rem;">+ Create new policy</a>
+              </div>
+            </div>
             
             <div id="paymentPolicyPreview" class="policy-preview">
-              <div class="policy-preview-title">We'll create this policy for you:<.div>
-              <div class="policy-preview-item">Immediate payment required<.div>
-              <div class="policy-preview-item">PayPal and credit.debit cards accepted<.div>
-              <div class="policy-preview-item">Applies to all categories except motor vehicles<.div>
-            <.div>
-          <.div>
+              <div class="policy-preview-title">We'll create this policy for you:</div>
+              <div class="policy-preview-item">Immediate payment required</div>
+              <div class="policy-preview-item">PayPal and credit.debit cards accepted</div>
+              <div class="policy-preview-item">Applies to all categories except motor vehicles</div>
+            </div>
+          </div>
           
           <div class="step-actions">
-            <button class="dp-btn dp-btn-secondary" onclick="prevStep()">← Back<.button>
-            <button class="dp-btn dp-btn-primary" id="paymentActionBtn" onclick="handlePaymentPolicy()">Create Policy →<.button>
-          <.div>
-        <.div>
+            <button class="dp-btn dp-btn-secondary" onclick="prevStep()">← Back</button>
+            <button class="dp-btn dp-btn-primary" id="paymentActionBtn" onclick="handlePaymentPolicy()">Create Policy →</button>
+          </div>
+        </div>
         
         <!-- Step 5: Return Policy -->
         <div class="step-content" data-step="5">
           <div class="step-header">
             <div class="step-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="1 4 1 10 7 10"><.polyline>
-                <polyline points="23 20 23 14 17 14"><.polyline>
-                <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"><.path>
-              <.svg>
-            <.div>
-            <h1 class="step-title">Return Policy<.h1>
+                <polyline points="1 4 1 10 7 10"></polyline>
+                <polyline points="23 20 23 14 17 14"></polyline>
+                <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"></path>
+              </svg>
+            </div>
+            <h1 class="step-title">Return Policy</h1>
             <p class="step-description">
               Define your return and refund policy for buyers.
-            <.p>
-          <.div>
+            </p>
+          </div>
           
           <div class="step-body">
             <div class="info-box">
-              <div class="info-box-title">What is this?<.div>
+              <div class="info-box-title">What is this?</div>
               <div class="info-box-text">
                 Your return policy tells buyers if they can return items and how. A generous return policy can increase buyer confidence and sales.
-              <.div>
-            <.div>
+              </div>
+            </div>
             
-            <div id="returnStatus"><.div>
+            <div id="returnStatus"></div>
             
             <div id="returnPolicySelector" style="display:none; margin-top:1rem;">
-              <label class="form-label">Select Return Policy<.label>
-              <select id="returnPolicyDropdown" class="form-input"><.select>
+              <label class="form-label">Select Return Policy</label>
+              <select id="returnPolicyDropdown" class="form-input"></select>
               <div style="margin-top:0.5rem;">
-                <a href=".policy-create.html?type=return" target="_blank" style="color:#5b7cff; font-size:0.9rem;">+ Create new policy<.a>
-              <.div>
-            <.div>
+                <a href="/policy-create.html?type=return" target="_blank" style="color:#5b7cff; font-size:0.9rem;">+ Create new policy</a>
+              </div>
+            </div>
             
             <div id="returnPolicyPreview" class="policy-preview">
-              <div class="policy-preview-title">We'll create this policy for you:<.div>
-              <div class="policy-preview-item">30-day returns accepted<.div>
-              <div class="policy-preview-item">Buyer pays return shipping<.div>
-              <div class="policy-preview-item">Money back refund<.div>
-              <div class="policy-preview-item">Item must be in original condition<.div>
-            <.div>
-          <.div>
+              <div class="policy-preview-title">We'll create this policy for you:</div>
+              <div class="policy-preview-item">30-day returns accepted</div>
+              <div class="policy-preview-item">Buyer pays return shipping</div>
+              <div class="policy-preview-item">Money back refund</div>
+              <div class="policy-preview-item">Item must be in original condition</div>
+            </div>
+          </div>
           
           <div class="step-actions">
-            <button class="dp-btn dp-btn-secondary" onclick="prevStep()">← Back<.button>
-            <button class="dp-btn dp-btn-primary" id="returnActionBtn" onclick="handleReturnPolicy()">Create Policy →<.button>
-          <.div>
-        <.div>
+            <button class="dp-btn dp-btn-secondary" onclick="prevStep()">← Back</button>
+            <button class="dp-btn dp-btn-primary" id="returnActionBtn" onclick="handleReturnPolicy()">Create Policy →</button>
+          </div>
+        </div>
         
         <!-- Step 6: Shipping Policy -->
         <div class="step-content" data-step="6">
           <div class="step-header">
             <div class="step-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="1" y="3" width="15" height="13"><.rect>
-                <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"><.polygon>
-                <circle cx="5.5" cy="18.5" r="2.5"><.circle>
-                <circle cx="18.5" cy="18.5" r="2.5"><.circle>
-              <.svg>
-            <.div>
-            <h1 class="step-title">Shipping Policy<.h1>
+                <rect x="1" y="3" width="15" height="13"></rect>
+                <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+                <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                <circle cx="18.5" cy="18.5" r="2.5"></circle>
+              </svg>
+            </div>
+            <h1 class="step-title">Shipping Policy</h1>
             <p class="step-description">
               Set up how you'll ship items to buyers.
-            <.p>
-          <.div>
+            </p>
+          </div>
           
           <div class="step-body">
             <div class="info-box">
-              <div class="info-box-title">What is this?<.div>
+              <div class="info-box-title">What is this?</div>
               <div class="info-box-text">
                 Your shipping policy tells buyers how long it will take to ship and how much it costs. We'll use standard USPS shipping for most items.
-              <.div>
-            <.div>
+              </div>
+            </div>
             
-            <div id="shippingStatus"><.div>
+            <div id="shippingStatus"></div>
             
             <div id="shippingPolicySelector" style="display:none; margin-top:1rem;">
-              <label class="form-label">Select Shipping Policy<.label>
-              <select id="shippingPolicyDropdown" class="form-input"><.select>
+              <label class="form-label">Select Shipping Policy</label>
+              <select id="shippingPolicyDropdown" class="form-input"></select>
               <div style="margin-top:0.5rem;">
-                <a href=".policy-create.html?type=fulfillment" target="_blank" style="color:#5b7cff; font-size:0.9rem;">+ Create new policy<.a>
-              <.div>
-            <.div>
+                <a href="/policy-create.html?type=fulfillment" target="_blank" style="color:#5b7cff; font-size:0.9rem;">+ Create new policy</a>
+              </div>
+            </div>
             
             <div id="shippingPolicyPreview" class="policy-preview">
-              <div class="policy-preview-title">We'll create this policy for you:<.div>
-              <div class="policy-preview-item">USPS Ground Advantage (1-5 business days)<.div>
-              <div class="policy-preview-item">Calculated shipping based on buyer's location<.div>
-              <div class="policy-preview-item">1-business-day handling time<.div>
-              <div class="policy-preview-item">Ships from your location<.div>
-            <.div>
-          <.div>
+              <div class="policy-preview-title">We'll create this policy for you:</div>
+              <div class="policy-preview-item">USPS Ground Advantage (1-5 business days)</div>
+              <div class="policy-preview-item">Calculated shipping based on buyer's location</div>
+              <div class="policy-preview-item">1-business-day handling time</div>
+              <div class="policy-preview-item">Ships from your location</div>
+            </div>
+          </div>
           
           <div class="step-actions">
-            <button class="dp-btn dp-btn-secondary" onclick="prevStep()">← Back<.button>
-            <button class="dp-btn dp-btn-primary" id="shippingActionBtn" onclick="handleShippingPolicy()">Create Policy →<.button>
-          <.div>
-        <.div>
+            <button class="dp-btn dp-btn-secondary" onclick="prevStep()">← Back</button>
+            <button class="dp-btn dp-btn-primary" id="shippingActionBtn" onclick="handleShippingPolicy()">Create Policy →</button>
+          </div>
+        </div>
         
         <!-- Step 7: Dropbox (Optional) -->
         <div class="step-content" data-step="7">
           <div class="step-header">
             <div class="step-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"><.path>
-                <polyline points="7 10 12 15 17 10"><.polyline>
-                <line x1="12" y1="15" x2="12" y2="3"><.line>
-              <.svg>
-            <.div>
-            <h1 class="step-title">Connect Dropbox (Optional)<.h1>
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+            </div>
+            <h1 class="step-title">Connect Dropbox (Optional)</h1>
             <p class="step-description">
               Connect Dropbox to automatically import product photos from a shared folder.
-            <.p>
-          <.div>
+            </p>
+          </div>
           
           <div class="step-body">
             <div class="info-box">
-              <div class="info-box-title">Why connect Dropbox?<.div>
+              <div class="info-box-title">Why connect Dropbox?</div>
               <div class="info-box-text">
                 If you store product photos in Dropbox, DraftPilot can automatically import them. You can also upload photos manually later, so this step is completely optional.
-              <.div>
-            <.div>
+              </div>
+            </div>
             
-            <div id="dropboxStatus"><.div>
-          <.div>
+            <div id="dropboxStatus"></div>
+          </div>
           
           <div class="step-actions">
-            <button class="dp-btn dp-btn-secondary" onclick="prevStep()">← Back<.button>
-            <a class="dp-btn dp-btn-primary" id="dropboxConnectBtn" href="..netlify.functions.dropbox-oauth-start">Connect Dropbox →<.a>
-          <.div>
+            <button class="dp-btn dp-btn-secondary" onclick="prevStep()">← Back</button>
+            <a class="dp-btn dp-btn-primary" id="dropboxConnectBtn" href="/.netlify/functions/dropbox-oauth-start">Connect Dropbox →</a>
+          </div>
           
           <div class="skip-link">
-            <a href="#" onclick="completeOnboarding(); return false;">Skip this step →<.a>
-          <.div>
-        <.div>
+            <a href="#" onclick="completeOnboarding(); return false;">Skip this step →</a>
+          </div>
+        </div>
         
         <!-- Step 8: Complete -->
         <div class="step-content" data-step="8">
           <div class="step-header">
             <div class="step-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"><.path>
-                <polyline points="22 4 12 14.01 9 11.01"><.polyline>
-              <.svg>
-            <.div>
-            <h1 class="step-title">All Set!<.h1>
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+              </svg>
+            </div>
+            <h1 class="step-title">All Set!</h1>
             <p class="step-description">
               Your account is ready. You can now start creating eBay listings with DraftPilot.
-            <.p>
-          <.div>
+            </p>
+          </div>
           
           <div class="step-body">
             <div class="status-message success">
               ✓ Setup complete! All your policies and settings are configured.
-            <.div>
+            </div>
             
             <div class="info-box">
-              <div class="info-box-title">What's next?<.div>
+              <div class="info-box-title">What's next?</div>
               <div class="info-box-text">
                 • Upload product photos to create your first listing<br>
                 • Review and customize your business policies anytime<br>
                 • Start selling on eBay with AI-powered listings
-              <.div>
-            <.div>
-          <.div>
+              </div>
+            </div>
+          </div>
           
           <div class="step-actions">
-            <a class="dp-btn dp-btn-primary" href=".quick-list.html" style="flex: 1; text-align: center;">Start Creating Listings →<.a>
-          <.div>
-        <.div>
-      <.div>
-    <.div>
+            <a class="dp-btn dp-btn-primary" href="/quick-list.html" style="flex: 1; text-align: center;">Start Creating Listings →</a>
+          </div>
+        </div>
+      </div>
+    </div>
     
     <script>
       let currentStep = 1;
@@ -897,7 +897,7 @@
             document.getElementById('paymentPolicySelector').style.display = 'block';
             const dropdown = document.getElementById('paymentPolicyDropdown');
             dropdown.innerHTML = policies.map(p => 
-              `<option value="${p.paymentPolicyId}">${p.name || p.paymentPolicyId}<.option>`
+              `<option value="${p.paymentPolicyId}">${p.name || p.paymentPolicyId}</option>`
             ).join('');
             document.getElementById('paymentActionBtn').textContent = 'Set as Default →';
             showStatus('paymentStatus', '⚠️ Select a policy to set as default', 'warning');
@@ -994,7 +994,7 @@
             document.getElementById('returnPolicySelector').style.display = 'block';
             const dropdown = document.getElementById('returnPolicyDropdown');
             dropdown.innerHTML = policies.map(p => 
-              `<option value="${p.returnPolicyId}">${p.name || p.returnPolicyId}<.option>`
+              `<option value="${p.returnPolicyId}">${p.name || p.returnPolicyId}</option>`
             ).join('');
             document.getElementById('returnActionBtn').textContent = 'Set as Default →';
             showStatus('returnStatus', '⚠️ Select a policy to set as default', 'warning');
@@ -1089,7 +1089,7 @@
             document.getElementById('shippingPolicySelector').style.display = 'block';
             const dropdown = document.getElementById('shippingPolicyDropdown');
             dropdown.innerHTML = policies.map(p => 
-              `<option value="${p.fulfillmentPolicyId}">${p.name || p.fulfillmentPolicyId}<.option>`
+              `<option value="${p.fulfillmentPolicyId}">${p.name || p.fulfillmentPolicyId}</option>`
             ).join('');
             document.getElementById('shippingActionBtn').textContent = 'Set as Default →';
             showStatus('shippingStatus', '⚠️ Select a policy to set as default', 'warning');
@@ -1185,6 +1185,6 @@
           checkAllRequirements();
         }
       });
-    <.script>
-  <.body>
-<.html>
+    </script>
+  </body>
+</html>
