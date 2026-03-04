@@ -1494,11 +1494,31 @@ async function getDeliveredPricingV2(
   let effectiveAmazonForRetail = effectiveAmazonPriceCents;
   let effectiveWalmartForRetail = effectiveWalmartPriceCents;
 
-  // Primary anchor: brand site price (most reliable)
-  const variantAnchor = brandSitePriceCents && brandSitePriceCents > 0
-    ? brandSitePriceCents
+  // Cross-validate brand site price against strong sold data.
+  // Google Shopping sometimes returns a mini/travel-size or different shade from the brand site
+  // at a much lower price (e.g. $30.80 for a product whose eBay sold P35 is $44.00).
+  // When we have ≥10 cleaned sold samples (sold-strong), trust sold P35 over brand site.
+  // If brand site < 75% of sold P35 → likely a wrong variant → exclude from retail cap.
+  //
+  // Rationale for 75%: brand-site DTC prices are typically AT or ABOVE Amazon/eBay market price.
+  // A brand site price <75% of the established sold market (P35) is almost certainly a
+  // different SKU (travel size, mini, older shade, etc.).
+  let effectiveBrandSitePriceCents = brandSitePriceCents;
+  if (brandSitePriceCents && brandSitePriceCents > 0 && soldStats && isSoldStrong(soldStats)) {
+    const soldP35 = soldStats.p35;
+    const brandSiteFloor = Math.round(soldP35 * 0.75);
+    if (brandSitePriceCents < brandSiteFloor) {
+      console.log(`[pricing-v2] ⚠️ Brand site $${(brandSitePriceCents / 100).toFixed(2)} is <75% of SoldP35 $${(soldP35 / 100).toFixed(2)} ($${(brandSiteFloor / 100).toFixed(2)} floor) - likely wrong variant, excluding from retail cap`);
+      effectiveBrandSitePriceCents = null;
+      warnings.push('brandSiteVariantExcluded');
+    }
+  }
+
+  // Primary anchor: brand site price (most reliable) — use effective (sanity-checked) value
+  const variantAnchor = effectiveBrandSitePriceCents && effectiveBrandSitePriceCents > 0
+    ? effectiveBrandSitePriceCents
     : (soldMedianForSanity && soldMedianForSanity > 0 ? soldMedianForSanity : null);
-  const variantAnchorSource = brandSitePriceCents && brandSitePriceCents > 0 ? 'brand site' : 'soldP50';
+  const variantAnchorSource = effectiveBrandSitePriceCents && effectiveBrandSitePriceCents > 0 ? 'brand site' : 'soldP50';
 
   if (variantAnchor) {
     // Use 50% of brand site, or 30% of soldP50 (sold is a lower anchor so we use a tighter threshold)
@@ -1525,7 +1545,7 @@ async function getDeliveredPricingV2(
     console.log(`[pricing-v2] âš ï¸ No variant detection anchor (no brand site or sold data)`);
   }
 
-  const effectiveRetailPrices = [brandSitePriceCents, effectiveAmazonForRetail, effectiveWalmartForRetail, effectiveTargetPriceCents]
+  const effectiveRetailPrices = [effectiveBrandSitePriceCents, effectiveAmazonForRetail, effectiveWalmartForRetail, effectiveTargetPriceCents]
     .filter((p): p is number => p !== null && p > 0);
   const effectiveLowestRetail = effectiveRetailPrices.length > 0 ? Math.min(...effectiveRetailPrices) : null;
 
