@@ -1604,6 +1604,27 @@ async function getDeliveredPricingV2(
     }
   }
 
+  // === Step 6.5: Amazon competitive discount enforcement ===
+  // Amazon offers 1-2 day FREE Prime shipping + easy returns. eBay buyers only choose us
+  // when there is a meaningful price difference. Even if eBay sold data shows items
+  // selling near Amazon's price, we actively undercut Amazon to give buyers a real reason
+  // to pick eBay. Hard cap: our delivered price <= AMAZON_MAX_RATIO of Amazon delivered.
+  //
+  // NOTE: We use effectiveAmazonPriceCents (direct API confirmed price) NOT
+  // effectiveAmazonForRetail (which may be null if the variant detector excluded Amazon
+  // because the brand site returned a bundle/kit price). Variant exclusion means
+  // "don't let this Amazon price cap our target downward" — but we must still ensure
+  // we price BELOW Amazon for competitive reasons.
+  const AMAZON_COMPETITIVE_CAP_RATIO = 0.80; // Always at least 20% below Amazon
+  if (effectiveAmazonPriceCents && effectiveAmazonPriceCents > 0) {
+    const amazonCompCap = Math.round(effectiveAmazonPriceCents * AMAZON_COMPETITIVE_CAP_RATIO);
+    if (finalTargetCents > amazonCompCap) {
+      console.log(`[pricing-v2] Amazon competitive cap: $${(finalTargetCents / 100).toFixed(2)} → $${(amazonCompCap / 100).toFixed(2)} (max ${Math.round(AMAZON_COMPETITIVE_CAP_RATIO * 100)}% of Amazon $${(effectiveAmazonPriceCents / 100).toFixed(2)})`);
+      warnings.push('amazonCompetitiveCapApplied');
+      finalTargetCents = amazonCompCap;
+    }
+  }
+
   console.log(`[pricing-v2] Target delivered: $${(finalTargetCents / 100).toFixed(2)}`);
 
   // === Step 7: Smart shipping ===
