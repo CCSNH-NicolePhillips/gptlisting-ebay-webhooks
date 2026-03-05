@@ -194,7 +194,9 @@ export function resolveActivePricingMode(): ActivePricingMode {
     return process.env.DELIVERED_PRICING_V2 === 'true' ? 'delivered_v2' : 'legacy';
   }
 
-  return 'legacy';
+  // Default: delivered_v2 (live market data from eBay/Amazon/Google Shopping).
+  // Use PRICING_MODE=legacy explicitly if you need the old retail-discount formula.
+  return 'delivered_v2';
 }
 
 /**

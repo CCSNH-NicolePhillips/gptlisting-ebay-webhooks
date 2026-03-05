@@ -218,6 +218,8 @@ export function buildPricingCalculations(
     soldCount?: number;
     soldStrong?: boolean;
     fallbackUsed?: boolean;
+    /** Actual draft price in cents — used when the pricing engine returned 0 (e.g. legacy path). */
+    draftPriceCents?: number;
   },
   settings: {
     discountPercent?: number;
@@ -226,8 +228,31 @@ export function buildPricingCalculations(
 ): PricingCalculationLog[] {
   const logs: PricingCalculationLog[] = [];
 
+  // Use draftPriceCents as fallback when the pricing engine produced 0
+  // (e.g. legacy path called without retailPriceDollars, or PRICING_MODE not set)
+  const effectiveFinalItemCents = (decision.finalItemCents && decision.finalItemCents > 0)
+    ? decision.finalItemCents
+    : (decision.draftPriceCents ?? 0);
+  const noMarketData = !decision.targetDeliveredCents &&
+    !decision.ebayComps?.length && !decision.retailComps?.length;
+
   // Step 1: Find competitor prices
-  if (decision.ebayComps?.length || decision.retailComps?.length) {
+  if (noMarketData) {
+    // Always show step 1 — even when empty — so the developer knows why pricing fell back.
+    const isPricingModeIssue = !decision.fallbackUsed && !decision.amazonPriceCents;
+    logs.push({
+      step: '1. Gather Competitor Prices',
+      input: { ebayCompsCount: 0, retailCompsCount: 0 },
+      output: {
+        lowestEbayDelivered: 'N/A',
+        amazonPrice: 'N/A',
+        walmartPrice: 'N/A',
+      },
+      notes: isPricingModeIssue
+        ? 'No market data fetched — PRICING_MODE may be set to legacy. Enable delivered_v2 in Settings/env for live price lookups.'
+        : 'No competitor prices found for this product. Price shown is AI-estimated.',
+    });
+  } else if (decision.ebayComps?.length || decision.retailComps?.length) {
     logs.push({
       step: '1. Gather Competitor Prices',
       input: {
@@ -250,7 +275,7 @@ export function buildPricingCalculations(
   }
 
   // Step 2: Calculate target delivered price
-  if (decision.targetDeliveredCents) {
+  if (decision.targetDeliveredCents) {  // eslint-disable-line @typescript-eslint/no-extra-parens
     // Show the actual pricing method used, not a generic formula
     const soldMedianStr = decision.soldMedianDeliveredCents
       ? `$${(decision.soldMedianDeliveredCents / 100).toFixed(2)}`
@@ -294,8 +319,11 @@ export function buildPricingCalculations(
   }
 
   // Step 3: Split into item + shipping
-  if (decision.finalItemCents !== undefined) {
+  if (decision.finalItemCents !== undefined || effectiveFinalItemCents > 0) {
     const shippingEstimate = decision.shippingEstimateCents || settings.shippingEstimateCents || 600;
+    const displayItemCents = effectiveFinalItemCents;
+    const displayShipCents = decision.finalShipCents ?? 0;
+    const isAiPrice = noMarketData && decision.draftPriceCents && decision.draftPriceCents > 0;
     logs.push({
       step: '3. Split Into Item + Shipping',
       input: {
@@ -304,8 +332,8 @@ export function buildPricingCalculations(
         freeShippingApplied: decision.freeShipApplied || false,
       },
       output: {
-        itemPrice: `$${(decision.finalItemCents / 100).toFixed(2)}`,
-        shippingCharge: `$${((decision.finalShipCents || 0) / 100).toFixed(2)}`,
+        itemPrice: `$${(displayItemCents / 100).toFixed(2)}`,
+        shippingCharge: `$${(displayShipCents / 100).toFixed(2)}`,
         subsidyAmount: decision.subsidyCents 
           ? `$${(decision.subsidyCents / 100).toFixed(2)}`
           : '$0.00',
@@ -313,9 +341,11 @@ export function buildPricingCalculations(
       formula: decision.freeShipApplied 
         ? 'ItemPrice = TargetDelivered (free shipping, seller absorbs cost)'
         : 'ItemPrice = TargetDelivered - ShippingCharge',
-      notes: decision.freeShipApplied 
-        ? 'Free shipping enabled to compete with market'
-        : 'Buyer pays shipping separately',
+      notes: isAiPrice
+        ? '⚠️ Price is AI-estimated (no market data) — verify manually before listing'
+        : decision.freeShipApplied 
+          ? 'Free shipping enabled to compete with market'
+          : 'Buyer pays shipping separately',
     });
   }
 
@@ -323,14 +353,16 @@ export function buildPricingCalculations(
   logs.push({
     step: '4. Final Price Verification',
     input: {
-      itemPrice: `$${((decision.finalItemCents || 0) / 100).toFixed(2)}`,
+      itemPrice: `$${(effectiveFinalItemCents / 100).toFixed(2)}`,
       shippingCharge: `$${((decision.finalShipCents || 0) / 100).toFixed(2)}`,
     },
     output: {
-      buyerTotalCost: `$${(((decision.finalItemCents || 0) + (decision.finalShipCents || 0)) / 100).toFixed(2)}`,
+      buyerTotalCost: `$${((effectiveFinalItemCents + (decision.finalShipCents || 0)) / 100).toFixed(2)}`,
     },
     formula: 'BuyerTotal = ItemPrice + ShippingCharge',
-    notes: 'This is what the buyer pays at checkout',
+    notes: noMarketData
+      ? '⚠️ AI-estimated price — enable PRICING_MODE=delivered_v2 for real market data'
+      : 'This is what the buyer pays at checkout',
   });
 
   return logs;

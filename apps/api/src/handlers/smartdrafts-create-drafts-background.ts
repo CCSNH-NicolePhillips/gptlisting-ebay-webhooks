@@ -2124,6 +2124,8 @@ async function createDraftForProduct(
         soldCount: _logSmr?.soldCount,
         soldStrong: _logSmr?.soldStrong,
         fallbackUsed: _logEv?.fallbackUsed,
+        // Pass actual draft price so logs stay consistent when the pricing engine returned 0
+        draftPriceCents: Math.round((draft.price || 0) * 100),
       },
       {
         discountPercent: 5,
