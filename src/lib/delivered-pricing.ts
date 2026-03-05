@@ -1059,6 +1059,21 @@ export function calculateTargetDeliveredV2(
     }
   }
 
+  // Active floor guard: prevent sold anchor from falling far below the cheapest active comp.
+  // High-dispersion sold data (IQR/median > 0.40) can produce a P35 well below all active
+  // listings, e.g. $14 sold P35 when every active listing is $21+. Without this guard we
+  // price 33% below the cheapest competitor, which is needlessly margin-destroying.
+  // Mode ratios: fast-sale 75% (aggressive undercut), market-match 85%, max-margin 90%.
+  if (activeStats !== null && activeStats.min > 0) {
+    const floorRatio = mode === 'fast-sale' ? 0.75 : mode === 'max-margin' ? 0.90 : 0.85;
+    const activeFloorGuard = Math.round(activeStats.min * floorRatio);
+    if (base < activeFloorGuard) {
+      console.log(`[pricing-v2] Active floor guard (${Math.round(floorRatio * 100)}% of active min $${(activeStats.min / 100).toFixed(2)}): $${(base / 100).toFixed(2)} -> $${(activeFloorGuard / 100).toFixed(2)}`);
+      warnings.push('activeFloorGuardApplied');
+      base = activeFloorGuard;
+    }
+  }
+
   // Enforce minimum
   base = Math.max(base, minDeliveredCents);
 
@@ -1566,7 +1581,7 @@ async function getDeliveredPricingV2(
     console.log(`[pricing-v2] No pricing data â€” returning minimum prices`);
     return {
       brand, productName, ebayComps, retailComps,
-      activeFloorDeliveredCents: activeStats?.min ?? null,
+      activeFloorDeliveredCents: (activeStats?.min ?? 0) > 0 ? activeStats!.min : getActiveFloorDelivered(ebayComps),
       activeMedianDeliveredCents: activeStats?.p50 ?? null,
       amazonPriceCents: effectiveAmazonPriceCents,
       walmartPriceCents: effectiveWalmartPriceCents,
@@ -1712,7 +1727,7 @@ async function getDeliveredPricingV2(
   return {
     brand, productName,
     ebayComps, retailComps,
-    activeFloorDeliveredCents: activeStats?.min ?? null,
+    activeFloorDeliveredCents: (activeStats?.min ?? 0) > 0 ? activeStats!.min : getActiveFloorDelivered(ebayComps),
     activeMedianDeliveredCents: activeStats?.p50 ?? null,
     amazonPriceCents: effectiveAmazonPriceCents,
     walmartPriceCents: effectiveWalmartPriceCents,
