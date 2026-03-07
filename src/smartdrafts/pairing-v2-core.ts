@@ -28,6 +28,7 @@ export interface PairingResult {
     brandWebsite?: string | null;
     title?: string | null;
     product?: string | null;
+    variant?: string | null;
     keyText?: string[];
     categoryPath?: string | null;
     photoQuantity?: number; // Max quantityInPhoto across front/back images
@@ -43,6 +44,7 @@ export interface PairingResult {
     panel?: string; // 'front' | 'back' | 'side' | 'unknown'
     brand?: string | null;
     product?: string | null;
+    variant?: string | null;
     title?: string | null;
     brandWebsite?: string | null;
     keyText?: string[];
@@ -89,6 +91,7 @@ interface ImageClassificationV2 {
   panel: PanelType;
   brand: string | null;
   productName: string | null;
+  variant: string | null; // Flavor, color, size, or count variant (e.g., "Raspberry Lemonade", "SPF 41", "300g")
   title: string | null; // For books: the book title. For products: null
   brandWebsite: string | null; // Official brand website URL (e.g., "https://myrkmd.com", "https://rootbrands.com")
   packageType: 'bottle' | 'jar' | 'tub' | 'pouch' | 'box' | 'sachet' | 'book' | 'unknown';
@@ -109,6 +112,7 @@ interface PairingInputItem {
   panel: PanelType;
   brand: string | null;
   productName: string | null;
+  variant: string | null;
   title: string | null;
   brandWebsite: string | null;
   packageType: string;
@@ -189,11 +193,19 @@ For each image, provide:
    - For books: MUST be null (books don't have brands in our system)
    - null if unreadable
 4. productName: 
-   - For supplements/cosmetics/food packaging: the FULL product name INCLUDING SIZE/UNIT (e.g., "Clean Slate 2oz", "Fish Oil 60 softgels", "Dopamine Brain Food 720g")
-   - CRITICAL: Always include the size/unit/count if visible on the label (oz, g, ml, fl oz, capsules, tablets, softgels, etc.)
+   - For supplements/cosmetics/food packaging: the BASE product name WITHOUT flavor/variant/size (e.g., "Clean Slate", "Fish Oil", "Dopamine Brain Food", "Super Yerba", "Beat The Bloat")
+   - This is the product LINE name — what you'd search on Amazon to find this exact product
+   - Do NOT include flavor, color, scent, or size here — those go in the variant field
    - For books: the author name (e.g., "Bobbi Brown", "J.K. Rowling")
    - DO NOT put literary titles or book names here for supplements (e.g., if a supplement is called "Clarity", productName is "Clarity", NOT a book title)
    - null if unreadable
+4b. variant:
+   - The specific flavor, scent, color, size, or count that distinguishes this SKU from others in the same product line
+   - Include size/unit/count here: "Raspberry Lemonade 300g", "SPF 41", "Original 60 Capsules", "Unflavored 2oz"
+   - Examples: "Raspberry Lemonade 300g" | "Pomegranate Berry 60 Chews" | "25 Capsules" | "50ml" | "Chocolate Fudge 2lb"
+   - If there is no distinguishing variant (single-SKU product), put the size/count here anyway: "50ml", "60 Capsules"
+   - For books: null
+   - null only if completely unreadable
 5. title:
    - For books ONLY: the book title (e.g., "Still Bobbi", "Harry Potter and the Sorcerer's Stone")
    - For supplements/cosmetics/food packaging: MUST ALWAYS be null
@@ -406,6 +418,7 @@ Respond ONLY with valid JSON:
       "panel": "front | back | side | unknown",
       "brand": "Brand Name" or null,
       "productName": "Product Name or Author Name" or null,
+      "variant": "Flavor/Color/Size variant" or null,
       "title": "Book Title (only for books)" or null,
       "brandWebsite": "https://brandname.com" or null,
       "packageType": "bottle | jar | tub | pouch | box | sachet | book | unknown",
@@ -683,6 +696,7 @@ async function pairChunk(items: ImageClassificationV2[], chunkLabel = ''): Promi
     panel: x.panel,
     brand: x.brand,
     productName: x.productName,
+    variant: x.variant,
     title: x.title,
     brandWebsite: x.brandWebsite,
     packageType: x.packageType,
@@ -977,6 +991,7 @@ async function pairVisuallyAggressive(items: ImageClassificationV2[]): Promise<P
       panel: x.panel,
       brand: x.brand,
       productName: x.productName,
+      variant: x.variant,
       title: x.title,
       brandWebsite: x.brandWebsite,
       packageType: x.packageType,
@@ -1372,6 +1387,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
       brandWebsite: frontClass?.brandWebsite || null,
       title: frontClass?.title || null,
       product: frontClass?.productName || null,
+      variant: frontClass?.variant ?? null,
       keyText: frontClass?.keyText || [],
       categoryPath: frontClass?.categoryPath || null,
       photoQuantity,
@@ -1410,6 +1426,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
           panel: classification?.panel || 'unknown',
           brand: classification?.brand || null,
         product: classification?.productName || null,
+        variant: classification?.variant ?? null,
         title: classification?.title || null,
         brandWebsite: classification?.brandWebsite || null,
         keyText: classification?.keyText || [],
@@ -1435,6 +1452,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
             panel: frontClass?.panel || 'unknown',
             brand: frontClass?.brand || null,
             product: frontClass?.productName || null,
+            variant: frontClass?.variant ?? null,
             title: frontClass?.title || null,
             brandWebsite: frontClass?.brandWebsite || null,
             keyText: frontClass?.keyText || [],
@@ -1452,6 +1470,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
             panel: backClass?.panel || 'unknown',
             brand: backClass?.brand || null,
           product: backClass?.productName || null,
+          variant: backClass?.variant ?? null,
           title: backClass?.title || null,
           brandWebsite: backClass?.brandWebsite || null,
           keyText: backClass?.keyText || [],

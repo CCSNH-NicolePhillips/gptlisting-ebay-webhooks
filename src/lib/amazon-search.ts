@@ -220,7 +220,7 @@ export async function searchAmazon(
     };
 
     // Title matching - verify the result is actually the same product
-    const isTitleMatch = (resultTitle: string | undefined, resultBrand: string | undefined, searchBrand: string): boolean => {
+    const isTitleMatch = (resultTitle: string | undefined, resultBrand: string | undefined, searchBrand: string): boolean | 'weak' => {
       // Skip results with no title
       if (!resultTitle) {
         console.log(`[amazon-search] Skipping result with no title`);
@@ -237,16 +237,37 @@ export async function searchAmazon(
 
       const brandWords = normalize(searchBrand);
       const titleLower = resultTitle.toLowerCase();
-      const resultBrandLower = resultBrand?.toLowerCase() || '';
+      const resultBrandLower = resultBrand?.toLowerCase().trim() || '';
 
-      // Check if brand matches (either in title or in brand field)
-      const brandInTitle = brandWords.some(bw => 
-        titleLower.includes(bw) || resultBrandLower.includes(bw)
-      );
+      // If API returns a brand field and it EXPLICITLY contradicts ours → hard reject
+      if (resultBrandLower && brandWords.length > 0) {
+        const apiMatchesOurs = brandWords.some(bw => resultBrandLower.includes(bw));
+        if (!apiMatchesOurs) {
+          // Check reverse: our brand words vs API brand
+          const ourBrandNorm = normalize(searchBrand).join(' ');
+          const apiBrandNorm = normalize(resultBrandLower).join(' ');
+          // Only hard-reject if they share NO words and both are non-trivial
+          if (ourBrandNorm.length > 3 && apiBrandNorm.length > 3 && !ourBrandNorm.includes(apiBrandNorm) && !apiBrandNorm.includes(ourBrandNorm)) {
+            console.log(`[amazon-search] ❌ Brand mismatch: our="${searchBrand}" API brand="${resultBrand}"`);
+            return false;
+          }
+        }
+      }
 
-      if (!brandInTitle && brandWords.length > 0) {
-        console.log(`[amazon-search] ❌ Brand mismatch: "${searchBrand}" not in "${resultTitle.slice(0, 60)}"`);
-        return false;
+      // Brand in title → strong match
+      const brandInTitle = brandWords.some(bw => titleLower.includes(bw));
+      if (brandInTitle) return true;
+
+      // Brand in API brand field → strong match
+      const brandInApiField = brandWords.some(bw => resultBrandLower.includes(bw));
+      if (brandInApiField) return true;
+
+      // Brand not in title AND API brand field is empty → weak match
+      // Many brands store their name in Amazon's brand field only (not in title)
+      // Don't reject — caller will score this lower
+      if (brandWords.length > 0) {
+        console.log(`[amazon-search] ⚠️  Brand "${searchBrand}" not in title/API-field — allowing with weak confidence (brand may be in Amazon's brand-registry only)`);
+        return 'weak';
       }
 
       return true;
@@ -276,8 +297,12 @@ export async function searchAmazon(
       }
 
       // Check brand match
-      if (!isTitleMatch(result.title, result.brand, brand)) {
+      const brandMatch = isTitleMatch(result.title, result.brand, brand);
+      if (brandMatch === false) {
         continue;
+      }
+      if (brandMatch === 'weak') {
+        score -= 20; // Penalize but don't discard — brand may be in Amazon's brand registry
       }
 
       // Scoring bonuses
