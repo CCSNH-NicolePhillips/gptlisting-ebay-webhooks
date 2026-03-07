@@ -18,6 +18,7 @@ import {
 import { getFinalEbayPrice, getCategoryCap } from './legacy-compute.js';
 import type { CompetitorPrice } from './shared-types.js';
 import { searchAmazonWithFallback } from '../../../../src/lib/amazon-search.js';
+import { searchByGoogleLens } from './serp-image-search.js';
 // Type-only re-export from price-lookup (erased at runtime — no circular risk)
 export type { PriceDecision } from '../../../../src/lib/price-lookup.js';
 
@@ -58,6 +59,13 @@ export interface PricingInput {
    * Defaults to 0.85 when not provided.
    */
   amazonPricingRatio?: number;
+  /**
+   * Publicly accessible HTTPS URL of the product's front image.
+   * Used as fallback when Amazon lookup fails (product not on Amazon):
+   * Google Lens image search is attempted to find a retail price.
+   * Must be an http/https URL (local paths are silently skipped).
+   */
+  heroImageUrl?: string;
 }
 
 /**
@@ -300,8 +308,62 @@ export async function getPricingDecision(input: PricingInput): Promise<PricingDe
       };
     }
 
-    // Product not found on Amazon — flag for manual review
-    console.log(`[pricing] amazon_anchored: "${brand} ${productName}" not found on Amazon (confidence=${amazonResult.confidence}), flagging NEEDS_REVIEW`);
+    // Product not found on Amazon — try Google Lens image search fallback
+    console.log(`[pricing] amazon_anchored: "${brand} ${productName}" not found on Amazon (confidence=${amazonResult.confidence}), trying Google Lens fallback`);
+
+    if (input.heroImageUrl) {
+      const lensResult = await searchByGoogleLens(input.heroImageUrl);
+      if (lensResult.price !== null) {
+        const lensPriceCents = Math.round(lensResult.price * 100);
+        const itemCents = Math.max(Math.round(lensPriceCents * ratio), 199);
+        console.log(`[pricing] amazon_anchored: Google Lens $${lensResult.price.toFixed(2)} × ${ratio} = item $${(itemCents / 100).toFixed(2)} (source: ${lensResult.source})`);
+        return {
+          status: 'READY',
+          finalItemCents: itemCents,
+          finalShipCents: shippingCents,
+          warnings: [],
+          pricingEvidence: {
+            source: 'delivered-v2',
+            mode: 'amazon-anchored-lens',
+            targetDeliveredCents: itemCents + shippingCents,
+            finalItemCents: itemCents,
+            finalShipCents: shippingCents,
+            ebayCompsCount: 0,
+            fallbackUsed: false,
+            warnings: [],
+            manualReviewRequired: false,
+            summary: {
+              canCompete: true,
+              skipListing: false,
+              matchConfidence: 'medium',
+              freeShipApplied: false,
+              compsSource: `google-lens:${lensResult.source ?? 'unknown'}`,
+              activeFloorDeliveredCents: null,
+              retailCompsCount: 1,
+              amazonPriceCents: null,
+              walmartPriceCents: null,
+              soldMedianDeliveredCents: null,
+              soldCount: 0,
+              soldStrong: false,
+              shippingEstimateSource: 'fixed',
+              subsidyCents: 0,
+              topComps: [{
+                source: 'google-lens',
+                deliveredCents: lensPriceCents,
+                itemCents: lensPriceCents,
+                shipCents: 0,
+                url: lensResult.url ?? null,
+                title: lensResult.title ?? '',
+                seller: lensResult.source ?? '',
+              }],
+            },
+          },
+        };
+      }
+    }
+
+    // Still not found — flag for manual review
+    console.log(`[pricing] amazon_anchored: "${brand} ${productName}" not found via Amazon or Google Lens, flagging NEEDS_REVIEW`);
     const fallbackCents = retailPriceDollars
       ? Math.round(legacyItemDollars(retailPriceDollars, categoryPath) * 100)
       : 0;
