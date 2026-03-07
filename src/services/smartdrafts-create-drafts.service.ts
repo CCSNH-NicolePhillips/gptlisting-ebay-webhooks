@@ -342,7 +342,6 @@ export async function createDraftForProduct(product: PairedProduct): Promise<Dra
     settings: { mode: 'market-match' },
     retailPriceDollars: retailPrice,
     categoryPath,
-    heroImageUrl: product.heroDisplayUrl ?? undefined,
   }).catch(err => {
     console.error(`[createDraftForProduct] Pricing failed, falling back to zero:`, err);
     return null;
