@@ -17,6 +17,7 @@ import {
 } from './delivered-pricing.js';
 import { getFinalEbayPrice, getCategoryCap } from './legacy-compute.js';
 import type { CompetitorPrice } from './shared-types.js';
+import { searchAmazonWithFallback } from '../../../../src/lib/amazon-search.js';
 // Type-only re-export from price-lookup (erased at runtime — no circular risk)
 export type { PriceDecision } from '../../../../src/lib/price-lookup.js';
 
@@ -29,7 +30,7 @@ export type { DeliveredPricingDecision, DeliveredPricingSettings, CompetitorPric
 // ── Active pricing mode ───────────────────────────────────────────────────────
 
 /** Controls which pricing pipeline {@link getPricingDecision} uses. */
-export type ActivePricingMode = 'legacy' | 'delivered_v2';
+export type ActivePricingMode = 'legacy' | 'delivered_v2' | 'amazon_anchored';
 
 // Emit the DELIVERED_PRICING_V2 deprecation warning at most once per process.
 let _deprecWarnEmitted = false;
@@ -51,6 +52,12 @@ export interface PricingInput {
   retailPriceDollars?: number;
   /** Category path for price-cap lookup (e.g. 'Books > Fiction'). */
   categoryPath?: string;
+  /**
+   * Amazon price ratio for amazon_anchored mode.
+   * eBay item price = Amazon price × amazonPricingRatio.
+   * Defaults to 0.85 when not provided.
+   */
+  amazonPricingRatio?: number;
 }
 
 /**
@@ -175,12 +182,12 @@ export function needsManualReview(warnings: string[]): boolean {
  */
 export function resolveActivePricingMode(): ActivePricingMode {
   const explicit = process.env.PRICING_MODE;
-  if (explicit === 'delivered_v2' || explicit === 'legacy') {
+  if (explicit === 'delivered_v2' || explicit === 'legacy' || explicit === 'amazon_anchored') {
     return explicit;
   }
   if (explicit !== undefined && explicit !== '') {
-    console.warn(`[pricing] Unknown PRICING_MODE="${explicit}" — falling back to "legacy"`);
-    return 'legacy';
+    console.warn(`[pricing] Unknown PRICING_MODE="${explicit}" — falling back to "amazon_anchored"`);
+    return 'amazon_anchored';
   }
 
   // Back-compat: DELIVERED_PRICING_V2
@@ -194,9 +201,10 @@ export function resolveActivePricingMode(): ActivePricingMode {
     return process.env.DELIVERED_PRICING_V2 === 'true' ? 'delivered_v2' : 'legacy';
   }
 
-  // Default: delivered_v2 (live market data from eBay/Amazon/Google Shopping).
-  // Use PRICING_MODE=legacy explicitly if you need the old retail-discount formula.
-  return 'delivered_v2';
+  // Default: amazon_anchored — simple, reliable: Amazon price × ratio.
+  // Use PRICING_MODE=delivered_v2 for the full eBay-sold comps engine.
+  // Use PRICING_MODE=legacy for the old retail-discount formula.
+  return 'amazon_anchored';
 }
 
 /**
@@ -233,6 +241,91 @@ export async function getPricingDecision(input: PricingInput): Promise<PricingDe
   } = input;
 
   const activeMode = resolveActivePricingMode();
+
+  // ── amazon_anchored path ─────────────────────────────────────────────────
+  // Simple, reliable: fetch Amazon price directly, apply ratio, done.
+  // When Amazon doesn't carry the product → NEEDS_REVIEW for manual pricing.
+  if (activeMode === 'amazon_anchored') {
+    const ratio = input.amazonPricingRatio ?? 0.85;
+    const shippingCents = settings?.shippingEstimateCents ?? 600;
+
+    console.log(`[pricing] amazon_anchored: looking up "${brand} ${productName}" (ratio=${ratio})`);
+    const amazonResult = await searchAmazonWithFallback(brand, productName, false);
+
+    if (amazonResult.price !== null && amazonResult.confidence !== 'low') {
+      const amazonPriceCents = Math.round(amazonResult.price * 100);
+      const itemCents = Math.max(Math.round(amazonPriceCents * ratio), 199);
+      console.log(`[pricing] amazon_anchored: Amazon $${amazonResult.price.toFixed(2)} × ${ratio} = item $${(itemCents / 100).toFixed(2)} + ship $${(shippingCents / 100).toFixed(2)}`);
+      return {
+        status: 'READY',
+        finalItemCents: itemCents,
+        finalShipCents: shippingCents,
+        warnings: [],
+        pricingEvidence: {
+          source: 'delivered-v2',
+          mode: 'amazon-anchored',
+          targetDeliveredCents: itemCents + shippingCents,
+          finalItemCents: itemCents,
+          finalShipCents: shippingCents,
+          ebayCompsCount: 0,
+          fallbackUsed: false,
+          warnings: [],
+          manualReviewRequired: false,
+          summary: {
+            canCompete: true,
+            skipListing: false,
+            matchConfidence: amazonResult.confidence,
+            freeShipApplied: false,
+            compsSource: 'amazon-direct',
+            activeFloorDeliveredCents: null,
+            retailCompsCount: 1,
+            amazonPriceCents,
+            walmartPriceCents: null,
+            soldMedianDeliveredCents: null,
+            soldCount: 0,
+            soldStrong: false,
+            shippingEstimateSource: 'fixed',
+            subsidyCents: 0,
+            topComps: [{
+              source: 'amazon',
+              deliveredCents: amazonPriceCents,
+              itemCents: amazonPriceCents,
+              shipCents: 0,
+              url: amazonResult.url ?? null,
+              title: amazonResult.title ?? '',
+              seller: 'Amazon',
+            }],
+          },
+        },
+      };
+    }
+
+    // Product not found on Amazon — flag for manual review
+    console.log(`[pricing] amazon_anchored: "${brand} ${productName}" not found on Amazon (confidence=${amazonResult.confidence}), flagging NEEDS_REVIEW`);
+    const fallbackCents = retailPriceDollars
+      ? Math.round(legacyItemDollars(retailPriceDollars, categoryPath) * 100)
+      : 0;
+    return {
+      status: 'NEEDS_REVIEW',
+      finalItemCents: fallbackCents,
+      finalShipCents: 0,
+      warnings: ['notOnAmazon', 'manualReviewRequired'],
+      pricingEvidence: {
+        source: 'delivered-v2',
+        mode: 'amazon-anchored',
+        targetDeliveredCents: fallbackCents,
+        finalItemCents: fallbackCents,
+        finalShipCents: 0,
+        ebayCompsCount: 0,
+        fallbackUsed: true,
+        warnings: ['notOnAmazon', 'manualReviewRequired'],
+        manualReviewRequired: true,
+        fallbackSuggestion: fallbackCents > 0
+          ? { itemCents: fallbackCents, source: 'legacy-retail' }
+          : undefined,
+      },
+    };
+  }
 
   // ── delivered_v2 path ─────────────────────────────────────────────────────
   if (activeMode === 'delivered_v2') {

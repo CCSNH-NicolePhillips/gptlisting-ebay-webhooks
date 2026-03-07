@@ -744,7 +744,11 @@ function buildPrompt(
   lines.push("");
   lines.push("⚠️ TITLE OPTIMIZATION RULES:");
   lines.push("1. ✅ START WITH BRAND NAME - buyers search by brand! (e.g., 'r.e.m. beauty', 'Pump Sauce')");
-  lines.push("2. DO NOT include capsule/gummy count - it's already in item specifics (wastes characters)");
+  lines.push("2. DO NOT include capsule/tablet count - it's already in item specifics (wastes characters)");
+  lines.push("   EXCEPTION: For PACKET/STICK/POUCH format products, DO include count + format in title:");
+  lines.push("   ✅ 'moonbrew Hot Cocoa Herbal Supplement 14 Single Serving Sticks'");
+  lines.push("   ✅ 'Brand Name Electrolyte Drink Mix 20 Single Serving Packets'");
+  lines.push("   ❌ 'moonbrew Hot Cocoa 14 Servings' ← missing format descriptor");
   lines.push("3. DO NOT include 'NEW' - condition is a separate listing field");
   lines.push("4. DO NOT include 'Unflavored' for capsules/tablets - only liquids and gummies need flavor specified");
   lines.push("5. DO include: Brand + Product line name + Active ingredients + Health benefit keywords");
@@ -1444,6 +1448,7 @@ async function createDraftForProduct(
       productName: isBundle ? bundlePriceLookupTitle : priceLookupTitle,
       settings: deliveredSettings,
       additionalContext: seoContext,
+      amazonPricingRatio: pricingSettings.amazonPricingRatio ?? 0.85,
     });
     
     // If full bundle query failed, try simplified query (e.g., "Brand Shampoo Conditioner")
@@ -1456,6 +1461,7 @@ async function createDraftForProduct(
         productName: simpleBundleTitle,
         settings: deliveredSettings,
         additionalContext: seoContext,
+        amazonPricingRatio: pricingSettings.amazonPricingRatio ?? 0.85,
       });
       
       // Use simplified result if it found better data
@@ -1479,6 +1485,7 @@ async function createDraftForProduct(
             productName: individualProduct,
             settings: deliveredSettings,
             additionalContext: seoContext,
+            amazonPricingRatio: pricingSettings.amazonPricingRatio ?? 0.85,
           });
           
           if (individualResult.finalItemCents > 0) {
@@ -2124,6 +2131,7 @@ async function createDraftForProduct(
         soldCount: _logSmr?.soldCount,
         soldStrong: _logSmr?.soldStrong,
         fallbackUsed: _logEv?.fallbackUsed,
+        compsSource: _logSmr?.compsSource,
         // Pass actual draft price so logs stay consistent when the pricing engine returned 0
         draftPriceCents: Math.round((draft.price || 0) * 100),
       },

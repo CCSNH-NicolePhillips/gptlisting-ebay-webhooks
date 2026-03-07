@@ -220,6 +220,8 @@ export function buildPricingCalculations(
     fallbackUsed?: boolean;
     /** Actual draft price in cents — used when the pricing engine returned 0 (e.g. legacy path). */
     draftPriceCents?: number;
+    /** Pricing source — 'amazon-direct' for amazon_anchored mode. */
+    compsSource?: string;
   },
   settings: {
     discountPercent?: number;
@@ -286,7 +288,14 @@ export function buildPricingCalculations(
 
     let formula: string;
     let notes: string;
-    if (isSoldBased) {
+    const isAmazonAnchored = decision.compsSource === 'amazon-direct';
+    if (isAmazonAnchored && decision.amazonPriceCents) {
+      const ratioApplied = effectiveFinalItemCents > 0 && decision.amazonPriceCents > 0
+        ? (effectiveFinalItemCents / decision.amazonPriceCents).toFixed(2)
+        : '0.85';
+      formula = `Target = Amazon $${(decision.amazonPriceCents / 100).toFixed(2)} × ${ratioApplied}`;
+      notes = 'Price based on Amazon listing. Buyer pays item + shipping separately.';
+    } else if (isSoldBased) {
       formula = `Target = Sold market data (${soldCountStr} recent sales, median ${soldMedianStr})`;
       notes = 'Price based on actual eBay sold data — what buyers are paying';
     } else if (decision.activeFloorDeliveredCents) {

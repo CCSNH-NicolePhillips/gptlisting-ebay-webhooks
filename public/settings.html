@@ -334,41 +334,47 @@
             <!-- Pricing Settings Card -->
             <section class="dp-card">
               <div class="dp-card__header">
-                <h3 class="dp-card__title">💰 Competitive Pricing</h3>
-                <p class="dp-card__subtitle">Configure how your eBay prices are calculated from retail sources</p>
+                <h3 class="dp-card__title">💰 Amazon-Anchored Pricing</h3>
+                <p class="dp-card__subtitle">eBay item price = Amazon price × ratio. Buyer pays item + shipping.</p>
               </div>
               
               <div class="dp-card__content">
-                <label class="dp-form-label">Discount Percentage</label>
-                <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1.5rem;">
-                  <input type="number" id="discountPercent" class="dp-input" placeholder="10" min="0" max="50" step="1" style="width: 120px;" />
-                  <span style="color: var(--text-muted);">% off retail</span>
-                </div>
-                <p style="font-size: 0.875rem; color: var(--text-muted); margin-top: -0.5rem; margin-bottom: 1.5rem;">
-                  Discount applied to retail/MSRP prices (0-50%). Recommended: 10% for competitive new item pricing.
+
+                <label class="dp-form-label">Amazon Price Ratio</label>
+                <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1rem;">
+                  How much of the Amazon price to charge as the eBay item price. Lower = more competitive.
                 </p>
-                
-                <label class="dp-form-label">Pricing Strategy</label>
-                <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1.5rem;">
+                <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 0.5rem;">
                   <label style="display: flex; align-items: start; cursor: pointer;">
-                    <input type="radio" name="shippingStrategy" value="DISCOUNT_ITEM_ONLY" id="strategyItemOnly" style="margin-top: 2px; margin-right: 8px;" />
+                    <input type="radio" name="amazonRatioPreset" value="0.85" id="ratio85" style="margin-top: 2px; margin-right: 8px;" />
                     <div>
-                      <span style="font-weight: 500;">Item-Only Discount</span>
+                      <span style="font-weight: 500;">×0.85 — Conservative (15% below Amazon)</span>
                       <p style="font-size: 0.8125rem; color: var(--text-muted); margin: 4px 0 0 0;">
-                        Simple strategy: applies discount to item price only. Ignores competitor shipping costs.
+                        Amazon $20 → eBay item $17.00 + $7 shipping = $24.00 total
                       </p>
                     </div>
                   </label>
                   <label style="display: flex; align-items: start; cursor: pointer;">
-                    <input type="radio" name="shippingStrategy" value="ALGO_COMPETITIVE_TOTAL" id="strategyAlgoTotal" style="margin-top: 2px; margin-right: 8px;" />
+                    <input type="radio" name="amazonRatioPreset" value="0.90" id="ratio90" style="margin-top: 2px; margin-right: 8px;" />
                     <div>
-                      <span style="font-weight: 500;">Total-Competitive Algorithm</span>
+                      <span style="font-weight: 500;">×0.90 — Standard (10% below Amazon)</span>
                       <p style="font-size: 0.8125rem; color: var(--text-muted); margin: 4px 0 0 0;">
-                        Advanced: accounts for competitor shipping when calculating item price to maintain competitive total-to-door cost.
+                        Amazon $20 → eBay item $18.00 + $7 shipping = $25.00 total
                       </p>
+                    </div>
+                  </label>
+                  <label style="display: flex; align-items: start; cursor: pointer;">
+                    <input type="radio" name="amazonRatioPreset" value="custom" id="ratioCustom" style="margin-top: 2px; margin-right: 8px;" />
+                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                      <span style="font-weight: 500;">Custom:</span>
+                      <input type="number" id="amazonRatioCustomInput" class="dp-input" placeholder="0.85" min="0.50" max="1.00" step="0.01" style="width: 100px;" />
+                      <span style="color: var(--text-muted); font-size: 0.8125rem;">(0.50 – 1.00)</span>
                     </div>
                   </label>
                 </div>
+                <p style="font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 1.5rem;">
+                  ⚠️ Products not found on Amazon will be flagged <strong>Needs Review</strong> for manual pricing.
+                </p>
                 
                 <label class="dp-form-label">Template Shipping Estimate</label>
                 <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1.5rem;">
@@ -917,33 +923,32 @@
       if (pricingSaveBtn) {
         pricingSaveBtn.onclick = async () => {
           const msg = document.getElementById('pricingSaveMessage');
-          const discountPercent = parseFloat(document.getElementById('discountPercent')?.value || '10');
-          const strategyItemOnly = document.getElementById('strategyItemOnly')?.checked;
-          const strategyAlgoTotal = document.getElementById('strategyAlgoTotal')?.checked;
           const templateShippingEstimate = parseFloat(document.getElementById('templateShippingEstimate')?.value || '6.00');
           const shippingSubsidyCapInput = document.getElementById('shippingSubsidyCap')?.value;
           const minItemPrice = parseFloat(document.getElementById('minItemPrice')?.value || '1.99');
           const ebayShippingMode = document.querySelector('input[name="ebayShippingMode"]:checked')?.value || 'BUYER_PAYS_SHIPPING';
           const buyerShippingCharge = ebayShippingMode === 'FREE_SHIPPING' ? 0 : templateShippingEstimate;
           const preferredCarrier = document.getElementById('preferredCarrier')?.value || 'auto';
-          
-          // Validation
-          if (discountPercent < 0 || discountPercent > 50) {
-            if (msg) {
-              msg.textContent = 'Discount must be between 0% and 50%';
-              msg.style.color = '#ef4444';
-              setTimeout(() => { msg.textContent = ''; msg.style.color = ''; }, 3000);
+
+          // Amazon pricing ratio
+          const ratioPreset = document.querySelector('input[name="amazonRatioPreset"]:checked')?.value;
+          let amazonPricingRatio = 0.85;
+          if (ratioPreset === '0.90') {
+            amazonPricingRatio = 0.90;
+          } else if (ratioPreset === 'custom') {
+            const custom = parseFloat(document.getElementById('amazonRatioCustomInput')?.value || '0.85');
+            if (!isNaN(custom) && custom >= 0.50 && custom <= 1.00) {
+              amazonPricingRatio = custom;
+            } else {
+              if (msg) {
+                msg.textContent = 'Custom ratio must be between 0.50 and 1.00';
+                msg.style.color = '#ef4444';
+                setTimeout(() => { msg.textContent = ''; msg.style.color = ''; }, 3000);
+              }
+              return;
             }
-            return;
-          }
-          
-          if (!strategyItemOnly && !strategyAlgoTotal) {
-            if (msg) {
-              msg.textContent = 'Please select a pricing strategy';
-              msg.style.color = '#ef4444';
-              setTimeout(() => { msg.textContent = ''; msg.style.color = ''; }, 3000);
-            }
-            return;
+          } else if (ratioPreset === '0.85') {
+            amazonPricingRatio = 0.85;
           }
           
           if (templateShippingEstimate < 0) {
@@ -967,7 +972,6 @@
           if (msg) msg.textContent = 'Saving...';
           
           try {
-            const shippingStrategy = strategyAlgoTotal ? 'ALGO_COMPETITIVE_TOTAL' : 'DISCOUNT_ITEM_ONLY';
             const shippingSubsidyCap = shippingSubsidyCapInput && shippingSubsidyCapInput.trim() !== '' 
               ? Math.round(parseFloat(shippingSubsidyCapInput) * 100)
               : null;
@@ -977,8 +981,7 @@
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 pricing: {
-                  discountPercent,
-                  shippingStrategy,
+                  amazonPricingRatio,
                   templateShippingEstimateCents: Math.round(templateShippingEstimate * 100),
                   shippingSubsidyCapCents: shippingSubsidyCap,
                   minItemPriceCents: Math.round(minItemPrice * 100),
@@ -1017,27 +1020,29 @@
             const settings = await response.json();
             const pricing = settings.pricing || {};
             
-            const discountInput = document.getElementById('discountPercent');
-            const strategyItemOnly = document.getElementById('strategyItemOnly');
-            const strategyAlgoTotal = document.getElementById('strategyAlgoTotal');
+            // Amazon pricing ratio
+            const ratio = pricing.amazonPricingRatio ?? 0.85;
+            const ratio85 = document.getElementById('ratio85');
+            const ratio90 = document.getElementById('ratio90');
+            const ratioCustom = document.getElementById('ratioCustom');
+            const ratioCustomInput = document.getElementById('amazonRatioCustomInput');
+            if (ratio85 && ratio90 && ratioCustom && ratioCustomInput) {
+              if (Math.abs(ratio - 0.85) < 0.001) {
+                ratio85.checked = true;
+              } else if (Math.abs(ratio - 0.90) < 0.001) {
+                ratio90.checked = true;
+              } else {
+                ratioCustom.checked = true;
+                ratioCustomInput.value = ratio.toFixed(2);
+              }
+            }
+
             const shippingEstimateInput = document.getElementById('templateShippingEstimate');
             const subsidyCapInput = document.getElementById('shippingSubsidyCap');
             const minItemPriceInput = document.getElementById('minItemPrice');
             const shipModeBuyerPays = document.getElementById('shipModeBuyerPays');
             const shipModeFree = document.getElementById('shipModeFree');
             const preferredCarrierSelect = document.getElementById('preferredCarrier');
-            
-            if (discountInput && pricing.discountPercent !== undefined) {
-              discountInput.value = pricing.discountPercent;
-            }
-            
-            if (strategyItemOnly && strategyAlgoTotal) {
-              if (pricing.shippingStrategy === 'ALGO_COMPETITIVE_TOTAL') {
-                strategyAlgoTotal.checked = true;
-              } else {
-                strategyItemOnly.checked = true;
-              }
-            }
             
             if (shippingEstimateInput && pricing.templateShippingEstimateCents !== undefined) {
               shippingEstimateInput.value = (pricing.templateShippingEstimateCents / 100).toFixed(2);

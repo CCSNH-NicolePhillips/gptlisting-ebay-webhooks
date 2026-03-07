@@ -130,6 +130,18 @@ export interface PricingSettings {
    * Default: 'auto'
    */
   preferredCarrier: 'auto' | 'usps' | 'ups' | 'fedex';
+
+  /**
+   * Amazon price ratio for amazon_anchored pricing mode.
+   * eBay item price = Amazon price × amazonPricingRatio
+   *
+   * Examples:
+   *   0.85 → item price is 85% of Amazon (15% below Amazon) — conservative
+   *   0.90 → item price is 90% of Amazon (10% below Amazon) — standard
+   *
+   * Valid range: 0.50 – 1.00. Default: 0.85
+   */
+  amazonPricingRatio: number;
 }
 
 /**
@@ -164,5 +176,6 @@ export function getDefaultPricingSettings(): PricingSettings {
     buyerShippingChargeCents: 600,
     allowAutoFreeShippingOnLowPrice: true,
     preferredCarrier: 'auto',
+    amazonPricingRatio: 0.85,
   };
 }

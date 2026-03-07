@@ -40,6 +40,8 @@ export interface UserSettingsResponse {
     ebayShippingMode: EbayShippingMode;
     buyerShippingChargeCents: number;
     preferredCarrier: 'auto' | 'usps' | 'ups' | 'fedex';
+    /** Amazon price ratio for amazon_anchored mode (0.50–1.00). */
+    amazonPricingRatio: number;
   };
   autoPrice: Required<AutoPriceSettings>;
   bestOffer: Required<BestOfferSettings>;
@@ -112,6 +114,11 @@ export function validateSaveInput(input: SaveSettingsInput): ValidationError | n
       const validCarriers = ['auto', 'usps', 'ups', 'fedex'];
       if (!validCarriers.includes(pricing.preferredCarrier as string)) {
         return { error: `preferredCarrier must be one of: ${validCarriers.join(', ')}` };
+      }
+    }
+    if (pricing.amazonPricingRatio !== undefined) {
+      if (typeof pricing.amazonPricingRatio !== 'number' || pricing.amazonPricingRatio < 0.50 || pricing.amazonPricingRatio > 1.00) {
+        return { error: 'amazonPricingRatio must be between 0.50 and 1.00' };
       }
     }
   }
@@ -200,6 +207,8 @@ export async function getUserSettings(sub: string): Promise<UserSettingsResponse
         settings.pricing?.buyerShippingChargeCents ?? defaultPricing.buyerShippingChargeCents,
       preferredCarrier:
         settings.pricing?.preferredCarrier ?? defaultPricing.preferredCarrier,
+      amazonPricingRatio:
+        settings.pricing?.amazonPricingRatio ?? defaultPricing.amazonPricingRatio,
     },
     autoPrice: {
       enabled: settings.autoPrice?.enabled ?? false,
@@ -254,6 +263,8 @@ export async function saveUserSettings(
       settings.pricing.buyerShippingChargeCents = pricing.buyerShippingChargeCents;
     if (pricing.preferredCarrier !== undefined)
       settings.pricing.preferredCarrier = pricing.preferredCarrier;
+    if (pricing.amazonPricingRatio !== undefined)
+      settings.pricing.amazonPricingRatio = pricing.amazonPricingRatio;
   }
 
   if (autoPrice !== undefined) {
