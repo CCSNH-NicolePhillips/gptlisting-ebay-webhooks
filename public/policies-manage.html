@@ -536,7 +536,7 @@
         await init();
       });
 
-      const defaults = { fulfillment: null, payment: null, return: null, promoCampaignId: null };
+      const defaults = { fulfillment: null, fulfillmentFree: null, payment: null, return: null, promoCampaignId: null };
 
       async function loadDefaults() {
         try {
@@ -730,6 +730,14 @@
             badge.textContent = 'Default';
             statusCell.appendChild(badge);
           }
+          // Free shipping default badge (fulfillment policies only)
+          if (typeKey === 'fulfillment' && defaults.fulfillmentFree && String(policyId) === String(defaults.fulfillmentFree)) {
+            const freeBadge = document.createElement('span');
+            freeBadge.className = 'default-badge';
+            freeBadge.style.cssText = 'background:rgba(16,185,129,0.15);border-color:rgba(16,185,129,0.4);color:#34d399;margin-left:4px;';
+            freeBadge.textContent = 'Free Ship (<$50)';
+            statusCell.appendChild(freeBadge);
+          }
           
           // Actions column
           const actionsCell = document.createElement('td');
@@ -762,6 +770,31 @@
             }
           };
           
+          // For fulfillment policies, add a second button to set as the Free Shipping policy (<$50)
+          let setFreeBtn = null;
+          if (typeKey === 'fulfillment') {
+            setFreeBtn = document.createElement('button');
+            setFreeBtn.textContent = 'Set Free Ship (<$50)';
+            setFreeBtn.className = 'btn-set-default';
+            setFreeBtn.title = 'Use this policy for items priced under $50 (free shipping included in price)';
+            setFreeBtn.style.cssText = 'background:rgba(16,185,129,0.12);border-color:rgba(16,185,129,0.35);color:#34d399;';
+            setFreeBtn.onclick = async () => {
+              try {
+                const r = await authClient.authFetch('/.netlify/functions/ebay-set-policy-defaults', {
+                  method: 'POST',
+                  headers: {'Content-Type': 'application/json'},
+                  body: JSON.stringify({ fulfillmentFree: policyId })
+                });
+                const j = await r.json();
+                Object.assign(defaults, j?.defaults || {});
+                await populate();
+                showMsg('✓ Free-shipping policy updated (used for items < $50)', 'success');
+              } catch (e) {
+                showMsg('Failed to set free-ship policy: ' + (e?.message || e), 'error');
+              }
+            };
+          }
+          
           const delBtn = document.createElement('button');
           delBtn.textContent = 'Delete';
           delBtn.className = 'btn-delete';
@@ -785,6 +818,7 @@
           
           actionsDiv.appendChild(inspectBtn);
           actionsDiv.appendChild(setBtn);
+          if (setFreeBtn) actionsDiv.appendChild(setFreeBtn);
           actionsDiv.appendChild(delBtn);
           actionsCell.appendChild(actionsDiv);
           

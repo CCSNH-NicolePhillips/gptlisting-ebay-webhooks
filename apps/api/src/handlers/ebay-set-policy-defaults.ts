@@ -11,6 +11,7 @@ export const handler: Handler = async (event) => {
 
 		const body = event.body ? JSON.parse(event.body) : {};
 		const fulfillment = body.fulfillment as string | undefined;
+		const fulfillmentFree = body.fulfillmentFree as string | undefined;
 		const payment = body.payment as string | undefined;
 		const ret = body.return as string | undefined;
 		const promoCampaignId = body.promoCampaignId as string | undefined;
@@ -25,6 +26,8 @@ export const handler: Handler = async (event) => {
 		}
 		if (!prefs || typeof prefs !== 'object') prefs = {};
 		if (fulfillment != null) prefs.fulfillment = String(fulfillment || '').trim() || undefined;
+		// fulfillmentFree: the free-shipping policy used for items priced under $50
+		if (fulfillmentFree != null) prefs.fulfillmentFree = String(fulfillmentFree || '').trim() || undefined;
 		if (payment != null) prefs.payment = String(payment || '').trim() || undefined;
 		if (ret != null) prefs.return = String(ret || '').trim() || undefined;
 		if (promoCampaignId !== undefined) prefs.promoCampaignId = promoCampaignId ? String(promoCampaignId).trim() : null;

@@ -945,6 +945,16 @@
             return;
           }
           
+          // Warn if pricing hasn't been verified
+          if (needsReview) {
+            const proceed = confirm(
+              '⚠️ Price Not Verified\n\n' +
+              'This draft\'s price could not be confirmed on Amazon and needs manual review.\n\n' +
+              'Do you want to publish anyway? Make sure you\'ve set the correct price in Edit first.'
+            );
+            if (!proceed) return;
+          }
+          
           pub.disabled = true;
           del.disabled = true;
           flash.textContent = 'Publishing…';

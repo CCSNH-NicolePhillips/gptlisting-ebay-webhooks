@@ -5,6 +5,8 @@ import { computeEbayItemPriceCents, computeEbayOfferPricingCents, formatPricingL
 import { getDefaultPricingSettings, type PricingSettings } from "./pricing-config.js";
 import { tokensStore } from "./redis-store.js";
 import { proxyImageUrls } from "./image-utils.js";
+import { estimateDomesticRate } from "./carrier-rates.js";
+import { estimateShippingWeightOz } from "./shipping-weight.js";
 
 const MAX_TITLE_LENGTH = 80;
 const DEFAULT_MARKETPLACE = process.env.DEFAULT_MARKETPLACE_ID || "EBAY_US";
@@ -194,6 +196,8 @@ export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>, us
 
   // PHASE 3: Load user pricing settings
   let pricingSettings: PricingSettings = getDefaultPricingSettings();
+  // _policyDefaults: loaded once, used throughout (per-price shipping, fulfillmentPolicyId)
+  let _policyDefaults: any = null;
   if (userId) {
     try {
       const store = tokensStore();
@@ -210,31 +214,29 @@ export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>, us
       console.warn(`[taxonomy-map] Failed to load user settings, using defaults:`, settingsErr);
     }
 
-    // Phase 3.5: Check default fulfillment policy for free shipping
+    // Phase 3.5: Load policy defaults. If both fulfillment + fulfillmentFree are set,
+    // per-price shipping logic will run after Amazon price is known (see pricing else block).
+    // If only fulfillment is set, fall back to eBay API check for free-shipping detection.
     try {
-      const store = tokensStore(); // Re-get store since it's out of scope from previous try block
-      const { hasFreeShipping, extractShippingCost } = await import("./policy-helpers.js");
-      const { getUserAccessToken, apiHost, headers: ebayHeaders } = await import("./_ebay.js");
+      const store = tokensStore();
       const { userScopedKey } = await import("./_auth.js");
-
-      // Load policy defaults
       const policyDefaultsKey = userScopedKey(userId, 'policy-defaults.json');
-      const policyDefaults = await store.get(policyDefaultsKey, { type: 'json' }) as any;
+      _policyDefaults = await store.get(policyDefaultsKey, { type: 'json' }) as any;
 
-      if (policyDefaults?.fulfillment) {
-        const fulfillmentPolicyId = policyDefaults.fulfillment;
+      const hasBothPolicies = _policyDefaults?.fulfillment && _policyDefaults?.fulfillmentFree;
+      if (!hasBothPolicies && _policyDefaults?.fulfillment) {
+        // Backward compat: single policy — check eBay to detect free shipping
+        const { hasFreeShipping, extractShippingCost } = await import("./policy-helpers.js");
+        const { getUserAccessToken, apiHost, headers: ebayHeaders } = await import("./_ebay.js");
+        const fulfillmentPolicyId = _policyDefaults.fulfillment;
         console.log(`[taxonomy-map] Checking fulfillment policy ${fulfillmentPolicyId} for free shipping...`);
-
-        // Fetch the policy from eBay
         const token = await getUserAccessToken(userId);
         const host = apiHost();
         const h = ebayHeaders(token);
         const policyUrl = `${host}/sell/account/v1/fulfillment_policy/${encodeURIComponent(fulfillmentPolicyId)}`;
         const policyRes = await fetch(policyUrl, { headers: h });
-
         if (policyRes.ok) {
           const policy = await policyRes.json();
-
           if (hasFreeShipping(policy)) {
             pricingSettings.templateShippingEstimateCents = 0;
             console.log(`[taxonomy-map] ✓ Free shipping policy detected - setting templateShippingEstimateCents to 0`);
@@ -250,7 +252,7 @@ export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>, us
         }
       }
     } catch (err) {
-      console.warn(`[taxonomy-map] Failed to check fulfillment policy for free shipping:`, err);
+      console.warn(`[taxonomy-map] Failed to load policy defaults:`, err);
     }
   }
 
@@ -294,6 +296,25 @@ export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>, us
         amazonItemPriceCents = Math.round(legacyPrice * 100);
       } else {
         throw new Error("Group missing pricing data (no priceMeta, no price, and no legacy pricing.ebay)");
+      }
+    }
+
+    // Per-price shipping policy selection: requires amazon price to be known first.
+    // Only applies when user has configured BOTH a paid and a free shipping fulfillment policy.
+    if (_policyDefaults?.fulfillment && _policyDefaults?.fulfillmentFree && amazonItemPriceCents > 0) {
+      const amazonDollars = amazonItemPriceCents / 100;
+      const netWeight = group?.netWeight as { value: number; unit: string } | undefined;
+      const category = (group?.categoryPath ?? group?.category) as string | undefined;
+      const shippingOz = estimateShippingWeightOz(netWeight, category);
+      if (amazonDollars < 50) {
+        pricingSettings.ebayShippingMode = 'FREE_SHIPPING';
+        pricingSettings.templateShippingEstimateCents = 0;
+        console.log(`[taxonomy-map] Per-price: $${amazonDollars.toFixed(2)} < $50 → FREE_SHIPPING (${shippingOz.toFixed(1)}oz, policy=${_policyDefaults.fulfillmentFree})`);
+      } else {
+        pricingSettings.ebayShippingMode = 'BUYER_PAYS_SHIPPING';
+        const shRate = estimateDomesticRate(shippingOz, (pricingSettings.preferredCarrier || 'auto') as any);
+        pricingSettings.templateShippingEstimateCents = shRate.cents;
+        console.log(`[taxonomy-map] Per-price: $${amazonDollars.toFixed(2)} >= $50 → BUYER_PAYS ${shRate.service} @${(shRate.cents/100).toFixed(2)} (${shippingOz.toFixed(1)}oz, policy=${_policyDefaults.fulfillment})`);
       }
     }
 
@@ -408,7 +429,23 @@ export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>, us
   });
   const description = buildDescription(title, group);
 
-  const fulfillmentPolicyId = matched?.defaults?.fulfillmentPolicyId || process.env.EBAY_FULFILLMENT_POLICY_ID || null;
+  // Fulfillment policy: per-price rule (fulfillmentFree < $50, fulfillment >= $50) takes precedence,
+  // then policyDefaults.fulfillment, then category defaults, finally env var fallback.
+  let fulfillmentPolicyId: string | null;
+  if (_policyDefaults?.fulfillment && _policyDefaults?.fulfillmentFree) {
+    // Use Amazon price if available; for publish path approximate from item price + discount
+    const refDollars = typeof priceMeta?.basePrice === 'number'
+      ? priceMeta.basePrice
+      : priceAlreadyComputed
+        ? price / ((100 - pricingSettings.discountPercent) / 100)
+        : price;
+    fulfillmentPolicyId = refDollars < 50 ? _policyDefaults.fulfillmentFree : _policyDefaults.fulfillment;
+    console.log(`[taxonomy-map] fulfillmentPolicyId="${fulfillmentPolicyId}" (refDollars=$${refDollars.toFixed(2)}, threshold=$50)`);
+  } else if (_policyDefaults?.fulfillment) {
+    fulfillmentPolicyId = _policyDefaults.fulfillment;
+  } else {
+    fulfillmentPolicyId = matched?.defaults?.fulfillmentPolicyId || process.env.EBAY_FULFILLMENT_POLICY_ID || null;
+  }
   const paymentPolicyId = matched?.defaults?.paymentPolicyId || process.env.EBAY_PAYMENT_POLICY_ID || null;
   const returnPolicyId = matched?.defaults?.returnPolicyId || process.env.EBAY_RETURN_POLICY_ID || null;
   const merchantLocationKey = process.env.EBAY_MERCHANT_LOCATION_KEY || null;
