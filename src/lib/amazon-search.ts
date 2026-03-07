@@ -235,7 +235,18 @@ export async function searchAmazon(
           .filter(w => !['the', 'and', 'for', 'with', 'new'].includes(w));
       };
 
+      // Generic words that appear in many brand names AND product titles — not reliable
+      // for distinguishing brands (e.g., "labs" in "XTRAPURE LABS" also appears in "Alpha Labs")
+      const GENERIC_BRAND_WORDS = new Set([
+        'labs', 'lab', 'co', 'corp', 'inc', 'llc', 'brand', 'brands',
+        'health', 'healthcare', 'wellness', 'nutrition', 'nutritional',
+        'natural', 'naturals', 'pure', 'life', 'living', 'bio',
+      ]);
+
       const brandWords = normalize(searchBrand);
+      // Use only specific (non-generic) brand words for title matching
+      const specificBrandWords = brandWords.filter(w => !GENERIC_BRAND_WORDS.has(w));
+      const matchBrandWords = specificBrandWords.length > 0 ? specificBrandWords : brandWords;
       const titleLower = resultTitle.toLowerCase();
       const resultBrandLower = resultBrand?.toLowerCase().trim() || '';
 
@@ -255,11 +266,11 @@ export async function searchAmazon(
       }
 
       // Brand in title → strong match
-      const brandInTitle = brandWords.some(bw => titleLower.includes(bw));
+      const brandInTitle = matchBrandWords.some(bw => titleLower.includes(bw));
       if (brandInTitle) return true;
 
       // Brand in API brand field → strong match
-      const brandInApiField = brandWords.some(bw => resultBrandLower.includes(bw));
+      const brandInApiField = matchBrandWords.some(bw => resultBrandLower.includes(bw));
       if (brandInApiField) return true;
 
       // Brand not in title AND API brand field is empty → weak match
@@ -302,6 +313,22 @@ export async function searchAmazon(
         continue;
       }
       if (brandMatch === 'weak') {
+        // For weak brand matches, require that key product name words appear in the title.
+        // Generic supplement/product terms don't count — we need specific identifying words.
+        // Require at least 2 specific words (or 1 if the product name has only 1 specific word).
+        const GENERIC_TERMS = new Set(['capsules','tablets','pills','powder','supplement',
+          'cream','serum','lotion','stick','pack','packs','count','serving','servings',
+          'vitamin','vitamins','formula','complex','blend','extract','bottle','packet','packets']);
+        const titleLower = result.title?.toLowerCase() ?? '';
+        const specificWords = productName.toLowerCase()
+          .split(/\s+/)
+          .filter(w => w.length > 3 && !GENERIC_TERMS.has(w) && !/^\d/.test(w));
+        const wordsInTitle = specificWords.filter(w => titleLower.includes(w));
+        const required = specificWords.length >= 2 ? 2 : 1;
+        if (specificWords.length > 0 && wordsInTitle.length < required) {
+          console.log(`[amazon-search] ❌ Weak brand — only ${wordsInTitle.length}/${required} specific words from "${productName}" found in title — rejecting`);
+          continue;
+        }
         score -= 20; // Penalize but don't discard — brand may be in Amazon's brand registry
       }
 
