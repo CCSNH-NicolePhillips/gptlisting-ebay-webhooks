@@ -33,6 +33,7 @@ import {
   EbayApiError as EbayLocApiError,
 } from '../../../../packages/core/src/services/ebay/locations.js';
 import { listActiveListings } from '../../../../packages/core/src/services/ebay/active-trading.js';
+import { listSoldOrders } from '../../../../packages/core/src/services/ebay/sold-orders.js';
 import {
   updateActiveListing,
   UpdateListingError,
@@ -364,6 +365,30 @@ router.post('/locations/user', async (req, res) => {
     if (err instanceof EbayLocApiError) {
       return res.status(err.statusCode).json({ error: err.message, detail: err.body });
     }
+    return handleEbayError(res, err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/ebay/orders/sold
+// List completed (sold) eBay orders via the Fulfillment API.
+//
+// Query params:
+//   limit  - max results (default 50)
+//   offset - pagination offset (default 0)
+//   dateFrom - ISO date string (optional)
+//   dateTo   - ISO date string (optional)
+// ---------------------------------------------------------------------------
+router.get('/orders/sold', async (req, res) => {
+  try {
+    const { userId } = await requireUserAuth(req.headers.authorization);
+    const limit = parseInt((req.query.limit as string) || '50', 10);
+    const offset = parseInt((req.query.offset as string) || '0', 10);
+    const dateFrom = (req.query.dateFrom as string) || undefined;
+    const dateTo = (req.query.dateTo as string) || undefined;
+    const result = await listSoldOrders(userId, { limit, offset, dateFrom, dateTo });
+    return res.status(200).json({ ok: true, ...result });
+  } catch (err) {
     return handleEbayError(res, err);
   }
 });

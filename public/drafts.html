@@ -11,6 +11,39 @@
       .flash {
         color: var(--muted);
         min-height: 1.25rem;
+        border-radius: 8px;
+        transition: background 0.2s, border-color 0.2s;
+      }
+      .flash.error {
+        color: #fca5a5;
+        background: rgba(239, 68, 68, 0.12);
+        border: 1px solid rgba(239, 68, 68, 0.45);
+        padding: 0.6rem 0.85rem;
+        box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.18);
+        animation: flash-error-in 0.25s ease-out;
+      }
+      .flash.success {
+        color: #6ee7b7;
+      }
+      @keyframes flash-error-in {
+        from { opacity: 0; transform: translateY(-4px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+      .card-error-banner {
+        display: none;
+        background: rgba(239, 68, 68, 0.10);
+        border: 1px solid rgba(239, 68, 68, 0.45);
+        border-radius: 8px;
+        padding: 0.55rem 0.75rem;
+        font-size: 0.82rem;
+        color: #fca5a5;
+        line-height: 1.45;
+        margin-top: 0.5rem;
+        word-break: break-word;
+        animation: flash-error-in 0.25s ease-out;
+      }
+      .card-error-banner.show {
+        display: block;
       }
       .toolbar {
         display: flex;
@@ -493,6 +526,16 @@
                 </svg>
                 <span class="dp-nav-item__label">Active Listings</span>
               </a>
+              <a href="/sold-items.html" class="dp-nav-item">
+                <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20 12 20 22 4 22 4 12"></polyline>
+                  <rect x="2" y="7" width="20" height="5"></rect>
+                  <line x1="12" y1="22" x2="12" y2="7"></line>
+                  <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path>
+                  <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path>
+                </svg>
+                <span class="dp-nav-item__label">Sold Items</span>
+              </a>
             </div>
           </div>
           
@@ -941,7 +984,8 @@
         pub.onclick = async () => {
           // Double-check blocking before publish
           if (hasBlockingIssue) {
-            flash.textContent = 'Cannot publish: This draft has issues that must be resolved first. Click Edit to fix.';
+            flash.className = 'flash error';
+            flash.textContent = '🚫 Cannot publish: This draft has issues that must be resolved first. Click Edit to fix.';
             return;
           }
           
@@ -957,7 +1001,9 @@
           
           pub.disabled = true;
           del.disabled = true;
+          flash.className = 'flash';
           flash.textContent = 'Publishing…';
+          cardError.classList.remove('show');
           
           // Store for debugging
           lastPublishAttempt = {
@@ -981,7 +1027,10 @@
               data = text ? JSON.parse(text) : {};
             } catch (parseErr) {
               console.error('[Publish] JSON parse error:', parseErr);
-              flash.textContent = 'Publish error: Invalid response from server';
+              flash.className = 'flash error';
+              flash.textContent = '❌ Publish error: Invalid response from server';
+              cardError.classList.add('show');
+              cardError.textContent = 'Publish failed: invalid server response.';
               pub.disabled = del.disabled = false;
               return;
             }
@@ -994,7 +1043,8 @@
               sessionStorage.removeItem('drafts-cache');
               sessionStorage.removeItem('drafts-cache-time');
               el.remove();
-              flash.textContent = `Published ${offer.offerId}`;
+              flash.className = 'flash success';
+              flash.textContent = `✓ Published ${offer.offerId}`;
               
               // Schedule promotion processing after eBay sync delay
               schedulePromotionProcessing();
@@ -1007,6 +1057,7 @@
               sessionStorage.removeItem('drafts-cache');
               sessionStorage.removeItem('drafts-cache-time');
               el.remove();
+              flash.className = 'flash';
               flash.textContent = `Draft ${offer.offerId} had errors and was deleted.`;
               
               // Check if all drafts are now gone
@@ -1015,32 +1066,57 @@
             }
             // Improve error details: surface common onboarding/privilege errors with a direct link
             try {
-              const errs = (data?.publish?.detail?.errors && Array.isArray(data.publish.detail.errors)) ? data.publish.detail.errors : [];
+              // detail may be a raw JSON string from eBay or an object
+              const rawDetail = data?.publish?.detail ?? null;
+              let detailObj = rawDetail;
+              if (typeof rawDetail === 'string') {
+                try { detailObj = JSON.parse(rawDetail); } catch { detailObj = null; }
+              }
+
+              const errs = Array.isArray(detailObj?.errors) ? detailObj.errors : [];
               const e25018 = errs.find((e) => Number(e?.errorId) === 25018);
+
               if (e25018) {
                 const params = Array.isArray(e25018.parameters) ? e25018.parameters : [];
                 const urlParam = params.find((p) => typeof p?.value === 'string' && /^https:\/\//i.test(p.value));
                 const url = urlParam?.value || 'https://ebaypayonboardingweb.ebay.com/seller-reg?client=THIRD_PARTY_API';
+                flash.className = 'flash error';
                 flash.innerHTML = '';
                 const span = document.createElement('span');
-                span.textContent = 'Publish error: Selling privileges required. ';
+                span.textContent = '❌ Publish error: Selling privileges required. ';
                 const a = document.createElement('a');
-                a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = 'Complete eBay onboarding';
+                a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = 'Complete eBay onboarding →';
                 flash.appendChild(span);
                 flash.appendChild(a);
+                cardError.classList.add('show');
+                cardError.textContent = 'Selling privileges required — complete eBay onboarding to publish.';
               } else {
-                const detail =
-                  typeof data?.publish?.detail === 'string'
-                    ? data.publish.detail
-                    : data?.publish?.detail?.message || JSON.stringify(data?.publish?.detail || data);
-                flash.textContent = `Publish error: ${data.error || ''}${detail ? ' — ' + detail : ''}`;
+                // Extract the first human-readable message from eBay errors array, or fall back gracefully
+                let cleanMsg = data.error || 'Publish failed';
+                if (errs.length > 0 && errs[0].message) {
+                  cleanMsg = errs[0].message;
+                } else if (detailObj?.message) {
+                  cleanMsg = detailObj.message;
+                } else if (typeof rawDetail === 'string' && rawDetail.length < 300 && !rawDetail.startsWith('{')) {
+                  cleanMsg = rawDetail;
+                }
+                flash.className = 'flash error';
+                flash.textContent = `❌ Publish error: ${cleanMsg}`;
+                cardError.classList.add('show');
+                cardError.textContent = `Publish failed: ${cleanMsg}`;
               }
             } catch {
-              flash.textContent = `Publish error: ${data.error || ''}`;
+              flash.className = 'flash error';
+              flash.textContent = `❌ Publish error: ${data.error || 'Unknown error'}`;
+              cardError.classList.add('show');
+              cardError.textContent = `Publish failed: ${data.error || 'Unknown error'}`;
             }
             pub.disabled = del.disabled = false;
           } catch (e) {
-            flash.textContent = 'Publish error: ' + e.message;
+            flash.className = 'flash error';
+            flash.textContent = '❌ Publish error: ' + e.message;
+            cardError.classList.add('show');
+            cardError.textContent = 'Publish failed: ' + e.message;
             pub.disabled = del.disabled = false;
           }
         };
@@ -1261,6 +1337,9 @@
         }
         body.appendChild(promoControls);
         body.appendChild(row);
+        const cardError = document.createElement('div');
+        cardError.className = 'card-error-banner';
+        body.appendChild(cardError);
         el.appendChild(th);
         el.appendChild(body);
         // attach lazy thumbnail loader

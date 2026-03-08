@@ -1,0 +1,707 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sold Items – DraftPilot</title>
+  <link rel="stylesheet" href="/draftpilot.css">
+  <style>
+    .flash {
+      min-height: 1.25rem;
+      color: var(--muted);
+      margin-bottom: 0.6rem;
+    }
+    .flash.error { color: #ffb4b4; }
+
+    .toolbar {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+    .search-input {
+      padding: 0.55rem 0.85rem;
+      border-radius: 10px;
+      background: #0f1529;
+      border: 1px solid #2a335c;
+      color: #f4f6fb;
+      font-size: 0.9rem;
+      min-width: 220px;
+      transition: border-color 0.2s ease;
+    }
+    .search-input:focus { outline: none; border-color: var(--primary); }
+    .search-input::placeholder { color: var(--muted); }
+    .btn {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 0.55rem 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn:hover { background: var(--primary-600); }
+    .btn.secondary {
+      background: transparent;
+      color: #cbd5ff;
+      border: 1px solid var(--line);
+    }
+    .date-input {
+      padding: 0.5rem 0.75rem;
+      border-radius: 8px;
+      background: #0f1529;
+      border: 1px solid #2a335c;
+      color: #f4f6fb;
+      font-size: 0.88rem;
+      cursor: pointer;
+    }
+    .loading {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      color: var(--muted);
+      margin: 2rem 0;
+    }
+    .spinner {
+      width: 26px;
+      height: 26px;
+      border: 3px solid rgba(255,255,255,0.15);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .empty-state {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--muted);
+    }
+    .empty-state h3 { margin-bottom: 0.5rem; color: var(--text-primary); }
+
+    /* Table */
+    .orders-table-wrap {
+      overflow-x: auto;
+      margin-top: 0.5rem;
+    }
+    table.orders-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+    }
+    .orders-table th {
+      text-align: left;
+      padding: 0.6rem 0.75rem;
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-bottom: 1px solid rgba(148,163,184,0.12);
+      white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+    }
+    .orders-table th:hover { color: #f4f6fb; }
+    .orders-table th.sorted { color: var(--primary); }
+    .orders-table th .sort-arrow { margin-left: 4px; opacity: 0.5; }
+    .orders-table th.sorted .sort-arrow { opacity: 1; }
+    .orders-table td {
+      padding: 0.65rem 0.75rem;
+      border-bottom: 1px solid rgba(148,163,184,0.07);
+      vertical-align: top;
+      line-height: 1.45;
+    }
+    .orders-table tr:hover td { background: rgba(99,102,241,0.05); }
+    .order-id {
+      font-family: monospace;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .order-date { white-space: nowrap; color: var(--muted); font-size: 0.85rem; }
+    .item-title { color: #f4f6fb; font-weight: 500; max-width: 320px; }
+    .item-sku { color: var(--muted); font-size: 0.8rem; margin-top: 2px; }
+    .price-cell { text-align: right; white-space: nowrap; font-weight: 600; color: #6ee7b7; }
+    .shipping-cell { text-align: right; white-space: nowrap; color: var(--muted); font-size: 0.85rem; }
+    .total-cell { text-align: right; white-space: nowrap; font-weight: 700; color: #f4f6fb; }
+    .buyer-cell { color: var(--muted); font-size: 0.85rem; }
+    .qty-badge {
+      display: inline-block;
+      padding: 0.1rem 0.45rem;
+      border-radius: 6px;
+      background: rgba(99,102,241,0.15);
+      color: #a5b4fc;
+      font-size: 0.78rem;
+      font-weight: 600;
+      margin-left: 4px;
+    }
+
+    /* Summary bar */
+    .summary-bar {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      padding: 0.85rem 1rem;
+      background: rgba(99,102,241,0.07);
+      border: 1px solid rgba(99,102,241,0.2);
+      border-radius: 12px;
+      margin-bottom: 1rem;
+    }
+    .summary-stat { display: flex; flex-direction: column; gap: 2px; }
+    .summary-stat__label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .summary-stat__value { font-size: 1.1rem; font-weight: 700; color: #f4f6fb; }
+    .summary-stat__value.green { color: #6ee7b7; }
+
+    /* Multi-row expansion */
+    .multi-items td { padding-top: 0.3rem; padding-bottom: 0.3rem; border-bottom: none; }
+    .multi-items:last-of-type td { border-bottom: 1px solid rgba(148,163,184,0.07); }
+    .expand-btn {
+      background: none;
+      border: none;
+      color: var(--primary);
+      cursor: pointer;
+      font-size: 0.8rem;
+      padding: 0;
+      text-decoration: underline;
+    }
+
+    /* Pagination */
+    .pagination {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      justify-content: flex-end;
+      margin-top: 1rem;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+    .pagination .btn { padding: 0.4rem 0.75rem; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <script src="/auth-client.js"></script>
+  <script src="/sidebar-toggle.js"></script>
+
+  <!-- Main Dashboard Shell -->
+  <div class="dp-shell" id="mainCard">
+    <!-- Sidebar -->
+    <aside class="dp-sidebar">
+      <div class="dp-sidebar__brand">
+        <img src="logo/LogoWhiteText_NoBg.png" alt="DraftPilot - AI Listing Studio" class="dp-brand-logo" />
+      </div>
+      <nav class="dp-sidebar__nav">
+        <div class="dp-nav-group">
+          <div class="dp-nav-group__label">APP</div>
+          <a href="/index.html" class="dp-nav-item">
+            <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+              <polyline points="9 22 9 12 15 12 15 22"></polyline>
+            </svg>
+            <span class="dp-nav-item__label">Overview</span>
+          </a>
+          <a href="/quick-list.html" class="dp-nav-item">
+            <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+            </svg>
+            <span class="dp-nav-item__label">Create Listings</span>
+          </a>
+          <a href="/drafts.html" class="dp-nav-item">
+            <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+            </svg>
+            <span class="dp-nav-item__label">Drafts</span>
+          </a>
+          <a href="/active-listings.html" class="dp-nav-item">
+            <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+            </svg>
+            <span class="dp-nav-item__label">Active Listings</span>
+          </a>
+          <a href="/sold-items.html" class="dp-nav-item dp-nav-item--active">
+            <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="20 12 20 22 4 22 4 12"></polyline>
+              <rect x="2" y="7" width="20" height="5"></rect>
+              <line x1="12" y1="22" x2="12" y2="7"></line>
+              <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path>
+              <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path>
+            </svg>
+            <span class="dp-nav-item__label">Sold Items</span>
+          </a>
+        </div>
+        <div class="dp-nav-group">
+          <div class="dp-nav-group__label">ACCOUNT</div>
+          <a href="/policies-manage.html" class="dp-nav-item">
+            <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+            <span class="dp-nav-item__label">eBay Policies</span>
+          </a>
+          <a href="/location.html" class="dp-nav-item">
+            <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+              <circle cx="12" cy="10" r="3"></circle>
+            </svg>
+            <span class="dp-nav-item__label">Inventory Locations</span>
+          </a>
+          <a href="/settings.html" class="dp-nav-item">
+            <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M12 1v6m0 6v6m5.196-15.196l-4.243 4.243m0 5.656l-4.242 4.243m15.195-5.196l-4.242-4.243m-5.657 0l-4.243-4.243"></path>
+            </svg>
+            <span class="dp-nav-item__label">Settings</span>
+          </a>
+          <a href="/faq.html" class="dp-nav-item">
+            <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            <span class="dp-nav-item__label">FAQ</span>
+          </a>
+          <a href="/support.html" class="dp-nav-item">
+            <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z"></path>
+            </svg>
+            <span class="dp-nav-item__label">Support</span>
+          </a>
+        </div>
+      </nav>
+      <div class="dp-sidebar__spacer"></div>
+      <div class="dp-sidebar__footer">
+        <div class="dp-user-card" id="sidebarUserCard">
+          <div class="dp-user-card__avatar" id="sidebarAvatar">U</div>
+          <div class="dp-user-card__info">
+            <div class="dp-user-card__name" id="sidebarUserName">User</div>
+            <div class="dp-user-card__email" id="sidebarUserEmail">user@example.com</div>
+          </div>
+        </div>
+        <div class="dp-user-menu" id="sidebarUserMenu" style="display:none;">
+          <a href="/logout.html" class="dp-user-menu__item">Sign out</a>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Mobile Backdrop -->
+    <div class="dp-backdrop" id="mobileBackdrop"></div>
+
+    <!-- Main wrapper -->
+    <div class="dp-main-wrapper">
+      <header class="dp-topbar">
+        <div class="dp-topbar-left">
+          <button class="dp-topbar-icon dp-topbar-icon--menu" id="mobileMenuButton" aria-label="Open navigation" aria-expanded="false" type="button">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="4" y1="6" x2="20" y2="6"></line>
+              <line x1="4" y1="12" x2="20" y2="12"></line>
+              <line x1="4" y1="18" x2="20" y2="18"></line>
+            </svg>
+          </button>
+          <div class="dp-topbar-heading">
+            <h1 class="dp-topbar__title">Sold Items</h1>
+            <p class="dp-topbar__subtitle">Completed eBay orders</p>
+          </div>
+        </div>
+        <div class="dp-topbar-center">
+          <div class="dp-search">
+            <svg class="dp-search__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <path d="m21 21-4.35-4.35"></path>
+            </svg>
+            <input type="text" class="dp-search__input" placeholder="Search sold items…" />
+          </div>
+        </div>
+        <div class="dp-topbar-right">
+          <div class="dp-topbar-avatar" id="topbarAvatar" title="User menu">U</div>
+        </div>
+      </header>
+
+      <main class="dp-main">
+        <div class="dp-card">
+          <div class="dp-card__content">
+
+            <div class="flash" id="flash"></div>
+
+            <!-- Toolbar -->
+            <div class="toolbar">
+              <button class="btn secondary" id="btnRefresh">↻ Refresh</button>
+              <input type="text" id="searchInput" class="search-input" placeholder="🔍 Search title or SKU…" />
+              <label style="color:var(--muted);font-size:0.85rem;">From</label>
+              <input type="date" id="dateFrom" class="date-input" />
+              <label style="color:var(--muted);font-size:0.85rem;">To</label>
+              <input type="date" id="dateTo" class="date-input" />
+              <div style="flex:1;"></div>
+              <div id="counts" style="color:var(--muted);font-size:0.9rem;"></div>
+            </div>
+
+            <!-- Summary Bar -->
+            <div class="summary-bar" id="summaryBar" style="display:none;">
+              <div class="summary-stat">
+                <span class="summary-stat__label">Orders</span>
+                <span class="summary-stat__value" id="sumOrders">0</span>
+              </div>
+              <div class="summary-stat">
+                <span class="summary-stat__label">Items Sold</span>
+                <span class="summary-stat__value" id="sumItems">0</span>
+              </div>
+              <div class="summary-stat">
+                <span class="summary-stat__label">Gross Revenue</span>
+                <span class="summary-stat__value green" id="sumRevenue">$0.00</span>
+              </div>
+              <div class="summary-stat">
+                <span class="summary-stat__label">Shipping Collected</span>
+                <span class="summary-stat__value" id="sumShipping">$0.00</span>
+              </div>
+            </div>
+
+            <!-- Loading -->
+            <div id="loading" class="loading" style="display:none;">
+              <div class="spinner"></div>
+              <span>Loading sold orders…</span>
+            </div>
+
+            <!-- Table -->
+            <div class="orders-table-wrap" id="tableWrap" style="display:none;">
+              <table class="orders-table">
+                <thead>
+                  <tr>
+                    <th data-col="date" class="sorted">Date <span class="sort-arrow">↓</span></th>
+                    <th data-col="order">Order ID</th>
+                    <th data-col="title">Item</th>
+                    <th data-col="buyer">Buyer</th>
+                    <th data-col="price" style="text-align:right;">Sale Price</th>
+                    <th data-col="shipping" style="text-align:right;">Shipping</th>
+                    <th data-col="total" style="text-align:right;">Total</th>
+                  </tr>
+                </thead>
+                <tbody id="ordersBody"></tbody>
+              </table>
+            </div>
+
+            <!-- Pagination -->
+            <div class="pagination" id="pagination">
+              <button class="btn secondary" id="btnPrev" disabled>← Prev</button>
+              <span id="pageInfo" style="min-width:80px;text-align:center;"></span>
+              <button class="btn secondary" id="btnNext">Next →</button>
+            </div>
+
+            <!-- Empty state -->
+            <div id="emptyState" class="empty-state" style="display:none;">
+              <h3>No Sold Items</h3>
+              <p>No completed orders found for the selected date range.</p>
+            </div>
+
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="/sidebar-shell.js"></script>
+  <script>
+    DraftPilotShell.init({
+      title: 'Sold Items',
+      subtitle: 'Completed eBay orders',
+      activePage: 'sold-items',
+      showSearch: false
+    });
+  </script>
+
+  <script type="module">
+    const flash    = document.getElementById('flash');
+    const tableWrap = document.getElementById('tableWrap');
+    const ordersBody = document.getElementById('ordersBody');
+    const loading  = document.getElementById('loading');
+    const counts   = document.getElementById('counts');
+    const emptyState = document.getElementById('emptyState');
+    const summaryBar = document.getElementById('summaryBar');
+    const searchInput = document.getElementById('searchInput');
+    const dateFromEl  = document.getElementById('dateFrom');
+    const dateToEl    = document.getElementById('dateTo');
+    const btnRefresh  = document.getElementById('btnRefresh');
+    const btnPrev     = document.getElementById('btnPrev');
+    const btnNext     = document.getElementById('btnNext');
+    const pageInfo    = document.getElementById('pageInfo');
+    const pagination  = document.getElementById('pagination');
+
+    const PAGE_SIZE = 50;
+    let allOrders  = [];
+    let filtered   = [];
+    let currentOffset = 0;
+    let serverTotal   = 0;
+    let sortCol = 'date';
+    let sortDir = 'desc';
+
+    function getAuthFetch() {
+      return (window.authClient && typeof window.authClient.authFetch === 'function')
+        ? window.authClient.authFetch
+        : fetch;
+    }
+
+    function apiBase() {
+      return window.location.hostname === 'localhost' || window.location.port
+        ? '/api/ebay'
+        : '/.netlify/functions';
+    }
+
+    function showFlash(msg, isError = false) {
+      flash.textContent = msg;
+      flash.className = 'flash' + (isError ? ' error' : '');
+      if (!isError) setTimeout(() => { flash.textContent = ''; }, 4000);
+    }
+
+    function fmtCurrency(val, currency = 'USD') {
+      try {
+        return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(Number(val));
+      } catch {
+        return `${val} ${currency}`;
+      }
+    }
+
+    function fmtDate(iso) {
+      if (!iso) return '';
+      try {
+        return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(iso));
+      } catch { return iso.slice(0, 10); }
+    }
+
+    // ---- Sorting ----
+    document.querySelectorAll('.orders-table th[data-col]').forEach(th => {
+      th.addEventListener('click', () => {
+        const col = th.dataset.col;
+        if (sortCol === col) {
+          sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+          sortCol = col;
+          sortDir = col === 'date' ? 'desc' : 'asc';
+        }
+        renderTable(filtered);
+        updateSortHeaders();
+      });
+    });
+
+    function updateSortHeaders() {
+      document.querySelectorAll('.orders-table th[data-col]').forEach(th => {
+        th.classList.toggle('sorted', th.dataset.col === sortCol);
+        const arrow = th.querySelector('.sort-arrow');
+        if (arrow) arrow.textContent = sortDir === 'asc' ? '↑' : '↓';
+      });
+    }
+
+    function sortOrders(orders) {
+      return [...orders].sort((a, b) => {
+        let av, bv;
+        switch (sortCol) {
+          case 'date':
+            av = a.creationDate || '';
+            bv = b.creationDate || '';
+            break;
+          case 'title':
+            av = (a.lineItems[0]?.title || '').toLowerCase();
+            bv = (b.lineItems[0]?.title || '').toLowerCase();
+            break;
+          case 'buyer':
+            av = (a.buyerUsername || '').toLowerCase();
+            bv = (b.buyerUsername || '').toLowerCase();
+            break;
+          case 'price':
+            av = Number(a.lineItems.reduce((s, l) => s + Number(l.salePrice?.value || 0), 0));
+            bv = Number(b.lineItems.reduce((s, l) => s + Number(l.salePrice?.value || 0), 0));
+            break;
+          case 'total':
+            av = Number(a.pricingSummary?.total?.value || 0);
+            bv = Number(b.pricingSummary?.total?.value || 0);
+            break;
+          default:
+            return 0;
+        }
+        if (av < bv) return sortDir === 'asc' ? -1 : 1;
+        if (av > bv) return sortDir === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    // ---- Filtering ----
+    function applyFilter(orders) {
+      const term = searchInput.value.trim().toLowerCase();
+      if (!term) return orders;
+      return orders.filter(o =>
+        o.lineItems.some(li =>
+          (li.title || '').toLowerCase().includes(term) ||
+          (li.sku || '').toLowerCase().includes(term)
+        ) || (o.orderId || '').toLowerCase().includes(term)
+      );
+    }
+
+    // ---- Summary ----
+    function updateSummary(orders) {
+      if (!orders.length) { summaryBar.style.display = 'none'; return; }
+      summaryBar.style.display = 'flex';
+
+      let totalItems = 0;
+      let grossRevenue = 0;
+      let shippingCollected = 0;
+      const currency = orders[0]?.pricingSummary?.total?.currency || 'USD';
+
+      for (const o of orders) {
+        for (const li of o.lineItems) totalItems += (li.quantity || 1);
+        grossRevenue += Number(o.pricingSummary?.total?.value || 0);
+        shippingCollected += Number(o.pricingSummary?.deliveryCost?.value || 0);
+      }
+
+      document.getElementById('sumOrders').textContent  = orders.length.toString();
+      document.getElementById('sumItems').textContent   = totalItems.toString();
+      document.getElementById('sumRevenue').textContent = fmtCurrency(grossRevenue, currency);
+      document.getElementById('sumShipping').textContent = fmtCurrency(shippingCollected, currency);
+    }
+
+    // ---- Render table ----
+    function renderTable(orders) {
+      ordersBody.innerHTML = '';
+      const sorted = sortOrders(orders);
+
+      if (sorted.length === 0) {
+        tableWrap.style.display = 'none';
+        pagination.style.display = 'none';
+        emptyState.style.display = '';
+        counts.textContent = '';
+        return;
+      }
+
+      tableWrap.style.display = '';
+      emptyState.style.display = 'none';
+
+      counts.textContent = `Showing ${sorted.length} of ${serverTotal} order${serverTotal !== 1 ? 's' : ''}`;
+
+      sorted.forEach(o => {
+        const currency = o.pricingSummary?.total?.currency || 'USD';
+        const shipping = o.pricingSummary?.deliveryCost ? fmtCurrency(o.pricingSummary.deliveryCost.value, currency) : '—';
+        const total    = o.pricingSummary?.total ? fmtCurrency(o.pricingSummary.total.value, currency) : '—';
+
+        o.lineItems.forEach((li, idx) => {
+          const tr = document.createElement('tr');
+          const itemPrice = li.salePrice ? fmtCurrency(li.salePrice.value, li.salePrice.currency) : '—';
+
+          if (idx === 0) {
+            tr.innerHTML = `
+              <td class="order-date" rowspan="${o.lineItems.length}">${fmtDate(o.creationDate)}</td>
+              <td class="order-id" rowspan="${o.lineItems.length}" title="${o.orderId}">${o.orderId.slice(-8)}</td>
+              <td>
+                <div class="item-title">${escHtml(li.title || '(no title)')}</div>
+                ${li.sku ? `<div class="item-sku">SKU: ${escHtml(li.sku)}</div>` : ''}
+                ${li.quantity > 1 ? `<span class="qty-badge">×${li.quantity}</span>` : ''}
+              </td>
+              <td class="buyer-cell" rowspan="${o.lineItems.length}">${o.buyerUsername ? escHtml(maskBuyer(o.buyerUsername)) : '—'}</td>
+              <td class="price-cell">${itemPrice}</td>
+              <td class="shipping-cell" rowspan="${o.lineItems.length}">${shipping}</td>
+              <td class="total-cell" rowspan="${o.lineItems.length}">${total}</td>
+            `;
+          } else {
+            tr.innerHTML = `
+              <td>
+                <div class="item-title">${escHtml(li.title || '(no title)')}</div>
+                ${li.sku ? `<div class="item-sku">SKU: ${escHtml(li.sku)}</div>` : ''}
+                ${li.quantity > 1 ? `<span class="qty-badge">×${li.quantity}</span>` : ''}
+              </td>
+              <td class="price-cell">${itemPrice}</td>
+            `;
+          }
+          ordersBody.appendChild(tr);
+        });
+      });
+
+      // Pagination
+      pagination.style.display = 'flex';
+      btnPrev.disabled = currentOffset === 0;
+      btnNext.disabled = currentOffset + PAGE_SIZE >= serverTotal;
+      const page = Math.floor(currentOffset / PAGE_SIZE) + 1;
+      const totalPages = Math.ceil(serverTotal / PAGE_SIZE) || 1;
+      pageInfo.textContent = `Page ${page} of ${totalPages}`;
+    }
+
+    function escHtml(str) {
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function maskBuyer(username) {
+      if (!username || username.length <= 3) return username || '—';
+      return username.slice(0, 2) + '***' + username.slice(-1);
+    }
+
+    // ---- Load ----
+    async function loadOrders(offset = 0) {
+      loading.style.display = 'flex';
+      tableWrap.style.display = 'none';
+      emptyState.style.display = 'none';
+      pagination.style.display = 'none';
+      flash.textContent = '';
+      currentOffset = offset;
+
+      try {
+        const authFetch = getAuthFetch();
+        const params = new URLSearchParams({
+          limit: PAGE_SIZE,
+          offset: String(offset),
+        });
+        const df = dateFromEl.value;
+        const dt = dateToEl.value;
+        if (df) params.set('dateFrom', new Date(df).toISOString());
+        if (dt) {
+          const to = new Date(dt);
+          to.setHours(23, 59, 59, 999);
+          params.set('dateTo', to.toISOString());
+        }
+
+        const base = apiBase();
+        const url = `${base}/orders/sold?${params}`;
+        const res = await authFetch(url);
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || `HTTP ${res.status}`);
+        }
+        const data = await res.json();
+        allOrders   = data.orders || [];
+        serverTotal = data.total ?? allOrders.length;
+        filtered    = applyFilter(allOrders);
+        updateSummary(filtered);
+        renderTable(filtered);
+      } catch (err) {
+        showFlash(err.message || 'Failed to load orders', true);
+        emptyState.style.display = '';
+      } finally {
+        loading.style.display = 'none';
+      }
+    }
+
+    // ---- Event listeners ----
+    btnRefresh.addEventListener('click', () => loadOrders(0));
+    btnPrev.addEventListener('click', () => loadOrders(Math.max(0, currentOffset - PAGE_SIZE)));
+    btnNext.addEventListener('click', () => loadOrders(currentOffset + PAGE_SIZE));
+
+    searchInput.addEventListener('input', () => {
+      filtered = applyFilter(allOrders);
+      updateSummary(filtered);
+      renderTable(filtered);
+    });
+
+    dateFromEl.addEventListener('change', () => loadOrders(0));
+    dateToEl.addEventListener('change', () => loadOrders(0));
+
+    // Set default date range: last 90 days
+    (function setDefaultDates() {
+      const to = new Date();
+      const from = new Date();
+      from.setDate(from.getDate() - 90);
+      dateToEl.value = to.toISOString().slice(0, 10);
+      dateFromEl.value = from.toISOString().slice(0, 10);
+    })();
+
+    // Initial load
+    loadOrders(0);
+  </script>
+</body>
+</html>
