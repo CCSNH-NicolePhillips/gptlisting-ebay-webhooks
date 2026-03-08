@@ -447,6 +447,54 @@ export async function publishOffer(
     return { ok: r.ok, status: r.status, url: publishUrl, body };
   }
 
+  // -- Pre-publish: apply per-price fulfillment policy if configured --------
+  // If the user has both a paid (fulfillment) and free (fulfillmentFree) policy
+  // set in their policy defaults, check the offer's price and ensure the correct
+  // policy is attached before publishing (handles drafts created before the
+  // free shipping policy was configured).
+  try {
+    const policyKey = userScopedKey(userId, 'policy-defaults.json');
+    const policyDefaults = await store.get(policyKey, { type: 'json' }) as any;
+
+    if (policyDefaults?.fulfillment && policyDefaults?.fulfillmentFree) {
+      const getOfferUrl = `${apiHost}/sell/inventory/v1/offer/${encodeURIComponent(offerId)}`;
+      const getRes = await fetch(getOfferUrl, { headers });
+      if (getRes.ok) {
+        const offer: any = await getRes.json();
+        const offerPrice = parseFloat(offer?.pricingSummary?.price?.value ?? '0');
+        const correctPolicyId = offerPrice < 50
+          ? policyDefaults.fulfillmentFree
+          : policyDefaults.fulfillment;
+        const currentPolicyId = offer?.listingPolicies?.fulfillmentPolicyId;
+
+        if (currentPolicyId !== correctPolicyId) {
+          console.log(`[publishOffer] Correcting fulfillmentPolicyId: ${currentPolicyId} → ${correctPolicyId} (price=$${offerPrice.toFixed(2)})`);
+          const updated = {
+            ...offer,
+            listingPolicies: {
+              ...offer.listingPolicies,
+              fulfillmentPolicyId: correctPolicyId,
+            },
+          };
+          const putRes = await fetch(getOfferUrl, {
+            method: 'PUT',
+            headers: { ...headers, 'Content-Type': 'application/json' },
+            body: JSON.stringify(updated),
+          });
+          if (!putRes.ok) {
+            const putTxt = await putRes.text().catch(() => '');
+            console.warn(`[publishOffer] Failed to update fulfillmentPolicyId (non-fatal): ${putRes.status} ${putTxt.slice(0, 200)}`);
+          }
+        } else {
+          console.log(`[publishOffer] fulfillmentPolicyId already correct (${currentPolicyId}, price=$${offerPrice.toFixed(2)})`);
+        }
+      }
+    }
+  } catch (policyErr: any) {
+    // Non-fatal: log and continue without blocking publish
+    console.warn(`[publishOffer] per-price policy pre-check failed (non-fatal): ${policyErr?.message}`);
+  }
+
   let pub = await publishOnce();
   const errors: any[] = Array.isArray(pub.body?.errors) ? pub.body.errors : [];
 
