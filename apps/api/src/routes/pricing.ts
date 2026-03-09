@@ -13,6 +13,8 @@ import {
 } from '../../../../packages/core/src/services/pricing/reduction-update.js';
 import { runPriceTick } from '../../../../packages/core/src/services/pricing/tick.js';
 import { ok, badRequest, serverError } from '../http/respond.js';
+import { getPolicyDefaults, getPolicy } from '../../../../packages/core/src/services/ebay/policies.service.js';
+import { hasFreeShipping } from '../../../../src/lib/policy-helpers.js';
 
 const router = Router();
 
@@ -32,7 +34,7 @@ const DEFAULT_SETTINGS: Partial<DeliveredPricingSettings> = {
  */
 router.post('/reprice', async (req, res) => {
   try {
-    await requireUserAuth(req.headers.authorization || '');
+    const { userId } = await requireUserAuth(req.headers.authorization || '');
 
     const { brand, productName } = req.body as {
       brand?: string;
@@ -43,36 +45,135 @@ router.post('/reprice', async (req, res) => {
       return badRequest(res, 'brand or productName is required');
     }
 
+    // Detect free shipping from user's default fulfillment policy
+    let shippingEstimateCents = 600;
+    let policyFreeShipping = false;
+    try {
+      const defaultsResult = await getPolicyDefaults(userId);
+      const fulfillmentId = defaultsResult.defaults?.fulfillment;
+      if (fulfillmentId) {
+        const policyResult = await getPolicy(userId, 'fulfillment', fulfillmentId);
+        if (policyResult.ok && hasFreeShipping(policyResult.policy)) {
+          shippingEstimateCents = 0;
+          policyFreeShipping = true;
+          console.log('[reprice] Free shipping policy detected — shippingEstimateCents=0');
+        }
+      }
+    } catch (policyErr) {
+      console.warn('[reprice] Could not check fulfillment policy, using default shipping cost:', policyErr);
+    }
+
+    const settings: Partial<DeliveredPricingSettings> = {
+      ...DEFAULT_SETTINGS,
+      shippingEstimateCents,
+    };
+
     const pricingResult = await getPricingDecision({
       brand: brand || '',
       productName: productName || '',
-      settings: DEFAULT_SETTINGS,
+      settings,
     });
 
     const summary = pricingResult.pricingEvidence?.summary;
     const finalItemCents = pricingResult.finalItemCents ?? 0;
     const finalShipCents = pricingResult.finalShipCents ?? 0;
     const targetDeliveredCents = finalItemCents + finalShipCents;
+    const isFreeShip = summary?.freeShipApplied ?? policyFreeShipping ?? (finalShipCents === 0);
+
+    // Build calculation steps in the same format as draft-logs.ts
+    const ebayCompsCount = pricingResult.pricingEvidence?.ebayCompsCount ?? 0;
+    const retailCompsCount = summary?.retailCompsCount ?? 0;
+    const amazonPriceCents = summary?.amazonPriceCents ?? null;
+    const walmartPriceCents = summary?.walmartPriceCents ?? null;
+    const soldMedianDeliveredCents = summary?.soldMedianDeliveredCents ?? null;
+    const subsidyCents = summary?.subsidyCents ?? 0;
+
+    const calculations = [
+      {
+        step: '1. Gather Competitor Prices',
+        input: {
+          brand: brand || '(none)',
+          productName: productName || '(none)',
+        },
+        output: {
+          ebayCompsCount,
+          retailCompsCount,
+          amazonPrice: amazonPriceCents != null ? `$${(amazonPriceCents / 100).toFixed(2)}` : null,
+          walmartPrice: walmartPriceCents != null ? `$${(walmartPriceCents / 100).toFixed(2)}` : null,
+          soldMedianDelivered: soldMedianDeliveredCents != null ? `$${(soldMedianDeliveredCents / 100).toFixed(2)}` : null,
+        },
+        formula: null,
+        notes: `Found ${ebayCompsCount} eBay comps, ${retailCompsCount} retail comps`,
+      },
+      {
+        step: '2. Calculate Target Delivered Price',
+        input: {
+          mode: settings.mode ?? 'market-match',
+          compsSource: summary?.compsSource ?? 'fallback',
+        },
+        output: {
+          targetDelivered: `$${(targetDeliveredCents / 100).toFixed(2)}`,
+        },
+        formula: 'TargetDelivered = BestCompPrice × Multiplier',
+        notes: `Status: ${pricingResult.status}`,
+      },
+      {
+        step: '3. Split Into Item + Shipping',
+        input: {
+          targetDelivered: `$${(targetDeliveredCents / 100).toFixed(2)}`,
+          shippingEstimate: `$${(shippingEstimateCents / 100).toFixed(2)}`,
+          freeShippingApplied: isFreeShip,
+          policyFreeShipping,
+        },
+        output: {
+          itemPrice: `$${(finalItemCents / 100).toFixed(2)}`,
+          shippingCharge: `$${(finalShipCents / 100).toFixed(2)}`,
+          subsidyAmount: `$${(subsidyCents / 100).toFixed(2)}`,
+        },
+        formula: isFreeShip
+          ? 'ItemPrice = TargetDelivered (free shipping absorbed by seller)'
+          : 'ItemPrice = TargetDelivered − ShippingCharge',
+        notes: isFreeShip
+          ? 'Policy has free shipping — seller absorbs shipping cost'
+          : `Buyer pays shipping separately ($${(shippingEstimateCents / 100).toFixed(2)} estimated)`,
+      },
+      {
+        step: '4. Final Price',
+        input: {
+          canCompete: summary?.canCompete ?? true,
+          matchConfidence: summary?.matchConfidence ?? 'medium',
+        },
+        output: {
+          finalItemPrice: `$${(finalItemCents / 100).toFixed(2)}`,
+          finalShippingCharge: `$${(finalShipCents / 100).toFixed(2)}`,
+        },
+        formula: null,
+        notes: (pricingResult.warnings ?? []).join('; ') || 'No warnings',
+      },
+    ];
 
     return ok(res, {
       success: true,
       suggestedPrice: finalItemCents / 100,
       shippingPrice: finalShipCents / 100,
-      freeShipping: summary?.freeShipApplied ?? (finalShipCents === 0),
+      freeShipping: isFreeShip,
       canCompete: summary?.canCompete ?? true,
       matchConfidence: summary?.matchConfidence ?? 'medium',
       status: pricingResult.status,
+      calculations,
       debug: {
         targetDeliveredCents,
         finalItemCents,
         finalShipCents,
-        ebayCompsCount: pricingResult.pricingEvidence?.ebayCompsCount ?? 0,
-        retailCompsCount: summary?.retailCompsCount ?? 0,
-        amazonPriceCents: summary?.amazonPriceCents ?? null,
-        walmartPriceCents: summary?.walmartPriceCents ?? null,
-        soldMedianDeliveredCents: summary?.soldMedianDeliveredCents ?? null,
+        policyFreeShipping,
+        shippingEstimateCents,
+        ebayCompsCount,
+        retailCompsCount,
+        amazonPriceCents,
+        walmartPriceCents,
+        soldMedianDeliveredCents,
         soldCount: summary?.soldCount ?? 0,
-        shippingEstimateSource: summary?.shippingEstimateSource ?? 'default',
+        shippingEstimateSource: policyFreeShipping ? 'policy-free' : (summary?.shippingEstimateSource ?? 'default'),
         compsSource: summary?.compsSource ?? 'fallback',
         warnings: pricingResult.warnings,
       },

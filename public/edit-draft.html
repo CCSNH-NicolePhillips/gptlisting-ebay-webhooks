@@ -1638,6 +1638,27 @@
         
         showFlash(`Price updated to $${newPrice.toFixed(2)}`, 'success');
         
+        // Refresh the dev mode breakdown panel with fresh reprice calculations
+        if (res.calculations && res.calculations.length > 0) {
+          const pricingData = {
+            finalPrice: res.suggestedPrice,
+            freeShippingApplied: res.freeShipping,
+            confidence: res.matchConfidence,
+            reasoning: `Repriced: item $${res.suggestedPrice.toFixed(2)} + ${res.freeShipping ? 'free shipping' : `ship $${res.shippingPrice.toFixed(2)}`}`,
+            calculations: res.calculations,
+            sources: [],
+            warnings: res.debug?.warnings || [],
+          };
+          // Ensure the logs section is visible
+          $('logsSection').style.display = 'block';
+          $('logsLoading').style.display = 'none';
+          $('logsEmpty').style.display = 'none';
+          $('logsData').style.display = 'block';
+          // Open the panel if it's collapsed
+          if (!logsOpen) toggleLogs();
+          renderPricingDecision(pricingData);
+        }
+        
       } catch (err) {
         console.error('[reprice] Error:', err);
         status.textContent = `❌ ${err.message}`;
