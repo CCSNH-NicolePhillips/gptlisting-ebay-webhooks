@@ -126,7 +126,7 @@ export async function listActiveListings(userId: string): Promise<{
   offers: ActiveOffer[];
 }> {
   const client = await getEbayClient(userId);
-  const { access_token } = client;
+  const { access_token, apiHost, headers } = client;
 
   const unsoldItemIds = await getUnsoldItemIds(access_token).catch(() => new Set<string>());
 
@@ -185,5 +185,64 @@ export async function listActiveListings(userId: string): Promise<{
     pageNumber++;
   }
 
+  // Enrich with promotion data from Inventory API (merchantData.autoPromote / autoPromoteAdRate).
+  // The Trading API has no promotion data — we must cross-reference the Offers API.
+  try {
+    const promoMap = await fetchPromotionMap(apiHost, headers);
+    if (promoMap.size > 0) {
+      for (const offer of activeOffers) {
+        const promo = promoMap.get(offer.sku);
+        if (promo) {
+          offer.autoPromote = promo.autoPromote;
+          if (promo.autoPromoteAdRate != null) offer.autoPromoteAdRate = promo.autoPromoteAdRate;
+        }
+      }
+    }
+  } catch {
+    // Non-fatal — better to return listings without promo data than fail entirely
+  }
+
   return { count: activeOffers.length, offers: activeOffers };
+}
+
+/**
+ * Fetch all PUBLISHED offers from the Inventory API and return a map of
+ * sku → { autoPromote, autoPromoteAdRate } so active listings can show
+ * their real promotion status.
+ */
+async function fetchPromotionMap(
+  apiHost: string,
+  headers: Record<string, string>,
+): Promise<Map<string, { autoPromote: boolean; autoPromoteAdRate?: number }>> {
+  const map = new Map<string, { autoPromote: boolean; autoPromoteAdRate?: number }>();
+  let offset = 0;
+  const pageSize = 200;
+
+  while (true) {
+    const params = new URLSearchParams({
+      offer_status: 'PUBLISHED',
+      marketplace_id: 'EBAY_US',
+      limit: String(pageSize),
+      offset: String(offset),
+    });
+    const res = await fetch(`${apiHost}/sell/inventory/v1/offer?${params}`, { headers });
+    if (!res.ok) break;
+    let body: any;
+    try { body = await res.json(); } catch { break; }
+    const offers: any[] = Array.isArray(body?.offers) ? body.offers : [];
+    for (const offer of offers) {
+      const sku = offer.sku;
+      if (!sku) continue;
+      const md = offer.merchantData;
+      map.set(sku, {
+        autoPromote: md?.autoPromote === true,
+        autoPromoteAdRate: typeof md?.autoPromoteAdRate === 'number' ? md.autoPromoteAdRate : undefined,
+      });
+    }
+    // Stop if we got fewer results than a full page
+    if (offers.length < pageSize) break;
+    offset += pageSize;
+  }
+
+  return map;
 }
