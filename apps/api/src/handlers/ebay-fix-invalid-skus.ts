@@ -198,7 +198,7 @@ export const handler: Handler = async (event) => {
       };
     }
 
-    const results = [];
+    const results: { oldSku: string; newSku: string; success: boolean; [key: string]: unknown }[] = [];
     let fixed = 0;
     let failed = 0;
 

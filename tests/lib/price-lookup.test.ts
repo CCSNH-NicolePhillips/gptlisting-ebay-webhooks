@@ -603,6 +603,7 @@ describe('price-lookup.ts', () => {
 
         // Ensure no brand MSRP candidate is added
         mockBrandUrlForBrandSite.mockResolvedValue(null);
+        // @ts-ignore
         mockGetBrandUrls.mockReturnValue(undefined);
 
         mockOpenAI.mockRejectedValue(new Error('API timeout'));
@@ -811,10 +812,7 @@ describe('price-lookup.ts', () => {
           ok: true,
           text: async () => '<html><span class="price">$25.00</span></html>',
         });
-        mockGetBrandUrls.mockResolvedValue({ urls: [] });
-
-        // AI fails - forces fallback to brand-MSRP path
-        mockOpenAI.mockRejectedValue(new Error('AI timeout'));
+        mockGetBrandUrls.mockRejectedValue(new Error('AI timeout'));
 
         const input: PriceLookupInput = {
           title: 'Brand MSRP Test Product',
@@ -1115,6 +1113,7 @@ describe('price-lookup.ts', () => {
         // Ensure no other candidates are created
         mockBraveSearch.mockResolvedValue(null); // No Amazon
         mockBrandUrlForBrandSite.mockResolvedValue(null); // No brand site
+        // @ts-ignore
         mockGetBrandUrls.mockReturnValue(undefined); // No registered brand URLs
         mockExtractPrice.mockReturnValue(null); // No HTML prices
 

@@ -1287,8 +1287,8 @@ async function getDeliveredPricingV2(
 
       soldSamples = rawSamples.map(s => ({
         itemCents: Math.round(s.price * 100),
-        shipCents: Math.round(s.shipping * 100),
-        deliveredCents: Math.round(s.deliveredPrice * 100),
+        shipCents: Math.round((s.shipping ?? 0) * 100),
+        deliveredCents: Math.round((s.deliveredPrice ?? s.price) * 100),
       }));
       soldCount = rawSamples.length;
       soldMedianCents = soldResult.deliveredMedian

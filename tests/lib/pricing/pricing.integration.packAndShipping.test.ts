@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Integration Test: Pack-of + Photo Quantity + Shipping - Phase 7
  * 

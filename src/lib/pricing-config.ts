@@ -90,7 +90,7 @@ export interface PricingSettings {
    * Example: 199 = $1.99 minimum item price
    * Default: 199
    */
-  minItemPriceCents: number;
+  minItemPriceCents?: number;
 
   /**
    * eBay shipping mode - determines how shipping is presented to buyer
@@ -100,7 +100,7 @@ export interface PricingSettings {
    * 
    * Default: 'BUYER_PAYS_SHIPPING'
    */
-  ebayShippingMode: EbayShippingMode;
+  ebayShippingMode?: EbayShippingMode;
 
   /**
    * Shipping charge shown to buyer when BUYER_PAYS_SHIPPING (cents)
@@ -111,7 +111,7 @@ export interface PricingSettings {
    * Example: 600 = buyer sees "$6.00 shipping" on eBay
    * Default: 600
    */
-  buyerShippingChargeCents: number;
+  buyerShippingChargeCents?: number;
 
   /**
    * If BUYER_PAYS_SHIPPING would force item price below minItemPriceCents,
@@ -122,14 +122,14 @@ export interface PricingSettings {
    * 
    * Default: true
    */
-  allowAutoFreeShippingOnLowPrice: boolean;
+  allowAutoFreeShippingOnLowPrice?: boolean;
 
   /**
    * Preferred carrier for shipping cost estimation (CARRIER_RATE mode).
    * 'auto' = always pick the cheapest carrier for the weight.
    * Default: 'auto'
    */
-  preferredCarrier: 'auto' | 'usps' | 'ups' | 'fedex';
+  preferredCarrier?: 'auto' | 'usps' | 'ups' | 'fedex';
 
   /**
    * Amazon price ratio for amazon_anchored pricing mode.
@@ -141,7 +141,30 @@ export interface PricingSettings {
    *
    * Valid range: 0.50 – 1.00. Default: 0.85
    */
-  amazonPricingRatio: number;
+  amazonPricingRatio?: number;
+}
+
+/** Backward-compatibility alias used by older test and service code. */
+export type CompetitivePricingRules = PricingSettings;
+
+/**
+ * Fill in any optional fields with their defaults so downstream code
+ * can rely on all fields being present without null-checks.
+ */
+export function normalizePricingSettings(s: PricingSettings): Required<PricingSettings> {
+  const d = getDefaultPricingSettings();
+  return {
+    discountPercent: s.discountPercent,
+    shippingStrategy: s.shippingStrategy,
+    templateShippingEstimateCents: s.templateShippingEstimateCents,
+    shippingSubsidyCapCents: s.shippingSubsidyCapCents,
+    minItemPriceCents: s.minItemPriceCents ?? d.minItemPriceCents!,
+    ebayShippingMode: s.ebayShippingMode ?? d.ebayShippingMode!,
+    buyerShippingChargeCents: s.buyerShippingChargeCents ?? d.buyerShippingChargeCents!,
+    allowAutoFreeShippingOnLowPrice: s.allowAutoFreeShippingOnLowPrice ?? d.allowAutoFreeShippingOnLowPrice!,
+    preferredCarrier: s.preferredCarrier ?? d.preferredCarrier!,
+    amazonPricingRatio: s.amazonPricingRatio ?? d.amazonPricingRatio!,
+  };
 }
 
 /**
@@ -165,7 +188,7 @@ export interface PricingSettings {
  * - BUYER_PAYS_SHIPPING: Most sellers use calculated/flat shipping
  * - Auto free shipping: Prevents scammy-looking low item + high shipping combos
  */
-export function getDefaultPricingSettings(): PricingSettings {
+export function getDefaultPricingSettings(): Required<PricingSettings> {
   return {
     discountPercent: 10,
     shippingStrategy: 'ALGO_COMPETITIVE_TOTAL',

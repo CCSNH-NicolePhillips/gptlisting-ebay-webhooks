@@ -21,8 +21,8 @@ async function rateLimitDelay() {
 
 export interface SoldPriceSample {
   price: number;           // Item price only
-  shipping: number;        // Shipping cost (0 = free shipping)
-  deliveredPrice: number;  // price + shipping
+  shipping?: number;        // Shipping cost (0 = free shipping)
+  deliveredPrice?: number;  // price + shipping
   currency: string;
   title?: string;          // eBay listing title (for identity filtering)
   url?: string;
@@ -386,14 +386,14 @@ async function searchSoldItems(
     const p90 = percentile(prices, 0.9);
 
     // Compute TRUE DELIVERED price stats (item + shipping)
-    const deliveredPrices = samples.map(s => s.deliveredPrice).sort((a, b) => a - b);
+    const deliveredPrices = samples.map(s => s.deliveredPrice).filter((n): n is number => n !== undefined).sort((a, b) => a - b);
     const deliveredMedian = percentile(deliveredPrices, 0.5);
     const deliveredP35 = percentile(deliveredPrices, 0.35);
     const deliveredP10 = percentile(deliveredPrices, 0.1);
     const deliveredP90 = percentile(deliveredPrices, 0.9);
 
     // Average shipping for reference
-    const avgShipping = samples.reduce((sum, s) => sum + s.shipping, 0) / samples.length;
+    const avgShipping = samples.reduce((sum, s) => sum + (s.shipping ?? 0), 0) / samples.length;
 
     const result: SoldPriceStats = {
       ok: samples.length >= 3, // Need at least 3 samples for reliable stats

@@ -1368,7 +1368,7 @@ export async function lookupPrice(
               confidence,
             });
           } else {
-            const rejectReasons = [];
+            const rejectReasons: string[] = [];
             if (!brandMatches) rejectReasons.push('brand mismatch');
             if (!productMatches) rejectReasons.push('product mismatch');
             if (isBundleMismatch) rejectReasons.push('bundle/multipack page');

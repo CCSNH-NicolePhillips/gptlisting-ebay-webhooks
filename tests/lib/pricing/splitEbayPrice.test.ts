@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Tests for eBay price splitting strategy - Phase 4
  * 

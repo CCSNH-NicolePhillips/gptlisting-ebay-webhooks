@@ -91,7 +91,7 @@ interface ImageClassificationV2 {
   panel: PanelType;
   brand: string | null;
   productName: string | null;
-  variant: string | null; // Flavor, color, size, or count variant (e.g., "Raspberry Lemonade", "SPF 41", "300g")
+  variant?: string | null; // Flavor, color, size, or count variant
   title: string | null; // For books: the book title. For products: null
   brandWebsite: string | null; // Official brand website URL (e.g., "https://myrkmd.com", "https://rootbrands.com")
   packageType: 'bottle' | 'jar' | 'tub' | 'pouch' | 'box' | 'sachet' | 'book' | 'unknown';
@@ -102,8 +102,8 @@ interface ImageClassificationV2 {
   confidence: number;
   quantityInPhoto: number; // How many of this product are visible in the photo (1-10)
   packCount: number | null; // Number of units inside the package (e.g., 24 for a 24-pack box, null if single unit or unknown)
-  netWeight: { value: number; unit: string } | null; // Product weight from label (e.g., 8 oz, 60 capsules, 250g)
-  bundleInfo: BundleInfo | null; // Bundle detection for sets/duos/kits sold together
+  netWeight?: { value: number; unit: string } | null; // Product weight from label (e.g., 8 oz, 60 capsules, 250g)
+  bundleInfo?: BundleInfo | null; // Bundle detection for sets/duos/kits sold together
 }
 
 interface PairingInputItem {
@@ -696,7 +696,7 @@ async function pairChunk(items: ImageClassificationV2[], chunkLabel = ''): Promi
     panel: x.panel,
     brand: x.brand,
     productName: x.productName,
-    variant: x.variant,
+    variant: x.variant ?? null,
     title: x.title,
     brandWebsite: x.brandWebsite,
     packageType: x.packageType,
@@ -991,7 +991,7 @@ async function pairVisuallyAggressive(items: ImageClassificationV2[]): Promise<P
       panel: x.panel,
       brand: x.brand,
       productName: x.productName,
-      variant: x.variant,
+      variant: x.variant ?? null,
       title: x.title,
       brandWebsite: x.brandWebsite,
       packageType: x.packageType,

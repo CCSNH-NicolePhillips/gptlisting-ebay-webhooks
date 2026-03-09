@@ -141,7 +141,7 @@ beforeAll(async () => {
 beforeEach(() => {
   jest.clearAllMocks();
 
-  mockTokensStore.mockReturnValue({ get: mockStoreGet } as unknown as Store);
+  mockTokensStore.mockReturnValue({ get: mockStoreGet } as any);
   mockStoreGet.mockResolvedValue({ refresh_token: "refresh-token" } as any);
   mockMakeCacheKey.mockReturnValue("cache-key");
   mockGetCached.mockResolvedValue(null);

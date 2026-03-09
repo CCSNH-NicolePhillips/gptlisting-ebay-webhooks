@@ -13,7 +13,7 @@
  */
 
 import type { PricingSettings, ShippingStrategy, EbayShippingMode } from '../../../../src/lib/pricing-config.js';
-import { getDefaultPricingSettings } from '../../../../src/lib/pricing-config.js';
+import { getDefaultPricingSettings, normalizePricingSettings } from '../../../../src/lib/pricing-config.js';
 import { computeEbayItemPrice } from './ebay-price-math.js';
 
 // ── getCategoryCap ────────────────────────────────────────────────────────────
@@ -55,7 +55,8 @@ export function computeEbayItemPriceCents(args: {
   amazonShippingCents: number;
   settings: PricingSettings;
 }): ComputeEbayItemPriceCentsResult {
-  const { amazonItemPriceCents, amazonShippingCents, settings } = args;
+  const { amazonItemPriceCents, amazonShippingCents, settings: rawSettings } = args;
+  const settings = normalizePricingSettings(rawSettings);
 
   const amazonDeliveredTotalCents = amazonItemPriceCents + amazonShippingCents;
   const discountMultiplier = 1 - settings.discountPercent / 100;
@@ -117,7 +118,7 @@ export function getFinalEbayPrice(
     cappedPrice = options.categoryCap;
   }
 
-  const settings = options?.settings ?? getDefaultPricingSettings();
+  const settings = normalizePricingSettings(options?.settings ?? getDefaultPricingSettings());
 
   const result = computeEbayItemPrice({
     amazonItemPriceCents: Math.round(cappedPrice * 100),
@@ -167,7 +168,8 @@ export function computeEbayOfferPricingCents(input: {
   shippingCostEstimateCents: number;
   settings: PricingSettings;
 }): EbayOfferPricingResult {
-  const { baseDeliveredTargetCents, shippingCostEstimateCents, settings } = input;
+  const { baseDeliveredTargetCents, shippingCostEstimateCents, settings: rawSettings } = input;
+  const settings = normalizePricingSettings(rawSettings);
   const warnings: string[] = [];
 
   let targetDeliveredTotalCents = baseDeliveredTargetCents;

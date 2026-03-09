@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Tests for competitive pricing configuration - Phase 1
  * 

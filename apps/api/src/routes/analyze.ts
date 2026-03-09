@@ -498,7 +498,7 @@ router.post('/gpt-drafts', async (req, res) => {
       const seed = gptNormalizeSeed(raw);
       if (!seed) { drafts.push({ id: undefined, title: '', bullets: [], description: 'ERROR: invalid seed', aspects: {}, category: {} }); continue; }
       try {
-        let hint = null;
+        let hint: any = null;
         try { hint = await pickCategoryForGroup({ brand: seed.brand, product: seed.product, variant: seed.variant, size: seed.size, claims: seed.features, keywords: seed.keywords }) ?? null; } catch { /* best effort */ }
         const hintObj = hint ? { id: (hint as any).id, title: (hint as any).title } : null;
         const lines = [

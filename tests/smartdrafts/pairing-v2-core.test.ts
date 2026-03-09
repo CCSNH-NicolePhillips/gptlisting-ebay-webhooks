@@ -255,8 +255,6 @@ describe("pairing-v2-core", () => {
                     colorSignature: ["red", "gold"],
                     layoutSignature: "book cover",
                     confidence: 0.98,
-                      quantityInPhoto: 1,
-                      packCount: 1,
                     quantityInPhoto: 1,
                   },
                 ],
