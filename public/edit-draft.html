@@ -815,6 +815,20 @@
             </div>
           </div>
           
+          <!-- Shipping Policy -->
+          <div style="margin-top: 1.5rem; padding: 1rem; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--line);">
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+              <span style="font-size: 1.125rem;">🚚</span>
+              <span style="font-weight: 600; color: var(--text-primary);">Shipping Policy</span>
+            </div>
+            <select id="shippingPolicyId" style="width: 100%; padding: 0.5rem 0.75rem; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; color: var(--text-primary); font-size: 0.9375rem;">
+              <option value="">Loading shipping policies…</option>
+            </select>
+            <div style="font-size: 0.8125rem; color: var(--text-muted); margin-top: 0.5rem;">
+              💡 Choose which eBay shipping policy to use for this listing.
+            </div>
+          </div>
+          
           <!-- Promotion Settings -->
           <div style="margin-top: 1.5rem; padding: 1rem; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--line);">
             <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
@@ -1390,6 +1404,9 @@
         
         showFlash('Draft loaded successfully!', 'success');
         
+        // Load shipping policies (non-blocking)
+        loadShippingPolicies(originalDraft.fulfillmentPolicyId || null);
+        
       } catch (err) {
         console.error('Failed to load draft:', err);
         showFlash(`Error: ${err.message}`, 'error');
@@ -1659,6 +1676,9 @@
           throw new Error(`${invalidImages.length} image(s) failed to upload. Please remove them and try adding again.`);
         }
         
+        // Collect shipping policy
+        const selectedShippingPolicy = $('shippingPolicyId').value || null;
+        
         // Collect promotion settings
         const promotionEnabled = $('promotionEnabled').checked;
         const promotionRate = parseFloat($('promotionRate').value) || null;
@@ -1687,6 +1707,7 @@
           condition: $('condition').value,
           aspects,
           images, // Include reordered images
+          fulfillmentPolicyId: selectedShippingPolicy !== null ? selectedShippingPolicy : (originalDraft.fulfillmentPolicyId || null),
           promotion: {
             enabled: promotionEnabled,
             rate: promotionEnabled ? promotionRate : null
@@ -1718,6 +1739,27 @@
         showFlash(`Error: ${err.message}`, 'error');
         $('btnSave').disabled = false;
         $('btnSave').textContent = 'Update Draft';
+      }
+    }
+    
+    async function loadShippingPolicies(currentPolicyId) {
+      try {
+        const data = await fetchJSON('/api/ebay/policies');
+        const policies = data?.fulfillment?.json?.fulfillmentPolicies ?? [];
+        const sel = $('shippingPolicyId');
+        if (policies.length === 0) {
+          sel.innerHTML = '<option value="">(No shipping policies found)</option>';
+          return;
+        }
+        sel.innerHTML = '<option value="">(Keep current policy)</option>' +
+          policies.map(p => {
+            const id = p.fulfillmentPolicyId || '';
+            const name = p.name || id;
+            const selected = id === currentPolicyId ? ' selected' : '';
+            return `<option value="${id}"${selected}>${name}</option>`;
+          }).join('');
+      } catch {
+        $('shippingPolicyId').innerHTML = '<option value="">(Could not load policies)</option>';
       }
     }
     

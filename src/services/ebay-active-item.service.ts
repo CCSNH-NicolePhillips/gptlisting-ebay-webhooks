@@ -36,6 +36,7 @@ export interface ActiveItem {
   aspects: Record<string, string[]>;
   autoPromote: boolean;
   autoPromoteAdRate?: unknown;
+  fulfillmentPolicyId?: string | null;
 }
 
 export interface GetActiveItemResult {
@@ -141,6 +142,7 @@ export async function getActiveItem(
   let finalIsInventoryListing = isInventoryListing;
   let autoPromote = false;
   let autoPromoteAdRate: unknown;
+  let fulfillmentPolicyId: string | null = null;
 
   // If item has a SKU, cross-reference Inventory API for richer description
   if (sku) {
@@ -167,11 +169,12 @@ export async function getActiveItem(
     }
   }
 
-  // If confirmed as Inventory API listing, fetch offer for promotion data
+  // If confirmed as Inventory API listing, fetch offer for promotion and policy data
   if (finalIsInventoryListing && sku) {
     try {
+      const MARKETPLACE_ID = process.env.DEFAULT_MARKETPLACE_ID || process.env.EBAY_MARKETPLACE_ID || 'EBAY_US';
       const offerRes = await fetch(
-        `${apiHost}/sell/inventory/v1/offer/${encodeURIComponent(sku)}`,
+        `${apiHost}/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}&marketplace_id=${MARKETPLACE_ID}`,
         {
           headers: {
             Authorization: `Bearer ${access_token}`,
@@ -180,14 +183,18 @@ export async function getActiveItem(
         },
       );
       if (offerRes.ok) {
-        const offer = await offerRes.json() as Record<string, any>;
-        if (offer.merchantData) {
-          autoPromote = offer.merchantData.autoPromote === true;
-          autoPromoteAdRate = offer.merchantData.autoPromoteAdRate;
+        const offersData = await offerRes.json() as { offers?: any[] };
+        const offer = offersData.offers?.[0];
+        if (offer) {
+          if (offer.merchantData) {
+            autoPromote = offer.merchantData.autoPromote === true;
+            autoPromoteAdRate = offer.merchantData.autoPromoteAdRate;
+          }
+          fulfillmentPolicyId = offer.listingPolicies?.fulfillmentPolicyId ?? null;
         }
       }
     } catch {
-      // Non-fatal — promotion data is optional
+      // Non-fatal — promotion/policy data is optional
     }
   }
 
@@ -206,6 +213,7 @@ export async function getActiveItem(
     aspects,
     autoPromote,
     autoPromoteAdRate,
+    fulfillmentPolicyId,
   };
 
   return { ok: true, item };

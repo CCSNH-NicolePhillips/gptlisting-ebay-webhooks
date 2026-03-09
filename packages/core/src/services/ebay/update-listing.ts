@@ -40,6 +40,8 @@ export type UpdateListingInput = {
     autoDeclinePercent?: number;
     autoAcceptPercent?: number;
   };
+  /** Override the fulfillment (shipping) policy for this offer. */
+  fulfillmentPolicyId?: string | null;
 };
 
 export type UpdateListingResult = {
@@ -198,6 +200,15 @@ async function updateViaInventoryApi(
     } else {
       offerPayload.listingPolicies = { ...existingPolicies, bestOfferTerms: { bestOfferEnabled: false } };
     }
+  }
+
+  // Apply fulfillment policy override (after bestOffer so we merge correctly)
+  if (input.fulfillmentPolicyId !== undefined) {
+    const currentPolicies = ((offerPayload.listingPolicies ?? offerBase.listingPolicies) ?? {}) as Record<string, unknown>;
+    offerPayload.listingPolicies = {
+      ...currentPolicies,
+      fulfillmentPolicyId: input.fulfillmentPolicyId,
+    };
   }
 
   const updateOfferRes = await fetch(`${apiHost}/sell/inventory/v1/offer/${offer.offerId}`, {

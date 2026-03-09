@@ -28,6 +28,8 @@ export type DraftUpdate = {
   promotion?: { enabled: boolean; rate?: number | null };
   bestOffer?: BestOfferSettings;
   weight?: { value: number; unit?: string };
+  /** Override the fulfillment (shipping) policy for this offer. */
+  fulfillmentPolicyId?: string | null;
 };
 
 export class InvalidDraftError extends Error {
@@ -195,6 +197,15 @@ export async function updateDraft(
         bestOfferTerms: { bestOfferEnabled: false },
       };
     }
+  }
+
+  // Apply fulfillment policy override (applied after bestOffer so we merge correctly)
+  if (draft.fulfillmentPolicyId !== undefined) {
+    const currentPolicies = ((offerPayload.listingPolicies ?? currentOffer.listingPolicies) ?? {}) as Record<string, unknown>;
+    offerPayload.listingPolicies = {
+      ...currentPolicies,
+      fulfillmentPolicyId: draft.fulfillmentPolicyId,
+    };
   }
 
   const updateRes = await fetch(

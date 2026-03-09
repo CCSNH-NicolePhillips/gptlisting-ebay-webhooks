@@ -478,6 +478,15 @@
           </div>
         </div>
         
+        <!-- Shipping Policy -->
+        <div class="dp-card dp-card--full">
+          <h3 style="margin-top: 0; margin-bottom: 1rem; color: var(--text-primary);">🚚 Shipping Policy</h3>
+          <select id="shippingPolicyId" style="width: 100%; padding: 0.5rem 0.75rem; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; color: var(--text-primary); font-size: 0.9375rem;">
+            <option value="">Loading shipping policies…</option>
+          </select>
+          <p class="muted-hint" style="margin-top: 0.5rem;">Choose which eBay shipping policy to use for this listing.</p>
+        </div>
+        
         <!-- Promotion Settings -->
         <div class="dp-card dp-card--full">
           <h3 style="margin-top: 0; margin-bottom: 1rem; color: var(--text-primary);">📣 Promoted Listings</h3>
@@ -670,6 +679,9 @@
         // Load promotion and best offer settings if available
         loadPromotionSettings();
         loadBestOfferSettings();
+        
+        // Load shipping policies (non-blocking)
+        loadShippingPolicies(originalItem.fulfillmentPolicyId || null);
         
       } catch (err) {
         console.error('Failed to load listing:', err);
@@ -1057,6 +1069,9 @@
         // Collect images in their current order
         const images = Array.from(document.querySelectorAll('.image-thumb')).map(el => el.dataset.url);
         
+        // Collect shipping policy
+        const selectedShippingPolicy = $('shippingPolicyId').value || null;
+        
         // Collect promotion settings
         const promotionEnabled = $('promotionEnabled').checked;
         const adRate = promotionEnabled ? parseFloat($('adRate').value) || 5 : null;
@@ -1077,6 +1092,7 @@
           condition: $('condition').value,
           aspects,
           images, // Include reordered images
+          fulfillmentPolicyId: selectedShippingPolicy !== null ? selectedShippingPolicy : (originalItem.fulfillmentPolicyId || null),
           promotion: promotionEnabled ? { enabled: true, adRate } : { enabled: false },
           bestOffer: bestOfferEnabled ? { 
             enabled: true, 
@@ -1106,6 +1122,27 @@
         showFlash(`Error: ${err.message}`, 'error');
         $('btnSave').disabled = false;
         $('btnSave').textContent = 'Update Listing';
+      }
+    }
+    
+    async function loadShippingPolicies(currentPolicyId) {
+      try {
+        const data = await fetchJSON('/api/ebay/policies');
+        const policies = data?.fulfillment?.json?.fulfillmentPolicies ?? [];
+        const sel = $('shippingPolicyId');
+        if (policies.length === 0) {
+          sel.innerHTML = '<option value="">(No shipping policies found)</option>';
+          return;
+        }
+        sel.innerHTML = '<option value="">(Keep current policy)</option>' +
+          policies.map(p => {
+            const id = p.fulfillmentPolicyId || '';
+            const name = p.name || id;
+            const selected = id === currentPolicyId ? ' selected' : '';
+            return `<option value="${id}"${selected}>${name}</option>`;
+          }).join('');
+      } catch {
+        $('shippingPolicyId').innerHTML = '<option value="">(Could not load policies)</option>';
       }
     }
     

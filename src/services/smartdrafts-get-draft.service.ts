@@ -40,6 +40,7 @@ export interface GetDraftResult {
     categoryAspects: unknown[];
     weight: unknown | null;
     bestOffer: BestOfferSettings;
+    fulfillmentPolicyId: string | null;
   };
 }
 
@@ -136,6 +137,7 @@ export async function getDraft(userId: string, offerId: string): Promise<GetDraf
     categoryAspects,
     weight: (inventory.packageWeightAndSize?.weight ?? null) as unknown,
     bestOffer,
+    fulfillmentPolicyId: (offer.listingPolicies?.fulfillmentPolicyId ?? null) as string | null,
   };
 
   return { ok: true, draft };
