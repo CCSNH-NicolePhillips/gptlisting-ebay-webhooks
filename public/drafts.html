@@ -722,6 +722,8 @@
       
       // Global user promotion settings (loaded on init)
       let globalPromoSettings = { enabled: false, rate: 5 };
+      // Policy defaults (fulfillment / fulfillmentFree policy IDs)
+      let policyDefaults = null;
       
       // Track pending promotion processing (eBay needs ~60s to sync before promotion works)
       let promotionProcessingTimeout = null;
@@ -783,6 +785,22 @@
         }
       }
       
+      async function loadPolicyDefaults() {
+        try {
+          const exec = window.authClient && typeof window.authClient.authFetch === 'function'
+            ? window.authClient.authFetch
+            : fetch;
+          const r = await exec('/.netlify/functions/ebay-get-policy-defaults');
+          if (r.ok) {
+            const data = await r.json();
+            policyDefaults = data.defaults || null;
+            console.log('[Drafts] Loaded policy defaults:', policyDefaults);
+          }
+        } catch (err) {
+          console.error('[Drafts] Failed to load policy defaults:', err);
+        }
+      }
+
       async function fetchJSON(url, opts) {
         const exec = authClient && typeof authClient.authFetch === 'function' ? authClient.authFetch : fetch;
         // Add cache-buster and force no-store to avoid stale CDN/browser caches
@@ -1334,6 +1352,26 @@
         body.appendChild(badge);
         if (promoBadge) {
           body.appendChild(promoBadge);
+        }
+        // Shipping template badge
+        const fulfillmentPolicyId = offer?.listingPolicies?.fulfillmentPolicyId;
+        if (fulfillmentPolicyId && policyDefaults) {
+          const isFreeShip = fulfillmentPolicyId === policyDefaults.fulfillmentFree;
+          const shipBadge = document.createElement('div');
+          shipBadge.className = 'badge';
+          shipBadge.style.marginTop = '0.25rem';
+          if (isFreeShip) {
+            shipBadge.style.background = 'rgba(16, 185, 129, 0.1)';
+            shipBadge.style.borderColor = 'rgba(16, 185, 129, 0.35)';
+            shipBadge.style.color = '#6ee7b7';
+            shipBadge.textContent = '\uD83D\uDE9A Free Ship';
+          } else {
+            shipBadge.style.background = 'rgba(99, 102, 241, 0.1)';
+            shipBadge.style.borderColor = 'rgba(99, 102, 241, 0.35)';
+            shipBadge.style.color = '#a5b4fc';
+            shipBadge.textContent = '\uD83D\uDCE6 Paid Ship';
+          }
+          body.appendChild(shipBadge);
         }
         body.appendChild(promoControls);
         body.appendChild(row);
@@ -1912,7 +1950,8 @@
           // Load user promo settings and update display in parallel
           await Promise.all([
             authClient.updateUserDisplay().catch(() => {}),
-            loadUserPromoSettings()
+            loadUserPromoSettings(),
+            loadPolicyDefaults()
           ]);
         } catch (e) {
           console.error('Auth check failed', e);

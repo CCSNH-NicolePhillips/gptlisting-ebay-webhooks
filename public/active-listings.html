@@ -830,6 +830,22 @@
         badges.appendChild(bestOfferBadge);
       }
 
+      // Shipping template badge (Trading API has no policy data, infer from price)
+      {
+        const itemPriceNum = parseFloat(o.price?.value || o.price || '0');
+        const isFreeShip = itemPriceNum >= 50;
+        const shipPill = document.createElement('span');
+        shipPill.className = 'pill';
+        if (isFreeShip) {
+          shipPill.style.background = 'rgba(16, 185, 129, 0.12)';
+          shipPill.style.color = '#6ee7b7';
+          shipPill.textContent = '\uD83D\uDE9A Free Ship';
+        } else {
+          shipPill.textContent = '\uD83D\uDCE6 Paid Ship';
+        }
+        badges.appendChild(shipPill);
+      }
+
       card.appendChild(badges);
 
       // Promotion control

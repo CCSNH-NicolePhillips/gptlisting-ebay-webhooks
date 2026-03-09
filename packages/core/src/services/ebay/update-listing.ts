@@ -126,11 +126,18 @@ async function updateViaInventoryApi(
       },
     };
 
-    // Ensure default weight exists
+    // Ensure default weight exists; strip eBay's 1×1×1 placeholder dimensions
     const ws = (invPayload as any).packageWeightAndSize ?? {};
     const wt = ws.weight ?? {};
+    const dims = ws.dimensions;
+    // eBay returns {length:1, width:1, height:1, unit:"INCH"} as a placeholder when no real
+    // dimensions have been set. Re-sending this every PUT would lock the listing to 1×1×1.
+    // Strip it so eBay keeps whatever value it already has (or uses its own default).
+    const isPlaceholderDims =
+      dims && dims.length === 1 && dims.width === 1 && dims.height === 1;
+    const { dimensions: _ignoredDims, ...wsWithoutDims } = ws;
     invPayload.packageWeightAndSize = {
-      ...ws,
+      ...(isPlaceholderDims ? wsWithoutDims : ws),
       weight: { value: wt.value && wt.value > 0 ? wt.value : 1, unit: wt.unit ?? 'POUND' },
     };
 
