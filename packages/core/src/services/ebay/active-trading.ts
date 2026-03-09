@@ -5,6 +5,9 @@
  */
 
 import { getEbayClient, EbayNotConnectedError } from '../../../../../src/lib/ebay-client.js';
+import { tokensStore } from '../../../../../src/lib/redis-store.js';
+import { userScopedKey } from '../../../../../src/lib/_auth.js';
+import { accessTokenFromRefresh, tokenHosts } from '../../../../../src/lib/_common.js';
 import {
   extractItemIdsFromContainer,
   checkXmlForErrors,
@@ -126,7 +129,7 @@ export async function listActiveListings(userId: string): Promise<{
   offers: ActiveOffer[];
 }> {
   const client = await getEbayClient(userId);
-  const { access_token, apiHost, headers } = client;
+  const { access_token, apiHost } = client;
 
   const unsoldItemIds = await getUnsoldItemIds(access_token).catch(() => new Set<string>());
 
@@ -185,17 +188,20 @@ export async function listActiveListings(userId: string): Promise<{
     pageNumber++;
   }
 
-  // Enrich with promotion data from Inventory API (merchantData.autoPromote / autoPromoteAdRate).
-  // The Trading API has no promotion data — we must cross-reference the Offers API.
+  // Enrich with promotion data from the Marketing API (Promoted Listings).
+  // The Trading API has no promotion data — we cross-reference running ad campaigns.
   try {
-    const promoMap = await fetchPromotionMap(apiHost, headers);
-    if (promoMap.size > 0) {
-      for (const offer of activeOffers) {
-        const promo = promoMap.get(offer.sku);
-        if (promo) {
-          offer.autoPromote = promo.autoPromote;
-          if (promo.autoPromoteAdRate != null) offer.autoPromoteAdRate = promo.autoPromoteAdRate;
-        }
+    const promoMap = await fetchPromotionMap(userId, apiHost);
+    for (const offer of activeOffers) {
+      const promo =
+        promoMap.get(offer.sku) ||
+        (offer.itemId ? promoMap.get(offer.itemId) : undefined) ||
+        promoMap.get(offer.offerId);
+      if (promo) {
+        offer.autoPromote = true;
+        offer.autoPromoteAdRate = promo.autoPromoteAdRate;
+      } else {
+        offer.autoPromote = false;
       }
     }
   } catch {
@@ -206,42 +212,91 @@ export async function listActiveListings(userId: string): Promise<{
 }
 
 /**
- * Fetch all PUBLISHED offers from the Inventory API and return a map of
- * sku → { autoPromote, autoPromoteAdRate } so active listings can show
- * their real promotion status.
+ * Fetch all RUNNING Promoted Listings ad campaigns via the Marketing API and
+ * return a map of (listingId or SKU) → { autoPromoteAdRate } so active
+ * listings can show their real promotion status.
+ *
+ * Both inventory-path listings (keyed by SKU / inventoryReferenceId) and
+ * traditional listings (keyed by listingId) are covered.
+ *
+ * Uses a separate token request with sell.marketing scope so that the main
+ * active-listings token is not affected if the user hasn't granted that scope.
  */
 async function fetchPromotionMap(
+  userId: string,
   apiHost: string,
-  headers: Record<string, string>,
 ): Promise<Map<string, { autoPromote: boolean; autoPromoteAdRate?: number }>> {
   const map = new Map<string, { autoPromote: boolean; autoPromoteAdRate?: number }>();
-  let offset = 0;
-  const pageSize = 200;
 
-  while (true) {
-    const params = new URLSearchParams({
-      offer_status: 'PUBLISHED',
-      marketplace_id: 'EBAY_US',
-      limit: String(pageSize),
-      offset: String(offset),
-    });
-    const res = await fetch(`${apiHost}/sell/inventory/v1/offer?${params}`, { headers });
-    if (!res.ok) break;
-    let body: any;
-    try { body = await res.json(); } catch { break; }
-    const offers: any[] = Array.isArray(body?.offers) ? body.offers : [];
-    for (const offer of offers) {
-      const sku = offer.sku;
-      if (!sku) continue;
-      const md = offer.merchantData;
-      map.set(sku, {
-        autoPromote: md?.autoPromote === true,
-        autoPromoteAdRate: typeof md?.autoPromoteAdRate === 'number' ? md.autoPromoteAdRate : undefined,
-      });
+  // Get a token that includes sell.marketing scope
+  let access_token: string;
+  try {
+    const store = tokensStore();
+    const saved = (await store.get(userScopedKey(userId, 'ebay.json'), { type: 'json' })) as any;
+    const refresh = saved?.refresh_token as string | undefined;
+    if (!refresh) return map;
+
+    const result = await accessTokenFromRefresh(refresh, [
+      'https://api.ebay.com/oauth/api_scope',
+      'https://api.ebay.com/oauth/api_scope/sell.account',
+      'https://api.ebay.com/oauth/api_scope/sell.inventory',
+      'https://api.ebay.com/oauth/api_scope/sell.marketing',
+    ]);
+    access_token = result.access_token;
+  } catch {
+    return map; // Marketing scope not available — return empty map gracefully
+  }
+
+  const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || 'EBAY_US';
+  const headers = {
+    Authorization: `Bearer ${access_token}`,
+    Accept: 'application/json',
+    'Accept-Language': 'en-US',
+    'Content-Language': 'en-US',
+    'X-EBAY-C-MARKETPLACE-ID': MARKETPLACE_ID,
+  };
+
+  // Step 1: Get all currently RUNNING campaigns
+  let campaignsBody: any;
+  try {
+    const campaignsRes = await fetch(
+      `${apiHost}/sell/marketing/v1/ad_campaign?campaign_status=RUNNING&limit=100`,
+      { headers },
+    );
+    if (!campaignsRes.ok) return map; // Marketing API unavailable or scope missing
+    campaignsBody = await campaignsRes.json();
+  } catch {
+    return map;
+  }
+
+  const campaigns: any[] = Array.isArray(campaignsBody?.campaigns) ? campaignsBody.campaigns : [];
+
+  // Step 2: For each campaign, page through its ads and build the promotion map
+  for (const campaign of campaigns) {
+    if (!campaign.campaignId) continue;
+    try {
+      const adsRes = await fetch(
+        `${apiHost}/sell/marketing/v1/ad_campaign/${encodeURIComponent(campaign.campaignId)}/ad?limit=500`,
+        { headers },
+      );
+      if (!adsRes.ok) continue;
+      let adsBody: any;
+      try { adsBody = await adsRes.json(); } catch { continue; }
+
+      const ads: any[] = Array.isArray(adsBody?.ads) ? adsBody.ads : [];
+      for (const ad of ads) {
+        // Non-inventory listings key by listingId; inventory-path listings key by inventoryReferenceId (= SKU)
+        const adId = ad.listingId || ad.inventoryReferenceId;
+        if (!adId) continue;
+        const bidPercentage =
+          typeof ad.bidPercentage === 'string'
+            ? parseFloat(ad.bidPercentage)
+            : (typeof ad.bidPercentage === 'number' ? ad.bidPercentage : 0);
+        map.set(adId, { autoPromote: true, autoPromoteAdRate: bidPercentage || 0 });
+      }
+    } catch {
+      // Non-fatal per campaign — continue with next
     }
-    // Stop if we got fewer results than a full page
-    if (offers.length < pageSize) break;
-    offset += pageSize;
   }
 
   return map;
