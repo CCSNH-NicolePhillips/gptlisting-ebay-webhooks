@@ -1373,6 +1373,17 @@
           }
           body.appendChild(shipBadge);
         }
+        // Best Offer badge
+        if (offer?.listingPolicies?.bestOfferTerms?.bestOfferEnabled === true) {
+          const boBadge = document.createElement('div');
+          boBadge.className = 'badge';
+          boBadge.style.marginTop = '0.25rem';
+          boBadge.style.background = 'rgba(245, 158, 11, 0.1)';
+          boBadge.style.borderColor = 'rgba(245, 158, 11, 0.35)';
+          boBadge.style.color = '#fcd34d';
+          boBadge.textContent = '🤝 Best Offer';
+          body.appendChild(boBadge);
+        }
         body.appendChild(promoControls);
         body.appendChild(row);
         const cardError = document.createElement('div');
