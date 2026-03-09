@@ -1755,7 +1755,13 @@
           const pollDelay = pairAttempts <= 20 ? 3000 : pairAttempts <= 44 ? 5000 : 10000;
           await new Promise(resolve => setTimeout(resolve, pollDelay));
 
-          const statusRes = await fetchJSON(`/api/smartdrafts/pairing/v2/status?jobId=${currentJobId}`);
+          let statusRes;
+          try {
+            statusRes = await fetchJSON(`/api/smartdrafts/pairing/v2/status?jobId=${currentJobId}`);
+          } catch (pollErr) {
+            console.warn(`[Quick List] Pairing status poll error (attempt ${pairAttempts}, will retry):`, pollErr.message);
+            continue;
+          }
 
           if (statusRes.status === 'completed') {
             pairingComplete = true;
@@ -1932,7 +1938,13 @@
           const pollDelay = draftAttempts <= 20 ? 3000 : draftAttempts <= 44 ? 5000 : 10000;
           await new Promise(resolve => setTimeout(resolve, pollDelay));
 
-          const statusRes = await fetchJSON(`/.netlify/functions/smartdrafts-create-drafts-status?jobId=${encodeURIComponent(draftJobId)}`);
+          let statusRes;
+          try {
+            statusRes = await fetchJSON(`/.netlify/functions/smartdrafts-create-drafts-status?jobId=${encodeURIComponent(draftJobId)}`);
+          } catch (pollErr) {
+            console.warn(`[Quick List] Draft status poll error (attempt ${draftAttempts}, will retry):`, pollErr.message);
+            continue;
+          }
 
           if (!statusRes.ok) continue;
 
