@@ -290,9 +290,10 @@ export async function searchEbayComps(
     limit?: number;
     filterBundles?: boolean;
     minMatchScore?: 'high' | 'medium' | 'low';
+    additionalContext?: string; // e.g. "15.22 fl oz" to target specific size
   } = {}
 ): Promise<EbayCompsResult> {
-  const { condition = 'NEW', limit = 50, filterBundles = true, minMatchScore = 'medium' } = options;
+  const { condition = 'NEW', limit = 50, filterBundles = true, minMatchScore = 'medium', additionalContext } = options;
 
   const empty: EbayCompsResult = {
     ok: false,
@@ -305,8 +306,8 @@ export async function searchEbayComps(
   };
 
   try {
-    // Build query
-    const query = `${brand} ${productName}`.trim();
+    // Build query — include size context so eBay returns the right variant
+    const query = [brand, productName, additionalContext].filter(Boolean).join(' ').trim();
     console.log(`[ebay-browse] Searching: "${query}"`);
 
     // Get app token

@@ -38,6 +38,7 @@ export type PairedProduct = {
   extras?: string[];
   evidence?: string[];
   extractedText?: string;
+  netWeight?: { value: number; unit: string } | null;
 };
 
 export type CategoryHint = {
@@ -336,12 +337,19 @@ export async function createDraftForProduct(product: PairedProduct): Promise<Dra
   const categoryPath = finalCategory?.title ?? product.categoryPath ?? '';
   const retailPrice = typeof parsed.price === 'number' && parsed.price > 0 ? parsed.price : 0;
 
+  // Include net weight (e.g. "15.22 fl oz") as size context so the pricing
+  // search targets the correct variant and doesn't pull in cheap smaller sizes.
+  const sizeContext = product.netWeight?.value && product.netWeight?.unit
+    ? `${product.netWeight.value} ${product.netWeight.unit}`
+    : undefined;
+
   const pricingResult = await getPricingDecision({
     brand: product.brand,
     productName: product.product,
     settings: { mode: 'market-match' },
     retailPriceDollars: retailPrice,
     categoryPath,
+    additionalContext: sizeContext,
   }).catch(err => {
     console.error(`[createDraftForProduct] Pricing failed, falling back to zero:`, err);
     return null;

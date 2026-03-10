@@ -1239,7 +1239,7 @@ async function getDeliveredPricingV2(
 
   if (flags.ebayBrowseActiveEnabled) {
     try {
-      const browseResult = await searchEbayComps(brand, productName);
+      const browseResult = await searchEbayComps(brand, productName, { additionalContext });
       if (browseResult.ok && browseResult.competitors.length > 0) {
         browseComps = browseResult.competitors;
         compsSource = 'ebay-browse';
