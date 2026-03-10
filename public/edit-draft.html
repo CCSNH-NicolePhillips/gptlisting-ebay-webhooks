@@ -914,18 +914,34 @@
           <div class="images-preview" id="imagesPreview"></div>
         </div>
         
-        <!-- AI Decision Logs (Developer feature) -->
+        <!-- Pipeline Trace (Developer feature) -->
         <div class="dp-card dp-card--full logs-section" id="logsSection" style="display: none;">
           <div class="logs-header" onclick="toggleLogs()">
             <span class="logs-toggle" id="logsToggle">▶</span>
-            <h3 style="margin: 0; color: var(--text-primary);">🧠 AI Decision Logs</h3>
-            <span style="font-size: 0.8rem; color: var(--text-muted);">(Developer)</span>
+            <h3 style="margin: 0; color: var(--text-primary);">🔬 Pipeline Trace</h3>
+            <span style="font-size: 0.8rem; color: var(--text-muted); margin-left: 0.5rem;">(Dev only)</span>
+            <button onclick="event.stopPropagation(); refreshPipelineLogs()" style="margin-left: auto; background: none; border: 1px solid var(--border-subtle); border-radius: 4px; padding: 0.2rem 0.6rem; cursor: pointer; font-size: 0.75rem; color: var(--text-muted);">↻ Refresh</button>
           </div>
           <div class="logs-content" id="logsContent">
-            <div id="logsLoading" style="text-align: center; padding: 1rem; color: var(--text-muted);">
-              Loading logs...
-            </div>
+            <div id="logsLoading" style="text-align: center; padding: 1rem; color: var(--text-muted);">Loading trace...</div>
             <div id="logsData" style="display: none;">
+
+              <!-- Vision Classification -->
+              <div class="logs-subsection" id="logsVision">
+                <h4>👁️ Vision Classification</h4>
+                <div id="visionFields" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.5rem;"></div>
+                <div id="visionKeyText" style="display: none; margin-top: 0.75rem;">
+                  <div style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.25rem;">Key text from label:</div>
+                  <div id="visionKeyTextList" style="font-family: monospace; font-size: 0.8rem; background: var(--bg-card); padding: 0.5rem; border-radius: 4px; word-break: break-word;"></div>
+                </div>
+              </div>
+
+              <!-- Search Queries -->
+              <div class="logs-subsection" id="logsSearch">
+                <h4>🔍 Search Queries</h4>
+                <div style="display: flex; flex-direction: column; gap: 0.5rem;" id="searchQueryList"></div>
+              </div>
+
               <!-- Pricing Decision -->
               <div class="logs-subsection" id="logsPricing">
                 <h4>💰 Pricing Decision</h4>
@@ -937,22 +953,14 @@
               <div class="logs-subsection" id="logsCompetitors">
                 <h4>🏪 Competitor Prices</h4>
                 <table class="logs-table" id="competitorTable">
-                  <thead>
-                    <tr>
-                      <th>Source</th>
-                      <th>Title</th>
-                      <th>Price</th>
-                      <th>Shipping</th>
-                      <th>Total</th>
-                    </tr>
-                  </thead>
+                  <thead><tr><th>Source</th><th>Title</th><th>Item</th><th>Ship</th><th>Total</th></tr></thead>
                   <tbody id="competitorTableBody"></tbody>
                 </table>
               </div>
               
               <!-- Calculation Breakdown -->
               <div class="logs-subsection" id="logsCalculations">
-                <h4>🧮 Calculation Breakdown</h4>
+                <h4>🧮 Calculation Steps</h4>
                 <div id="calculationSteps"></div>
               </div>
               
@@ -963,7 +971,7 @@
               </div>
             </div>
             <div id="logsEmpty" style="display: none; text-align: center; padding: 1rem; color: var(--text-muted);">
-              No logs available for this draft. Logs are only available for drafts created after this feature was enabled.
+              No trace found. Traces are stored for 7 days and only available for items created after this feature was enabled.
             </div>
           </div>
         </div>
@@ -1916,59 +1924,99 @@
     }
     
     async function checkAndLoadLogs() {
-      // First check if user has logs enabled in settings
       try {
-        const settings = await fetchJSON('/api/settings');
-        if (!settings.showPricingLogs) {
-          // Setting not enabled, keep section hidden
-          return;
+        // Auto-show on localhost (dev mode) without needing admin toggle
+        const isLocalhost = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+        if (!isLocalhost) {
+          const settings = await fetchJSON('/api/settings');
+          if (!settings.showPricingLogs) return;
         }
-        
-        // Show the section (collapsed by default)
         $('logsSection').style.display = 'block';
-        
-        // Load the logs when expanded (lazy load)
-        // For now, load immediately
         await loadDraftLogs();
       } catch (err) {
         console.error('Failed to check logs setting:', err);
       }
     }
+
+    function refreshPipelineLogs() {
+      $('logsLoading').style.display = 'block';
+      $('logsData').style.display = 'none';
+      $('logsEmpty').style.display = 'none';
+      loadDraftLogs();
+    }
     
     async function loadDraftLogs() {
-      if (!originalDraft?.sku) {
-        console.log('No SKU available for logs');
+      if (!originalDraft?.sku && !currentOfferId) {
         $('logsLoading').style.display = 'none';
         $('logsEmpty').style.display = 'block';
         return;
       }
-      
       try {
-        const params = new URLSearchParams({
-          sku: originalDraft.sku,
-          ...(currentOfferId ? { offerId: currentOfferId } : {}),
-        });
-        const res = await fetchJSON(`/.netlify/functions/draft-logs-get?${params.toString()}`);
-        
+        const params = new URLSearchParams();
+        if (originalDraft?.sku) params.set('sku', originalDraft.sku);
+        if (currentOfferId) params.set('offerId', currentOfferId);
+        const res = await fetchJSON(`/api/smartdrafts/logs?${params.toString()}`);
         $('logsLoading').style.display = 'none';
-        
         if (!res.ok || !res.logs) {
           $('logsEmpty').style.display = 'block';
           return;
         }
-        
         const logs = res.logs;
         $('logsData').style.display = 'block';
-        
-        // Render pricing decision
+        renderVisionClassification(logs.classification);
+        renderSearchQueries(logs.pricing?.searchQuery);
         renderPricingDecision(logs.pricing);
-        
       } catch (err) {
-        console.error('Failed to load draft logs:', err);
+        console.error('Failed to load pipeline trace:', err);
         $('logsLoading').style.display = 'none';
         $('logsEmpty').style.display = 'block';
-        $('logsEmpty').textContent = `Failed to load logs: ${err.message}`;
+        $('logsEmpty').textContent = `Failed to load trace: ${err.message}`;
       }
+    }
+
+    function renderVisionClassification(cls) {
+      if (!cls) { $('logsVision').style.display = 'none'; return; }
+      $('logsVision').style.display = 'block';
+      const fields = [
+        ['Brand', cls.brand],
+        ['Product', cls.productName],
+        ['Variant', cls.variant],
+        ['Size', cls.size],
+        ['Package', cls.packageType],
+        ['Category', cls.categoryPath],
+        ['Net weight', cls.netWeight ? `${cls.netWeight.value} ${cls.netWeight.unit}` : null],
+        ['Photo qty', cls.photoQuantity],
+        ['Bundle', cls.bundleInfo?.isBundle ? `Yes — ${cls.bundleInfo.bundleProducts?.join(' + ')}` : null],
+      ];
+      $('visionFields').innerHTML = fields
+        .filter(([, v]) => v != null && v !== '' && v !== 'Unknown')
+        .map(([label, val]) => `
+          <div style="background: var(--bg-card); border-radius: 4px; padding: 0.4rem 0.6rem;">
+            <div style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 0.1rem;">${label}</div>
+            <div style="font-size: 0.85rem; font-weight: 500;">${escapeHtml(String(val))}</div>
+          </div>`).join('');
+      if (cls.keyText?.length > 0) {
+        $('visionKeyText').style.display = 'block';
+        $('visionKeyTextList').textContent = cls.keyText.join(', ');
+      } else {
+        $('visionKeyText').style.display = 'none';
+      }
+    }
+
+    function renderSearchQueries(sq) {
+      if (!sq) { $('logsSearch').style.display = 'none'; return; }
+      $('logsSearch').style.display = 'block';
+      const rows = [
+        ['Price lookup title', sq.priceLookupTitle],
+        ['eBay Browse query', sq.ebayQuery],
+        ['Google Shopping query', sq.googleQuery],
+        ...(sq.seoContext ? [['SEO context', sq.seoContext]] : []),
+      ];
+      $('searchQueryList').innerHTML = rows.map(([label, val]) => `
+        <div style="background: var(--bg-card); border-radius: 4px; padding: 0.5rem 0.75rem;">
+          <div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 0.2rem;">${label}</div>
+          <div style="font-family: monospace; font-size: 0.82rem; color: var(--accent); word-break: break-all;">${escapeHtml(String(val ?? '—'))}</div>
+        </div>`).join('');
     }
     
     function renderPricingDecision(pricing) {

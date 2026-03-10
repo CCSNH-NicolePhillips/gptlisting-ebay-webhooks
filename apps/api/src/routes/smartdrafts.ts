@@ -32,6 +32,10 @@ import { schedulePairingV2Job } from '../../../../src/lib/pairingV2Jobs.js';
 import { tokensStore } from '../../../../src/lib/redis-store.js';
 import { userScopedKey } from '../../../../src/lib/_auth.js';
 import { ok, badRequest, serverError } from '../http/respond.js';
+import {
+  getDraftLogs,
+  getDraftLogsByOfferId,
+} from '../../../../src/lib/draft-logs.js';
 import { runDirectScan } from '../../../../packages/core/src/services/smartdrafts/scan-direct.service.js';
 import {
   startPairingFromScan,
@@ -505,6 +509,43 @@ router.get('/drafts', async (req, res) => {
     if (err instanceof Error && (err as any).statusCode) {
       return res.status((err as any).statusCode).json({ ok: false, error: err.message, detail: (err as any).detail });
     }
+    if (err instanceof Error && err.message.toLowerCase().includes('auth')) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    return serverError(res, err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/smartdrafts/logs
+//
+// Returns the full pipeline trace (vision classification, search queries,
+// pricing decision, competitor data) for a specific draft.
+// Only accessible to authenticated users — returns THEIR own logs only.
+//
+// Query params (one of):
+//   sku     — fetch by SKU / productId
+//   offerId — fetch by eBay offer ID (falls back to sku lookup if needed)
+//
+// Response 200: { ok: true, logs: DraftLogs }
+// Response 404: { ok: false, error: 'No logs found' }
+// ---------------------------------------------------------------------------
+router.get('/logs', async (req, res) => {
+  try {
+    const { userId } = await requireUserAuth(req.headers.authorization || '');
+    const sku = (req.query.sku as string | undefined)?.trim() ?? '';
+    const offerId = (req.query.offerId as string | undefined)?.trim() ?? '';
+
+    if (!sku && !offerId) return badRequest(res, 'Provide sku or offerId');
+
+    let logs = null;
+    if (offerId) logs = await getDraftLogsByOfferId(userId, offerId);
+    if (!logs && sku) logs = await getDraftLogs(userId, sku);
+
+    if (!logs) return res.status(404).json({ ok: false, error: 'No logs found' });
+
+    return res.status(200).json({ ok: true, logs });
+  } catch (err) {
     if (err instanceof Error && err.message.toLowerCase().includes('auth')) {
       return res.status(401).json({ error: 'Unauthorized' });
     }

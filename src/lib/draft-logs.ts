@@ -22,6 +22,27 @@ export interface VisionAnalysisLog {
   rawResponse?: string;
 }
 
+/**
+ * Full vision classification result stored per draft.
+ * Captures everything Vision API extracted from the product images.
+ */
+export interface VisionClassificationLog {
+  brand: string;
+  productName: string;
+  variant?: string | null;
+  size?: string | null;
+  packageType?: string | null;
+  keyText?: string[];
+  netWeight?: { value: number; unit: string } | null;
+  categoryPath?: string;
+  photoQuantity?: number;
+  bundleInfo?: {
+    isBundle: boolean;
+    bundleType: string | null;
+    bundleProducts: string[];
+  } | null;
+}
+
 export interface PricingSourceLog {
   source: string;
   query: string;
@@ -79,6 +100,18 @@ export interface PricingDecisionLog {
     ebayActiveCount?: number;
     ebaySoldCount?: number;
   };
+
+  /** The exact search strings sent to eBay Browse and Google Shopping. */
+  searchQuery?: {
+    /** e.g. "Mary Ruth Organics Liquid Probiotic 15.22 fl oz" */
+    ebayQuery: string;
+    /** Same string sent to Google Shopping SERP. */
+    googleQuery: string;
+    /** SEO context appended (categoryPath + keyText + size). */
+    seoContext?: string;
+    /** The productName actually used for the price lookup (may differ from vision product name for bundles). */
+    priceLookupTitle: string;
+  };
 }
 
 export interface DraftLogs {
@@ -86,6 +119,11 @@ export interface DraftLogs {
   offerId?: string;
   createdAt: string;
   vision?: VisionAnalysisLog;
+  /**
+   * Full vision classification data — product attributes extracted from images.
+   * More detailed than `vision` (which was for the older GPT-4o reasoning log).
+   */
+  classification?: VisionClassificationLog;
   pricing?: PricingDecisionLog;
   promotion?: {
     enabled: boolean;

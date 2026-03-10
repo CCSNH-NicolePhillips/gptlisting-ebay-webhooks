@@ -1346,13 +1346,18 @@ async function createDraftForProduct(
   let pricingStatus: 'OK' | 'ESTIMATED' | 'NEEDS_REVIEW' = 'NEEDS_REVIEW';
   let priceMeta: any = undefined;
   let priceWarning: string | undefined = undefined;
+  // Hoisted so the logging block (separate try/catch) can read the search context
+  let priceLookupTitle = '';
+  let seoContext: string | undefined = undefined;
+  let isBundle = false;
+  let bundlePriceLookupTitle = '';
 
   try {
     const priceStart = Date.now();
     
     // Build price lookup title - fallback to keyText if product name is missing
     // This handles cases where Vision API didn't extract productName but did get keyText
-    let priceLookupTitle = [product.product, product.variant].filter(Boolean).join(' ').trim();
+    priceLookupTitle = [product.product, product.variant].filter(Boolean).join(' ').trim();
     if (!priceLookupTitle && product.keyText && product.keyText.length > 0) {
       // Use first 4 keyText terms as fallback (e.g., "Hydrolyzed Collagen Protein Powder")
       priceLookupTitle = product.keyText.slice(0, 4).join(' ').trim();
@@ -1377,7 +1382,7 @@ async function createDraftForProduct(
     if (product.size) {
       seoContextParts.push(product.size);
     }
-    const seoContext = seoContextParts.filter(Boolean).join(' ').trim() || undefined;
+    seoContext = seoContextParts.filter(Boolean).join(' ').trim() || undefined;
     
     console.log(`[smartdrafts-price] Looking up price for: ${product.brand || '(no brand)'} ${priceLookupTitle || '(no product name)'}`);
     if (seoContext) {
@@ -1392,8 +1397,8 @@ async function createDraftForProduct(
     // 2. If no set price found, sum individual product prices
     // ========================================
     
-    const isBundle = product.bundleInfo?.isBundle && product.bundleInfo.bundleProducts?.length > 1;
-    let bundlePriceLookupTitle = priceLookupTitle;
+    isBundle = !!(product.bundleInfo?.isBundle && product.bundleInfo.bundleProducts?.length > 1);
+    bundlePriceLookupTitle = priceLookupTitle;
     let simpleBundleTitle = ''; // Simplified search for eBay Sold fallback
     
     if (isBundle) {
@@ -2150,6 +2155,18 @@ async function createDraftForProduct(
     }
     
     await storeDraftLogs(userId, product.productId, {
+      classification: {
+        brand: product.brand || '',
+        productName: product.product,
+        variant: product.variant ?? null,
+        size: product.size ?? null,
+        packageType: product.packageType ?? null,
+        keyText: product.keyText ?? [],
+        netWeight: product.netWeight ?? null,
+        categoryPath: product.categoryPath,
+        photoQuantity: product.photoQuantity,
+        bundleInfo: product.bundleInfo ?? null,
+      },
       pricing: {
         timestamp: new Date().toISOString(),
         brand: product.brand || '',
@@ -2179,6 +2196,14 @@ async function createDraftForProduct(
             : undefined,
           ebayActiveCount: _logEv?.ebayCompsCount,
           ebaySoldCount: _logSmr?.soldCount,
+        },
+        searchQuery: {
+          priceLookupTitle,
+          ebayQuery: [product.brand, isBundle ? bundlePriceLookupTitle : priceLookupTitle, seoContext]
+            .filter(Boolean).join(' ').trim(),
+          googleQuery: [product.brand, isBundle ? bundlePriceLookupTitle : priceLookupTitle, seoContext]
+            .filter(Boolean).join(' ').trim(),
+          seoContext: seoContext || undefined,
         },
       },
       promotion: promotion.enabled ? {
