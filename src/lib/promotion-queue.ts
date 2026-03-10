@@ -331,6 +331,35 @@ export async function getPromotionIntent(offerId: string): Promise<PromotionInte
 }
 
 /**
+ * Batch-fetch promotion intents for multiple offer IDs in a single MGET call.
+ * Returns a Map from offerId → PromotionIntent (only entries that exist).
+ */
+export async function batchGetPromotionIntents(
+  offerIds: string[],
+): Promise<Map<string, PromotionIntent>> {
+  const result = new Map<string, PromotionIntent>();
+  if (!REDIS_URL || !REDIS_TOKEN || offerIds.length === 0) return result;
+
+  const keys = offerIds.map((id) => `${PROMO_INTENT_PREFIX}${id}`);
+  let values: (string | null)[];
+  try {
+    const raw = await redisCall('MGET', ...keys);
+    values = Array.isArray(raw) ? raw : [];
+  } catch {
+    return result;
+  }
+
+  for (let i = 0; i < offerIds.length; i++) {
+    const data = values[i];
+    if (!data) continue;
+    try {
+      result.set(offerIds[i], JSON.parse(data) as PromotionIntent);
+    } catch { /* skip malformed */ }
+  }
+  return result;
+}
+
+/**
  * Delete promotion intent for an offer (after processing)
  */
 export async function deletePromotionIntent(offerId: string): Promise<void> {

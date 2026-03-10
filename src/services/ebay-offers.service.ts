@@ -18,6 +18,7 @@ import {
   getPromotionIntent,
   deletePromotionIntent,
   queuePromotionJob,
+  batchGetPromotionIntents,
 } from '../lib/promotion-queue.js';
 import { bindListing } from '../lib/price-store.js';
 
@@ -248,8 +249,10 @@ export async function listOffers(
       );
 
       if (filtered.length > 0) {
-        await enrichWithInventoryData(filtered, apiHost, headers);
-        await enrichWithPromotionIntent(filtered);
+        await Promise.all([
+          enrichWithInventoryData(filtered, apiHost, headers),
+          enrichWithPromotionIntent(filtered),
+        ]);
         return {
           ok: true,
           total: filtered.length,
@@ -349,10 +352,12 @@ export async function listOffers(
       )
     : offers;
 
-  if (final.length > 0 && final.length <= 50) {
-    await enrichWithInventoryData(final, apiHost, headers);
-  }
-  await enrichWithPromotionIntent(final);
+  await Promise.all([
+    final.length > 0 && final.length <= 50
+      ? enrichWithInventoryData(final, apiHost, headers)
+      : Promise.resolve(),
+    enrichWithPromotionIntent(final),
+  ]);
 
   const note =
     rawSku && !sku ? 'sku filter ignored due to invalid characters' : undefined;
@@ -797,51 +802,55 @@ async function enrichWithInventoryData(
   if (!uniqueSkus.length) return;
 
   const CHUNK_SIZE = 25;
+  const chunks: string[][] = [];
   for (let start = 0; start < uniqueSkus.length; start += CHUNK_SIZE) {
-    const chunk = uniqueSkus.slice(start, start + CHUNK_SIZE);
-    try {
-      const bulkUrl = `${apiHost}/sell/inventory/v1/bulk_get_inventory_item`;
-      const r = await fetch(bulkUrl, {
-        method: 'POST',
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requests: chunk.map((sku) => ({ sku })) }),
-      });
-      if (!r.ok) continue;
-      const json: any = await r.json();
-      for (const resp of Array.isArray(json?.responses) ? json.responses : []) {
-        if (resp.statusCode !== 200) continue;
-        const inv = resp.inventoryItem;
-        const indices = skuToIndices.get(resp.sku);
-        if (!inv || !indices) continue;
-        const title = inv?.product?.title ?? inv?.title;
-        const weight = inv?.packageWeightAndSize?.weight;
-        const imgArr: string[] = Array.isArray(inv?.product?.imageUrls)
-          ? inv.product.imageUrls
-          : [];
-        for (const idx of indices) {
-          if (title) offers[idx]._enrichedTitle = title;
-          if (weight?.value > 0) {
-            offers[idx]._hasWeight = true;
-            offers[idx]._weight = { value: weight.value, unit: weight.unit || 'OUNCE' };
-          } else {
-            offers[idx]._hasWeight = false;
-          }
-          if (imgArr.length > 0) offers[idx]._imageUrl = imgArr[0];
-        }
-      }
-    } catch { /* skip chunk */ }
+    chunks.push(uniqueSkus.slice(start, start + CHUNK_SIZE));
   }
+
+  await Promise.all(
+    chunks.map(async (chunk) => {
+      try {
+        const bulkUrl = `${apiHost}/sell/inventory/v1/bulk_get_inventory_item`;
+        const r = await fetch(bulkUrl, {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ requests: chunk.map((sku) => ({ sku })) }),
+        });
+        if (!r.ok) return;
+        const json: any = await r.json();
+        for (const resp of Array.isArray(json?.responses) ? json.responses : []) {
+          if (resp.statusCode !== 200) continue;
+          const inv = resp.inventoryItem;
+          const indices = skuToIndices.get(resp.sku);
+          if (!inv || !indices) continue;
+          const title = inv?.product?.title ?? inv?.title;
+          const weight = inv?.packageWeightAndSize?.weight;
+          const imgArr: string[] = Array.isArray(inv?.product?.imageUrls)
+            ? inv.product.imageUrls
+            : [];
+          for (const idx of indices) {
+            if (title) offers[idx]._enrichedTitle = title;
+            if (weight?.value > 0) {
+              offers[idx]._hasWeight = true;
+              offers[idx]._weight = { value: weight.value, unit: weight.unit || 'OUNCE' };
+            } else {
+              offers[idx]._hasWeight = false;
+            }
+            if (imgArr.length > 0) offers[idx]._imageUrl = imgArr[0];
+          }
+        }
+      } catch { /* skip chunk */ }
+    }),
+  );
 }
 
 async function enrichWithPromotionIntent(offers: any[]): Promise<void> {
   try {
-    const intents = await Promise.all(
-      offers.map((o: any) => {
-        const id = o?.offerId;
-        return id ? getPromotionIntent(id) : Promise.resolve(null);
-      }),
-    );
-    intents.forEach((intent: any, idx: number) => {
+    const offerIds = offers.map((o: any) => o?.offerId).filter(Boolean) as string[];
+    if (!offerIds.length) return;
+    const intentMap = await batchGetPromotionIntents(offerIds);
+    offers.forEach((o: any, idx: number) => {
+      const intent = intentMap.get(o?.offerId);
       if (!intent?.enabled) return;
       offers[idx].merchantData = offers[idx].merchantData ?? {};
       offers[idx].merchantData.autoPromote = true;
