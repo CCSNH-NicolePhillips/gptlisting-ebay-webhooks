@@ -21,7 +21,7 @@ import {
   batchGetPromotionIntents,
 } from '../lib/promotion-queue.js';
 import { bindListing } from '../lib/price-store.js';
-import { getDraftLogsByOfferId } from '../lib/draft-logs.js';
+import { getDraftLogsByOfferId, getDraftLogs } from '../lib/draft-logs.js';
 
 // ---------------------------------------------------------------------------
 // getOffer
@@ -869,21 +869,55 @@ async function enrichWithPromotionIntent(offers: any[]): Promise<void> {
  * wrote at offer-creation time. This function re-hydrates those fields from
  * Redis (keyed by offerId) so the UI can show the "NEEDS REVIEW" gate without
  * depending on eBay's response.
+ *
+ * For drafts created before the pricingStatus field was added to draft logs,
+ * falls back to the SKU-keyed entry and infers pricingStatus from log signals.
  */
 async function enrichWithDraftLogsMeta(offers: any[], userId: string): Promise<void> {
   try {
-    const offerIds = offers.map((o: any) => o?.offerId).filter(Boolean) as string[];
-    if (!offerIds.length) return;
+    if (!offers.length) return;
     await Promise.all(
-      offerIds.map(async (offerId) => {
+      offers.map(async (o: any) => {
         try {
-          const logs = await getDraftLogsByOfferId(userId, offerId);
-          if (!logs?.pricingStatus || logs.pricingStatus === 'OK') return;
-          const idx = offers.findIndex((o: any) => o?.offerId === offerId);
+          const offerId: string | undefined = o?.offerId;
+          const sku: string | undefined = o?.sku;
+          if (!offerId && !sku) return;
+
+          // 1. Try offerId-keyed entry first (written by updateDraftLogsOfferId)
+          let logs = offerId ? await getDraftLogsByOfferId(userId, offerId) : null;
+
+          // 2. Fall back to SKU-keyed entry (always written by storeDraftLogs)
+          if (!logs?.pricingStatus && sku) {
+            logs = await getDraftLogs(userId, sku);
+          }
+
+          if (!logs) return;
+
+          // 3. Determine effective pricingStatus — use stored value if present,
+          //    otherwise infer from pricing log signals (pre-fix drafts).
+          let effectiveStatus: 'OK' | 'ESTIMATED' | 'NEEDS_REVIEW' | undefined = logs.pricingStatus;
+          if (!effectiveStatus && logs.pricing) {
+            const reasoning = logs.pricing.reasoning ?? '';
+            const confidence = logs.pricing.confidence;
+            const cs = logs.pricing.competitorSummary;
+            const hasNoMarketData =
+              reasoning.toLowerCase().includes('no market data') ||
+              reasoning.toLowerCase().includes('fallback pricing');
+            const hasNoPrices =
+              !cs?.amazonPrice && !cs?.walmartPrice &&
+              !cs?.lowestDeliveredPrice && !cs?.medianDeliveredPrice;
+            if (hasNoMarketData || (confidence === 'low' && hasNoPrices)) {
+              effectiveStatus = 'NEEDS_REVIEW';
+            }
+          }
+
+          if (!effectiveStatus || effectiveStatus === 'OK') return;
+
+          const idx = offers.indexOf(o);
           if (idx === -1) return;
           offers[idx].merchantData = offers[idx].merchantData ?? {};
-          offers[idx].merchantData.pricingStatus = logs.pricingStatus;
-          offers[idx].merchantData.needsPriceReview = logs.needsPriceReview ?? true;
+          offers[idx].merchantData.pricingStatus = effectiveStatus;
+          offers[idx].merchantData.needsPriceReview = true;
           if (logs.attentionReasons?.length) {
             offers[idx].merchantData.attentionReasons = logs.attentionReasons;
           }
