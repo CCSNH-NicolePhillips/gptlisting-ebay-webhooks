@@ -30,6 +30,12 @@ export type DraftUpdate = {
   weight?: { value: number; unit?: string };
   /** Override the fulfillment (shipping) policy for this offer. */
   fulfillmentPolicyId?: string | null;
+  /**
+   * When true, clears the NEEDS_REVIEW pricing gate — the user has manually
+   * verified and confirmed the price. Sets pricingStatus to 'MANUAL_CONFIRMED'
+   * so the Publish button becomes available again on the drafts list.
+   */
+  confirmPriceReview?: boolean;
 };
 
 export class InvalidDraftError extends Error {
@@ -171,6 +177,8 @@ export async function updateDraft(
       autoPromote: draft.promotion?.enabled ?? false,
       autoPromoteAdRate:
         draft.promotion?.enabled && draft.promotion?.rate ? draft.promotion.rate : null,
+      // Confirm price clears the NEEDS_REVIEW gate — user has manually verified the price
+      ...(draft.confirmPriceReview ? { pricingStatus: 'MANUAL_CONFIRMED' } : {}),
     },
   };
 

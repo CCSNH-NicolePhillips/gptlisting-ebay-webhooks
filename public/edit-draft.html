@@ -71,6 +71,26 @@
       color: var(--text-muted);
       margin-top: 0.3rem;
     }
+    .needs-review-banner {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.5);
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1.25rem;
+    }
+    .needs-review-banner h3 { margin: 0 0 0.5rem; color: #f87171; font-size: 1rem; }
+    .needs-review-banner p { margin: 0; font-size: 0.875rem; line-height: 1.5; color: #fca5a5; }
+    #priceConfirmRow {
+      display: none;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 0.6rem;
+      padding: 0.6rem 0.75rem;
+      background: rgba(239, 68, 68, 0.07);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 6px;
+    }
+    #priceConfirmRow label { font-size: 0.875rem; color: var(--text-primary); cursor: pointer; }
     .aspect-item {
       display: grid;
       grid-template-columns: minmax(160px, 0.4fr) minmax(220px, 1fr) auto;
@@ -743,7 +763,13 @@
       <!-- Main Content Area -->
       <main class="dp-main">
         <div id="flash" style="margin-bottom: 1rem;"></div>
-        
+
+        <!-- NEEDS_REVIEW banner — shown when pricing requires manual confirmation -->
+        <div id="needsReviewBanner" class="needs-review-banner" style="display: none;">
+          <h3>⚠️ Manual Pricing Required</h3>
+          <p>Amazon could not find a verified price for this product. Set the correct price below, check the confirmation box, then click <strong>Confirm Price &amp; Save</strong>. Publishing will be unlocked automatically.</p>
+        </div>
+
         <!-- Basic Information -->
         <div class="dp-card dp-card--full">
           <h3 style="margin-top: 0; margin-bottom: 1rem; color: var(--text-primary);">Basic Information</h3>
@@ -773,6 +799,11 @@
                 </button>
               </div>
               <small class="muted-hint" id="repriceStatus" style="display: none;"></small>
+              <!-- Shown only when pricingStatus is NEEDS_REVIEW -->
+              <div id="priceConfirmRow">
+                <input type="checkbox" id="priceConfirmed" onchange="onPriceConfirmChange()" />
+                <label for="priceConfirmed">✅ I have reviewed and confirmed this price is correct</label>
+              </div>
             </div>
             
             <div class="form-field">
@@ -1411,7 +1442,17 @@
         }
         
         showFlash('Draft loaded successfully!', 'success');
-        
+
+        // NEEDS_REVIEW: show banner and lock Save button until user confirms the price
+        if (originalDraft.merchantData?.pricingStatus === 'NEEDS_REVIEW') {
+          _needsPriceReview = true;
+          $('needsReviewBanner').style.display = 'block';
+          $('priceConfirmRow').style.display = 'flex';
+          const btn = $('btnSave');
+          btn.disabled = true;
+          btn.textContent = '🔒 Confirm Price to Save';
+        }
+
         // Load shipping policies (non-blocking)
         loadShippingPolicies(originalDraft.fulfillmentPolicyId || null);
         
@@ -1678,6 +1719,17 @@
       }
     }
     
+    // Tracks whether this draft is in the NEEDS_REVIEW pricing state
+    let _needsPriceReview = false;
+
+    function onPriceConfirmChange() {
+      if (!_needsPriceReview) return;
+      const confirmed = $('priceConfirmed').checked;
+      const btn = $('btnSave');
+      btn.disabled = !confirmed;
+      btn.textContent = confirmed ? '✅ Confirm Price & Save' : '🔒 Confirm Price to Save';
+    }
+
     async function saveDraft() {
       try {
         const btn = $('btnSave');
@@ -1746,7 +1798,9 @@
             autoDeclinePercent: bestOfferEnabled ? bestOfferAutoDecline : null,
             autoAcceptPercent: bestOfferEnabled ? bestOfferAutoAccept : null
           },
-          weight: weightValue ? { value: weightValue, unit: weightUnit } : null
+          weight: weightValue ? { value: weightValue, unit: weightUnit } : null,
+          // If the user confirmed the price on a NEEDS_REVIEW draft, clear the gate
+          confirmPriceReview: _needsPriceReview && ($('priceConfirmed')?.checked ?? false),
         };
         
         // Save to backend

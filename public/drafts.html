@@ -308,6 +308,15 @@
         background: var(--warning);
         box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.18);
       }
+      .badge.review-badge {
+        color: #fca5a5;
+        border-color: rgba(239, 68, 68, 0.5);
+        background: rgba(239, 68, 68, 0.08);
+      }
+      .badge.review-badge .dot {
+        background: #ef4444;
+        box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25);
+      }
       .muted {
         color: var(--muted);
       }
@@ -916,8 +925,8 @@
         }
         
   const badge = document.createElement('div');
-  badge.className = 'badge';
-  const st = String(offer?.status || 'UNPUBLISHED');
+  badge.className = needsReview ? 'badge review-badge' : 'badge';
+  const st = needsReview ? '⚠️ NEEDS REVIEW' : String(offer?.status || 'UNPUBLISHED');
   badge.innerHTML = `<span class="dot"></span> ${st}`;
   
         // Create promo indicator badge (shown above the promo controls for visibility)
@@ -1196,10 +1205,15 @@
           }
         };
 
-        // Only add publish button if pricing is OK
-        if (!needsReview) {
-          row.appendChild(pub);
+        // For NEEDS_REVIEW: show locked publish button — user must confirm price in Edit first
+        if (needsReview) {
+          pub.textContent = '🔒 Set Price First';
+          pub.disabled = true;
+          pub.title = 'Price needs manual review — open Edit to set and confirm the correct price.';
+          pub.style.opacity = '0.5';
+          pub.style.cursor = 'not-allowed';
         }
+        row.appendChild(pub);
         row.appendChild(edit);
         row.appendChild(del);
         
