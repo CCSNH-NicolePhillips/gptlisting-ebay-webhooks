@@ -2199,6 +2199,8 @@ async function createDraftForProduct(
         },
         searchQuery: {
           priceLookupTitle,
+          amazonQuery: [product.brand, isBundle ? bundlePriceLookupTitle : priceLookupTitle]
+            .filter(Boolean).join(' ').trim(),
           ebayQuery: [product.brand, isBundle ? bundlePriceLookupTitle : priceLookupTitle, seoContext]
             .filter(Boolean).join(' ').trim(),
           googleQuery: [product.brand, isBundle ? bundlePriceLookupTitle : priceLookupTitle, seoContext]

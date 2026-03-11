@@ -105,6 +105,8 @@ export interface PricingDecisionLog {
   searchQuery?: {
     /** e.g. "Mary Ruth Organics Liquid Probiotic 15.22 fl oz" */
     ebayQuery: string;
+    /** Full "brand + productName" query sent to Amazon Search API. */
+    amazonQuery?: string;
     /** Same string sent to Google Shopping SERP. */
     googleQuery: string;
     /** SEO context appended (categoryPath + keyText + size). */

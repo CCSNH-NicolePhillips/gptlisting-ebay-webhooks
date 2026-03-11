@@ -2008,6 +2008,7 @@
       $('logsSearch').style.display = 'block';
       const rows = [
         ['Price lookup title', sq.priceLookupTitle],
+        ...(sq.amazonQuery ? [['Amazon search query', sq.amazonQuery]] : []),
         ['eBay Browse query', sq.ebayQuery],
         ['Google Shopping query', sq.googleQuery],
         ...(sq.seoContext ? [['SEO context', sq.seoContext]] : []),
