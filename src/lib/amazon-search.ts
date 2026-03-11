@@ -576,16 +576,19 @@ export async function getAmazonPrice(
  * not "Hemp Seed Oil Capsules" - so searching "Milamend" alone finds it.
  * 
  * @param brand - Product brand
- * @param productName - Product name
+ * @param productName - Product name (may include additionalContext for richer Amazon queries)
  * @param tryBrandOnly - If true, try brand-only search as fallback
+ * @param conflictCheckName - Optional original product name for conflict checks when productName
+ *   has been enriched with seoContext. Keeps ingredient/region/form-factor checks accurate.
  */
 export async function searchAmazonWithFallback(
   brand: string,
   productName: string,
-  tryBrandOnly: boolean = true
+  tryBrandOnly: boolean = true,
+  conflictCheckName?: string
 ): Promise<AmazonPriceLookupResult> {
   // First try the full brand + product search
-  const fullResult = await searchAmazon(brand, productName);
+  const fullResult = await searchAmazon(brand, productName, 10, conflictCheckName ?? undefined);
   
   if (fullResult.price !== null && fullResult.confidence !== 'low') {
     return fullResult;
@@ -596,7 +599,8 @@ export async function searchAmazonWithFallback(
     // Skip brand-only fallback when the product has specific ingredient/flavor keywords.
     // Multi-SKU brands (e.g. Plant People) sell Elderberry AND Mushroom variants — a
     // brand-only search returns whichever is most popular, which can be the wrong variant.
-    const hasSpecificIngredient = CONFLICT_INGREDIENT_MARKERS.some(i => productName.toLowerCase().includes(i));
+    const nameForIngredientCheck = (conflictCheckName ?? productName).toLowerCase();
+    const hasSpecificIngredient = CONFLICT_INGREDIENT_MARKERS.some(i => nameForIngredientCheck.includes(i));
     if (hasSpecificIngredient) {
       console.log(`[amazon-search] Skipping brand-only fallback — product has specific ingredients; brand-only would risk wrong SKU`);
       return fullResult;
@@ -604,9 +608,9 @@ export async function searchAmazonWithFallback(
 
     console.log(`[amazon-search] Brand+product search failed, trying brand-only: "${brand}"`);
     
-    // Pass original productName as conflictCheckProductName so region/ingredient
-    // conflict checks still fire even though the search query is brand-only.
-    const brandOnlyResult = await searchAmazon(brand, '', 10, productName);
+    // Pass original product name (without seoContext noise) as conflictCheckProductName
+    // so region/ingredient/form-factor checks still fire accurately.
+    const brandOnlyResult = await searchAmazon(brand, '', 10, conflictCheckName ?? productName);
     
     if (brandOnlyResult.price !== null) {
       console.log(`[amazon-search] ✅ Brand-only fallback found: $${brandOnlyResult.price}`);

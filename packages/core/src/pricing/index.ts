@@ -253,7 +253,12 @@ export async function getPricingDecision(input: PricingInput): Promise<PricingDe
     // tryBrandOnly=true: when full brand+product search fails, retry with brand name alone.
     // This finds niche brands whose Amazon title differs from the product label
     // (e.g. Besque's full product title doesn't surface in keyword search).
-    const amazonResult = await searchAmazonWithFallback(brand, productName, true);
+    //
+    // additionalContext (seoContext) is appended to the product search query to improve
+    // Amazon search accuracy for niche products (e.g. adds "100ml" which helps find
+    // Besque Magic Luxury Body Oil). Conflict checks still use the original productName.
+    const amazonProductQuery = [productName, additionalContext].filter(Boolean).join(' ').trim();
+    const amazonResult = await searchAmazonWithFallback(brand, amazonProductQuery, true, productName);
 
     if (amazonResult.price !== null && amazonResult.confidence !== 'low') {
       const amazonPriceCents = Math.round(amazonResult.price * 100);

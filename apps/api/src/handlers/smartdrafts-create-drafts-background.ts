@@ -1363,6 +1363,16 @@ async function createDraftForProduct(
       priceLookupTitle = product.keyText.slice(0, 4).join(' ').trim();
       console.log(`[smartdrafts-price] Using keyText fallback for title: "${priceLookupTitle}"`);
     }
+    // Append product size if present and not already in the title (e.g. "100ml", "2 fl oz").
+    // This significantly improves Amazon search accuracy for niche products where the size
+    // is part of the Amazon listing title (e.g. "Besque Magic Luxury Body Oil 100ml").
+    if (product.size) {
+      const sizeLower = product.size.toLowerCase().trim();
+      if (sizeLower && !priceLookupTitle.toLowerCase().includes(sizeLower)) {
+        priceLookupTitle = `${priceLookupTitle} ${product.size}`.trim();
+        console.log(`[smartdrafts-price] Appended size to lookup title: "${priceLookupTitle}"`);
+      }
+    }
     
     // Build SEO context for better search matching
     // Include categoryPath and relevant keyText terms that help identify the product
