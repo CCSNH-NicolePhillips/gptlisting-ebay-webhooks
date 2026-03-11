@@ -896,7 +896,8 @@
         
         // Check for pricing status from custom merchant data
         const pricingStatus = offer?.merchantData?.pricingStatus;
-        const needsReview = pricingStatus === 'NEEDS_REVIEW';
+        const needsReview = pricingStatus === 'NEEDS_REVIEW'
+          || offer?.merchantData?.needsPriceReview === true;
         const missingWeight = offer?._hasWeight === false;
         
         meta.textContent = [

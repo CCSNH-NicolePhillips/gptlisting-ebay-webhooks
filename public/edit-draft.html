@@ -1444,7 +1444,8 @@
         showFlash('Draft loaded successfully!', 'success');
 
         // NEEDS_REVIEW: show banner and lock Save button until user confirms the price
-        if (originalDraft.merchantData?.pricingStatus === 'NEEDS_REVIEW') {
+        if (originalDraft.merchantData?.pricingStatus === 'NEEDS_REVIEW'
+            || originalDraft.merchantData?.needsPriceReview === true) {
           _needsPriceReview = true;
           $('needsReviewBanner').style.display = 'block';
           $('priceConfirmRow').style.display = 'flex';
