@@ -443,9 +443,7 @@
     }
 
     function apiBase() {
-      return window.location.hostname === 'localhost' || window.location.port
-        ? '/api/ebay'
-        : '/.netlify/functions';
+      return '/api/ebay';
     }
 
     function showFlash(msg, isError = false) {
