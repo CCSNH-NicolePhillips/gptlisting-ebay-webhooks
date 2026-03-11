@@ -231,6 +231,7 @@ export async function listOffers(
       if (r.status === 400) {
         const safe = await safeAggregateByInventory();
         const partial = Date.now() - startTime > 6_500;
+        await enrichWithDraftLogsMeta(safe.offers, userId);
         return {
           ok: true,
           partial,
@@ -282,6 +283,7 @@ export async function listOffers(
         seen.add(id);
         return true;
       });
+      await enrichWithDraftLogsMeta(unique, userId);
       return {
         ok: true,
         total: unique.length,
@@ -309,6 +311,7 @@ export async function listOffers(
     if (res.status === 400) {
       // Any eBay 400 (no offers, invalid SKU, etc.) → safe aggregate or empty
       const safe = await safeAggregateByInventory();
+      await enrichWithDraftLogsMeta(safe.offers, userId);
       return {
         ok: true,
         total: safe.offers.length,
@@ -338,6 +341,7 @@ export async function listOffers(
     }
     if (offers.length === 0) {
       const safe = await safeAggregateByInventory();
+      await enrichWithDraftLogsMeta(safe.offers, userId);
       return {
         ok: true,
         total: safe.offers.length,
