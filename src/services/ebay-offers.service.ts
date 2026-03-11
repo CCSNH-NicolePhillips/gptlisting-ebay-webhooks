@@ -21,6 +21,7 @@ import {
   batchGetPromotionIntents,
 } from '../lib/promotion-queue.js';
 import { bindListing } from '../lib/price-store.js';
+import { getDraftLogsByOfferId } from '../lib/draft-logs.js';
 
 // ---------------------------------------------------------------------------
 // getOffer
@@ -252,6 +253,7 @@ export async function listOffers(
         await Promise.all([
           enrichWithInventoryData(filtered, apiHost, headers),
           enrichWithPromotionIntent(filtered),
+          enrichWithDraftLogsMeta(filtered, userId),
         ]);
         return {
           ok: true,
@@ -357,6 +359,7 @@ export async function listOffers(
       ? enrichWithInventoryData(final, apiHost, headers)
       : Promise.resolve(),
     enrichWithPromotionIntent(final),
+    enrichWithDraftLogsMeta(final, userId),
   ]);
 
   const note =
@@ -856,6 +859,37 @@ async function enrichWithPromotionIntent(offers: any[]): Promise<void> {
       offers[idx].merchantData.autoPromote = true;
       offers[idx].merchantData.autoPromoteAdRate = intent.adRate;
     });
+  } catch { /* ignore */ }
+}
+
+/**
+ * Enrich offers with pricingStatus / attentionReasons from Redis draft logs.
+ *
+ * eBay's list endpoint does not reliably return custom merchantData fields we
+ * wrote at offer-creation time. This function re-hydrates those fields from
+ * Redis (keyed by offerId) so the UI can show the "NEEDS REVIEW" gate without
+ * depending on eBay's response.
+ */
+async function enrichWithDraftLogsMeta(offers: any[], userId: string): Promise<void> {
+  try {
+    const offerIds = offers.map((o: any) => o?.offerId).filter(Boolean) as string[];
+    if (!offerIds.length) return;
+    await Promise.all(
+      offerIds.map(async (offerId) => {
+        try {
+          const logs = await getDraftLogsByOfferId(userId, offerId);
+          if (!logs?.pricingStatus || logs.pricingStatus === 'OK') return;
+          const idx = offers.findIndex((o: any) => o?.offerId === offerId);
+          if (idx === -1) return;
+          offers[idx].merchantData = offers[idx].merchantData ?? {};
+          offers[idx].merchantData.pricingStatus = logs.pricingStatus;
+          offers[idx].merchantData.needsPriceReview = logs.needsPriceReview ?? true;
+          if (logs.attentionReasons?.length) {
+            offers[idx].merchantData.attentionReasons = logs.attentionReasons;
+          }
+        } catch { /* non-fatal per offer */ }
+      }),
+    );
   } catch { /* ignore */ }
 }
 

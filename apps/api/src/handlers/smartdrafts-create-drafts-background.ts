@@ -2223,6 +2223,9 @@ async function createDraftForProduct(
         rate: promotion.rate || 5,
         reason: 'User-configured promotion rate',
       } : undefined,
+      pricingStatus: pricingStatus as 'OK' | 'ESTIMATED' | 'NEEDS_REVIEW',
+      needsPriceReview: pricingStatus !== 'OK',
+      attentionReasons: attentionReasons.length > 0 ? attentionReasons : undefined,
     });
     
     console.log(`[Draft] ✓ Stored pricing logs for ${product.productId}`);

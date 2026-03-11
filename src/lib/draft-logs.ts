@@ -139,6 +139,15 @@ export interface DraftLogs {
     minPrice: number;
     reason: string;
   };
+  /**
+   * Pricing gate status — enriched back onto offer.merchantData so the UI
+   * can show a red "NEEDS REVIEW" badge without relying on eBay returning merchantData.
+   */
+  pricingStatus?: 'OK' | 'ESTIMATED' | 'NEEDS_REVIEW';
+  /** Convenience flag: true when pricingStatus !== 'OK' */
+  needsPriceReview?: boolean;
+  /** Reasons why manual review is required (surfaced in edit-draft UI). */
+  attentionReasons?: Array<{ code: string; message: string; severity?: string }>;
 }
 
 /**
