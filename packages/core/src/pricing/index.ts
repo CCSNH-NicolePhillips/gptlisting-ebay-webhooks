@@ -250,7 +250,10 @@ export async function getPricingDecision(input: PricingInput): Promise<PricingDe
     const shippingCents = settings?.shippingEstimateCents ?? 600;
 
     console.log(`[pricing] amazon_anchored: looking up "${brand} ${productName}" (ratio=${ratio})`);
-    const amazonResult = await searchAmazonWithFallback(brand, productName, false);
+    // tryBrandOnly=true: when full brand+product search fails, retry with brand name alone.
+    // This finds niche brands whose Amazon title differs from the product label
+    // (e.g. Besque's full product title doesn't surface in keyword search).
+    const amazonResult = await searchAmazonWithFallback(brand, productName, true);
 
     if (amazonResult.price !== null && amazonResult.confidence !== 'low') {
       const amazonPriceCents = Math.round(amazonResult.price * 100);

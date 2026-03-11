@@ -31,7 +31,9 @@
     "check:structure:ps1": "powershell -File scripts/check-structure.ps1",
     "list-functions": "npx tsx scripts/list-netlify-functions.ts",
     "list-functions:diff": "npx tsx scripts/list-netlify-functions.ts --diff",
-    "deploy": "railway up"
+    "deploy": "railway up",
+    "test:pricing-benchmark": "tsx scripts/test-pricing-benchmark.ts",
+    "test:pricing-benchmark:verbose": "tsx scripts/test-pricing-benchmark.ts --verbose"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.21.1",

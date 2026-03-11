@@ -92,16 +92,72 @@ const UNTRUSTED_AMAZON_SELLERS: string[] = [
 ];
 
 /**
+ * Body-region tokens — used to prevent same-brand, different-SKU matches.
+ * e.g. "OS-01 FACE" must not match "OS-01 HAIR Scalp Serum".
+ */
+const CONFLICT_REGION_ANCHORS = [
+  'face', 'facial', 'hair', 'scalp', 'body', 'eye', 'lip', 'hand', 'foot', 'neck',
+];
+
+/**
+ * Ingredient / flavor tokens — used to prevent same-brand, same-sub-brand but
+ * different-formula matches.
+ * e.g. "WonderSleep Wild Elderberry" must not match "WonderSleep Mushroom Gummies".
+ * Also used to skip brand-only fallback when a specific formula is required.
+ */
+const CONFLICT_INGREDIENT_MARKERS = [
+  'elderberry', 'mushroom', 'ashwagandha', 'turmeric', 'melatonin',
+  'blueberry', 'raspberry', 'strawberry', 'cherry', 'ginger', 'lavender',
+  'chamomile', 'arnica', 'collagen', 'retinol', 'niacinamide',
+  'biotin', 'probiotic', 'probiotics', 'hemp',
+];
+
+/**
+ * Supplement / topical form factors that are mutually exclusive.
+ * If our product specifies "Capsules" and a result says "Gummies" — different product.
+ * Keeps serum/cream/oil/lotion OUT because those are handled by region checks.
+ */
+const SUPPLEMENT_FORM_FACTORS = [
+  'capsules', 'tablets', 'gummies', 'softgels',
+  'liquid', 'spray', 'powder', 'drops', 'chews', 'tincture', 'lozenge',
+];
+
+/**
+ * Regex patterns that identify multi-unit / bundle / set listings on Amazon.
+ * These are always skipped — the price reflects multiple units, not one item.
+ */
+const LOT_BUNDLE_PATTERNS = [
+  /\bpack\s+of\s+\d+/i,
+  /\b\d+\s*-?\s*pack\b/i,
+  /\blot\s+of\s+\d+/i,
+  /\bset\s+of\s+\d+/i,
+  /\bbundle\s+of\s+\d+/i,
+  /\(\s*pack\s+of\s+\d+\s*\)/i,
+  /,\s*\d+\s*pack\b/i,
+  /\bqty\s*:?\s*\d+\b/i,
+  /\b3[\s-]*pack\b/i,
+  /\b2[\s-]*pack\b/i,
+  /\b4[\s-]*pack\b/i,
+  /\bset\s*:/i,           // "serum set: Product A + B" — colon signals multi-product
+  /\bcombo\b/i,           // "value combo", "skincare combo"
+  /\bkit\b/i,             // "starter kit", "trial kit"
+  /\b\d+[\s-]*piece\b/i,  // "2-piece set", "3-piece kit"
+];
+
+/**
  * Search Amazon directly for a product
  * 
  * @param brand - Product brand (e.g., "Panda's Promise")
  * @param productName - Product name with size/count (e.g., "Immune Support Gummies 60ct")
  * @param maxResults - Maximum results to return (default: 10)
+ * @param conflictCheckProductName - Optional override for conflict checks. Pass the original
+ *   product name when the search query is brand-only, so region/ingredient filters still work.
  */
 export async function searchAmazon(
   brand: string,
   productName: string,
-  maxResults: number = 10
+  maxResults: number = 10,
+  conflictCheckProductName?: string
 ): Promise<AmazonPriceLookupResult> {
   if (!SEARCHAPI_KEY) {
     console.log('[amazon-search] No SEARCHAPI_KEY configured, skipping');
@@ -200,24 +256,16 @@ export async function searchAmazon(
 
     console.log(`[amazon-search] Found ${results.length} results`);
 
-    // Lot/multi-pack filter patterns
-    const LOT_PATTERNS = [
-      /\bpack\s+of\s+\d+/i,
-      /\b\d+\s*-?\s*pack\b/i,
-      /\blot\s+of\s+\d+/i,
-      /\bset\s+of\s+\d+/i,
-      /\bbundle\s+of\s+\d+/i,
-      /\(\s*pack\s+of\s+\d+\s*\)/i,
-      /,\s*\d+\s*pack\b/i,
-      /\bqty\s*:?\s*\d+\b/i,
-      /\b3[\s-]*pack\b/i,    // Specifically catch 3-pack bundles
-      /\b2[\s-]*pack\b/i,    // 2-pack bundles
-      /\b4[\s-]*pack\b/i,    // 4-pack bundles
-    ];
-    
-    const isLotListing = (title: string): boolean => {
-      return LOT_PATTERNS.some(pattern => pattern.test(title));
-    };
+    // Product context for conflict detection.
+    // For brand-only searches productName is empty; conflictCheckProductName carries
+    // the original product name so region/ingredient filters still fire correctly.
+    const conflictName = (conflictCheckProductName ?? productName).toLowerCase();
+
+    const ourRegions = CONFLICT_REGION_ANCHORS.filter(r => conflictName.includes(r));
+    const ourIngredients = CONFLICT_INGREDIENT_MARKERS.filter(i => conflictName.includes(i));
+    const ourFormFactors = SUPPLEMENT_FORM_FACTORS.filter(f => conflictName.includes(f));
+
+    const isLotListing = (title: string): boolean => LOT_BUNDLE_PATTERNS.some(p => p.test(title));
 
     // Title matching - verify the result is actually the same product
     const isTitleMatch = (resultTitle: string | undefined, resultBrand: string | undefined, searchBrand: string): boolean | 'weak' => {
@@ -324,13 +372,50 @@ export async function searchAmazon(
           .split(/\s+/)
           .filter(w => w.length > 3 && !GENERIC_TERMS.has(w) && !/^\d/.test(w));
         const wordsInTitle = specificWords.filter(w => titleLower.includes(w));
-        const required = specificWords.length >= 2 ? 2 : 1;
+        // For weak brand matches require a majority of specific words (60%, min 2).
+        // This prevents wrong product matches where only a brand-name sub-word
+        // (e.g. "WonderSleep") appears in a completely different product's title.
+        const required = Math.max(2, Math.ceil(specificWords.length * 0.6));
         if (specificWords.length > 0 && wordsInTitle.length < required) {
           console.log(`[amazon-search] ❌ Weak brand — only ${wordsInTitle.length}/${required} specific words from "${productName}" found in title — rejecting`);
           continue;
         }
         score -= 20; // Penalize but don't discard — brand may be in Amazon's brand registry
       }
+
+      // ── Conflict detection (runs for ALL matches: strong and weak) ─────────
+      const resultTitleLower = (result.title ?? '').toLowerCase();
+
+      // 1. Body-region conflict: want "face" product but result is "hair", etc.
+      if (ourRegions.length > 0) {
+        const resultRegions = CONFLICT_REGION_ANCHORS.filter(r => resultTitleLower.includes(r));
+        if (resultRegions.length > 0 && !ourRegions.some(r => resultRegions.includes(r))) {
+          console.log(`[amazon-search] ❌ Region conflict: want "${ourRegions.join(',')}" but title has "${resultRegions.join(',')}" — skipping`);
+          continue;
+        }
+      }
+
+      // 2. Ingredient specificity: if our product names a specific ingredient (e.g. elderberry),
+      // REQUIRE that ingredient to appear in the result title. This prevents any result from
+      // slipping through regardless of how Amazon renders the title or brand field.
+      if (ourIngredients.length > 0) {
+        if (!ourIngredients.some(i => resultTitleLower.includes(i))) {
+          const resultIngredients = CONFLICT_INGREDIENT_MARKERS.filter(i => resultTitleLower.includes(i));
+          const reason = resultIngredients.length > 0 ? `has "${resultIngredients.join(',')}" instead` : 'no matching ingredient';
+          console.log(`[amazon-search] ❌ Ingredient mismatch: want "${ourIngredients.join(',')}" — ${reason} — skipping`);
+          continue;
+        }
+      }
+      // 3. Form-factor conflict: capsules vs gummies vs tablets vs powder, etc.
+      // These are mutually exclusive supplement delivery forms. If our product is
+      // "Elderberry Capsules" we must not accept "Elderberry Gummies" even from the same brand.
+      if (ourFormFactors.length > 0) {
+        const resultFormFactors = SUPPLEMENT_FORM_FACTORS.filter(f => resultTitleLower.includes(f));
+        if (resultFormFactors.length > 0 && !ourFormFactors.some(f => resultFormFactors.includes(f))) {
+          console.log(`[amazon-search] ❌ Form-factor mismatch: want "${ourFormFactors.join(',')}"-but got "${resultFormFactors.join(',')}"-— skipping`);
+          continue;
+        }
+      }      // ── End conflict detection ─────────────────────────────────────────────
 
       // Scoring bonuses
       if (result.is_prime) {
@@ -386,6 +471,29 @@ export async function searchAmazon(
 
     const best = scoredResults[0];
     const bestResult = best.result;
+
+    // Post-selection safeguard: require our ingredient to appear in the winning title.
+    // Belt-and-suspenders in case a result slipped through the per-result loop.
+    if (ourIngredients.length > 0) {
+      const bestTitleLower = (bestResult.title ?? '').toLowerCase();
+      if (!ourIngredients.some(i => bestTitleLower.includes(i))) {
+        console.log(`[amazon-search] ❌ Post-select: best match missing required ingredient "${ourIngredients.join(',')}" — discarding "${bestResult.title?.slice(0, 55)}"`);
+        return {
+          price: null,
+          originalPrice: null,
+          url: null,
+          asin: null,
+          title: null,
+          brand: null,
+          isPrime: false,
+          rating: null,
+          reviews: null,
+          allResults: results,
+          confidence: 'low',
+          reasoning: `Best match missing required ingredient: ${ourIngredients.join(',')}`,
+        };
+      }
+    }
 
     console.log(`[amazon-search] ✅ Best match: "${bestResult.title?.slice(0, 60)}" @ $${bestResult.extracted_price} (${best.reasons.join(', ')})`);
 
@@ -485,9 +593,20 @@ export async function searchAmazonWithFallback(
   
   // If no result and brand-only fallback is enabled, try just the brand
   if (tryBrandOnly && brand && brand.length >= 3) {
+    // Skip brand-only fallback when the product has specific ingredient/flavor keywords.
+    // Multi-SKU brands (e.g. Plant People) sell Elderberry AND Mushroom variants — a
+    // brand-only search returns whichever is most popular, which can be the wrong variant.
+    const hasSpecificIngredient = CONFLICT_INGREDIENT_MARKERS.some(i => productName.toLowerCase().includes(i));
+    if (hasSpecificIngredient) {
+      console.log(`[amazon-search] Skipping brand-only fallback — product has specific ingredients; brand-only would risk wrong SKU`);
+      return fullResult;
+    }
+
     console.log(`[amazon-search] Brand+product search failed, trying brand-only: "${brand}"`);
     
-    const brandOnlyResult = await searchAmazon(brand, '');
+    // Pass original productName as conflictCheckProductName so region/ingredient
+    // conflict checks still fire even though the search query is brand-only.
+    const brandOnlyResult = await searchAmazon(brand, '', 10, productName);
     
     if (brandOnlyResult.price !== null) {
       console.log(`[amazon-search] ✅ Brand-only fallback found: $${brandOnlyResult.price}`);
