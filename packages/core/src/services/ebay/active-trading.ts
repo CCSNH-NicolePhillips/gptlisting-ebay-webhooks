@@ -234,97 +234,16 @@ export async function listActiveListings(userId: string): Promise<{
  * price < $50 heuristic.
  */
 /**
- * Build the set of eBay fulfillment policy IDs that represent free shipping.
- *
- * Primary: GET /sell/account/v1/fulfillment_policy — inspect each policy's
- * shippingOptions to see if shippingCostType === 'FREE' or all shipping
- * service costs are $0.00. No Redis dependency.
- *
- * Fallback: Redis policy-defaults.json fulfillmentFree field (for edge cases
- * where the Account API is unavailable).
- */
-async function buildFreePolicyIdSet(
-  userId: string,
-  access_token: string,
-  apiHost: string,
-): Promise<Set<string>> {
-  const freeIds = new Set<string>();
-  const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || 'EBAY_US';
-  const headers = {
-    Authorization: `Bearer ${access_token}`,
-    Accept: 'application/json',
-    'Accept-Language': 'en-US',
-    'Content-Language': 'en-US',
-    'X-EBAY-C-MARKETPLACE-ID': MARKETPLACE_ID,
-  };
-
-  try {
-    const res = await fetch(
-      `${apiHost}/sell/account/v1/fulfillment_policy?marketplace_id=${MARKETPLACE_ID}`,
-      { headers },
-    );
-    if (res.ok) {
-      const body: any = await res.json().catch(() => null);
-      for (const policy of (body?.fulfillmentPolicies ?? [])) {
-        const id: string | undefined = policy?.fulfillmentPolicyId;
-        if (!id) continue;
-        const options: any[] = Array.isArray(policy.shippingOptions) ? policy.shippingOptions : [];
-
-        // Only look at the DOMESTIC option — international options at $0 should not
-        // mark the whole policy as free-shipping for domestic buyers.
-        const domesticOpts = options.filter((opt: any) =>
-          (opt?.optionType ?? '').toUpperCase() === 'DOMESTIC'
-        );
-        // If no optionType distinction, fall back to all options (older API shape)
-        const relevant = domesticOpts.length > 0 ? domesticOpts : options;
-
-        const isFree = relevant.some((opt: any) => {
-          // Explicit FREE cost type — the most reliable signal
-          if (opt?.shippingCostType === 'FREE') return true;
-
-          // Flat-rate at $0.00 — only count if shippingCost is explicitly present
-          // and the value is '0.00'/'0'. Do NOT treat absent shippingCost as $0
-          // (CALCULATED policies omit it entirely).
-          if (opt?.shippingCostType !== 'FLAT_RATE') return false;
-          const services: any[] = Array.isArray(opt?.shippingServices) ? opt.shippingServices : [];
-          return services.length > 0 && services.every((svc: any) => {
-            const raw: string | undefined = svc?.shippingCost?.value;
-            if (raw === undefined || raw === null) return false; // absent = not free
-            return parseFloat(raw) === 0;
-          });
-        });
-        if (isFree) freeIds.add(id);
-      }
-      // If we got a valid response return the result, even if empty
-      return freeIds;
-    }
-  } catch { /* fall through to Redis fallback */ }
-
-  // Fallback: Redis fulfillmentFree setting
-  try {
-    const store = tokensStore();
-    const defaults = ((await store.get(
-      userScopedKey(userId, 'policy-defaults.json'),
-      { type: 'json' },
-    ).catch(() => null)) as any) ?? {};
-    if (typeof defaults.fulfillmentFree === 'string') {
-      freeIds.add(defaults.fulfillmentFree);
-    }
-  } catch { /* ignore */ }
-
-  return freeIds;
-}
-
-/**
- * Fetch all inventory offers and map (sku | listingId) → isFreeShipping.
- * Runs the policy lookup and Inventory API paging in parallel.
+ * Two parallel calls:
+ *   1. GET /sell/account/v1/fulfillment_policy   → which policy IDs are free-shipping
+ *   2. GET /sell/inventory/v1/offer               → which SKU/listingId uses which policy
+ * Cross-reference → map of (sku | listingId) → isFreeShipping boolean.
  */
 async function fetchShippingPolicyMap(
-  userId: string,
+  _userId: string,
   access_token: string,
   apiHost: string,
 ): Promise<Map<string, boolean>> {
-  const map = new Map<string, boolean>();
   const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || 'EBAY_US';
   const headers = {
     Authorization: `Bearer ${access_token}`,
@@ -334,40 +253,38 @@ async function fetchShippingPolicyMap(
     'X-EBAY-C-MARKETPLACE-ID': MARKETPLACE_ID,
   };
 
-  // Run free-policy lookup and first page of offers in parallel
-  const firstPageUrl = `${apiHost}/sell/inventory/v1/offer?marketplace_id=${MARKETPLACE_ID}&limit=200&offset=0`;
-  const [freePolicyIds, firstPageRes] = await Promise.all([
-    buildFreePolicyIdSet(userId, access_token, apiHost).catch(() => new Set<string>()),
-    fetch(firstPageUrl, { headers }).catch(() => null),
+  // Fire both calls in parallel
+  const [policiesRes, offersRes] = await Promise.all([
+    fetch(`${apiHost}/sell/account/v1/fulfillment_policy?marketplace_id=${MARKETPLACE_ID}`, { headers }).catch(() => null),
+    fetch(`${apiHost}/sell/inventory/v1/offer?marketplace_id=${MARKETPLACE_ID}&limit=200&offset=0`, { headers }).catch(() => null),
   ]);
 
-  if (!freePolicyIds.size) return map; // no free policies → nothing to classify
-
-  async function processOfferPage(res: Response | null): Promise<{ total: number; count: number }> {
-    if (!res?.ok) return { total: 0, count: 0 };
-    const body: any = await res.json().catch(() => null);
-    if (!body) return { total: 0, count: 0 };
-    for (const offer of (body.offers ?? [])) {
-      const policyId: string | undefined = offer?.listingPolicies?.fulfillmentPolicyId;
-      if (!policyId) continue;
-      const isFree = freePolicyIds.has(policyId);
-      if (offer.sku) map.set(String(offer.sku), isFree);
-      const listingId = offer?.listing?.listingId;
-      if (listingId) map.set(String(listingId), isFree);
+  // Build set of free-shipping policy IDs
+  // A policy is free if any shippingOption has shippingCostType === 'FREE'
+  const freePolicyIds = new Set<string>();
+  if (policiesRes?.ok) {
+    const body: any = await policiesRes.json().catch(() => null);
+    for (const policy of (body?.fulfillmentPolicies ?? [])) {
+      const id: string = policy?.fulfillmentPolicyId;
+      if (!id) continue;
+      const opts: any[] = Array.isArray(policy.shippingOptions) ? policy.shippingOptions : [];
+      if (opts.some((o: any) => o?.shippingCostType === 'FREE')) {
+        freePolicyIds.add(id);
+      }
     }
-    return { total: body.total ?? 0, count: (body.offers ?? []).length };
   }
 
-  const { total, count } = await processOfferPage(firstPageRes);
-
-  // Fetch remaining pages sequentially if needed (uncommon: >200 offers)
-  let offset = count;
-  while (offset > 0 && offset < total) {
-    const url = `${apiHost}/sell/inventory/v1/offer?marketplace_id=${MARKETPLACE_ID}&limit=200&offset=${offset}`;
-    const res = await fetch(url, { headers }).catch(() => null);
-    const page = await processOfferPage(res);
-    if (!page.count) break;
-    offset += page.count;
+  // Map each offer's sku and listingId → isFreeShipping
+  const map = new Map<string, boolean>();
+  if (offersRes?.ok) {
+    const body: any = await offersRes.json().catch(() => null);
+    for (const offer of (body?.offers ?? [])) {
+      const policyId: string = offer?.listingPolicies?.fulfillmentPolicyId;
+      if (!policyId) continue;
+      const isFree = freePolicyIds.has(policyId);
+      if (offer.sku)                       map.set(String(offer.sku), isFree);
+      if (offer?.listing?.listingId)       map.set(String(offer.listing.listingId), isFree);
+    }
   }
 
   return map;
