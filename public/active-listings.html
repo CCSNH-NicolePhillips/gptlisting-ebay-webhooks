@@ -833,12 +833,12 @@
         badges.appendChild(bestOfferBadge);
       }
 
-      // Shipping template badge (Trading API has no policy data, infer from price)
+      // Shipping badge: items priced < $50 use free-shipping policy
       {
         const itemPriceNum = parseFloat(o.price?.value || o.price || '0');
-        const isFreeShip = itemPriceNum >= 50;
+        const isFreeShip = itemPriceNum < 50;
         const shipPill = document.createElement('span');
-        shipPill.className = 'pill';
+        shipPill.className = 'pill shipping-pill';
         if (isFreeShip) {
           shipPill.style.background = 'rgba(16, 185, 129, 0.12)';
           shipPill.style.color = '#6ee7b7';
@@ -1516,6 +1516,31 @@
           flash.textContent = `✓ Shipping updated for ${data.successCount} listing(s)`;
           flash.className = 'flash';
         }
+
+        // Update shipping badge on each card without a full reload
+        const succeededIds = new Set(
+          (data.results || []).filter(r => r.ok).map(r => r.itemId)
+        );
+        getSelectedCards().forEach(card => {
+          if (!succeededIds.has(card.dataset.listingId)) return;
+          const price = Number(card.dataset.price ?? 0);
+          let nowFree;
+          if (trimmedMode === 'free') nowFree = true;
+          else if (trimmedMode === 'paid') nowFree = false;
+          else nowFree = Number.isFinite(price) && price < 50; // auto
+          const pill = card.querySelector('.shipping-pill');
+          if (pill) {
+            if (nowFree) {
+              pill.style.background = 'rgba(16, 185, 129, 0.12)';
+              pill.style.color = '#6ee7b7';
+              pill.textContent = '\uD83D\uDE9A Free Ship';
+            } else {
+              pill.style.background = '';
+              pill.style.color = '';
+              pill.textContent = '\uD83D\uDCE6 Paid Ship';
+            }
+          }
+        });
 
         // Clear selection
         grid.querySelectorAll('.card.selected').forEach(card => {
