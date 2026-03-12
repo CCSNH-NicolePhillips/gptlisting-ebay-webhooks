@@ -269,13 +269,28 @@ async function buildFreePolicyIdSet(
         const id: string | undefined = policy?.fulfillmentPolicyId;
         if (!id) continue;
         const options: any[] = Array.isArray(policy.shippingOptions) ? policy.shippingOptions : [];
-        const isFree = options.some((opt: any) => {
+
+        // Only look at the DOMESTIC option — international options at $0 should not
+        // mark the whole policy as free-shipping for domestic buyers.
+        const domesticOpts = options.filter((opt: any) =>
+          (opt?.optionType ?? '').toUpperCase() === 'DOMESTIC'
+        );
+        // If no optionType distinction, fall back to all options (older API shape)
+        const relevant = domesticOpts.length > 0 ? domesticOpts : options;
+
+        const isFree = relevant.some((opt: any) => {
+          // Explicit FREE cost type — the most reliable signal
           if (opt?.shippingCostType === 'FREE') return true;
-          // Also treat as free if every shipping service in this option costs $0
+
+          // Flat-rate at $0.00 — only count if shippingCost is explicitly present
+          // and the value is '0.00'/'0'. Do NOT treat absent shippingCost as $0
+          // (CALCULATED policies omit it entirely).
+          if (opt?.shippingCostType !== 'FLAT_RATE') return false;
           const services: any[] = Array.isArray(opt?.shippingServices) ? opt.shippingServices : [];
           return services.length > 0 && services.every((svc: any) => {
-            const cost = parseFloat(svc?.shippingCost?.value ?? '1');
-            return cost === 0;
+            const raw: string | undefined = svc?.shippingCost?.value;
+            if (raw === undefined || raw === null) return false; // absent = not free
+            return parseFloat(raw) === 0;
           });
         });
         if (isFree) freeIds.add(id);
