@@ -39,6 +39,8 @@ export type ActiveOffer = {
   hitCount?: number;
   bestOfferEnabled?: boolean;
   bestOfferCount?: number;
+  /** True = free-shipping policy; false = paid; undefined = unknown (falls back to price inference in UI) */
+  isFreeShipping?: boolean;
 };
 
 const TRADING_API_URL = 'https://api.ebay.com/ws/api.dll';
@@ -188,10 +190,12 @@ export async function listActiveListings(userId: string): Promise<{
     pageNumber++;
   }
 
-  // Enrich with promotion data from the Marketing API (Promoted Listings).
-  // The Trading API has no promotion data — we cross-reference running ad campaigns.
+  // Enrich with promotion data and shipping policy in parallel
   try {
-    const promoMap = await fetchPromotionMap(userId, apiHost);
+    const [promoMap, shippingMap] = await Promise.all([
+      fetchPromotionMap(userId, apiHost).catch(() => new Map()),
+      fetchShippingPolicyMap(userId, access_token, apiHost).catch(() => new Map()),
+    ]);
     for (const offer of activeOffers) {
       const promo =
         promoMap.get(offer.sku) ||
@@ -203,12 +207,86 @@ export async function listActiveListings(userId: string): Promise<{
       } else {
         offer.autoPromote = false;
       }
+      // Shipping: prefer real policy lookup; fall back to price inference if not found
+      const shipKey = offer.sku || offer.listingId || offer.offerId;
+      const shipResult = shippingMap.get(shipKey) ??
+        (offer.listingId ? shippingMap.get(offer.listingId) : undefined) ??
+        (offer.itemId ? shippingMap.get(offer.itemId) : undefined);
+      if (shipResult !== undefined) {
+        offer.isFreeShipping = shipResult;
+      }
+      // else: isFreeShipping stays undefined → UI falls back to price<50 heuristic
     }
   } catch {
-    // Non-fatal — better to return listings without promo data than fail entirely
+    // Non-fatal
   }
 
   return { count: activeOffers.length, offers: activeOffers };
+}
+
+/**
+ * Fetch all inventory offers in one paged call and build a map of
+ * (sku or listingId) → isFreeShipping based on the offer's fulfillmentPolicyId
+ * compared against the user's saved `fulfillmentFree` default.
+ *
+ * One REST call per 200 offers (paginated). Non-inventory listings not present
+ * here will have `isFreeShipping` left undefined and the UI falls back to the
+ * price < $50 heuristic.
+ */
+async function fetchShippingPolicyMap(
+  userId: string,
+  access_token: string,
+  apiHost: string,
+): Promise<Map<string, boolean>> {
+  const map = new Map<string, boolean>();
+
+  // 1. Load the user's free-shipping policy ID from Redis (no HTTP call)
+  const store = tokensStore();
+  const defaults = ((await store.get(
+    userScopedKey(userId, 'policy-defaults.json'),
+    { type: 'json' },
+  ).catch(() => null)) as any) ?? {};
+  const freePolicyId: string | undefined =
+    typeof defaults.fulfillmentFree === 'string' ? defaults.fulfillmentFree : undefined;
+
+  // If no free-shipping policy is configured there's nothing to compare — bail early
+  if (!freePolicyId) return map;
+
+  // 2. Page through all inventory offers (200 per page)
+  const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || 'EBAY_US';
+  const headers = {
+    Authorization: `Bearer ${access_token}`,
+    Accept: 'application/json',
+    'Accept-Language': 'en-US',
+    'Content-Language': 'en-US',
+    'X-EBAY-C-MARKETPLACE-ID': MARKETPLACE_ID,
+  };
+
+  let offset = 0;
+  const limit = 200;
+  while (true) {
+    const url = `${apiHost}/sell/inventory/v1/offer?marketplace_id=${MARKETPLACE_ID}&limit=${limit}&offset=${offset}`;
+    const res = await fetch(url, { headers });
+    if (!res.ok) break; // non-fatal
+    const body: any = await res.json().catch(() => null);
+    if (!body) break;
+
+    for (const offer of (body.offers ?? [])) {
+      const policyId: string | undefined = offer?.listingPolicies?.fulfillmentPolicyId;
+      if (!policyId) continue;
+      const isFree = policyId === freePolicyId;
+      // Key both by SKU and by listingId (eBay listing number) for flexible lookup
+      if (offer.sku) map.set(String(offer.sku), isFree);
+      const listingId = offer?.listing?.listingId;
+      if (listingId) map.set(String(listingId), isFree);
+    }
+
+    const total: number = body.total ?? 0;
+    offset += limit;
+    if (offset >= total || !(body.offers?.length)) break;
+  }
+
+  return map;
 }
 
 /**

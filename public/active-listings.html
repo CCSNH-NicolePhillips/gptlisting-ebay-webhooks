@@ -833,10 +833,12 @@
         badges.appendChild(bestOfferBadge);
       }
 
-      // Shipping badge: items priced < $50 use free-shipping policy
+      // Shipping badge: use real policy lookup when available, fall back to price < $50 heuristic
       {
         const itemPriceNum = parseFloat(o.price?.value || o.price || '0');
-        const isFreeShip = itemPriceNum < 50;
+        const isFreeShip = (o.isFreeShipping !== undefined)
+          ? o.isFreeShipping
+          : (itemPriceNum < 50);
         const shipPill = document.createElement('span');
         shipPill.className = 'pill shipping-pill';
         if (isFreeShip) {
