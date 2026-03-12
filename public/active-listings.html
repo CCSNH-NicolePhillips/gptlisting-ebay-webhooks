@@ -570,16 +570,6 @@
     </div>
   </div>
 
-  <script src="/sidebar-shell.js"></script>
-  <script>
-    DraftPilotShell.init({
-      title: 'Active Listings',
-      subtitle: 'Manage your live eBay listings and promotions',
-      activePage: 'active-listings',
-      showSearch: false
-    });
-  </script>
-  
   <script type="module">
     const flash = document.getElementById('flash');
     const grid = document.getElementById('grid');
@@ -833,15 +823,11 @@
         badges.appendChild(bestOfferBadge);
       }
 
-      // Shipping badge: use real policy lookup when available, fall back to price < $50 heuristic
-      {
-        const itemPriceNum = parseFloat(o.price?.value || o.price || '0');
-        const isFreeShip = (o.isFreeShipping !== undefined)
-          ? o.isFreeShipping
-          : (itemPriceNum < 50);
+      // Shipping badge: only shown when the API returned a definitive answer
+      if (o.isFreeShipping !== undefined) {
         const shipPill = document.createElement('span');
         shipPill.className = 'pill shipping-pill';
-        if (isFreeShip) {
+        if (o.isFreeShipping) {
           shipPill.style.background = 'rgba(16, 185, 129, 0.12)';
           shipPill.style.color = '#6ee7b7';
           shipPill.textContent = '\uD83D\uDE9A Free Ship';
