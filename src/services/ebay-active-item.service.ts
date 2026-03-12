@@ -49,7 +49,8 @@ export interface GetActiveItemResult {
 // ---------------------------------------------------------------------------
 
 export function extractXmlText(xml: string, tag: string): string | null {
-  const re = new RegExp(`<${tag}>([^<]+)<\/${tag}>`);
+  // Allow for XML attributes on the tag (e.g. <CurrentPrice currencyID="USD">5.99</CurrentPrice>)
+  const re = new RegExp(`<${tag}(?:\\s[^>]*)?>([^<]+)<\\/${tag}>`);
   return xml.match(re)?.[1] ?? null;
 }
 
