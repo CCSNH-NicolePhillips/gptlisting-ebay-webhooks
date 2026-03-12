@@ -547,6 +547,7 @@
         </div>
         <span class="selected-count" id="selectedCount">0 selected</span>
         <div class="bulk-actions">
+          <button class="btn" id="bulkShipping" title="Update shipping policy for selected listings">🚒 Update Shipping</button>
           <button class="btn" id="bulkPromote" title="Promote selected listings">📢 Promote</button>
           <button class="btn danger" id="bulkEnd" title="End selected listings">End Listings</button>
         </div>
@@ -709,6 +710,8 @@
       card.dataset.listingId = o.listingId || '';
       card.dataset.offerId = o.offerId || '';
       card.dataset.sku = o.sku || '';
+      card.dataset.price = String(o.price?.value ?? '');
+      card.dataset.isInventory = o.isInventoryListing ? '1' : '0';
 
       // Add image thumbnail if available
       if (o.imageUrl) {
@@ -1299,6 +1302,7 @@
     const bulkActionBar = document.getElementById('bulkActionBar');
     const selectAllCheckbox = document.getElementById('selectAll');
     const selectedCountEl = document.getElementById('selectedCount');
+    const bulkShippingBtn = document.getElementById('bulkShipping');
     const bulkPromoteBtn = document.getElementById('bulkPromote');
     const bulkEndBtn = document.getElementById('bulkEnd');
     
@@ -1311,6 +1315,8 @@
         listingId: card.dataset.listingId,
         offerId: card.dataset.offerId,
         sku: card.dataset.sku,
+        price: card.dataset.price ? Number(card.dataset.price) : undefined,
+        isInventoryListing: card.dataset.isInventory === '1',
         title: card.querySelector('.card-title')?.textContent || '',
       })).filter(l => l.listingId);
     }
@@ -1452,6 +1458,74 @@
         flash.className = 'flash';
       } else {
         flash.textContent = `Ended ${successCount}, failed ${errorCount}`;
+        flash.className = 'flash error';
+      }
+    });
+
+    bulkShippingBtn?.addEventListener('click', async () => {
+      const listings = getSelectedListings();
+      if (listings.length === 0) return;
+
+      const mode = prompt(
+        `Update shipping for ${listings.length} listing(s).\n\n` +
+        `Enter shipping mode:\n` +
+        `  auto  – items < $50 get free shipping, ≥ $50 get paid shipping\n` +
+        `  free  – apply free shipping to all selected\n` +
+        `  paid  – apply paid shipping to all selected\n\n` +
+        `Mode:`,
+        'auto'
+      );
+      if (mode === null) return;
+      const trimmedMode = mode.trim().toLowerCase();
+      if (!['auto', 'free', 'paid'].includes(trimmedMode)) {
+        flash.textContent = 'Invalid mode. Must be auto, free, or paid.';
+        flash.className = 'flash error';
+        return;
+      }
+
+      flash.textContent = `Updating shipping for ${listings.length} listing(s)...`;
+      flash.className = 'flash';
+
+      try {
+        const exec = getAuthFetch();
+        const res = await exec('/api/ebay/listings/bulk-update-shipping', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mode: trimmedMode,
+            items: listings.map(l => ({
+              itemId: l.listingId,
+              sku: l.sku,
+              isInventoryListing: l.isInventoryListing,
+              price: l.price,
+            })),
+          }),
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) {
+          flash.textContent = data?.error || `Failed (${res.status})`;
+          flash.className = 'flash error';
+          return;
+        }
+
+        if (data.failCount > 0) {
+          flash.textContent = `Updated ${data.successCount}, failed ${data.failCount}`;
+          flash.className = 'flash error';
+        } else {
+          flash.textContent = `✓ Shipping updated for ${data.successCount} listing(s)`;
+          flash.className = 'flash';
+        }
+
+        // Clear selection
+        grid.querySelectorAll('.card.selected').forEach(card => {
+          card.classList.remove('selected');
+          const cb = card.querySelector('.card-checkbox');
+          if (cb) cb.checked = false;
+        });
+        updateBulkActionBar();
+      } catch (e) {
+        flash.textContent = e?.message || String(e);
         flash.className = 'flash error';
       }
     });

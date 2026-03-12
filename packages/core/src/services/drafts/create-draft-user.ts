@@ -257,6 +257,8 @@ export async function createEbayDraftsFromGroups(
   // Load user policy defaults
   let userPolicyDefaults: {
     fulfillment?: string;
+    /** Free-shipping policy — applied when item price < FREE_SHIPPING_THRESHOLD */
+    fulfillmentFree?: string;
     payment?: string;
     return?: string;
     promoCampaignId?: string | null;
@@ -266,6 +268,7 @@ export async function createEbayDraftsFromGroups(
     if (saved && typeof saved === 'object') {
       userPolicyDefaults = {
         fulfillment: typeof saved.fulfillment === 'string' ? saved.fulfillment : undefined,
+        fulfillmentFree: typeof saved.fulfillmentFree === 'string' ? saved.fulfillmentFree : undefined,
         payment: typeof saved.payment === 'string' ? saved.payment : undefined,
         return: typeof saved.return === 'string' ? saved.return : undefined,
         promoCampaignId: typeof saved.promoCampaignId === 'string' ? saved.promoCampaignId : null,
@@ -273,6 +276,20 @@ export async function createEbayDraftsFromGroups(
     }
   } catch {
     // ignore
+  }
+
+  /** Pick the correct fulfillment policy: free shipping for items priced under $50 */
+  function pickFulfillmentPolicy(price: unknown): string | null {
+    const FREE_SHIPPING_THRESHOLD = 50;
+    const numPrice = Number(price);
+    if (
+      userPolicyDefaults.fulfillmentFree &&
+      Number.isFinite(numPrice) &&
+      numPrice < FREE_SHIPPING_THRESHOLD
+    ) {
+      return userPolicyDefaults.fulfillmentFree;
+    }
+    return userPolicyDefaults.fulfillment ?? null;
   }
 
   // Pre-validate and map all groups (fail fast before any eBay API call)
@@ -364,7 +381,7 @@ export async function createEbayDraftsFromGroups(
           quantity: mapped.offer.quantity,
           condition: mapped.offer.condition,
           fulfillmentPolicyId:
-            mapped.offer.fulfillmentPolicyId ?? userPolicyDefaults.fulfillment ?? null,
+            mapped.offer.fulfillmentPolicyId ?? pickFulfillmentPolicy(mapped.offer.price),
           paymentPolicyId: mapped.offer.paymentPolicyId ?? userPolicyDefaults.payment ?? null,
           returnPolicyId: mapped.offer.returnPolicyId ?? userPolicyDefaults.return ?? null,
           merchantLocationKey,

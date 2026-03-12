@@ -347,12 +347,22 @@ export async function getPolicyDefaults(userId: string) {
   return { ok: true, defaults: prefs };
 }
 
-/** Set a policy default (payment | fulfillment | return). */
+/** Set a policy default (payment | fulfillment | fulfillmentFree | return). */
 export async function setPolicyDefault(userId: string, type: string, policyId: string) {
-  const pathType = resolvePathType(type);
   const store = tokensStore();
   const key = userScopedKey(userId, 'policy-defaults.json');
   const cur = ((await store.get(key, { type: 'json' })) as any) || {};
+
+  // fulfillmentFree is a custom DraftPilot concept (free-shipping policy for items < $50).
+  // It does not correspond to an eBay API policy type, so we bypass normal path resolution.
+  if (type === 'fulfillmentFree') {
+    if (policyId) cur.fulfillmentFree = policyId;
+    else delete cur.fulfillmentFree;
+    await store.set(key, JSON.stringify(cur));
+    return { ok: true, defaults: cur };
+  }
+
+  const pathType = resolvePathType(type);
   if (pathType === 'payment_policy') cur.payment = policyId;
   else if (pathType === 'fulfillment_policy') cur.fulfillment = policyId;
   else if (pathType === 'return_policy') cur.return = policyId;

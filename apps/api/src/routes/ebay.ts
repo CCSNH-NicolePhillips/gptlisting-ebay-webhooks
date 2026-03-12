@@ -437,6 +437,74 @@ router.put('/listings/:id', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// POST /api/ebay/listings/bulk-update-shipping
+//
+// Bulk-update the fulfillment (shipping) policy on multiple active listings.
+//
+// Body: {
+//   items: [{ itemId, sku?, isInventoryListing? }],
+//   mode: 'auto' | 'free' | 'paid'
+// }
+//  mode=auto  → items priced under $50 get free-shipping policy, others get paid
+//  mode=free  → all items get fulfillmentFree policy (falls back to fulfillment)
+//  mode=paid  → all items get fulfillment (paid) policy
+//
+// NOTE: 'auto' mode requires the caller to supply `price` on each item object.
+// ---------------------------------------------------------------------------
+router.post('/listings/bulk-update-shipping', async (req, res) => {
+  try {
+    const { userId } = await requireUserAuth(req.headers.authorization || '');
+    const body = req.body as { items?: any[]; mode?: string };
+    if (!Array.isArray(body.items) || body.items.length === 0) {
+      return badRequest(res, 'items array required');
+    }
+    const mode = body.mode || 'auto';
+
+    const { defaults } = await getPolicyDefaults(userId);
+    const paidId: string | undefined = defaults?.fulfillment;
+    const freeId: string | undefined = defaults?.fulfillmentFree || defaults?.fulfillment;
+
+    if (!paidId) {
+      return res.status(400).json({ ok: false, error: 'No fulfillment policy configured in your settings' });
+    }
+
+    const results: { itemId: string; ok: boolean; error?: string }[] = [];
+
+    for (const item of body.items) {
+      const { itemId, sku, isInventoryListing, price } = item as any;
+      if (!itemId) { results.push({ itemId: '', ok: false, error: 'missing itemId' }); continue; }
+
+      let policyId: string;
+      if (mode === 'auto') {
+        const numPrice = Number(price ?? 0);
+        policyId = (freeId && Number.isFinite(numPrice) && numPrice < 50) ? freeId : (paidId || freeId!);
+      } else if (mode === 'free') {
+        policyId = freeId!;
+      } else {
+        policyId = paidId!;
+      }
+
+      try {
+        await updateActiveListing(userId, {
+          itemId,
+          sku: sku || undefined,
+          isInventoryListing: isInventoryListing !== false && isInventoryListing !== '0',
+          fulfillmentPolicyId: policyId,
+        });
+        results.push({ itemId, ok: true });
+      } catch (err: any) {
+        results.push({ itemId, ok: false, error: err?.message || String(err) });
+      }
+    }
+
+    const failCount = results.filter((r) => !r.ok).length;
+    return res.status(200).json({ ok: true, results, successCount: results.length - failCount, failCount });
+  } catch (err) {
+    return handleEbayError(res, err);
+  }
+});
+
+// ---------------------------------------------------------------------------
 // GET /api/ebay/offers/:id/thumb
 //
 // Fetch a thumbnail image for an eBay offer.
