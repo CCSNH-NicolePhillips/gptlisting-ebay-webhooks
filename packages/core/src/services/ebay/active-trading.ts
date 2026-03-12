@@ -79,6 +79,17 @@ function parseActiveItemFromXml(itemXml: string): ActiveOffer | null {
     ? bestOfferXml[1].toLowerCase() === 'true'
     : undefined;
 
+  // Baseline free-shipping detection from Trading API XML.
+  // The policy-map enrichment step may override this with more accurate data.
+  let isFreeShipping: boolean | undefined;
+  const shipCostMatch = itemXml.match(/<ShippingServiceCost[^>]*>([^<]+)<\/ShippingServiceCost>/);
+  if (shipCostMatch) {
+    isFreeShipping = parseFloat(shipCostMatch[1]) === 0;
+  } else {
+    const freeShipEl = itemXml.match(/<FreeShipping>([^<]+)<\/FreeShipping>/);
+    if (freeShipEl) isFreeShipping = freeShipEl[1].toLowerCase() === 'true';
+  }
+
   return {
     itemId,
     offerId: itemId,
@@ -97,6 +108,7 @@ function parseActiveItemFromXml(itemXml: string): ActiveOffer | null {
     watchCount: watchCount ? parseInt(watchCount, 10) : undefined,
     hitCount: hitCount ? parseInt(hitCount, 10) : undefined,
     bestOfferEnabled,
+    isFreeShipping,
   };
 }
 
@@ -259,8 +271,8 @@ async function fetchShippingPolicyMap(
     fetch(`${apiHost}/sell/inventory/v1/offer?marketplace_id=${MARKETPLACE_ID}&limit=200&offset=0`, { headers }).catch(() => null),
   ]);
 
-  // Build set of free-shipping policy IDs
-  // A policy is free if any shippingOption has shippingCostType === 'FREE'
+  // Build set of free-shipping policy IDs.
+  // A policy is free if shippingCostType === 'FREE', or FLAT_RATE with any $0 service cost.
   const freePolicyIds = new Set<string>();
   if (policiesRes?.ok) {
     const body: any = await policiesRes.json().catch(() => null);
@@ -268,7 +280,15 @@ async function fetchShippingPolicyMap(
       const id: string = policy?.fulfillmentPolicyId;
       if (!id) continue;
       const opts: any[] = Array.isArray(policy.shippingOptions) ? policy.shippingOptions : [];
-      if (opts.some((o: any) => o?.shippingCostType === 'FREE')) {
+      const isFreePolicy = opts.some((o: any) => {
+        if (o?.shippingCostType === 'FREE') return true;
+        if (o?.shippingCostType === 'FLAT_RATE') {
+          const services: any[] = Array.isArray(o?.shippingServices) ? o.shippingServices : [];
+          return services.some((s: any) => parseFloat(s?.shippingCost?.value ?? '1') === 0);
+        }
+        return false;
+      });
+      if (isFreePolicy) {
         freePolicyIds.add(id);
       }
     }
