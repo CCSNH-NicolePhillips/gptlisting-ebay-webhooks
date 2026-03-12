@@ -41,6 +41,8 @@ export type ActiveOffer = {
   bestOfferCount?: number;
   /** True = free-shipping policy; false = paid; undefined = unknown (falls back to price inference in UI) */
   isFreeShipping?: boolean;
+  /** True when the listing was created via the Inventory API (has a real SKU, not a Trading API placeholder) */
+  isInventoryListing?: boolean;
 };
 
 const TRADING_API_URL = 'https://api.ebay.com/ws/api.dll';
@@ -61,7 +63,10 @@ function parseActiveItemFromXml(itemXml: string): ActiveOffer | null {
   if (!itemId) return null;
 
   const title = extractTextBetween(itemXml, 'Title');
-  const sku = extractTextBetween(itemXml, 'SKU') || extractTextBetween(itemXml, 'ItemID');
+  const rawSku = extractTextBetween(itemXml, 'SKU');
+  const sku = rawSku || itemId;
+  // isInventoryListing: has a real SKU that differs from itemId (inventory-path listings set their own SKU)
+  const isInventoryListing = !!(rawSku && rawSku !== itemId && !rawSku.includes('SKU123456789'));
   // eBay Trading API returns price as <CurrentPrice currencyID="USD">9.99</CurrentPrice>
   // (inside <SellingStatus> or at top level — matches either)
   const priceMatch = itemXml.match(/<CurrentPrice[^>]*currencyID="([^"]+)"[^>]*>([^<]+)<\/CurrentPrice>/);
@@ -109,6 +114,7 @@ function parseActiveItemFromXml(itemXml: string): ActiveOffer | null {
     hitCount: hitCount ? parseInt(hitCount, 10) : undefined,
     bestOfferEnabled,
     isFreeShipping,
+    isInventoryListing,
   };
 }
 

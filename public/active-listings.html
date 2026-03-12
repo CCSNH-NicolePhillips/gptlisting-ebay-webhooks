@@ -1498,7 +1498,9 @@
         }
 
         if (data.failCount > 0) {
-          flash.textContent = `Updated ${data.successCount}, failed ${data.failCount}`;
+          const failures = (data.results || []).filter(r => !r.ok);
+          const reasons = [...new Set(failures.map(r => r.error).filter(Boolean))].join('; ');
+          flash.textContent = `Updated ${data.successCount}, failed ${data.failCount}${reasons ? ': ' + reasons : ''}`;
           flash.className = 'flash error';
         } else {
           flash.textContent = `✓ Shipping updated for ${data.successCount} listing(s)`;
