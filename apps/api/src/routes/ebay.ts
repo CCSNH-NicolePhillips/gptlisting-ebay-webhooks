@@ -454,18 +454,25 @@ router.put('/listings/:id', async (req, res) => {
 router.post('/listings/bulk-update-shipping', async (req, res) => {
   try {
     const { userId } = await requireUserAuth(req.headers.authorization || '');
-    const body = req.body as { items?: any[]; mode?: string };
+    const body = req.body as { items?: any[]; mode?: string; policyId?: string };
     if (!Array.isArray(body.items) || body.items.length === 0) {
       return badRequest(res, 'items array required');
     }
+
+    // If caller supplies a direct policyId, use it for every item (no mode lookup needed)
+    const directPolicyId: string | undefined = body.policyId || undefined;
+
     const mode = body.mode || 'auto';
+    let paidId: string | undefined;
+    let freeId: string | undefined;
 
-    const { defaults } = await getPolicyDefaults(userId);
-    const paidId: string | undefined = defaults?.fulfillment;
-    const freeId: string | undefined = defaults?.fulfillmentFree || defaults?.fulfillment;
-
-    if (!paidId) {
-      return res.status(400).json({ ok: false, error: 'No fulfillment policy configured in your settings' });
+    if (!directPolicyId) {
+      const { defaults } = await getPolicyDefaults(userId);
+      paidId = defaults?.fulfillment;
+      freeId = defaults?.fulfillmentFree || defaults?.fulfillment;
+      if (!paidId) {
+        return res.status(400).json({ ok: false, error: 'No fulfillment policy configured in your settings' });
+      }
     }
 
     const results: { itemId: string; ok: boolean; error?: string }[] = [];
@@ -475,7 +482,9 @@ router.post('/listings/bulk-update-shipping', async (req, res) => {
       if (!itemId) { results.push({ itemId: '', ok: false, error: 'missing itemId' }); continue; }
 
       let policyId: string;
-      if (mode === 'auto') {
+      if (directPolicyId) {
+        policyId = directPolicyId;
+      } else if (mode === 'auto') {
         const numPrice = Number(price ?? 0);
         policyId = (freeId && Number.isFinite(numPrice) && numPrice < 50) ? freeId : (paidId || freeId!);
       } else if (mode === 'free') {
