@@ -233,26 +233,22 @@ export async function listActiveListings(userId: string): Promise<{
  * here will have `isFreeShipping` left undefined and the UI falls back to the
  * price < $50 heuristic.
  */
-async function fetchShippingPolicyMap(
+/**
+ * Build the set of eBay fulfillment policy IDs that represent free shipping.
+ *
+ * Primary: GET /sell/account/v1/fulfillment_policy — inspect each policy's
+ * shippingOptions to see if shippingCostType === 'FREE' or all shipping
+ * service costs are $0.00. No Redis dependency.
+ *
+ * Fallback: Redis policy-defaults.json fulfillmentFree field (for edge cases
+ * where the Account API is unavailable).
+ */
+async function buildFreePolicyIdSet(
   userId: string,
   access_token: string,
   apiHost: string,
-): Promise<Map<string, boolean>> {
-  const map = new Map<string, boolean>();
-
-  // 1. Load the user's free-shipping policy ID from Redis (no HTTP call)
-  const store = tokensStore();
-  const defaults = ((await store.get(
-    userScopedKey(userId, 'policy-defaults.json'),
-    { type: 'json' },
-  ).catch(() => null)) as any) ?? {};
-  const freePolicyId: string | undefined =
-    typeof defaults.fulfillmentFree === 'string' ? defaults.fulfillmentFree : undefined;
-
-  // If no free-shipping policy is configured there's nothing to compare — bail early
-  if (!freePolicyId) return map;
-
-  // 2. Page through all inventory offers (200 per page)
+): Promise<Set<string>> {
+  const freeIds = new Set<string>();
   const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || 'EBAY_US';
   const headers = {
     Authorization: `Bearer ${access_token}`,
@@ -262,28 +258,101 @@ async function fetchShippingPolicyMap(
     'X-EBAY-C-MARKETPLACE-ID': MARKETPLACE_ID,
   };
 
-  let offset = 0;
-  const limit = 200;
-  while (true) {
-    const url = `${apiHost}/sell/inventory/v1/offer?marketplace_id=${MARKETPLACE_ID}&limit=${limit}&offset=${offset}`;
-    const res = await fetch(url, { headers });
-    if (!res.ok) break; // non-fatal
-    const body: any = await res.json().catch(() => null);
-    if (!body) break;
+  try {
+    const res = await fetch(
+      `${apiHost}/sell/account/v1/fulfillment_policy?marketplace_id=${MARKETPLACE_ID}`,
+      { headers },
+    );
+    if (res.ok) {
+      const body: any = await res.json().catch(() => null);
+      for (const policy of (body?.fulfillmentPolicies ?? [])) {
+        const id: string | undefined = policy?.fulfillmentPolicyId;
+        if (!id) continue;
+        const options: any[] = Array.isArray(policy.shippingOptions) ? policy.shippingOptions : [];
+        const isFree = options.some((opt: any) => {
+          if (opt?.shippingCostType === 'FREE') return true;
+          // Also treat as free if every shipping service in this option costs $0
+          const services: any[] = Array.isArray(opt?.shippingServices) ? opt.shippingServices : [];
+          return services.length > 0 && services.every((svc: any) => {
+            const cost = parseFloat(svc?.shippingCost?.value ?? '1');
+            return cost === 0;
+          });
+        });
+        if (isFree) freeIds.add(id);
+      }
+      // If we got a valid response return the result, even if empty
+      return freeIds;
+    }
+  } catch { /* fall through to Redis fallback */ }
 
+  // Fallback: Redis fulfillmentFree setting
+  try {
+    const store = tokensStore();
+    const defaults = ((await store.get(
+      userScopedKey(userId, 'policy-defaults.json'),
+      { type: 'json' },
+    ).catch(() => null)) as any) ?? {};
+    if (typeof defaults.fulfillmentFree === 'string') {
+      freeIds.add(defaults.fulfillmentFree);
+    }
+  } catch { /* ignore */ }
+
+  return freeIds;
+}
+
+/**
+ * Fetch all inventory offers and map (sku | listingId) → isFreeShipping.
+ * Runs the policy lookup and Inventory API paging in parallel.
+ */
+async function fetchShippingPolicyMap(
+  userId: string,
+  access_token: string,
+  apiHost: string,
+): Promise<Map<string, boolean>> {
+  const map = new Map<string, boolean>();
+  const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || 'EBAY_US';
+  const headers = {
+    Authorization: `Bearer ${access_token}`,
+    Accept: 'application/json',
+    'Accept-Language': 'en-US',
+    'Content-Language': 'en-US',
+    'X-EBAY-C-MARKETPLACE-ID': MARKETPLACE_ID,
+  };
+
+  // Run free-policy lookup and first page of offers in parallel
+  const firstPageUrl = `${apiHost}/sell/inventory/v1/offer?marketplace_id=${MARKETPLACE_ID}&limit=200&offset=0`;
+  const [freePolicyIds, firstPageRes] = await Promise.all([
+    buildFreePolicyIdSet(userId, access_token, apiHost).catch(() => new Set<string>()),
+    fetch(firstPageUrl, { headers }).catch(() => null),
+  ]);
+
+  if (!freePolicyIds.size) return map; // no free policies → nothing to classify
+
+  async function processOfferPage(res: Response | null): Promise<{ total: number; count: number }> {
+    if (!res?.ok) return { total: 0, count: 0 };
+    const body: any = await res.json().catch(() => null);
+    if (!body) return { total: 0, count: 0 };
     for (const offer of (body.offers ?? [])) {
       const policyId: string | undefined = offer?.listingPolicies?.fulfillmentPolicyId;
       if (!policyId) continue;
-      const isFree = policyId === freePolicyId;
-      // Key both by SKU and by listingId (eBay listing number) for flexible lookup
+      const isFree = freePolicyIds.has(policyId);
       if (offer.sku) map.set(String(offer.sku), isFree);
       const listingId = offer?.listing?.listingId;
       if (listingId) map.set(String(listingId), isFree);
     }
+    return { total: body.total ?? 0, count: (body.offers ?? []).length };
+  }
 
-    const total: number = body.total ?? 0;
-    offset += limit;
-    if (offset >= total || !(body.offers?.length)) break;
+  const { total, count } = await processOfferPage(firstPageRes);
+
+  // Fetch remaining pages sequentially if needed (uncommon: >200 offers)
+  let offset = count;
+  while (offset > 0 && offset < total) {
+    const url = `${apiHost}/sell/inventory/v1/offer?marketplace_id=${MARKETPLACE_ID}&limit=200&offset=${offset}`;
+    const res = await fetch(url, { headers }).catch(() => null);
+    const page = await processOfferPage(res);
+    if (!page.count) break;
+    offset += page.count;
   }
 
   return map;
