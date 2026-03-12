@@ -54,9 +54,12 @@ export async function listSoldOrders(
   const { apiHost, headers } = client;
 
   // Build filter string
+  // eBay Fulfillment API requires a single range filter: creationdate:[from..to]
+  // Sending two separate creationdate fields causes a 400.
   const filters: string[] = ['orderfulfillmentstatus:{FULFILLED}'];
-  if (dateFrom) filters.push(`creationdate:[${dateFrom}]`);
-  if (dateTo) filters.push(`creationdate:[..${dateTo}]`);
+  if (dateFrom || dateTo) {
+    filters.push(`creationdate:[${dateFrom ?? ''}..${dateTo ?? ''}]`);
+  }
 
   const params = new URLSearchParams({
     filter: filters.join(','),
@@ -70,7 +73,9 @@ export async function listSoldOrders(
 
   if (!res.ok) {
     const body = await res.text().catch(() => '');
-    throw new Error(`eBay Fulfillment API error ${res.status}: ${body.slice(0, 300)}`);
+    const err = new Error(`eBay Fulfillment API error ${res.status}: ${body.slice(0, 300)}`);
+    (err as any).statusCode = res.status;
+    throw err;
   }
 
   const data: any = await res.json();

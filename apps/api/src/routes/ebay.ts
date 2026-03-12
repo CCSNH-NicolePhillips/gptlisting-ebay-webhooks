@@ -128,6 +128,10 @@ function handleEbayError(res: any, err: unknown): void {
   if (err instanceof Error && err.message.toLowerCase().includes('auth')) {
     return void res.status(401).json({ error: 'Unauthorized' });
   }
+  // Pass through eBay upstream error status codes (4xx) rather than always returning 500
+  if (err instanceof Error && (err as any).statusCode >= 400 && (err as any).statusCode < 500) {
+    return void res.status((err as any).statusCode).json({ error: err.message });
+  }
   return serverError(res, err);
 }
 
