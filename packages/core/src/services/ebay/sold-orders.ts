@@ -53,21 +53,18 @@ export async function listSoldOrders(
   const client = await getEbayClient(userId);
   const { apiHost, headers } = client;
 
-  // Build filter string
-  // eBay Fulfillment API requires a single range filter: creationdate:[from..to]
-  // Sending two separate creationdate fields causes a 400.
-  const filters: string[] = ['orderfulfillmentstatus:{FULFILLED}'];
+  // Build filter string manually — do NOT use URLSearchParams for the filter value.
+  // eBay's filter syntax uses { } and [ ] and : as structural characters; encoding them
+  // with %7B / %5B / %3A causes a 400 because eBay's parser doesn't recognise the syntax.
+  // We also omit the orderfulfillmentstatus filter so we return all sold orders regardless
+  // of whether they have been shipped yet (NOT_STARTED / IN_PROGRESS / FULFILLED).
+  const filters: string[] = [];
   if (dateFrom || dateTo) {
     filters.push(`creationdate:[${dateFrom ?? ''}..${dateTo ?? ''}]`);
   }
 
-  const params = new URLSearchParams({
-    filter: filters.join(','),
-    limit: String(Math.min(limit, 200)),
-    offset: String(offset),
-  });
-
-  const url = `${apiHost}/sell/fulfillment/v1/order?${params}`;
+  const filterPart = filters.length > 0 ? `&filter=${filters.join(',')}` : '';
+  const url = `${apiHost}/sell/fulfillment/v1/order?limit=${Math.min(limit, 200)}&offset=${offset}${filterPart}`;
 
   const res = await fetch(url, { headers });
 
