@@ -21,7 +21,7 @@ import {
   batchGetPromotionIntents,
 } from '../lib/promotion-queue.js';
 import { bindListing } from '../lib/price-store.js';
-import { getDraftLogsByOfferId, getDraftLogs } from '../lib/draft-logs.js';
+import { redisCall } from '../lib/job-store.js';
 
 // ---------------------------------------------------------------------------
 // getOffer
@@ -880,54 +880,100 @@ async function enrichWithPromotionIntent(offers: any[]): Promise<void> {
 async function enrichWithDraftLogsMeta(offers: any[], userId: string): Promise<void> {
   try {
     if (!offers.length) return;
-    await Promise.all(
-      offers.map(async (o: any) => {
-        try {
-          const offerId: string | undefined = o?.offerId;
-          const sku: string | undefined = o?.sku;
-          if (!offerId && !sku) return;
 
-          // 1. Try offerId-keyed entry first (written by updateDraftLogsOfferId)
-          let logs = offerId ? await getDraftLogsByOfferId(userId, offerId) : null;
+    // ----- Pass 1: batch MGET all offerId-keyed logs (1 HTTP call) -----
+    const offerIds: Array<string | undefined> = offers.map((o: any) => o?.offerId);
+    const offerKeys = offerIds.map(id => id ? `draft-logs-offer:${userId}:${id}` : null);
+    const validOfferKeys = offerKeys.filter((k): k is string => k !== null);
 
-          // 2. Fall back to SKU-keyed entry (always written by storeDraftLogs)
-          if (!logs?.pricingStatus && sku) {
-            logs = await getDraftLogs(userId, sku);
+    let offerKeyResults: Array<string | null> = [];
+    if (validOfferKeys.length > 0) {
+      try {
+        const mgetResp = await redisCall('MGET', ...validOfferKeys);
+        offerKeyResults = Array.isArray(mgetResp.result)
+          ? (mgetResp.result as Array<string | null>)
+          : [];
+      } catch { /* fall through */ }
+    }
+
+    // Map offerId → parsed logs from pass 1
+    const offerIdToLogs = new Map<string, any>();
+    let idx2 = 0;
+    for (let i = 0; i < offerKeys.length; i++) {
+      const key = offerKeys[i];
+      if (!key) continue;
+      const raw = offerKeyResults[idx2++] ?? null;
+      if (raw && typeof raw === 'string') {
+        try { offerIdToLogs.set(offerIds[i]!, JSON.parse(raw)); } catch { /* skip */ }
+      }
+    }
+
+    // ----- Pass 2: batch MGET SKU-keyed logs for any offers still missing a pricingStatus -----
+    const skus: Array<string | undefined> = offers.map((o: any) => o?.sku);
+    const needsSku: Array<{ offerIndex: number; sku: string }> = [];
+    for (let i = 0; i < offers.length; i++) {
+      const offerId = offerIds[i];
+      const logsFromOfferId = offerId ? offerIdToLogs.get(offerId) : null;
+      if (!logsFromOfferId?.pricingStatus && skus[i]) {
+        needsSku.push({ offerIndex: i, sku: skus[i]! });
+      }
+    }
+
+    const skuToLogs = new Map<string, any>();
+    if (needsSku.length > 0) {
+      const skuKeys = needsSku.map(({ sku }) => `draft-logs:${userId}:${sku}`);
+      try {
+        const mgetResp2 = await redisCall('MGET', ...skuKeys);
+        const skuResults = Array.isArray(mgetResp2.result)
+          ? (mgetResp2.result as Array<string | null>)
+          : [];
+        for (let i = 0; i < needsSku.length; i++) {
+          const raw = skuResults[i] ?? null;
+          if (raw && typeof raw === 'string') {
+            try { skuToLogs.set(needsSku[i].sku, JSON.parse(raw)); } catch { /* skip */ }
           }
+        }
+      } catch { /* fall through */ }
+    }
 
-          if (!logs) return;
+    // ----- Apply enrichment -----
+    for (let i = 0; i < offers.length; i++) {
+      try {
+        const offerId = offerIds[i];
+        const sku = skus[i];
+        const logs = (offerId && offerIdToLogs.get(offerId))
+          || (sku && skuToLogs.get(sku))
+          || null;
+        if (!logs) continue;
 
-          // 3. Determine effective pricingStatus — use stored value if present,
-          //    otherwise infer from pricing log signals (pre-fix drafts).
-          let effectiveStatus: 'OK' | 'ESTIMATED' | 'NEEDS_REVIEW' | undefined = logs.pricingStatus;
-          if (!effectiveStatus && logs.pricing) {
-            const reasoning = logs.pricing.reasoning ?? '';
-            const confidence = logs.pricing.confidence;
-            const cs = logs.pricing.competitorSummary;
-            const hasNoMarketData =
-              reasoning.toLowerCase().includes('no market data') ||
-              reasoning.toLowerCase().includes('fallback pricing');
-            const hasNoPrices =
-              !cs?.amazonPrice && !cs?.walmartPrice &&
-              !cs?.lowestDeliveredPrice && !cs?.medianDeliveredPrice;
-            if (hasNoMarketData || (confidence === 'low' && hasNoPrices)) {
-              effectiveStatus = 'NEEDS_REVIEW';
-            }
+        // Determine effective pricingStatus — use stored value if present,
+        // otherwise infer from pricing log signals (pre-fix drafts).
+        let effectiveStatus: 'OK' | 'ESTIMATED' | 'NEEDS_REVIEW' | undefined = logs.pricingStatus;
+        if (!effectiveStatus && logs.pricing) {
+          const reasoning = logs.pricing.reasoning ?? '';
+          const confidence = logs.pricing.confidence;
+          const cs = logs.pricing.competitorSummary;
+          const hasNoMarketData =
+            reasoning.toLowerCase().includes('no market data') ||
+            reasoning.toLowerCase().includes('fallback pricing');
+          const hasNoPrices =
+            !cs?.amazonPrice && !cs?.walmartPrice &&
+            !cs?.lowestDeliveredPrice && !cs?.medianDeliveredPrice;
+          if (hasNoMarketData || (confidence === 'low' && hasNoPrices)) {
+            effectiveStatus = 'NEEDS_REVIEW';
           }
+        }
 
-          if (!effectiveStatus || effectiveStatus === 'OK') return;
+        if (!effectiveStatus || effectiveStatus === 'OK') continue;
 
-          const idx = offers.indexOf(o);
-          if (idx === -1) return;
-          offers[idx].merchantData = offers[idx].merchantData ?? {};
-          offers[idx].merchantData.pricingStatus = effectiveStatus;
-          offers[idx].merchantData.needsPriceReview = true;
-          if (logs.attentionReasons?.length) {
-            offers[idx].merchantData.attentionReasons = logs.attentionReasons;
-          }
-        } catch { /* non-fatal per offer */ }
-      }),
-    );
+        offers[i].merchantData = offers[i].merchantData ?? {};
+        offers[i].merchantData.pricingStatus = effectiveStatus;
+        offers[i].merchantData.needsPriceReview = true;
+        if (logs.attentionReasons?.length) {
+          offers[i].merchantData.attentionReasons = logs.attentionReasons;
+        }
+      } catch { /* non-fatal per offer */ }
+    }
   } catch { /* ignore */ }
 }
 
