@@ -2234,11 +2234,22 @@
           const titleText = o?.listing?.title || o?.title || o?._enrichedTitle || o?.sku || '';
           rows.push([o.offerId||'', o.sku||'', titleText, priceVal, currency, o.status||'', flaggedSet.has(key)?'1':'0']);
           let fileData = { ...o };
-          // Fetch product images from inventory item and include in export for debugging
-          try {
-            const imgs = await getImagesForSKU(o.sku);
-            if (imgs && imgs.length > 0) fileData._imageUrls = imgs;
-          } catch {}
+          // Attach image URLs for debugging.
+          // Priority: (1) _imageUrl already on the enriched offer object (no extra
+          // API call), (2) _directImageUrl stored on the card DOM node (already
+          // loaded by lazyLoadThumbs), (3) live getImagesForSKU only as last resort.
+          const cardNode = document.querySelector(`.card[data-offer-id="${CSS.escape(o.offerId || '')}"]`);
+          const domImageUrl = cardNode?._directImageUrl || null;
+          if (o._imageUrl) {
+            fileData._imageUrls = [o._imageUrl];
+          } else if (domImageUrl) {
+            fileData._imageUrls = [domImageUrl];
+          } else {
+            try {
+              const imgs = await getImagesForSKU(o.sku);
+              if (imgs && imgs.length > 0) fileData._imageUrls = imgs;
+            } catch {}
+          }
           if (DEV_MODE) {
             try {
               const brand = o?.merchantData?.brand || '';
