@@ -227,10 +227,19 @@ For each image, provide:
    - null if brand is unknown or you cannot confidently infer any URL
 7. packageType: bottle/jar/tub/pouch/box/sachet/book/unknown
 8. keyText: array of 3-5 short readable text snippets from the label
-   ⚠️ CRITICAL: ALWAYS include the FLAVOR if visible! (e.g., "Strawberry Watermelon", "Pistachio Caramel", "Mixed Berry", "Citrus", "Natural Flavor")
+   ⚠️ CRITICAL: ALWAYS include the FLAVOR if visible for EDIBLE products! (e.g., "Strawberry Watermelon", "Pistachio Caramel", "Mixed Berry", "Citrus", "Natural Flavor")
    Look for flavor text anywhere on the label - it's often in a different color, larger font, or near the product name.
    Flavored products include: gummies, drinks, powders, liquid supplements, gum, mints, chews.
-   If you see ANY flavor text, it MUST be one of the keyText entries.
+   If you see ANY flavor text on an edible product, it MUST be one of the keyText entries.
+   ⚠️ SKINCARE/BEAUTY EXCEPTION: For face care, body care, hair care, serums, creams, lotions, cleansers, and other topical products:
+   - DO NOT include "Unflavored" in keyText — these products have scents, not flavors
+   - Only include a scent/fragrance if it is explicitly named on the label (e.g., "Lavender", "Rose", "Citrus" scent)
+   ⚠️ SERVINGS CLARIFICATION: When reading a Supplement Facts or Nutrition Facts panel:
+   - "Serving Size: 14g" means each serving is 14 grams — this is the AMOUNT per serving, NOT the serving count
+   - "Servings Per Container: 8" means there are 8 total servings in the package — this is the SERVING COUNT
+   - ✅ Include "8 servings" in keyText (the serving COUNT from "Servings Per Container")
+   - ❌ Do NOT write "14 servings" just because serving size is 14g or 14ml
+   - If the label says "About 8 servings", write "8 servings" (drop "About")
 9. categoryPath: hierarchical product category (e.g., "Health & Personal Care > Vitamins & Dietary Supplements", "Beauty > Skin Care > Face Moisturizers")
    - Infer from the product type, claims, and visible text
    - For supplements: "Health & Personal Care > Vitamins & Dietary Supplements"

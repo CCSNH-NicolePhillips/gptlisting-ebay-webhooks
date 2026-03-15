@@ -750,7 +750,9 @@ function buildPrompt(
   lines.push("   ✅ 'Brand Name Electrolyte Drink Mix 20 Single Serving Packets'");
   lines.push("   ❌ 'moonbrew Hot Cocoa 14 Servings' ← missing format descriptor");
   lines.push("3. DO NOT include 'NEW' - condition is a separate listing field");
-  lines.push("4. DO NOT include 'Unflavored' for capsules/tablets - only liquids and gummies need flavor specified");
+  lines.push("4. DO NOT include 'Unflavored' in the title for: capsules, tablets, skincare, face care, body care, hair care, or any topical products");
+  lines.push("   For skincare/beauty products NEVER add any flavor word to the title unless the product explicitly names a scent (e.g., 'Lavender', 'Rose') AND that scent is a key selling point.");
+  lines.push("   Only include a flavor in the title for edible products (liquids/drinks, gummies, powders, chews) with a real named flavor.");
   lines.push("5. DO include: Brand + Product line name + Active ingredients + Health benefit keywords");
   lines.push("");
   lines.push("GOOD TITLE EXAMPLES (SEO-focused, brand first):");
@@ -806,11 +808,15 @@ function buildPrompt(
     lines.push("1. REQUIRED ASPECTS: Fill ALL of these - no exceptions. Missing = listing rejected.");
     lines.push("");
     lines.push("2. 🚨 FLAVOR IS CRITICAL - READ CAREFULLY:");
-    lines.push("   - ALWAYS look at the product label/packaging for flavor text");
+    lines.push("   - For EDIBLE products (gummies, drinks, powders, liquid supplements, chews, mints): ALWAYS look for flavor text");
     lines.push("   - Flavor can appear as: 'Strawberry', 'Berry Blast', 'Pistachio Caramel', 'Citrus', 'Mint', 'Natural', 'Unflavored'");
     lines.push("   - If the product is edible (gummies, drinks, powders, supplements), it almost ALWAYS has a flavor");
     lines.push("   - Even 'Natural Flavor' or 'Original' counts - include it!");
     lines.push("   - Common MISTAKE: Seeing flavor text on the bottle but NOT including the Flavor aspect!");
+    lines.push("   - 🚫 SKINCARE/BEAUTY EXCEPTION: For face care, body care, hair care, serums, creams, lotions, and other topical/cosmetic products:");
+    lines.push("     * DO NOT set Flavor: 'Unflavored' — these products are not eaten, 'Unflavored' is meaningless");
+    lines.push("     * Only set Flavor if the product explicitly names a real scent/flavor people search for (e.g., Lavender, Rose, Citrus)");
+    lines.push("     * When in doubt, leave Flavor blank for topical products");
     lines.push("");
     lines.push("3. EXTRACT FROM PRODUCT LABEL:");
     lines.push("   - Flavor: LOOK AT THE LABEL (e.g., 'Pistachio Caramel Flavor' → Flavor: 'Pistachio Caramel')");
@@ -1034,8 +1040,20 @@ function normalizeAspects(aspects: any, product: PairedProduct): Record<string, 
     normalized.Size = [product.size];
   }
   
-  // Extract Flavor from keyText if GPT didn't set it
-  if ((!normalized.Flavor || normalized.Flavor.length === 0) && product.keyText && product.keyText.length > 0) {
+  // Detect skincare/beauty/topical products — these NEVER get "Unflavored" flavor
+  const isSkincare = /beauty|skin\s*care|face\s*care|body\s*care|personal\s*care|hair\s*care/i.test(product.categoryPath || '') ||
+    /serum|moisturizer|toner|cleanser|face\s*wash|body\s*wash|sunscreen|spf\s*\d|face\s*cream|eye\s*cream|face\s*mask|body\s*lotion|body\s*cream|face\s*lotion/i.test(
+      (product.product || '') + ' ' + (product.categoryPath || '')
+    );
+
+  // Remove GPT-set 'Unflavored' for skincare products (makes no sense for topicals)
+  if (isSkincare && normalized.Flavor) {
+    normalized.Flavor = normalized.Flavor.filter(f => !/^unflavored$/i.test(f.trim()));
+    if (normalized.Flavor.length === 0) delete normalized.Flavor;
+  }
+
+  // Extract Flavor from keyText if GPT didn't set it — skip entirely for skincare
+  if (!isSkincare && (!normalized.Flavor || normalized.Flavor.length === 0) && product.keyText && product.keyText.length > 0) {
     // First try compound flavors (multi-word), then individual words
     const compoundFlavorPatterns = [
       /\b(pistachio\s+caramel|strawberry\s+watermelon|mixed\s+berry|fruit\s+punch|lemon\s+lime)\s*(flavor)?\b/gi
