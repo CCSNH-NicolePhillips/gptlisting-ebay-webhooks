@@ -2250,13 +2250,37 @@
               if (imgs && imgs.length > 0) fileData._imageUrls = imgs;
             } catch {}
           }
+          // Always fetch price-cache for every exported draft so the Amazon/Walmart
+          // source URLs are visible without needing DEV_MODE.
+          // The /api/diag/price-cache endpoint is a read-only Redis lookup (no auth).
+          try {
+            const brand = o?.merchantData?.brand || '';
+            const exec2 = (window.authClient && typeof window.authClient.authFetch === 'function') ? window.authClient.authFetch : fetch;
+            const pr = await exec2(`/api/diag/price-cache?brand=${encodeURIComponent(brand)}&title=${encodeURIComponent(titleText)}`);
+            if (pr.ok) {
+              const pc = await pr.json();
+              fileData._priceCache = pc;
+              // Surface pricing source URLs as top-level fields for easy debugging
+              if (pc?.cached) {
+                const cached = pc.cached;
+                const candidates = Array.isArray(cached.candidates) ? cached.candidates : [];
+                const amazonCandidate = candidates.find(c => c?.source === 'amazon' || c?.url?.includes('amazon.com'));
+                const walmartCandidate = candidates.find(c => c?.source === 'walmart' || c?.url?.includes('walmart.com'));
+                fileData._pricingDebug = {
+                  chosenSource: cached.chosen?.source ?? null,
+                  chosenPriceDollars: cached.chosen?.price ?? null,
+                  chosenUrl: cached.chosen?.url ?? null,
+                  amazonUrl: amazonCandidate?.url ?? (cached.chosen?.url?.includes('amazon.com') ? cached.chosen.url : null),
+                  amazonPriceDollars: amazonCandidate?.price ?? (cached.chosen?.source === 'amazon' ? cached.chosen?.price : null),
+                  walmartUrl: walmartCandidate?.url ?? (cached.chosen?.url?.includes('walmart.com') ? cached.chosen.url : null),
+                  walmartPriceDollars: walmartCandidate?.price ?? (cached.chosen?.source === 'walmart' ? cached.chosen?.price : null),
+                  cachedAt: cached.cachedAt ? new Date(cached.cachedAt).toISOString() : null,
+                };
+              }
+            }
+          } catch {}
           if (DEV_MODE) {
-            try {
-              const brand = o?.merchantData?.brand || '';
-              const exec2 = (window.authClient && typeof window.authClient.authFetch === 'function') ? window.authClient.authFetch : fetch;
-              const pr = await exec2(`/api/diag/price-cache?brand=${encodeURIComponent(brand)}&title=${encodeURIComponent(titleText)}`);
-              if (pr.ok) fileData._priceCache = await pr.json();
-            } catch {}
+            // DEV_MODE: full price-cache already attached above; nothing extra needed
           }
           folder.file((o.sku || o.offerId || key) + '.json', JSON.stringify(fileData, null, 2));
         }
