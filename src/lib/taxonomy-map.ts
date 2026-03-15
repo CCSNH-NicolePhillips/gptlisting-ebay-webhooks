@@ -429,8 +429,11 @@ export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>, us
   });
   const description = buildDescription(title, group);
 
-  // Fulfillment policy: per-price rule (fulfillmentFree < $50, fulfillment >= $50) takes precedence,
-  // then policyDefaults.fulfillment, then category defaults, finally env var fallback.
+  // Fulfillment policy selection priority:
+  // 1. Dual-policy per-price rule (fulfillmentFree < $50, fulfillment >= $50)
+  // 2. FREE_SHIPPING mode → always use fulfillmentFree (if set), else fulfillment
+  // 3. Single policy default (fulfillment)
+  // 4. Category defaults / env var fallback
   let fulfillmentPolicyId: string | null;
   if (_policyDefaults?.fulfillment && _policyDefaults?.fulfillmentFree) {
     // Use Amazon price if available; for publish path approximate from item price + discount
@@ -441,7 +444,14 @@ export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>, us
         : price;
     fulfillmentPolicyId = refDollars < 50 ? _policyDefaults.fulfillmentFree : _policyDefaults.fulfillment;
     console.log(`[taxonomy-map] fulfillmentPolicyId="${fulfillmentPolicyId}" (refDollars=$${refDollars.toFixed(2)}, threshold=$50)`);
+  } else if (pricingSettings.ebayShippingMode === 'FREE_SHIPPING' && _policyDefaults?.fulfillmentFree) {
+    // User set FREE_SHIPPING mode — use free-shipping policy regardless of price threshold
+    fulfillmentPolicyId = _policyDefaults.fulfillmentFree;
+    console.log(`[taxonomy-map] fulfillmentPolicyId="${fulfillmentPolicyId}" (FREE_SHIPPING mode → fulfillmentFree)`);
   } else if (_policyDefaults?.fulfillment) {
+    if (pricingSettings.ebayShippingMode === 'FREE_SHIPPING') {
+      console.warn(`[taxonomy-map] FREE_SHIPPING mode set but no fulfillmentFree policy configured — using fulfillment policy. Set a free-shipping policy in Setup > Policies to fix this.`);
+    }
     fulfillmentPolicyId = _policyDefaults.fulfillment;
   } else {
     fulfillmentPolicyId = matched?.defaults?.fulfillmentPolicyId || process.env.EBAY_FULFILLMENT_POLICY_ID || null;
