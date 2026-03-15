@@ -2250,38 +2250,79 @@
               if (imgs && imgs.length > 0) fileData._imageUrls = imgs;
             } catch {}
           }
-          // Always fetch price-cache for every exported draft so the Amazon/Walmart
-          // source URLs are visible without needing DEV_MODE.
-          // The /api/diag/price-cache endpoint is a read-only Redis lookup (no auth).
+          // Fetch draft logs (stored in Redis per-draft, auth required).
+          // These contain classification.brand, classification.productName,
+          // pricing.searchQuery, pricing.sources (with Amazon URLs), and
+          // pricing.competitorSummary — everything needed to debug bad prices.
+          const exec2 = (window.authClient && typeof window.authClient.authFetch === 'function') ? window.authClient.authFetch : fetch;
+          let draftLogBrand = o?.merchantData?.brand || '';
+          let draftLogProduct = titleText;
           try {
-            const brand = o?.merchantData?.brand || '';
-            const exec2 = (window.authClient && typeof window.authClient.authFetch === 'function') ? window.authClient.authFetch : fetch;
-            const pr = await exec2(`/api/diag/price-cache?brand=${encodeURIComponent(brand)}&title=${encodeURIComponent(titleText)}`);
+            const logsParams = new URLSearchParams();
+            if (o.offerId) logsParams.set('offerId', o.offerId);
+            if (o.sku) logsParams.set('sku', o.sku);
+            const lr = await exec2(`/api/drafts/logs?${logsParams}`);
+            if (lr.ok) {
+              const logsBody = await lr.json();
+              const logs = logsBody?.logs;
+              if (logs) {
+                fileData._draftLogs = logs;
+                // Extract real brand/product for price-cache sig lookup
+                if (logs.classification?.brand) draftLogBrand = logs.classification.brand;
+                if (logs.classification?.productName) draftLogProduct = logs.classification.productName;
+                // Surface key pricing fields directly for easy debugging
+                const p = logs.pricing;
+                if (p) {
+                  // Find Amazon/Walmart URLs from sources array
+                  const allResults = (p.sources || []).flatMap(s => s.results || []);
+                  const amazonResult = allResults.find(r => r?.url?.includes('amazon.com'));
+                  const walmartResult = allResults.find(r => r?.url?.includes('walmart.com'));
+                  fileData._pricingDebug = {
+                    brand: draftLogBrand,
+                    productName: draftLogProduct,
+                    amazonQuery: p.searchQuery?.amazonQuery ?? p.searchQuery?.googleQuery ?? null,
+                    priceLookupTitle: p.searchQuery?.priceLookupTitle ?? null,
+                    confidence: p.confidence ?? null,
+                    reasoning: p.reasoning ?? null,
+                    warnings: p.warnings ?? [],
+                    competitorSummary: p.competitorSummary ?? null,
+                    amazonUrl: amazonResult?.url ?? null,
+                    amazonPriceDollars: amazonResult?.price ?? p.competitorSummary?.amazonPrice ?? null,
+                    walmartUrl: walmartResult?.url ?? null,
+                    walmartPriceDollars: walmartResult?.price ?? p.competitorSummary?.walmartPrice ?? null,
+                    finalPrice: p.finalPrice ?? null,
+                  };
+                }
+              }
+            }
+          } catch {}
+          // Also look up price-cache using brand+productName from draft logs
+          // (falls back to merchantData.brand + title if logs were unavailable)
+          try {
+            const pr = await exec2(`/api/diag/price-cache?brand=${encodeURIComponent(draftLogBrand)}&title=${encodeURIComponent(draftLogProduct)}`);
             if (pr.ok) {
               const pc = await pr.json();
-              fileData._priceCache = pc;
-              // Surface pricing source URLs as top-level fields for easy debugging
               if (pc?.cached) {
                 const cached = pc.cached;
                 const candidates = Array.isArray(cached.candidates) ? cached.candidates : [];
                 const amazonCandidate = candidates.find(c => c?.source === 'amazon' || c?.url?.includes('amazon.com'));
                 const walmartCandidate = candidates.find(c => c?.source === 'walmart' || c?.url?.includes('walmart.com'));
+                // Merge into _pricingDebug (created above) or create fresh
+                const pd = fileData._pricingDebug || {};
                 fileData._pricingDebug = {
-                  chosenSource: cached.chosen?.source ?? null,
-                  chosenPriceDollars: cached.chosen?.price ?? null,
-                  chosenUrl: cached.chosen?.url ?? null,
-                  amazonUrl: amazonCandidate?.url ?? (cached.chosen?.url?.includes('amazon.com') ? cached.chosen.url : null),
-                  amazonPriceDollars: amazonCandidate?.price ?? (cached.chosen?.source === 'amazon' ? cached.chosen?.price : null),
-                  walmartUrl: walmartCandidate?.url ?? (cached.chosen?.url?.includes('walmart.com') ? cached.chosen.url : null),
-                  walmartPriceDollars: walmartCandidate?.price ?? (cached.chosen?.source === 'walmart' ? cached.chosen?.price : null),
+                  ...pd,
+                  cacheChosenSource: cached.chosen?.source ?? null,
+                  cacheChosenPriceDollars: cached.chosen?.price ?? null,
+                  cacheChosenUrl: cached.chosen?.url ?? null,
+                  cacheAmazonUrl: amazonCandidate?.url ?? (cached.chosen?.url?.includes('amazon.com') ? cached.chosen.url : null),
+                  cacheAmazonPriceDollars: amazonCandidate?.price ?? (cached.chosen?.source === 'amazon' ? cached.chosen?.price : null),
+                  cacheWalmartUrl: walmartCandidate?.url ?? (cached.chosen?.url?.includes('walmart.com') ? cached.chosen.url : null),
+                  cacheWalmartPriceDollars: walmartCandidate?.price ?? null,
                   cachedAt: cached.cachedAt ? new Date(cached.cachedAt).toISOString() : null,
                 };
               }
             }
           } catch {}
-          if (DEV_MODE) {
-            // DEV_MODE: full price-cache already attached above; nothing extra needed
-          }
           folder.file((o.sku || o.offerId || key) + '.json', JSON.stringify(fileData, null, 2));
         }
         folder.file('summary.csv', rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n'));
