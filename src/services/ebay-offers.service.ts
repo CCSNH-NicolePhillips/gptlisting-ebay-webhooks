@@ -460,34 +460,49 @@ export async function publishOffer(
   }
 
   // -- Pre-publish: apply per-price fulfillment policy if configured --------
-  // If the user has both a paid (fulfillment) and free (fulfillmentFree) policy
-  // set in their policy defaults, check the offer's price and ensure the correct
-  // policy is attached before publishing (handles drafts created before the
-  // free shipping policy was configured).
+  // If the user has a free-shipping policy (fulfillmentFree) configured, check
+  // the offer's price and ensure the correct policy is attached before publishing.
+  // This handles drafts created before the free-shipping policy was configured,
+  // or drafts that were created with the wrong default shipping policy.
+  // NOTE: Only fulfillmentFree is required to trigger this check; fulfillment
+  // (paid) is optional and used as fallback for items >= $50.
   try {
     const policyKey = userScopedKey(userId, 'policy-defaults.json');
     const policyDefaults = await store.get(policyKey, { type: 'json' }) as any;
 
-    if (policyDefaults?.fulfillment && policyDefaults?.fulfillmentFree) {
+    if (policyDefaults?.fulfillmentFree) {
       const getOfferUrl = `${apiHost}/sell/inventory/v1/offer/${encodeURIComponent(offerId)}`;
       const getRes = await fetch(getOfferUrl, { headers });
       if (getRes.ok) {
         const offer: any = await getRes.json();
         const offerPrice = parseFloat(offer?.pricingSummary?.price?.value ?? '0');
-        const correctPolicyId = offerPrice < 50
+        const correctPolicyId = (Number.isFinite(offerPrice) && offerPrice > 0 && offerPrice < 50)
           ? policyDefaults.fulfillmentFree
-          : policyDefaults.fulfillment;
+          : (policyDefaults.fulfillment ?? policyDefaults.fulfillmentFree);
         const currentPolicyId = offer?.listingPolicies?.fulfillmentPolicyId;
 
-        if (currentPolicyId !== correctPolicyId) {
+        if (correctPolicyId && currentPolicyId !== correctPolicyId) {
           console.log(`[publishOffer] Correcting fulfillmentPolicyId: ${currentPolicyId} → ${correctPolicyId} (price=$${offerPrice.toFixed(2)})`);
-          const updated = {
-            ...offer,
-            listingPolicies: {
-              ...offer.listingPolicies,
-              fulfillmentPolicyId: correctPolicyId,
-            },
+
+          // Build a minimal PUT body — eBay rejects read-only fields (offerId,
+          // status, listing, etc.) included in a full offer spread.
+          const writableFields = [
+            'sku', 'marketplaceId', 'format', 'availableQuantity', 'categoryId',
+            'secondaryCategoryId', 'listingDescription', 'listingDuration',
+            'pricingSummary', 'merchantLocationKey', 'condition', 'conditionDescription',
+            'storeCategoryNames', 'tax', 'charity', 'quantityLimitPerBuyer',
+            'includeCatalogProductDetails', 'hideBuyerDetails', 'extendedProducerResponsibility',
+            'regulatory', 'lotSize', 'listingStartDate',
+          ];
+          const updated: Record<string, unknown> = {};
+          for (const key of writableFields) {
+            if (offer[key] != null) updated[key] = offer[key];
+          }
+          updated.listingPolicies = {
+            ...offer.listingPolicies,
+            fulfillmentPolicyId: correctPolicyId,
           };
+
           const putRes = await fetch(getOfferUrl, {
             method: 'PUT',
             headers: { ...headers, 'Content-Type': 'application/json' },
@@ -496,10 +511,14 @@ export async function publishOffer(
           if (!putRes.ok) {
             const putTxt = await putRes.text().catch(() => '');
             console.warn(`[publishOffer] Failed to update fulfillmentPolicyId (non-fatal): ${putRes.status} ${putTxt.slice(0, 200)}`);
+          } else {
+            console.log(`[publishOffer] fulfillmentPolicyId corrected to ${correctPolicyId}`);
           }
         } else {
           console.log(`[publishOffer] fulfillmentPolicyId already correct (${currentPolicyId}, price=$${offerPrice.toFixed(2)})`);
         }
+      } else {
+        console.warn(`[publishOffer] Could not fetch offer for policy pre-check: ${getRes.status}`);
       }
     }
   } catch (policyErr: any) {
