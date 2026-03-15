@@ -816,6 +816,10 @@
                 <option value="USED_ACCEPTABLE">Used - Acceptable</option>
               </select>
             </div>
+            <div class="form-field">
+              <label for="quantity">Quantity</label>
+              <input type="number" id="quantity" min="1" step="1" placeholder="1" title="How many separate units you have to sell (each ships as a separate order)" />
+            </div>
           </div>
           
           <!-- Shipping Weight -->
@@ -1336,6 +1340,7 @@
         $('description').value = originalDraft.description || '';
         $('price').value = originalDraft.price || '';
         $('condition').value = originalDraft.condition || 'NEW';
+        $('quantity').value = originalDraft.quantity || 1;
         
         // Populate weight fields
         if (originalDraft.weight) {
@@ -1786,6 +1791,7 @@
           title: $('title').value.trim(),
           description: $('description').value.trim(),
           price: parseFloat($('price').value) || 0,
+          quantity: Math.max(1, parseInt($('quantity').value) || 1),
           condition: $('condition').value,
           aspects,
           images, // Include reordered images

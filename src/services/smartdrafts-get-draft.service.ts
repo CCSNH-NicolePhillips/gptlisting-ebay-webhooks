@@ -32,6 +32,7 @@ export interface GetDraftResult {
     title: string;
     description: string;
     price: string | number;
+    quantity: number;
     condition: string;
     aspects: Record<string, string[]>;
     images: string[];
@@ -129,6 +130,7 @@ export async function getDraft(userId: string, offerId: string): Promise<GetDraf
     title: (inventory.product?.title ?? offer.title ?? '') as string,
     description: (inventory.product?.description ?? offer.listingDescription ?? '') as string,
     price: offer.pricingSummary?.price?.value ?? 0,
+    quantity: (inventory.availability?.shipToLocationAvailability?.quantity ?? offer.availableQuantity ?? 1) as number,
     condition: (inventory.condition ?? offer.condition ?? 'NEW') as string,
     aspects: (inventory.product?.aspects ?? {}) as Record<string, string[]>,
     images: (inventory.product?.imageUrls ?? []) as string[],

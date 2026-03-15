@@ -22,6 +22,7 @@ export type DraftUpdate = {
   title: string;
   description?: string;
   price: number;
+  quantity?: number;
   condition?: string;
   aspects?: Record<string, string | string[]>;
   images?: string[];
@@ -142,8 +143,10 @@ export async function updateDraft(
             : ((currentOffer.listing as any)?.imageUrls ?? []),
       },
       condition: draft.condition ?? 'NEW',
-      availability: currentOffer.availability ?? {
-        shipToLocationAvailability: { quantity: 1 },
+      availability: {
+        shipToLocationAvailability: {
+          quantity: draft.quantity ?? (currentOffer as any).availability?.shipToLocationAvailability?.quantity ?? (currentOffer as any).availableQuantity ?? 1,
+        },
       },
     };
 

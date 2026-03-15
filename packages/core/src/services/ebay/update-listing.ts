@@ -100,7 +100,7 @@ async function updateViaInventoryApi(
   const sku_ = sku!;
 
   // Update inventory item
-  if (title || description || images || aspects || condition) {
+  if (title || description || images || aspects || condition || quantity !== undefined) {
     const getItemRes = await fetch(
       `${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku_)}`,
       { headers: ebayHeaders },
@@ -145,6 +145,15 @@ async function updateViaInventoryApi(
 
     if (condition && CONDITION_MAP[condition]) {
       invPayload.condition = CONDITION_MAP[condition];
+    }
+
+    if (quantity !== undefined) {
+      const existingAvail = (existingItem.availability as any) ?? {};
+      const existingShip = existingAvail.shipToLocationAvailability ?? {};
+      invPayload.availability = {
+        ...existingAvail,
+        shipToLocationAvailability: { ...existingShip, quantity },
+      };
     }
 
     const updateItemRes = await fetch(
