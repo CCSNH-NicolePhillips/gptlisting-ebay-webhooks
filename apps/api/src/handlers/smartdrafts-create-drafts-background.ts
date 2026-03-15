@@ -1711,9 +1711,20 @@ async function createDraftForProduct(
     finalPrice = null;
   }
   return { priceResult, pricingDecision, finalPrice, pricingStatus, priceMeta, priceWarning, priceLookupTitle, seoContext, isBundle, bundlePriceLookupTitle };
-  })(); // end pricingPromise — runs in background while categories + GPT run
+  })(); // end pricingPromise
 
-  // ⚡ PARALLEL: categories + GPT run while pricing runs in background
+  // Await pricing before GPT — sequential to avoid overwhelming external APIs
+  const _pr = await pricingPromise;
+  priceLookupTitle = _pr.priceLookupTitle;
+  seoContext = _pr.seoContext;
+  isBundle = _pr.isBundle;
+  bundlePriceLookupTitle = _pr.bundlePriceLookupTitle;
+  let { priceResult, pricingDecision } = _pr;
+  let finalPrice = _pr.finalPrice;
+  let pricingStatus = _pr.pricingStatus;
+  let priceMeta = _pr.priceMeta;
+  let priceWarning = _pr.priceWarning;
+
   const catListStart = Date.now();
   const relevantCategories = await getRelevantCategories(product, undefined);
   console.log(`[Draft] Category list generation took ${Date.now() - catListStart}ms`);
@@ -1756,17 +1767,7 @@ async function createDraftForProduct(
   const parsed = parseGptResponse(responseText, product);
   console.log(`[Draft] Parsed response:`, JSON.stringify(parsed, null, 2));
 
-  // ⚡ Await pricing (GPT took ~15s, pricing ~20-30s — should be done or nearly done)
-  const _pr = await pricingPromise;
-  priceLookupTitle = _pr.priceLookupTitle;
-  seoContext = _pr.seoContext;
-  isBundle = _pr.isBundle;
-  bundlePriceLookupTitle = _pr.bundlePriceLookupTitle;
-  let { priceResult, pricingDecision } = _pr;
-  let finalPrice = _pr.finalPrice;
-  let pricingStatus = _pr.pricingStatus;
-  let priceMeta = _pr.priceMeta;
-  let priceWarning = _pr.priceWarning;
+  // (pricing already awaited above — results available in priceResult, pricingDecision, etc.)
 
   let finalCategory: CategoryHint | null = categoryHint;
   if (parsed.categoryId) {
@@ -2418,7 +2419,7 @@ export const handler: Handler = async (event) => {
     
     // Process products in batches to avoid overwhelming connections
     // CONCURRENCY_LIMIT controls how many products process simultaneously
-    const CONCURRENCY_LIMIT = 6; // Run up to 6 products in parallel (pricing overlaps with GPT)
+    const CONCURRENCY_LIMIT = 3; // 3 products in parallel keeps external API calls manageable
     const batches: typeof products[] = [];
     
     for (let i = 0; i < products.length; i += CONCURRENCY_LIMIT) {
