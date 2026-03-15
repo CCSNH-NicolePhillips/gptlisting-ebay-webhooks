@@ -205,10 +205,17 @@ async function updateViaInventoryApi(
   // Apply fulfillment policy override (after bestOffer so we merge correctly)
   if (input.fulfillmentPolicyId !== undefined) {
     const currentPolicies = ((offerPayload.listingPolicies ?? offerBase.listingPolicies) ?? {}) as Record<string, unknown>;
+    // Drop per-offer shippingCostOverrides from listingPolicies (in case eBay stores them there)
+    // so the new fulfillment policy's shipping terms take effect cleanly.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { shippingCostOverrides: _droppedNested, ...policiesWithoutOverrides } = currentPolicies;
     offerPayload.listingPolicies = {
-      ...currentPolicies,
+      ...policiesWithoutOverrides,
       fulfillmentPolicyId: input.fulfillmentPolicyId,
     };
+    // Also clear top-level shippingCostOverrides on the offer; these override the
+    // fulfillment policy's shipping cost and would prevent free-shipping from taking effect.
+    delete offerPayload.shippingCostOverrides;
   }
 
   const updateOfferRes = await fetch(`${apiHost}/sell/inventory/v1/offer/${offer.offerId}`, {
