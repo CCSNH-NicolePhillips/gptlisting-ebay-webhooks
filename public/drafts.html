@@ -488,7 +488,14 @@
         padding: 0.4rem 0.8rem;
         font-size: 0.85rem;
       }
+      .card.flagged { border-color: rgba(239,68,68,0.55) !important; box-shadow: 0 18px 40px rgba(239,68,68,0.14); }
+      .flag-btn { position: absolute; top: 6px; right: 8px; background: rgba(15,23,42,0.7); border: none; border-radius: 6px; color: #94a3b8; cursor: pointer; font-size: 0.8rem; padding: 2px 5px; z-index: 2; line-height: 1.4; }
+      .flag-btn.active { color: #ef4444; }
+      .flag-count-badge { display: inline-block; background: #ef4444; color: #fff; border-radius: 999px; font-size: 0.7rem; font-weight: 700; padding: 1px 6px; margin-left: 4px; vertical-align: middle; }
+      .dev-price-row { font-size: 0.73rem; color: #64748b; margin-top: 0.25rem; }
+      .dev-banner { background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.35); border-radius: 8px; padding: 0.4rem 0.75rem; font-size: 0.78rem; color: #fcd34d; margin-bottom: 1rem; }
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   </head>
   <body>
     <script src="/auth-client.js"></script>
@@ -668,6 +675,8 @@
               </svg>
               Refresh
             </button>
+            <button class="dp-btn dp-btn-secondary" id="exportAllBtn" style="padding: 0.5rem 1rem; font-size: 0.875rem;">⬇ Export All</button>
+            <button class="dp-btn dp-btn-secondary" id="exportFlaggedBtn" disabled style="padding: 0.5rem 1rem; font-size: 0.875rem;">📎 Export Flagged<span class="flag-count-badge" id="flagCountBadge" style="display:none">0</span></button>
             <a href="/index.html" class="dp-btn dp-btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem;">← Back to Dashboard</a>
             <button id="btnClean" class="dp-btn dp-btn-danger" title="Delete ALL UNPUBLISHED drafts" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
               Delete all drafts
@@ -693,6 +702,7 @@
               <div class="bulk-actions">
                 <button class="btn" id="bulkPublish" title="Publish selected drafts">Publish</button>
                 <button class="btn danger" id="bulkDelete" title="Delete selected drafts">Delete</button>
+                <button class="btn secondary" id="bulkExportBtn" title="Export selected drafts">⬇ Export Selected</button>
               </div>
             </div>
             
@@ -733,7 +743,48 @@
       let globalPromoSettings = { enabled: false, rate: 5 };
       // Policy defaults (fulfillment / fulfillmentFree policy IDs)
       let policyDefaults = null;
-      
+
+      // ── Flag & Export ──────────────────────────────────────────────────────────
+      const DEV_MODE = new URLSearchParams(location.search).has('dev');
+      const FLAGGED_KEY = 'dp_flagged_drafts';
+      const flaggedSet = new Set(JSON.parse(localStorage.getItem(FLAGGED_KEY) || '[]'));
+      const draftDataMap = new Map(); // flagKey → full offer object
+
+      function getDraftFlagKey(o) { return o.offerId || o.sku || ''; }
+      function saveFlagged() { localStorage.setItem(FLAGGED_KEY, JSON.stringify([...flaggedSet])); updateFlagExportBtn(); }
+      function updateFlagExportBtn() {
+        const btn = document.getElementById('exportFlaggedBtn');
+        const badge = document.getElementById('flagCountBadge');
+        const count = flaggedSet.size;
+        if (btn) btn.disabled = count === 0;
+        if (badge) { badge.textContent = count; badge.style.display = count > 0 ? '' : 'none'; }
+      }
+      function addFlagButton(container, o, cardEl) {
+        const key = getDraftFlagKey(o);
+        const btn = document.createElement('button');
+        btn.className = 'flag-btn' + (flaggedSet.has(key) ? ' active' : '');
+        btn.title = flaggedSet.has(key) ? 'Unflag' : 'Flag for export';
+        btn.textContent = '🚩';
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (flaggedSet.has(key)) { flaggedSet.delete(key); btn.classList.remove('active'); btn.title = 'Flag for export'; cardEl.classList.remove('flagged'); }
+          else { flaggedSet.add(key); btn.classList.add('active'); btn.title = 'Unflag'; cardEl.classList.add('flagged'); }
+          saveFlagged();
+        });
+        container.style.position = 'relative';
+        container.appendChild(btn);
+        if (flaggedSet.has(key)) cardEl.classList.add('flagged');
+      }
+
+      if (DEV_MODE) {
+        const devBanner = document.createElement('div');
+        devBanner.className = 'dev-banner';
+        devBanner.textContent = '\uD83D\uDEE0 Dev Mode – price debug links active';
+        const flashEl = document.getElementById('flash');
+        flashEl?.parentNode?.insertBefore(devBanner, flashEl);
+      }
+      // ── End Flag & Export ──────────────────────────────────────────────────────
+
       // Track pending promotion processing (eBay needs ~60s to sync before promotion works)
       let promotionProcessingTimeout = null;
       
@@ -1423,6 +1474,17 @@
     const isEbayCdn = offer._imageUrl.includes('ebayimg.com') || offer._imageUrl.includes('ebaystatic.com');
     img.src = isEbayCdn ? offer._imageUrl : proxied(offer._imageUrl);
   }
+        // Store in draftDataMap and attach flag button
+        draftDataMap.set(getDraftFlagKey(offer), offer);
+        addFlagButton(th, offer, el);
+        if (DEV_MODE) {
+          const devRow = document.createElement('div');
+          devRow.className = 'dev-price-row';
+          const brand = offer?.merchantData?.brand || '';
+          const titleText = offer?.listing?.title || offer?.title || offer?._enrichedTitle || offer?.sku || '';
+          devRow.innerHTML = `🔬 <a href="/api/diag/price-cache?brand=${encodeURIComponent(brand)}&title=${encodeURIComponent(titleText)}" target="_blank" style="color:#64748b">price cache</a>`;
+          el.appendChild(devRow);
+        }
   return el;
       }
 
@@ -2157,6 +2219,54 @@
         sessionStorage.removeItem('drafts-cache-time');
       });
       
+      // ======================================================================
+      // Flag & Export Functions
+      // ======================================================================
+      async function exportDraftsAsZip(offers, label) {
+        if (!offers || offers.length === 0) { alert('No drafts to export.'); return; }
+        const zip = new JSZip();
+        const folder = zip.folder(label);
+        const rows = [['offerId','sku','title','price','currency','status','flagged']];
+        for (const o of offers) {
+          const key = getDraftFlagKey(o);
+          const priceVal = o?.pricingSummary?.price?.value || '';
+          const currency = o?.pricingSummary?.price?.currency || '';
+          const titleText = o?.listing?.title || o?.title || o?._enrichedTitle || o?.sku || '';
+          rows.push([o.offerId||'', o.sku||'', titleText, priceVal, currency, o.status||'', flaggedSet.has(key)?'1':'0']);
+          let fileData = { ...o };
+          if (DEV_MODE) {
+            try {
+              const brand = o?.merchantData?.brand || '';
+              const exec2 = (window.authClient && typeof window.authClient.authFetch === 'function') ? window.authClient.authFetch : fetch;
+              const pr = await exec2(`/api/diag/price-cache?brand=${encodeURIComponent(brand)}&title=${encodeURIComponent(titleText)}`);
+              if (pr.ok) fileData._priceCache = await pr.json();
+            } catch {}
+          }
+          folder.file((o.sku || o.offerId || key) + '.json', JSON.stringify(fileData, null, 2));
+        }
+        folder.file('summary.csv', rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n'));
+        folder.file('summary.json', JSON.stringify(offers, null, 2));
+        const blob = await zip.generateAsync({ type: 'blob' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${label}-${new Date().toISOString().slice(0,10)}.zip`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      }
+
+      document.getElementById('exportAllBtn')?.addEventListener('click', () => {
+        exportDraftsAsZip([...draftDataMap.values()], 'all-drafts');
+      });
+      document.getElementById('exportFlaggedBtn')?.addEventListener('click', () => {
+        const flagged = [...draftDataMap.values()].filter(o => flaggedSet.has(getDraftFlagKey(o)));
+        exportDraftsAsZip(flagged, 'flagged-drafts');
+      });
+      document.getElementById('bulkExportBtn')?.addEventListener('click', () => {
+        const selected = getSelectedOffers().map(s => draftDataMap.get(s.offerId)).filter(Boolean);
+        exportDraftsAsZip(selected, 'selected-drafts');
+      });
+
       initUserMenu();
       bootstrap();
     </script>
