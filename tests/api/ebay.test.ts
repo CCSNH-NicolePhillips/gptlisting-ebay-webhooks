@@ -302,7 +302,7 @@ describe('DELETE /api/ebay/offers/:offerId', () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ ok: true, deleted: 'off-123' });
-    expect(mockDeleteOffer).toHaveBeenCalledWith(MOCK_USER.userId, 'off-123');
+    expect(mockDeleteOffer).toHaveBeenCalledWith(MOCK_USER.userId, 'off-123', undefined);
   });
 
   it('returns 400 when eBay not connected', async () => {

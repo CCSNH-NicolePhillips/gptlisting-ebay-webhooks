@@ -1206,9 +1206,9 @@
           flash.textContent = 'Deleting…';
           try {
             const exec = (window.authClient && typeof window.authClient.authFetch === 'function') ? window.authClient.authFetch : fetch;
-            const r = await exec(
-              '/.netlify/functions/ebay-delete-offer?offerId=' + encodeURIComponent(offer.offerId)
-            );
+            const deleteUrl = '/.netlify/functions/ebay-delete-offer?offerId=' + encodeURIComponent(offer.offerId)
+              + (offer.sku ? '&sku=' + encodeURIComponent(offer.sku) : '');
+            const r = await exec(deleteUrl);
             
             // Safe JSON parsing
             let data;
@@ -1590,6 +1590,15 @@
                 console.warn('[Drafts] Failed to check recent offers:', e);
               }
             
+            // Filter out sold-through INACTIVE offers (qty=0). These are completed listings
+            // that eBay keeps in INACTIVE status after all units sell. They are not actionable
+            // drafts — the user should see them on the Sold Items page instead.
+            offers = offers.filter(o => {
+              const isSoldThrough = String(o?.status || '').toUpperCase() === 'INACTIVE'
+                && Number(o?.availableQuantity ?? -1) === 0;
+              return !isSoldThrough;
+            });
+
             // Cache the results
             try {
               sessionStorage.setItem(cacheKey, JSON.stringify(offers));

@@ -188,7 +188,10 @@ router.delete('/offers/:offerId', async (req, res) => {
     const { userId } = await requireUserAuth(req.headers.authorization);
     const offerId = req.params.offerId || (req.body as any)?.offerId;
     if (!offerId) return badRequest(res, 'Missing offerId');
-    const result = await deleteOffer(userId, offerId);
+    // Optional: also delete the underlying inventory item to prevent eBay from
+    // re-surfacing the offer on the next page load (e.g. sold-through INACTIVE offers).
+    const sku = (req.query.sku as string | undefined) || (req.body as any)?.sku || undefined;
+    const result = await deleteOffer(userId, offerId, sku);
     return res.status(200).json(result);
   } catch (err) {
     return handleEbayError(res, err);

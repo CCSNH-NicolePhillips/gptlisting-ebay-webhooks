@@ -392,14 +392,20 @@ export async function listOffers(
 export interface DeleteOfferResult {
   ok: true;
   deleted: string;
+  deletedInventory?: boolean;
 }
 
 /**
  * Delete an eBay offer (removes the listing draft).
+ *
+ * @param sku  When provided, also deletes the underlying inventory item so eBay
+ *             cannot re-surface the offer on the next page load (e.g. sold-through
+ *             INACTIVE offers that keep reappearing).
  */
 export async function deleteOffer(
   userId: string,
   offerId: string,
+  sku?: string,
 ): Promise<DeleteOfferResult> {
   const { apiHost, headers } = await getEbayClient(userId);
   const url = `${apiHost}/sell/inventory/v1/offer/${encodeURIComponent(offerId)}`;
@@ -416,7 +422,15 @@ export async function deleteOffer(
     throw new EbayApiError(res.status, body);
   }
 
-  return { ok: true, deleted: offerId };
+  // Optionally delete the inventory item so eBay doesn't re-create the offer.
+  let deletedInventory = false;
+  if (sku) {
+    const invUrl = `${apiHost}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
+    const invRes = await fetch(invUrl, { method: 'DELETE', headers });
+    deletedInventory = invRes.ok || invRes.status === 404;
+  }
+
+  return { ok: true, deleted: offerId, ...(sku ? { deletedInventory } : {}) };
 }
 
 // ---------------------------------------------------------------------------
