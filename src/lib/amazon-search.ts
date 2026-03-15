@@ -695,7 +695,39 @@ export async function searchAmazonWithFallback(
     console.warn('[amazon-search] Brand registry check failed (non-fatal):', err instanceof Error ? err.message : String(err));
   }
 
-  // First try the full brand + product search
+  // Step 2: Rainforest brand-search — finds all products for this brand in one call,
+  // auto-populates the brand registry with discovered ASINs, and returns the best match.
+  if (brand) {
+    try {
+      const { searchRainforestByBrand } = await import('./rainforest-search.js');
+      const rfResult = await searchRainforestByBrand(brand, conflictCheckName ?? productName);
+      if (rfResult.match && rfResult.confidence !== 'low') {
+        const m = rfResult.match;
+        const price = m.price;
+        if (price !== null) {
+          console.log(`[amazon-search] ✅ Rainforest match: "${m.title.slice(0, 60)}" $${price} (${rfResult.confidence})`);
+          return {
+            price,
+            originalPrice: m.rrpPrice,
+            url: m.url,
+            asin: m.asin,
+            title: m.title,
+            brand: m.brand,
+            isPrime: m.isPrime,
+            rating: m.rating,
+            reviews: m.ratingsTotal,
+            allResults: [],
+            confidence: rfResult.confidence,
+            reasoning: rfResult.reasoning,
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('[amazon-search] Rainforest search failed (non-fatal):', err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  // Step 3: Fall back to full brand + product keyword search
   const fullResult = await searchAmazon(brand, productName, 10, conflictCheckName ?? undefined);
   
   if (fullResult.price !== null && fullResult.confidence !== 'low') {
