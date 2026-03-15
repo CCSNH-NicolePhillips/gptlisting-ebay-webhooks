@@ -19,7 +19,7 @@ import { requireUserAuth } from '../../../../src/lib/auth-user.js';
 import { getUserAccessToken, apiHost, headers as ebayHeaders } from '../../../../src/lib/_ebay.js';
 import { resolveEbayEnv } from '../../../../src/lib/_common.js';
 import { lookupPrice } from '../../../../src/lib/price-lookup.js';
-import { deleteCachedPrice, makePriceSig } from '../../../../src/lib/price-cache.js';
+import { getCachedPrice, deleteCachedPrice, makePriceSig } from '../../../../src/lib/price-cache.js';
 import { serverError } from '../http/respond.js';
 
 const router = Router();
@@ -324,6 +324,32 @@ router.get('/debug-price', async (req, res) => {
         needsManualReview: result.needsManualReview,
         manualReviewReason: result.manualReviewReason,
       },
+    });
+  } catch (err: any) {
+    serverError(res, err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/diag/price-cache?brand=&title=
+// No auth required — returns cached price data for a brand+title without
+// triggering a fresh lookup. Used by the flagged-listings debug export.
+// ---------------------------------------------------------------------------
+router.get('/price-cache', async (req, res) => {
+  try {
+    const brand = ((req.query.brand as string) || '').trim();
+    const title = ((req.query.title as string) || '').trim();
+    if (!brand || !title) {
+      return void res.status(400).json({ ok: false, error: 'brand and title params required' });
+    }
+    const sig = makePriceSig(brand, title);
+    const cached = await getCachedPrice(sig);
+    return res.json({
+      ok: true,
+      sig,
+      found: !!cached,
+      cached,
+      debugUrl: `/api/diag/debug-price?brand=${encodeURIComponent(brand)}&title=${encodeURIComponent(title)}`,
     });
   } catch (err: any) {
     serverError(res, err);

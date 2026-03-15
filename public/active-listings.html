@@ -489,7 +489,74 @@
     .ship-modal-footer .btn {
       min-width: 80px;
     }
+
+    /* ── Flagged listings & dev mode ────────────────────────── */
+    .card.flagged {
+      border-color: rgba(239,68,68,0.55) !important;
+      box-shadow: 0 18px 40px rgba(239,68,68,0.14);
+    }
+    .flag-btn {
+      position: absolute;
+      top: 6px;
+      right: 8px;
+      background: rgba(0,0,0,0.5);
+      border: none;
+      border-radius: 6px;
+      color: rgba(255,255,255,0.35);
+      font-size: 0.83rem;
+      padding: 0.18rem 0.28rem;
+      cursor: pointer;
+      z-index: 5;
+      transition: color 0.15s, background 0.15s;
+      line-height: 1.5;
+    }
+    .flag-btn:hover,
+    .card.flagged .flag-btn { color: #f87171; background: rgba(239,68,68,0.22); }
+    .flag-count-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      background: #ef4444;
+      color: #fff;
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 0 4px;
+      margin-left: 0.3rem;
+      vertical-align: middle;
+    }
+    .dev-price-row {
+      margin-top: 0.45rem;
+      padding-top: 0.45rem;
+      border-top: 1px dashed rgba(148,163,184,0.14);
+      font-size: 0.73rem;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+    }
+    .dev-price-row a {
+      color: #a5b4fc;
+      text-decoration: none;
+    }
+    .dev-price-row a:hover { text-decoration: underline; }
+    .dev-banner {
+      background: rgba(251,191,36,0.1);
+      border: 1px solid rgba(251,191,36,0.28);
+      color: #fde68a;
+      border-radius: 8px;
+      padding: 0.35rem 0.75rem;
+      font-size: 0.8rem;
+      margin-bottom: 0.8rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
   </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
   <script src="/auth-client.js"></script>
@@ -739,6 +806,9 @@
           <option value="watched">Most Watched</option>
         </select>
         <div style="flex: 1;"></div>
+        <button class="btn secondary" id="exportFlaggedBtn" disabled style="opacity:0.4;white-space:nowrap">
+          📎 Export Flagged<span class="flag-count-badge" id="flagCountBadge">0</span>
+        </button>
         <div id="counts" style="color: var(--muted); font-size: 0.9rem;"></div>
       </div>
       
@@ -784,6 +854,58 @@
 
     let allOffers = []; // Store all offers for sorting
     let filteredOffers = []; // Store filtered offers for display
+
+    // ── Dev mode & flagging ─────────────────────────────────────────────
+    const DEV_MODE = new URLSearchParams(location.search).has('dev');
+    const FLAGGED_KEY = 'dp_flagged_listings';
+    const flaggedSet = new Set(JSON.parse(localStorage.getItem(FLAGGED_KEY) || '[]'));
+    const offerDataMap = new Map(); // key → full offer object
+
+    if (DEV_MODE) {
+      document.getElementById('flash')?.insertAdjacentHTML(
+        'beforebegin',
+        '<div class="dev-banner">🛠 Dev Mode — price debug links active · <a href="?" style="color:#fde68a">Exit dev mode</a></div>'
+      );
+    }
+
+    function getFlagKey(o) { return o.listingId || o.offerId || o.sku || ''; }
+
+    function saveFlagged() {
+      localStorage.setItem(FLAGGED_KEY, JSON.stringify([...flaggedSet]));
+      updateExportBtn();
+    }
+
+    function updateExportBtn() {
+      const btn = document.getElementById('exportFlaggedBtn');
+      const badge = document.getElementById('flagCountBadge');
+      if (!btn) return;
+      const n = flaggedSet.size;
+      if (badge) badge.textContent = String(n);
+      btn.disabled = n === 0;
+      btn.style.opacity = n === 0 ? '0.4' : '1';
+    }
+
+    function addFlagButton(container, o, card) {
+      const key = getFlagKey(o);
+      const btn = document.createElement('button');
+      btn.className = 'flag-btn';
+      btn.title = flaggedSet.has(key) ? 'Remove flag' : 'Flag as poorly priced';
+      btn.textContent = '🚩';
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        if (flaggedSet.has(key)) {
+          flaggedSet.delete(key);
+          card.classList.remove('flagged');
+          btn.title = 'Flag as poorly priced';
+        } else {
+          flaggedSet.add(key);
+          card.classList.add('flagged');
+          btn.title = 'Remove flag';
+        }
+        saveFlagged();
+      });
+      container.appendChild(btn);
+    }
     
     function getAuthFetch() {
       return (window.authClient && typeof window.authClient.authFetch === 'function') 
@@ -906,6 +1028,11 @@
       card.dataset.price = String(o.price?.value ?? '');
       card.dataset.isInventory = o.isInventoryListing ? '1' : '0';
 
+      // Track offer data for export and apply any pre-existing flag
+      const _flagKey = getFlagKey(o);
+      offerDataMap.set(_flagKey, o);
+      if (flaggedSet.has(_flagKey)) card.classList.add('flagged');
+
       // Add image thumbnail if available
       if (o.imageUrl) {
         const imgContainer = document.createElement('div');
@@ -928,7 +1055,8 @@
         });
         checkbox.addEventListener('click', (e) => e.stopPropagation());
         imgContainer.appendChild(checkbox);
-        
+        addFlagButton(imgContainer, o, card);
+
         const img = document.createElement('img');
         img.src = o.imageUrl;
         img.alt = o.title || 'Product image';
@@ -972,6 +1100,7 @@
         });
         checkbox.addEventListener('click', (e) => e.stopPropagation());
         imgContainer.appendChild(checkbox);
+        addFlagButton(imgContainer, o, card);
         card.appendChild(imgContainer);
       }
 
@@ -1038,6 +1167,18 @@
           shipPill.textContent = '\uD83D\uDCE6 Paid Ship';
         }
         badges.appendChild(shipPill);
+      }
+
+      // Dev mode: show price debug link
+      if (DEV_MODE) {
+        const words = (o.title || '').trim().split(/\s+/);
+        const brand = encodeURIComponent(words.slice(0, 2).join(' '));
+        const titleEnc = encodeURIComponent(o.title || '');
+        const row = document.createElement('div');
+        row.className = 'dev-price-row';
+        row.innerHTML = `🛠 <a href="/api/diag/debug-price?brand=${brand}&title=${titleEnc}" target="_blank">Debug pricing →</a>`
+          + (o.listingId ? ` · <a href="https://www.ebay.com/itm/${o.listingId}" target="_blank">eBay listing ↗</a>` : '');
+        card.appendChild(row);
       }
 
       card.appendChild(badges);
@@ -1816,6 +1957,99 @@
       openShipModal(listings);
     });
     
+    // ── Export flagged listings ───────────────────────────────────────────
+    document.getElementById('exportFlaggedBtn')?.addEventListener('click', async () => {
+      if (flaggedSet.size === 0) return;
+      const flaggedOffers = [...flaggedSet].map(k => offerDataMap.get(k)).filter(Boolean);
+      const JSZip = window.JSZip;
+      if (!JSZip) {
+        flash.textContent = 'JSZip not loaded — try refreshing';
+        flash.className = 'flash error';
+        return;
+      }
+
+      flash.textContent = `Building zip for ${flaggedOffers.length} flagged listing(s)…`;
+      flash.className = 'flash';
+
+      const zip = new JSZip();
+      const folder = zip.folder('flagged-listings');
+      const now = new Date().toISOString();
+      const exec = getAuthFetch();
+      const summaryRows = [];
+
+      for (const o of flaggedOffers) {
+        const ebayUrl = o.listingId ? `https://www.ebay.com/itm/${o.listingId}` : null;
+        const entry = {
+          metadata: { exportedAt: now, devMode: DEV_MODE, ebayUrl },
+          listing: {
+            listingId: o.listingId,
+            sku: o.sku,
+            title: o.title,
+            price: o.price,
+            availableQuantity: o.availableQuantity,
+            quantitySold: o.quantitySold,
+            watchCount: o.watchCount,
+            hitCount: o.hitCount,
+            isFreeShipping: o.isFreeShipping,
+            isInventoryListing: o.isInventoryListing,
+            listingStatus: o.listingStatus,
+            startTime: o.startTime,
+            imageUrl: o.imageUrl,
+            autoPromote: o.autoPromote,
+            autoPromoteAdRate: o.autoPromoteAdRate,
+          },
+          priceDebug: null,
+        };
+
+        if (DEV_MODE && o.title) {
+          const words = o.title.trim().split(/\s+/);
+          const brand = words.slice(0, 2).join(' ');
+          try {
+            const pr = await exec(
+              `/api/diag/price-cache?brand=${encodeURIComponent(brand)}&title=${encodeURIComponent(o.title)}`
+            );
+            if (pr.ok) entry.priceDebug = await pr.json();
+          } catch {}
+          entry.metadata.priceDebugUrl =
+            `/api/diag/debug-price?brand=${encodeURIComponent(brand)}&title=${encodeURIComponent(o.title)}`;
+        }
+
+        summaryRows.push({
+          listingId: o.listingId || '',
+          sku: o.sku || '',
+          title: (o.title || '').slice(0, 100),
+          price: o.price?.value || '',
+          currency: o.price?.currency || 'USD',
+          qty: o.availableQuantity ?? '',
+          sold: o.quantitySold ?? '',
+          watches: o.watchCount ?? '',
+          isFreeShipping: o.isFreeShipping ?? '',
+          ebayUrl: ebayUrl || '',
+        });
+
+        const fn = (o.sku || o.listingId || 'listing').replace(/[^\w-]/g, '_').slice(0, 60);
+        folder.file(`${fn}.json`, JSON.stringify(entry, null, 2));
+      }
+
+      folder.file('summary.json', JSON.stringify(summaryRows, null, 2));
+      const csvHeader = Object.keys(summaryRows[0] || {}).join(',');
+      const csvBody = summaryRows.map(r =>
+        Object.values(r).map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')
+      ).join('\n');
+      folder.file('summary.csv', `${csvHeader}\n${csvBody}`);
+
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `flagged-listings-${now.slice(0, 10)}.zip`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      flash.textContent = `✓ Exported ${flaggedOffers.length} listing(s) as zip`;
+      flash.className = 'flash';
+    });
+
+    updateExportBtn();
+
     // Lightbox functions
     function openLightbox(imageUrl) {
       const lightbox = document.getElementById('imageLightbox');
