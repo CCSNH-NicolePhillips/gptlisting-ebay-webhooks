@@ -156,6 +156,21 @@ function buildPrompt(
 
   if (product.evidence?.length) lines.push(`Matching evidence: ${product.evidence.join('; ')}`);
 
+  // Detect topical skincare products and suppress supplement/food attributes
+  const skincareKeywords = /\b(serum|cream|lotion|moisturizer|toner|cleanser|face wash|gel|mask|facial|eye cream|eye gel|body wash|body lotion|exfoliant|exfoliating|scrub|primer|essence|ampoule|mist|face oil|retinol|vitamin c|niacinamide|hyaluronic|peptide serum|booster)\b/i;
+  const productText = [product.product, product.brand, product.variant, product.extractedText].filter(Boolean).join(' ');
+  const isTopicalSkincare = skincareKeywords.test(productText);
+
+  if (isTopicalSkincare) {
+    lines.push(
+      'IMPORTANT: This is a TOPICAL SKINCARE product (applied to skin, NOT consumed).',
+      'DO NOT include any food/supplement attributes in the title or aspects:',
+      '  - Prohibited: Unflavored, Flavored, Flavor, Vanilla, Chocolate, Serving Size, Servings, Count (as in supplement dose count)',
+      '  - Include ONLY skincare-relevant attributes: skin type, key ingredients, size/volume (oz/ml), form (serum/cream/gel), concern (anti-aging/hydrating/firming)',
+      '',
+    );
+  }
+
   lines.push('');
 
   if (categories) {
@@ -223,7 +238,8 @@ async function callOpenAI(prompt: string): Promise<string> {
                 '- bullets: array of 3-5 specific feature/benefit points.\n' +
                 '- aspects: object with Brand, Type, Features, Size, etc.\n' +
                 '- price: CURRENT Amazon/Walmart price (NOT sale prices). Return ONLY the number (e.g. 24.99).\n' +
-                "- condition: one of 'NEW', 'LIKE_NEW', 'USED_EXCELLENT', 'USED_GOOD', 'USED_ACCEPTABLE'.\n",
+                "- condition: one of 'NEW', 'LIKE_NEW', 'USED_EXCELLENT', 'USED_GOOD', 'USED_ACCEPTABLE'.\n" +
+                '- NEVER include food/supplement words (Unflavored, Flavored, Flavor, Servings, Serving Size) in titles or aspects for topical skincare products (serums, creams, lotions, gels, masks, etc.).\n',
             },
             { role: 'user', content: prompt },
           ],
