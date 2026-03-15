@@ -806,6 +806,9 @@
           <option value="watched">Most Watched</option>
         </select>
         <div style="flex: 1;"></div>
+        <button class="btn secondary" id="exportAllBtn" style="white-space:nowrap">
+          ⬇ Export All
+        </button>
         <button class="btn secondary" id="exportFlaggedBtn" disabled style="opacity:0.4;white-space:nowrap">
           📎 Export Flagged<span class="flag-count-badge" id="flagCountBadge">0</span>
         </button>
@@ -822,6 +825,7 @@
         <div class="bulk-actions">
           <button class="btn" id="bulkShipping" title="Update shipping policy for selected listings">🚒 Update Shipping</button>
           <button class="btn" id="bulkPromote" title="Promote selected listings">📢 Promote</button>
+          <button class="btn secondary" id="bulkExportBtn" title="Export selected listings as zip">⬇ Export Selected</button>
           <button class="btn danger" id="bulkEnd" title="End selected listings">End Listings</button>
         </div>
       </div>
@@ -1957,27 +1961,30 @@
       openShipModal(listings);
     });
     
-    // ── Export flagged listings ───────────────────────────────────────────
-    document.getElementById('exportFlaggedBtn')?.addEventListener('click', async () => {
-      if (flaggedSet.size === 0) return;
-      const flaggedOffers = [...flaggedSet].map(k => offerDataMap.get(k)).filter(Boolean);
+    // ── Export listings ─────────────────────────────────────────────
+    async function exportListingsAsZip(offers, label) {
       const JSZip = window.JSZip;
       if (!JSZip) {
         flash.textContent = 'JSZip not loaded — try refreshing';
         flash.className = 'flash error';
         return;
       }
+      if (!offers.length) {
+        flash.textContent = 'Nothing to export.';
+        flash.className = 'flash error';
+        return;
+      }
 
-      flash.textContent = `Building zip for ${flaggedOffers.length} flagged listing(s)…`;
+      flash.textContent = `Building zip for ${offers.length} listing(s)…`;
       flash.className = 'flash';
 
       const zip = new JSZip();
-      const folder = zip.folder('flagged-listings');
+      const folder = zip.folder(label);
       const now = new Date().toISOString();
       const exec = getAuthFetch();
       const summaryRows = [];
 
-      for (const o of flaggedOffers) {
+      for (const o of offers) {
         const ebayUrl = o.listingId ? `https://www.ebay.com/itm/${o.listingId}` : null;
         const entry = {
           metadata: { exportedAt: now, devMode: DEV_MODE, ebayUrl },
@@ -2015,6 +2022,7 @@
         }
 
         summaryRows.push({
+          flagged: flaggedSet.has(getFlagKey(o)) ? 'YES' : '',
           listingId: o.listingId || '',
           sku: o.sku || '',
           title: (o.title || '').slice(0, 100),
@@ -2041,11 +2049,28 @@
       const blob = await zip.generateAsync({ type: 'blob' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `flagged-listings-${now.slice(0, 10)}.zip`;
+      a.download = `${label}-${now.slice(0, 10)}.zip`;
       a.click();
       URL.revokeObjectURL(a.href);
-      flash.textContent = `✓ Exported ${flaggedOffers.length} listing(s) as zip`;
+      flash.textContent = `✓ Exported ${offers.length} listing(s)`;
       flash.className = 'flash';
+    }
+
+    document.getElementById('exportAllBtn')?.addEventListener('click', () => {
+      exportListingsAsZip([...offerDataMap.values()], 'all-listings');
+    });
+
+    document.getElementById('exportFlaggedBtn')?.addEventListener('click', () => {
+      if (flaggedSet.size === 0) return;
+      const offers = [...flaggedSet].map(k => offerDataMap.get(k)).filter(Boolean);
+      exportListingsAsZip(offers, 'flagged-listings');
+    });
+
+    document.getElementById('bulkExportBtn')?.addEventListener('click', () => {
+      const selected = getSelectedListings();
+      if (!selected.length) return;
+      const offers = selected.map(l => offerDataMap.get(l.listingId || l.sku)).filter(Boolean);
+      exportListingsAsZip(offers, 'selected-listings');
     });
 
     updateExportBtn();
