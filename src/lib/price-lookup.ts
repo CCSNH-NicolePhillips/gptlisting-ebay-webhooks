@@ -412,9 +412,8 @@ function isAmazonBundlePage(
         continue;
       }
       
-      // If Amazon is selling significantly more than we are (more than 2x), reject
-      // Use > instead of >= to allow borderline cases like "Pack of 2" when selling 1
-      if (packSize > effectiveSellingQty * 2 && packSize > 1) {
+      // If Amazon is selling more units than we are, reject (even a 2-pack when selling 1)
+      if (packSize > effectiveSellingQty && packSize > 1) {
         console.log(`[price] ⚠️ Amazon page for ${packSize}-pack but we're selling ${effectiveSellingQty} items - rejecting`);
         return true;
       }
