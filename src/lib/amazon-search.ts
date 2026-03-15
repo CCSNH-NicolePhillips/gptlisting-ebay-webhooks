@@ -672,6 +672,165 @@ async function lookupAmazonByAsin(
   }
 }
 
+// Retailers we trust for price-anchoring in Google Shopping results.
+// eBay, Mercari, Facebook Marketplace etc. are reseller platforms — excluded.
+const TRUSTED_RETAILERS: RegExp[] = [
+  /\bamazon\b/i,
+  /\biherb\b/i,
+  /\bvitacost\b/i,
+  /\bulta\b/i,
+  /\btarget\b/i,
+  /\bwalmart\b/i,
+  /\bcvs\b/i,
+  /\bwalgreens\b/i,
+  /\bvitamin\s*shoppe\b/i,
+  /\bcostco\b/i,
+  /\bsam'?s\s*club\b/i,
+  /\bthrive\s*market\b/i,
+  /\bispot\b/i,
+  /\bsprouts\b/i,
+  /\bwhole\s*foods\b/i,
+];
+
+const EXCLUDED_RETAILERS: RegExp[] = [
+  /\bebay\b/i,
+  /\bmercari\b/i,
+  /\bposhmark\b/i,
+  /\bfacebook\b/i,
+  /\bofferup\b/i,
+  /\bcraigslist\b/i,
+  /\bwish\b/i,
+  /\btemu\b/i,
+  /\baliexpress\b/i,
+];
+
+/**
+ * Google Shopping fallback — searches across all retailers for the product.
+ * Used as a last resort when Amazon (brand registry, Rainforest, keyword) all fail.
+ *
+ * Scores results: preferred retailers > generic retailers > excluded (skipped).
+ * Returns median price of trusted results to avoid outlier inflation.
+ */
+async function searchGoogleShopping(
+  brand: string,
+  productName: string
+): Promise<AmazonPriceLookupResult> {
+  const empty: AmazonPriceLookupResult = {
+    price: null,
+    originalPrice: null,
+    url: null,
+    asin: null,
+    title: null,
+    brand: null,
+    isPrime: false,
+    rating: null,
+    reviews: null,
+    allResults: [],
+    confidence: 'low',
+    reasoning: 'google-shopping-no-match',
+  };
+
+  if (!SEARCHAPI_KEY) return empty;
+
+  const query = `${brand} ${productName}`.trim().slice(0, 200);
+  console.log(`[google-shopping] Searching: "${query}"`);
+
+  try {
+    const url = new URL(SEARCHAPI_BASE);
+    url.searchParams.set('engine', 'google_shopping');
+    url.searchParams.set('q', query);
+    url.searchParams.set('api_key', SEARCHAPI_KEY);
+    url.searchParams.set('num', '10');
+
+    const response = await fetch(url.toString());
+    if (!response.ok) {
+      console.warn(`[google-shopping] API error ${response.status}`);
+      return empty;
+    }
+
+    const data: Record<string, any> = await response.json();
+    const results: any[] = data.shopping_results ?? [];
+
+    if (!results.length) {
+      console.log('[google-shopping] No shopping results returned');
+      return empty;
+    }
+
+    // Filter and collect usable prices
+    const trusted: Array<{ price: number; source: string; title: string; link: string }> = [];
+    const fallback: Array<{ price: number; source: string; title: string; link: string }> = [];
+
+    for (const r of results) {
+      const price: number | null =
+        typeof r.extracted_price === 'number' && r.extracted_price > 0
+          ? r.extracted_price
+          : typeof r.price === 'string'
+          ? parseFloat(r.price.replace(/[^0-9.]/g, ''))
+          : null;
+
+      if (!price || price <= 0) continue;
+
+      const source: string = r.source ?? r.seller ?? '';
+      const title: string = r.title ?? '';
+      const link: string = r.link ?? '';
+
+      // Skip excluded platforms
+      if (EXCLUDED_RETAILERS.some(rx => rx.test(source))) {
+        console.log(`[google-shopping] Skip excluded: ${source}`);
+        continue;
+      }
+
+      // Skip lot/bundle listings
+      if (LOT_BUNDLE_PATTERNS.some(p => p.test(title))) {
+        console.log(`[google-shopping] Skip bundle: "${title.slice(0, 55)}"`);
+        continue;
+      }
+
+      const entry = { price, source, title, link };
+      if (TRUSTED_RETAILERS.some(rx => rx.test(source))) {
+        trusted.push(entry);
+      } else {
+        fallback.push(entry);
+      }
+    }
+
+    const pool = trusted.length > 0 ? trusted : fallback;
+    if (!pool.length) {
+      console.log('[google-shopping] No usable prices after filtering');
+      return empty;
+    }
+
+    // Use median to resist outliers
+    const sorted = [...pool].sort((a, b) => a.price - b.price);
+    const mid = Math.floor(sorted.length / 2);
+    const best = sorted.length % 2 === 0
+      ? { ...sorted[mid], price: (sorted[mid - 1].price + sorted[mid].price) / 2 }
+      : sorted[mid];
+
+    const confidence = trusted.length > 0 ? 'medium' : 'low';
+    const sourceList = pool.map(p => p.source).join(', ').slice(0, 120);
+    console.log(`[google-shopping] ✅ price=$${best.price.toFixed(2)} from "${best.source}" (${trusted.length} trusted, ${fallback.length} fallback)`);
+
+    return {
+      price: best.price,
+      originalPrice: best.price,
+      url: best.link || null,
+      asin: null,
+      title: best.title || null,
+      brand,
+      isPrime: false,
+      rating: null,
+      reviews: null,
+      allResults: [],
+      confidence,
+      reasoning: `google-shopping median of ${pool.length} results [${sourceList}]`,
+    };
+  } catch (err) {
+    console.error('[google-shopping] Error:', err instanceof Error ? err.message : String(err));
+    return empty;
+  }
+}
+
 export async function searchAmazonWithFallback(
   brand: string,
   productName: string,
@@ -761,6 +920,14 @@ export async function searchAmazonWithFallback(
     }
   }
   
-  // Return original result (even if no match)
+  // Step 4: Google Shopping — catches products not on Amazon (brand-direct, iHerb, Ulta, etc.)
+  console.log(`[amazon-search] Trying Google Shopping fallback for "${brand} ${productName}"`);
+  const gsResult = await searchGoogleShopping(brand, conflictCheckName ?? productName);
+  if (gsResult.price !== null && gsResult.confidence !== 'low') {
+    console.log(`[amazon-search] ✅ Google Shopping found: $${gsResult.price} (${gsResult.confidence})`);
+    return gsResult;
+  }
+
+  // Nothing found anywhere — return the best null result we have
   return fullResult;
 }
