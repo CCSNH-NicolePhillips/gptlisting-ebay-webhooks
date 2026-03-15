@@ -136,7 +136,10 @@ export async function getActiveItem(
   const quantity = parseInt(extractXmlText(xmlText, 'Quantity') ?? '0', 10);
   const condition = extractXmlText(xmlText, 'ConditionID') ?? '1000';
   const conditionName = extractXmlText(xmlText, 'ConditionDisplayName') ?? 'New';
-  const images: string[] = [...xmlText.matchAll(/<PictureURL>([^<]+)<\/PictureURL>/g)].map(m => m[1]);
+  // Strip eBay CDN version suffixes (e.g. ";1" in "s-l1600.jpg;1") — Inventory API rejects URLs with semicolons
+  const images: string[] = [...xmlText.matchAll(/<PictureURL>([^<]+)<\/PictureURL>/g)]
+    .map(m => m[1].split(';')[0].trim())
+    .filter(Boolean);
   const aspects = extractItemAspects(xmlText);
 
   let description = extractXmlCdata(xmlText, 'Description') ?? '';

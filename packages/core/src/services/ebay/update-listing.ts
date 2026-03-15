@@ -117,7 +117,7 @@ async function updateViaInventoryApi(
         ...((existingItem.product as object) ?? {}),
         ...(title ? { title } : {}),
         ...(description ? { description } : {}),
-        ...(images?.length ? { imageUrls: images } : {}),
+        ...(images?.length ? { imageUrls: images.map(u => u.split(';')[0].trim()).filter(Boolean) } : {}),
         ...(aspects
           ? {
               aspects: Object.fromEntries(

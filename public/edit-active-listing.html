@@ -832,6 +832,15 @@
         return;
       }
       
+      // Warn if any single file is very large (>4 MB)
+      const MAX_FILE_BYTES = 4 * 1024 * 1024;
+      const oversized = imageFiles.filter(f => f.size > MAX_FILE_BYTES);
+      if (oversized.length > 0) {
+        const names = oversized.map(f => `${f.name} (${(f.size / 1024 / 1024).toFixed(1)} MB)`).join(', ');
+        uploadStatus.textContent = `❌ Image(s) too large: ${names}. Please resize to under 4 MB each.`;
+        return;
+      }
+      
       uploadStatus.textContent = `⏳ Uploading ${imageFiles.length} image(s)...`;
       
       try {
@@ -858,16 +867,21 @@
         console.log('[upload] Response status:', uploadRes.status);
         
         if (!uploadRes.ok) {
-          let errorDetail;
+          // Read body once as text, then optionally parse as JSON
+          let errorMsg = `HTTP ${uploadRes.status}`;
           try {
-            errorDetail = await uploadRes.json();
-            console.error('[upload] Error response:', errorDetail);
-          } catch (e) {
-            const text = await uploadRes.text();
-            console.error('[upload] Error text:', text);
-            errorDetail = { error: `HTTP ${uploadRes.status}` };
+            const errText = await uploadRes.text();
+            try {
+              const errJson = JSON.parse(errText);
+              errorMsg = errJson.error || errJson.message || errJson.detail || errText || errorMsg;
+            } catch {
+              errorMsg = errText || errorMsg;
+            }
+          } catch { /* body unreadable */ }
+          if (uploadRes.status === 413) {
+            throw new Error('Images are too large to upload. Please resize your photos (each should be under 4 MB) and try again.');
           }
-          throw new Error(errorDetail.error || errorDetail.message || errorDetail.detail || 'Upload failed');
+          throw new Error(errorMsg);
         }
         
         const uploadData = await uploadRes.json();
