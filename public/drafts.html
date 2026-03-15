@@ -1535,30 +1535,12 @@
               '/.netlify/functions/ebay-list-offers?limit=100' +
               (skuOk ? '&sku=' + encodeURIComponent(rawSku) : '');
 
-            // Single aggregated query to rely on server-side multi-status handling and safe-aggregate fallback
+            // Single aggregated query — the server handles all internal fallbacks (safeAggregateByInventory etc.)
+            // so a second client-side broad fetch is redundant and doubles the wait time.
             console.log('[Drafts] Calling:', base + '&status=UNPUBLISHED,DRAFT,INACTIVE');
             const agg = await fetchJSON(base + '&status=' + encodeURIComponent('UNPUBLISHED,DRAFT,INACTIVE'));
-            console.log('[Drafts] API Response:', JSON.stringify(agg, null, 2).substring(0, 2000));
             offers = Array.isArray(agg?.offers) ? agg.offers : [];
             console.log('[Drafts] Offers from primary call:', offers.length);
-
-            // Fallback: if explicit queries yielded nothing, do a broad fetch and client-filter
-            if (!offers.length) {
-              console.log('[Drafts] No offers found, trying broad fetch...');
-              const j = await fetchJSON(base);
-              console.log('[Drafts] Broad fetch response:', JSON.stringify(j, null, 2).substring(0, 2000));
-              const all = Array.isArray(j.offers) ? j.offers : [];
-              
-              // DEBUG: Log ALL offer statuses to understand what's in the account
-              console.log('[Drafts] DEBUG: All offers in account:');
-              all.forEach((o, idx) => {
-                console.log(`  [${idx}] SKU: ${o?.sku}, Status: ${o?.status}, OfferId: ${o?.offerId}`);
-              });
-              
-              const allowed = new Set(['UNPUBLISHED', 'DRAFT', 'INACTIVE']);
-              offers = all.filter((o) => allowed.has(String(o?.status || '').toUpperCase()));
-              console.log('[Drafts] Filtered offers after broad fetch:', offers.length);
-            }
             
             // ALWAYS check for recently created offers from Quick List and merge them in
             // This ensures newly created offers appear even if eBay API is slow to reflect them
@@ -1573,22 +1555,26 @@
                   if (validRecent.length > 0) {
                     console.log('[Drafts] Found', validRecent.length, 'recently created offers, fetching directly by SKU...');
                     
-                    for (const recent of validRecent) {
-                      try {
-                        const skuRes = await fetchJSON(`/.netlify/functions/ebay-list-offers?sku=${encodeURIComponent(recent.sku)}&limit=10`);
-                        if (skuRes.ok && skuRes.offers && skuRes.offers.length > 0) {
-                          for (const o of skuRes.offers) {
-                            // Only add if not already in list and is UNPUBLISHED/DRAFT/INACTIVE
-                            const st = String(o?.status || '').toUpperCase();
-                            const alreadyExists = offers.some(existing => existing.offerId === o.offerId);
-                            if (!alreadyExists && ['UNPUBLISHED', 'DRAFT', 'INACTIVE'].includes(st)) {
-                              console.log('[Drafts] ✓ Found recent offer:', o.sku, o.status, o.offerId);
-                              offers.push(o);
-                            }
-                          }
+                    // Fetch all SKUs in parallel instead of sequentially
+                    const skuFetches = await Promise.all(
+                      validRecent.map(async (recent) => {
+                        try {
+                          return await fetchJSON(`/.netlify/functions/ebay-list-offers?sku=${encodeURIComponent(recent.sku)}&limit=10`);
+                        } catch (e) {
+                          console.warn('[Drafts] Failed to fetch recent offer by SKU:', recent.sku, e);
+                          return null;
                         }
-                      } catch (e) {
-                        console.warn('[Drafts] Failed to fetch recent offer by SKU:', recent.sku, e);
+                      })
+                    );
+                    for (const skuRes of skuFetches) {
+                      if (!skuRes?.ok || !skuRes.offers?.length) continue;
+                      for (const o of skuRes.offers) {
+                        const st = String(o?.status || '').toUpperCase();
+                        const alreadyExists = offers.some(existing => existing.offerId === o.offerId);
+                        if (!alreadyExists && ['UNPUBLISHED', 'DRAFT', 'INACTIVE'].includes(st)) {
+                          console.log('[Drafts] ✓ Found recent offer:', o.sku, o.status, o.offerId);
+                          offers.push(o);
+                        }
                       }
                     }
                     

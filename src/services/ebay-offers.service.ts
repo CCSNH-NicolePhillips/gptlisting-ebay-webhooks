@@ -184,30 +184,36 @@ export async function listOffers(
         : [];
       if (!items.length) break;
 
-      for (const it of items) {
-        const s = String(it?.sku ?? '');
-        if (!skuOk(s)) continue;
-        const p = new URLSearchParams({ sku: s, limit: '50' });
-        const offerUrl = `${apiHost}/sell/inventory/v1/offer?${p}`;
-        const r = await fetch(offerUrl, { headers });
-        const t = await r.text();
-        let j: any;
-        try {
-          j = JSON.parse(t);
-        } catch {
-          j = { raw: t };
-        }
-        agg_attempts.push({ url: offerUrl, status: r.status, body: j });
-        if (!r.ok) continue;
-        const arr: any[] = Array.isArray(j?.offers) ? j.offers : [];
+      // Fetch offers for all SKUs on this page in parallel (was sequential O(N))
+      const validSkus = items
+        .map((it) => String(it?.sku ?? ''))
+        .filter(skuOk);
+
+      const skuResults = await Promise.all(
+        validSkus.map(async (s) => {
+          const p = new URLSearchParams({ sku: s, limit: '50' });
+          const offerUrl = `${apiHost}/sell/inventory/v1/offer?${p}`;
+          const r = await fetch(offerUrl, { headers });
+          const t = await r.text();
+          let j: any;
+          try { j = JSON.parse(t); } catch { j = { raw: t }; }
+          return { url: offerUrl, status: r.status, ok: r.ok, body: j };
+        }),
+      );
+
+      for (const res of skuResults) {
+        agg_attempts.push({ url: res.url, status: res.status, body: res.body });
+        if (!res.ok) continue;
+        const arr: any[] = Array.isArray(res.body?.offers) ? res.body.offers : [];
         for (const o of arr) {
           const st = String(o?.status ?? '').toUpperCase();
           if (!allowStatuses.length || allowStatuses.includes(st)) {
             agg.push(o);
           }
         }
-        if (agg.length >= limit) break;
       }
+
+      if (agg.length >= limit) break;
     }
     return { offers: agg.slice(0, limit), attempts: agg_attempts };
   }
