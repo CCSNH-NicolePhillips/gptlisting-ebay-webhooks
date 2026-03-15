@@ -356,4 +356,24 @@ router.get('/price-cache', async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// DELETE /api/diag/price-cache?brand=&title=
+// Deletes a stale cached price entry so the next pricing run fetches fresh data.
+// ---------------------------------------------------------------------------
+router.delete('/price-cache', async (req, res) => {
+  try {
+    const brand = ((req.query.brand as string) || '').trim();
+    const title = ((req.query.title as string) || '').trim();
+    if (!brand || !title) {
+      return void res.status(400).json({ ok: false, error: 'brand and title params required' });
+    }
+    const sig = makePriceSig(brand, title);
+    const deleted = await deleteCachedPrice(sig);
+    console.log(`[diag] price-cache DELETE: sig="${sig}" deleted=${deleted}`);
+    return res.json({ ok: true, sig, deleted });
+  } catch (err: any) {
+    serverError(res, err);
+  }
+});
+
 export default router;
