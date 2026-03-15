@@ -2,6 +2,7 @@ import { Router } from 'express';
 import adminRouter from './admin.js';
 import analyzeRouter from './analyze.js';
 import authRouter from './auth.js';
+import brandRegistryRouter from './brand-registry.js';
 import cdnRouter from './cdn.js';
 import configRouter from './config.js';
 import connectionsRouter from './connections.js';
@@ -24,6 +25,7 @@ import taxonomyRouter from './taxonomy.js';
 export const router = Router();
 
 router.use('/admin', adminRouter);
+router.use('/brand-registry', brandRegistryRouter);
 router.use('/analyze', analyzeRouter);
 router.use('/auth', authRouter);
 router.use('/cdn', cdnRouter);

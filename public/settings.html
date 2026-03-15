@@ -528,6 +528,35 @@
               </div>
             </section>
             
+            <!-- Brand Registry Card -->
+            <section class="dp-card" id="brandRegistryCard">
+              <div class="dp-card__header">
+                <h3 class="dp-card__title">Brand Registry</h3>
+                <p class="dp-card__subtitle">Pin a specific Amazon ASIN to guarantee correct pricing for a brand + product</p>
+              </div>
+
+              <div class="dp-card__content">
+                <!-- Add entry form -->
+                <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;">
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <input id="brBrand" type="text" placeholder="Brand  (e.g. Triquetra)"
+                      class="dp-input" style="padding: 8px 10px; font-size: 13px;" />
+                    <input id="brProduct" type="text" placeholder="Product name  (e.g. 5-MTHF L-Methylfolate)"
+                      class="dp-input" style="padding: 8px 10px; font-size: 13px;" />
+                  </div>
+                  <div style="display: flex; gap: 8px;">
+                    <input id="brAsin" type="text" placeholder="ASIN or Amazon URL  (e.g. B0B83PXLXW)"
+                      class="dp-input" style="padding: 8px 10px; font-size: 13px; flex: 1;" />
+                    <button onclick="brSave()" class="dp-btn dp-btn-primary" style="padding: 8px 18px; font-size: 13px; white-space: nowrap;">Save ASIN</button>
+                  </div>
+                  <div id="brMsg" style="font-size: 12px; min-height: 16px;"></div>
+                </div>
+
+                <!-- Registered entries list -->
+                <div id="brList" style="font-size: 13px; color: #94a3b8;">Loading…</div>
+              </div>
+            </section>
+
             <!-- Connections Card -->
             <section class="dp-card">
               <div class="dp-card__header">
@@ -572,6 +601,89 @@
     </div>
     
     <script>
+      // ── Brand Registry ─────────────────────────────────────────────────────
+      async function brLoad() {
+        const el = document.getElementById('brList');
+        if (!el) return;
+        try {
+          const token = await authClient.getToken?.();
+          const res = await fetch('/api/brand-registry', {
+            headers: token ? { Authorization: `Bearer ${token}` } : {}
+          });
+          const json = await res.json();
+          const entries = json.entries ?? [];
+          if (!entries.length) {
+            el.innerHTML = '<span style="color:#64748b;">No entries yet. Add one above to guarantee a specific Amazon product is used for pricing.</span>';
+            return;
+          }
+          el.innerHTML = entries.map(e => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
+              <div>
+                <span style="color:#e2e8f0;font-weight:500;">${e.brand}</span>
+                <span style="color:#94a3b8;margin:0 6px;">›</span>
+                <span style="color:#cbd5e1;">${e.product}</span>
+                <a href="${e.url}" target="_blank" rel="noopener"
+                   style="margin-left:10px;color:#60a5fa;font-size:11px;text-decoration:none;">
+                  ${e.asin} ↗
+                </a>
+              </div>
+              <button onclick="brDelete('${e.brand.replace(/'/g,"\\'")}','${e.product.replace(/'/g,"\\'")}',this)"
+                      class="dp-btn dp-btn-secondary"
+                      style="padding:4px 10px;font-size:11px;color:#f87171;border-color:#f87171;">
+                Remove
+              </button>
+            </div>`).join('');
+        } catch (err) {
+          el.textContent = 'Failed to load entries.';
+        }
+      }
+
+      async function brSave() {
+        const brand   = document.getElementById('brBrand')?.value?.trim();
+        const product = document.getElementById('brProduct')?.value?.trim();
+        const asin    = document.getElementById('brAsin')?.value?.trim();
+        const msg     = document.getElementById('brMsg');
+
+        if (!brand || !product || !asin) {
+          if (msg) { msg.textContent = '⚠ Fill in brand, product name, and ASIN / URL.'; msg.style.color = '#f87171'; }
+          return;
+        }
+
+        if (msg) { msg.textContent = 'Saving…'; msg.style.color = '#94a3b8'; }
+        try {
+          const token = await authClient.getToken?.();
+          const res = await fetch('/api/brand-registry', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+            body: JSON.stringify({ brand, product, asin }),
+          });
+          const json = await res.json();
+          if (!res.ok || !json.ok) throw new Error(json.error ?? 'Save failed');
+          if (msg) { msg.textContent = `✓ Saved: ${brand} › ${product} = ${json.entry?.asin}`; msg.style.color = '#10b981'; }
+          document.getElementById('brBrand').value = '';
+          document.getElementById('brProduct').value = '';
+          document.getElementById('brAsin').value = '';
+          brLoad();
+        } catch (err) {
+          if (msg) { msg.textContent = `Error: ${err.message}`; msg.style.color = '#f87171'; }
+        }
+      }
+
+      async function brDelete(brand, product, btn) {
+        if (!confirm(`Remove ASIN for "${brand} › ${product}"?`)) return;
+        btn.disabled = true;
+        try {
+          const token = await authClient.getToken?.();
+          await fetch('/api/brand-registry', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+            body: JSON.stringify({ brand, product }),
+          });
+          brLoad();
+        } catch { btn.disabled = false; }
+      }
+      // ── End Brand Registry ─────────────────────────────────────────────────
+
       let lastStatus = null;
 
       async function refreshStatus() {
@@ -1328,6 +1440,7 @@
           loadPricingSettings().catch(() => {}),
           loadAutoPriceSettings().catch(() => {}),
           loadDevSettings().catch(() => {}),
+          brLoad().catch(() => {}),
         ];
         await Promise.all(loads);
         

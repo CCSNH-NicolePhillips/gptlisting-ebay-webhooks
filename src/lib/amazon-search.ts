@@ -581,12 +581,120 @@ export async function getAmazonPrice(
  * @param conflictCheckName - Optional original product name for conflict checks when productName
  *   has been enriched with seoContext. Keeps ingredient/region/form-factor checks accurate.
  */
+/**
+ * Look up a specific Amazon product by ASIN using the SearchAPI amazon_product engine.
+ * Returns high-confidence result when the ASIN is known (e.g. from brand registry).
+ */
+async function lookupAmazonByAsin(
+  asin: string,
+  brand: string,
+  productName: string
+): Promise<AmazonPriceLookupResult> {
+  const empty: AmazonPriceLookupResult = {
+    price: null,
+    originalPrice: null,
+    url: `https://www.amazon.com/dp/${asin}`,
+    asin,
+    title: null,
+    brand: null,
+    isPrime: false,
+    rating: null,
+    reviews: null,
+    allResults: [],
+    confidence: 'low',
+    reasoning: 'asin-lookup-failed',
+  };
+
+  if (!SEARCHAPI_KEY) {
+    console.log('[amazon-search] No SEARCHAPI_KEY for ASIN lookup, skipping');
+    return empty;
+  }
+
+  try {
+    const url = new URL(SEARCHAPI_BASE);
+    url.searchParams.set('engine', 'amazon_product');
+    url.searchParams.set('asin', asin);
+    url.searchParams.set('api_key', SEARCHAPI_KEY);
+    url.searchParams.set('amazon_domain', 'amazon.com');
+
+    console.log(`[amazon-search] ASIN lookup: ${asin}`);
+    const response = await fetch(url.toString());
+
+    if (!response.ok) {
+      console.warn(`[amazon-search] ASIN lookup API error ${response.status}`);
+      return empty;
+    }
+
+    const data: Record<string, any> = await response.json();
+    const product = data.product ?? data;
+
+    // Extract price from various field names SearchAPI may use
+    const rawPrice =
+      product.price ??
+      product.typical_price ??
+      product.list_price ??
+      product.buybox_price ??
+      null;
+
+    const price =
+      typeof rawPrice === 'number'
+        ? rawPrice
+        : typeof rawPrice === 'string'
+        ? parseFloat(rawPrice.replace(/[^0-9.]/g, ''))
+        : null;
+
+    const title = product.title ?? product.name ?? null;
+    const detectedBrand = product.brand ?? product.manufacturer ?? null;
+
+    if (!price || price <= 0) {
+      console.warn(`[amazon-search] ASIN ${asin} — no price in response`);
+      return { ...empty, title, brand: detectedBrand };
+    }
+
+    console.log(`[amazon-search] ASIN ${asin} => $${price} — "${title}"`);
+    return {
+      price,
+      originalPrice: price,
+      url: `https://www.amazon.com/dp/${asin}`,
+      asin,
+      title,
+      brand: detectedBrand,
+      isPrime: Boolean(product.is_prime ?? product.prime),
+      rating: typeof product.rating === 'number' ? product.rating : null,
+      reviews: typeof product.reviews_count === 'number' ? product.reviews_count : null,
+      allResults: [],
+      confidence: 'high',
+      reasoning: `registered-asin:${asin} — "${brand} ${productName}"`,
+    };
+  } catch (err) {
+    console.error('[amazon-search] ASIN lookup error:', err instanceof Error ? err.message : String(err));
+    return empty;
+  }
+}
+
 export async function searchAmazonWithFallback(
   brand: string,
   productName: string,
   tryBrandOnly: boolean = true,
   conflictCheckName?: string
 ): Promise<AmazonPriceLookupResult> {
+  // Check if we have a pinned ASIN for this brand+product — skip keyword search entirely
+  try {
+    const { getAmazonAsin } = await import('./brand-registry.js');
+    const registeredAsin = await getAmazonAsin(brand, productName);
+    if (registeredAsin) {
+      console.log(`[amazon-search] Using registered ASIN ${registeredAsin} for "${brand} ${productName}"`);
+      const asinResult = await lookupAmazonByAsin(registeredAsin, brand, productName);
+      if (asinResult.price !== null) {
+        console.log(`[amazon-search] ✅ Registered ASIN ${registeredAsin} price: $${asinResult.price}`);
+        return asinResult;
+      }
+      console.log(`[amazon-search] ⚠️ Registered ASIN ${registeredAsin} price lookup failed, falling through to search`);
+    }
+  } catch (err) {
+    console.warn('[amazon-search] Brand registry check failed (non-fatal):', err instanceof Error ? err.message : String(err));
+  }
+
   // First try the full brand + product search
   const fullResult = await searchAmazon(brand, productName, 10, conflictCheckName ?? undefined);
   
