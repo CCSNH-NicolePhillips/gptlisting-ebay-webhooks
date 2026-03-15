@@ -1352,19 +1352,27 @@ async function createDraftForProduct(
   console.log(`[Draft-debug] Full product keys:`, Object.keys(product));
   
   // ========================================
-  // DELIVERED PRICING ENGINE
+  // DELIVERED PRICING ENGINE — runs in background (parallel with GPT)
   // ========================================
-  // Uses Google Shopping for market comps
-  // Prices to delivered-to-door, then backs into item + shipping
+  // Pricing makes multiple external API calls (Google/Amazon/eBay, ~15-30s).
+  // Categories + aspects + GPT (~17s) run concurrently so total time is
+  // max(pricing, gpt-chain) instead of pricing + gpt-chain (saves ~15-20s/product).
   // ========================================
-  
+
+  // Hoisted for the logging block at end of function (populated from pricingPromise)
+  let priceLookupTitle = '';
+  let seoContext: string | undefined = undefined;
+  let isBundle = false;
+  let bundlePriceLookupTitle = '';
+
+  // ⚡ START PRICING IN BACKGROUND — don't await yet
+  const pricingPromise = (async () => {
   let pricingDecision: PriceDecision | null = null;
   let priceResult: PricingDecision | null = null;
   let finalPrice: number | null = null;
   let pricingStatus: 'OK' | 'ESTIMATED' | 'NEEDS_REVIEW' = 'NEEDS_REVIEW';
   let priceMeta: any = undefined;
   let priceWarning: string | undefined = undefined;
-  // Hoisted so the logging block (separate try/catch) can read the search context
   let priceLookupTitle = '';
   let seoContext: string | undefined = undefined;
   let isBundle = false;
@@ -1702,15 +1710,17 @@ async function createDraftForProduct(
     pricingStatus = 'NEEDS_REVIEW';
     finalPrice = null;
   }
-  
+  return { priceResult, pricingDecision, finalPrice, pricingStatus, priceMeta, priceWarning, priceLookupTitle, seoContext, isBundle, bundlePriceLookupTitle };
+  })(); // end pricingPromise — runs in background while categories + GPT run
+
+  // ⚡ PARALLEL: categories + GPT run while pricing runs in background
   const catListStart = Date.now();
   const relevantCategories = await getRelevantCategories(product, undefined);
   console.log(`[Draft] Category list generation took ${Date.now() - catListStart}ms`);
   console.log(`[Draft] Category list preview:\n${relevantCategories.slice(0, 500)}...`);
-  
-  const catStart = Date.now();
-  const categoryHint = await pickCategory(product);
-  console.log(`[Draft] Category fallback pick took ${Date.now() - catStart}ms`);
+
+  // pickCategory always returns null (GPT picks category), skip async call
+  const categoryHint: CategoryHint | null = null;
   
   // Try to get a likely category ID to fetch full aspects from eBay's Taxonomy API
   // Extract the first category ID from the relevantCategories list as a hint
@@ -1718,8 +1728,6 @@ async function createDraftForProduct(
   const categoryIdMatch = relevantCategories.match(/^(\d+):/m);
   if (categoryIdMatch) {
     likelyCategoryId = categoryIdMatch[1];
-  } else if (categoryHint?.id) {
-    likelyCategoryId = categoryHint.id;
   }
   
   // Fetch full category aspects from eBay Taxonomy API
@@ -1747,7 +1755,19 @@ async function createDraftForProduct(
   
   const parsed = parseGptResponse(responseText, product);
   console.log(`[Draft] Parsed response:`, JSON.stringify(parsed, null, 2));
-  
+
+  // ⚡ Await pricing (GPT took ~15s, pricing ~20-30s — should be done or nearly done)
+  const _pr = await pricingPromise;
+  priceLookupTitle = _pr.priceLookupTitle;
+  seoContext = _pr.seoContext;
+  isBundle = _pr.isBundle;
+  bundlePriceLookupTitle = _pr.bundlePriceLookupTitle;
+  let { priceResult, pricingDecision } = _pr;
+  let finalPrice = _pr.finalPrice;
+  let pricingStatus = _pr.pricingStatus;
+  let priceMeta = _pr.priceMeta;
+  let priceWarning = _pr.priceWarning;
+
   let finalCategory: CategoryHint | null = categoryHint;
   if (parsed.categoryId) {
     console.log(`[Draft] GPT selected category ID: ${parsed.categoryId}`);
@@ -2182,7 +2202,8 @@ async function createDraftForProduct(
       confidence = 'medium';
     }
     
-    await storeDraftLogs(userId, product.productId, {
+    // Fire-and-forget: don't block draft return on Redis log write (~400ms saved)
+    storeDraftLogs(userId, product.productId, {
       classification: {
         brand: product.brand || '',
         productName: product.product,
@@ -2244,14 +2265,14 @@ async function createDraftForProduct(
       pricingStatus: pricingStatus as 'OK' | 'ESTIMATED' | 'NEEDS_REVIEW',
       needsPriceReview: pricingStatus !== 'OK',
       attentionReasons: attentionReasons.length > 0 ? attentionReasons : undefined,
+    }).catch((logErr: any) => {
+      console.error(`[Draft] ⚠️ Failed to store pricing logs for ${product.productId}:`, logErr);
     });
-    
-    console.log(`[Draft] ✓ Stored pricing logs for ${product.productId}`);
   } catch (logErr) {
-    // Non-fatal - don't break draft creation if logging fails
-    console.error(`[Draft] ⚠️ Failed to store pricing logs for ${product.productId}:`, logErr);
+    // Non-fatal - failed building log data (synchronous portion)
+    console.error(`[Draft] ⚠️ Failed to build pricing logs for ${product.productId}:`, logErr);
   }
-  
+
   return draft;
 }
 
@@ -2397,7 +2418,7 @@ export const handler: Handler = async (event) => {
     
     // Process products in batches to avoid overwhelming connections
     // CONCURRENCY_LIMIT controls how many products process simultaneously
-    const CONCURRENCY_LIMIT = 3; // Conservative: 3 products at a time
+    const CONCURRENCY_LIMIT = 6; // Run up to 6 products in parallel (pricing overlaps with GPT)
     const batches: typeof products[] = [];
     
     for (let i = 0; i < products.length; i += CONCURRENCY_LIMIT) {
@@ -2434,15 +2455,14 @@ export const handler: Handler = async (event) => {
               timeMs: productTotalTime,
             });
             
-            // Update progress (increment completed count)
+            // Fire-and-forget progress update (saves ~200ms per product)
             completedCount++;
-            const progressStart = Date.now();
-            await writeJob(jobId, userId, {
+            writeJob(jobId, userId, {
               status: "processing",
               processedProducts: completedCount,
               totalProducts: products.length,
-            });
-            console.log(`[PERF] Progress update (${completedCount}/${products.length}) took ${Date.now() - progressStart}ms`);
+            }).catch(() => {}); // non-critical
+            console.log(`[PERF] Progress update fired (${completedCount}/${products.length}) non-blocking`);
             
             return { success: true, draft };
           } catch (err: any) {
