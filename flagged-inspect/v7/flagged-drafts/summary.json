@@ -1,0 +1,42 @@
+[
+  {
+    "offerId": "132842290011",
+    "sku": "AM1mms9m30jhj1",
+    "marketplaceId": "EBAY_US",
+    "format": "FIXED_PRICE",
+    "listingDescription": "Discover Arrae MB-1, a premium dietary supplement designed to support your digestive health. Each bottle contains 40 capsules formulated to help reduce bloating and improve digestion with a natural approach. These capsules are ideal for those seeking a convenient and effective way to enhance their digestive wellness. Crafted with natural ingredients, Arrae MB-1 is perfect for adults looking to maintain a balanced and healthy lifestyle. The formula, crafted with care, provides gentle yet effective support for your digestive system without any added flavors. Specifications include natural flavor capsules with a quantity of 40 per bottle. This supplement is a great addition to your daily routine, offering a natural solution to common digestive issues. Experience the benefits and make digestive discomfort a thing of the past. Order your bottle today and step towards a healthier, more balanced digestive lifestyle.",
+    "availableQuantity": 1,
+    "pricingSummary": {
+      "price": {
+        "value": "58.65",
+        "currency": "USD"
+      }
+    },
+    "listingPolicies": {
+      "paymentPolicyId": "245353452026",
+      "returnPolicyId": "245353453026",
+      "fulfillmentPolicyId": "247278755026",
+      "eBayPlusIfEligible": false,
+      "bestOfferTerms": {
+        "bestOfferEnabled": true,
+        "autoAcceptPrice": {
+          "value": "52.78",
+          "currency": "USD"
+        },
+        "autoDeclinePrice": {
+          "value": "35.19",
+          "currency": "USD"
+        }
+      }
+    },
+    "categoryId": "180960",
+    "merchantLocationKey": "primary-location",
+    "tax": {
+      "applyTax": false
+    },
+    "status": "UNPUBLISHED",
+    "listingDuration": "GTC",
+    "includeCatalogProductDetails": true,
+    "hideBuyerDetails": false
+  }
+]

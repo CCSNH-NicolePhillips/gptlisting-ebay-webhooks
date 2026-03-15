@@ -628,12 +628,15 @@ async function lookupAmazonByAsin(
     const data: Record<string, any> = await response.json();
     const product = data.product ?? data;
 
-    // Extract price from various field names SearchAPI may use
+    // Extract price from various field names SearchAPI may use.
+    // IMPORTANT: prefer buybox_price (the actual "Add to Cart" price) over product.price,
+    // because for items on sale, product.price is the crossed-out MSRP/list price while
+    // buybox_price is what the buyer actually pays today.
+    // Never use list_price — that is always the MSRP/retail price.
     const rawPrice =
-      product.price ??
+      product.buybox_price ??     // actual current Add-to-Cart price (preferred)
+      product.price ??            // may be MSRP for sale items — fallback only
       product.typical_price ??
-      product.list_price ??
-      product.buybox_price ??
       null;
 
     const price =
