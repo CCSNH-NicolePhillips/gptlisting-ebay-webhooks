@@ -494,10 +494,61 @@
       .flag-count-badge { display: inline-block; background: #ef4444; color: #fff; border-radius: 999px; font-size: 0.7rem; font-weight: 700; padding: 1px 6px; margin-left: 4px; vertical-align: middle; }
       .dev-price-row { font-size: 0.73rem; color: #64748b; margin-top: 0.25rem; }
       .dev-banner { background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.35); border-radius: 8px; padding: 0.4rem 0.75rem; font-size: 0.78rem; color: #fcd34d; margin-bottom: 1rem; }
+      /* Card click-to-edit */
+      .card { cursor: pointer; }
+      /* Thumbnail image — zoom cursor */
+      .thumb img.loaded { cursor: zoom-in; }
+      /* Lightbox overlay */
+      #imgLightbox {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background: rgba(2, 6, 23, 0.92);
+        backdrop-filter: blur(6px);
+        align-items: center;
+        justify-content: center;
+        cursor: zoom-out;
+        animation: lb-in 0.18s ease-out;
+      }
+      #imgLightbox.open { display: flex; }
+      @keyframes lb-in {
+        from { opacity: 0; transform: scale(0.96); }
+        to   { opacity: 1; transform: scale(1); }
+      }
+      #imgLightbox img {
+        max-width: min(92vw, 900px);
+        max-height: 88vh;
+        object-fit: contain;
+        border-radius: 12px;
+        box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7);
+        cursor: default;
+        pointer-events: none;
+      }
+      #imgLightbox .lb-close {
+        position: absolute;
+        top: 1rem;
+        right: 1.25rem;
+        font-size: 1.6rem;
+        line-height: 1;
+        color: rgba(255,255,255,0.6);
+        cursor: pointer;
+        background: none;
+        border: none;
+        padding: 0.25rem 0.5rem;
+        border-radius: 6px;
+        transition: color 0.15s;
+      }
+      #imgLightbox .lb-close:hover { color: #fff; }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   </head>
   <body>
+    <!-- Image lightbox overlay -->
+    <div id="imgLightbox" role="dialog" aria-modal="true" aria-label="Image preview">
+      <button class="lb-close" id="lbClose" aria-label="Close">&times;</button>
+      <img id="lbImg" src="" alt="Draft image preview" />
+    </div>
     <script src="/auth-client.js"></script>
     <script src="/sidebar-toggle.js"></script>
     
@@ -1474,6 +1525,26 @@
     const isEbayCdn = offer._imageUrl.includes('ebayimg.com') || offer._imageUrl.includes('ebaystatic.com');
     img.src = isEbayCdn ? offer._imageUrl : proxied(offer._imageUrl);
   }
+        // Image click → lightbox expand (stop propagation so card click doesn't fire)
+        img.addEventListener('click', (e) => {
+          const src = img.src;
+          if (!src || !img.classList.contains('loaded')) return;
+          e.stopPropagation();
+          const lb = document.getElementById('imgLightbox');
+          const lbImg = document.getElementById('lbImg');
+          if (lb && lbImg) {
+            lbImg.src = src;
+            lb.classList.add('open');
+          }
+        });
+        // Card click → open edit draft (only when not clicking an interactive element)
+        el.addEventListener('click', (e) => {
+          const tag = e.target.tagName;
+          if (tag === 'BUTTON' || tag === 'INPUT' || tag === 'LABEL' || tag === 'A' || tag === 'SELECT') return;
+          if (e.target.closest('.promo-controls, .promo-toggle, .promo-rate, .flag-btn, .card-checkbox, button, input, label, a')) return;
+          if (!offer.offerId) return;
+          window.location.href = `/edit-draft.html?offerId=${encodeURIComponent(offer.offerId)}`;
+        });
         // Store in draftDataMap and attach flag button
         draftDataMap.set(getDraftFlagKey(offer), offer);
         addFlagButton(th, offer, el);
@@ -2006,6 +2077,16 @@
         debugPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       });
       
+      function initLightbox() {
+        const lb = document.getElementById('imgLightbox');
+        const lbClose = document.getElementById('lbClose');
+        if (!lb) return;
+        const close = () => { lb.classList.remove('open'); document.getElementById('lbImg').src = ''; };
+        lbClose?.addEventListener('click', (e) => { e.stopPropagation(); close(); });
+        lb.addEventListener('click', (e) => { if (e.target === lb) close(); });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+      }
+
       function initUserMenu() {
         const userCard = document.getElementById('userCard');
         const userMenu = document.getElementById('userMenu');
@@ -2352,6 +2433,7 @@
         exportDraftsAsZip(selected, 'selected-drafts');
       });
 
+      initLightbox();
       initUserMenu();
       bootstrap();
     </script>
