@@ -41,6 +41,8 @@ router.post('/reprice', async (req, res) => {
       productName?: string;
     };
 
+    console.log(`[reprice] RAW body: brand="${brand}" productName="${String(productName).slice(0, 120)}"`);
+
     if (!brand && !productName) {
       return badRequest(res, 'brand or productName is required');
     }
