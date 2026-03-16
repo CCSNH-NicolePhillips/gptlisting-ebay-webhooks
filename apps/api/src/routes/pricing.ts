@@ -45,6 +45,19 @@ router.post('/reprice', async (req, res) => {
       return badRequest(res, 'brand or productName is required');
     }
 
+    // Normalise productName: strip the brand prefix if the frontend didn't already,
+    // then truncate at common eBay title separators ("|", " by ", ",").
+    // e.g. "Root ReLive Greens by Dr. Rahm's | Superfood Powerhouse..." → "ReLive Greens"
+    // This ensures the brand-registry Redis key always matches the pinned short name
+    // regardless of which frontend version (or browser cache) sent the request.
+    let cleanBrand = (brand || '').trim();
+    let cleanProduct = (productName || '').trim();
+    if (cleanBrand && cleanProduct.toLowerCase().startsWith(cleanBrand.toLowerCase())) {
+      cleanProduct = cleanProduct.slice(cleanBrand.length).replace(/^[\s\-–—]+/, '');
+    }
+    cleanProduct = cleanProduct.split(/\s+by\s+|\s*[|,]\s*/i)[0].trim();
+    console.log(`[reprice] Normalised: brand="${cleanBrand}" productName="${cleanProduct}" (raw: "${brand}" / "${productName}")`);
+
     // Detect free shipping from user's default fulfillment policy
     let shippingEstimateCents = 600;
     let policyFreeShipping = false;
@@ -69,8 +82,8 @@ router.post('/reprice', async (req, res) => {
     };
 
     const pricingResult = await getPricingDecision({
-      brand: brand || '',
-      productName: productName || '',
+      brand: cleanBrand,
+      productName: cleanProduct,
       settings,
     });
 
@@ -92,8 +105,8 @@ router.post('/reprice', async (req, res) => {
       {
         step: '1. Gather Competitor Prices',
         input: {
-          brand: brand || '(none)',
-          productName: productName || '(none)',
+          brand: cleanBrand || '(none)',
+          productName: cleanProduct || '(none)',
         },
         output: {
           ebayCompsCount,
