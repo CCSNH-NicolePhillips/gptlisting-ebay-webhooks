@@ -248,6 +248,14 @@ function scoreResults(results: RainforestSearchResult[], productName: string): S
 
     if (hits.length === 0) continue; // zero overlap → definitely wrong product
 
+    // For short product names (≤4 significant words), ALL words must appear in the title.
+    // e.g. "ReLive Greens" → both 'relive' AND 'greens' must match, not just 'greens'.
+    // This prevents a generic greens product matching when only 'greens' overlaps.
+    if (productWords.length <= 4 && hitRatio < 1.0) {
+      console.log(`[rainforest] skip partial match (${hits.length}/${productWords.length} words): "${r.title.slice(0, 55)}"`);
+      continue;
+    }
+
     score += Math.round(hitRatio * 60); // up to 60 pts for word match
     reasons.push(`words=${hits.length}/${productWords.length}`);
 

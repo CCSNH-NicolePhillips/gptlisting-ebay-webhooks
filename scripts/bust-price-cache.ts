@@ -1,12 +1,13 @@
 #!/usr/bin/env tsx
 /**
- * Bust stale price-cache entries for the 5 flagged drafts.
+ * Bust stale price-cache entries for flagged drafts.
  *
  * Run after a pricing code change to force a fresh lookup on next draft creation.
  * Usage:  npx tsx scripts/bust-price-cache.ts
  */
 import 'dotenv/config';
 import { makePriceSig, getCachedPrice, deleteCachedPrice } from '../src/lib/price-cache.js';
+import { deleteAmazonAsin, saveAmazonAsin } from '../src/lib/brand-registry.js';
 
 const ENTRIES = [
   { brand: 'Cymbiotika',    title: 'Irish Sea Moss Lemon Vanilla Powder Supplement' },
@@ -14,6 +15,12 @@ const ENTRIES = [
   { brand: 'Plant People',  title: 'Wonder Sleep Wild Elderberry Capsules' },
   { brand: 'Viv',           title: 'Menstrual Disc Starter Kit' },
   { brand: "Sha's Organic", title: 'Acne Pore Cleanser' },
+  { brand: 'Root',          title: 'ReLive Greens' },
+];
+
+// Correct ASIN pins — overwrite any bad auto-discovered ASIN with the verified one
+const ASIN_PINS: { brand: string; product: string; asin: string }[] = [
+  { brand: 'Root', product: 'ReLive Greens', asin: 'B0BQ2YY5YB' },
 ];
 
 async function main() {
@@ -40,6 +47,18 @@ async function main() {
   }
 
   console.log('\nDone. Next pricing run will fetch fresh data.\n');
+
+  // ── Pin correct ASINs ────────────────────────────────────────────────────
+  if (ASIN_PINS.length > 0) {
+    console.log('ASIN Pins\n' + '─'.repeat(60));
+    for (const p of ASIN_PINS) {
+      // Delete any wrongly auto-discovered ASIN first
+      await deleteAmazonAsin(p.brand, p.product);
+      // Save the verified correct one
+      await saveAmazonAsin(p.brand, p.product, p.asin, true);
+      console.log(`  ✅ Pinned ASIN ${p.asin} → ${p.brand} ${p.product}`);
+    }
+  }
 }
 
 main().catch(err => {

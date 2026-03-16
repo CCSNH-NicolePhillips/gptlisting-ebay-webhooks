@@ -1,0 +1,42 @@
+[
+  {
+    "offerId": "132921180011",
+    "sku": "RRGmmsglfr65t6",
+    "marketplaceId": "EBAY_US",
+    "format": "FIXED_PRICE",
+    "listingDescription": "Discover Root ReLive Greens, the premium dietary supplement powder formulated to enhance your overall wellness. Packed with essential nutrients, this superfood blend supports energy, detoxification, and immune function. Perfect for individuals seeking a convenient and delicious way to incorporate greens into their daily regimen. Mix easily into water, smoothies, or your favorite beverage for a natural energy boost. Specifications: ReLive Greens, Dietary Supplement, Natural Flavor, Powder formulation. Features include Non-GMO, Vegan, and Gluten-Free. Unleash the power of nature with Root's ReLive Greens today!",
+    "availableQuantity": 1,
+    "pricingSummary": {
+      "price": {
+        "value": "20.36",
+        "currency": "USD"
+      }
+    },
+    "listingPolicies": {
+      "paymentPolicyId": "245353452026",
+      "returnPolicyId": "245353453026",
+      "fulfillmentPolicyId": "245353454026",
+      "eBayPlusIfEligible": false,
+      "bestOfferTerms": {
+        "bestOfferEnabled": true,
+        "autoAcceptPrice": {
+          "value": "18.32",
+          "currency": "USD"
+        },
+        "autoDeclinePrice": {
+          "value": "12.22",
+          "currency": "USD"
+        }
+      }
+    },
+    "categoryId": "180960",
+    "merchantLocationKey": "primary-location",
+    "tax": {
+      "applyTax": false
+    },
+    "status": "UNPUBLISHED",
+    "listingDuration": "GTC",
+    "includeCatalogProductDetails": true,
+    "hideBuyerDetails": false
+  }
+]
