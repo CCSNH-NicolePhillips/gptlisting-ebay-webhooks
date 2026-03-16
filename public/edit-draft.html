@@ -1636,22 +1636,30 @@
         status.textContent = 'Fetching market prices...';
         status.style.color = 'var(--text-muted)';
         
-        // Extract brand from aspects
-        let brand = '';
-        document.querySelectorAll('.aspect-item').forEach(item => {
-          const key = item.querySelector('.aspect-key').value.trim().toLowerCase();
-          if (key === 'brand') {
-            brand = item.querySelector('.aspect-value').value.trim();
+        // Prefer the original CLASSIFIED brand/productName from _draftLogs.
+        // These are the short names (e.g. "Root" + "ReLive Greens") that match
+        // what is pinned in the brand registry. Deriving from the full eBay title
+        // produces a long string that never matches the registry key.
+        let brand = originalDraft?._draftLogs?.classification?.brand || '';
+        let productName = originalDraft?._draftLogs?.classification?.productName || '';
+
+        if (!brand || !productName) {
+          // Fallback: extract brand from aspects
+          document.querySelectorAll('.aspect-item').forEach(item => {
+            const key = item.querySelector('.aspect-key').value.trim().toLowerCase();
+            if (key === 'brand') {
+              brand = item.querySelector('.aspect-value').value.trim();
+            }
+          });
+          // Use title as product name, minus the brand if present
+          productName = $('title').value.trim();
+          if (brand && productName.toLowerCase().startsWith(brand.toLowerCase())) {
+            productName = productName.substring(brand.length).trim();
           }
-        });
-        
-        // Use title as product name, minus the brand if present
-        let productName = $('title').value.trim();
-        if (brand && productName.toLowerCase().startsWith(brand.toLowerCase())) {
-          productName = productName.substring(brand.length).trim();
+          productName = productName.replace(/^[-–—\s]+/, '');
+          // Truncate at common eBay title separators (e.g. "ReLive Greens by Dr. Rahm's | Superfood...")
+          productName = productName.split(/\s+by\s+|\s*[|,]\s*/i)[0].trim();
         }
-        // Strip leading dashes or hyphens
-        productName = productName.replace(/^[-–—\s]+/, '');
         
         console.log('[reprice] Request:', { brand, productName });
         
