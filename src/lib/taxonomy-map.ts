@@ -311,10 +311,36 @@ export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>, us
         pricingSettings.templateShippingEstimateCents = 0;
         console.log(`[taxonomy-map] Per-price: $${amazonDollars.toFixed(2)} < $50 → FREE_SHIPPING (${shippingOz.toFixed(1)}oz, policy=${_policyDefaults.fulfillmentFree})`);
       } else {
-        pricingSettings.ebayShippingMode = 'BUYER_PAYS_SHIPPING';
-        const shRate = estimateDomesticRate(shippingOz, (pricingSettings.preferredCarrier || 'auto') as any);
-        pricingSettings.templateShippingEstimateCents = shRate.cents;
-        console.log(`[taxonomy-map] Per-price: $${amazonDollars.toFixed(2)} >= $50 → BUYER_PAYS ${shRate.service} @${(shRate.cents/100).toFixed(2)} (${shippingOz.toFixed(1)}oz, policy=${_policyDefaults.fulfillment})`);
+        // For items >= $50 check if the fulfillment policy itself is free shipping.
+        // Users who set BOTH policies to free shipping should always get FREE_SHIPPING.
+        let fulfillmentIsFree = (_policyDefaults.fulfillment === _policyDefaults.fulfillmentFree);
+        if (!fulfillmentIsFree) {
+          try {
+            const { hasFreeShipping } = await import("./policy-helpers.js");
+            const { getUserAccessToken, apiHost, headers: ebayHeaders } = await import("./_ebay.js");
+            const token = await getUserAccessToken(userId);
+            const host = apiHost();
+            const h = ebayHeaders(token);
+            const policyUrl = `${host}/sell/account/v1/fulfillment_policy/${encodeURIComponent(_policyDefaults.fulfillment)}`;
+            const policyRes = await fetch(policyUrl, { headers: h });
+            if (policyRes.ok) {
+              const policy = await policyRes.json();
+              fulfillmentIsFree = hasFreeShipping(policy);
+            }
+          } catch (err) {
+            console.warn(`[taxonomy-map] Could not check fulfillment policy for free-shipping (>=$50 branch):`, err instanceof Error ? err.message : String(err));
+          }
+        }
+        if (fulfillmentIsFree) {
+          pricingSettings.ebayShippingMode = 'FREE_SHIPPING';
+          pricingSettings.templateShippingEstimateCents = 0;
+          console.log(`[taxonomy-map] Per-price: $${amazonDollars.toFixed(2)} >= $50 → FREE_SHIPPING (fulfillment policy is also free, policy=${_policyDefaults.fulfillment})`);
+        } else {
+          pricingSettings.ebayShippingMode = 'BUYER_PAYS_SHIPPING';
+          const shRate = estimateDomesticRate(shippingOz, (pricingSettings.preferredCarrier || 'auto') as any);
+          pricingSettings.templateShippingEstimateCents = shRate.cents;
+          console.log(`[taxonomy-map] Per-price: $${amazonDollars.toFixed(2)} >= $50 → BUYER_PAYS ${shRate.service} @${(shRate.cents/100).toFixed(2)} (${shippingOz.toFixed(1)}oz, policy=${_policyDefaults.fulfillment})`);
+        }
       }
     }
 

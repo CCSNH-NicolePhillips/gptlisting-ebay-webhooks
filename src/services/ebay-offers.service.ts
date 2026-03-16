@@ -496,9 +496,14 @@ export async function publishOffer(
       if (getRes.ok) {
         const offer: any = await getRes.json();
         const offerPrice = parseFloat(offer?.pricingSummary?.price?.value ?? '0');
-        const correctPolicyId = (Number.isFinite(offerPrice) && offerPrice > 0 && offerPrice < 50)
-          ? policyDefaults.fulfillmentFree
-          : (policyDefaults.fulfillment ?? policyDefaults.fulfillmentFree);
+        // Use price-based switching only when user has configured two DISTINCT policies.
+        // If fulfillment and fulfillmentFree are the same (or fulfillment is absent),
+        // use fulfillmentFree for all prices so free shipping applies regardless of price.
+        const hasTwoPolicies = policyDefaults.fulfillment &&
+          policyDefaults.fulfillment !== policyDefaults.fulfillmentFree;
+        const correctPolicyId = (hasTwoPolicies && Number.isFinite(offerPrice) && offerPrice > 0 && offerPrice >= 50)
+          ? policyDefaults.fulfillment
+          : policyDefaults.fulfillmentFree;
         const currentPolicyId = offer?.listingPolicies?.fulfillmentPolicyId;
 
         if (correctPolicyId && currentPolicyId !== correctPolicyId) {

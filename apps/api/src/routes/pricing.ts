@@ -60,22 +60,42 @@ router.post('/reprice', async (req, res) => {
     cleanProduct = cleanProduct.split(/\s+by\s+|\s*[|,]\s*/i)[0].trim();
     console.log(`[reprice] Normalised: brand="${cleanBrand}" productName="${cleanProduct}" (raw: "${brand}" / "${productName}")`);
 
-    // Detect free shipping from user's default fulfillment policy
+    // Detect free shipping from user's default fulfillment policy.
+    // Check BOTH fulfillment (used for items >= $50) and fulfillmentFree (items < $50).
+    // If EITHER is free, honour it — the user may have set only one policy as "always free".
     let shippingEstimateCents = 600;
     let policyFreeShipping = false;
     try {
       const defaultsResult = await getPolicyDefaults(userId);
-      const fulfillmentId = defaultsResult.defaults?.fulfillment;
-      if (fulfillmentId) {
-        const policyResult = await getPolicy(userId, 'fulfillment', fulfillmentId);
-        if (policyResult.ok && hasFreeShipping(policyResult.policy)) {
-          shippingEstimateCents = 0;
-          policyFreeShipping = true;
-          console.log('[reprice] Free shipping policy detected — shippingEstimateCents=0');
+      const defaults = defaultsResult.defaults ?? {};
+
+      // Collect policy IDs to check — fulfillment first, then fulfillmentFree as fallback
+      const policyIdsToCheck: string[] = [];
+      if (defaults.fulfillment) policyIdsToCheck.push(defaults.fulfillment);
+      if (defaults.fulfillmentFree && defaults.fulfillmentFree !== defaults.fulfillment) {
+        policyIdsToCheck.push(defaults.fulfillmentFree);
+      }
+
+      for (const policyId of policyIdsToCheck) {
+        try {
+          const policyResult = await getPolicy(userId, 'fulfillment', policyId);
+          if (policyResult.ok && hasFreeShipping(policyResult.policy)) {
+            shippingEstimateCents = 0;
+            policyFreeShipping = true;
+            console.log(`[reprice] Free shipping detected on policy ${policyId} — shippingEstimateCents=0`);
+            break;
+          }
+          console.log(`[reprice] Policy ${policyId} — paid shipping`);
+        } catch (innerErr) {
+          console.warn(`[reprice] Could not fetch policy ${policyId}:`, innerErr instanceof Error ? innerErr.message : String(innerErr));
         }
       }
+
+      if (policyIdsToCheck.length === 0) {
+        console.log('[reprice] No fulfillment policy configured — using default $6 shipping estimate');
+      }
     } catch (policyErr) {
-      console.warn('[reprice] Could not check fulfillment policy, using default shipping cost:', policyErr);
+      console.warn('[reprice] Could not load policy defaults, using default shipping cost:', policyErr);
     }
 
     const settings: Partial<DeliveredPricingSettings> = {
