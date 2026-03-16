@@ -2336,7 +2336,16 @@
       });
       document.getElementById('exportFlaggedBtn')?.addEventListener('click', () => {
         const flagged = [...draftDataMap.values()].filter(o => flaggedSet.has(getDraftFlagKey(o)));
+        if (!flagged.length) return;
         exportDraftsAsZip(flagged, 'flagged-drafts');
+        // Clear flags after export so the count resets
+        flaggedSet.clear();
+        saveFlagged();
+        document.querySelectorAll('.flag-btn.active').forEach(b => {
+          b.classList.remove('active');
+          b.title = 'Flag for export';
+          b.closest('[class*="card"]')?.classList.remove('flagged');
+        });
       });
       document.getElementById('bulkExportBtn')?.addEventListener('click', () => {
         const selected = getSelectedOffers().map(s => draftDataMap.get(s.offerId)).filter(Boolean);

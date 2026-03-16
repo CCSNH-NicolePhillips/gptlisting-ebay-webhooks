@@ -2064,6 +2064,14 @@
       if (flaggedSet.size === 0) return;
       const offers = [...flaggedSet].map(k => offerDataMap.get(k)).filter(Boolean);
       exportListingsAsZip(offers, 'flagged-listings');
+      // Clear flags after export so the count resets
+      flaggedSet.clear();
+      saveFlagged();
+      document.querySelectorAll('.flag-btn.active').forEach(b => {
+        b.classList.remove('active');
+        b.title = 'Flag for export';
+        b.closest('[class*="card"], tr')?.classList.remove('flagged');
+      });
     });
 
     document.getElementById('bulkExportBtn')?.addEventListener('click', () => {
