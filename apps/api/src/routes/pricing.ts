@@ -36,12 +36,13 @@ router.post('/reprice', async (req, res) => {
   try {
     const { userId } = await requireUserAuth(req.headers.authorization || '');
 
-    const { brand, productName } = req.body as {
+    const { brand, productName, ebayTitle } = req.body as {
       brand?: string;
       productName?: string;
+      ebayTitle?: string;
     };
 
-    console.log(`[reprice] RAW body: brand="${brand}" productName="${String(productName).slice(0, 120)}"`);
+    console.log(`[reprice] RAW body: brand="${brand}" productName="${String(productName).slice(0, 120)}" ebayTitle="${String(ebayTitle || '').slice(0, 80)}"`);
 
     if (!brand && !productName) {
       return badRequest(res, 'brand or productName is required');
@@ -59,6 +60,46 @@ router.post('/reprice', async (req, res) => {
     }
     cleanProduct = cleanProduct.split(/\s+by\s+|\s*[|,]\s*/i)[0].trim();
     console.log(`[reprice] Normalised: brand="${cleanBrand}" productName="${cleanProduct}" (raw: "${brand}" / "${productName}")`);
+
+    // Cross-validate classification brand against the eBay offer title.
+    // When the scan misidentifies a product (e.g. classifies "Root ReLive Greens" images as
+    // "beam Kids All-In-One Superpowder"), the brand will NOT appear anywhere in the eBay
+    // listing title.  In that case derive brand/productName from the eBay title instead
+    // so the Amazon price lookup targets the correct product.
+    let finalBrand = cleanBrand;
+    let finalProduct = cleanProduct;
+    let additionalContext: string | undefined;
+
+    const titleStr = (ebayTitle || '').trim();
+    if (titleStr) {
+      const brandInTitle = finalBrand && titleStr.toLowerCase().includes(finalBrand.toLowerCase());
+      if (!brandInTitle) {
+        const titleWords = titleStr.split(/\s+/);
+        const derivedBrand = titleWords[0] ?? finalBrand;
+        const derivedProduct = titleWords.slice(1).join(' ')
+          .split(/\s*[|,]\s*|\s+by\s+/i)[0].trim()
+          .split(/\s+/).slice(0, 5).join(' ');
+        console.warn(
+          `[reprice] Brand "${finalBrand}" not in eBay title "${titleStr.slice(0, 70)}"` +
+          ` — overriding: brand="${derivedBrand}" product="${derivedProduct}"`,
+        );
+        finalBrand = derivedBrand;
+        finalProduct = derivedProduct;
+      }
+
+      // Extract additional variant terms from eBay title (flavour, sub-type, size keywords)
+      // that are NOT already captured in brand+productName.  Appending these to the Amazon
+      // query helps it find the exact variant instead of a generic / differently-sized one.
+      const NOISE = /^(supplement|powder|vitamin|natural|organic|vegan|gluten|capsule|capsules|tablet|tablets|serum|lotion|cream|spray|formula|complex|hydrating|support|skin|care|beauty|health|personal)$/i;
+      const baseLc = `${finalBrand} ${finalProduct}`.toLowerCase().split(/\s+/).filter(t => t.length > 2);
+      const extraTerms = titleStr.split(/\s+/)
+        .filter(w => w.length > 3 && !NOISE.test(w))
+        .filter(w => !baseLc.some(b => b.includes(w.toLowerCase()) || w.toLowerCase().includes(b)));
+      if (extraTerms.length > 0) {
+        additionalContext = extraTerms.slice(0, 4).join(' ');
+        console.log(`[reprice] additionalContext from title: "${additionalContext}"`);
+      }
+    }
 
     // Detect free shipping from user's default fulfillment policy.
     // Check BOTH fulfillment (used for items >= $50) and fulfillmentFree (items < $50).
@@ -104,8 +145,9 @@ router.post('/reprice', async (req, res) => {
     };
 
     const pricingResult = await getPricingDecision({
-      brand: cleanBrand,
-      productName: cleanProduct,
+      brand: finalBrand,
+      productName: finalProduct,
+      additionalContext,
       settings,
     });
 
@@ -127,8 +169,8 @@ router.post('/reprice', async (req, res) => {
       {
         step: '1. Gather Competitor Prices',
         input: {
-          brand: cleanBrand || '(none)',
-          productName: cleanProduct || '(none)',
+          brand: finalBrand || '(none)',
+          productName: finalProduct || '(none)',
         },
         output: {
           ebayCompsCount,

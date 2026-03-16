@@ -359,13 +359,47 @@ export async function createDraftForProduct(product: PairedProduct): Promise<Dra
     ? `${product.netWeight.value} ${product.netWeight.unit}`
     : undefined;
 
+  // Cross-validate the classification brand against the GPT-generated eBay title.
+  // When the scan misidentifies a product (e.g. classifies "Root ReLive Greens" as
+  // "beam Kids"), the classification brand will NOT appear in the eBay title that
+  // GPT wrote from the actual images.  In that case derive brand/product from the
+  // GPT title instead — it is far more reliable for the Amazon price lookup.
+  let pricingBrand = product.brand;
+  let pricingProduct = product.product;
+  const gptTitle = parsed.title || '';
+  if (pricingBrand && gptTitle && !gptTitle.toLowerCase().includes(pricingBrand.toLowerCase())) {
+    const titleWords = gptTitle.trim().split(/\s+/);
+    const derivedBrand = titleWords[0] ?? pricingBrand;
+    const derivedProduct = titleWords.slice(1).join(' ')
+      .split(/\s*[|,]\s*|\s+by\s+/i)[0].trim()
+      .split(/\s+/).slice(0, 5).join(' ');
+    console.warn(
+      `[createDraftForProduct] Classification brand "${pricingBrand}" not in GPT title` +
+      ` "${gptTitle.slice(0, 60)}" — overriding pricing: brand="${derivedBrand}" product="${derivedProduct}"`,
+    );
+    pricingBrand = derivedBrand;
+    pricingProduct = derivedProduct;
+  }
+
+  // Extract additional distinguishing terms from the GPT title that are not part
+  // of brand/productName (e.g. flavor "Mint Chocolate", sub-type "After Shave Serum").
+  // Passing these as additionalContext narrows the Amazon search to the correct variant
+  // and prevents matching a different size/flavour at a wildly different price.
+  const NOISE_WORDS = /^(supplement|powder|vitamin|natural|organic|vegan|gluten|capsule|capsules|tablet|tablets|serum|lotion|cream|spray|formula|complex)$/i;
+  const basePricingTermsLc = `${pricingBrand} ${pricingProduct}`.toLowerCase().split(/\s+/).filter(t => t.length > 2);
+  const extraTitleTerms = gptTitle.split(/\s+/)
+    .filter(w => w.length > 3 && !NOISE_WORDS.test(w))
+    .filter(w => !basePricingTermsLc.some(b => b.includes(w.toLowerCase()) || w.toLowerCase().includes(b)));
+  const titleContext = extraTitleTerms.slice(0, 4).join(' ');
+  const combinedContext = [sizeContext, titleContext].filter(Boolean).join(' ') || undefined;
+
   const pricingResult = await getPricingDecision({
-    brand: product.brand,
-    productName: product.product,
+    brand: pricingBrand,
+    productName: pricingProduct,
     settings: { mode: 'market-match' },
     retailPriceDollars: retailPrice,
     categoryPath,
-    additionalContext: sizeContext,
+    additionalContext: combinedContext,
   }).catch(err => {
     console.error(`[createDraftForProduct] Pricing failed, falling back to zero:`, err);
     return null;

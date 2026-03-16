@@ -314,11 +314,12 @@ export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>, us
         // For items >= $50 check if the fulfillment policy itself is free shipping.
         // Users who set BOTH policies to free shipping should always get FREE_SHIPPING.
         let fulfillmentIsFree = (_policyDefaults.fulfillment === _policyDefaults.fulfillmentFree);
-        if (!fulfillmentIsFree) {
+        if (!fulfillmentIsFree && userId) {
+          const safeUserId = userId; // capture as string for TypeScript narrowing across awaits
           try {
             const { hasFreeShipping } = await import("./policy-helpers.js");
             const { getUserAccessToken, apiHost, headers: ebayHeaders } = await import("./_ebay.js");
-            const token = await getUserAccessToken(userId);
+            const token = await getUserAccessToken(safeUserId);
             const host = apiHost();
             const h = ebayHeaders(token);
             const policyUrl = `${host}/sell/account/v1/fulfillment_policy/${encodeURIComponent(_policyDefaults.fulfillment)}`;

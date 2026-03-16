@@ -1026,10 +1026,15 @@
           throw new Error('Need brand or title to calculate price');
         }
         
+        // Always send the current eBay title so the server can cross-validate the
+        // classification brand against it and automatically fall back to a title-derived
+        // brand/productName when the scan misidentified the product.
+        const ebayTitle = $('title')?.value?.trim() || '';
+
         const res = await fetchJSON('/api/pricing/reprice', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ brand, productName }),
+          body: JSON.stringify({ brand, productName, ebayTitle }),
         });
         
         console.log('[reprice] Response:', res);

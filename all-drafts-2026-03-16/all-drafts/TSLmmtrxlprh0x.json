@@ -1,0 +1,188 @@
+{
+  "offerId": "133386612011",
+  "sku": "TSLmmtrxlprh0x",
+  "marketplaceId": "EBAY_US",
+  "format": "FIXED_PRICE",
+  "listingDescription": "Introducing Truly's Smooth Legend After Shave Serum, the ultimate solution for a soothing post-shave experience. This premium skincare product calms and hydrates your skin, leaving it smooth and refreshed. Ideal for those looking to reduce post-shave irritation, this serum ensures your skin feels luxurious and rejuvenated. Formulated with high-quality ingredients, it absorbs quickly without leaving a greasy finish. Perfect for all skin types, this serum is a must-have in your grooming routine. Specifications: 2 fl oz bottle with a sleek design, featuring top-quality ingredients guaranteed to enhance your skin's natural appearance. Make this exceptional after shave serum a staple in your daily regimen.",
+  "availableQuantity": 1,
+  "pricingSummary": {
+    "price": {
+      "value": "28.05",
+      "currency": "USD"
+    }
+  },
+  "listingPolicies": {
+    "paymentPolicyId": "245353452026",
+    "returnPolicyId": "245353453026",
+    "fulfillmentPolicyId": "245353454026",
+    "eBayPlusIfEligible": false,
+    "bestOfferTerms": {
+      "bestOfferEnabled": true,
+      "autoAcceptPrice": {
+        "value": "25.25",
+        "currency": "USD"
+      },
+      "autoDeclinePrice": {
+        "value": "16.83",
+        "currency": "USD"
+      }
+    }
+  },
+  "categoryId": "20398",
+  "merchantLocationKey": "primary-location",
+  "tax": {
+    "applyTax": false
+  },
+  "status": "UNPUBLISHED",
+  "listingDuration": "GTC",
+  "includeCatalogProductDetails": true,
+  "hideBuyerDetails": false,
+  "_imageUrls": [
+    "https://www.draftpilot.app/api/images/proxy?url=https%3A%2F%2Fwww.draftpilot.app%2Fapi%2Fimg%3Fk%3Dstaging%252Fgoogle-oauth2_108767599998494531403%252F398a7fbd-f9ec-4f9d-af4b-4619cc90ee07%252F73bc73049affc283-IMG_20260316_182158.jpg&v=mmtrxlrj",
+    "https://www.draftpilot.app/api/images/proxy?url=https%3A%2F%2Fwww.draftpilot.app%2Fapi%2Fimg%3Fk%3Dstaging%252Fgoogle-oauth2_108767599998494531403%252F398a7fbd-f9ec-4f9d-af4b-4619cc90ee07%252F9bfd269d3efb21ba-IMG_20260316_182208.jpg&v=mmtrxlrk"
+  ],
+  "_draftLogs": {
+    "sku": "product-4",
+    "createdAt": "2026-03-16T22:46:58.571Z",
+    "classification": {
+      "brand": "Truly",
+      "productName": "Smooth Legend",
+      "variant": null,
+      "size": null,
+      "packageType": null,
+      "keyText": [
+        "Truly",
+        "Smooth Legend",
+        "After Shave Serum"
+      ],
+      "netWeight": null,
+      "categoryPath": "Beauty > Skin Care > Serums",
+      "photoQuantity": 1,
+      "bundleInfo": {
+        "isBundle": false,
+        "bundleType": null,
+        "bundleProducts": []
+      }
+    },
+    "pricing": {
+      "timestamp": "2026-03-16T22:46:58.571Z",
+      "brand": "Truly",
+      "productName": "Smooth Legend",
+      "sources": [
+        {
+          "source": "Retail (Amazon/Walmart)",
+          "query": "Truly Smooth Legend",
+          "results": [
+            {
+              "title": "Amazon",
+              "price": 33,
+              "shipping": 0,
+              "total": 33
+            }
+          ]
+        }
+      ],
+      "finalPrice": 28.05,
+      "finalShipping": 6,
+      "freeShippingApplied": false,
+      "calculations": [
+        {
+          "step": "1. Gather Competitor Prices",
+          "input": {
+            "ebayCompsCount": 0,
+            "retailCompsCount": 1
+          },
+          "output": {
+            "lowestEbayDelivered": "N/A",
+            "amazonPrice": "$33.00",
+            "walmartPrice": "N/A"
+          },
+          "notes": "Search eBay active listings, Amazon, Walmart, Google Shopping for competitor prices"
+        },
+        {
+          "step": "2. Calculate Target Delivered Price",
+          "input": {
+            "soldCount": 0,
+            "soldMedian": "N/A",
+            "soldStrong": false,
+            "competitorFloor": "N/A"
+          },
+          "output": {
+            "targetDeliveredPrice": "$34.05"
+          },
+          "formula": "Target = Amazon $33.00 × 0.85",
+          "notes": "Price based on Amazon listing. Buyer pays item + shipping separately."
+        },
+        {
+          "step": "3. Split Into Item + Shipping",
+          "input": {
+            "targetDelivered": "$34.05",
+            "shippingEstimate": "$6.00",
+            "freeShippingApplied": false
+          },
+          "output": {
+            "itemPrice": "$28.05",
+            "shippingCharge": "$6.00",
+            "subsidyAmount": "$0.00"
+          },
+          "formula": "ItemPrice = TargetDelivered - ShippingCharge",
+          "notes": "Buyer pays shipping separately"
+        },
+        {
+          "step": "4. Final Price Verification",
+          "input": {
+            "itemPrice": "$28.05",
+            "shippingCharge": "$6.00"
+          },
+          "output": {
+            "buyerTotalCost": "$34.05"
+          },
+          "formula": "BuyerTotal = ItemPrice + ShippingCharge",
+          "notes": "This is what the buyer pays at checkout"
+        }
+      ],
+      "reasoning": "Price based on amazon-direct data. Competitive.",
+      "confidence": "medium",
+      "warnings": [],
+      "competitorSummary": {
+        "amazonPrice": 33,
+        "ebayActiveCount": 0,
+        "ebaySoldCount": 0
+      },
+      "searchQuery": {
+        "priceLookupTitle": "Smooth Legend",
+        "amazonQuery": "Truly Smooth Legend",
+        "ebayQuery": "Truly Smooth Legend Beauty > Skin Care > Serums After Shave Serum",
+        "googleQuery": "Truly Smooth Legend Beauty > Skin Care > Serums After Shave Serum",
+        "seoContext": "Beauty > Skin Care > Serums After Shave Serum"
+      }
+    },
+    "promotion": {
+      "enabled": true,
+      "rate": 5,
+      "reason": "User-configured promotion rate"
+    },
+    "pricingStatus": "OK",
+    "needsPriceReview": false,
+    "offerId": "133386612011"
+  },
+  "_pricingDebug": {
+    "brand": "Truly",
+    "productName": "Smooth Legend",
+    "amazonQuery": "Truly Smooth Legend",
+    "priceLookupTitle": "Smooth Legend",
+    "confidence": "medium",
+    "reasoning": "Price based on amazon-direct data. Competitive.",
+    "warnings": [],
+    "competitorSummary": {
+      "amazonPrice": 33,
+      "ebayActiveCount": 0,
+      "ebaySoldCount": 0
+    },
+    "amazonUrl": null,
+    "amazonPriceDollars": 33,
+    "walmartUrl": null,
+    "walmartPriceDollars": null,
+    "finalPrice": 28.05
+  }
+}

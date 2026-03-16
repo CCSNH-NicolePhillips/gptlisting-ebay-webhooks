@@ -1,0 +1,188 @@
+{
+  "offerId": "133386671011",
+  "sku": "PLGSRSmmtrxm43m79",
+  "marketplaceId": "EBAY_US",
+  "format": "FIXED_PRICE",
+  "listingDescription": "Discover Peach & Lily's Glass Skin Refining Serum, the ultimate solution for achieving a translucent and luminous complexion. This serum is expertly formulated to hydrate and plump your skin, giving you the enviable 'glass skin' effect. With its lightweight, fast-absorbing formula, it is perfect for anyone seeking to improve skin texture and brightness. Infused with powerhouse ingredients, this serum deeply nourishes and soothes, making it ideal for all skin types. Whether you're dealing with dullness or seeking a dewy glow, this serum meets your skincare needs effortlessly. Specifications: 40ml bottle, powerful hydration, and plumping effect, suitable for daily use. Unlock the secret to radiant skin with Peach & Lily.",
+  "availableQuantity": 1,
+  "pricingSummary": {
+    "price": {
+      "value": "33.15",
+      "currency": "USD"
+    }
+  },
+  "listingPolicies": {
+    "paymentPolicyId": "245353452026",
+    "returnPolicyId": "245353453026",
+    "fulfillmentPolicyId": "245353454026",
+    "eBayPlusIfEligible": false,
+    "bestOfferTerms": {
+      "bestOfferEnabled": true,
+      "autoAcceptPrice": {
+        "value": "29.84",
+        "currency": "USD"
+      },
+      "autoDeclinePrice": {
+        "value": "19.89",
+        "currency": "USD"
+      }
+    }
+  },
+  "categoryId": "20398",
+  "merchantLocationKey": "primary-location",
+  "tax": {
+    "applyTax": false
+  },
+  "status": "UNPUBLISHED",
+  "listingDuration": "GTC",
+  "includeCatalogProductDetails": true,
+  "hideBuyerDetails": false,
+  "_imageUrls": [
+    "https://www.draftpilot.app/api/images/proxy?url=https%3A%2F%2Fwww.draftpilot.app%2Fapi%2Fimg%3Fk%3Dstaging%252Fgoogle-oauth2_108767599998494531403%252F398a7fbd-f9ec-4f9d-af4b-4619cc90ee07%252Fad3a3b33a94e74ae-IMG_20260316_182322.jpg&v=mmtrxm5w",
+    "https://www.draftpilot.app/api/images/proxy?url=https%3A%2F%2Fwww.draftpilot.app%2Fapi%2Fimg%3Fk%3Dstaging%252Fgoogle-oauth2_108767599998494531403%252F398a7fbd-f9ec-4f9d-af4b-4619cc90ee07%252F759a4677f6a59fca-IMG_20260316_182330.jpg&v=mmtrxm5w"
+  ],
+  "_draftLogs": {
+    "sku": "product-12",
+    "createdAt": "2026-03-16T22:47:20.115Z",
+    "classification": {
+      "brand": "Peach & Lily",
+      "productName": "Glass Skin Refining Serum",
+      "variant": null,
+      "size": null,
+      "packageType": null,
+      "keyText": [
+        "Peach & Lily",
+        "Glass Skin Refining Serum",
+        "Translucent + Luminous"
+      ],
+      "netWeight": null,
+      "categoryPath": "Beauty > Skin Care > Serums",
+      "photoQuantity": 1,
+      "bundleInfo": {
+        "isBundle": false,
+        "bundleType": null,
+        "bundleProducts": []
+      }
+    },
+    "pricing": {
+      "timestamp": "2026-03-16T22:47:20.114Z",
+      "brand": "Peach & Lily",
+      "productName": "Glass Skin Refining Serum",
+      "sources": [
+        {
+          "source": "Retail (Amazon/Walmart)",
+          "query": "Peach & Lily Glass Skin Refining Serum",
+          "results": [
+            {
+              "title": "Amazon",
+              "price": 39,
+              "shipping": 0,
+              "total": 39
+            }
+          ]
+        }
+      ],
+      "finalPrice": 33.15,
+      "finalShipping": 6,
+      "freeShippingApplied": false,
+      "calculations": [
+        {
+          "step": "1. Gather Competitor Prices",
+          "input": {
+            "ebayCompsCount": 0,
+            "retailCompsCount": 1
+          },
+          "output": {
+            "lowestEbayDelivered": "N/A",
+            "amazonPrice": "$39.00",
+            "walmartPrice": "N/A"
+          },
+          "notes": "Search eBay active listings, Amazon, Walmart, Google Shopping for competitor prices"
+        },
+        {
+          "step": "2. Calculate Target Delivered Price",
+          "input": {
+            "soldCount": 0,
+            "soldMedian": "N/A",
+            "soldStrong": false,
+            "competitorFloor": "N/A"
+          },
+          "output": {
+            "targetDeliveredPrice": "$39.15"
+          },
+          "formula": "Target = Amazon $39.00 × 0.85",
+          "notes": "Price based on Amazon listing. Buyer pays item + shipping separately."
+        },
+        {
+          "step": "3. Split Into Item + Shipping",
+          "input": {
+            "targetDelivered": "$39.15",
+            "shippingEstimate": "$6.00",
+            "freeShippingApplied": false
+          },
+          "output": {
+            "itemPrice": "$33.15",
+            "shippingCharge": "$6.00",
+            "subsidyAmount": "$0.00"
+          },
+          "formula": "ItemPrice = TargetDelivered - ShippingCharge",
+          "notes": "Buyer pays shipping separately"
+        },
+        {
+          "step": "4. Final Price Verification",
+          "input": {
+            "itemPrice": "$33.15",
+            "shippingCharge": "$6.00"
+          },
+          "output": {
+            "buyerTotalCost": "$39.15"
+          },
+          "formula": "BuyerTotal = ItemPrice + ShippingCharge",
+          "notes": "This is what the buyer pays at checkout"
+        }
+      ],
+      "reasoning": "Price based on amazon-direct data. Competitive.",
+      "confidence": "medium",
+      "warnings": [],
+      "competitorSummary": {
+        "amazonPrice": 39,
+        "ebayActiveCount": 0,
+        "ebaySoldCount": 0
+      },
+      "searchQuery": {
+        "priceLookupTitle": "Glass Skin Refining Serum",
+        "amazonQuery": "Peach & Lily Glass Skin Refining Serum",
+        "ebayQuery": "Peach & Lily Glass Skin Refining Serum Beauty > Skin Care > Serums Translucent + Luminous",
+        "googleQuery": "Peach & Lily Glass Skin Refining Serum Beauty > Skin Care > Serums Translucent + Luminous",
+        "seoContext": "Beauty > Skin Care > Serums Translucent + Luminous"
+      }
+    },
+    "promotion": {
+      "enabled": true,
+      "rate": 5,
+      "reason": "User-configured promotion rate"
+    },
+    "pricingStatus": "OK",
+    "needsPriceReview": false,
+    "offerId": "133386671011"
+  },
+  "_pricingDebug": {
+    "brand": "Peach & Lily",
+    "productName": "Glass Skin Refining Serum",
+    "amazonQuery": "Peach & Lily Glass Skin Refining Serum",
+    "priceLookupTitle": "Glass Skin Refining Serum",
+    "confidence": "medium",
+    "reasoning": "Price based on amazon-direct data. Competitive.",
+    "warnings": [],
+    "competitorSummary": {
+      "amazonPrice": 39,
+      "ebayActiveCount": 0,
+      "ebaySoldCount": 0
+    },
+    "amazonUrl": null,
+    "amazonPriceDollars": 39,
+    "walmartUrl": null,
+    "walmartPriceDollars": null,
+    "finalPrice": 33.15
+  }
+}

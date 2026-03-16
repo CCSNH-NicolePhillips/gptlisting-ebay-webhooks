@@ -1,0 +1,188 @@
+{
+  "offerId": "132931186011",
+  "sku": "BBLmmshlph6srt",
+  "marketplaceId": "EBAY_US",
+  "format": "FIXED_PRICE",
+  "listingDescription": "Discover BetterBrand Better Lungs, a specially formulated dietary supplement designed to support optimal lung health and respiratory function. With a potent blend of Mullein and Chlorophyll, this supplement helps to cleanse and fortify your respiratory system, ensuring you breathe with ease and vitality. Key features of this product include its vegan-friendly composition and its commitment to using only natural ingredients that promote lung health. Whether you're an athlete striving for peak performance or someone seeking to enhance your daily breathing, Better Lungs is the perfect support for vibrant respiratory health. This vegan, non-GMO supplement is ideal for adults looking to maintain their respiratory well-being. Specifications: 60 capsules per bottle, made in the USA with high-quality Mullein and Chlorophyll. Start your journey to better breathing today with BetterBrand Better Lungs.",
+  "availableQuantity": 1,
+  "pricingSummary": {
+    "price": {
+      "value": "29.71",
+      "currency": "USD"
+    }
+  },
+  "listingPolicies": {
+    "paymentPolicyId": "245353452026",
+    "returnPolicyId": "245353453026",
+    "fulfillmentPolicyId": "245353454026",
+    "eBayPlusIfEligible": false,
+    "bestOfferTerms": {
+      "bestOfferEnabled": true,
+      "autoAcceptPrice": {
+        "value": "26.74",
+        "currency": "USD"
+      },
+      "autoDeclinePrice": {
+        "value": "17.83",
+        "currency": "USD"
+      }
+    }
+  },
+  "categoryId": "180960",
+  "merchantLocationKey": "primary-location",
+  "tax": {
+    "applyTax": false
+  },
+  "status": "UNPUBLISHED",
+  "listingDuration": "GTC",
+  "includeCatalogProductDetails": true,
+  "hideBuyerDetails": false,
+  "_imageUrls": [
+    "https://www.draftpilot.app/api/images/proxy?url=https%3A%2F%2Fwww.draftpilot.app%2Fapi%2Fimg%3Fk%3Dstaging%252Fgoogle-oauth2_108767599998494531403%252F61535d48-966a-48fd-9bd4-d9266f625254%252F635783be30e5d4b8-IMG_20260315_155650.jpg&v=mmshlpiy",
+    "https://www.draftpilot.app/api/images/proxy?url=https%3A%2F%2Fwww.draftpilot.app%2Fapi%2Fimg%3Fk%3Dstaging%252Fgoogle-oauth2_108767599998494531403%252F61535d48-966a-48fd-9bd4-d9266f625254%252F89a62189bae37ec6-IMG_20260315_155659.jpg&v=mmshlpiy"
+  ],
+  "_draftLogs": {
+    "sku": "product-9",
+    "createdAt": "2026-03-16T22:47:07.742Z",
+    "classification": {
+      "brand": "Thanks! Naturals",
+      "productName": "Tea Tree Tingle",
+      "variant": null,
+      "size": null,
+      "packageType": null,
+      "keyText": [
+        "Thanks! Naturals",
+        "Tea Tree Tingle",
+        "Muscle Freeze Roll-On"
+      ],
+      "netWeight": null,
+      "categoryPath": "Health & Personal Care > Pain Relief",
+      "photoQuantity": 1,
+      "bundleInfo": {
+        "isBundle": false,
+        "bundleType": null,
+        "bundleProducts": []
+      }
+    },
+    "pricing": {
+      "timestamp": "2026-03-16T22:47:07.741Z",
+      "brand": "Thanks! Naturals",
+      "productName": "Tea Tree Tingle",
+      "sources": [
+        {
+          "source": "Retail (Amazon/Walmart)",
+          "query": "Thanks! Naturals Tea Tree Tingle",
+          "results": [
+            {
+              "title": "Amazon",
+              "price": 29,
+              "shipping": 0,
+              "total": 29
+            }
+          ]
+        }
+      ],
+      "finalPrice": 24.65,
+      "finalShipping": 6,
+      "freeShippingApplied": false,
+      "calculations": [
+        {
+          "step": "1. Gather Competitor Prices",
+          "input": {
+            "ebayCompsCount": 0,
+            "retailCompsCount": 1
+          },
+          "output": {
+            "lowestEbayDelivered": "N/A",
+            "amazonPrice": "$29.00",
+            "walmartPrice": "N/A"
+          },
+          "notes": "Search eBay active listings, Amazon, Walmart, Google Shopping for competitor prices"
+        },
+        {
+          "step": "2. Calculate Target Delivered Price",
+          "input": {
+            "soldCount": 0,
+            "soldMedian": "N/A",
+            "soldStrong": false,
+            "competitorFloor": "N/A"
+          },
+          "output": {
+            "targetDeliveredPrice": "$30.65"
+          },
+          "formula": "Target = Amazon $29.00 × 0.85",
+          "notes": "Price based on Amazon listing. Buyer pays item + shipping separately."
+        },
+        {
+          "step": "3. Split Into Item + Shipping",
+          "input": {
+            "targetDelivered": "$30.65",
+            "shippingEstimate": "$6.00",
+            "freeShippingApplied": false
+          },
+          "output": {
+            "itemPrice": "$24.65",
+            "shippingCharge": "$6.00",
+            "subsidyAmount": "$0.00"
+          },
+          "formula": "ItemPrice = TargetDelivered - ShippingCharge",
+          "notes": "Buyer pays shipping separately"
+        },
+        {
+          "step": "4. Final Price Verification",
+          "input": {
+            "itemPrice": "$24.65",
+            "shippingCharge": "$6.00"
+          },
+          "output": {
+            "buyerTotalCost": "$30.65"
+          },
+          "formula": "BuyerTotal = ItemPrice + ShippingCharge",
+          "notes": "This is what the buyer pays at checkout"
+        }
+      ],
+      "reasoning": "Price based on amazon-direct data. Competitive.",
+      "confidence": "medium",
+      "warnings": [],
+      "competitorSummary": {
+        "amazonPrice": 29,
+        "ebayActiveCount": 0,
+        "ebaySoldCount": 0
+      },
+      "searchQuery": {
+        "priceLookupTitle": "Tea Tree Tingle",
+        "amazonQuery": "Thanks! Naturals Tea Tree Tingle",
+        "ebayQuery": "Thanks! Naturals Tea Tree Tingle Health & Personal Care > Pain Relief Muscle Freeze Roll-On",
+        "googleQuery": "Thanks! Naturals Tea Tree Tingle Health & Personal Care > Pain Relief Muscle Freeze Roll-On",
+        "seoContext": "Health & Personal Care > Pain Relief Muscle Freeze Roll-On"
+      }
+    },
+    "promotion": {
+      "enabled": true,
+      "rate": 5,
+      "reason": "User-configured promotion rate"
+    },
+    "pricingStatus": "OK",
+    "needsPriceReview": false,
+    "offerId": "133386649011"
+  },
+  "_pricingDebug": {
+    "brand": "Thanks! Naturals",
+    "productName": "Tea Tree Tingle",
+    "amazonQuery": "Thanks! Naturals Tea Tree Tingle",
+    "priceLookupTitle": "Tea Tree Tingle",
+    "confidence": "medium",
+    "reasoning": "Price based on amazon-direct data. Competitive.",
+    "warnings": [],
+    "competitorSummary": {
+      "amazonPrice": 29,
+      "ebayActiveCount": 0,
+      "ebaySoldCount": 0
+    },
+    "amazonUrl": null,
+    "amazonPriceDollars": 29,
+    "walmartUrl": null,
+    "walmartPriceDollars": null,
+    "finalPrice": 24.65
+  }
+}

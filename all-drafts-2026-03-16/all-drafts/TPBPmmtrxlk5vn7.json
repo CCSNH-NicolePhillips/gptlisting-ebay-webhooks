@@ -1,0 +1,188 @@
+{
+  "offerId": "133386596011",
+  "sku": "TPBPmmtrxlk5vn7",
+  "marketplaceId": "EBAY_US",
+  "format": "FIXED_PRICE",
+  "listingDescription": "Introducing Truvani Plant Based Protein in a delectable Mint Chocolate flavor – the perfect choice for those who seek a delicious and nutritious supplement to enhance their daily protein intake. Crafted with high-quality, organic ingredients, this protein powder supports muscle growth, recovery, and overall wellness. Enjoy the rich combination of cocoa and refreshing mint with every serving. Perfect for health-conscious individuals and athletes looking for a clean, plant-based protein source. Specifications include a rich blend of organic pea and pumpkin seed protein, with added benefits of MCT oil powder to naturally boost energy. Made without artificial sweeteners, this gluten-free and soy-free formula is suitable for vegans and those with dietary restrictions. Unleash the power of plants and support your active lifestyle with Truvani's irresistible protein solution.",
+  "availableQuantity": 1,
+  "pricingSummary": {
+    "price": {
+      "value": "38.24",
+      "currency": "USD"
+    }
+  },
+  "listingPolicies": {
+    "paymentPolicyId": "245353452026",
+    "returnPolicyId": "245353453026",
+    "fulfillmentPolicyId": "245353454026",
+    "eBayPlusIfEligible": false,
+    "bestOfferTerms": {
+      "bestOfferEnabled": true,
+      "autoAcceptPrice": {
+        "value": "34.42",
+        "currency": "USD"
+      },
+      "autoDeclinePrice": {
+        "value": "22.94",
+        "currency": "USD"
+      }
+    }
+  },
+  "categoryId": "180960",
+  "merchantLocationKey": "primary-location",
+  "tax": {
+    "applyTax": false
+  },
+  "status": "UNPUBLISHED",
+  "listingDuration": "GTC",
+  "includeCatalogProductDetails": true,
+  "hideBuyerDetails": false,
+  "_imageUrls": [
+    "https://www.draftpilot.app/api/images/proxy?url=https%3A%2F%2Fwww.draftpilot.app%2Fapi%2Fimg%3Fk%3Dstaging%252Fgoogle-oauth2_108767599998494531403%252F398a7fbd-f9ec-4f9d-af4b-4619cc90ee07%252F51d56c66b2a4e8bd-IMG_20260316_181706.jpg&v=mmtrxlm1",
+    "https://www.draftpilot.app/api/images/proxy?url=https%3A%2F%2Fwww.draftpilot.app%2Fapi%2Fimg%3Fk%3Dstaging%252Fgoogle-oauth2_108767599998494531403%252F398a7fbd-f9ec-4f9d-af4b-4619cc90ee07%252F778c6de1fb910811-IMG_20260316_181721.jpg&v=mmtrxlm1"
+  ],
+  "_draftLogs": {
+    "sku": "product-1",
+    "createdAt": "2026-03-16T22:46:45.078Z",
+    "classification": {
+      "brand": "Truvani",
+      "productName": "Plant Based Protein",
+      "variant": null,
+      "size": null,
+      "packageType": null,
+      "keyText": [
+        "Truvani",
+        "Plant Based Protein",
+        "Mint Chocolate"
+      ],
+      "netWeight": null,
+      "categoryPath": "Health & Personal Care > Vitamins & Dietary Supplements",
+      "photoQuantity": 1,
+      "bundleInfo": {
+        "isBundle": false,
+        "bundleType": null,
+        "bundleProducts": []
+      }
+    },
+    "pricing": {
+      "timestamp": "2026-03-16T22:46:45.078Z",
+      "brand": "Truvani",
+      "productName": "Plant Based Protein",
+      "sources": [
+        {
+          "source": "Retail (Amazon/Walmart)",
+          "query": "Truvani Plant Based Protein",
+          "results": [
+            {
+              "title": "Amazon",
+              "price": 44.99,
+              "shipping": 0,
+              "total": 44.99
+            }
+          ]
+        }
+      ],
+      "finalPrice": 38.24,
+      "finalShipping": 6,
+      "freeShippingApplied": false,
+      "calculations": [
+        {
+          "step": "1. Gather Competitor Prices",
+          "input": {
+            "ebayCompsCount": 0,
+            "retailCompsCount": 1
+          },
+          "output": {
+            "lowestEbayDelivered": "N/A",
+            "amazonPrice": "$44.99",
+            "walmartPrice": "N/A"
+          },
+          "notes": "Search eBay active listings, Amazon, Walmart, Google Shopping for competitor prices"
+        },
+        {
+          "step": "2. Calculate Target Delivered Price",
+          "input": {
+            "soldCount": 0,
+            "soldMedian": "N/A",
+            "soldStrong": false,
+            "competitorFloor": "N/A"
+          },
+          "output": {
+            "targetDeliveredPrice": "$44.24"
+          },
+          "formula": "Target = Amazon $44.99 × 0.85",
+          "notes": "Price based on Amazon listing. Buyer pays item + shipping separately."
+        },
+        {
+          "step": "3. Split Into Item + Shipping",
+          "input": {
+            "targetDelivered": "$44.24",
+            "shippingEstimate": "$6.00",
+            "freeShippingApplied": false
+          },
+          "output": {
+            "itemPrice": "$38.24",
+            "shippingCharge": "$6.00",
+            "subsidyAmount": "$0.00"
+          },
+          "formula": "ItemPrice = TargetDelivered - ShippingCharge",
+          "notes": "Buyer pays shipping separately"
+        },
+        {
+          "step": "4. Final Price Verification",
+          "input": {
+            "itemPrice": "$38.24",
+            "shippingCharge": "$6.00"
+          },
+          "output": {
+            "buyerTotalCost": "$44.24"
+          },
+          "formula": "BuyerTotal = ItemPrice + ShippingCharge",
+          "notes": "This is what the buyer pays at checkout"
+        }
+      ],
+      "reasoning": "Price based on amazon-direct data. Competitive.",
+      "confidence": "medium",
+      "warnings": [],
+      "competitorSummary": {
+        "amazonPrice": 44.99,
+        "ebayActiveCount": 0,
+        "ebaySoldCount": 0
+      },
+      "searchQuery": {
+        "priceLookupTitle": "Plant Based Protein",
+        "amazonQuery": "Truvani Plant Based Protein",
+        "ebayQuery": "Truvani Plant Based Protein Health & Personal Care > Vitamins & Dietary Supplements Mint Chocolate",
+        "googleQuery": "Truvani Plant Based Protein Health & Personal Care > Vitamins & Dietary Supplements Mint Chocolate",
+        "seoContext": "Health & Personal Care > Vitamins & Dietary Supplements Mint Chocolate"
+      }
+    },
+    "promotion": {
+      "enabled": true,
+      "rate": 5,
+      "reason": "User-configured promotion rate"
+    },
+    "pricingStatus": "OK",
+    "needsPriceReview": false,
+    "offerId": "133386596011"
+  },
+  "_pricingDebug": {
+    "brand": "Truvani",
+    "productName": "Plant Based Protein",
+    "amazonQuery": "Truvani Plant Based Protein",
+    "priceLookupTitle": "Plant Based Protein",
+    "confidence": "medium",
+    "reasoning": "Price based on amazon-direct data. Competitive.",
+    "warnings": [],
+    "competitorSummary": {
+      "amazonPrice": 44.99,
+      "ebayActiveCount": 0,
+      "ebaySoldCount": 0
+    },
+    "amazonUrl": null,
+    "amazonPriceDollars": 44.99,
+    "walmartUrl": null,
+    "walmartPriceDollars": null,
+    "finalPrice": 38.24
+  }
+}

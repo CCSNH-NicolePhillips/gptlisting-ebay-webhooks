@@ -1,0 +1,188 @@
+{
+  "offerId": "133386606011",
+  "sku": "TUFmmtrxlnw8v1",
+  "marketplaceId": "EBAY_US",
+  "format": "FIXED_PRICE",
+  "listingDescription": "Discover Truly's Unicorn Fruit After Shave Serum, the ultimate solution for post-shave hydration and soothing. Infused with a delightful citrus essence, this lightweight serum is designed to calm and nourish your skin, leaving it smooth and refreshed. Ideal for sensitive skin, the serum is formulated with cruelty-free and vegan-friendly ingredients, ensuring a gentle and ethical skincare experience. Packed in a convenient size, it fits perfectly into your skincare routine. Perfect for both men and women who seek to enhance their shaving routine with a touch of luxury.",
+  "availableQuantity": 1,
+  "pricingSummary": {
+    "price": {
+      "value": "15.3",
+      "currency": "USD"
+    }
+  },
+  "listingPolicies": {
+    "paymentPolicyId": "245353452026",
+    "returnPolicyId": "245353453026",
+    "fulfillmentPolicyId": "245353454026",
+    "eBayPlusIfEligible": false,
+    "bestOfferTerms": {
+      "bestOfferEnabled": true,
+      "autoAcceptPrice": {
+        "value": "13.77",
+        "currency": "USD"
+      },
+      "autoDeclinePrice": {
+        "value": "9.18",
+        "currency": "USD"
+      }
+    }
+  },
+  "categoryId": "180950",
+  "merchantLocationKey": "primary-location",
+  "tax": {
+    "applyTax": false
+  },
+  "status": "UNPUBLISHED",
+  "listingDuration": "GTC",
+  "includeCatalogProductDetails": true,
+  "hideBuyerDetails": false,
+  "_imageUrls": [
+    "https://www.draftpilot.app/api/images/proxy?url=https%3A%2F%2Fwww.draftpilot.app%2Fapi%2Fimg%3Fk%3Dstaging%252Fgoogle-oauth2_108767599998494531403%252F398a7fbd-f9ec-4f9d-af4b-4619cc90ee07%252F18d96076de2a3579-IMG_20260316_181809.jpg&v=mmtrxlpr",
+    "https://www.draftpilot.app/api/images/proxy?url=https%3A%2F%2Fwww.draftpilot.app%2Fapi%2Fimg%3Fk%3Dstaging%252Fgoogle-oauth2_108767599998494531403%252F398a7fbd-f9ec-4f9d-af4b-4619cc90ee07%252F18b0d70949d3d7d5-IMG_20260316_181818.jpg&v=mmtrxlpr"
+  ],
+  "_draftLogs": {
+    "sku": "product-3",
+    "createdAt": "2026-03-16T22:46:43.211Z",
+    "classification": {
+      "brand": "Truly",
+      "productName": "Unicorn Fruit",
+      "variant": null,
+      "size": null,
+      "packageType": null,
+      "keyText": [
+        "Truly",
+        "Unicorn Fruit",
+        "After Shave Serum"
+      ],
+      "netWeight": null,
+      "categoryPath": "Beauty > Skin Care > Face Serums",
+      "photoQuantity": 1,
+      "bundleInfo": {
+        "isBundle": false,
+        "bundleType": null,
+        "bundleProducts": []
+      }
+    },
+    "pricing": {
+      "timestamp": "2026-03-16T22:46:43.211Z",
+      "brand": "Truly",
+      "productName": "Unicorn Fruit",
+      "sources": [
+        {
+          "source": "Retail (Amazon/Walmart)",
+          "query": "Truly Unicorn Fruit",
+          "results": [
+            {
+              "title": "Amazon",
+              "price": 18,
+              "shipping": 0,
+              "total": 18
+            }
+          ]
+        }
+      ],
+      "finalPrice": 15.3,
+      "finalShipping": 6,
+      "freeShippingApplied": false,
+      "calculations": [
+        {
+          "step": "1. Gather Competitor Prices",
+          "input": {
+            "ebayCompsCount": 0,
+            "retailCompsCount": 1
+          },
+          "output": {
+            "lowestEbayDelivered": "N/A",
+            "amazonPrice": "$18.00",
+            "walmartPrice": "N/A"
+          },
+          "notes": "Search eBay active listings, Amazon, Walmart, Google Shopping for competitor prices"
+        },
+        {
+          "step": "2. Calculate Target Delivered Price",
+          "input": {
+            "soldCount": 0,
+            "soldMedian": "N/A",
+            "soldStrong": false,
+            "competitorFloor": "N/A"
+          },
+          "output": {
+            "targetDeliveredPrice": "$21.30"
+          },
+          "formula": "Target = Amazon $18.00 × 0.85",
+          "notes": "Price based on Amazon listing. Buyer pays item + shipping separately."
+        },
+        {
+          "step": "3. Split Into Item + Shipping",
+          "input": {
+            "targetDelivered": "$21.30",
+            "shippingEstimate": "$6.00",
+            "freeShippingApplied": false
+          },
+          "output": {
+            "itemPrice": "$15.30",
+            "shippingCharge": "$6.00",
+            "subsidyAmount": "$0.00"
+          },
+          "formula": "ItemPrice = TargetDelivered - ShippingCharge",
+          "notes": "Buyer pays shipping separately"
+        },
+        {
+          "step": "4. Final Price Verification",
+          "input": {
+            "itemPrice": "$15.30",
+            "shippingCharge": "$6.00"
+          },
+          "output": {
+            "buyerTotalCost": "$21.30"
+          },
+          "formula": "BuyerTotal = ItemPrice + ShippingCharge",
+          "notes": "This is what the buyer pays at checkout"
+        }
+      ],
+      "reasoning": "Price based on amazon-direct data. Competitive.",
+      "confidence": "medium",
+      "warnings": [],
+      "competitorSummary": {
+        "amazonPrice": 18,
+        "ebayActiveCount": 0,
+        "ebaySoldCount": 0
+      },
+      "searchQuery": {
+        "priceLookupTitle": "Unicorn Fruit",
+        "amazonQuery": "Truly Unicorn Fruit",
+        "ebayQuery": "Truly Unicorn Fruit Beauty > Skin Care > Face Serums After Shave Serum",
+        "googleQuery": "Truly Unicorn Fruit Beauty > Skin Care > Face Serums After Shave Serum",
+        "seoContext": "Beauty > Skin Care > Face Serums After Shave Serum"
+      }
+    },
+    "promotion": {
+      "enabled": true,
+      "rate": 5,
+      "reason": "User-configured promotion rate"
+    },
+    "pricingStatus": "OK",
+    "needsPriceReview": false,
+    "offerId": "133386606011"
+  },
+  "_pricingDebug": {
+    "brand": "Truly",
+    "productName": "Unicorn Fruit",
+    "amazonQuery": "Truly Unicorn Fruit",
+    "priceLookupTitle": "Unicorn Fruit",
+    "confidence": "medium",
+    "reasoning": "Price based on amazon-direct data. Competitive.",
+    "warnings": [],
+    "competitorSummary": {
+      "amazonPrice": 18,
+      "ebayActiveCount": 0,
+      "ebaySoldCount": 0
+    },
+    "amazonUrl": null,
+    "amazonPriceDollars": 18,
+    "walmartUrl": null,
+    "walmartPriceDollars": null,
+    "finalPrice": 15.3
+  }
+}

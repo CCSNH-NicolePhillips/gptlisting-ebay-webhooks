@@ -261,6 +261,45 @@ export async function getPricingDecision(input: PricingInput): Promise<PricingDe
     const amazonResult = await searchAmazonWithFallback(brand, amazonProductQuery, true, productName);
 
     if (amazonResult.price !== null && amazonResult.confidence !== 'low') {
+      // Safety: validate that the Amazon result is actually about the product we searched for.
+      // If fewer than 25% of the non-trivial search terms appear in the result title, the
+      // Amazon search returned a completely unrelated product (e.g. wrong brand/category).
+      // Flag NEEDS_REVIEW instead of auto-pricing at a wrong price.
+      if (amazonResult.title) {
+        const STOP_WORDS = new Set(['the','a','an','and','or','for','in','of','with','by','to','on','at','is','it']);
+        const searchTerms = `${brand} ${productName}`.toLowerCase()
+          .split(/\s+/).filter(t => t.length > 2 && !STOP_WORDS.has(t));
+        if (searchTerms.length >= 3) {
+          const resultLower = amazonResult.title.toLowerCase();
+          const overlap = searchTerms.filter(t => resultLower.includes(t)).length;
+          const overlapRatio = overlap / searchTerms.length;
+          if (overlapRatio < 0.25) {
+            console.warn(
+              `[pricing] amazon_anchored: LOW title overlap ${(overlapRatio * 100).toFixed(0)}% ` +
+              `— searched "${brand} ${productName}" but result is "${amazonResult.title?.slice(0, 70)}" ` +
+              `— flagging NEEDS_REVIEW (titleMismatch)`,
+            );
+            return {
+              status: 'NEEDS_REVIEW',
+              finalItemCents: 0,
+              finalShipCents: 0,
+              warnings: ['titleMismatch', 'manualReviewRequired'],
+              pricingEvidence: {
+                source: 'delivered-v2',
+                mode: 'amazon-anchored',
+                targetDeliveredCents: 0,
+                finalItemCents: 0,
+                finalShipCents: 0,
+                ebayCompsCount: 0,
+                fallbackUsed: true,
+                warnings: ['titleMismatch', 'manualReviewRequired'],
+                manualReviewRequired: true,
+              },
+            };
+          }
+        }
+      }
+
       const amazonPriceCents = Math.round(amazonResult.price * 100);
       const itemCents = Math.max(Math.round(amazonPriceCents * ratio), 199);
       console.log(`[pricing] amazon_anchored: Amazon $${amazonResult.price.toFixed(2)} × ${ratio} = item $${(itemCents / 100).toFixed(2)} + ship $${(shippingCents / 100).toFixed(2)}`);

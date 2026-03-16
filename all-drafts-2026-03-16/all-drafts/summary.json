@@ -1,0 +1,522 @@
+[
+  {
+    "offerId": "133386680011",
+    "sku": "TNmmtrxm5xf12",
+    "marketplaceId": "EBAY_US",
+    "format": "FIXED_PRICE",
+    "listingDescription": "Discover thinbi's NMN formulation, a powerful dietary supplement designed to enhance your cellular health and support anti-aging. By combining NMN, resveratrol, and urolithin, this supplement aims to boost energy metabolism, promote cell longevity, and improve overall wellness. Ideal for adults seeking to maintain vitality and youthfulness, this product supports healthy aging and cellular rejuvenation. Encapsulated in an easy-to-take form, it provides convenience without compromising effectiveness. Specifications: NMN, resveratrol, and urolithin blend, designed for optimal absorption, in a capsule formulation. Made in the United States and crafted with high-quality ingredients to ensure the best results. Perfect for those committed to health-conscious living.",
+    "availableQuantity": 1,
+    "pricingSummary": {
+      "price": {
+        "value": "28.02",
+        "currency": "USD"
+      }
+    },
+    "listingPolicies": {
+      "paymentPolicyId": "245353452026",
+      "returnPolicyId": "245353453026",
+      "fulfillmentPolicyId": "245353454026",
+      "eBayPlusIfEligible": false,
+      "bestOfferTerms": {
+        "bestOfferEnabled": true,
+        "autoAcceptPrice": {
+          "value": "25.22",
+          "currency": "USD"
+        },
+        "autoDeclinePrice": {
+          "value": "16.81",
+          "currency": "USD"
+        }
+      }
+    },
+    "categoryId": "180960",
+    "merchantLocationKey": "primary-location",
+    "tax": {
+      "applyTax": false
+    },
+    "status": "UNPUBLISHED",
+    "listingDuration": "GTC",
+    "includeCatalogProductDetails": true,
+    "hideBuyerDetails": false
+  },
+  {
+    "offerId": "133386671011",
+    "sku": "PLGSRSmmtrxm43m79",
+    "marketplaceId": "EBAY_US",
+    "format": "FIXED_PRICE",
+    "listingDescription": "Discover Peach & Lily's Glass Skin Refining Serum, the ultimate solution for achieving a translucent and luminous complexion. This serum is expertly formulated to hydrate and plump your skin, giving you the enviable 'glass skin' effect. With its lightweight, fast-absorbing formula, it is perfect for anyone seeking to improve skin texture and brightness. Infused with powerhouse ingredients, this serum deeply nourishes and soothes, making it ideal for all skin types. Whether you're dealing with dullness or seeking a dewy glow, this serum meets your skincare needs effortlessly. Specifications: 40ml bottle, powerful hydration, and plumping effect, suitable for daily use. Unlock the secret to radiant skin with Peach & Lily.",
+    "availableQuantity": 1,
+    "pricingSummary": {
+      "price": {
+        "value": "33.15",
+        "currency": "USD"
+      }
+    },
+    "listingPolicies": {
+      "paymentPolicyId": "245353452026",
+      "returnPolicyId": "245353453026",
+      "fulfillmentPolicyId": "245353454026",
+      "eBayPlusIfEligible": false,
+      "bestOfferTerms": {
+        "bestOfferEnabled": true,
+        "autoAcceptPrice": {
+          "value": "29.84",
+          "currency": "USD"
+        },
+        "autoDeclinePrice": {
+          "value": "19.89",
+          "currency": "USD"
+        }
+      }
+    },
+    "categoryId": "20398",
+    "merchantLocationKey": "primary-location",
+    "tax": {
+      "applyTax": false
+    },
+    "status": "UNPUBLISHED",
+    "listingDuration": "GTC",
+    "includeCatalogProductDetails": true,
+    "hideBuyerDetails": false
+  },
+  {
+    "offerId": "133386665011",
+    "sku": "PLGSWGMmmtrxm2eksb",
+    "marketplaceId": "EBAY_US",
+    "format": "FIXED_PRICE",
+    "listingDescription": "Discover the transformative power of Peach & Lily's Glass Skin Water-Gel Moisturizer. This premium skincare solution is designed to give you the dewy, glass-skin complexion you've always desired. Infused with hydrating hyaluronic acid and the antioxidant-rich kiwi extract, this moisturizer delivers deep hydration and rejuvenates dull, tired skin. Its lightweight, water-gel formulation ensures quick absorption, leaving your skin feeling soft and supple without any greasy residue. Perfect for all skin types, it provides an excellent base for makeup application or can be used alone for a natural glow. This moisturizer is a must-have in your daily skincare routine, ensuring optimal hydration while enhancing your skin's natural radiance. Specifications: 1.7 oz / 50 ml bottle, formulated without parabens, sulfates, or phthalates. Dermatologist-tested and cruelty-free, it's suitable for all skin types. Treat your skin to the ultimate hydration experience with Peach & Lily's Glass Skin Water-Gel Moisturizer.",
+    "availableQuantity": 1,
+    "pricingSummary": {
+      "price": {
+        "value": "36.55",
+        "currency": "USD"
+      }
+    },
+    "listingPolicies": {
+      "paymentPolicyId": "245353452026",
+      "returnPolicyId": "245353453026",
+      "fulfillmentPolicyId": "245353454026",
+      "eBayPlusIfEligible": false,
+      "bestOfferTerms": {
+        "bestOfferEnabled": true,
+        "autoAcceptPrice": {
+          "value": "32.89",
+          "currency": "USD"
+        },
+        "autoDeclinePrice": {
+          "value": "21.93",
+          "currency": "USD"
+        }
+      }
+    },
+    "categoryId": "20398",
+    "merchantLocationKey": "primary-location",
+    "tax": {
+      "applyTax": false
+    },
+    "status": "UNPUBLISHED",
+    "listingDuration": "GTC",
+    "includeCatalogProductDetails": true,
+    "hideBuyerDetails": false
+  },
+  {
+    "offerId": "133386649011",
+    "sku": "TNTTTmmtrxlysioh",
+    "marketplaceId": "EBAY_US",
+    "format": "FIXED_PRICE",
+    "listingDescription": "Experience the soothing relief of Thanks! Naturals Tea Tree Tingle Muscle Freeze Roll-On, designed for quick and effective muscle relaxation. Infused with the invigorating scent of peppermint, this roll-on provides an immediate cooling sensation that helps ease muscle stiffness and discomfort. Ideal for athletes, fitness enthusiasts, or anyone in need of refreshing muscle relief. The easy-to-apply roll-on format allows for targeted application, ensuring you get relief exactly where you need it, without any mess. Made with natural ingredients to provide a pleasant and effective muscle recovery experience.",
+    "availableQuantity": 1,
+    "pricingSummary": {
+      "price": {
+        "value": "24.65",
+        "currency": "USD"
+      }
+    },
+    "listingPolicies": {
+      "paymentPolicyId": "245353452026",
+      "returnPolicyId": "245353453026",
+      "fulfillmentPolicyId": "245353454026",
+      "eBayPlusIfEligible": false,
+      "bestOfferTerms": {
+        "bestOfferEnabled": true,
+        "autoAcceptPrice": {
+          "value": "22.18",
+          "currency": "USD"
+        },
+        "autoDeclinePrice": {
+          "value": "14.79",
+          "currency": "USD"
+        }
+      }
+    },
+    "categoryId": "158906",
+    "merchantLocationKey": "primary-location",
+    "tax": {
+      "applyTax": false
+    },
+    "status": "UNPUBLISHED",
+    "listingDuration": "GTC",
+    "includeCatalogProductDetails": true,
+    "hideBuyerDetails": false
+  },
+  {
+    "offerId": "133386628011",
+    "sku": "ASEPmmtrxltckai",
+    "marketplaceId": "EBAY_US",
+    "format": "FIXED_PRICE",
+    "listingDescription": "Discover AGE20's Signature Essence Pact, the premium face makeup solution designed to offer superior coverage while hydrating your skin. This luxurious compact is infused with SPF 50+ to protect your skin from harmful UV rays while providing a flawless finish. Ideal for those who want to maintain a fresh and dewy complexion throughout the day. Its formula combines skincare benefits with aesthetic enhancement, leaving your skin looking radiant and healthy. Perfect for daily use, whether you're heading to work or enjoying a day out. Specifications: The product comes in a compact form with a unique essence-infused formula, ensuring high moisturization and sun protection in one. Try it today and elevate your makeup routine!",
+    "availableQuantity": 1,
+    "pricingSummary": {
+      "price": {
+        "value": "29.75",
+        "currency": "USD"
+      }
+    },
+    "listingPolicies": {
+      "paymentPolicyId": "245353452026",
+      "returnPolicyId": "245353453026",
+      "fulfillmentPolicyId": "245353454026",
+      "eBayPlusIfEligible": false,
+      "bestOfferTerms": {
+        "bestOfferEnabled": true,
+        "autoAcceptPrice": {
+          "value": "26.77",
+          "currency": "USD"
+        },
+        "autoDeclinePrice": {
+          "value": "17.85",
+          "currency": "USD"
+        }
+      }
+    },
+    "categoryId": "260746",
+    "merchantLocationKey": "primary-location",
+    "tax": {
+      "applyTax": false
+    },
+    "status": "UNPUBLISHED",
+    "listingDuration": "GTC",
+    "includeCatalogProductDetails": true,
+    "hideBuyerDetails": false
+  },
+  {
+    "offerId": "133386634011",
+    "sku": "BDmmtrxlv32iy",
+    "marketplaceId": "EBAY_US",
+    "format": "FIXED_PRICE",
+    "listingDescription": "Experience the ultimate relaxation with Beam Dream Cinnamon Cocoa Flavored Powder, a premium dietary supplement designed to support restful sleep and relaxation. This uniquely flavored cocoa supplement combines the warmth of cinnamon and the rich taste of cocoa to provide a comforting bedtime ritual. Perfect for those seeking to enhance their sleep quality, Dream is formulated with natural ingredients to help you unwind and prepare for a rejuvenating night. Simply mix with warm milk or water to enjoy a soothing, sleep-enhancing beverage. Whether you're looking to alleviate occasional sleeplessness or establish a calming nightly routine, this supplement is an ideal choice. Product specifications include its soothing cinnamon cocoa flavor, supportive natural ingredients, and convenient powder formulation for easy mixing. Discover how Dream can transform your evenings for the better.",
+    "availableQuantity": 1,
+    "pricingSummary": {
+      "price": {
+        "value": "46.74",
+        "currency": "USD"
+      }
+    },
+    "listingPolicies": {
+      "paymentPolicyId": "245353452026",
+      "returnPolicyId": "245353453026",
+      "fulfillmentPolicyId": "247278755026",
+      "eBayPlusIfEligible": false,
+      "bestOfferTerms": {
+        "bestOfferEnabled": true,
+        "autoAcceptPrice": {
+          "value": "42.07",
+          "currency": "USD"
+        },
+        "autoDeclinePrice": {
+          "value": "28.04",
+          "currency": "USD"
+        }
+      }
+    },
+    "categoryId": "180960",
+    "merchantLocationKey": "primary-location",
+    "tax": {
+      "applyTax": false
+    },
+    "status": "UNPUBLISHED",
+    "listingDuration": "GTC",
+    "includeCatalogProductDetails": true,
+    "hideBuyerDetails": false
+  },
+  {
+    "offerId": "133386612011",
+    "sku": "TSLmmtrxlprh0x",
+    "marketplaceId": "EBAY_US",
+    "format": "FIXED_PRICE",
+    "listingDescription": "Introducing Truly's Smooth Legend After Shave Serum, the ultimate solution for a soothing post-shave experience. This premium skincare product calms and hydrates your skin, leaving it smooth and refreshed. Ideal for those looking to reduce post-shave irritation, this serum ensures your skin feels luxurious and rejuvenated. Formulated with high-quality ingredients, it absorbs quickly without leaving a greasy finish. Perfect for all skin types, this serum is a must-have in your grooming routine. Specifications: 2 fl oz bottle with a sleek design, featuring top-quality ingredients guaranteed to enhance your skin's natural appearance. Make this exceptional after shave serum a staple in your daily regimen.",
+    "availableQuantity": 1,
+    "pricingSummary": {
+      "price": {
+        "value": "28.05",
+        "currency": "USD"
+      }
+    },
+    "listingPolicies": {
+      "paymentPolicyId": "245353452026",
+      "returnPolicyId": "245353453026",
+      "fulfillmentPolicyId": "245353454026",
+      "eBayPlusIfEligible": false,
+      "bestOfferTerms": {
+        "bestOfferEnabled": true,
+        "autoAcceptPrice": {
+          "value": "25.25",
+          "currency": "USD"
+        },
+        "autoDeclinePrice": {
+          "value": "16.83",
+          "currency": "USD"
+        }
+      }
+    },
+    "categoryId": "20398",
+    "merchantLocationKey": "primary-location",
+    "tax": {
+      "applyTax": false
+    },
+    "status": "UNPUBLISHED",
+    "listingDuration": "GTC",
+    "includeCatalogProductDetails": true,
+    "hideBuyerDetails": false
+  },
+  {
+    "offerId": "133386606011",
+    "sku": "TUFmmtrxlnw8v1",
+    "marketplaceId": "EBAY_US",
+    "format": "FIXED_PRICE",
+    "listingDescription": "Discover Truly's Unicorn Fruit After Shave Serum, the ultimate solution for post-shave hydration and soothing. Infused with a delightful citrus essence, this lightweight serum is designed to calm and nourish your skin, leaving it smooth and refreshed. Ideal for sensitive skin, the serum is formulated with cruelty-free and vegan-friendly ingredients, ensuring a gentle and ethical skincare experience. Packed in a convenient size, it fits perfectly into your skincare routine. Perfect for both men and women who seek to enhance their shaving routine with a touch of luxury.",
+    "availableQuantity": 1,
+    "pricingSummary": {
+      "price": {
+        "value": "15.3",
+        "currency": "USD"
+      }
+    },
+    "listingPolicies": {
+      "paymentPolicyId": "245353452026",
+      "returnPolicyId": "245353453026",
+      "fulfillmentPolicyId": "245353454026",
+      "eBayPlusIfEligible": false,
+      "bestOfferTerms": {
+        "bestOfferEnabled": true,
+        "autoAcceptPrice": {
+          "value": "13.77",
+          "currency": "USD"
+        },
+        "autoDeclinePrice": {
+          "value": "9.18",
+          "currency": "USD"
+        }
+      }
+    },
+    "categoryId": "180950",
+    "merchantLocationKey": "primary-location",
+    "tax": {
+      "applyTax": false
+    },
+    "status": "UNPUBLISHED",
+    "listingDuration": "GTC",
+    "includeCatalogProductDetails": true,
+    "hideBuyerDetails": false
+  },
+  {
+    "offerId": "133386600011",
+    "sku": "ILNmmtrxlm2gmi",
+    "marketplaceId": "EBAY_US",
+    "format": "FIXED_PRICE",
+    "listingDescription": "Discover inGreens Liposomal NAD+, a cutting-edge dietary supplement designed to enhance your cellular energy and support overall health. Packed with 1800MG of NAD+, this unflavored formulation is ideal for those seeking the benefits of NAD+ without the addition of artificial flavors. Each dose helps support anti-aging processes, metabolism, and cellular regeneration, making it a perfect choice for health-conscious adults aiming to optimize their vitality and longevity. Key features include a potent liposomal delivery system for enhanced absorption, allowing NAD+ to penetrate more effectively at the cellular level. This supplement is perfect for adults looking to boost their energy levels, improve metabolic function, and promote healthier aging. Specifications: 1800MG NAD+ per serving, Liposomal formulation for superior absorption, Unflavored for versatile use, Suitable for daily consumption, Non-GMO and vegan-friendly. Embrace the power of inGreens Liposomal NAD+ and rejuvenate your cells with every dose!",
+    "availableQuantity": 1,
+    "pricingSummary": {
+      "price": {
+        "value": "29.74",
+        "currency": "USD"
+      }
+    },
+    "listingPolicies": {
+      "paymentPolicyId": "245353452026",
+      "returnPolicyId": "245353453026",
+      "fulfillmentPolicyId": "245353454026",
+      "eBayPlusIfEligible": false,
+      "bestOfferTerms": {
+        "bestOfferEnabled": true,
+        "autoAcceptPrice": {
+          "value": "26.77",
+          "currency": "USD"
+        },
+        "autoDeclinePrice": {
+          "value": "17.84",
+          "currency": "USD"
+        }
+      }
+    },
+    "categoryId": "180960",
+    "merchantLocationKey": "primary-location",
+    "tax": {
+      "applyTax": false
+    },
+    "status": "UNPUBLISHED",
+    "listingDuration": "GTC",
+    "includeCatalogProductDetails": true,
+    "hideBuyerDetails": false
+  },
+  {
+    "offerId": "133386596011",
+    "sku": "TPBPmmtrxlk5vn7",
+    "marketplaceId": "EBAY_US",
+    "format": "FIXED_PRICE",
+    "listingDescription": "Introducing Truvani Plant Based Protein in a delectable Mint Chocolate flavor – the perfect choice for those who seek a delicious and nutritious supplement to enhance their daily protein intake. Crafted with high-quality, organic ingredients, this protein powder supports muscle growth, recovery, and overall wellness. Enjoy the rich combination of cocoa and refreshing mint with every serving. Perfect for health-conscious individuals and athletes looking for a clean, plant-based protein source. Specifications include a rich blend of organic pea and pumpkin seed protein, with added benefits of MCT oil powder to naturally boost energy. Made without artificial sweeteners, this gluten-free and soy-free formula is suitable for vegans and those with dietary restrictions. Unleash the power of plants and support your active lifestyle with Truvani's irresistible protein solution.",
+    "availableQuantity": 1,
+    "pricingSummary": {
+      "price": {
+        "value": "38.24",
+        "currency": "USD"
+      }
+    },
+    "listingPolicies": {
+      "paymentPolicyId": "245353452026",
+      "returnPolicyId": "245353453026",
+      "fulfillmentPolicyId": "245353454026",
+      "eBayPlusIfEligible": false,
+      "bestOfferTerms": {
+        "bestOfferEnabled": true,
+        "autoAcceptPrice": {
+          "value": "34.42",
+          "currency": "USD"
+        },
+        "autoDeclinePrice": {
+          "value": "22.94",
+          "currency": "USD"
+        }
+      }
+    },
+    "categoryId": "180960",
+    "merchantLocationKey": "primary-location",
+    "tax": {
+      "applyTax": false
+    },
+    "status": "UNPUBLISHED",
+    "listingDuration": "GTC",
+    "includeCatalogProductDetails": true,
+    "hideBuyerDetails": false
+  },
+  {
+    "offerId": "132921180011",
+    "sku": "RRGmmsglfr65t6",
+    "marketplaceId": "EBAY_US",
+    "format": "FIXED_PRICE",
+    "listingDescription": "Discover Root ReLive Greens, the premium dietary supplement powder formulated to enhance your overall wellness. Packed with essential nutrients, this superfood blend supports energy, detoxification, and immune function. Perfect for individuals seeking a convenient and delicious way to incorporate greens into their daily regimen. Mix easily into water, smoothies, or your favorite beverage for a natural energy boost. Specifications: ReLive Greens, Dietary Supplement, Natural Flavor, Powder formulation. Features include Non-GMO, Vegan, and Gluten-Free. Unleash the power of nature with Root's ReLive Greens today!",
+    "availableQuantity": 1,
+    "pricingSummary": {
+      "price": {
+        "value": "20.36",
+        "currency": "USD"
+      }
+    },
+    "listingPolicies": {
+      "paymentPolicyId": "245353452026",
+      "returnPolicyId": "245353453026",
+      "fulfillmentPolicyId": "245353454026",
+      "eBayPlusIfEligible": false,
+      "bestOfferTerms": {
+        "bestOfferEnabled": true,
+        "autoAcceptPrice": {
+          "value": "18.32",
+          "currency": "USD"
+        },
+        "autoDeclinePrice": {
+          "value": "12.22",
+          "currency": "USD"
+        }
+      }
+    },
+    "categoryId": "180960",
+    "merchantLocationKey": "primary-location",
+    "tax": {
+      "applyTax": false
+    },
+    "status": "UNPUBLISHED",
+    "listingDuration": "GTC",
+    "includeCatalogProductDetails": true,
+    "hideBuyerDetails": false
+  },
+  {
+    "offerId": "132931167011",
+    "sku": "KVMmmshlp9m360",
+    "marketplaceId": "EBAY_US",
+    "format": "FIXED_PRICE",
+    "listingDescription": "Experience the rejuvenating benefits of ki Vinoreset Mist, a premium face mist designed to enhance skin hydration and vitality. This refreshing mist is perfect for anyone looking to revitalize and hydrate their skin throughout the day. With its lightweight formulation and easy application, it's a must-have addition to your skincare routine. The mist is expertly crafted to soothe and refresh your skin, leaving it feeling soft and revitalized. Ideal for all skin types, it can be used as a part of your morning routine or as a mid-day skin refresher. Carry it with you for a quick hydration boost anytime. Specifications: Contains 80ml of Vinoreset Mist, formulated without artificial fragrances, ensuring a natural and gentle experience for your skin.",
+    "availableQuantity": 1,
+    "pricingSummary": {
+      "price": {
+        "value": "13.6",
+        "currency": "USD"
+      }
+    },
+    "listingPolicies": {
+      "paymentPolicyId": "245353452026",
+      "returnPolicyId": "245353453026",
+      "fulfillmentPolicyId": "245353454026",
+      "eBayPlusIfEligible": false,
+      "bestOfferTerms": {
+        "bestOfferEnabled": true,
+        "autoAcceptPrice": {
+          "value": "12.24",
+          "currency": "USD"
+        },
+        "autoDeclinePrice": {
+          "value": "8.16",
+          "currency": "USD"
+        }
+      }
+    },
+    "categoryId": "260746",
+    "merchantLocationKey": "primary-location",
+    "tax": {
+      "applyTax": false
+    },
+    "status": "UNPUBLISHED",
+    "listingDuration": "GTC",
+    "includeCatalogProductDetails": true,
+    "hideBuyerDetails": false
+  },
+  {
+    "offerId": "132931186011",
+    "sku": "BBLmmshlph6srt",
+    "marketplaceId": "EBAY_US",
+    "format": "FIXED_PRICE",
+    "listingDescription": "Discover BetterBrand Better Lungs, a specially formulated dietary supplement designed to support optimal lung health and respiratory function. With a potent blend of Mullein and Chlorophyll, this supplement helps to cleanse and fortify your respiratory system, ensuring you breathe with ease and vitality. Key features of this product include its vegan-friendly composition and its commitment to using only natural ingredients that promote lung health. Whether you're an athlete striving for peak performance or someone seeking to enhance your daily breathing, Better Lungs is the perfect support for vibrant respiratory health. This vegan, non-GMO supplement is ideal for adults looking to maintain their respiratory well-being. Specifications: 60 capsules per bottle, made in the USA with high-quality Mullein and Chlorophyll. Start your journey to better breathing today with BetterBrand Better Lungs.",
+    "availableQuantity": 1,
+    "pricingSummary": {
+      "price": {
+        "value": "29.71",
+        "currency": "USD"
+      }
+    },
+    "listingPolicies": {
+      "paymentPolicyId": "245353452026",
+      "returnPolicyId": "245353453026",
+      "fulfillmentPolicyId": "245353454026",
+      "eBayPlusIfEligible": false,
+      "bestOfferTerms": {
+        "bestOfferEnabled": true,
+        "autoAcceptPrice": {
+          "value": "26.74",
+          "currency": "USD"
+        },
+        "autoDeclinePrice": {
+          "value": "17.83",
+          "currency": "USD"
+        }
+      }
+    },
+    "categoryId": "180960",
+    "merchantLocationKey": "primary-location",
+    "tax": {
+      "applyTax": false
+    },
+    "status": "UNPUBLISHED",
+    "listingDuration": "GTC",
+    "includeCatalogProductDetails": true,
+    "hideBuyerDetails": false
+  }
+]

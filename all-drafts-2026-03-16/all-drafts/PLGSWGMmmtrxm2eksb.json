@@ -1,0 +1,188 @@
+{
+  "offerId": "133386665011",
+  "sku": "PLGSWGMmmtrxm2eksb",
+  "marketplaceId": "EBAY_US",
+  "format": "FIXED_PRICE",
+  "listingDescription": "Discover the transformative power of Peach & Lily's Glass Skin Water-Gel Moisturizer. This premium skincare solution is designed to give you the dewy, glass-skin complexion you've always desired. Infused with hydrating hyaluronic acid and the antioxidant-rich kiwi extract, this moisturizer delivers deep hydration and rejuvenates dull, tired skin. Its lightweight, water-gel formulation ensures quick absorption, leaving your skin feeling soft and supple without any greasy residue. Perfect for all skin types, it provides an excellent base for makeup application or can be used alone for a natural glow. This moisturizer is a must-have in your daily skincare routine, ensuring optimal hydration while enhancing your skin's natural radiance. Specifications: 1.7 oz / 50 ml bottle, formulated without parabens, sulfates, or phthalates. Dermatologist-tested and cruelty-free, it's suitable for all skin types. Treat your skin to the ultimate hydration experience with Peach & Lily's Glass Skin Water-Gel Moisturizer.",
+  "availableQuantity": 1,
+  "pricingSummary": {
+    "price": {
+      "value": "36.55",
+      "currency": "USD"
+    }
+  },
+  "listingPolicies": {
+    "paymentPolicyId": "245353452026",
+    "returnPolicyId": "245353453026",
+    "fulfillmentPolicyId": "245353454026",
+    "eBayPlusIfEligible": false,
+    "bestOfferTerms": {
+      "bestOfferEnabled": true,
+      "autoAcceptPrice": {
+        "value": "32.89",
+        "currency": "USD"
+      },
+      "autoDeclinePrice": {
+        "value": "21.93",
+        "currency": "USD"
+      }
+    }
+  },
+  "categoryId": "20398",
+  "merchantLocationKey": "primary-location",
+  "tax": {
+    "applyTax": false
+  },
+  "status": "UNPUBLISHED",
+  "listingDuration": "GTC",
+  "includeCatalogProductDetails": true,
+  "hideBuyerDetails": false,
+  "_imageUrls": [
+    "https://www.draftpilot.app/api/images/proxy?url=https%3A%2F%2Fwww.draftpilot.app%2Fapi%2Fimg%3Fk%3Dstaging%252Fgoogle-oauth2_108767599998494531403%252F398a7fbd-f9ec-4f9d-af4b-4619cc90ee07%252F0fe39f98276df7ff-IMG_20260316_182301.jpg&v=mmtrxm43",
+    "https://www.draftpilot.app/api/images/proxy?url=https%3A%2F%2Fwww.draftpilot.app%2Fapi%2Fimg%3Fk%3Dstaging%252Fgoogle-oauth2_108767599998494531403%252F398a7fbd-f9ec-4f9d-af4b-4619cc90ee07%252F8907247005937a34-IMG_20260316_182310.jpg&v=mmtrxm43"
+  ],
+  "_draftLogs": {
+    "sku": "product-11",
+    "createdAt": "2026-03-16T22:47:25.768Z",
+    "classification": {
+      "brand": "Peach & Lily",
+      "productName": "Glass Skin Water-Gel Moisturizer",
+      "variant": null,
+      "size": null,
+      "packageType": null,
+      "keyText": [
+        "Peach & Lily",
+        "Glass Skin Water-Gel Moisturizer",
+        "Hyaluronic Acid + Kiwi Extract"
+      ],
+      "netWeight": null,
+      "categoryPath": "Beauty > Skin Care > Moisturizers",
+      "photoQuantity": 1,
+      "bundleInfo": {
+        "isBundle": false,
+        "bundleType": null,
+        "bundleProducts": []
+      }
+    },
+    "pricing": {
+      "timestamp": "2026-03-16T22:47:25.768Z",
+      "brand": "Peach & Lily",
+      "productName": "Glass Skin Water-Gel Moisturizer",
+      "sources": [
+        {
+          "source": "Retail (Amazon/Walmart)",
+          "query": "Peach & Lily Glass Skin Water-Gel Moisturizer",
+          "results": [
+            {
+              "title": "Amazon",
+              "price": 43,
+              "shipping": 0,
+              "total": 43
+            }
+          ]
+        }
+      ],
+      "finalPrice": 36.55,
+      "finalShipping": 6,
+      "freeShippingApplied": false,
+      "calculations": [
+        {
+          "step": "1. Gather Competitor Prices",
+          "input": {
+            "ebayCompsCount": 0,
+            "retailCompsCount": 1
+          },
+          "output": {
+            "lowestEbayDelivered": "N/A",
+            "amazonPrice": "$43.00",
+            "walmartPrice": "N/A"
+          },
+          "notes": "Search eBay active listings, Amazon, Walmart, Google Shopping for competitor prices"
+        },
+        {
+          "step": "2. Calculate Target Delivered Price",
+          "input": {
+            "soldCount": 0,
+            "soldMedian": "N/A",
+            "soldStrong": false,
+            "competitorFloor": "N/A"
+          },
+          "output": {
+            "targetDeliveredPrice": "$42.55"
+          },
+          "formula": "Target = Amazon $43.00 × 0.85",
+          "notes": "Price based on Amazon listing. Buyer pays item + shipping separately."
+        },
+        {
+          "step": "3. Split Into Item + Shipping",
+          "input": {
+            "targetDelivered": "$42.55",
+            "shippingEstimate": "$6.00",
+            "freeShippingApplied": false
+          },
+          "output": {
+            "itemPrice": "$36.55",
+            "shippingCharge": "$6.00",
+            "subsidyAmount": "$0.00"
+          },
+          "formula": "ItemPrice = TargetDelivered - ShippingCharge",
+          "notes": "Buyer pays shipping separately"
+        },
+        {
+          "step": "4. Final Price Verification",
+          "input": {
+            "itemPrice": "$36.55",
+            "shippingCharge": "$6.00"
+          },
+          "output": {
+            "buyerTotalCost": "$42.55"
+          },
+          "formula": "BuyerTotal = ItemPrice + ShippingCharge",
+          "notes": "This is what the buyer pays at checkout"
+        }
+      ],
+      "reasoning": "Price based on amazon-direct data. Competitive.",
+      "confidence": "medium",
+      "warnings": [],
+      "competitorSummary": {
+        "amazonPrice": 43,
+        "ebayActiveCount": 0,
+        "ebaySoldCount": 0
+      },
+      "searchQuery": {
+        "priceLookupTitle": "Glass Skin Water-Gel Moisturizer",
+        "amazonQuery": "Peach & Lily Glass Skin Water-Gel Moisturizer",
+        "ebayQuery": "Peach & Lily Glass Skin Water-Gel Moisturizer Beauty > Skin Care > Moisturizers Hyaluronic Acid + Kiwi Extract",
+        "googleQuery": "Peach & Lily Glass Skin Water-Gel Moisturizer Beauty > Skin Care > Moisturizers Hyaluronic Acid + Kiwi Extract",
+        "seoContext": "Beauty > Skin Care > Moisturizers Hyaluronic Acid + Kiwi Extract"
+      }
+    },
+    "promotion": {
+      "enabled": true,
+      "rate": 5,
+      "reason": "User-configured promotion rate"
+    },
+    "pricingStatus": "OK",
+    "needsPriceReview": false,
+    "offerId": "133386665011"
+  },
+  "_pricingDebug": {
+    "brand": "Peach & Lily",
+    "productName": "Glass Skin Water-Gel Moisturizer",
+    "amazonQuery": "Peach & Lily Glass Skin Water-Gel Moisturizer",
+    "priceLookupTitle": "Glass Skin Water-Gel Moisturizer",
+    "confidence": "medium",
+    "reasoning": "Price based on amazon-direct data. Competitive.",
+    "warnings": [],
+    "competitorSummary": {
+      "amazonPrice": 43,
+      "ebayActiveCount": 0,
+      "ebaySoldCount": 0
+    },
+    "amazonUrl": null,
+    "amazonPriceDollars": 43,
+    "walmartUrl": null,
+    "walmartPriceDollars": null,
+    "finalPrice": 36.55
+  }
+}
