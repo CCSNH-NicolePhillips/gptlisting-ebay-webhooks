@@ -628,23 +628,17 @@ async function lookupAmazonByAsin(
     const data: Record<string, any> = await response.json();
     const product = data.product ?? data;
 
-    // Extract price from various field names SearchAPI may use.
-    // IMPORTANT: prefer buybox_price (the actual "Add to Cart" price) over product.price,
-    // because for items on sale, product.price is the crossed-out MSRP/list price while
-    // buybox_price is what the buyer actually pays today.
-    // Never use list_price — that is always the MSRP/retail price.
-    const rawPrice =
-      product.buybox_price ??     // actual current Add-to-Cart price (preferred)
-      product.price ??            // may be MSRP for sale items — fallback only
-      product.typical_price ??
+    // SearchAPI amazon_product engine nests the current price inside product.buybox.price.value.
+    // product.buybox_price / product.price (flat number) do NOT exist in this engine's schema.
+    // Extract in priority order: buybox current price → buybox original price → any flat fallback.
+    const rawPrice: number | null =
+      (typeof product.buybox?.price?.value === 'number' ? product.buybox.price.value : null) ??
+      (typeof product.buybox?.original_price?.value === 'number' ? product.buybox.original_price.value : null) ??
+      (typeof product.buybox_price === 'number' ? product.buybox_price : null) ??    // other engines
+      (typeof product.price === 'number' ? product.price : null) ??                   // fallback
       null;
 
-    const price =
-      typeof rawPrice === 'number'
-        ? rawPrice
-        : typeof rawPrice === 'string'
-        ? parseFloat(rawPrice.replace(/[^0-9.]/g, ''))
-        : null;
+    const price = rawPrice !== null && rawPrice > 0 ? rawPrice : null;
 
     const title = product.title ?? product.name ?? null;
     const detectedBrand = product.brand ?? product.manufacturer ?? null;

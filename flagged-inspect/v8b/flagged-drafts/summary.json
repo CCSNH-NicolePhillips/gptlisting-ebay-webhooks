@@ -1,0 +1,42 @@
+[
+  {
+    "offerId": "132921169011",
+    "sku": "KVMmmsglfm4dtu",
+    "marketplaceId": "EBAY_US",
+    "format": "FIXED_PRICE",
+    "listingDescription": "Discover the ki Vinoreset Mist, a premium face mist designed to refresh and hydrate your skin instantly. This carefully formulated skincare product is perfect for revitalizing tired skin and provides a burst of freshness throughout the day. With a hydrating formula in a convenient 80ml spray bottle, it's an essential addition to your skincare routine. Ideal for all skin types, the Vinoreset Mist helps maintain moisture and enhances your skin's natural radiance without leaving any residue. Use it as a midday refresher or to set your makeup for a dewy look. Restore your skin's vitality with the ki Vinoreset Mist, offering a natural and effective solution for hydration.",
+    "availableQuantity": 1,
+    "pricingSummary": {
+      "price": {
+        "value": "16.78",
+        "currency": "USD"
+      }
+    },
+    "listingPolicies": {
+      "paymentPolicyId": "245353452026",
+      "returnPolicyId": "245353453026",
+      "fulfillmentPolicyId": "245353454026",
+      "eBayPlusIfEligible": false,
+      "bestOfferTerms": {
+        "bestOfferEnabled": true,
+        "autoAcceptPrice": {
+          "value": "15.1",
+          "currency": "USD"
+        },
+        "autoDeclinePrice": {
+          "value": "10.07",
+          "currency": "USD"
+        }
+      }
+    },
+    "categoryId": "260746",
+    "merchantLocationKey": "primary-location",
+    "tax": {
+      "applyTax": false
+    },
+    "status": "UNPUBLISHED",
+    "listingDuration": "GTC",
+    "includeCatalogProductDetails": true,
+    "hideBuyerDetails": false
+  }
+]

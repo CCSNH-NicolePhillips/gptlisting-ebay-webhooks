@@ -94,6 +94,13 @@ export async function searchRainforestByBrand(
     return { ...noMatch, reasoning: 'no brand supplied' };
   }
 
+  // Very short brand names (≤2 chars like "ki", "rx") produce garbage Amazon search results
+  // because Amazon's brand filter isn't specific enough. Skip and fall through to keyword search.
+  if (brand.trim().length <= 2) {
+    console.log(`[rainforest] Brand "${brand}" too short for reliable search — skipping`);
+    return { ...noMatch, reasoning: `brand too short ("${brand}")` };
+  }
+
   console.log(`[rainforest] Searching brand="${brand}" product="${productName}"`);
 
   let rawResults: any[];

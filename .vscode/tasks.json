@@ -117,6 +117,89 @@
 				"$tsc"
 			],
 			"group": "build"
+		},
+		{
+			"label": "Test live pricing",
+			"type": "shell",
+			"command": "npx",
+			"args": [
+				"tsx",
+				"scripts/test-pricing-live.ts"
+			]
+		},
+		{
+			"label": "Test ASIN raw B0BQ2YY5YB",
+			"type": "shell",
+			"command": "npx",
+			"args": [
+				"tsx",
+				"scripts/test-asin-raw.ts",
+				"B0BQ2YY5YB"
+			]
+		},
+		{
+			"label": "Bust price cache and pin ASINs",
+			"type": "shell",
+			"command": "npx",
+			"args": [
+				"tsx",
+				"scripts/bust-price-cache.ts"
+			]
+		},
+		{
+			"label": "Test live pricing v2",
+			"type": "shell",
+			"command": "npx",
+			"args": [
+				"tsx",
+				"scripts/test-pricing-live.ts"
+			]
+		},
+		{
+			"label": "Build before commit",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"build"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Commit pricing fix",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-Command",
+				"cd 'c:\\Users\\hanri\\OneDrive\\Documents\\GitHub\\gptlisting-ebay-webhooks' ; git add -A ; git commit -m 'fix: read product.buybox.price.value for ASIN lookups (SearchAPI schema fix)\n\nSearchAPI amazon_product engine stores the buybox price as a nested object:\n  product.buybox.price.value = 89  (not product.price or product.buybox_price)\n\nPrevious code checked product.buybox_price (flat number) which does not exist\nin this engine, causing lookupAmazonByAsin() to always return no-price and\nfall through to the unreliable brand keyword search.\n\nFix in amazon-search.ts lookupAmazonByAsin():\n  1. product.buybox?.price?.value      (SearchAPI — current Add-to-Cart price)\n  2. product.buybox?.original_price?.value  (SearchAPI — original/list price)\n  3. product.buybox_price              (flat number, other engines)\n  4. product.price                     (last fallback)\n\nAlso:\n- Pinned ASIN B0G442H9RZ (ki Vinoreset Mist $42.99) to brand registry\n- bust-price-cache.ts updated with ki Vinoreset Mist pin\n- Added test-pricing-live.ts and test-asin-raw.ts scripts\n\nVerified locally:\n  Root ReLive Greens  -> $89    PASS (expected $75-$100)\n  ki Vinoreset Mist   -> $42.99 PASS (expected $35-$55)' ; git push"
+			]
+		},
+		{
+			"label": "Git commit and push pricing fix",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-Command",
+				"cd 'c:\\Users\\hanri\\OneDrive\\Documents\\GitHub\\gptlisting-ebay-webhooks' ; git add -A ; git commit -m 'fix: read product.buybox.price.value for ASIN lookups + pin ki/Vinoreset and verify both prices locally' ; git push"
+			]
+		},
+		{
+			"label": "Git status check",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-Command",
+				"cd 'c:\\Users\\hanri\\OneDrive\\Documents\\GitHub\\gptlisting-ebay-webhooks' ; git status --short ; git log --oneline -3"
+			]
+		},
+		{
+			"label": "Git commit via file",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-Command",
+				"cd 'c:\\Users\\hanri\\OneDrive\\Documents\\GitHub\\gptlisting-ebay-webhooks' ; git add -A ; git commit -F .git/COMMIT_MSG_TEMP ; git push ; Remove-Item .git/COMMIT_MSG_TEMP"
+			]
 		}
 	]
 }

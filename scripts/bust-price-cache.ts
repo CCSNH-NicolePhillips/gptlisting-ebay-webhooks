@@ -21,6 +21,7 @@ const ENTRIES = [
 // Correct ASIN pins — overwrite any bad auto-discovered ASIN with the verified one
 const ASIN_PINS: { brand: string; product: string; asin: string }[] = [
   { brand: 'Root', product: 'ReLive Greens', asin: 'B0BQ2YY5YB' },
+  { brand: 'ki',   product: 'Vinoreset Mist', asin: 'B0G442H9RZ' },
 ];
 
 async function main() {

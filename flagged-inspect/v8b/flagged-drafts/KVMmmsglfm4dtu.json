@@ -1,0 +1,188 @@
+{
+  "offerId": "132921169011",
+  "sku": "KVMmmsglfm4dtu",
+  "marketplaceId": "EBAY_US",
+  "format": "FIXED_PRICE",
+  "listingDescription": "Discover the ki Vinoreset Mist, a premium face mist designed to refresh and hydrate your skin instantly. This carefully formulated skincare product is perfect for revitalizing tired skin and provides a burst of freshness throughout the day. With a hydrating formula in a convenient 80ml spray bottle, it's an essential addition to your skincare routine. Ideal for all skin types, the Vinoreset Mist helps maintain moisture and enhances your skin's natural radiance without leaving any residue. Use it as a midday refresher or to set your makeup for a dewy look. Restore your skin's vitality with the ki Vinoreset Mist, offering a natural and effective solution for hydration.",
+  "availableQuantity": 1,
+  "pricingSummary": {
+    "price": {
+      "value": "16.78",
+      "currency": "USD"
+    }
+  },
+  "listingPolicies": {
+    "paymentPolicyId": "245353452026",
+    "returnPolicyId": "245353453026",
+    "fulfillmentPolicyId": "245353454026",
+    "eBayPlusIfEligible": false,
+    "bestOfferTerms": {
+      "bestOfferEnabled": true,
+      "autoAcceptPrice": {
+        "value": "15.1",
+        "currency": "USD"
+      },
+      "autoDeclinePrice": {
+        "value": "10.07",
+        "currency": "USD"
+      }
+    }
+  },
+  "categoryId": "260746",
+  "merchantLocationKey": "primary-location",
+  "tax": {
+    "applyTax": false
+  },
+  "status": "UNPUBLISHED",
+  "listingDuration": "GTC",
+  "includeCatalogProductDetails": true,
+  "hideBuyerDetails": false,
+  "_imageUrls": [
+    "https://www.draftpilot.app/api/images/proxy?url=https%3A%2F%2Fwww.draftpilot.app%2Fapi%2Fimg%3Fk%3Dstaging%252Fgoogle-oauth2_108767599998494531403%252F309c7092-fb6e-4359-8a37-e7a6257eb48e%252F3ffe5854d7d8679d-IMG_20260315_155328.jpg&v=mmsglfns",
+    "https://www.draftpilot.app/api/images/proxy?url=https%3A%2F%2Fwww.draftpilot.app%2Fapi%2Fimg%3Fk%3Dstaging%252Fgoogle-oauth2_108767599998494531403%252F309c7092-fb6e-4359-8a37-e7a6257eb48e%252Fe13c89a8a8c67919-IMG_20260315_155342.jpg&v=mmsglfnt"
+  ],
+  "_draftLogs": {
+    "sku": "product-5",
+    "createdAt": "2026-03-16T00:42:17.021Z",
+    "classification": {
+      "brand": "ki",
+      "productName": "Vinoreset Mist",
+      "variant": null,
+      "size": null,
+      "packageType": null,
+      "keyText": [
+        "ki",
+        "Vinoreset Mist",
+        "80ml"
+      ],
+      "netWeight": null,
+      "categoryPath": "Beauty > Skin Care > Face Mists",
+      "photoQuantity": 1,
+      "bundleInfo": {
+        "isBundle": false,
+        "bundleType": null,
+        "bundleProducts": []
+      }
+    },
+    "pricing": {
+      "timestamp": "2026-03-16T00:42:17.021Z",
+      "brand": "ki",
+      "productName": "Vinoreset Mist",
+      "sources": [
+        {
+          "source": "Retail (Amazon/Walmart)",
+          "query": "ki Vinoreset Mist",
+          "results": [
+            {
+              "title": "Amazon",
+              "price": 19.74,
+              "shipping": 0,
+              "total": 19.74
+            }
+          ]
+        }
+      ],
+      "finalPrice": 16.78,
+      "finalShipping": 6,
+      "freeShippingApplied": false,
+      "calculations": [
+        {
+          "step": "1. Gather Competitor Prices",
+          "input": {
+            "ebayCompsCount": 0,
+            "retailCompsCount": 1
+          },
+          "output": {
+            "lowestEbayDelivered": "N/A",
+            "amazonPrice": "$19.74",
+            "walmartPrice": "N/A"
+          },
+          "notes": "Search eBay active listings, Amazon, Walmart, Google Shopping for competitor prices"
+        },
+        {
+          "step": "2. Calculate Target Delivered Price",
+          "input": {
+            "soldCount": 0,
+            "soldMedian": "N/A",
+            "soldStrong": false,
+            "competitorFloor": "N/A"
+          },
+          "output": {
+            "targetDeliveredPrice": "$22.78"
+          },
+          "formula": "Target = Amazon $19.74 × 0.85",
+          "notes": "Price based on Amazon listing. Buyer pays item + shipping separately."
+        },
+        {
+          "step": "3. Split Into Item + Shipping",
+          "input": {
+            "targetDelivered": "$22.78",
+            "shippingEstimate": "$6.00",
+            "freeShippingApplied": false
+          },
+          "output": {
+            "itemPrice": "$16.78",
+            "shippingCharge": "$6.00",
+            "subsidyAmount": "$0.00"
+          },
+          "formula": "ItemPrice = TargetDelivered - ShippingCharge",
+          "notes": "Buyer pays shipping separately"
+        },
+        {
+          "step": "4. Final Price Verification",
+          "input": {
+            "itemPrice": "$16.78",
+            "shippingCharge": "$6.00"
+          },
+          "output": {
+            "buyerTotalCost": "$22.78"
+          },
+          "formula": "BuyerTotal = ItemPrice + ShippingCharge",
+          "notes": "This is what the buyer pays at checkout"
+        }
+      ],
+      "reasoning": "Price based on amazon-direct data. Competitive.",
+      "confidence": "medium",
+      "warnings": [],
+      "competitorSummary": {
+        "amazonPrice": 19.74,
+        "ebayActiveCount": 0,
+        "ebaySoldCount": 0
+      },
+      "searchQuery": {
+        "priceLookupTitle": "Vinoreset Mist",
+        "amazonQuery": "ki Vinoreset Mist",
+        "ebayQuery": "ki Vinoreset Mist Beauty > Skin Care > Face Mists 80ml",
+        "googleQuery": "ki Vinoreset Mist Beauty > Skin Care > Face Mists 80ml",
+        "seoContext": "Beauty > Skin Care > Face Mists 80ml"
+      }
+    },
+    "promotion": {
+      "enabled": true,
+      "rate": 5,
+      "reason": "User-configured promotion rate"
+    },
+    "pricingStatus": "OK",
+    "needsPriceReview": false,
+    "offerId": "132921169011"
+  },
+  "_pricingDebug": {
+    "brand": "ki",
+    "productName": "Vinoreset Mist",
+    "amazonQuery": "ki Vinoreset Mist",
+    "priceLookupTitle": "Vinoreset Mist",
+    "confidence": "medium",
+    "reasoning": "Price based on amazon-direct data. Competitive.",
+    "warnings": [],
+    "competitorSummary": {
+      "amazonPrice": 19.74,
+      "ebayActiveCount": 0,
+      "ebaySoldCount": 0
+    },
+    "amazonUrl": null,
+    "amazonPriceDollars": 19.74,
+    "walmartUrl": null,
+    "walmartPriceDollars": null,
+    "finalPrice": 16.78
+  }
+}
