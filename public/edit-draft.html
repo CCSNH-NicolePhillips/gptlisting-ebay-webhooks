@@ -1660,22 +1660,40 @@
           // Truncate at common eBay title separators (e.g. "ReLive Greens by Dr. Rahm's | Superfood...")
           productName = productName.split(/\s+by\s+|\s*[|,]\s*/i)[0].trim();
         }
-        
-        console.log('[reprice] Request:', { brand, productName });
-        
-        if (!brand && !productName) {
-          throw new Error('Need brand or title to calculate price');
+
+        // Serving count — used by server to scale Amazon price for sample/travel sizes.
+        // Priority: scan classification → "Number of Servings" aspect → null
+        let servingCount = null;
+        const scFromLogs = originalDraft?._draftLogs?.servingCount
+          ?? originalDraft?._draftLogs?.classification?.servingCount;
+        if (typeof scFromLogs === 'number' && scFromLogs > 0) {
+          servingCount = scFromLogs;
+        } else {
+          // Fall back to the "Number of Servings" aspect on the draft
+          document.querySelectorAll('.aspect-item').forEach(item => {
+            const key = item.querySelector('.aspect-key')?.value?.trim().toLowerCase();
+            if (key === 'number of servings') {
+              const val = parseInt(item.querySelector('.aspect-value')?.value?.trim() || '', 10);
+              if (!isNaN(val) && val > 0) servingCount = val;
+            }
+          });
         }
-        
+
         // Always send the current eBay title so the server can cross-validate the
         // classification brand against it and automatically fall back to a title-derived
         // brand/productName when the scan misidentified the product.
         const ebayTitle = $('title')?.value?.trim() || '';
 
+        console.log('[reprice] Request:', { brand, productName, ebayTitle, servingCount });
+
+        if (!brand && !productName) {
+          throw new Error('Need brand or title to calculate price');
+        }
+
         const res = await fetchJSON('/api/pricing/reprice', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ brand, productName, ebayTitle }),
+          body: JSON.stringify({ brand, productName, ebayTitle, servingCount }),
         });
         
         console.log('[reprice] Response:', res);
