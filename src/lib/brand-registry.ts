@@ -53,20 +53,36 @@ function buildKey(brand: string, product: string): string {
 
 /**
  * Get Amazon ASIN for a brand + product
+ * Tries progressive word-truncation as fallback so that
+ * "Vinoreset Face Mist" matches a pin stored under "Vinoreset Mist" etc.
  */
 export async function getAmazonAsin(brand: string, product: string): Promise<string | null> {
   try {
-    const key = buildKey(brand, product);
-    const resp = await redisCall("GET", key);
-    
-    if (!resp || !resp.result) {
-      console.log(`[brand-registry] No ASIN found for: ${brand} ${product}`);
-      return null;
+    // Build candidate product strings to try, from most-specific to least:
+    // 1. exact product as given
+    // 2. first 3 words (drops trailing size/descriptor words)
+    // 3. first 2 words
+    const words = product.trim().split(/\s+/);
+    const candidates = [product];
+    if (words.length > 3) candidates.push(words.slice(0, 3).join(' '));
+    if (words.length > 2) candidates.push(words.slice(0, 2).join(' '));
+
+    for (const candidate of candidates) {
+      const key = buildKey(brand, candidate);
+      const resp = await redisCall("GET", key);
+      if (resp && resp.result) {
+        const entry = typeof resp.result === 'string' ? JSON.parse(resp.result) : resp.result;
+        if (candidate !== product) {
+          console.log(`[brand-registry] ✓ Found ASIN: ${entry.asin} for ${brand} ${product} (matched via "${candidate}")`);
+        } else {
+          console.log(`[brand-registry] ✓ Found ASIN: ${entry.asin} for ${brand} ${product}`);
+        }
+        return entry.asin;
+      }
     }
-    
-    const entry = typeof resp.result === 'string' ? JSON.parse(resp.result) : resp.result;
-    console.log(`[brand-registry] ✓ Found ASIN: ${entry.asin} for ${brand} ${product}`);
-    return entry.asin;
+
+    console.log(`[brand-registry] No ASIN found for: ${brand} ${product}`);
+    return null;
   } catch (error) {
     console.error('[brand-registry] Lookup error:', error);
     return null;
