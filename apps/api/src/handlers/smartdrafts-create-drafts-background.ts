@@ -53,6 +53,7 @@ type PairedProduct = {
   packageType?: string; // bottle/jar/tub/pouch/box/sachet/book/unknown - used for formulation inference
   netWeight?: { value: number; unit: string } | null; // AI-extracted weight from product label (e.g., 8 oz, 250 g)
   bundleInfo?: { isBundle: boolean; bundleType: string | null; bundleProducts: string[] } | null; // Bundle detection for sets/duos/kits
+  servingCount?: number | null; // Servings Per Container from Supplement Facts panel (for price-per-serving scaling)
   heroDisplayUrl?: string;
   backDisplayUrl?: string;
   side1DisplayUrl?: string;  // Optional 3rd image (side panel)
@@ -1420,6 +1421,13 @@ async function createDraftForProduct(
     }
     seoContext = seoContextParts.filter(Boolean).join(' ').trim() || undefined;
     
+    // Include serving count in seoContext so Amazon search targets the correct variant size
+    // (e.g. "5 servings" helps disambiguate a mini pouch from a 30-serving tub of the same product)
+    if (product.servingCount && product.servingCount > 0) {
+      seoContext = [seoContext, `${product.servingCount} servings`].filter(Boolean).join(' ').trim() || undefined;
+      console.log(`[smartdrafts-price] Appended servingCount to seoContext: ${product.servingCount} servings`);
+    }
+    
     console.log(`[smartdrafts-price] Looking up price for: ${product.brand || '(no brand)'} ${priceLookupTitle || '(no product name)'}`);
     if (seoContext) {
       console.log(`[smartdrafts-price] SEO context: "${seoContext}"`);
@@ -1490,6 +1498,7 @@ async function createDraftForProduct(
       settings: deliveredSettings,
       additionalContext: seoContext,
       amazonPricingRatio: pricingSettings.amazonPricingRatio ?? 0.85,
+      servingCount: product.servingCount ?? undefined,
     });
     
     // If full bundle query failed, try simplified query (e.g., "Brand Shampoo Conditioner")
@@ -1503,6 +1512,7 @@ async function createDraftForProduct(
         settings: deliveredSettings,
         additionalContext: seoContext,
         amazonPricingRatio: pricingSettings.amazonPricingRatio ?? 0.85,
+        servingCount: product.servingCount ?? undefined,
       });
       
       // Use simplified result if it found better data

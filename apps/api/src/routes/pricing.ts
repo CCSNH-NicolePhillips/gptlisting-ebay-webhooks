@@ -36,13 +36,14 @@ router.post('/reprice', async (req, res) => {
   try {
     const { userId } = await requireUserAuth(req.headers.authorization || '');
 
-    const { brand, productName, ebayTitle } = req.body as {
+    const { brand, productName, ebayTitle, servingCount } = req.body as {
       brand?: string;
       productName?: string;
       ebayTitle?: string;
+      servingCount?: number | null;
     };
 
-    console.log(`[reprice] RAW body: brand="${brand}" productName="${String(productName).slice(0, 120)}" ebayTitle="${String(ebayTitle || '').slice(0, 80)}"`);
+    console.log(`[reprice] RAW body: brand="${brand}" productName="${String(productName).slice(0, 120)}" ebayTitle="${String(ebayTitle || '').slice(0, 80)}" servingCount=${servingCount ?? 'null'}`);
 
     if (!brand && !productName) {
       return badRequest(res, 'brand or productName is required');
@@ -149,6 +150,7 @@ router.post('/reprice', async (req, res) => {
       productName: finalProduct,
       additionalContext,
       settings,
+      servingCount: typeof servingCount === 'number' ? servingCount : null,
     });
 
     const summary = pricingResult.pricingEvidence?.summary;

@@ -58,6 +58,13 @@ export interface PricingInput {
    * Defaults to 0.85 when not provided.
    */
   amazonPricingRatio?: number;
+  /**
+   * Servings Per Container from the product's Supplement Facts panel.
+   * When provided and differs from the serving count in the Amazon result title,
+   * the Amazon price is scaled by (ourServings / amazonServings) before applying
+   * the ratio. This prevents over-pricing a 5-serving sample vs a 30-serving tub.
+   */
+  servingCount?: number | null;
 }
 
 /**
@@ -300,7 +307,48 @@ export async function getPricingDecision(input: PricingInput): Promise<PricingDe
         }
       }
 
-      const amazonPriceCents = Math.round(amazonResult.price * 100);
+      // ── Serving-count price scaling ────────────────────────────────────────
+      // When our product has a different serving count than the Amazon result,
+      // the Amazon price reflects a different package size. Scale proportionally:
+      //   scaledPrice = (ourServings / amazonServings) × amazonPrice
+      // Flag NEEDS_REVIEW when scaling ratio is extreme (> 5× or < 0.2×).
+      let effectiveAmazonPrice = amazonResult.price;
+      const ourServings = input.servingCount ?? null;
+      if (ourServings && ourServings > 0 && amazonResult.title) {
+        const servMatch = amazonResult.title.match(/\b(\d+)\s*serv(?:ing)?s?\b/i);
+        const amazonServings = servMatch ? parseInt(servMatch[1], 10) : null;
+        if (amazonServings && amazonServings > 0 && Math.abs(amazonServings - ourServings) / amazonServings > 0.15) {
+          const scalingRatio = ourServings / amazonServings;
+          effectiveAmazonPrice = amazonResult.price * scalingRatio;
+          console.log(
+            `[pricing] Serving-count scale: ours=${ourServings} amazon=${amazonServings} ` +
+            `ratio=${scalingRatio.toFixed(3)} → $${amazonResult.price.toFixed(2)} × ${scalingRatio.toFixed(3)} = $${effectiveAmazonPrice.toFixed(2)}`,
+          );
+          // If scaling ratio is extreme (< 20% or > 5× original price), flag NEEDS_REVIEW
+          if (scalingRatio < 0.2 || scalingRatio > 5) {
+            console.warn(`[pricing] Serving-count scale ratio ${scalingRatio.toFixed(2)} is extreme — flagging NEEDS_REVIEW`);
+            return {
+              status: 'NEEDS_REVIEW',
+              finalItemCents: 0,
+              finalShipCents: 0,
+              warnings: ['servingCountMismatch', 'manualReviewRequired'],
+              pricingEvidence: {
+                source: 'delivered-v2',
+                mode: 'amazon-anchored',
+                targetDeliveredCents: 0,
+                finalItemCents: 0,
+                finalShipCents: 0,
+                ebayCompsCount: 0,
+                fallbackUsed: true,
+                warnings: ['servingCountMismatch', 'manualReviewRequired'],
+                manualReviewRequired: true,
+              },
+            };
+          }
+        }
+      }
+
+      const amazonPriceCents = Math.round(effectiveAmazonPrice * 100);
       const itemCents = Math.max(Math.round(amazonPriceCents * ratio), 199);
       console.log(`[pricing] amazon_anchored: Amazon $${amazonResult.price.toFixed(2)} × ${ratio} = item $${(itemCents / 100).toFixed(2)} + ship $${(shippingCents / 100).toFixed(2)}`);
       return {

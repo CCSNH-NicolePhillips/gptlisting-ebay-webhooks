@@ -36,6 +36,7 @@ export interface PairingResult {
     packageType?: string; // bottle/jar/tub/pouch/box/sachet/book/unknown - used for formulation inference
     netWeight?: { value: number; unit: string } | null; // Product weight from label for shipping
     bundleInfo?: { isBundle: boolean; bundleType: string | null; bundleProducts: string[] } | null; // Bundle detection
+    servingCount?: number | null; // Servings Per Container from Supplement Facts panel
   }>;
   unpaired: Array<{
     imagePath: string;
@@ -54,6 +55,7 @@ export interface PairingResult {
     packageType?: string; // bottle/jar/tub/pouch/box/sachet/book/unknown
     netWeight?: { value: number; unit: string } | null; // Product weight from label for shipping
     bundleInfo?: { isBundle: boolean; bundleType: string | null; bundleProducts: string[] } | null; // Bundle detection
+    servingCount?: number | null; // Servings Per Container from Supplement Facts panel
   }>;
   metrics: {
     totals: {
@@ -104,6 +106,7 @@ interface ImageClassificationV2 {
   packCount: number | null; // Number of units inside the package (e.g., 24 for a 24-pack box, null if single unit or unknown)
   netWeight?: { value: number; unit: string } | null; // Product weight from label (e.g., 8 oz, 60 capsules, 250g)
   bundleInfo?: BundleInfo | null; // Bundle detection for sets/duos/kits sold together
+  servingCount?: number | null; // Servings Per Container from Supplement Facts panel
 }
 
 interface PairingInputItem {
@@ -125,6 +128,7 @@ interface PairingInputItem {
   packCount: number | null;
   netWeight: { value: number; unit: string } | null;
   bundleInfo: BundleInfo | null;
+  servingCount?: number | null; // Servings Per Container from Supplement Facts panel
 }
 
 interface PairingOutput {
@@ -440,7 +444,8 @@ Respond ONLY with valid JSON:
       "quantityInPhoto": 1,
       "packCount": 24 or null,
       "netWeight": { "value": 8, "unit": "oz" },  // ⚠️ REQUIRED - never null, estimate if needed
-      "bundleInfo": { "isBundle": false, "bundleType": null, "bundleProducts": [] }  // or { "isBundle": true, "bundleType": "duo", "bundleProducts": ["Shampoo 8oz", "Conditioner 8oz"] }
+      "bundleInfo": { "isBundle": false, "bundleType": null, "bundleProducts": [] },  // or { "isBundle": true, "bundleType": "duo", "bundleProducts": ["Shampoo 8oz", "Conditioner 8oz"] }
+      "servingCount": 5 or null   // Integer from "Servings Per Container" on Supplement Facts panel; null if not a supplement or not visible
     }
   ]
 }
@@ -530,6 +535,15 @@ ${JSON.stringify(filenames, null, 2)}`;
     parsed.items?.forEach((item: any) => {
       if (!item.bundleInfo) {
         item.bundleInfo = { isBundle: false, bundleType: null, bundleProducts: [] };
+      }
+    });
+    
+    // CHUNK 1c: Parse servingCount from keyText if GPT didn't return it as a dedicated field
+    parsed.items?.forEach((item: any) => {
+      if (typeof item.servingCount !== 'number') {
+        const kt = (item.keyText || []).join(' ');
+        const m = kt.match(/\b(\d+)\s+servings?\b/i);
+        item.servingCount = m ? parseInt(m[1], 10) : null;
       }
     });
     
@@ -1386,6 +1400,12 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
       console.log(`[pairing-v2] Bundle detected: ${bundleInfo.bundleType} with ${bundleInfo.bundleProducts.length} products (brand: ${frontClass?.brand})`);
     }
     
+    // CHUNK 7: Extract servingCount - prefer back panel (Supplement Facts usually on back)
+    const servingCount = backClass?.servingCount ?? frontClass?.servingCount ?? side1Class?.servingCount ?? side2Class?.servingCount ?? null;
+    if (servingCount) {
+      console.log(`[pairing-v2] servingCount detected: ${servingCount} servings (brand: ${frontClass?.brand})`);
+    }
+    
     return {
       front: p.front,
       back: p.back,
@@ -1404,6 +1424,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
       packageType: frontClass?.packageType || backClass?.packageType || 'unknown',
       netWeight,
       bundleInfo,
+      servingCount,
     };
   });
   
@@ -1445,6 +1466,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
         packageType: classification?.packageType || 'unknown',
         netWeight: classification?.netWeight ?? null,
         bundleInfo: classification?.bundleInfo ?? null,
+        servingCount: classification?.servingCount ?? null,
       };
     }),
     ...rejectedPairs
@@ -1471,6 +1493,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
             packageType: frontClass?.packageType || 'unknown',
             netWeight: frontClass?.netWeight ?? null,
             bundleInfo: frontClass?.bundleInfo ?? null,
+            servingCount: frontClass?.servingCount ?? null,
           },
           {
             imagePath: p.back,
@@ -1489,6 +1512,7 @@ export async function runNewTwoStagePipeline(imagePaths: string[]): Promise<Pair
           packageType: backClass?.packageType || 'unknown',
           netWeight: backClass?.netWeight ?? null,
           bundleInfo: backClass?.bundleInfo ?? null,
+          servingCount: backClass?.servingCount ?? null,
         },
       ];
     }),
