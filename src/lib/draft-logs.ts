@@ -41,6 +41,7 @@ export interface VisionClassificationLog {
     bundleType: string | null;
     bundleProducts: string[];
   } | null;
+  servingCount?: number | null;
 }
 
 export interface PricingSourceLog {

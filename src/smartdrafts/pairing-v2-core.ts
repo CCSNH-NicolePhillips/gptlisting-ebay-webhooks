@@ -538,12 +538,20 @@ ${JSON.stringify(filenames, null, 2)}`;
       }
     });
     
-    // CHUNK 1c: Parse servingCount from keyText if GPT didn't return it as a dedicated field
+    // CHUNK 1c: Parse servingCount from keyText if GPT didn't return it as a dedicated field.
+    // Supplement Facts panels use TWO formats:
+    //   "10 servings" / "10 Servings Per Container"  → number first
+    //   "Servings Per Container 10" / "Servings Per Container: 10" → number last
+    // Both must be handled.
     parsed.items?.forEach((item: any) => {
       if (typeof item.servingCount !== 'number') {
         const kt = (item.keyText || []).join(' ');
-        const m = kt.match(/\b(\d+)\s+servings?\b/i);
-        item.servingCount = m ? parseInt(m[1], 10) : null;
+        // Pattern A: number-first  e.g. "10 servings", "10 Servings Per Container"
+        const mA = kt.match(/\b(\d+)\s+servings?(?:\s+per\s+container)?\b/i);
+        // Pattern B: number-last   e.g. "Servings Per Container 10", "Servings Per Container: 10"
+        const mB = kt.match(/\bservings?\s+per\s+container\s*:?\s*(\d+)\b/i);
+        const raw = mA ? parseInt(mA[1], 10) : mB ? parseInt(mB[1], 10) : null;
+        item.servingCount = raw !== null && raw > 0 && raw <= 500 ? raw : null;
       }
     });
     

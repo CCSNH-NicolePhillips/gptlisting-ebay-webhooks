@@ -2226,6 +2226,7 @@ async function createDraftForProduct(
         categoryPath: product.categoryPath,
         photoQuantity: product.photoQuantity,
         bundleInfo: product.bundleInfo ?? null,
+        servingCount: product.servingCount ?? null,
       },
       pricing: {
         timestamp: new Date().toISOString(),
