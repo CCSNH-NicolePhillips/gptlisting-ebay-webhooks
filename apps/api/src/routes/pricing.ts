@@ -145,6 +145,7 @@ router.post('/reprice', async (req, res) => {
       shippingEstimateCents,
     };
 
+    console.log(`[reprice] calling getPricingDecision: brand="${finalBrand}" product="${finalProduct}" additionalContext="${additionalContext ?? ''}" servingCount=${typeof servingCount === 'number' ? servingCount : 'null'} shippingEstimateCents=${shippingEstimateCents}`);
     const pricingResult = await getPricingDecision({
       brand: finalBrand,
       productName: finalProduct,
@@ -152,6 +153,8 @@ router.post('/reprice', async (req, res) => {
       settings,
       servingCount: typeof servingCount === 'number' ? servingCount : null,
     });
+
+    console.log(`[reprice] getPricingDecision returned: status=${pricingResult.status} finalItemCents=${pricingResult.finalItemCents} finalShipCents=${pricingResult.finalShipCents} warnings=[${(pricingResult.warnings ?? []).join(',')}] mode=${pricingResult.pricingEvidence?.mode} amazonPriceCents=${pricingResult.pricingEvidence?.summary?.amazonPriceCents ?? 'null'} amazonTitle="${(pricingResult.pricingEvidence?.summary?.topComps?.[0]?.title ?? '').slice(0,80)}"`); 
 
     const summary = pricingResult.pricingEvidence?.summary;
     const finalItemCents = pricingResult.finalItemCents ?? 0;

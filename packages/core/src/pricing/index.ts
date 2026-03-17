@@ -265,7 +265,10 @@ export async function getPricingDecision(input: PricingInput): Promise<PricingDe
     // Amazon search accuracy for niche products (e.g. adds "100ml" which helps find
     // Besque Magic Luxury Body Oil). Conflict checks still use the original productName.
     const amazonProductQuery = [productName, additionalContext].filter(Boolean).join(' ').trim();
+    console.log(`[pricing] amazon_anchored: amazonProductQuery="${amazonProductQuery}"`);
     const amazonResult = await searchAmazonWithFallback(brand, amazonProductQuery, true, productName);
+
+    console.log(`[pricing] amazon_anchored: searchAmazonWithFallback returned — price=$${String(amazonResult.price)} confidence=${amazonResult.confidence} title="${String(amazonResult.title ?? '').slice(0, 80)}" reasoning="${amazonResult.reasoning}"`);
 
     if (amazonResult.price !== null && amazonResult.confidence !== 'low') {
       // Safety: validate that the Amazon result is actually about the product we searched for.
@@ -280,6 +283,11 @@ export async function getPricingDecision(input: PricingInput): Promise<PricingDe
           const resultLower = amazonResult.title.toLowerCase();
           const overlap = searchTerms.filter(t => resultLower.includes(t)).length;
           const overlapRatio = overlap / searchTerms.length;
+          console.log(
+            `[pricing] title-overlap check: ${overlap}/${searchTerms.length} terms (${(overlapRatio*100).toFixed(0)}%) ` +
+            `— searched terms=[${searchTerms.join(',')}] ` +
+            `— result title="${amazonResult.title?.slice(0, 80)}"`,
+          );
           if (overlapRatio < 0.25) {
             console.warn(
               `[pricing] amazon_anchored: LOW title overlap ${(overlapRatio * 100).toFixed(0)}% ` +
@@ -313,6 +321,7 @@ export async function getPricingDecision(input: PricingInput): Promise<PricingDe
       //   scaledPrice = (ourServings / amazonServings) × amazonPrice
       // Flag NEEDS_REVIEW when scaling ratio is extreme (> 5× or < 0.2×).
       let effectiveAmazonPrice = amazonResult.price;
+      console.log(`[pricing] serving-count check: input.servingCount=${input.servingCount ?? 'null'} effectiveAmazonPrice=$${effectiveAmazonPrice.toFixed(2)} amazonTitle="${String(amazonResult.title ?? '').slice(0, 60)}"`);
       const ourServings = input.servingCount ?? null;
       if (ourServings && ourServings > 0 && amazonResult.title) {
         const servMatch = amazonResult.title.match(/\b(\d+)\s*serv(?:ing)?s?\b/i);
