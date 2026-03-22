@@ -37,7 +37,65 @@ import { serverError, badRequest } from '../http/respond.js';
 const router = Router();
 
 // ---------------------------------------------------------------------------
-// POST /api/ingest/local/upload
+// POST /api/ingest/local   (JSON body with base64 images)
+//
+// Mirrors: /.netlify/functions/ingest-local-upload
+//
+// The quick-list.html frontend sends JSON: { files: [{ name, mime, data }] }
+// where data is a base64-encoded image string.
+// This route decodes the base64 → Buffer and delegates to the same
+// uploadLocalFiles service used by the multipart handler below.
+//
+// The netlify-compat layer maps ingest-local-upload → /ingest/local,
+// so this handler catches that rewritten path.
+// ---------------------------------------------------------------------------
+router.post('/local', async (req, res) => {
+  try {
+    const { userId } = await requireUserAuth(req.headers.authorization || '');
+    const body = req.body as { files?: Array<{ name?: string; mime?: string; data?: string }> };
+
+    if (!Array.isArray(body?.files) || body.files.length === 0) {
+      return badRequest(res, 'Missing files array in request body');
+    }
+
+    // Decode base64 → Buffer for each file
+    const incoming: Array<{ originalname: string; mimetype: string; buffer: Buffer }> = [];
+    for (const f of body.files) {
+      if (!f.data || !f.name) continue;
+      const raw = f.data.includes(',')
+        ? f.data.split(',')[1]  // strip data:mime;base64, prefix if present
+        : f.data;
+      incoming.push({
+        originalname: f.name,
+        mimetype: f.mime || 'image/jpeg',
+        buffer: Buffer.from(raw, 'base64'),
+      });
+    }
+
+    if (incoming.length === 0) {
+      return badRequest(res, 'No valid files found in request body');
+    }
+
+    const result = await uploadLocalFiles(userId, incoming);
+    return res.status(200).json({
+      ok: true,
+      files: result.files,
+      count: result.count,
+      message: `${result.count} file(s) uploaded successfully`,
+    });
+  } catch (err) {
+    if (err instanceof LocalUploadError) {
+      return res.status(err.statusCode).json({ ok: false, error: err.message });
+    }
+    if (err instanceof Error && err.message.toLowerCase().includes('auth')) {
+      return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    }
+    return serverError(res, err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/ingest/local/upload   (multipart/form-data via multer)
 // ---------------------------------------------------------------------------
 
 router.post(

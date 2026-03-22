@@ -11,7 +11,7 @@ const __dirname = dirname(__filename);
 const publicDir = join(__dirname, '../../../../public');
 
 const app = express();
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '6mb' }));
 
 app.get('/health', (_req, res) => {
   res.status(200).json({ ok: true });
