@@ -1,0 +1,42 @@
+[
+  {
+    "offerId": "134454880011",
+    "sku": "EKMVFCmmwo8pbl1i0",
+    "marketplaceId": "EBAY_US",
+    "format": "FIXED_PRICE",
+    "listingDescription": "Introducing the Evereden Kids Multi-Vitamin Face Cream, an essential skincare product formulated specifically for children's delicate skin. This luxurious face cream harnesses the power of the MegaVitamin Complex to nourish, hydrate, and protect young faces. Carefully crafted with safe, high-quality ingredients, this face cream supports healthy skin development, ensuring your child's skin remains soft, supple, and well-moisturized throughout the day. Perfect for parents seeking a reliable skincare solution for their kids, the Evereden Kids Multi-Vitamin Face Cream is free from harsh chemicals, hypoallergenic, and ideal for daily use. Specifications include size, ingredients, and certifications, making it a trustworthy choice for health-conscious parents. Embrace the confidence of a premium skincare product that prioritizes your child's skin health. Order now and keep your child's skin radiant and protected.",
+    "availableQuantity": 1,
+    "pricingSummary": {
+      "price": {
+        "value": "15.3",
+        "currency": "USD"
+      }
+    },
+    "listingPolicies": {
+      "paymentPolicyId": "245353452026",
+      "returnPolicyId": "245353453026",
+      "fulfillmentPolicyId": "245353454026",
+      "eBayPlusIfEligible": false,
+      "bestOfferTerms": {
+        "bestOfferEnabled": true,
+        "autoAcceptPrice": {
+          "value": "13.77",
+          "currency": "USD"
+        },
+        "autoDeclinePrice": {
+          "value": "9.18",
+          "currency": "USD"
+        }
+      }
+    },
+    "categoryId": "260746",
+    "merchantLocationKey": "primary-location",
+    "tax": {
+      "applyTax": false
+    },
+    "status": "UNPUBLISHED",
+    "listingDuration": "GTC",
+    "includeCatalogProductDetails": true,
+    "hideBuyerDetails": false
+  }
+]

@@ -1,0 +1,189 @@
+{
+  "offerId": "134454880011",
+  "sku": "EKMVFCmmwo8pbl1i0",
+  "marketplaceId": "EBAY_US",
+  "format": "FIXED_PRICE",
+  "listingDescription": "Introducing the Evereden Kids Multi-Vitamin Face Cream, an essential skincare product formulated specifically for children's delicate skin. This luxurious face cream harnesses the power of the MegaVitamin Complex to nourish, hydrate, and protect young faces. Carefully crafted with safe, high-quality ingredients, this face cream supports healthy skin development, ensuring your child's skin remains soft, supple, and well-moisturized throughout the day. Perfect for parents seeking a reliable skincare solution for their kids, the Evereden Kids Multi-Vitamin Face Cream is free from harsh chemicals, hypoallergenic, and ideal for daily use. Specifications include size, ingredients, and certifications, making it a trustworthy choice for health-conscious parents. Embrace the confidence of a premium skincare product that prioritizes your child's skin health. Order now and keep your child's skin radiant and protected.",
+  "availableQuantity": 1,
+  "pricingSummary": {
+    "price": {
+      "value": "15.3",
+      "currency": "USD"
+    }
+  },
+  "listingPolicies": {
+    "paymentPolicyId": "245353452026",
+    "returnPolicyId": "245353453026",
+    "fulfillmentPolicyId": "245353454026",
+    "eBayPlusIfEligible": false,
+    "bestOfferTerms": {
+      "bestOfferEnabled": true,
+      "autoAcceptPrice": {
+        "value": "13.77",
+        "currency": "USD"
+      },
+      "autoDeclinePrice": {
+        "value": "9.18",
+        "currency": "USD"
+      }
+    }
+  },
+  "categoryId": "260746",
+  "merchantLocationKey": "primary-location",
+  "tax": {
+    "applyTax": false
+  },
+  "status": "UNPUBLISHED",
+  "listingDuration": "GTC",
+  "includeCatalogProductDetails": true,
+  "hideBuyerDetails": false,
+  "_imageUrls": [
+    "https://www.draftpilot.app/api/images/proxy?url=https%3A%2F%2Fwww.draftpilot.app%2Fapi%2Fimg%3Fk%3Dstaging%252Fgoogle-oauth2_108767599998494531403%252F11ebb19a-839e-426a-889e-561d657c8942%252Ff4052ed4dc09b64e-IMG_20260318_191319.jpg&v=mmwo8pd9",
+    "https://www.draftpilot.app/api/images/proxy?url=https%3A%2F%2Fwww.draftpilot.app%2Fapi%2Fimg%3Fk%3Dstaging%252Fgoogle-oauth2_108767599998494531403%252F11ebb19a-839e-426a-889e-561d657c8942%252Faee56ff0ff875210-IMG_20260318_191330.jpg&v=mmwo8pd9"
+  ],
+  "_draftLogs": {
+    "sku": "product-7",
+    "createdAt": "2026-03-22T18:11:45.383Z",
+    "classification": {
+      "brand": "SKIN1004",
+      "productName": "Madagascar Centella",
+      "variant": null,
+      "size": null,
+      "packageType": null,
+      "keyText": [
+        "Madagascar Centella",
+        "Poremizing Light Gel Cream",
+        "73 ml / 2.53 fl. oz."
+      ],
+      "netWeight": null,
+      "categoryPath": "Beauty > Skin Care > Face Moisturizers",
+      "photoQuantity": 1,
+      "bundleInfo": {
+        "isBundle": false,
+        "bundleType": null,
+        "bundleProducts": []
+      },
+      "servingCount": null
+    },
+    "pricing": {
+      "timestamp": "2026-03-22T18:11:45.383Z",
+      "brand": "SKIN1004",
+      "productName": "Madagascar Centella",
+      "sources": [
+        {
+          "source": "Retail (Amazon/Walmart)",
+          "query": "SKIN1004 Madagascar Centella",
+          "results": [
+            {
+              "title": "Amazon",
+              "price": 17.44,
+              "shipping": 0,
+              "total": 17.44
+            }
+          ]
+        }
+      ],
+      "finalPrice": 14.82,
+      "finalShipping": 6,
+      "freeShippingApplied": false,
+      "calculations": [
+        {
+          "step": "1. Gather Competitor Prices",
+          "input": {
+            "ebayCompsCount": 0,
+            "retailCompsCount": 1
+          },
+          "output": {
+            "lowestEbayDelivered": "N/A",
+            "amazonPrice": "$17.44",
+            "walmartPrice": "N/A"
+          },
+          "notes": "Search eBay active listings, Amazon, Walmart, Google Shopping for competitor prices"
+        },
+        {
+          "step": "2. Calculate Target Delivered Price",
+          "input": {
+            "soldCount": 0,
+            "soldMedian": "N/A",
+            "soldStrong": false,
+            "competitorFloor": "N/A"
+          },
+          "output": {
+            "targetDeliveredPrice": "$20.82"
+          },
+          "formula": "Target = Amazon $17.44 × 0.85",
+          "notes": "Price based on Amazon listing. Buyer pays item + shipping separately."
+        },
+        {
+          "step": "3. Split Into Item + Shipping",
+          "input": {
+            "targetDelivered": "$20.82",
+            "shippingEstimate": "$6.00",
+            "freeShippingApplied": false
+          },
+          "output": {
+            "itemPrice": "$14.82",
+            "shippingCharge": "$6.00",
+            "subsidyAmount": "$0.00"
+          },
+          "formula": "ItemPrice = TargetDelivered - ShippingCharge",
+          "notes": "Buyer pays shipping separately"
+        },
+        {
+          "step": "4. Final Price Verification",
+          "input": {
+            "itemPrice": "$14.82",
+            "shippingCharge": "$6.00"
+          },
+          "output": {
+            "buyerTotalCost": "$20.82"
+          },
+          "formula": "BuyerTotal = ItemPrice + ShippingCharge",
+          "notes": "This is what the buyer pays at checkout"
+        }
+      ],
+      "reasoning": "Price based on amazon-direct data. Competitive.",
+      "confidence": "medium",
+      "warnings": [],
+      "competitorSummary": {
+        "amazonPrice": 17.44,
+        "ebayActiveCount": 0,
+        "ebaySoldCount": 0
+      },
+      "searchQuery": {
+        "priceLookupTitle": "Madagascar Centella",
+        "amazonQuery": "SKIN1004 Madagascar Centella",
+        "ebayQuery": "SKIN1004 Madagascar Centella Beauty > Skin Care > Face Moisturizers Poremizing Light Gel Cream 73 ml / 2.53 fl. oz.",
+        "googleQuery": "SKIN1004 Madagascar Centella Beauty > Skin Care > Face Moisturizers Poremizing Light Gel Cream 73 ml / 2.53 fl. oz.",
+        "seoContext": "Beauty > Skin Care > Face Moisturizers Poremizing Light Gel Cream 73 ml / 2.53 fl. oz."
+      }
+    },
+    "promotion": {
+      "enabled": true,
+      "rate": 5,
+      "reason": "User-configured promotion rate"
+    },
+    "pricingStatus": "OK",
+    "needsPriceReview": false,
+    "offerId": "136671795011"
+  },
+  "_pricingDebug": {
+    "brand": "SKIN1004",
+    "productName": "Madagascar Centella",
+    "amazonQuery": "SKIN1004 Madagascar Centella",
+    "priceLookupTitle": "Madagascar Centella",
+    "confidence": "medium",
+    "reasoning": "Price based on amazon-direct data. Competitive.",
+    "warnings": [],
+    "competitorSummary": {
+      "amazonPrice": 17.44,
+      "ebayActiveCount": 0,
+      "ebaySoldCount": 0
+    },
+    "amazonUrl": null,
+    "amazonPriceDollars": 17.44,
+    "walmartUrl": null,
+    "walmartPriceDollars": null,
+    "finalPrice": 14.82
+  }
+}

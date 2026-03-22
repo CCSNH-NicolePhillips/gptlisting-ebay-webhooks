@@ -20,6 +20,7 @@ const ENTRIES = [
   { brand: 'Makeup Eraser', title: '7-Day Set' },
   { brand: 'Root',          title: 'Zero-In' },
   { brand: 'Stasis',        title: 'Nighttime' },
+  { brand: 'SKIN1004',       title: 'Madagascar Centella' },
 ];
 
 // Direct price overrides — for DTC-only brands not sold on Amazon.
@@ -52,6 +53,11 @@ const ASIN_PINS: { brand: string; product: string; asin: string }[] = [
   // Root Zero-In — keyword search returns a single-serve packet at $14.99 ($12.74 eBay).
   // Correct full-bottle ASIN B0BQ2VT3CB ($97) → eBay ~$76.45.
   { brand: 'Root', product: 'Zero-In', asin: 'B0BQ2VT3CB' },
+  // Evereden Kids Multi-Vitamin Face Cream ($24.95).
+  // GPT misclassified as SKIN1004 Madagascar Centella — pin both names.
+  { brand: 'Evereden', product: 'Kids Face Cream', asin: 'B08ZGQCPJJ' },
+  { brand: 'Evereden', product: 'Kids Multi-Vitamin Face Cream', asin: 'B08ZGQCPJJ' },
+  { brand: 'SKIN1004', product: 'Madagascar Centella', asin: 'B08ZGQCPJJ' },
 ];
 
 async function main() {
