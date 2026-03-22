@@ -1,0 +1,191 @@
+{
+  "offerId": "136710181011",
+  "sku": "EKMVFCmn27xns41g2",
+  "marketplaceId": "EBAY_US",
+  "format": "FIXED_PRICE",
+  "listingDescription": "Introducing the Evereden Kids Multi-Vitamin Face Cream, a premium skincare solution crafted specifically for children's delicate skin. This nourishing cream is formulated with a blend of essential Omegas 3, 6, and 9 to provide comprehensive hydration and skin protection. The delightful Melon Juice scent makes it a fun and pleasant experience for kids, encouraging regular use. Key benefits include moisturizing dry skin, boosting skin elasticity, and providing antioxidant protection. Evereden's formulation uses safe, gentle ingredients, making it perfect for sensitive skin. Specifications include a 50 ml size, featuring a rich blend of nourishing vitamins and omegas. Transform your child's skincare routine with Evereden's innovative formula, designed for healthy, vibrant skin. Order now and give your child's skin the care it deserves!",
+  "availableQuantity": 1,
+  "pricingSummary": {
+    "price": {
+      "value": "15.3",
+      "currency": "USD"
+    }
+  },
+  "listingPolicies": {
+    "paymentPolicyId": "245353452026",
+    "returnPolicyId": "245353453026",
+    "fulfillmentPolicyId": "245353454026",
+    "eBayPlusIfEligible": false,
+    "bestOfferTerms": {
+      "bestOfferEnabled": true,
+      "autoAcceptPrice": {
+        "value": "13.77",
+        "currency": "USD"
+      },
+      "autoDeclinePrice": {
+        "value": "9.18",
+        "currency": "USD"
+      }
+    }
+  },
+  "categoryId": "260746",
+  "merchantLocationKey": "primary-location",
+  "tax": {
+    "applyTax": false
+  },
+  "status": "UNPUBLISHED",
+  "listingDuration": "GTC",
+  "includeCatalogProductDetails": true,
+  "hideBuyerDetails": false,
+  "_imageUrls": [
+    "https://www.draftpilot.app/api/images/proxy?url=https%3A%2F%2Fwww.draftpilot.app%2Fapi%2Fimg%3Fk%3Dstaging%252Fgoogle-oauth2_108767599998494531403%252F57d1ef9a-fda4-448f-b4a4-565d4e773d47%252F26d8e13986b1297f-IMG_20260318_191319.jpg&v=mn27xnu3",
+    "https://www.draftpilot.app/api/images/proxy?url=https%3A%2F%2Fwww.draftpilot.app%2Fapi%2Fimg%3Fk%3Dstaging%252Fgoogle-oauth2_108767599998494531403%252F57d1ef9a-fda4-448f-b4a4-565d4e773d47%252F583066a64d651cb8-IMG_20260318_191330.jpg&v=mn27xnu3"
+  ],
+  "_draftLogs": {
+    "sku": "product-1",
+    "createdAt": "2026-03-22T20:37:40.639Z",
+    "classification": {
+      "brand": "Evereden",
+      "productName": "Kids Multi-Vitamin Face Cream",
+      "variant": null,
+      "size": null,
+      "packageType": null,
+      "keyText": [
+        "Evereden",
+        "Kids Multi-Vitamin Face Cream",
+        "Melon Juice",
+        "50 ml",
+        "Omegas 3, 6, 9"
+      ],
+      "netWeight": null,
+      "categoryPath": "Beauty > Skin Care > Face Moisturizers",
+      "photoQuantity": 1,
+      "bundleInfo": {
+        "isBundle": false,
+        "bundleType": null,
+        "bundleProducts": []
+      },
+      "servingCount": null
+    },
+    "pricing": {
+      "timestamp": "2026-03-22T20:37:40.638Z",
+      "brand": "Evereden",
+      "productName": "Kids Multi-Vitamin Face Cream",
+      "sources": [
+        {
+          "source": "Retail (Amazon/Walmart)",
+          "query": "Evereden Kids Multi-Vitamin Face Cream",
+          "results": [
+            {
+              "title": "Amazon",
+              "price": 18,
+              "shipping": 0,
+              "total": 18
+            }
+          ]
+        }
+      ],
+      "finalPrice": 15.3,
+      "finalShipping": 6,
+      "freeShippingApplied": false,
+      "calculations": [
+        {
+          "step": "1. Gather Competitor Prices",
+          "input": {
+            "ebayCompsCount": 0,
+            "retailCompsCount": 1
+          },
+          "output": {
+            "lowestEbayDelivered": "N/A",
+            "amazonPrice": "$18.00",
+            "walmartPrice": "N/A"
+          },
+          "notes": "Search eBay active listings, Amazon, Walmart, Google Shopping for competitor prices"
+        },
+        {
+          "step": "2. Calculate Target Delivered Price",
+          "input": {
+            "soldCount": 0,
+            "soldMedian": "N/A",
+            "soldStrong": false,
+            "competitorFloor": "N/A"
+          },
+          "output": {
+            "targetDeliveredPrice": "$21.30"
+          },
+          "formula": "Target = Amazon $18.00 × 0.85",
+          "notes": "Price based on Amazon listing. Buyer pays item + shipping separately."
+        },
+        {
+          "step": "3. Split Into Item + Shipping",
+          "input": {
+            "targetDelivered": "$21.30",
+            "shippingEstimate": "$6.00",
+            "freeShippingApplied": false
+          },
+          "output": {
+            "itemPrice": "$15.30",
+            "shippingCharge": "$6.00",
+            "subsidyAmount": "$0.00"
+          },
+          "formula": "ItemPrice = TargetDelivered - ShippingCharge",
+          "notes": "Buyer pays shipping separately"
+        },
+        {
+          "step": "4. Final Price Verification",
+          "input": {
+            "itemPrice": "$15.30",
+            "shippingCharge": "$6.00"
+          },
+          "output": {
+            "buyerTotalCost": "$21.30"
+          },
+          "formula": "BuyerTotal = ItemPrice + ShippingCharge",
+          "notes": "This is what the buyer pays at checkout"
+        }
+      ],
+      "reasoning": "Price based on amazon-direct data. Competitive.",
+      "confidence": "medium",
+      "warnings": [],
+      "competitorSummary": {
+        "amazonPrice": 18,
+        "ebayActiveCount": 0,
+        "ebaySoldCount": 0
+      },
+      "searchQuery": {
+        "priceLookupTitle": "Kids Multi-Vitamin Face Cream",
+        "amazonQuery": "Evereden Kids Multi-Vitamin Face Cream",
+        "ebayQuery": "Evereden Kids Multi-Vitamin Face Cream Beauty > Skin Care > Face Moisturizers Melon Juice 50 ml Omegas 3, 6, 9",
+        "googleQuery": "Evereden Kids Multi-Vitamin Face Cream Beauty > Skin Care > Face Moisturizers Melon Juice 50 ml Omegas 3, 6, 9",
+        "seoContext": "Beauty > Skin Care > Face Moisturizers Melon Juice 50 ml Omegas 3, 6, 9"
+      }
+    },
+    "promotion": {
+      "enabled": true,
+      "rate": 5,
+      "reason": "User-configured promotion rate"
+    },
+    "pricingStatus": "OK",
+    "needsPriceReview": false,
+    "offerId": "136710181011"
+  },
+  "_pricingDebug": {
+    "brand": "Evereden",
+    "productName": "Kids Multi-Vitamin Face Cream",
+    "amazonQuery": "Evereden Kids Multi-Vitamin Face Cream",
+    "priceLookupTitle": "Kids Multi-Vitamin Face Cream",
+    "confidence": "medium",
+    "reasoning": "Price based on amazon-direct data. Competitive.",
+    "warnings": [],
+    "competitorSummary": {
+      "amazonPrice": 18,
+      "ebayActiveCount": 0,
+      "ebaySoldCount": 0
+    },
+    "amazonUrl": null,
+    "amazonPriceDollars": 18,
+    "walmartUrl": null,
+    "walmartPriceDollars": null,
+    "finalPrice": 15.3
+  }
+}

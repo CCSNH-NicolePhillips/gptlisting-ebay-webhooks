@@ -865,7 +865,15 @@ export async function searchAmazonWithFallback(
   // Step 1: Check if we have a pinned ASIN for this brand+product — skip keyword search entirely
   try {
     const { getAmazonAsin } = await import('./brand-registry.js');
-    const registeredAsin = await getAmazonAsin(brand, productName);
+    // Try conflictCheckName first (clean product name), then the full productName
+    // (which may include seoContext). The creation pipeline appends category/keyText
+    // context to productName, making exact-match impossible for pins stored under
+    // the clean product name.
+    const cleanName = conflictCheckName ?? productName;
+    let registeredAsin = await getAmazonAsin(brand, cleanName);
+    if (!registeredAsin && cleanName !== productName) {
+      registeredAsin = await getAmazonAsin(brand, productName);
+    }
     if (registeredAsin) {
       console.log(`[amazon-search] Using registered ASIN ${registeredAsin} for "${brand} ${productName}"`);
       const asinResult = await lookupAmazonByAsin(registeredAsin, brand, productName);

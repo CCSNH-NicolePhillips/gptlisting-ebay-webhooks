@@ -1,0 +1,42 @@
+[
+  {
+    "offerId": "136710181011",
+    "sku": "EKMVFCmn27xns41g2",
+    "marketplaceId": "EBAY_US",
+    "format": "FIXED_PRICE",
+    "listingDescription": "Introducing the Evereden Kids Multi-Vitamin Face Cream, a premium skincare solution crafted specifically for children's delicate skin. This nourishing cream is formulated with a blend of essential Omegas 3, 6, and 9 to provide comprehensive hydration and skin protection. The delightful Melon Juice scent makes it a fun and pleasant experience for kids, encouraging regular use. Key benefits include moisturizing dry skin, boosting skin elasticity, and providing antioxidant protection. Evereden's formulation uses safe, gentle ingredients, making it perfect for sensitive skin. Specifications include a 50 ml size, featuring a rich blend of nourishing vitamins and omegas. Transform your child's skincare routine with Evereden's innovative formula, designed for healthy, vibrant skin. Order now and give your child's skin the care it deserves!",
+    "availableQuantity": 1,
+    "pricingSummary": {
+      "price": {
+        "value": "15.3",
+        "currency": "USD"
+      }
+    },
+    "listingPolicies": {
+      "paymentPolicyId": "245353452026",
+      "returnPolicyId": "245353453026",
+      "fulfillmentPolicyId": "245353454026",
+      "eBayPlusIfEligible": false,
+      "bestOfferTerms": {
+        "bestOfferEnabled": true,
+        "autoAcceptPrice": {
+          "value": "13.77",
+          "currency": "USD"
+        },
+        "autoDeclinePrice": {
+          "value": "9.18",
+          "currency": "USD"
+        }
+      }
+    },
+    "categoryId": "260746",
+    "merchantLocationKey": "primary-location",
+    "tax": {
+      "applyTax": false
+    },
+    "status": "UNPUBLISHED",
+    "listingDuration": "GTC",
+    "includeCatalogProductDetails": true,
+    "hideBuyerDetails": false
+  }
+]
