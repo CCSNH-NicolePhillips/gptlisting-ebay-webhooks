@@ -488,8 +488,10 @@ router.post('/listings/bulk-update-shipping', async (req, res) => {
       if (directPolicyId) {
         policyId = directPolicyId;
       } else if (mode === 'auto') {
+        // Only split on $50 threshold when user has two distinct policies
+        const hasTwoPolicies = paidId && freeId && paidId !== freeId;
         const numPrice = Number(price ?? 0);
-        policyId = (freeId && Number.isFinite(numPrice) && numPrice < 50) ? freeId : (paidId || freeId!);
+        policyId = (hasTwoPolicies && freeId && Number.isFinite(numPrice) && numPrice < 50) ? freeId : (paidId || freeId!);
       } else if (mode === 'free') {
         policyId = freeId!;
       } else {

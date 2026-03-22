@@ -300,8 +300,11 @@ export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>, us
     }
 
     // Per-price shipping policy selection: requires amazon price to be known first.
-    // Only applies when user has configured BOTH a paid and a free shipping fulfillment policy.
-    if (_policyDefaults?.fulfillment && _policyDefaults?.fulfillmentFree && amazonItemPriceCents > 0) {
+    // Only applies when user has configured TWO DISTINCT fulfillment policies.
+    // When both policies are the same (user wants free shipping on everything), skip the $50 split.
+    const hasTwoDistinctPolicies = _policyDefaults?.fulfillment && _policyDefaults?.fulfillmentFree
+      && _policyDefaults.fulfillment !== _policyDefaults.fulfillmentFree;
+    if (hasTwoDistinctPolicies && amazonItemPriceCents > 0) {
       const amazonDollars = amazonItemPriceCents / 100;
       const netWeight = group?.netWeight as { value: number; unit: string } | undefined;
       const category = (group?.categoryPath ?? group?.category) as string | undefined;
@@ -462,7 +465,9 @@ export async function mapGroupToDraftWithTaxonomy(group: Record<string, any>, us
   // 3. Single policy default (fulfillment)
   // 4. Category defaults / env var fallback
   let fulfillmentPolicyId: string | null;
-  if (_policyDefaults?.fulfillment && _policyDefaults?.fulfillmentFree) {
+  const hasTwoDistinctFulfillment = _policyDefaults?.fulfillment && _policyDefaults?.fulfillmentFree
+    && _policyDefaults.fulfillment !== _policyDefaults.fulfillmentFree;
+  if (hasTwoDistinctFulfillment) {
     // Use Amazon price if available; for publish path approximate from item price + discount
     const refDollars = typeof priceMeta?.basePrice === 'number'
       ? priceMeta.basePrice

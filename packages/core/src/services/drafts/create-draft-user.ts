@@ -278,18 +278,28 @@ export async function createEbayDraftsFromGroups(
     // ignore
   }
 
-  /** Pick the correct fulfillment policy: free shipping for items priced under $50 */
+  /**
+   * Pick the correct fulfillment policy.
+   * Only split on the $50 threshold when the user has TWO DISTINCT policies.
+   * When both policies are the same (or only one is set), use that single
+   * policy for ALL items — this respects "free shipping as my default".
+   */
   function pickFulfillmentPolicy(price: unknown): string | null {
-    const FREE_SHIPPING_THRESHOLD = 50;
-    const numPrice = Number(price);
-    if (
+    const hasTwoPolicies = userPolicyDefaults.fulfillment &&
       userPolicyDefaults.fulfillmentFree &&
-      Number.isFinite(numPrice) &&
-      numPrice < FREE_SHIPPING_THRESHOLD
-    ) {
-      return userPolicyDefaults.fulfillmentFree;
+      userPolicyDefaults.fulfillment !== userPolicyDefaults.fulfillmentFree;
+
+    if (hasTwoPolicies) {
+      const FREE_SHIPPING_THRESHOLD = 50;
+      const numPrice = Number(price);
+      if (Number.isFinite(numPrice) && numPrice < FREE_SHIPPING_THRESHOLD) {
+        return userPolicyDefaults.fulfillmentFree!;
+      }
+      return userPolicyDefaults.fulfillment!;
     }
-    return userPolicyDefaults.fulfillment ?? null;
+
+    // Single policy (or both are the same) → use it for all items
+    return userPolicyDefaults.fulfillment ?? userPolicyDefaults.fulfillmentFree ?? null;
   }
 
   // Pre-validate and map all groups (fail fast before any eBay API call)
