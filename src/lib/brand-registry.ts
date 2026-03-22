@@ -62,10 +62,13 @@ export async function getAmazonAsin(brand: string, product: string): Promise<str
     // 1. exact product as given
     // 2. first 3 words (drops trailing size/descriptor words)
     // 3. first 2 words
+    // 4. first word alone — handles seoContext-enriched queries like
+    //    "SuperCalm Cherry Limeade Net Wt. 4.57 oz" matching pin "SuperCalm"
     const words = product.trim().split(/\s+/);
     const candidates = [product];
     if (words.length > 3) candidates.push(words.slice(0, 3).join(' '));
     if (words.length > 2) candidates.push(words.slice(0, 2).join(' '));
+    if (words.length > 1) candidates.push(words[0]);  // first-word fallback
 
     for (const candidate of candidates) {
       const key = buildKey(brand, candidate);

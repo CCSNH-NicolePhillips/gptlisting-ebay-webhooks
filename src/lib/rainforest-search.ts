@@ -249,22 +249,25 @@ function scoreResults(results: RainforestSearchResult[], productName: string): S
     const reasons: string[] = [];
     let score = 0;
 
-    // Count product-word hits in title
-    const hits = productWords.filter(w => titleLower.includes(w));
-    const hitRatio = productWords.length > 0 ? hits.length / productWords.length : 0;
+    // Split productWords into:
+    //   anchorWords = FIRST word only (the base product identifier, e.g. 'supercalm')
+    //   flavorWords = remaining words (flavor/variant/size, e.g. 'cherry', 'limeade')
+    // Amazon search result titles contain the base name but NOT flavor — flavor is
+    // stored in the variant selector, not the title. Require only anchor to match;
+    // flavor words are optional boosters that add to score when present.
+    const anchorWords = productWords.slice(0, 1);
+    const flavorWords = productWords.slice(1);
 
-    if (hits.length === 0) continue; // zero overlap → definitely wrong product
+    const anchorHits = anchorWords.filter(w => titleLower.includes(w));
+    const flavorHits = flavorWords.filter(w => titleLower.includes(w));
+    const totalHits = anchorHits.length + flavorHits.length;
+    const hitRatio = productWords.length > 0 ? totalHits / productWords.length : 0;
 
-    // For short product names (≤4 significant words), ALL words must appear in the title.
-    // e.g. "ReLive Greens" → both 'relive' AND 'greens' must match, not just 'greens'.
-    // This prevents a generic greens product matching when only 'greens' overlaps.
-    if (productWords.length <= 4 && hitRatio < 1.0) {
-      console.log(`[rainforest] skip partial match (${hits.length}/${productWords.length} words): "${r.title.slice(0, 55)}"`);
-      continue;
-    }
+    if (anchorHits.length === 0) continue; // anchor word not in title → wrong product
 
-    score += Math.round(hitRatio * 60); // up to 60 pts for word match
-    reasons.push(`words=${hits.length}/${productWords.length}`);
+    score += Math.round(hitRatio * 60); // up to 60 pts for word match (anchor required, flavor bonus)
+    if (flavorHits.length > 0) score += 10; // bonus: flavor/variant confirmed in title
+    reasons.push(`words=${totalHits}/${productWords.length}(anchor=${anchorHits.length}/1)`);
 
     // Bonus: non-sponsored result is more trustworthy ordering-wise
     if (!r.sponsored) {
