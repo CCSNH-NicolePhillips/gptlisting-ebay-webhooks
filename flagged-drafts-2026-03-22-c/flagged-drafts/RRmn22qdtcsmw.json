@@ -1,0 +1,189 @@
+{
+  "offerId": "136671764011",
+  "sku": "RRmn22qdtcsmw",
+  "marketplaceId": "EBAY_US",
+  "format": "FIXED_PRICE",
+  "listingDescription": "Unleash the power of wellness with Root Restore Powder, your go-to dietary supplement formulated to revitalize and invigorate your health. Taste greatness with every scoop of this lemon-flavored supplement that supports overall wellness and energy. Designed for those who seek a natural and effective way to enhance their daily nutrient intake, Root Restore is more than just a supplement—it's a lifestyle choice. Each serving provides essential nutrients that help maintain optimal health, making it perfect for adults desiring a convenient way to maintain their vitality and energy. This formulation contains carefully selected ingredients known for their health benefits and efficacy. Make a positive choice for your wellbeing today with Root Restore. Specifications include a classic lemon flavor for a refreshing taste experience, presented in a convenient powder form for easy mixing into your favorite beverages. Join the growing community of individuals who step towards a healthier lifestyle with Root.",
+  "availableQuantity": 1,
+  "pricingSummary": {
+    "price": {
+      "value": "28.05",
+      "currency": "USD"
+    }
+  },
+  "listingPolicies": {
+    "paymentPolicyId": "245353452026",
+    "returnPolicyId": "245353453026",
+    "fulfillmentPolicyId": "245353454026",
+    "eBayPlusIfEligible": false,
+    "bestOfferTerms": {
+      "bestOfferEnabled": true,
+      "autoAcceptPrice": {
+        "value": "25.25",
+        "currency": "USD"
+      },
+      "autoDeclinePrice": {
+        "value": "16.83",
+        "currency": "USD"
+      }
+    }
+  },
+  "categoryId": "180960",
+  "merchantLocationKey": "primary-location",
+  "tax": {
+    "applyTax": false
+  },
+  "status": "UNPUBLISHED",
+  "listingDuration": "GTC",
+  "includeCatalogProductDetails": true,
+  "hideBuyerDetails": false,
+  "_imageUrls": [
+    "https://www.draftpilot.app/api/images/proxy?url=https%3A%2F%2Fwww.draftpilot.app%2Fapi%2Fimg%3Fk%3Dstaging%252Fgoogle-oauth2_108767599998494531403%252F8a35fc7c-9416-4c21-bb6c-3ce5004c8ad2%252Fadb76c0971c1002b-IMG_20260320_171157.jpg&v=mn22qdv3",
+    "https://www.draftpilot.app/api/images/proxy?url=https%3A%2F%2Fwww.draftpilot.app%2Fapi%2Fimg%3Fk%3Dstaging%252Fgoogle-oauth2_108767599998494531403%252F8a35fc7c-9416-4c21-bb6c-3ce5004c8ad2%252Fdbe6da7d76b3bba0-IMG_20260320_171211.jpg&v=mn22qdv3"
+  ],
+  "_draftLogs": {
+    "sku": "product-2",
+    "createdAt": "2026-03-22T18:11:19.906Z",
+    "classification": {
+      "brand": "Root",
+      "productName": "Restore",
+      "variant": null,
+      "size": null,
+      "packageType": null,
+      "keyText": [
+        "Root",
+        "Restore",
+        "Taste Greatness"
+      ],
+      "netWeight": null,
+      "categoryPath": "Health & Personal Care > Vitamins & Dietary Supplements",
+      "photoQuantity": 1,
+      "bundleInfo": {
+        "isBundle": false,
+        "bundleType": null,
+        "bundleProducts": []
+      },
+      "servingCount": null
+    },
+    "pricing": {
+      "timestamp": "2026-03-22T18:11:19.906Z",
+      "brand": "Root",
+      "productName": "Restore",
+      "sources": [
+        {
+          "source": "Retail (Amazon/Walmart)",
+          "query": "Root Restore",
+          "results": [
+            {
+              "title": "Amazon",
+              "price": 33,
+              "shipping": 0,
+              "total": 33
+            }
+          ]
+        }
+      ],
+      "finalPrice": 28.05,
+      "finalShipping": 6,
+      "freeShippingApplied": false,
+      "calculations": [
+        {
+          "step": "1. Gather Competitor Prices",
+          "input": {
+            "ebayCompsCount": 0,
+            "retailCompsCount": 1
+          },
+          "output": {
+            "lowestEbayDelivered": "N/A",
+            "amazonPrice": "$33.00",
+            "walmartPrice": "N/A"
+          },
+          "notes": "Search eBay active listings, Amazon, Walmart, Google Shopping for competitor prices"
+        },
+        {
+          "step": "2. Calculate Target Delivered Price",
+          "input": {
+            "soldCount": 0,
+            "soldMedian": "N/A",
+            "soldStrong": false,
+            "competitorFloor": "N/A"
+          },
+          "output": {
+            "targetDeliveredPrice": "$34.05"
+          },
+          "formula": "Target = Amazon $33.00 × 0.85",
+          "notes": "Price based on Amazon listing. Buyer pays item + shipping separately."
+        },
+        {
+          "step": "3. Split Into Item + Shipping",
+          "input": {
+            "targetDelivered": "$34.05",
+            "shippingEstimate": "$6.00",
+            "freeShippingApplied": false
+          },
+          "output": {
+            "itemPrice": "$28.05",
+            "shippingCharge": "$6.00",
+            "subsidyAmount": "$0.00"
+          },
+          "formula": "ItemPrice = TargetDelivered - ShippingCharge",
+          "notes": "Buyer pays shipping separately"
+        },
+        {
+          "step": "4. Final Price Verification",
+          "input": {
+            "itemPrice": "$28.05",
+            "shippingCharge": "$6.00"
+          },
+          "output": {
+            "buyerTotalCost": "$34.05"
+          },
+          "formula": "BuyerTotal = ItemPrice + ShippingCharge",
+          "notes": "This is what the buyer pays at checkout"
+        }
+      ],
+      "reasoning": "Price based on amazon-direct data. Competitive.",
+      "confidence": "medium",
+      "warnings": [],
+      "competitorSummary": {
+        "amazonPrice": 33,
+        "ebayActiveCount": 0,
+        "ebaySoldCount": 0
+      },
+      "searchQuery": {
+        "priceLookupTitle": "Restore",
+        "amazonQuery": "Root Restore",
+        "ebayQuery": "Root Restore Health & Personal Care > Vitamins & Dietary Supplements Taste Greatness",
+        "googleQuery": "Root Restore Health & Personal Care > Vitamins & Dietary Supplements Taste Greatness",
+        "seoContext": "Health & Personal Care > Vitamins & Dietary Supplements Taste Greatness"
+      }
+    },
+    "promotion": {
+      "enabled": true,
+      "rate": 5,
+      "reason": "User-configured promotion rate"
+    },
+    "pricingStatus": "OK",
+    "needsPriceReview": false,
+    "offerId": "136671764011"
+  },
+  "_pricingDebug": {
+    "brand": "Root",
+    "productName": "Restore",
+    "amazonQuery": "Root Restore",
+    "priceLookupTitle": "Restore",
+    "confidence": "medium",
+    "reasoning": "Price based on amazon-direct data. Competitive.",
+    "warnings": [],
+    "competitorSummary": {
+      "amazonPrice": 33,
+      "ebayActiveCount": 0,
+      "ebaySoldCount": 0
+    },
+    "amazonUrl": null,
+    "amazonPriceDollars": 33,
+    "walmartUrl": null,
+    "walmartPriceDollars": null,
+    "finalPrice": 28.05
+  }
+}

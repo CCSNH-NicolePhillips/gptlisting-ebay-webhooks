@@ -36,12 +36,13 @@ router.post('/reprice', async (req, res) => {
   try {
     const { userId } = await requireUserAuth(req.headers.authorization || '');
 
-    const { brand, productName, ebayTitle, servingCount, keyText } = req.body as {
+    const { brand, productName, ebayTitle, servingCount, keyText, brandWebsite } = req.body as {
       brand?: string;
       productName?: string;
       ebayTitle?: string;
       servingCount?: number | null;
       keyText?: string[];
+      brandWebsite?: string | null;
     };
 
     console.log(`[reprice] RAW body: brand="${brand}" productName="${String(productName).slice(0, 120)}" ebayTitle="${String(ebayTitle || '').slice(0, 80)}" servingCount=${servingCount ?? 'null'}`);
@@ -180,6 +181,7 @@ router.post('/reprice', async (req, res) => {
       additionalContext,
       settings,
       servingCount: typeof servingCount === 'number' ? servingCount : null,
+      brandWebsite: brandWebsite ?? null,
     });
 
     console.log(`[reprice] getPricingDecision returned: status=${pricingResult.status} finalItemCents=${pricingResult.finalItemCents} finalShipCents=${pricingResult.finalShipCents} warnings=[${(pricingResult.warnings ?? []).join(',')}] mode=${pricingResult.pricingEvidence?.mode} amazonPriceCents=${pricingResult.pricingEvidence?.summary?.amazonPriceCents ?? 'null'} amazonTitle="${(pricingResult.pricingEvidence?.summary?.topComps?.[0]?.title ?? '').slice(0,80)}"`); 

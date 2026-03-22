@@ -1520,6 +1520,7 @@ async function createDraftForProduct(
       additionalContext: seoContext,
       amazonPricingRatio: pricingSettings.amazonPricingRatio ?? 0.85,
       servingCount: product.servingCount ?? undefined,
+      brandWebsite: product.brandWebsite ?? null,
     });
     
     // If full bundle query failed, try simplified query (e.g., "Brand Shampoo Conditioner")

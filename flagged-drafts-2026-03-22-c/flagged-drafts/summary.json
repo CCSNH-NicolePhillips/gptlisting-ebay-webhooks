@@ -1,0 +1,42 @@
+[
+  {
+    "offerId": "136671764011",
+    "sku": "RRmn22qdtcsmw",
+    "marketplaceId": "EBAY_US",
+    "format": "FIXED_PRICE",
+    "listingDescription": "Unleash the power of wellness with Root Restore Powder, your go-to dietary supplement formulated to revitalize and invigorate your health. Taste greatness with every scoop of this lemon-flavored supplement that supports overall wellness and energy. Designed for those who seek a natural and effective way to enhance their daily nutrient intake, Root Restore is more than just a supplement—it's a lifestyle choice. Each serving provides essential nutrients that help maintain optimal health, making it perfect for adults desiring a convenient way to maintain their vitality and energy. This formulation contains carefully selected ingredients known for their health benefits and efficacy. Make a positive choice for your wellbeing today with Root Restore. Specifications include a classic lemon flavor for a refreshing taste experience, presented in a convenient powder form for easy mixing into your favorite beverages. Join the growing community of individuals who step towards a healthier lifestyle with Root.",
+    "availableQuantity": 1,
+    "pricingSummary": {
+      "price": {
+        "value": "28.05",
+        "currency": "USD"
+      }
+    },
+    "listingPolicies": {
+      "paymentPolicyId": "245353452026",
+      "returnPolicyId": "245353453026",
+      "fulfillmentPolicyId": "245353454026",
+      "eBayPlusIfEligible": false,
+      "bestOfferTerms": {
+        "bestOfferEnabled": true,
+        "autoAcceptPrice": {
+          "value": "25.25",
+          "currency": "USD"
+        },
+        "autoDeclinePrice": {
+          "value": "16.83",
+          "currency": "USD"
+        }
+      }
+    },
+    "categoryId": "180960",
+    "merchantLocationKey": "primary-location",
+    "tax": {
+      "applyTax": false
+    },
+    "status": "UNPUBLISHED",
+    "listingDuration": "GTC",
+    "includeCatalogProductDetails": true,
+    "hideBuyerDetails": false
+  }
+]

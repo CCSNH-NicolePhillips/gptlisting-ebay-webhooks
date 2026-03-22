@@ -832,7 +832,8 @@ export async function searchAmazonWithFallback(
   brand: string,
   productName: string,
   tryBrandOnly: boolean = true,
-  conflictCheckName?: string
+  conflictCheckName?: string,
+  brandWebsite?: string | null,
 ): Promise<AmazonPriceLookupResult> {
   // Check if we have a pinned ASIN for this brand+product — skip keyword search entirely
   try {
@@ -923,6 +924,22 @@ export async function searchAmazonWithFallback(
   if (gsResult.price !== null && gsResult.confidence !== 'low') {
     console.log(`[amazon-search] ✅ Google Shopping found: $${gsResult.price} (${gsResult.confidence})`);
     return gsResult;
+  }
+
+  // Step 5: Brand website via Perplexity AI web search.
+  // Used for DTC-only brands whose products aren't sold on Amazon or indexed by Google Shopping
+  // (e.g. therootbrands.com, myrkmd.com).  Perplexity's sonar model does a live web search to
+  // find the brand's official product page and extract the current retail price.
+  try {
+    const { searchBrandWebsite } = await import('./brand-website-search.js');
+    console.log(`[amazon-search] Trying brand website fallback for "${brand} ${productName}"`);
+    const bwResult = await searchBrandWebsite(brand, conflictCheckName ?? productName, brandWebsite);
+    if (bwResult.price !== null && bwResult.confidence !== 'low') {
+      console.log(`[amazon-search] ✅ Brand website found: $${bwResult.price} (${bwResult.confidence})`);
+      return bwResult;
+    }
+  } catch (err) {
+    console.warn('[amazon-search] Brand website search failed (non-fatal):', err instanceof Error ? err.message : String(err));
   }
 
   // Nothing found anywhere — return the best null result we have

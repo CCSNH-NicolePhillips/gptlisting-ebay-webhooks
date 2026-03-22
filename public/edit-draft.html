@@ -1688,7 +1688,12 @@
         // (e.g. "Makeup Eraser" brand / "Makeup Eraser" product → uses "7-Day Set" from keyText)
         const keyText = originalDraft?._draftLogs?.classification?.keyText || [];
 
-        console.log('[reprice] Request:', { brand, productName, ebayTitle, servingCount, keyText });
+        // Send brandWebsite hint for the Perplexity brand-website fallback (Step 5).
+        // Vision sometimes extracts the brand URL from packaging; passing it lets Perplexity
+        // target the correct domain directly (e.g. "https://therootbrands.com").
+        const brandWebsite = originalDraft?._draftLogs?.classification?.brandWebsite || null;
+
+        console.log('[reprice] Request:', { brand, productName, ebayTitle, servingCount, keyText, brandWebsite });
 
         if (!brand && !productName) {
           throw new Error('Need brand or title to calculate price');
@@ -1697,7 +1702,7 @@
         const res = await fetchJSON('/api/pricing/reprice', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ brand, productName, ebayTitle, servingCount, keyText }),
+          body: JSON.stringify({ brand, productName, ebayTitle, servingCount, keyText, brandWebsite }),
         });
         
         console.log('[reprice] Response:', res);

@@ -1,0 +1,189 @@
+{
+  "offerId": "136671803011",
+  "sku": "MEMEmn22qe5gwq8",
+  "marketplaceId": "EBAY_US",
+  "format": "FIXED_PRICE",
+  "listingDescription": "Introducing the Makeup Eraser 7-Day Set, a revolutionary approach to your daily makeup removal routine. Say goodbye to disposable wipes and say hello to an eco-friendly, skin-loving solution. This set includes seven soft, plush cloths designed to remove all makeup with just water. Simply wet the cloth, erase makeup from your face, and experience the difference. Perfect for sensitive skin, these makeup removers gently lift away dirt, oil, and even waterproof makeup without the need for harsh chemicals. Each cloth is machine washable, ensuring durability and repeated use. Transform your skincare regimen with this convenient, travel-friendly set. Key benefits include ease of use, sustainability, and gentle, effective makeup removal tailored for all skin types. Discover the simplicity and effectiveness of the Makeup Eraser today!",
+  "availableQuantity": 1,
+  "pricingSummary": {
+    "price": {
+      "value": "10.79",
+      "currency": "USD"
+    }
+  },
+  "listingPolicies": {
+    "paymentPolicyId": "245353452026",
+    "returnPolicyId": "245353453026",
+    "fulfillmentPolicyId": "245353454026",
+    "eBayPlusIfEligible": false,
+    "bestOfferTerms": {
+      "bestOfferEnabled": true,
+      "autoAcceptPrice": {
+        "value": "9.71",
+        "currency": "USD"
+      },
+      "autoDeclinePrice": {
+        "value": "6.47",
+        "currency": "USD"
+      }
+    }
+  },
+  "categoryId": "170082",
+  "merchantLocationKey": "primary-location",
+  "tax": {
+    "applyTax": false
+  },
+  "status": "UNPUBLISHED",
+  "listingDuration": "GTC",
+  "includeCatalogProductDetails": true,
+  "hideBuyerDetails": false,
+  "_imageUrls": [
+    "https://www.draftpilot.app/api/images/proxy?url=https%3A%2F%2Fwww.draftpilot.app%2Fapi%2Fimg%3Fk%3Dstaging%252Fgoogle-oauth2_108767599998494531403%252F8a35fc7c-9416-4c21-bb6c-3ce5004c8ad2%252F6bba910c1522b13f-IMG_20260320_171949.jpg&v=mn22qe76",
+    "https://www.draftpilot.app/api/images/proxy?url=https%3A%2F%2Fwww.draftpilot.app%2Fapi%2Fimg%3Fk%3Dstaging%252Fgoogle-oauth2_108767599998494531403%252F8a35fc7c-9416-4c21-bb6c-3ce5004c8ad2%252Fad46edb2e9a90463-IMG_20260320_171957.jpg&v=mn22qe76"
+  ],
+  "_draftLogs": {
+    "sku": "product-9",
+    "createdAt": "2026-03-22T18:11:48.026Z",
+    "classification": {
+      "brand": "Makeup Eraser",
+      "productName": "Makeup Eraser",
+      "variant": null,
+      "size": null,
+      "packageType": null,
+      "keyText": [
+        "Makeup Eraser",
+        "7-Day Set",
+        "Erase all makeup with JUST WATER"
+      ],
+      "netWeight": null,
+      "categoryPath": "Beauty > Tools & Accessories > Makeup Removers",
+      "photoQuantity": 1,
+      "bundleInfo": {
+        "isBundle": false,
+        "bundleType": null,
+        "bundleProducts": []
+      },
+      "servingCount": null
+    },
+    "pricing": {
+      "timestamp": "2026-03-22T18:11:48.026Z",
+      "brand": "Makeup Eraser",
+      "productName": "Makeup Eraser",
+      "sources": [
+        {
+          "source": "Retail (Amazon/Walmart)",
+          "query": "Makeup Eraser Makeup Eraser",
+          "results": [
+            {
+              "title": "Amazon",
+              "price": 12.69,
+              "shipping": 0,
+              "total": 12.69
+            }
+          ]
+        }
+      ],
+      "finalPrice": 10.79,
+      "finalShipping": 6,
+      "freeShippingApplied": false,
+      "calculations": [
+        {
+          "step": "1. Gather Competitor Prices",
+          "input": {
+            "ebayCompsCount": 0,
+            "retailCompsCount": 1
+          },
+          "output": {
+            "lowestEbayDelivered": "N/A",
+            "amazonPrice": "$12.69",
+            "walmartPrice": "N/A"
+          },
+          "notes": "Search eBay active listings, Amazon, Walmart, Google Shopping for competitor prices"
+        },
+        {
+          "step": "2. Calculate Target Delivered Price",
+          "input": {
+            "soldCount": 0,
+            "soldMedian": "N/A",
+            "soldStrong": false,
+            "competitorFloor": "N/A"
+          },
+          "output": {
+            "targetDeliveredPrice": "$16.79"
+          },
+          "formula": "Target = Amazon $12.69 × 0.85",
+          "notes": "Price based on Amazon listing. Buyer pays item + shipping separately."
+        },
+        {
+          "step": "3. Split Into Item + Shipping",
+          "input": {
+            "targetDelivered": "$16.79",
+            "shippingEstimate": "$6.00",
+            "freeShippingApplied": false
+          },
+          "output": {
+            "itemPrice": "$10.79",
+            "shippingCharge": "$6.00",
+            "subsidyAmount": "$0.00"
+          },
+          "formula": "ItemPrice = TargetDelivered - ShippingCharge",
+          "notes": "Buyer pays shipping separately"
+        },
+        {
+          "step": "4. Final Price Verification",
+          "input": {
+            "itemPrice": "$10.79",
+            "shippingCharge": "$6.00"
+          },
+          "output": {
+            "buyerTotalCost": "$16.79"
+          },
+          "formula": "BuyerTotal = ItemPrice + ShippingCharge",
+          "notes": "This is what the buyer pays at checkout"
+        }
+      ],
+      "reasoning": "Price based on amazon-direct data. Competitive.",
+      "confidence": "medium",
+      "warnings": [],
+      "competitorSummary": {
+        "amazonPrice": 12.69,
+        "ebayActiveCount": 0,
+        "ebaySoldCount": 0
+      },
+      "searchQuery": {
+        "priceLookupTitle": "Makeup Eraser",
+        "amazonQuery": "Makeup Eraser Makeup Eraser",
+        "ebayQuery": "Makeup Eraser Makeup Eraser Beauty > Tools & Accessories > Makeup Removers 7-Day Set Erase all makeup with JUST WATER",
+        "googleQuery": "Makeup Eraser Makeup Eraser Beauty > Tools & Accessories > Makeup Removers 7-Day Set Erase all makeup with JUST WATER",
+        "seoContext": "Beauty > Tools & Accessories > Makeup Removers 7-Day Set Erase all makeup with JUST WATER"
+      }
+    },
+    "promotion": {
+      "enabled": true,
+      "rate": 5,
+      "reason": "User-configured promotion rate"
+    },
+    "pricingStatus": "OK",
+    "needsPriceReview": false,
+    "offerId": "136671803011"
+  },
+  "_pricingDebug": {
+    "brand": "Makeup Eraser",
+    "productName": "Makeup Eraser",
+    "amazonQuery": "Makeup Eraser Makeup Eraser",
+    "priceLookupTitle": "Makeup Eraser",
+    "confidence": "medium",
+    "reasoning": "Price based on amazon-direct data. Competitive.",
+    "warnings": [],
+    "competitorSummary": {
+      "amazonPrice": 12.69,
+      "ebayActiveCount": 0,
+      "ebaySoldCount": 0
+    },
+    "amazonUrl": null,
+    "amazonPriceDollars": 12.69,
+    "walmartUrl": null,
+    "walmartPriceDollars": null,
+    "finalPrice": 10.79
+  }
+}

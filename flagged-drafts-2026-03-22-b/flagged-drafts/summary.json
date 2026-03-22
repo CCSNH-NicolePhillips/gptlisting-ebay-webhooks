@@ -1,0 +1,42 @@
+[
+  {
+    "offerId": "136671803011",
+    "sku": "MEMEmn22qe5gwq8",
+    "marketplaceId": "EBAY_US",
+    "format": "FIXED_PRICE",
+    "listingDescription": "Introducing the Makeup Eraser 7-Day Set, a revolutionary approach to your daily makeup removal routine. Say goodbye to disposable wipes and say hello to an eco-friendly, skin-loving solution. This set includes seven soft, plush cloths designed to remove all makeup with just water. Simply wet the cloth, erase makeup from your face, and experience the difference. Perfect for sensitive skin, these makeup removers gently lift away dirt, oil, and even waterproof makeup without the need for harsh chemicals. Each cloth is machine washable, ensuring durability and repeated use. Transform your skincare regimen with this convenient, travel-friendly set. Key benefits include ease of use, sustainability, and gentle, effective makeup removal tailored for all skin types. Discover the simplicity and effectiveness of the Makeup Eraser today!",
+    "availableQuantity": 1,
+    "pricingSummary": {
+      "price": {
+        "value": "10.79",
+        "currency": "USD"
+      }
+    },
+    "listingPolicies": {
+      "paymentPolicyId": "245353452026",
+      "returnPolicyId": "245353453026",
+      "fulfillmentPolicyId": "245353454026",
+      "eBayPlusIfEligible": false,
+      "bestOfferTerms": {
+        "bestOfferEnabled": true,
+        "autoAcceptPrice": {
+          "value": "9.71",
+          "currency": "USD"
+        },
+        "autoDeclinePrice": {
+          "value": "6.47",
+          "currency": "USD"
+        }
+      }
+    },
+    "categoryId": "170082",
+    "merchantLocationKey": "primary-location",
+    "tax": {
+      "applyTax": false
+    },
+    "status": "UNPUBLISHED",
+    "listingDuration": "GTC",
+    "includeCatalogProductDetails": true,
+    "hideBuyerDetails": false
+  }
+]

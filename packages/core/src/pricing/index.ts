@@ -65,6 +65,12 @@ export interface PricingInput {
    * the ratio. This prevents over-pricing a 5-serving sample vs a 30-serving tub.
    */
   servingCount?: number | null;
+  /**
+   * Official brand website URL from Vision API classification (e.g. "https://therootbrands.com").
+   * Passed as a hint to the Perplexity brand-website fallback (Step 5) so it can target the
+   * correct domain directly rather than searching from scratch.
+   */
+  brandWebsite?: string | null;
 }
 
 /**
@@ -266,7 +272,7 @@ export async function getPricingDecision(input: PricingInput): Promise<PricingDe
     // Besque Magic Luxury Body Oil). Conflict checks still use the original productName.
     const amazonProductQuery = [productName, additionalContext].filter(Boolean).join(' ').trim();
     console.log(`[pricing] amazon_anchored: amazonProductQuery="${amazonProductQuery}"`);
-    const amazonResult = await searchAmazonWithFallback(brand, amazonProductQuery, true, productName);
+    const amazonResult = await searchAmazonWithFallback(brand, amazonProductQuery, true, productName, input.brandWebsite ?? undefined);
 
     console.log(`[pricing] amazon_anchored: searchAmazonWithFallback returned — price=$${String(amazonResult.price)} confidence=${amazonResult.confidence} title="${String(amazonResult.title ?? '').slice(0, 80)}" reasoning="${amazonResult.reasoning}"`);
 
