@@ -1,0 +1,189 @@
+{
+  "offerId": "136671758011",
+  "sku": "RZImn22qdrbrl9",
+  "marketplaceId": "EBAY_US",
+  "format": "FIXED_PRICE",
+  "listingDescription": "Experience enhanced mental clarity and focus with Root Zero-In, a premium dietary supplement designed to support your brain's natural capabilities. Packed with active ingredients to boost cognitive functions, this product is perfect for individuals looking to improve concentration and mental performance. Zero-In is formulated in convenient capsule form, making it easy to incorporate into your daily routine. The natural flavor ensures a pleasant intake experience, setting it apart from other supplements in the market. Specifications include a blend of high-quality, natural ingredients to maximize efficacy. Ideal for students, professionals, and anyone seeking to elevate their cognitive performance. Take charge of your mental health with Root Zero-In and discover the difference in your daily focus and productivity!",
+  "availableQuantity": 1,
+  "pricingSummary": {
+    "price": {
+      "value": "12.74",
+      "currency": "USD"
+    }
+  },
+  "listingPolicies": {
+    "paymentPolicyId": "245353452026",
+    "returnPolicyId": "245353453026",
+    "fulfillmentPolicyId": "245353454026",
+    "eBayPlusIfEligible": false,
+    "bestOfferTerms": {
+      "bestOfferEnabled": true,
+      "autoAcceptPrice": {
+        "value": "11.47",
+        "currency": "USD"
+      },
+      "autoDeclinePrice": {
+        "value": "7.64",
+        "currency": "USD"
+      }
+    }
+  },
+  "categoryId": "180960",
+  "merchantLocationKey": "primary-location",
+  "tax": {
+    "applyTax": false
+  },
+  "status": "UNPUBLISHED",
+  "listingDuration": "GTC",
+  "includeCatalogProductDetails": true,
+  "hideBuyerDetails": false,
+  "_imageUrls": [
+    "https://www.draftpilot.app/api/images/proxy?url=https%3A%2F%2Fwww.draftpilot.app%2Fapi%2Fimg%3Fk%3Dstaging%252Fgoogle-oauth2_108767599998494531403%252F8a35fc7c-9416-4c21-bb6c-3ce5004c8ad2%252F36d4c9d3456d0c8b-IMG_20260320_171115.jpg&v=mn22qdtc",
+    "https://www.draftpilot.app/api/images/proxy?url=https%3A%2F%2Fwww.draftpilot.app%2Fapi%2Fimg%3Fk%3Dstaging%252Fgoogle-oauth2_108767599998494531403%252F8a35fc7c-9416-4c21-bb6c-3ce5004c8ad2%252Fb566c88b5c2a3530-IMG_20260320_171141.jpg&v=mn22qdtc"
+  ],
+  "_draftLogs": {
+    "sku": "product-1",
+    "createdAt": "2026-03-22T18:11:20.973Z",
+    "classification": {
+      "brand": "Root",
+      "productName": "Zero-In",
+      "variant": null,
+      "size": null,
+      "packageType": null,
+      "keyText": [
+        "Root",
+        "Zero-In",
+        "Focus your brain naturally"
+      ],
+      "netWeight": null,
+      "categoryPath": "Health & Personal Care > Vitamins & Dietary Supplements",
+      "photoQuantity": 1,
+      "bundleInfo": {
+        "isBundle": false,
+        "bundleType": null,
+        "bundleProducts": []
+      },
+      "servingCount": null
+    },
+    "pricing": {
+      "timestamp": "2026-03-22T18:11:20.973Z",
+      "brand": "Root",
+      "productName": "Zero-In",
+      "sources": [
+        {
+          "source": "Retail (Amazon/Walmart)",
+          "query": "Root Zero-In",
+          "results": [
+            {
+              "title": "Amazon",
+              "price": 14.99,
+              "shipping": 0,
+              "total": 14.99
+            }
+          ]
+        }
+      ],
+      "finalPrice": 12.74,
+      "finalShipping": 6,
+      "freeShippingApplied": false,
+      "calculations": [
+        {
+          "step": "1. Gather Competitor Prices",
+          "input": {
+            "ebayCompsCount": 0,
+            "retailCompsCount": 1
+          },
+          "output": {
+            "lowestEbayDelivered": "N/A",
+            "amazonPrice": "$14.99",
+            "walmartPrice": "N/A"
+          },
+          "notes": "Search eBay active listings, Amazon, Walmart, Google Shopping for competitor prices"
+        },
+        {
+          "step": "2. Calculate Target Delivered Price",
+          "input": {
+            "soldCount": 0,
+            "soldMedian": "N/A",
+            "soldStrong": false,
+            "competitorFloor": "N/A"
+          },
+          "output": {
+            "targetDeliveredPrice": "$18.74"
+          },
+          "formula": "Target = Amazon $14.99 × 0.85",
+          "notes": "Price based on Amazon listing. Buyer pays item + shipping separately."
+        },
+        {
+          "step": "3. Split Into Item + Shipping",
+          "input": {
+            "targetDelivered": "$18.74",
+            "shippingEstimate": "$6.00",
+            "freeShippingApplied": false
+          },
+          "output": {
+            "itemPrice": "$12.74",
+            "shippingCharge": "$6.00",
+            "subsidyAmount": "$0.00"
+          },
+          "formula": "ItemPrice = TargetDelivered - ShippingCharge",
+          "notes": "Buyer pays shipping separately"
+        },
+        {
+          "step": "4. Final Price Verification",
+          "input": {
+            "itemPrice": "$12.74",
+            "shippingCharge": "$6.00"
+          },
+          "output": {
+            "buyerTotalCost": "$18.74"
+          },
+          "formula": "BuyerTotal = ItemPrice + ShippingCharge",
+          "notes": "This is what the buyer pays at checkout"
+        }
+      ],
+      "reasoning": "Price based on amazon-direct data. Competitive.",
+      "confidence": "medium",
+      "warnings": [],
+      "competitorSummary": {
+        "amazonPrice": 14.99,
+        "ebayActiveCount": 0,
+        "ebaySoldCount": 0
+      },
+      "searchQuery": {
+        "priceLookupTitle": "Zero-In",
+        "amazonQuery": "Root Zero-In",
+        "ebayQuery": "Root Zero-In Health & Personal Care > Vitamins & Dietary Supplements Focus your brain naturally",
+        "googleQuery": "Root Zero-In Health & Personal Care > Vitamins & Dietary Supplements Focus your brain naturally",
+        "seoContext": "Health & Personal Care > Vitamins & Dietary Supplements Focus your brain naturally"
+      }
+    },
+    "promotion": {
+      "enabled": true,
+      "rate": 5,
+      "reason": "User-configured promotion rate"
+    },
+    "pricingStatus": "OK",
+    "needsPriceReview": false,
+    "offerId": "136671758011"
+  },
+  "_pricingDebug": {
+    "brand": "Root",
+    "productName": "Zero-In",
+    "amazonQuery": "Root Zero-In",
+    "priceLookupTitle": "Zero-In",
+    "confidence": "medium",
+    "reasoning": "Price based on amazon-direct data. Competitive.",
+    "warnings": [],
+    "competitorSummary": {
+      "amazonPrice": 14.99,
+      "ebayActiveCount": 0,
+      "ebaySoldCount": 0
+    },
+    "amazonUrl": null,
+    "amazonPriceDollars": 14.99,
+    "walmartUrl": null,
+    "walmartPriceDollars": null,
+    "finalPrice": 12.74
+  }
+}

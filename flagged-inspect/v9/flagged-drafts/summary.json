@@ -1,0 +1,42 @@
+[
+  {
+    "offerId": "136671758011",
+    "sku": "RZImn22qdrbrl9",
+    "marketplaceId": "EBAY_US",
+    "format": "FIXED_PRICE",
+    "listingDescription": "Experience enhanced mental clarity and focus with Root Zero-In, a premium dietary supplement designed to support your brain's natural capabilities. Packed with active ingredients to boost cognitive functions, this product is perfect for individuals looking to improve concentration and mental performance. Zero-In is formulated in convenient capsule form, making it easy to incorporate into your daily routine. The natural flavor ensures a pleasant intake experience, setting it apart from other supplements in the market. Specifications include a blend of high-quality, natural ingredients to maximize efficacy. Ideal for students, professionals, and anyone seeking to elevate their cognitive performance. Take charge of your mental health with Root Zero-In and discover the difference in your daily focus and productivity!",
+    "availableQuantity": 1,
+    "pricingSummary": {
+      "price": {
+        "value": "12.74",
+        "currency": "USD"
+      }
+    },
+    "listingPolicies": {
+      "paymentPolicyId": "245353452026",
+      "returnPolicyId": "245353453026",
+      "fulfillmentPolicyId": "245353454026",
+      "eBayPlusIfEligible": false,
+      "bestOfferTerms": {
+        "bestOfferEnabled": true,
+        "autoAcceptPrice": {
+          "value": "11.47",
+          "currency": "USD"
+        },
+        "autoDeclinePrice": {
+          "value": "7.64",
+          "currency": "USD"
+        }
+      }
+    },
+    "categoryId": "180960",
+    "merchantLocationKey": "primary-location",
+    "tax": {
+      "applyTax": false
+    },
+    "status": "UNPUBLISHED",
+    "listingDuration": "GTC",
+    "includeCatalogProductDetails": true,
+    "hideBuyerDetails": false
+  }
+]

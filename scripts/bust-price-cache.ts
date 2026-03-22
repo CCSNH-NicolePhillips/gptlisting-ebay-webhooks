@@ -18,6 +18,7 @@ const ENTRIES = [
   { brand: 'Root',          title: 'ReLive Greens' },
   { brand: 'Nello',         title: 'SuperCalm' },
   { brand: 'Makeup Eraser', title: '7-Day Set' },
+  { brand: 'Root',          title: 'Zero-In' },
 ];
 
 // Direct price overrides — for DTC-only brands not sold on Amazon.
@@ -42,6 +43,9 @@ const ASIN_PINS: { brand: string; product: string; asin: string }[] = [
   // Pin the standard product ASIN B0CDNHHB2Z ($25). Product key matches the
   // keyText disambiguation fix which sends productName="7-Day Set" to search.
   { brand: 'Makeup Eraser', product: '7-Day Set', asin: 'B0CDNHHB2Z' },
+  // Root Zero-In — keyword search returns a single-serve packet at $14.99 ($12.74 eBay).
+  // Correct full-bottle ASIN B0BQ2VT3CB ($97) → eBay ~$76.45.
+  { brand: 'Root', product: 'Zero-In', asin: 'B0BQ2VT3CB' },
 ];
 
 async function main() {
