@@ -35,6 +35,10 @@ const PRICE_OVERRIDES: { brand: string; product: string; price: number; url?: st
   // Pin both the real name AND the misclassified name so reprice works on existing draft.
   { brand: 'Immerge Health', product: 'Hersitol', price: 49.99, url: 'https://www.immergehealth.com/products/hersitol', notes: 'DTC-only. Not on Amazon.' },
   { brand: 'Stasis', product: 'Nighttime', price: 49.99, url: 'https://www.immergehealth.com/products/hersitol', notes: 'Misclassified as Stasis/Nighttime — actual product is Immerge Health Hersitol ($49.99). DTC-only.' },
+  // Evereden Kids Multi-Vitamin Face Cream ($24.95) — ASIN B08ZGQCPJJ.
+  // ASIN lookup via SearchAPI returns wrong variant price ($40.95). Force correct price.
+  { brand: 'Evereden', product: 'Kids Multi-Vitamin Face Cream', price: 24.95, url: 'https://www.amazon.com/dp/B08ZGQCPJJ', notes: 'ASIN lookup returns wrong variant price. Verified $24.95 on Amazon.' },
+  { brand: 'Evereden', product: 'Kids Face Cream', price: 24.95, url: 'https://www.amazon.com/dp/B08ZGQCPJJ', notes: 'Short name alias.' },
 ];
 
 // Correct ASIN pins — overwrite any bad auto-discovered ASIN with the verified one
