@@ -1,0 +1,189 @@
+{
+  "offerId": "136671811011",
+  "sku": "NSmn22qeb07g1",
+  "marketplaceId": "EBAY_US",
+  "format": "FIXED_PRICE",
+  "listingDescription": "Discover the calming power of Nello SuperCalm, the perfect dietary supplement designed to promote relaxation and stress relief with every serving. This cherry limeade flavored powder ensures a delightful taste while delivering essential nutrients. Crafted for those seeking tranquility and focus amidst the hustle and bustle of daily life, SuperCalm is your go-to solution. Simply mix it in water, and let the soothing cherry limeade flavor guide you to a serene state. Specifications: Net Wt. 4.57 oz (137.1g). Perfect for adults seeking relaxation and improved mental clarity. Contains a blend of natural calming ingredients, ensuring quality and effectiveness. Try Nello SuperCalm today and embrace a calmer, more balanced lifestyle.",
+  "availableQuantity": 1,
+  "pricingSummary": {
+    "price": {
+      "value": "33.96",
+      "currency": "USD"
+    }
+  },
+  "listingPolicies": {
+    "paymentPolicyId": "245353452026",
+    "returnPolicyId": "245353453026",
+    "fulfillmentPolicyId": "245353454026",
+    "eBayPlusIfEligible": false,
+    "bestOfferTerms": {
+      "bestOfferEnabled": true,
+      "autoAcceptPrice": {
+        "value": "30.56",
+        "currency": "USD"
+      },
+      "autoDeclinePrice": {
+        "value": "20.38",
+        "currency": "USD"
+      }
+    }
+  },
+  "categoryId": "180960",
+  "merchantLocationKey": "primary-location",
+  "tax": {
+    "applyTax": false
+  },
+  "status": "UNPUBLISHED",
+  "listingDuration": "GTC",
+  "includeCatalogProductDetails": true,
+  "hideBuyerDetails": false,
+  "_imageUrls": [
+    "https://www.draftpilot.app/api/images/proxy?url=https%3A%2F%2Fwww.draftpilot.app%2Fapi%2Fimg%3Fk%3Dstaging%252Fgoogle-oauth2_108767599998494531403%252F8a35fc7c-9416-4c21-bb6c-3ce5004c8ad2%252Fb9e351e8880cdf33-IMG_20260320_172435.jpg&v=mn22qecx",
+    "https://www.draftpilot.app/api/images/proxy?url=https%3A%2F%2Fwww.draftpilot.app%2Fapi%2Fimg%3Fk%3Dstaging%252Fgoogle-oauth2_108767599998494531403%252F8a35fc7c-9416-4c21-bb6c-3ce5004c8ad2%252Ff3e0c3837f57d123-IMG_20260320_172446.jpg&v=mn22qecx"
+  ],
+  "_draftLogs": {
+    "sku": "product-12",
+    "createdAt": "2026-03-22T18:11:58.126Z",
+    "classification": {
+      "brand": "Nello",
+      "productName": "SuperCalm",
+      "variant": null,
+      "size": null,
+      "packageType": null,
+      "keyText": [
+        "SuperCalm",
+        "Cherry Limeade",
+        "Net Wt. 4.57 oz (137.1g)"
+      ],
+      "netWeight": null,
+      "categoryPath": "Health & Personal Care > Vitamins & Dietary Supplements",
+      "photoQuantity": 1,
+      "bundleInfo": {
+        "isBundle": false,
+        "bundleType": null,
+        "bundleProducts": []
+      },
+      "servingCount": null
+    },
+    "pricing": {
+      "timestamp": "2026-03-22T18:11:58.126Z",
+      "brand": "Nello",
+      "productName": "SuperCalm",
+      "sources": [
+        {
+          "source": "Retail (Amazon/Walmart)",
+          "query": "Nello SuperCalm",
+          "results": [
+            {
+              "title": "Amazon",
+              "price": 39.95,
+              "shipping": 0,
+              "total": 39.95
+            }
+          ]
+        }
+      ],
+      "finalPrice": 33.96,
+      "finalShipping": 6,
+      "freeShippingApplied": false,
+      "calculations": [
+        {
+          "step": "1. Gather Competitor Prices",
+          "input": {
+            "ebayCompsCount": 0,
+            "retailCompsCount": 1
+          },
+          "output": {
+            "lowestEbayDelivered": "N/A",
+            "amazonPrice": "$39.95",
+            "walmartPrice": "N/A"
+          },
+          "notes": "Search eBay active listings, Amazon, Walmart, Google Shopping for competitor prices"
+        },
+        {
+          "step": "2. Calculate Target Delivered Price",
+          "input": {
+            "soldCount": 0,
+            "soldMedian": "N/A",
+            "soldStrong": false,
+            "competitorFloor": "N/A"
+          },
+          "output": {
+            "targetDeliveredPrice": "$39.96"
+          },
+          "formula": "Target = Amazon $39.95 × 0.85",
+          "notes": "Price based on Amazon listing. Buyer pays item + shipping separately."
+        },
+        {
+          "step": "3. Split Into Item + Shipping",
+          "input": {
+            "targetDelivered": "$39.96",
+            "shippingEstimate": "$6.00",
+            "freeShippingApplied": false
+          },
+          "output": {
+            "itemPrice": "$33.96",
+            "shippingCharge": "$6.00",
+            "subsidyAmount": "$0.00"
+          },
+          "formula": "ItemPrice = TargetDelivered - ShippingCharge",
+          "notes": "Buyer pays shipping separately"
+        },
+        {
+          "step": "4. Final Price Verification",
+          "input": {
+            "itemPrice": "$33.96",
+            "shippingCharge": "$6.00"
+          },
+          "output": {
+            "buyerTotalCost": "$39.96"
+          },
+          "formula": "BuyerTotal = ItemPrice + ShippingCharge",
+          "notes": "This is what the buyer pays at checkout"
+        }
+      ],
+      "reasoning": "Price based on amazon-direct data. Competitive.",
+      "confidence": "medium",
+      "warnings": [],
+      "competitorSummary": {
+        "amazonPrice": 39.95,
+        "ebayActiveCount": 0,
+        "ebaySoldCount": 0
+      },
+      "searchQuery": {
+        "priceLookupTitle": "SuperCalm",
+        "amazonQuery": "Nello SuperCalm",
+        "ebayQuery": "Nello SuperCalm Health & Personal Care > Vitamins & Dietary Supplements Cherry Limeade Net Wt. 4.57 oz (137.1g)",
+        "googleQuery": "Nello SuperCalm Health & Personal Care > Vitamins & Dietary Supplements Cherry Limeade Net Wt. 4.57 oz (137.1g)",
+        "seoContext": "Health & Personal Care > Vitamins & Dietary Supplements Cherry Limeade Net Wt. 4.57 oz (137.1g)"
+      }
+    },
+    "promotion": {
+      "enabled": true,
+      "rate": 5,
+      "reason": "User-configured promotion rate"
+    },
+    "pricingStatus": "OK",
+    "needsPriceReview": false,
+    "offerId": "136671811011"
+  },
+  "_pricingDebug": {
+    "brand": "Nello",
+    "productName": "SuperCalm",
+    "amazonQuery": "Nello SuperCalm",
+    "priceLookupTitle": "SuperCalm",
+    "confidence": "medium",
+    "reasoning": "Price based on amazon-direct data. Competitive.",
+    "warnings": [],
+    "competitorSummary": {
+      "amazonPrice": 39.95,
+      "ebayActiveCount": 0,
+      "ebaySoldCount": 0
+    },
+    "amazonUrl": null,
+    "amazonPriceDollars": 39.95,
+    "walmartUrl": null,
+    "walmartPriceDollars": null,
+    "finalPrice": 33.96
+  }
+}

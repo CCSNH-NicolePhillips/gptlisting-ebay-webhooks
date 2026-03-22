@@ -1,0 +1,42 @@
+[
+  {
+    "offerId": "136671811011",
+    "sku": "NSmn22qeb07g1",
+    "marketplaceId": "EBAY_US",
+    "format": "FIXED_PRICE",
+    "listingDescription": "Discover the calming power of Nello SuperCalm, the perfect dietary supplement designed to promote relaxation and stress relief with every serving. This cherry limeade flavored powder ensures a delightful taste while delivering essential nutrients. Crafted for those seeking tranquility and focus amidst the hustle and bustle of daily life, SuperCalm is your go-to solution. Simply mix it in water, and let the soothing cherry limeade flavor guide you to a serene state. Specifications: Net Wt. 4.57 oz (137.1g). Perfect for adults seeking relaxation and improved mental clarity. Contains a blend of natural calming ingredients, ensuring quality and effectiveness. Try Nello SuperCalm today and embrace a calmer, more balanced lifestyle.",
+    "availableQuantity": 1,
+    "pricingSummary": {
+      "price": {
+        "value": "33.96",
+        "currency": "USD"
+      }
+    },
+    "listingPolicies": {
+      "paymentPolicyId": "245353452026",
+      "returnPolicyId": "245353453026",
+      "fulfillmentPolicyId": "245353454026",
+      "eBayPlusIfEligible": false,
+      "bestOfferTerms": {
+        "bestOfferEnabled": true,
+        "autoAcceptPrice": {
+          "value": "30.56",
+          "currency": "USD"
+        },
+        "autoDeclinePrice": {
+          "value": "20.38",
+          "currency": "USD"
+        }
+      }
+    },
+    "categoryId": "180960",
+    "merchantLocationKey": "primary-location",
+    "tax": {
+      "applyTax": false
+    },
+    "status": "UNPUBLISHED",
+    "listingDuration": "GTC",
+    "includeCatalogProductDetails": true,
+    "hideBuyerDetails": false
+  }
+]

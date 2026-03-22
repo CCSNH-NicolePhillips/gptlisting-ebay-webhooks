@@ -435,7 +435,7 @@ Respond ONLY with valid JSON:
       "title": "Book Title (only for books)" or null,
       "brandWebsite": "https://brandname.com" or null,
       "packageType": "bottle | jar | tub | pouch | box | sachet | book | unknown",
-      "keyText": ["Brand Name", "Product Name", "Strawberry Flavor"],  // ⚠️ ALWAYS include flavor if visible!
+      "keyText": ["Brand Name", "Product Name", "Strawberry Flavor"],  // ⚠️ ALWAYS include flavor AND serving count if visible! e.g. ["SuperCalm", "Cherry Limeade", "30 Servings", "Net Wt. 4.57 oz"]
       "categoryPath": "Category > Subcategory" or null,
       "colorSignature": ["color1", "color2", "pattern"],
       "layoutSignature": "layout description",
@@ -445,7 +445,11 @@ Respond ONLY with valid JSON:
       "packCount": 24 or null,
       "netWeight": { "value": 8, "unit": "oz" },  // ⚠️ REQUIRED - never null, estimate if needed
       "bundleInfo": { "isBundle": false, "bundleType": null, "bundleProducts": [] },  // or { "isBundle": true, "bundleType": "duo", "bundleProducts": ["Shampoo 8oz", "Conditioner 8oz"] }
-      "servingCount": 5 or null   // Integer from "Servings Per Container" on Supplement Facts panel; null if not a supplement or not visible
+      "servingCount": 5 or null   // ⚠️ IMPORTANT: Integer number of servings — look ANYWHERE on the packaging, not just the Supplement Facts panel!
+                                   // Front labels often print "30 Servings", "20 Servings", "60 Ct" prominently.
+                                   // Sources in priority order: Supplement Facts "Servings Per Container" (back) →
+                                   // front/side label text "N Servings" → count text "60 capsules" → null if truly not visible.
+                                   // NEVER return null just because you don't see the Supplement Facts panel — check front & side text too.
     }
   ]
 }

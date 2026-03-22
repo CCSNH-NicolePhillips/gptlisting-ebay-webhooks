@@ -16,15 +16,18 @@ const ENTRIES = [
   { brand: 'Viv',           title: 'Menstrual Disc Starter Kit' },
   { brand: "Sha's Organic", title: 'Acne Pore Cleanser' },
   { brand: 'Root',          title: 'ReLive Greens' },
+  { brand: 'Nello',         title: 'SuperCalm' },
 ];
 
 // Correct ASIN pins — overwrite any bad auto-discovered ASIN with the verified one
 const ASIN_PINS: { brand: string; product: string; asin: string }[] = [
   { brand: 'Root', product: 'ReLive Greens', asin: 'B0BQ2YY5YB' },
-  // ki Vinoreset — pin multiple product name variations because the draft may store
-  // any of these depending on what the Vision API or eBay title normalisation produced
+  // ki Vinoreset — pin multiple product name variations
   { brand: 'ki',   product: 'Vinoreset Mist',      asin: 'B0G442H9RZ' },
   { brand: 'ki',   product: 'Vinoreset Face Mist',  asin: 'B0G442H9RZ' },
+  // Nello SuperCalm — pin 30-serving version ($44.95). Keyword search returns the
+  // 20-serving ($39.95) which is wrong. All 30-serving flavors are same price.
+  { brand: 'Nello', product: 'SuperCalm', asin: 'B0FJ31ZMHX' },
 ];
 
 async function main() {
