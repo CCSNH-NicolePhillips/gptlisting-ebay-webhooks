@@ -17,6 +17,7 @@ const ENTRIES = [
   { brand: "Sha's Organic", title: 'Acne Pore Cleanser' },
   { brand: 'Root',          title: 'ReLive Greens' },
   { brand: 'Nello',         title: 'SuperCalm' },
+  { brand: 'Makeup Eraser', title: '7-Day Set' },
 ];
 
 // Correct ASIN pins — overwrite any bad auto-discovered ASIN with the verified one
@@ -28,6 +29,10 @@ const ASIN_PINS: { brand: string; product: string; asin: string }[] = [
   // Nello SuperCalm — pin 30-serving version ($44.95). Keyword search returns the
   // 20-serving ($39.95) which is wrong. All 30-serving flavors are same price.
   { brand: 'Nello', product: 'SuperCalm', asin: 'B0FJ31ZMHX' },
+  // Makeup Eraser 7-Day Set — Rainforest picks the cheapest color variant ($12.69).
+  // Pin the standard product ASIN B0CDNHHB2Z ($25). Product key matches the
+  // keyText disambiguation fix which sends productName="7-Day Set" to search.
+  { brand: 'Makeup Eraser', product: '7-Day Set', asin: 'B0CDNHHB2Z' },
 ];
 
 async function main() {
