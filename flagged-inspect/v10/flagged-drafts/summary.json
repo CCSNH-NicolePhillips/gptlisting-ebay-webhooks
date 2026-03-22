@@ -1,0 +1,42 @@
+[
+  {
+    "offerId": "134454848011",
+    "sku": "IHHmmwo8p6hz1b",
+    "marketplaceId": "EBAY_US",
+    "format": "FIXED_PRICE",
+    "listingDescription": "Discover Hersitol, an advanced hormone balance and PCOS supplement by Immerge Health. Designed to promote women's health and support hormonal balance, Hersitol is ideal for managing PCOS symptoms and enhancing well-being. Packed with a blend of carefully selected ingredients, it supports holistic health benefits. Perfect for women seeking natural hormone regulation solutions. Key features include hormone balance support, PCOS symptom management, and vegetarian-friendly capsules. Get your monthly supply of Hormone Balance in every bottle. Specifications: 120 veggie capsules per bottle, designed for adult women, manufactured in the USA, and free from artificial flavors and additives. Take charge of your health with Hersitol. Feel empowered and balanced.",
+    "availableQuantity": 1,
+    "pricingSummary": {
+      "price": {
+        "value": "38.24",
+        "currency": "USD"
+      }
+    },
+    "listingPolicies": {
+      "paymentPolicyId": "245353452026",
+      "returnPolicyId": "245353453026",
+      "fulfillmentPolicyId": "245353454026",
+      "eBayPlusIfEligible": false,
+      "bestOfferTerms": {
+        "bestOfferEnabled": true,
+        "autoAcceptPrice": {
+          "value": "34.42",
+          "currency": "USD"
+        },
+        "autoDeclinePrice": {
+          "value": "22.94",
+          "currency": "USD"
+        }
+      }
+    },
+    "categoryId": "180960",
+    "merchantLocationKey": "primary-location",
+    "tax": {
+      "applyTax": false
+    },
+    "status": "UNPUBLISHED",
+    "listingDuration": "GTC",
+    "includeCatalogProductDetails": true,
+    "hideBuyerDetails": false
+  }
+]

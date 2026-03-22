@@ -19,6 +19,7 @@ const ENTRIES = [
   { brand: 'Nello',         title: 'SuperCalm' },
   { brand: 'Makeup Eraser', title: '7-Day Set' },
   { brand: 'Root',          title: 'Zero-In' },
+  { brand: 'Stasis',        title: 'Nighttime' },
 ];
 
 // Direct price overrides — for DTC-only brands not sold on Amazon.
@@ -28,6 +29,11 @@ const PRICE_OVERRIDES: { brand: string; product: string; price: number; url?: st
   // therootbrands.com Restore product ($74). Root is DTC-only; not on Amazon.
   // Without this: Perplexity fires Step 5 and returns ~$167 (wrong product/bundle).
   { brand: 'Root', product: 'Restore', price: 74, url: 'https://therootbrands.com/products/restore', notes: 'DTC-only. Amazon query returns generic $33 result. Perplexity returned ~$167 (wrong).' },
+  // Immerge Health Hersitol ($49.99) — DTC-only, not on Amazon.
+  // GPT misclassified as brand="Stasis" productName="Nighttime" (wrong label in photo).
+  // Pin both the real name AND the misclassified name so reprice works on existing draft.
+  { brand: 'Immerge Health', product: 'Hersitol', price: 49.99, url: 'https://www.immergehealth.com/products/hersitol', notes: 'DTC-only. Not on Amazon.' },
+  { brand: 'Stasis', product: 'Nighttime', price: 49.99, url: 'https://www.immergehealth.com/products/hersitol', notes: 'Misclassified as Stasis/Nighttime — actual product is Immerge Health Hersitol ($49.99). DTC-only.' },
 ];
 
 // Correct ASIN pins — overwrite any bad auto-discovered ASIN with the verified one
