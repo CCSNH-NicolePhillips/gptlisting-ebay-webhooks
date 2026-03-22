@@ -36,11 +36,12 @@ router.post('/reprice', async (req, res) => {
   try {
     const { userId } = await requireUserAuth(req.headers.authorization || '');
 
-    const { brand, productName, ebayTitle, servingCount } = req.body as {
+    const { brand, productName, ebayTitle, servingCount, keyText } = req.body as {
       brand?: string;
       productName?: string;
       ebayTitle?: string;
       servingCount?: number | null;
+      keyText?: string[];
     };
 
     console.log(`[reprice] RAW body: brand="${brand}" productName="${String(productName).slice(0, 120)}" ebayTitle="${String(ebayTitle || '').slice(0, 80)}" servingCount=${servingCount ?? 'null'}`);
@@ -57,7 +58,11 @@ router.post('/reprice', async (req, res) => {
     let cleanBrand = (brand || '').trim();
     let cleanProduct = (productName || '').trim();
     if (cleanBrand && cleanProduct.toLowerCase().startsWith(cleanBrand.toLowerCase())) {
-      cleanProduct = cleanProduct.slice(cleanBrand.length).replace(/^[\s\-–—]+/, '');
+      const stripped = cleanProduct.slice(cleanBrand.length).replace(/^[\s\-–—]+/, '').trim();
+      // Only strip the brand prefix if the result is non-empty.
+      // When brand === productName (e.g. "Makeup Eraser" / "Makeup Eraser"), stripping
+      // would give "" — an empty product name makes the Amazon query useless.
+      if (stripped) cleanProduct = stripped;
     }
     cleanProduct = cleanProduct.split(/\s+by\s+|\s*[|,]\s*/i)[0].trim();
     console.log(`[reprice] Normalised: brand="${cleanBrand}" productName="${cleanProduct}" (raw: "${brand}" / "${productName}")`);
@@ -99,6 +104,29 @@ router.post('/reprice', async (req, res) => {
       if (extraTerms.length > 0) {
         additionalContext = extraTerms.slice(0, 4).join(' ');
         console.log(`[reprice] additionalContext from title: "${additionalContext}"`);
+      }
+    }
+
+    // Brand=ProductName disambiguation: when brand === productName after all title processing
+    // (e.g. "Makeup Eraser" brand / "Makeup Eraser" product), the Amazon search would
+    // produce "Makeup Eraser Makeup Eraser" and find the cheapest generic variant.
+    // Use the keyText (from classification) to extract the variant descriptor instead
+    // (e.g. "7-Day Set" → Amazon "Makeup Eraser 7-Day Set" → $25 not $12.69).
+    if (finalProduct && finalBrand &&
+        finalProduct.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim() ===
+        finalBrand.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim()) {
+      const ktTerms = (keyText || [])
+        .filter(t => t && t.toLowerCase() !== finalBrand.toLowerCase() && t.length > 3)
+        .slice(0, 2)
+        .join(' ')
+        .trim();
+      if (ktTerms) {
+        console.log(`[reprice] Brand=ProductName — using keyText as product: "${ktTerms}" (was: "${finalProduct}")`);
+        finalProduct = ktTerms;
+        additionalContext = undefined; // ktTerms already specific, don't double-include
+      } else if (!additionalContext) {
+        // No keyText discriminators and no ebayTitle extras — log so we can diagnose
+        console.warn(`[reprice] Brand=ProductName with no keyText discriminators: brand="${finalBrand}" — Amazon query may be ambiguous`);
       }
     }
 

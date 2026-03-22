@@ -1684,7 +1684,11 @@
         // brand/productName when the scan misidentified the product.
         const ebayTitle = $('title')?.value?.trim() || '';
 
-        console.log('[reprice] Request:', { brand, productName, ebayTitle, servingCount });
+        // Send keyText so the server can disambiguate when brand === productName
+        // (e.g. "Makeup Eraser" brand / "Makeup Eraser" product → uses "7-Day Set" from keyText)
+        const keyText = originalDraft?._draftLogs?.classification?.keyText || [];
+
+        console.log('[reprice] Request:', { brand, productName, ebayTitle, servingCount, keyText });
 
         if (!brand && !productName) {
           throw new Error('Need brand or title to calculate price');
@@ -1693,7 +1697,7 @@
         const res = await fetchJSON('/api/pricing/reprice', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ brand, productName, ebayTitle, servingCount }),
+          body: JSON.stringify({ brand, productName, ebayTitle, servingCount, keyText }),
         });
         
         console.log('[reprice] Response:', res);

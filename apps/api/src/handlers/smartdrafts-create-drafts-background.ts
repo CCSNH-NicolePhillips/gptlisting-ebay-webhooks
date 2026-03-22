@@ -1400,7 +1400,28 @@ async function createDraftForProduct(
         console.log(`[smartdrafts-price] Appended size to lookup title: "${priceLookupTitle}"`);
       }
     }
-    
+
+    // Brand=ProductName conflict: when the product name equals the brand (e.g. "Makeup Eraser"
+    // brand sells a product also called "Makeup Eraser"), the Amazon search becomes
+    // "Makeup Eraser Makeup Eraser" which finds the cheapest generic variant instead of the
+    // correct set/size. In this case, use keyText discriminators as the lookup title so the
+    // search targets the specific product variant (e.g. "7-Day Set" → $25 not $12.69).
+    {
+      const normLookup = priceLookupTitle.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+      const normBrand  = (product.brand || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+      if (normLookup && normBrand && normLookup === normBrand && product.keyText?.length) {
+        const enriched = product.keyText
+          .filter(t => t && t.toLowerCase() !== (product.brand || '').toLowerCase() && t.length > 3)
+          .slice(0, 2)
+          .join(' ')
+          .trim();
+        if (enriched) {
+          console.log(`[smartdrafts-price] Brand=ProductName conflict — using keyText as lookup title: "${enriched}" (was: "${priceLookupTitle}")`);
+          priceLookupTitle = enriched;
+        }
+      }
+    }
+
     // Build SEO context for better search matching
     // Include categoryPath and relevant keyText terms that help identify the product
     const seoContextParts: string[] = [];
