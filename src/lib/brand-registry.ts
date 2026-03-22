@@ -149,6 +149,99 @@ export async function listBrandRegistry(userId?: string): Promise<BrandRegistryE
   }
 }
 
+// ---------------------------------------------------------------------------
+// Price Overrides — for DTC-only brands not on Amazon
+// Key format: price:override:{normalizedBrand}:{normalizedProduct}
+// Use when: Amazon/Rainforest/Google all return wrong/missing results, and
+// Perplexity sonar returns an incorrect price.  Values are set via bust-price-cache.ts.
+// ---------------------------------------------------------------------------
+
+interface PriceOverrideEntry {
+  price: number;     // USD retail price on the brand's own website
+  url: string | null;
+  brand: string;
+  product: string;
+  notes?: string;
+  addedAt: number;
+}
+
+function buildPriceOverrideKey(brand: string, product: string): string {
+  return `price:override:${normalizeKey(brand)}:${normalizeKey(product)}`;
+}
+
+/**
+ * Retrieve a manual price override for a brand + product.
+ * Returns the configured price (USD) or null if none is set.
+ */
+export async function getPriceOverride(brand: string, product: string): Promise<number | null> {
+  try {
+    const words = product.trim().split(/\s+/);
+    const candidates = [product];
+    if (words.length > 3) candidates.push(words.slice(0, 3).join(' '));
+    if (words.length > 2) candidates.push(words.slice(0, 2).join(' '));
+    if (words.length > 1) candidates.push(words[0]);
+
+    for (const candidate of candidates) {
+      const key = buildPriceOverrideKey(brand, candidate);
+      const resp = await redisCall("GET", key);
+      if (resp && resp.result) {
+        const entry = typeof resp.result === 'string' ? JSON.parse(resp.result) : resp.result as PriceOverrideEntry;
+        console.log(`[brand-registry] ✓ Price override $${entry.price} for ${brand} ${candidate}${entry.url ? ` (${entry.url})` : ''}`);
+        return entry.price;
+      }
+    }
+    return null;
+  } catch (error) {
+    console.error('[brand-registry] Price override lookup error:', error);
+    return null;
+  }
+}
+
+/**
+ * Save a manual price override for a brand + product (DTC-only brands).
+ */
+export async function savePriceOverride(
+  brand: string,
+  product: string,
+  price: number,
+  url?: string | null,
+  notes?: string,
+): Promise<void> {
+  try {
+    const key = buildPriceOverrideKey(brand, product);
+    const entry: PriceOverrideEntry = {
+      price,
+      url: url ?? null,
+      brand,
+      product,
+      notes,
+      addedAt: Date.now(),
+    };
+    await redisCall("SET", key, JSON.stringify(entry));
+    console.log(`[brand-registry] ✓ Saved price override $${price} for: ${brand} ${product}`);
+  } catch (error) {
+    console.error('[brand-registry] Price override save error:', error);
+  }
+}
+
+/**
+ * Delete a price override entry.
+ */
+export async function deletePriceOverride(brand: string, product: string): Promise<boolean> {
+  try {
+    const key = buildPriceOverrideKey(brand, product);
+    const resp = await redisCall("DEL", key);
+    const deleted = !!(resp && typeof resp.result === 'number' && resp.result > 0);
+    if (deleted) console.log(`[brand-registry] Deleted price override for: ${brand} ${product}`);
+    return deleted;
+  } catch (error) {
+    console.error('[brand-registry] Price override delete error:', error);
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+
 /**
  * Delete a brand registry entry
  */

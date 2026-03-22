@@ -835,7 +835,34 @@ export async function searchAmazonWithFallback(
   conflictCheckName?: string,
   brandWebsite?: string | null,
 ): Promise<AmazonPriceLookupResult> {
-  // Check if we have a pinned ASIN for this brand+product — skip keyword search entirely
+  // Step 0: Manual price override — for DTC-only brands whose products aren't on Amazon
+  // and whose Perplexity/Google results are unreliable (e.g. Root → therootbrands.com $74).
+  // These are set via bust-price-cache.ts and stored in Redis under price:override:*.
+  try {
+    const { getPriceOverride } = await import('./brand-registry.js');
+    const overridePrice = await getPriceOverride(brand, conflictCheckName ?? productName);
+    if (overridePrice !== null) {
+      console.log(`[amazon-search] ✅ Price override $${overridePrice} for "${brand} ${conflictCheckName ?? productName}" — skipping all search`);
+      return {
+        price: overridePrice,
+        originalPrice: null,
+        url: null,
+        asin: null,
+        title: `${brand} ${conflictCheckName ?? productName}`,
+        brand,
+        isPrime: false,
+        rating: null,
+        reviews: null,
+        allResults: [],
+        confidence: 'high',
+        reasoning: 'price-override-registry',
+      };
+    }
+  } catch (err) {
+    console.warn('[amazon-search] Price override check failed (non-fatal):', err instanceof Error ? err.message : String(err));
+  }
+
+  // Step 1: Check if we have a pinned ASIN for this brand+product — skip keyword search entirely
   try {
     const { getAmazonAsin } = await import('./brand-registry.js');
     const registeredAsin = await getAmazonAsin(brand, productName);

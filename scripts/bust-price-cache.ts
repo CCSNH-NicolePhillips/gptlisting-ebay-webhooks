@@ -7,7 +7,7 @@
  */
 import 'dotenv/config';
 import { makePriceSig, getCachedPrice, deleteCachedPrice } from '../src/lib/price-cache.js';
-import { deleteAmazonAsin, saveAmazonAsin } from '../src/lib/brand-registry.js';
+import { deleteAmazonAsin, saveAmazonAsin, savePriceOverride, deletePriceOverride } from '../src/lib/brand-registry.js';
 
 const ENTRIES = [
   { brand: 'Cymbiotika',    title: 'Irish Sea Moss Lemon Vanilla Powder Supplement' },
@@ -18,6 +18,15 @@ const ENTRIES = [
   { brand: 'Root',          title: 'ReLive Greens' },
   { brand: 'Nello',         title: 'SuperCalm' },
   { brand: 'Makeup Eraser', title: '7-Day Set' },
+];
+
+// Direct price overrides — for DTC-only brands not sold on Amazon.
+// Bypasses ALL search steps (Rainforest, Amazon keyword, Google Shopping, Perplexity).
+// Use when Perplexity returns an incorrect or inflated price for a DTC brand.
+const PRICE_OVERRIDES: { brand: string; product: string; price: number; url?: string; notes?: string }[] = [
+  // therootbrands.com Restore product ($74). Root is DTC-only; not on Amazon.
+  // Without this: Perplexity fires Step 5 and returns ~$167 (wrong product/bundle).
+  { brand: 'Root', product: 'Restore', price: 74, url: 'https://therootbrands.com/products/restore', notes: 'DTC-only. Amazon query returns generic $33 result. Perplexity returned ~$167 (wrong).' },
 ];
 
 // Correct ASIN pins — overwrite any bad auto-discovered ASIN with the verified one
@@ -60,9 +69,19 @@ async function main() {
 
   console.log('\nDone. Next pricing run will fetch fresh data.\n');
 
+  // ── Price overrides (DTC-only brands) ──────────────────────────────────────
+  if (PRICE_OVERRIDES.length > 0) {
+    console.log('\nPrice Overrides\n' + '─'.repeat(60));
+    for (const p of PRICE_OVERRIDES) {
+      await deletePriceOverride(p.brand, p.product);
+      await savePriceOverride(p.brand, p.product, p.price, p.url, p.notes);
+      console.log(`  ✅ Price override $${p.price} → ${p.brand} ${p.product}${p.url ? ` (${p.url})` : ''}`);
+    }
+  }
+
   // ── Pin correct ASINs ────────────────────────────────────────────────────
   if (ASIN_PINS.length > 0) {
-    console.log('ASIN Pins\n' + '─'.repeat(60));
+    console.log('\nASIN Pins\n' + '─'.repeat(60));
     for (const p of ASIN_PINS) {
       // Delete any wrongly auto-discovered ASIN first
       await deleteAmazonAsin(p.brand, p.product);
