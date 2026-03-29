@@ -775,11 +775,11 @@
           <div id="dupCheckLoading" style="display: none; color: var(--text-muted);">
             🔍 Checking for duplicates…
           </div>
-          <div id="dupCheckClean" style="display: none; color: #16a34a;">
+          <div id="dupCheckClean" style="display: none; color: #22c55e;">
             ✅ No matching active listings or recent sales found.
           </div>
           <div id="dupCheckMatches" style="display: none;">
-            <div style="font-weight: 600; margin-bottom: 0.5rem; color: #dc2626;">⚠️ Possible duplicates found</div>
+            <div style="font-weight: 600; margin-bottom: 0.5rem; color: #fca5a5;">⚠️ Possible duplicates found</div>
             <div id="dupMatchList" style="display: flex; flex-direction: column; gap: 0.5rem;"></div>
           </div>
         </div>
@@ -2023,12 +2023,14 @@
 
         if (!data.matches || data.matches.length === 0) {
           clean.style.display = 'block';
-          banner.style.background = 'var(--bg-card, #f0fdf4)';
+          banner.style.background = 'rgba(22, 163, 106, 0.1)';
+          banner.style.border = '1px solid rgba(34, 197, 94, 0.3)';
           return;
         }
 
         // Show matches
-        banner.style.background = '#fef2f2';
+        banner.style.background = 'rgba(220, 38, 38, 0.1)';
+        banner.style.border = '1px solid rgba(252, 165, 165, 0.4)';
         matchesDiv.style.display = 'block';
         matchList.innerHTML = '';
 
@@ -2040,8 +2042,8 @@
           const dateStr = m.date ? ` (${new Date(m.date).toLocaleDateString()})` : '';
           const score = Math.round(m.score * 100);
           const row = document.createElement('div');
-          row.style.cssText = 'display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.75rem;background:rgba(255,255,255,0.7);border-radius:6px;font-size:0.85rem;';
-          row.innerHTML = `${badge} <span style="flex:1;">${escapeHtml(m.title)}${price}${dateStr}</span> <span style="color:var(--text-muted);font-size:0.75rem;">${score}% match</span>`;
+          row.style.cssText = 'display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.75rem;background:rgba(255,255,255,0.06);border-radius:6px;font-size:0.85rem;';
+          row.innerHTML = `${badge} <span style="flex:1;color:var(--text-primary, #e2e8f0);">${escapeHtml(m.title)}${price}${dateStr}</span> <span style="color:var(--text-muted, #94a3b8);font-size:0.75rem;">${score}% match</span>`;
           matchList.appendChild(row);
         }
       } catch (e) {

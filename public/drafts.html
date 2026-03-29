@@ -768,11 +768,11 @@
               <div id="dupCheckLoading" style="display: none; color: var(--text-muted);">
                 🔍 Checking for duplicates across active listings and recent sales…
               </div>
-              <div id="dupCheckClean" style="display: none; color: #16a34a; font-weight: 500;">
+              <div id="dupCheckClean" style="display: none; color: #22c55e; font-weight: 500;">
                 ✅ No duplicates found — none of your drafts match an active listing or recent sale.
               </div>
               <div id="dupCheckResults" style="display: none;">
-                <div style="font-weight: 600; margin-bottom: 0.75rem; color: #dc2626;">⚠️ Possible duplicates found</div>
+                <div style="font-weight: 600; margin-bottom: 0.75rem; color: #fca5a5;">⚠️ Possible duplicates found</div>
                 <div id="dupResultsList" style="display: flex; flex-direction: column; gap: 0.5rem;"></div>
               </div>
             </div>
@@ -2182,7 +2182,8 @@
           if (drafts.length === 0) {
             loading.style.display = 'none';
             clean.style.display = 'block';
-            banner.style.background = 'rgba(22, 163, 106, 0.08)';
+            banner.style.background = 'rgba(22, 163, 106, 0.1)';
+            banner.style.border = '1px solid rgba(34, 197, 94, 0.3)';
             return;
           }
 
@@ -2213,9 +2214,11 @@
           const withMatches = allMatches.filter(r => r.matches.length > 0);
           if (withMatches.length === 0) {
             clean.style.display = 'block';
-            banner.style.background = 'rgba(22, 163, 106, 0.08)';
+            banner.style.background = 'rgba(22, 163, 106, 0.1)';
+            banner.style.border = '1px solid rgba(34, 197, 94, 0.3)';
           } else {
-            banner.style.background = '#fef2f2';
+            banner.style.background = 'rgba(220, 38, 38, 0.1)';
+            banner.style.border = '1px solid rgba(252, 165, 165, 0.4)';
             results.style.display = 'block';
             resultsList.innerHTML = '';
 
@@ -2225,10 +2228,10 @@
               draft.card.style.outlineOffset = '-2px';
 
               const group = document.createElement('div');
-              group.style.cssText = 'background:rgba(255,255,255,0.7);border-radius:8px;padding:0.75rem 1rem;';
+              group.style.cssText = 'background:rgba(255,255,255,0.06);border-radius:8px;padding:0.75rem 1rem;';
 
               const header = document.createElement('div');
-              header.style.cssText = 'font-weight:600;font-size:0.85rem;margin-bottom:0.4rem;color:#111;';
+              header.style.cssText = 'font-weight:600;font-size:0.85rem;margin-bottom:0.4rem;color:var(--text-primary, #e2e8f0);';
               header.textContent = draft.title;
               group.appendChild(header);
 
@@ -2236,12 +2239,12 @@
                 const badge = m.type === 'active'
                   ? '<span style="background:#2563eb;color:#fff;padding:2px 6px;border-radius:4px;font-size:0.72rem;font-weight:600;">ACTIVE</span>'
                   : '<span style="background:#7c3aed;color:#fff;padding:2px 6px;border-radius:4px;font-size:0.72rem;font-weight:600;">SOLD</span>';
-                const price = m.price ? ` — $${m.price.replace(/ USD$/, '')}` : '';
+                const price = m.price ? ` \u2014 $${m.price.replace(/ USD$/, '')}` : '';
                 const dateStr = m.date ? ` (${new Date(m.date).toLocaleDateString()})` : '';
                 const score = Math.round(m.score * 100);
                 const row = document.createElement('div');
                 row.style.cssText = 'display:flex;align-items:center;gap:0.5rem;padding:0.3rem 0;font-size:0.82rem;';
-                row.innerHTML = `${badge} <span style="flex:1;">${escapeHtml(m.title)}${price}${dateStr}</span> <span style="color:#888;font-size:0.72rem;">${score}%</span>`;
+                row.innerHTML = `${badge} <span style="flex:1;color:var(--text-primary, #e2e8f0);">${escapeHtml(m.title)}${price}${dateStr}</span> <span style="color:var(--text-muted, #94a3b8);font-size:0.72rem;">${score}%</span>`;
                 group.appendChild(row);
               }
 

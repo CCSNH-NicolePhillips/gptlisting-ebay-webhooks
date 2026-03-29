@@ -5,6 +5,7 @@
  */
 
 import { getEbayClient, EbayNotConnectedError } from '../../../../../src/lib/ebay-client.js';
+import { confirmDraftPriceReview } from '../../../../../src/lib/draft-logs.js';
 
 export { EbayNotConnectedError };
 
@@ -226,6 +227,12 @@ export async function updateDraft(
   if (!updateRes.ok) {
     const text = await updateRes.text().catch(() => '');
     throw new EbayApiError('Failed to update offer', updateRes.status, text);
+  }
+
+  // Clear the NEEDS_REVIEW gate in Redis so enrichWithDraftLogsMeta no longer
+  // re-applies NEEDS_REVIEW on subsequent list/detail loads.
+  if (draft.confirmPriceReview) {
+    await confirmDraftPriceReview(userId, offerId).catch(() => { /* non-fatal */ });
   }
 
   return { ok: true };

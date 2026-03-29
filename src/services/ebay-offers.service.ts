@@ -992,7 +992,7 @@ async function enrichWithDraftLogsMeta(offers: any[], userId: string): Promise<v
 
         // Determine effective pricingStatus — use stored value if present,
         // otherwise infer from pricing log signals (pre-fix drafts).
-        let effectiveStatus: 'OK' | 'ESTIMATED' | 'NEEDS_REVIEW' | undefined = logs.pricingStatus;
+        let effectiveStatus: 'OK' | 'ESTIMATED' | 'NEEDS_REVIEW' | 'MANUAL_CONFIRMED' | undefined = logs.pricingStatus;
         if (!effectiveStatus && logs.pricing) {
           const reasoning = logs.pricing.reasoning ?? '';
           const confidence = logs.pricing.confidence;
@@ -1008,7 +1008,8 @@ async function enrichWithDraftLogsMeta(offers: any[], userId: string): Promise<v
           }
         }
 
-        if (!effectiveStatus || effectiveStatus === 'OK') continue;
+        // MANUAL_CONFIRMED means the user approved the price — treat like OK
+        if (!effectiveStatus || effectiveStatus === 'OK' || effectiveStatus === 'MANUAL_CONFIRMED') continue;
 
         offers[i].merchantData = offers[i].merchantData ?? {};
         offers[i].merchantData.pricingStatus = effectiveStatus;

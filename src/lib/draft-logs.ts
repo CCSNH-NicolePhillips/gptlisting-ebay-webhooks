@@ -143,8 +143,9 @@ export interface DraftLogs {
   /**
    * Pricing gate status — enriched back onto offer.merchantData so the UI
    * can show a red "NEEDS REVIEW" badge without relying on eBay returning merchantData.
+   * 'MANUAL_CONFIRMED' means the user has verified the price and cleared the gate.
    */
-  pricingStatus?: 'OK' | 'ESTIMATED' | 'NEEDS_REVIEW';
+  pricingStatus?: 'OK' | 'ESTIMATED' | 'NEEDS_REVIEW' | 'MANUAL_CONFIRMED';
   /** Convenience flag: true when pricingStatus !== 'OK' */
   needsPriceReview?: boolean;
   /** Reasons why manual review is required (surfaced in edit-draft UI). */
@@ -224,6 +225,38 @@ export async function getDraftLogs(
   }
   
   return null;
+}
+
+/**
+ * Confirm that the user has manually reviewed and approved the price for a
+ * NEEDS_REVIEW draft. Updates both the offer-keyed and SKU-keyed Redis entries
+ * to pricingStatus='MANUAL_CONFIRMED' so that enrichWithDraftLogsMeta no
+ * longer re-applies the NEEDS_REVIEW gate on subsequent list loads.
+ */
+export async function confirmDraftPriceReview(
+  userId: string,
+  offerId: string,
+): Promise<void> {
+  const offerKey = `draft-logs-offer:${userId}:${offerId}`;
+  try {
+    const result = await redisCall('GET', offerKey);
+    if (result.result && typeof result.result === 'string') {
+      const logs = JSON.parse(result.result) as DraftLogs;
+      logs.pricingStatus = 'MANUAL_CONFIRMED';
+      logs.needsPriceReview = false;
+      await redisCall('SET', offerKey, JSON.stringify(logs), 'EX', DRAFT_LOGS_TTL_SECONDS.toString());
+
+      // Also patch the SKU-keyed entry if we know the SKU
+      if (logs.sku) {
+        const skuKey = `draft-logs:${userId}:${logs.sku}`;
+        await redisCall('SET', skuKey, JSON.stringify(logs), 'EX', DRAFT_LOGS_TTL_SECONDS.toString());
+      }
+      console.log(`[draft-logs] ✓ Confirmed price review for offerId ${offerId}`);
+    }
+  } catch (err) {
+    console.error(`[draft-logs] ⚠️ Failed to confirm price review for offerId ${offerId}:`, err);
+    // Non-fatal
+  }
 }
 
 /**
