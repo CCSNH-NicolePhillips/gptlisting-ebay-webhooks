@@ -12,6 +12,7 @@
  */
 
 import { getEbayClient, EbayNotConnectedError } from '../lib/ebay-client.js';
+import { getDraftLogsByOfferId } from '../lib/draft-logs.js';
 
 export { EbayNotConnectedError };
 
@@ -42,6 +43,11 @@ export interface GetDraftResult {
     weight: unknown | null;
     bestOffer: BestOfferSettings;
     fulfillmentPolicyId: string | null;
+    merchantData?: {
+      pricingStatus?: string;
+      needsPriceReview?: boolean;
+      attentionReasons?: Array<{ code: string; message: string; severity?: string }>;
+    };
   };
 }
 
@@ -125,6 +131,26 @@ export async function getDraft(userId: string, offerId: string): Promise<GetDraf
     bestOffer = { enabled: false };
   }
 
+  // Enrich merchantData from Redis so the edit page can show the NEEDS_REVIEW confirm row.
+  // Fall back to whatever eBay returned in the raw offer (e.g. after a manual MANUAL_CONFIRMED write).
+  let merchantData: GetDraftResult['draft']['merchantData'] =
+    offer.merchantData ? { ...(offer.merchantData as object) } : undefined;
+
+  try {
+    const resolvedOfferId: string = (offer.offerId ?? offerId) as string;
+    const logs = await getDraftLogsByOfferId(userId, resolvedOfferId);
+    if (logs?.pricingStatus && logs.pricingStatus !== 'OK' && logs.pricingStatus !== 'MANUAL_CONFIRMED') {
+      merchantData = {
+        ...merchantData,
+        pricingStatus: logs.pricingStatus,
+        needsPriceReview: true,
+        ...(logs.attentionReasons?.length ? { attentionReasons: logs.attentionReasons } : {}),
+      };
+    }
+  } catch {
+    // Non-fatal — merchantData enrichment is best-effort
+  }
+
   const draft = {
     sku,
     title: (inventory.product?.title ?? offer.title ?? '') as string,
@@ -140,6 +166,7 @@ export async function getDraft(userId: string, offerId: string): Promise<GetDraf
     weight: (inventory.packageWeightAndSize?.weight ?? null) as unknown,
     bestOffer,
     fulfillmentPolicyId: (offer.listingPolicies?.fulfillmentPolicyId ?? null) as string | null,
+    ...(merchantData ? { merchantData } : {}),
   };
 
   return { ok: true, draft };
