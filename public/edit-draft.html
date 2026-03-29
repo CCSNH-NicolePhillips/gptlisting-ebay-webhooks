@@ -770,6 +770,20 @@
           <p>Amazon could not find a verified price for this product. Set the correct price below, check the confirmation box, then click <strong>Confirm Price &amp; Save</strong>. Publishing will be unlocked automatically.</p>
         </div>
 
+        <!-- Duplicate Check Banner -->
+        <div id="dupCheckBanner" style="display: none; margin-bottom: 1rem; border-radius: 8px; padding: 1rem 1.25rem; font-size: 0.9rem;">
+          <div id="dupCheckLoading" style="display: none; color: var(--text-muted);">
+            🔍 Checking for duplicates…
+          </div>
+          <div id="dupCheckClean" style="display: none; color: #16a34a;">
+            ✅ No matching active listings or recent sales found.
+          </div>
+          <div id="dupCheckMatches" style="display: none;">
+            <div style="font-weight: 600; margin-bottom: 0.5rem; color: #dc2626;">⚠️ Possible duplicates found</div>
+            <div id="dupMatchList" style="display: flex; flex-direction: column; gap: 0.5rem;"></div>
+          </div>
+        </div>
+
         <!-- Basic Information -->
         <div class="dp-card dp-card--full">
           <h3 style="margin-top: 0; margin-bottom: 1rem; color: var(--text-primary);">Basic Information</h3>
@@ -1970,6 +1984,9 @@
         }
         
         await loadDraft();
+
+        // Non-blocking duplicate check
+        checkForDuplicates();
         
         // Load AI decision logs if enabled in settings
         await checkAndLoadLogs();
@@ -1979,6 +1996,61 @@
       }
     }
     
+    // ---------------------------------------------------------------
+    // Duplicate Check
+    // ---------------------------------------------------------------
+    async function checkForDuplicates() {
+      const banner = $('dupCheckBanner');
+      const loading = $('dupCheckLoading');
+      const clean = $('dupCheckClean');
+      const matchesDiv = $('dupCheckMatches');
+      const matchList = $('dupMatchList');
+
+      const title = ($('title')?.value || '').trim();
+      if (!title) return;
+
+      banner.style.display = 'block';
+      loading.style.display = 'block';
+      clean.style.display = 'none';
+      matchesDiv.style.display = 'none';
+
+      try {
+        const qs = new URLSearchParams({ title });
+        if (currentOfferId) qs.set('offerId', currentOfferId);
+        const data = await fetchJSON(`/api/ebay/duplicate-check?${qs}`);
+
+        loading.style.display = 'none';
+
+        if (!data.matches || data.matches.length === 0) {
+          clean.style.display = 'block';
+          banner.style.background = 'var(--bg-card, #f0fdf4)';
+          return;
+        }
+
+        // Show matches
+        banner.style.background = '#fef2f2';
+        matchesDiv.style.display = 'block';
+        matchList.innerHTML = '';
+
+        for (const m of data.matches) {
+          const badge = m.type === 'active'
+            ? '<span style="background:#2563eb;color:#fff;padding:2px 6px;border-radius:4px;font-size:0.75rem;font-weight:600;">ACTIVE</span>'
+            : '<span style="background:#7c3aed;color:#fff;padding:2px 6px;border-radius:4px;font-size:0.75rem;font-weight:600;">SOLD</span>';
+          const price = m.price ? ` — $${m.price.replace(/ USD$/, '')}` : '';
+          const dateStr = m.date ? ` (${new Date(m.date).toLocaleDateString()})` : '';
+          const score = Math.round(m.score * 100);
+          const row = document.createElement('div');
+          row.style.cssText = 'display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.75rem;background:rgba(255,255,255,0.7);border-radius:6px;font-size:0.85rem;';
+          row.innerHTML = `${badge} <span style="flex:1;">${escapeHtml(m.title)}${price}${dateStr}</span> <span style="color:var(--text-muted);font-size:0.75rem;">${score}% match</span>`;
+          matchList.appendChild(row);
+        }
+      } catch (e) {
+        console.warn('Duplicate check failed:', e);
+        loading.style.display = 'none';
+        banner.style.display = 'none'; // Silently hide on error
+      }
+    }
+
     // Lightbox functions
     function openLightbox(imageUrl) {
       const lightbox = $('imageLightbox');

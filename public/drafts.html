@@ -727,6 +727,7 @@
               Refresh
             </button>
             <button class="dp-btn dp-btn-secondary" id="exportAllBtn" style="padding: 0.5rem 1rem; font-size: 0.875rem;">⬇ Export All</button>
+            <button class="dp-btn dp-btn-secondary" id="btnDupCheck" title="Check if any drafts are already listed or recently sold" style="padding: 0.5rem 1rem; font-size: 0.875rem;">🔍 Check Duplicates</button>
             <button class="dp-btn dp-btn-secondary" id="exportFlaggedBtn" disabled style="padding: 0.5rem 1rem; font-size: 0.875rem;">📎 Export Flagged<span class="flag-count-badge" id="flagCountBadge" style="display:none">0</span></button>
             <a href="/index.html" class="dp-btn dp-btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem;">← Back to Dashboard</a>
             <button id="btnClean" class="dp-btn dp-btn-danger" title="Delete ALL UNPUBLISHED drafts" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
@@ -760,6 +761,20 @@
             <div id="initialLoader" class="loading" style="margin: 3rem 0;">
               <div class="spinner" role="status" aria-label="Loading"></div>
               <div class="label">Loading drafts…</div>
+            </div>
+
+            <!-- Duplicate Check Results Banner -->
+            <div id="dupCheckBanner" style="display: none; margin-bottom: 1.5rem; border-radius: 8px; padding: 1rem 1.25rem; font-size: 0.9rem;">
+              <div id="dupCheckLoading" style="display: none; color: var(--text-muted);">
+                🔍 Checking for duplicates across active listings and recent sales…
+              </div>
+              <div id="dupCheckClean" style="display: none; color: #16a34a; font-weight: 500;">
+                ✅ No duplicates found — none of your drafts match an active listing or recent sale.
+              </div>
+              <div id="dupCheckResults" style="display: none;">
+                <div style="font-weight: 600; margin-bottom: 0.75rem; color: #dc2626;">⚠️ Possible duplicates found</div>
+                <div id="dupResultsList" style="display: flex; flex-direction: column; gap: 0.5rem;"></div>
+              </div>
             </div>
             
             <div id="needsAttention" style="display: none; margin-bottom: 2rem;">
@@ -2131,6 +2146,117 @@
           load(); 
         } catch {} 
       });
+
+      // ========================================================================
+      // Duplicate Check — batch-compare all draft titles vs active/sold
+      // ========================================================================
+      document.getElementById('btnDupCheck')?.addEventListener('click', runDuplicateCheck);
+
+      async function runDuplicateCheck() {
+        const banner = $('dupCheckBanner');
+        const loading = $('dupCheckLoading');
+        const clean = $('dupCheckClean');
+        const results = $('dupCheckResults');
+        const resultsList = $('dupResultsList');
+        const btn = document.getElementById('btnDupCheck');
+
+        banner.style.display = 'block';
+        loading.style.display = 'block';
+        clean.style.display = 'none';
+        results.style.display = 'none';
+        if (btn) { btn.disabled = true; btn.textContent = '🔍 Checking…'; }
+
+        try {
+          // Gather all draft titles from the rendered cards
+          const cards = document.querySelectorAll('#readyList .card, #needsList .card');
+          const drafts = [];
+          cards.forEach(card => {
+            const titleEl = card.querySelector('.title');
+            const title = (titleEl?.textContent || '').trim();
+            const offerId = card.dataset.offerId || '';
+            if (title && title !== '(loading title…)') {
+              drafts.push({ title, offerId, card });
+            }
+          });
+
+          if (drafts.length === 0) {
+            loading.style.display = 'none';
+            clean.style.display = 'block';
+            banner.style.background = 'rgba(22, 163, 106, 0.08)';
+            return;
+          }
+
+          // Fire duplicate checks in parallel (max 6 concurrent)
+          const CONCURRENCY = 6;
+          const allMatches = [];
+          for (let i = 0; i < drafts.length; i += CONCURRENCY) {
+            const batch = drafts.slice(i, i + CONCURRENCY);
+            const batchResults = await Promise.all(
+              batch.map(async (d) => {
+                try {
+                  const qs = new URLSearchParams({ title: d.title });
+                  if (d.offerId) qs.set('offerId', d.offerId);
+                  const data = await fetchJSON(`/api/ebay/duplicate-check?${qs}`);
+                  return { draft: d, matches: data.matches || [] };
+                } catch (e) {
+                  console.warn('Dup check failed for', d.title, e);
+                  return { draft: d, matches: [] };
+                }
+              })
+            );
+            allMatches.push(...batchResults);
+          }
+
+          loading.style.display = 'none';
+
+          // Show results
+          const withMatches = allMatches.filter(r => r.matches.length > 0);
+          if (withMatches.length === 0) {
+            clean.style.display = 'block';
+            banner.style.background = 'rgba(22, 163, 106, 0.08)';
+          } else {
+            banner.style.background = '#fef2f2';
+            results.style.display = 'block';
+            resultsList.innerHTML = '';
+
+            for (const { draft, matches } of withMatches) {
+              // Add visual indicator to the card
+              draft.card.style.outline = '2px solid #ef4444';
+              draft.card.style.outlineOffset = '-2px';
+
+              const group = document.createElement('div');
+              group.style.cssText = 'background:rgba(255,255,255,0.7);border-radius:8px;padding:0.75rem 1rem;';
+
+              const header = document.createElement('div');
+              header.style.cssText = 'font-weight:600;font-size:0.85rem;margin-bottom:0.4rem;color:#111;';
+              header.textContent = draft.title;
+              group.appendChild(header);
+
+              for (const m of matches) {
+                const badge = m.type === 'active'
+                  ? '<span style="background:#2563eb;color:#fff;padding:2px 6px;border-radius:4px;font-size:0.72rem;font-weight:600;">ACTIVE</span>'
+                  : '<span style="background:#7c3aed;color:#fff;padding:2px 6px;border-radius:4px;font-size:0.72rem;font-weight:600;">SOLD</span>';
+                const price = m.price ? ` — $${m.price.replace(/ USD$/, '')}` : '';
+                const dateStr = m.date ? ` (${new Date(m.date).toLocaleDateString()})` : '';
+                const score = Math.round(m.score * 100);
+                const row = document.createElement('div');
+                row.style.cssText = 'display:flex;align-items:center;gap:0.5rem;padding:0.3rem 0;font-size:0.82rem;';
+                row.innerHTML = `${badge} <span style="flex:1;">${escapeHtml(m.title)}${price}${dateStr}</span> <span style="color:#888;font-size:0.72rem;">${score}%</span>`;
+                group.appendChild(row);
+              }
+
+              resultsList.appendChild(group);
+            }
+          }
+        } catch (e) {
+          console.error('Duplicate check failed:', e);
+          loading.style.display = 'none';
+          banner.style.display = 'none';
+          if (flash) { flash.textContent = 'Duplicate check failed: ' + (e.message || e); flash.style.display = 'block'; }
+        } finally {
+          if (btn) { btn.disabled = false; btn.textContent = '🔍 Check Duplicates'; }
+        }
+      }
       
       // ========================================================================
       // Multi-select and Bulk Actions

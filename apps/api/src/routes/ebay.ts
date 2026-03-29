@@ -417,6 +417,98 @@ router.get('/listings/active', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /api/ebay/duplicate-check
+// Check if a draft title matches any active listing or recently sold item.
+//
+// Query params:
+//   title     — the draft title to check (required)
+//   offerId   — current draft's offer/itemId to exclude from matches (optional)
+//   days      — how many days back to check sold orders (default 90)
+//
+// Returns: { ok, matches: [{ type, title, score, itemId?, orderId?, price?, date? }] }
+// ---------------------------------------------------------------------------
+router.get('/duplicate-check', async (req, res) => {
+  try {
+    const { userId } = await requireUserAuth(req.headers.authorization);
+    const rawTitle = (req.query.title as string || '').trim();
+    const excludeId = (req.query.offerId as string || '').trim();
+    const days = Math.min(parseInt((req.query.days as string) || '90', 10), 365);
+
+    if (!rawTitle) return badRequest(res, 'title required');
+
+    // Normalise: lowercase, strip special chars, collapse whitespace
+    const normalise = (s: string) =>
+      s.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+    const tokenise = (s: string) => normalise(s).split(' ').filter(Boolean);
+
+    // Token-overlap similarity (Jaccard-ish weighted by token length)
+    const similarity = (a: string, b: string): number => {
+      const tA = tokenise(a);
+      const tB = tokenise(b);
+      if (!tA.length || !tB.length) return 0;
+      let shared = 0, total = 0;
+      const setB = new Set(tB);
+      for (const t of tA) { total += t.length; if (setB.has(t)) shared += t.length; }
+      const setA = new Set(tA);
+      for (const t of tB) { total += t.length; if (setA.has(t)) shared += t.length; }
+      return total > 0 ? (shared / total) : 0;
+    };
+
+    type Match = { type: 'active' | 'sold'; title: string; score: number;
+      itemId?: string; orderId?: string; price?: string; date?: string };
+    const matches: Match[] = [];
+    const THRESHOLD = 0.55; // tuned: Jaccard >0.55 catches duplicates without too many false positives
+
+    // --- Active listings ---
+    try {
+      const { offers } = await listActiveListings(userId);
+      for (const o of offers) {
+        if (excludeId && (o.itemId === excludeId || o.offerId === excludeId)) continue;
+        const score = similarity(rawTitle, o.title || o.sku || '');
+        if (score >= THRESHOLD) {
+          matches.push({
+            type: 'active', title: o.title || o.sku, score: Math.round(score * 100) / 100,
+            itemId: o.itemId || o.offerId,
+            price: o.price?.value ? `${o.price.value} ${o.price.currency || 'USD'}` : undefined,
+            date: o.startTime,
+          });
+        }
+      }
+    } catch (e) {
+      // Non-fatal — still return sold matches if active fetch fails
+      console.warn('[duplicate-check] active listings fetch failed:', (e as Error).message);
+    }
+
+    // --- Sold orders (last N days) ---
+    try {
+      const dateFrom = new Date(Date.now() - days * 86_400_000).toISOString();
+      const { orders } = await listSoldOrders(userId, { limit: 200, dateFrom });
+      for (const order of orders) {
+        for (const li of order.lineItems) {
+          const score = similarity(rawTitle, li.title || '');
+          if (score >= THRESHOLD) {
+            matches.push({
+              type: 'sold', title: li.title || '', score: Math.round(score * 100) / 100,
+              orderId: order.orderId,
+              price: li.salePrice?.value ? `${li.salePrice.value} ${li.salePrice.currency || 'USD'}` : undefined,
+              date: order.creationDate,
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[duplicate-check] sold orders fetch failed:', (e as Error).message);
+    }
+
+    // Sort by score descending, cap at 10
+    matches.sort((a, b) => b.score - a.score);
+    return res.status(200).json({ ok: true, matches: matches.slice(0, 10) });
+  } catch (err) {
+    return handleEbayError(res, err);
+  }
+});
+
+// ---------------------------------------------------------------------------
 // PUT /api/ebay/listings/:id
 // Update an active eBay listing (Inventory API or Trading API path).
 //
