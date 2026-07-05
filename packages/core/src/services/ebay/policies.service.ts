@@ -10,7 +10,7 @@
  *   setPolicyDefault(...)       → POST /api/ebay/policies/defaults
  */
 
-import { tokensStore } from '../../../../../src/lib/redis-store.js';
+import { tokensStore, preferencesStore } from '../../../../../src/lib/redis-store.js';
 import { userScopedKey } from '../../../../../src/lib/_auth.js';
 import { getUserAccessToken, apiHost, headers as ebayHeaders } from '../../../../../src/lib/_ebay.js';
 
@@ -308,13 +308,12 @@ export async function createPolicy(userId: string, body: any) {
   let defaultsUpdated: any = null;
   if (id && body.setDefault) {
     try {
-      const store = tokensStore();
       const key = userScopedKey(userId, 'policy-defaults.json');
-      const cur = ((await store.get(key, { type: 'json' })) as any) || {};
+      const cur = await getPolicyDefaultsRaw(userId, key);
       if (pathType === 'payment_policy') cur.payment = id;
       else if (pathType === 'fulfillment_policy') cur.fulfillment = id;
       else if (pathType === 'return_policy') cur.return = id;
-      await store.set(key, JSON.stringify(cur));
+      await preferencesStore().set(key, JSON.stringify(cur));
       defaultsUpdated = cur;
     } catch {}
   }
@@ -336,29 +335,37 @@ export async function deletePolicy(userId: string, type: string, id: string) {
   return { ok: true, deleted: { type: pathType, id } };
 }
 
+// Policy defaults are a user setting, not a credential — unlike OAuth tokens
+// they have no security reason to expire, so they're stored in the
+// non-expiring preferences store. Falls back to the legacy expiring token
+// store for values saved before this moved, so existing defaults aren't
+// dropped by this change.
+async function getPolicyDefaultsRaw(userId: string, key: string): Promise<any> {
+  const cur = (await preferencesStore().get(key, { type: 'json' })) as any
+    ?? (await tokensStore().get(key, { type: 'json' })) as any;
+  return (cur && typeof cur === 'object') ? cur : {};
+}
+
 /** Get per-user saved policy defaults from Redis. */
 export async function getPolicyDefaults(userId: string) {
-  const store = tokensStore();
   let prefs: any = {};
   try {
-    prefs = (await store.get(userScopedKey(userId, 'policy-defaults.json'), { type: 'json' })) as any;
+    prefs = await getPolicyDefaultsRaw(userId, userScopedKey(userId, 'policy-defaults.json'));
   } catch {}
-  if (!prefs || typeof prefs !== 'object') prefs = {};
   return { ok: true, defaults: prefs };
 }
 
 /** Set a policy default (payment | fulfillment | fulfillmentFree | return). */
 export async function setPolicyDefault(userId: string, type: string, policyId: string) {
-  const store = tokensStore();
   const key = userScopedKey(userId, 'policy-defaults.json');
-  const cur = ((await store.get(key, { type: 'json' })) as any) || {};
+  const cur = await getPolicyDefaultsRaw(userId, key);
 
   // fulfillmentFree is a custom DraftPilot concept (free-shipping policy for items < $50).
   // It does not correspond to an eBay API policy type, so we bypass normal path resolution.
   if (type === 'fulfillmentFree') {
     if (policyId) cur.fulfillmentFree = policyId;
     else delete cur.fulfillmentFree;
-    await store.set(key, JSON.stringify(cur));
+    await preferencesStore().set(key, JSON.stringify(cur));
     return { ok: true, defaults: cur };
   }
 
@@ -366,6 +373,6 @@ export async function setPolicyDefault(userId: string, type: string, policyId: s
   if (pathType === 'payment_policy') cur.payment = policyId;
   else if (pathType === 'fulfillment_policy') cur.fulfillment = policyId;
   else if (pathType === 'return_policy') cur.return = policyId;
-  await store.set(key, JSON.stringify(cur));
+  await preferencesStore().set(key, JSON.stringify(cur));
   return { ok: true, defaults: cur };
 }

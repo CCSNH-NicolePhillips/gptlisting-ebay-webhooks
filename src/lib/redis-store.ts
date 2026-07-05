@@ -71,7 +71,11 @@ class RedisStore {
 
   async set(name: string, value: unknown): Promise<void> {
     const serialized = typeof value === 'string' ? value : JSON.stringify(value);
-    await redisCall("SETEX", this.key(name), `${this.ttl}`, serialized);
+    if (this.ttl > 0) {
+      await redisCall("SETEX", this.key(name), `${this.ttl}`, serialized);
+    } else {
+      await redisCall("SET", this.key(name), serialized);
+    }
   }
 
   async setJSON(name: string, value: unknown): Promise<void> {
@@ -101,6 +105,7 @@ class RedisStore {
 // Singleton stores
 let _tokensStore: RedisStore | null = null;
 let _cacheStore: RedisStore | null = null;
+let _preferencesStore: RedisStore | null = null;
 
 export function tokensStore(): RedisStore {
   if (!_tokensStore) {
@@ -114,4 +119,15 @@ export function cacheStore(): RedisStore {
     _cacheStore = new RedisStore('cache', CACHE_TTL_SEC);
   }
   return _cacheStore;
+}
+
+// Durable user settings (default location, policy defaults, etc.) — unlike OAuth
+// tokens these have no security reason to expire, and are only rewritten when a
+// user explicitly changes them, so a fixed TTL silently drops them after months
+// of inactivity. Store with no expiry (ttl 0 skips SETEX, uses plain SET).
+export function preferencesStore(): RedisStore {
+  if (!_preferencesStore) {
+    _preferencesStore = new RedisStore('prefs', 0);
+  }
+  return _preferencesStore;
 }

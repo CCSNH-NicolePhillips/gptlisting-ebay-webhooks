@@ -8,7 +8,7 @@
  */
 
 import { getEbayClient, EbayNotConnectedError } from '../../../../../src/lib/ebay-client.js';
-import { tokensStore } from '../../../../../src/lib/redis-store.js';
+import { tokensStore, preferencesStore } from '../../../../../src/lib/redis-store.js';
 import { userScopedKey } from '../../../../../src/lib/_auth.js';
 
 export { EbayNotConnectedError };
@@ -76,26 +76,26 @@ export async function listLocations(userId: string): Promise<LocationInfo[]> {
 
 /**
  * Read the user's saved default inventory location key from Redis.
- * Returns an empty string if not set.
+ * Returns an empty string if not set. Falls back to the legacy
+ * expiring token store for values saved before this preference moved
+ * to a non-expiring store.
  */
 export async function getUserLocation(userId: string): Promise<string> {
-  const store = tokensStore();
-  const saved = (await store.get(
-    userScopedKey(userId, 'ebay-location.json'),
-    { type: 'json' },
-  )) as any;
+  const key = userScopedKey(userId, 'ebay-location.json');
+  const saved = (await preferencesStore().get(key, { type: 'json' })) as any
+    ?? (await tokensStore().get(key, { type: 'json' })) as any;
   return typeof saved?.merchantLocationKey === 'string' ? saved.merchantLocationKey.trim() : '';
 }
 
 /**
- * Persist the user's default inventory location key to Redis.
+ * Persist the user's default inventory location key. Stored without expiry —
+ * unlike OAuth tokens, this is a user setting with no security reason to lapse.
  */
 export async function setUserLocation(userId: string, merchantLocationKey: string): Promise<void> {
   if (!merchantLocationKey.trim()) {
     throw Object.assign(new Error('merchantLocationKey is required'), { statusCode: 400 });
   }
-  const store = tokensStore();
-  await store.setJSON(userScopedKey(userId, 'ebay-location.json'), {
+  await preferencesStore().setJSON(userScopedKey(userId, 'ebay-location.json'), {
     merchantLocationKey: merchantLocationKey.trim(),
     updatedAt: Date.now(),
   });
