@@ -532,7 +532,14 @@
           });
           if (token !== extractionToken) return;
 
-          const group = result?.groups?.[0];
+          // The front and back photos are analyzed independently, and can disagree on
+          // product name (e.g. a back-panel tagline gets mistaken for the product name),
+          // which splits them into separate groups. The front panel is the reliable
+          // source for the product's actual name, so prefer whichever group contains
+          // the front photo's URL over just taking the first group in the array.
+          const groups = Array.isArray(result?.groups) ? result.groups : [];
+          const group = groups.find((g) => Array.isArray(g.images) && g.images.includes(frontStagedUrl))
+            || groups[0];
           if (group) {
             if (!$('qsBrand').value.trim() && group.brand) $('qsBrand').value = group.brand;
             if (!$('qsProduct').value.trim() && group.product) $('qsProduct').value = group.product;
