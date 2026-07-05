@@ -486,23 +486,28 @@
         });
       }
 
-      wirePhotoTarget('qsFrontTarget', 'qsFrontInput', 'qsFrontIcon', 'qsFrontLabel', (file) => {
-        frontFile = file;
-        frontStagedUrl = null;
-        setStepState(1, 'complete');
-        setStepState(2, 'active');
-        updateSubmitState();
-        autoExtractBrandProduct();
-      });
+      function wireForm() {
+        wirePhotoTarget('qsFrontTarget', 'qsFrontInput', 'qsFrontIcon', 'qsFrontLabel', (file) => {
+          frontFile = file;
+          frontStagedUrl = null;
+          setStepState(1, 'complete');
+          setStepState(2, 'active');
+          updateSubmitState();
+          autoExtractBrandProduct();
+        });
 
-      wirePhotoTarget('qsBackTarget', 'qsBackInput', 'qsBackIcon', 'qsBackLabel', (file) => {
-        backFile = file;
-        backStagedUrl = null;
-        setStepState(2, 'complete');
-        setStepState(3, 'active');
-        updateSubmitState();
-        autoExtractBrandProduct();
-      });
+        wirePhotoTarget('qsBackTarget', 'qsBackInput', 'qsBackIcon', 'qsBackLabel', (file) => {
+          backFile = file;
+          backStagedUrl = null;
+          setStepState(2, 'complete');
+          setStepState(3, 'active');
+          updateSubmitState();
+          autoExtractBrandProduct();
+        });
+
+        $('qsBrand').addEventListener('input', updateSubmitState);
+        $('qsProduct').addEventListener('input', updateSubmitState);
+      }
 
       async function autoExtractBrandProduct() {
         if (!frontFile || !backFile) return;
@@ -536,9 +541,6 @@
           if (token === extractionToken) statusEl.style.display = 'none';
         }
       }
-
-      $('qsBrand').addEventListener('input', updateSubmitState);
-      $('qsProduct').addEventListener('input', updateSubmitState);
 
       function showError(message) {
         const el = $('qsError');
@@ -753,6 +755,7 @@
           subtitle: 'Single-item listing in four taps',
           activePage: 'quick-shoot',
         });
+        wireForm();
       });
     </script>
   </body>
