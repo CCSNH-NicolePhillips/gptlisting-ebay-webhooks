@@ -241,6 +241,123 @@ export async function deletePriceOverride(brand: string, product: string): Promi
 }
 
 // ---------------------------------------------------------------------------
+// TikTok Shop pins — for products (often TikTok-exclusive/viral items) that
+// aren't carried on Amazon at all.
+// Key format: brand:tiktok:{normalizedBrand}:{normalizedProduct}
+// The price itself is NOT stored here — only the pinned URL. amazon-search.ts
+// live-scrapes the pinned URL on every lookup (same as it does for pinned ASINs),
+// since TikTok Shop prices/discounts change more often than the pin itself.
+// ---------------------------------------------------------------------------
+
+interface TikTokShopPinEntry {
+  url: string;
+  brand: string;
+  product: string;
+  addedAt: number;
+  verified: boolean;
+}
+
+function buildTikTokKey(brand: string, product: string): string {
+  return `brand:tiktok:${normalizeKey(brand)}:${normalizeKey(product)}`;
+}
+
+/**
+ * Get the pinned TikTok Shop product URL for a brand + product.
+ * Same progressive word-truncation fuzzy match as getAmazonAsin.
+ */
+export async function getTikTokShopPin(brand: string, product: string): Promise<string | null> {
+  try {
+    const words = product.trim().split(/\s+/);
+    const candidates = [product];
+    if (words.length > 3) candidates.push(words.slice(0, 3).join(' '));
+    if (words.length > 2) candidates.push(words.slice(0, 2).join(' '));
+    if (words.length > 1) candidates.push(words[0]);
+
+    for (const candidate of candidates) {
+      const key = buildTikTokKey(brand, candidate);
+      const resp = await redisCall("GET", key);
+      if (resp && resp.result) {
+        const entry: TikTokShopPinEntry = typeof resp.result === 'string' ? JSON.parse(resp.result) : resp.result;
+        console.log(`[brand-registry] ✓ Found TikTok Shop pin: ${entry.url} for ${brand} ${product}${candidate !== product ? ` (matched via "${candidate}")` : ''}`);
+        return entry.url;
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error('[brand-registry] TikTok pin lookup error:', error);
+    return null;
+  }
+}
+
+/**
+ * Save a pinned TikTok Shop product URL for a brand + product. No expiration.
+ */
+export async function saveTikTokShopPin(
+  brand: string,
+  product: string,
+  url: string,
+  verified = false,
+): Promise<void> {
+  try {
+    const key = buildTikTokKey(brand, product);
+    const entry: TikTokShopPinEntry = {
+      url,
+      brand,
+      product,
+      addedAt: Date.now(),
+      verified,
+    };
+    await redisCall("SET", key, JSON.stringify(entry));
+    console.log(`[brand-registry] ✓ Saved TikTok Shop pin ${url} for: ${brand} ${product} (verified: ${verified})`);
+  } catch (error) {
+    console.error('[brand-registry] TikTok pin save error:', error);
+  }
+}
+
+/**
+ * Get all registered TikTok Shop pins (for admin UI).
+ */
+export async function listTikTokShopPins(): Promise<TikTokShopPinEntry[]> {
+  try {
+    const resp = await redisCall("KEYS", 'brand:tiktok:*');
+    if (!resp || !Array.isArray(resp.result) || resp.result.length === 0) {
+      return [];
+    }
+
+    const entries: TikTokShopPinEntry[] = [];
+    for (const key of resp.result) {
+      const dataResp = await redisCall("GET", key as string);
+      if (dataResp && dataResp.result) {
+        const entry = typeof dataResp.result === 'string' ? JSON.parse(dataResp.result) : dataResp.result;
+        entries.push(entry);
+      }
+    }
+
+    return entries.sort((a, b) => b.addedAt - a.addedAt);
+  } catch (error) {
+    console.error('[brand-registry] TikTok pin list error:', error);
+    return [];
+  }
+}
+
+/**
+ * Delete a TikTok Shop pin entry.
+ */
+export async function deleteTikTokShopPin(brand: string, product: string): Promise<boolean> {
+  try {
+    const key = buildTikTokKey(brand, product);
+    const resp = await redisCall("DEL", key);
+    const deleted = !!(resp && typeof resp.result === 'number' && resp.result > 0);
+    if (deleted) console.log(`[brand-registry] Deleted TikTok Shop pin for: ${brand} ${product}`);
+    return deleted;
+  } catch (error) {
+    console.error('[brand-registry] TikTok pin delete error:', error);
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
 
 /**
  * Delete a brand registry entry

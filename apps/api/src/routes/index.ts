@@ -21,6 +21,7 @@ import settingsRouter from './settings.js';
 import smartdraftsRouter from './smartdrafts.js';
 import statusRouter from './status.js';
 import taxonomyRouter from './taxonomy.js';
+import tiktokRegistryRouter from './tiktok-registry.js';
 
 export const router = Router();
 
@@ -46,3 +47,4 @@ router.use('/settings', settingsRouter);
 router.use('/smartdrafts', smartdraftsRouter);
 router.use('/status', statusRouter);
 router.use('/taxonomy', taxonomyRouter);
+router.use('/tiktok-registry', tiktokRegistryRouter);

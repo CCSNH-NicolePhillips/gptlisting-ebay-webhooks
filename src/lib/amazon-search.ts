@@ -887,6 +887,37 @@ export async function searchAmazonWithFallback(
     console.warn('[amazon-search] Brand registry check failed (non-fatal):', err instanceof Error ? err.message : String(err));
   }
 
+  // Step 1.5: Check for a pinned TikTok Shop URL — same tier as a pinned ASIN, for
+  // products (often TikTok-exclusive/viral) that Amazon doesn't carry at all.
+  try {
+    const { getTikTokShopPin } = await import('./brand-registry.js');
+    const pinnedUrl = await getTikTokShopPin(brand, conflictCheckName ?? productName);
+    if (pinnedUrl) {
+      const { scrapeTikTokShopProduct } = await import('./tiktok-shop-scraper.js');
+      const shopResult = await scrapeTikTokShopProduct(pinnedUrl);
+      if (shopResult?.price !== null && shopResult?.price !== undefined) {
+        console.log(`[amazon-search] ✅ TikTok Shop pin price: $${shopResult.price}`);
+        return {
+          price: shopResult.price,
+          originalPrice: shopResult.originalPrice,
+          url: pinnedUrl,
+          asin: null,
+          title: shopResult.title ?? `${brand} ${productName}`,
+          brand: shopResult.brand ?? brand,
+          isPrime: false,
+          rating: null,
+          reviews: null,
+          allResults: [],
+          confidence: 'high',
+          reasoning: 'tiktok-shop-pin',
+        };
+      }
+      console.log('[amazon-search] ⚠️ TikTok Shop pin scrape failed, falling through to search');
+    }
+  } catch (err) {
+    console.warn('[amazon-search] TikTok Shop pin check failed (non-fatal):', err instanceof Error ? err.message : String(err));
+  }
+
   // Step 2: Rainforest brand-search — finds all products for this brand in one call,
   // auto-populates the brand registry with discovered ASINs, and returns the best match.
   if (brand) {

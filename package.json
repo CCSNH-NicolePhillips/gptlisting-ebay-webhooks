@@ -48,6 +48,7 @@
     "multer": "^2.1.0",
     "node-fetch": "^3.3.2",
     "openai": "^4.59.0",
+    "playwright-core": "^1.61.1",
     "redis": "^5.9.0",
     "sharp": "^0.33.5",
     "undici": "^6.19.6",
