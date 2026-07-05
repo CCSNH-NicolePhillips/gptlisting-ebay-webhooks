@@ -69,6 +69,12 @@
         color: var(--text-primary);
         margin-bottom: 0.75rem;
       }
+      .qs-autofill-status {
+        font-weight: 400;
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        margin-left: 0.5rem;
+      }
       .qs-photo-target {
         display: flex;
         align-items: center;
@@ -247,7 +253,7 @@
                   <span>The front of the product</span>
                 </div>
               </div>
-              <input type="file" id="qsFrontInput" accept="image/*" capture="environment" style="display:none;">
+              <input type="file" id="qsFrontInput" accept="image/*" style="display:none;">
             </div>
           </div>
 
@@ -263,7 +269,7 @@
                   <span>The back / label / ingredients</span>
                 </div>
               </div>
-              <input type="file" id="qsBackInput" accept="image/*" capture="environment" style="display:none;">
+              <input type="file" id="qsBackInput" accept="image/*" style="display:none;">
             </div>
           </div>
 
@@ -271,7 +277,7 @@
           <div class="qs-step" id="qsStep3">
             <div class="qs-step-num">3</div>
             <div class="qs-step-body">
-              <div class="qs-step-title">What is it?</div>
+              <div class="qs-step-title">What is it? <span class="qs-autofill-status" id="qsAutoFillStatus" style="display:none;"></span></div>
               <div class="qs-fields">
                 <div class="qs-field">
                   <label for="qsBrand">Brand</label>
@@ -328,6 +334,7 @@
       let backFile = null;
       let frontStagedUrl = null;
       let backStagedUrl = null;
+      let extractionToken = 0;
 
       async function fetchJSON(url, opts = {}) {
         const r = await exec(url, opts);
@@ -485,6 +492,7 @@
         setStepState(1, 'complete');
         setStepState(2, 'active');
         updateSubmitState();
+        autoExtractBrandProduct();
       });
 
       wirePhotoTarget('qsBackTarget', 'qsBackInput', 'qsBackIcon', 'qsBackLabel', (file) => {
@@ -493,7 +501,41 @@
         setStepState(2, 'complete');
         setStepState(3, 'active');
         updateSubmitState();
+        autoExtractBrandProduct();
       });
+
+      async function autoExtractBrandProduct() {
+        if (!frontFile || !backFile) return;
+        const token = ++extractionToken;
+        const statusEl = $('qsAutoFillStatus');
+        statusEl.textContent = '✨ Analyzing photos...';
+        statusEl.style.display = 'inline';
+
+        try {
+          if (!frontStagedUrl) frontStagedUrl = await uploadStagedFile(frontFile, frontFile.name || 'front.jpg');
+          if (token !== extractionToken) return;
+          if (!backStagedUrl) backStagedUrl = await uploadStagedFile(backFile, backFile.name || 'back.jpg');
+          if (token !== extractionToken) return;
+
+          const result = await fetchJSON('/api/analyze/user/images', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ images: [frontStagedUrl, backStagedUrl] }),
+          });
+          if (token !== extractionToken) return;
+
+          const group = result?.groups?.[0];
+          if (group) {
+            if (!$('qsBrand').value.trim() && group.brand) $('qsBrand').value = group.brand;
+            if (!$('qsProduct').value.trim() && group.product) $('qsProduct').value = group.product;
+            updateSubmitState();
+          }
+          statusEl.style.display = 'none';
+        } catch (err) {
+          console.warn('[Quick Shoot] Auto-extraction failed, falling back to manual entry:', err);
+          if (token === extractionToken) statusEl.style.display = 'none';
+        }
+      }
 
       $('qsBrand').addEventListener('input', updateSubmitState);
       $('qsProduct').addEventListener('input', updateSubmitState);
@@ -671,6 +713,8 @@
         backFile = null;
         frontStagedUrl = null;
         backStagedUrl = null;
+        extractionToken++;
+        $('qsAutoFillStatus').style.display = 'none';
         $('qsBrand').value = '';
         $('qsProduct').value = '';
         $('qsFrontInput').value = '';
