@@ -517,9 +517,12 @@
         statusEl.style.display = 'inline';
 
         try {
-          if (!frontStagedUrl) frontStagedUrl = await uploadStagedFile(frontFile, frontFile.name || 'front.jpg');
-          if (token !== extractionToken) return;
-          if (!backStagedUrl) backStagedUrl = await uploadStagedFile(backFile, backFile.name || 'back.jpg');
+          const [frontUrl, backUrl] = await Promise.all([
+            frontStagedUrl || uploadStagedFile(frontFile, frontFile.name || 'front.jpg'),
+            backStagedUrl || uploadStagedFile(backFile, backFile.name || 'back.jpg'),
+          ]);
+          frontStagedUrl = frontUrl;
+          backStagedUrl = backUrl;
           if (token !== extractionToken) return;
 
           const result = await fetchJSON('/api/analyze/user/images', {
