@@ -231,7 +231,7 @@ router.post('/user/images', async (req, res) => {
     await consumeImages(userId, images.length);
     const rawBatch = Number(body.batchSize);
     const batchSize = Number.isFinite(rawBatch) ? Math.min(Math.max(rawBatch, 4), 12) : 12;
-    const result = await runAnalysis(images, batchSize);
+    const result = await runAnalysis(images, batchSize, { singleItem: true });
     res.json({ ...result, user: true });
   } catch (err) {
     serverError(res, err);

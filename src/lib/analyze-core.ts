@@ -1,6 +1,6 @@
 import { clipImageEmbedding, cosine } from "./clip-client-split.js";
 import type { ImageInsight } from "./image-insight.js";
-import { mergeGroups, sanitizeUrls, toDirectDropbox } from "./merge.js";
+import { mergeGroups, mergeOptionMaps, sanitizeUrls, toDirectDropbox } from "./merge.js";
 import { applyPricingFormula } from "./price-formula.js";
 import { lookupMarketPrice } from "./price-lookup.js";
 import { deleteCachedBatch, getCachedBatch, setCachedBatch } from "./vision-cache.js";
@@ -740,6 +740,60 @@ export type AnalysisResult = {
   };
 };
 
+/**
+ * Combine per-image vision reads into a single product record for callers (Quick Shoot)
+ * that already know all images belong to one item and pass them in front-first order.
+ * mergeGroups() buckets by exact brand/product/variant match, so a single item's front
+ * and back reads landing on different product-name text (e.g. a back-panel tagline read
+ * as the name) become two unmerged groups; the batch-mode folder/pool reassignment that
+ * normally follows then hands all images to whichever group sorts first and leaves the
+ * other with none. Since there's exactly one item, that disambiguation is unnecessary —
+ * just fold every per-image group into one, preferring the front (first) image's fields.
+ */
+function combineSingleItemResult(analyzedResults: Array<{ groups?: any[] }>, orderedImages: string[]): { groups: any[] } {
+  const perImageGroups = analyzedResults
+    .map((result) => (Array.isArray(result?.groups) ? result.groups[0] : null))
+    .filter((g): g is any => Boolean(g));
+
+  if (!perImageGroups.length) return { groups: [] };
+
+  const [primary, ...rest] = perImageGroups;
+  const pick = (field: string): any => {
+    if (primary[field]) return primary[field];
+    for (const g of rest) if (g[field]) return g[field];
+    return primary[field];
+  };
+
+  const claims = Array.from(
+    new Set(perImageGroups.flatMap((g) => (Array.isArray(g.claims) ? g.claims : [])))
+  );
+  const options = perImageGroups.reduce(
+    (acc: any, g) => mergeOptionMaps(acc, g.options),
+    undefined
+  );
+  const confidence = perImageGroups.reduce((max, g) => Math.max(max, g.confidence || 0), 0);
+
+  const combined = {
+    groupId: "grp_1",
+    brand: pick("brand"),
+    product: pick("product"),
+    variant: pick("variant"),
+    size: pick("size"),
+    category: pick("category"),
+    categoryPath: pick("categoryPath"),
+    claims,
+    options,
+    confidence,
+    images: orderedImages.slice(),
+    primaryImageUrl: orderedImages[0] || null,
+    heroUrl: orderedImages[0] || null,
+    secondaryImageUrl: orderedImages[1] || null,
+    backUrl: orderedImages[1] || null,
+  };
+
+  return { groups: [combined] };
+}
+
 export async function runAnalysis(
   inputUrls: string[],
   rawBatchSize = 12,
@@ -748,9 +802,16 @@ export async function runAnalysis(
     metadata?: Array<{ url: string; name: string; folder: string }>;
     debugVisionResponse?: boolean;
     force?: boolean;
+    /**
+     * Set when the caller already knows every image belongs to exactly one product and
+     * knows the front/back order (Quick Shoot's 2-photo flow). Skips the multi-product
+     * merge/bucketing and shared-photo-pool reassignment built for batch mode — see
+     * combineSingleItemResult() for why those steps mis-attribute images for this case.
+     */
+    singleItem?: boolean;
   } = {}
 ): Promise<AnalysisResult> {
-  const { skipPricing = false, metadata, debugVisionResponse = false, force = false } = opts;
+  const { skipPricing = false, metadata, debugVisionResponse = false, force = false, singleItem = false } = opts;
   let images = sanitizeUrls(inputUrls).map(toDirectDropbox);
   const insightMap = new Map<string, ImageInsight>();
   const useLegacyAssignment = envFlag(process.env.USE_LEGACY_IMAGE_ASSIGNMENT);
@@ -909,7 +970,9 @@ export async function runAnalysis(
     uniqueKeys: visionCache.size,
   });
 
-  const merged = mergeGroups(analyzedResults);
+  const merged: { groups: any[] } = singleItem
+    ? combineSingleItemResult(analyzedResults, verified)
+    : mergeGroups(analyzedResults);
   let orphanDetails: Array<{ url: string; name?: string; folder?: string }> = [];
 
   const uniqueImages = new Set(images);
@@ -917,7 +980,7 @@ export async function runAnalysis(
 
   const useNewSorter = process.env.USE_NEW_SORTER === "true";
 
-  if (!useLegacyAssignment && !useNewSorter && merged.groups.length) {
+  if (!singleItem && !useLegacyAssignment && !useNewSorter && merged.groups.length) {
     type FolderState = {
       key: string;
       label: string;

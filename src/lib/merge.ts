@@ -67,7 +67,7 @@ function normalizeOptions(input: any): Record<string, string[]> | undefined {
   return Object.keys(out).length ? out : undefined;
 }
 
-function mergeOptionMaps(existing: any, incoming: any): Record<string, string[]> | undefined {
+export function mergeOptionMaps(existing: any, incoming: any): Record<string, string[]> | undefined {
   const base = normalizeOptions(existing) || {};
   const next = normalizeOptions(incoming) || {};
   const merged: Record<string, string[]> = { ...base };
