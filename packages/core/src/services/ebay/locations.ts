@@ -15,8 +15,12 @@ export { EbayNotConnectedError };
 
 export type LocationInfo = {
   key: string;
+  merchantLocationKey: string;
   isDefault: boolean;
   name?: string;
+  location?: { address?: Record<string, string> };
+  locationTypes?: string[];
+  merchantLocationStatus?: string;
 };
 
 export class EbayApiError extends Error {
@@ -64,13 +68,21 @@ export async function listLocations(userId: string): Promise<LocationInfo[]> {
         : [];
 
   return list
-    .map((loc) => ({
-      key: typeof loc?.merchantLocationKey === 'string' ? loc.merchantLocationKey : '',
-      isDefault:
-        Array.isArray(loc?.locationTypes) &&
-        (loc.locationTypes.includes('WAREHOUSE') || loc.locationTypes.includes('DEFAULT')),
-      name: typeof loc?.name === 'string' ? loc.name : undefined,
-    }))
+    .map((loc) => {
+      const key = typeof loc?.merchantLocationKey === 'string' ? loc.merchantLocationKey : '';
+      return {
+        key,
+        merchantLocationKey: key,
+        isDefault:
+          Array.isArray(loc?.locationTypes) &&
+          (loc.locationTypes.includes('WAREHOUSE') || loc.locationTypes.includes('DEFAULT')),
+        name: typeof loc?.name === 'string' ? loc.name : undefined,
+        location: loc?.location && typeof loc.location === 'object' ? loc.location : undefined,
+        locationTypes: Array.isArray(loc?.locationTypes) ? loc.locationTypes : undefined,
+        merchantLocationStatus:
+          typeof loc?.merchantLocationStatus === 'string' ? loc.merchantLocationStatus : undefined,
+      };
+    })
     .filter((l) => l.key.length > 0);
 }
 

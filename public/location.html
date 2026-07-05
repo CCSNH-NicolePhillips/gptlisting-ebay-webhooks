@@ -769,7 +769,7 @@
               try {
                 setMsg('Deleting…');
                 const res = await authClient.authFetch('/.netlify/functions/ebay-delete-location', {
-                  method: 'POST',
+                  method: 'DELETE',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ key: loc.merchantLocationKey }),
                 });
@@ -864,7 +864,7 @@
             qs.set('country', values.country);
             qs.set('minimal', 'true');
             const url = `/.netlify/functions/ebay-create-location?${qs.toString()}`;
-            const res = await authClient.authFetch(url);
+            const res = await authClient.authFetch(url, { method: 'POST' });
             const text = await res.text();
             const payload = safeParse(text) || {};
             if (!res.ok || payload?.error) {
