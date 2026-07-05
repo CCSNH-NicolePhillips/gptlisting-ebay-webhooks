@@ -32,6 +32,14 @@ app.use('/api', router);
 // internally dispatches through router (no HTTP redirect, auth headers preserved).
 app.use('/.netlify/functions/:name', netlifyCompatMiddleware(router));
 
+// eBay's registered OAuth redirect URI (RuName) still points at this legacy
+// path from before the Netlify-functions → Express migration — forward it to
+// the real route instead of re-registering a new RuName with eBay.
+app.get('/api/auth/callback/ebay', (req, res) => {
+  const queryString = req.originalUrl.split('?')[1];
+  res.redirect(`/api/ebay/oauth/callback${queryString ? '?' + queryString : ''}`);
+});
+
 // Redirect rules from public/_redirects
 app.get('/', (_req, res) => res.sendFile(join(publicDir, 'welcome.html')));
 app.get('/location', (_req, res) => res.sendFile(join(publicDir, 'location.html')));
