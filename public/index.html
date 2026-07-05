@@ -83,6 +83,13 @@
                 </svg>
                 <span class="dp-nav-item__label">Create Listings</span>
               </a>
+              <a href="/quick-shoot.html" class="dp-nav-item" id="navQuickShoot">
+                <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                  <circle cx="12" cy="13" r="4"></circle>
+                </svg>
+                <span class="dp-nav-item__label">Quick Shoot</span>
+              </a>
               <a href="/drafts.html" class="dp-nav-item">
                 <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -257,12 +264,17 @@
                 <h2 class="dp-hero-title">SmartDrafts AI Quick List</h2>
                 <p class="dp-hero-subtext">Drop product photos into Dropbox or upload from your device. DraftPilot groups images, analyzes them, and creates ready-to-publish eBay drafts.</p>
 
-                <a id="goQuickList" class="dp-btn dp-btn-primary dp-hero-cta disabled" href="/quick-list.html" aria-disabled="true">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-                  </svg>
-                  Create AI Listings
-                </a>
+                <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                  <a id="goQuickList" class="dp-btn dp-btn-primary dp-hero-cta disabled" href="/quick-list.html" aria-disabled="true">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                    </svg>
+                    Create AI Listings
+                  </a>
+                  <a id="goQuickShoot" class="dp-btn dp-btn-secondary dp-hero-cta disabled" href="/quick-shoot.html" aria-disabled="true">
+                    📸 Quick Shoot
+                  </a>
+                </div>
 
                 <div class="dp-hero-feature-chips">
                   <span class="dp-chip">Vision AI</span>
@@ -1212,6 +1224,8 @@
   const goLink = document.getElementById('goCreateDraft');
   const goQuickList = document.getElementById('goQuickList');
   const navQuickList = document.getElementById('navQuickList');
+  const goQuickShoot = document.getElementById('goQuickShoot');
+  const navQuickShoot = document.getElementById('navQuickShoot');
   if (goLink) {
     if (ready) {
       goLink.classList.remove('disabled');
@@ -1243,6 +1257,28 @@
       navQuickList.classList.add('disabled');
       navQuickList.setAttribute('aria-disabled', 'true');
       navQuickList.setAttribute('tabindex', '-1');
+    }
+  }
+  if (goQuickShoot) {
+    if (ready) {
+      goQuickShoot.classList.remove('disabled');
+      goQuickShoot.removeAttribute('aria-disabled');
+      goQuickShoot.removeAttribute('tabindex');
+    } else {
+      goQuickShoot.classList.add('disabled');
+      goQuickShoot.setAttribute('aria-disabled', 'true');
+      goQuickShoot.setAttribute('tabindex', '-1');
+    }
+  }
+  if (navQuickShoot) {
+    if (ready) {
+      navQuickShoot.classList.remove('disabled');
+      navQuickShoot.removeAttribute('aria-disabled');
+      navQuickShoot.removeAttribute('tabindex');
+    } else {
+      navQuickShoot.classList.add('disabled');
+      navQuickShoot.setAttribute('aria-disabled', 'true');
+      navQuickShoot.setAttribute('tabindex', '-1');
     }
   }
 
@@ -1346,8 +1382,10 @@ async function updateUIFromCache(data) {
   const goLink = document.getElementById('goCreateDraft');
   const goQuickList = document.getElementById('goQuickList');
   const navQuickList = document.getElementById('navQuickList');
-  
-  [goLink, goQuickList, navQuickList].forEach(el => {
+  const goQuickShoot = document.getElementById('goQuickShoot');
+  const navQuickShoot = document.getElementById('navQuickShoot');
+
+  [goLink, goQuickList, navQuickList, goQuickShoot, navQuickShoot].forEach(el => {
     if (!el) return;
     if (ready) {
       el.classList.remove('disabled');

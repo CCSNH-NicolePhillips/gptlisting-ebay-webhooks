@@ -1,0 +1,715 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Quick Shoot – DraftPilot</title>
+    <link rel="stylesheet" href="/draftpilot.css">
+    <style>
+      .qs-wizard {
+        max-width: 640px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+      .qs-intro {
+        text-align: center;
+        margin-bottom: 0.5rem;
+      }
+      .qs-intro h2 {
+        margin: 0 0 0.35rem;
+        color: var(--text-primary);
+      }
+      .qs-intro p {
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 0.9rem;
+      }
+      .qs-step {
+        display: flex;
+        gap: 1rem;
+        opacity: 0.45;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+      }
+      .qs-step.active,
+      .qs-step.complete {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .qs-step-num {
+        flex-shrink: 0;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        background: var(--bg-main);
+        border: 2px solid var(--border-medium);
+        color: var(--text-secondary);
+      }
+      .qs-step.active .qs-step-num {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .qs-step.complete .qs-step-num {
+        border-color: var(--success);
+        background: var(--success);
+        color: white;
+      }
+      .qs-step-body {
+        flex: 1;
+        min-width: 0;
+      }
+      .qs-step-title {
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 0.75rem;
+      }
+      .qs-photo-target {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        border: 2px dashed var(--border-medium);
+        border-radius: var(--radius-md);
+        padding: 1rem;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        background: rgba(255, 255, 255, 0.02);
+      }
+      .qs-photo-target:hover {
+        border-color: var(--accent);
+        background: var(--accent-soft);
+      }
+      .qs-photo-target.has-photo {
+        border-style: solid;
+        border-color: var(--success);
+      }
+      .qs-photo-icon {
+        font-size: 1.75rem;
+        flex-shrink: 0;
+      }
+      .qs-photo-thumb {
+        width: 56px;
+        height: 56px;
+        object-fit: cover;
+        border-radius: var(--radius-sm);
+        flex-shrink: 0;
+      }
+      .qs-photo-text {
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+      }
+      .qs-photo-text strong {
+        color: var(--text-primary);
+        font-size: 0.9rem;
+      }
+      .qs-photo-text span {
+        color: var(--text-muted);
+        font-size: 0.8rem;
+      }
+      .qs-fields {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+      .qs-field label {
+        display: block;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        margin-bottom: 0.35rem;
+      }
+      .qs-field input[type="text"] {
+        width: 100%;
+        padding: 0.65rem 0.85rem;
+        font-size: 0.9375rem;
+        background: var(--bg-main);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        color: var(--text-primary);
+        box-sizing: border-box;
+      }
+      .qs-field input[type="text"]:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
+      .qs-submit-row {
+        margin-top: 0.5rem;
+      }
+      .qs-submit-row .dp-btn {
+        width: 100%;
+        justify-content: center;
+      }
+      .qs-submit-row .dp-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+      }
+      .qs-inline-spinner {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border: 2px solid rgba(255, 255, 255, 0.4);
+        border-top-color: white;
+        border-radius: 50%;
+        animation: dp-spin 0.8s linear infinite;
+      }
+      .qs-error {
+        display: none;
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        color: rgb(248, 113, 113);
+        border-radius: var(--radius-md);
+        padding: 0.85rem 1rem;
+        font-size: 0.875rem;
+      }
+      .qs-result {
+        display: none;
+      }
+      .qs-result-images {
+        display: flex;
+        gap: 0.5rem;
+        margin: 1rem 0;
+      }
+      .qs-result-images img {
+        width: 90px;
+        height: 90px;
+        object-fit: cover;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-subtle);
+      }
+      .qs-result-title {
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 0.25rem;
+      }
+      .qs-result-price {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--accent);
+      }
+      .qs-status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.25rem 0.6rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        margin-bottom: 0.5rem;
+      }
+      .qs-status-pill.ready {
+        background: rgba(34, 197, 94, 0.15);
+        color: var(--success);
+        border: 1px solid rgba(34, 197, 94, 0.35);
+      }
+      .qs-status-pill.needs-review {
+        background: rgba(251, 191, 36, 0.15);
+        color: rgb(251, 191, 36);
+        border: 1px solid rgba(251, 191, 36, 0.35);
+      }
+      .qs-result-actions {
+        display: flex;
+        gap: 0.75rem;
+        margin-top: 1.25rem;
+        flex-wrap: wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <script src="/auth-client.js"></script>
+    <script src="/sidebar-toggle.js"></script>
+
+    <div id="pageContent">
+      <div class="dp-card dp-card--full qs-wizard">
+        <div class="qs-intro">
+          <h2>📸 Quick Shoot</h2>
+          <p>Front photo, back photo, name it — one eBay draft, done.</p>
+        </div>
+
+        <div id="qsForm">
+          <!-- Step 1: front photo -->
+          <div class="qs-step active" id="qsStep1">
+            <div class="qs-step-num">1</div>
+            <div class="qs-step-body">
+              <div class="qs-step-title">Front photo</div>
+              <div class="qs-photo-target" id="qsFrontTarget">
+                <div class="qs-photo-icon" id="qsFrontIcon">📷</div>
+                <div class="qs-photo-text">
+                  <strong id="qsFrontLabel">Tap to take or choose a photo</strong>
+                  <span>The front of the product</span>
+                </div>
+              </div>
+              <input type="file" id="qsFrontInput" accept="image/*" capture="environment" style="display:none;">
+            </div>
+          </div>
+
+          <!-- Step 2: back photo -->
+          <div class="qs-step" id="qsStep2">
+            <div class="qs-step-num">2</div>
+            <div class="qs-step-body">
+              <div class="qs-step-title">Back photo</div>
+              <div class="qs-photo-target" id="qsBackTarget">
+                <div class="qs-photo-icon" id="qsBackIcon">📷</div>
+                <div class="qs-photo-text">
+                  <strong id="qsBackLabel">Tap to take or choose a photo</strong>
+                  <span>The back / label / ingredients</span>
+                </div>
+              </div>
+              <input type="file" id="qsBackInput" accept="image/*" capture="environment" style="display:none;">
+            </div>
+          </div>
+
+          <!-- Step 3: brand + product -->
+          <div class="qs-step" id="qsStep3">
+            <div class="qs-step-num">3</div>
+            <div class="qs-step-body">
+              <div class="qs-step-title">What is it?</div>
+              <div class="qs-fields">
+                <div class="qs-field">
+                  <label for="qsBrand">Brand</label>
+                  <input type="text" id="qsBrand" placeholder="e.g. Rosabella">
+                </div>
+                <div class="qs-field">
+                  <label for="qsProduct">Product name</label>
+                  <input type="text" id="qsProduct" placeholder="e.g. Moringa Gummies">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 4: submit -->
+          <div class="qs-step" id="qsStep4">
+            <div class="qs-step-num">4</div>
+            <div class="qs-step-body">
+              <div class="qs-submit-row">
+                <button class="dp-btn dp-btn-primary" id="qsSubmitBtn" disabled onclick="submitQuickShoot()">
+                  🚀 Create Listing
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="qs-error" id="qsError"></div>
+
+        <div class="dp-card qs-result" id="qsResult" style="background: linear-gradient(135deg, rgba(34, 197, 94, 0.12) 0%, rgba(34, 197, 94, 0.04) 100%); border-color: var(--success);">
+          <div id="qsStatusPill"></div>
+          <div class="qs-result-title" id="qsResultTitle"></div>
+          <div class="qs-result-price" id="qsResultPrice"></div>
+          <div class="qs-result-images" id="qsResultImages"></div>
+          <div class="qs-result-actions">
+            <a href="/drafts.html" class="dp-btn dp-btn-primary">✓ View in Drafts</a>
+            <button class="dp-btn dp-btn-secondary" onclick="resetQuickShoot()">🔄 Shoot Another</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="/sidebar-shell.js"></script>
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const exec = window.authClient?.authFetch || fetch;
+
+      const MAX_UPLOAD_FILE_BYTES = 3 * 1024 * 1024;
+      const MAX_UPLOAD_BASE64_BYTES = 4 * 1024 * 1024;
+      const MAX_IMAGE_DIMENSION = 3000;
+      const MIN_JPEG_QUALITY = 0.6;
+      const JPEG_QUALITY_STEP = 0.1;
+
+      let frontFile = null;
+      let backFile = null;
+      let frontStagedUrl = null;
+      let backStagedUrl = null;
+
+      async function fetchJSON(url, opts = {}) {
+        const r = await exec(url, opts);
+        if (!r) throw new Error('No response received from server');
+
+        const rawText = await r.text();
+        const ct = (r.headers.get('content-type') || '').toLowerCase();
+        const looksJson = ct.includes('application/json') || /^[\s\r\n]*[\[{]/.test(rawText);
+
+        let data = {};
+        if (rawText && looksJson) {
+          try { data = JSON.parse(rawText); } catch (e) { data = { error: rawText }; }
+        } else if (rawText) {
+          data = { error: rawText };
+        }
+
+        if (!r.ok) {
+          const errorMsg = data?.error || rawText || '';
+          const errorLower = errorMsg.toLowerCase();
+          const isDropboxError = errorLower.includes('dropbox') || errorLower.includes('dropbox-not-connected');
+          const isEbayError = errorLower.includes('ebay-not-connected') || errorLower.includes('no ebay token') || errorLower.includes('connect ebay');
+
+          if ((r.status === 400 || r.status === 401 || r.status === 403) && (isDropboxError || isEbayError)) {
+            const service = isDropboxError ? 'dropbox' : 'ebay';
+            if (typeof window.showReconnectModal === 'function') {
+              const reconnected = await window.showReconnectModal(service);
+              if (reconnected) return fetchJSON(url, opts);
+            }
+            throw new Error(`${service === 'ebay' ? 'eBay' : 'Dropbox'} connection required`);
+          }
+
+          if (r.status === 401 || r.status === 403) {
+            sessionStorage.setItem('returnTo', window.location.pathname + window.location.search);
+            window.location.replace('/login.html');
+            throw new Error('Authentication required');
+          }
+
+          const msg = data?.detail ? `${data.error || `HTTP ${r.status}`}: ${data.detail}` : (data?.error || `HTTP ${r.status}`);
+          throw new Error(msg);
+        }
+
+        return data;
+      }
+
+      function blobToBase64(blob) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const result = reader.result;
+            if (typeof result !== 'string') { reject(new Error('Failed to read file as data URL')); return; }
+            const commaIdx = result.indexOf(',');
+            resolve(commaIdx >= 0 ? result.slice(commaIdx + 1) : result);
+          };
+          reader.onerror = () => reject(reader.error || new Error('File read failed'));
+          reader.readAsDataURL(blob);
+        });
+      }
+
+      function loadImageElement(blob) {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          const url = URL.createObjectURL(blob);
+          img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+          img.onerror = (err) => { URL.revokeObjectURL(url); reject(err || new Error('Image load failed')); };
+          img.src = url;
+        });
+      }
+
+      function canvasToBase64(canvas, quality) {
+        return new Promise((resolve, reject) => {
+          canvas.toBlob((blob) => {
+            if (!blob) { reject(new Error('Canvas toBlob() returned null')); return; }
+            blobToBase64(blob).then(resolve).catch(reject);
+          }, 'image/jpeg', quality);
+        });
+      }
+
+      async function compressImageFile(file) {
+        const img = await loadImageElement(file);
+        const longestSide = Math.max(img.width, img.height);
+        const scale = longestSide > MAX_IMAGE_DIMENSION ? MAX_IMAGE_DIMENSION / longestSide : 1;
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('Canvas context unavailable');
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        let quality = 0.9;
+        let lastBase64 = '';
+        while (quality >= MIN_JPEG_QUALITY - 0.001) {
+          const base64 = await canvasToBase64(canvas, quality);
+          lastBase64 = base64;
+          if (base64.length <= MAX_UPLOAD_BASE64_BYTES) return { base64, mime: 'image/jpeg' };
+          quality -= JPEG_QUALITY_STEP;
+        }
+        if (lastBase64 && lastBase64.length <= MAX_UPLOAD_BASE64_BYTES) return { base64: lastBase64, mime: 'image/jpeg' };
+        throw new Error(`${file.name} is too large even after compression. Please retake the photo.`);
+      }
+
+      async function prepareFileForUpload(file) {
+        const mime = file.type || 'application/octet-stream';
+        const isImage = mime.startsWith('image/');
+        const isJpeg = /jpe?g$/i.test(mime);
+
+        if (!isImage) {
+          const base64 = await blobToBase64(file);
+          if (base64.length > MAX_UPLOAD_BASE64_BYTES) {
+            throw new Error(`${file.name} is too large. Please use a smaller file.`);
+          }
+          return { base64, mime };
+        }
+
+        if (isJpeg && file.size <= MAX_UPLOAD_FILE_BYTES) {
+          const base64 = await blobToBase64(file);
+          if (base64.length <= MAX_UPLOAD_BASE64_BYTES) return { base64, mime };
+        }
+
+        return compressImageFile(file);
+      }
+
+      function setStepState(num, state) {
+        const step = $(`qsStep${num}`);
+        step.classList.remove('active', 'complete');
+        if (state) step.classList.add(state);
+      }
+
+      function updateSubmitState() {
+        const brand = $('qsBrand').value.trim();
+        const product = $('qsProduct').value.trim();
+        const ready = !!frontFile && !!backFile && !!brand && !!product;
+        $('qsSubmitBtn').disabled = !ready;
+        setStepState(4, ready ? 'active' : null);
+      }
+
+      function wirePhotoTarget(targetId, inputId, iconId, labelId, onSelected) {
+        const target = $(targetId);
+        const input = $(inputId);
+        target.addEventListener('click', () => input.click());
+        input.addEventListener('change', (e) => {
+          const file = e.target.files && e.target.files[0];
+          if (!file) return;
+          onSelected(file);
+          target.classList.add('has-photo');
+          $(iconId).outerHTML = `<img src="${URL.createObjectURL(file)}" class="qs-photo-thumb" id="${iconId}" alt="">`;
+          $(labelId).textContent = file.name;
+        });
+      }
+
+      wirePhotoTarget('qsFrontTarget', 'qsFrontInput', 'qsFrontIcon', 'qsFrontLabel', (file) => {
+        frontFile = file;
+        frontStagedUrl = null;
+        setStepState(1, 'complete');
+        setStepState(2, 'active');
+        updateSubmitState();
+      });
+
+      wirePhotoTarget('qsBackTarget', 'qsBackInput', 'qsBackIcon', 'qsBackLabel', (file) => {
+        backFile = file;
+        backStagedUrl = null;
+        setStepState(2, 'complete');
+        setStepState(3, 'active');
+        updateSubmitState();
+      });
+
+      $('qsBrand').addEventListener('input', updateSubmitState);
+      $('qsProduct').addEventListener('input', updateSubmitState);
+
+      function showError(message) {
+        const el = $('qsError');
+        el.textContent = message;
+        el.style.display = 'block';
+      }
+
+      function clearError() {
+        $('qsError').style.display = 'none';
+      }
+
+      async function uploadStagedFile(file, name) {
+        const { base64, mime } = await prepareFileForUpload(file);
+        const res = await fetchJSON('/api/ingest/local', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ files: [{ name, mime, data: base64 }] }),
+        });
+        const stagedUrl = res?.files?.[0]?.stagedUrl;
+        if (!stagedUrl) throw new Error('Upload response missing staged URL. Please try again.');
+        return stagedUrl;
+      }
+
+      async function checkEbaySetup() {
+        try {
+          const [policiesListRes, defaultsRes, locationRes] = await Promise.all([
+            fetchJSON('/.netlify/functions/ebay-list-policies'),
+            fetchJSON('/.netlify/functions/ebay-get-policy-defaults'),
+            fetchJSON('/api/ebay/locations/user'),
+          ]);
+
+          const defaults = defaultsRes?.defaults || {};
+          const hasFulfillmentPolicy = (policiesListRes?.fulfillment?.json?.fulfillmentPolicies?.length || 0) > 0;
+          const hasPaymentPolicy = (policiesListRes?.payment?.json?.paymentPolicies?.length || 0) > 0;
+          const hasReturnPolicy = (policiesListRes?.returns?.json?.returnPolicies?.length || 0) > 0;
+
+          const missingPolicies = [];
+          if (!hasFulfillmentPolicy) missingPolicies.push('Fulfillment Policy');
+          if (!hasPaymentPolicy) missingPolicies.push('Payment Policy');
+          if (!hasReturnPolicy) missingPolicies.push('Return Policy');
+          const missingLocation = !locationRes?.merchantLocationKey;
+
+          if (missingPolicies.length > 0 || missingLocation) {
+            const missingItems = [...missingPolicies];
+            if (missingLocation) missingItems.push('Inventory Location');
+            showError(`Missing required eBay setup: ${missingItems.join(', ')}. Complete setup in Settings before using Quick Shoot.`);
+            return false;
+          }
+
+          const missingDefaults = [];
+          if (hasFulfillmentPolicy && !defaults.fulfillment) missingDefaults.push('Fulfillment Policy');
+          if (hasPaymentPolicy && !defaults.payment) missingDefaults.push('Payment Policy');
+          if (hasReturnPolicy && !defaults.return) missingDefaults.push('Return Policy');
+          if (missingDefaults.length > 0) {
+            showError(`Set these as your defaults in Settings first: ${missingDefaults.join(', ')}.`);
+            return false;
+          }
+
+          return true;
+        } catch (err) {
+          console.warn('[Quick Shoot] Setup check failed, proceeding anyway:', err);
+          return true;
+        }
+      }
+
+      async function submitQuickShoot() {
+        clearError();
+        const btn = $('qsSubmitBtn');
+        btn.disabled = true;
+        const originalLabel = btn.innerHTML;
+        btn.innerHTML = '<span class="qs-inline-spinner"></span> Creating listing...';
+
+        try {
+          const setupOk = await checkEbaySetup();
+          if (!setupOk) return;
+
+          if (!frontStagedUrl) frontStagedUrl = await uploadStagedFile(frontFile, frontFile.name || 'front.jpg');
+          if (!backStagedUrl) backStagedUrl = await uploadStagedFile(backFile, backFile.name || 'back.jpg');
+
+          const product = {
+            productId: 'product-1',
+            brand: $('qsBrand').value.trim(),
+            product: $('qsProduct').value.trim(),
+            heroDisplayUrl: frontStagedUrl,
+            backDisplayUrl: backStagedUrl,
+          };
+
+          const createRes = await fetchJSON('/api/smartdrafts/create-drafts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ products: [product] }),
+          });
+
+          if (createRes.errors && createRes.errors.length > 0) {
+            throw new Error(createRes.errors[0].error || 'Failed to create draft');
+          }
+          const draft = createRes.drafts && createRes.drafts[0];
+          if (!draft) throw new Error('No draft was created. Please try again.');
+
+          const attentionReasons = draft.attentionReasons || [];
+          const blockingReason = attentionReasons.find(r => r?.severity === 'error');
+          if (blockingReason) throw new Error(blockingReason.message || 'This product could not be listed.');
+          if (!draft.price || draft.price <= 0) throw new Error('No price could be determined for this product.');
+          const images = draft.images || [];
+          if (images.length === 0) throw new Error('No images available for this draft.');
+
+          const group = {
+            groupId: draft.productId || 'product-1',
+            brand: draft.brand || 'Unknown',
+            product: draft.product || 'Product',
+            images,
+            title: draft.title,
+            description: draft.description,
+            aspects: draft.aspects,
+            price: draft.price,
+            pricing: { ebay: draft.price },
+            quantity: 1,
+            condition: draft.condition,
+            category: draft.category,
+            categoryPath: draft.category?.title,
+            weight: draft.weight,
+          };
+
+          const jobId = `quick-shoot-${Date.now()}`;
+          const pubRes = await fetchJSON('/api/drafts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ jobId, groups: [group] }),
+          });
+
+          if (!pubRes.ok) throw new Error(pubRes.error || 'Publishing to eBay failed');
+
+          try {
+            sessionStorage.removeItem('drafts-cache');
+            sessionStorage.removeItem('drafts-cache-time');
+            if (pubRes.results && pubRes.results.length > 0) {
+              const recentOffers = pubRes.results.map(r => ({ sku: r.sku, offerId: r.offerId, createdAt: Date.now() }));
+              sessionStorage.setItem('recent-created-offers', JSON.stringify(recentOffers));
+            }
+          } catch (e) {
+            console.warn('[Quick Shoot] Failed to store recent offers:', e);
+          }
+
+          showResult(draft, images);
+        } catch (err) {
+          console.error('[Quick Shoot] Submit failed:', err);
+          showError(err.message || 'Something went wrong. Please try again.');
+          btn.disabled = false;
+          btn.innerHTML = originalLabel;
+        }
+      }
+
+      function showResult(draft, images) {
+        $('qsForm').style.display = 'none';
+        clearError();
+
+        const status = draft.status || 'READY';
+        const pill = $('qsStatusPill');
+        pill.innerHTML = status === 'NEEDS_REVIEW'
+          ? '<span class="qs-status-pill needs-review">⚠ Needs Review</span>'
+          : '<span class="qs-status-pill ready">✓ Ready</span>';
+
+        $('qsResultTitle').textContent = draft.title || `${draft.brand || ''} ${draft.product || ''}`.trim();
+        $('qsResultPrice').textContent = `$${Number(draft.price).toFixed(2)}`;
+        $('qsResultImages').innerHTML = images.slice(0, 4).map(url => `<img src="${url}" alt="">`).join('');
+
+        $('qsResult').style.display = 'block';
+      }
+
+      function resetQuickShoot() {
+        frontFile = null;
+        backFile = null;
+        frontStagedUrl = null;
+        backStagedUrl = null;
+        $('qsBrand').value = '';
+        $('qsProduct').value = '';
+        $('qsFrontInput').value = '';
+        $('qsBackInput').value = '';
+
+        document.getElementById('qsFrontTarget').classList.remove('has-photo');
+        document.getElementById('qsBackTarget').classList.remove('has-photo');
+        document.querySelectorAll('.qs-photo-thumb').forEach(el => {
+          const isFront = el.id === 'qsFrontIcon';
+          el.outerHTML = `<div class="qs-photo-icon" id="${isFront ? 'qsFrontIcon' : 'qsBackIcon'}">📷</div>`;
+        });
+        $('qsFrontLabel').textContent = 'Tap to take or choose a photo';
+        $('qsBackLabel').textContent = 'Tap to take or choose a photo';
+
+        setStepState(1, 'active');
+        setStepState(2, null);
+        setStepState(3, null);
+        setStepState(4, null);
+        updateSubmitState();
+
+        const btn = $('qsSubmitBtn');
+        btn.disabled = true;
+        btn.innerHTML = '🚀 Create Listing';
+
+        clearError();
+        $('qsResult').style.display = 'none';
+        $('qsForm').style.display = 'block';
+      }
+
+      window.submitQuickShoot = submitQuickShoot;
+      window.resetQuickShoot = resetQuickShoot;
+
+      document.addEventListener('DOMContentLoaded', () => {
+        DraftPilotShell.init({
+          title: 'Quick Shoot',
+          subtitle: 'Single-item listing in four taps',
+          activePage: 'quick-shoot',
+        });
+      });
+    </script>
+  </body>
+</html>

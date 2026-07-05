@@ -62,6 +62,13 @@ window.DraftPilotShell = {
                   </svg>
                   <span class="dp-nav-item__label">Create Listings</span>
                 </a>
+                <a href="/quick-shoot.html" class="dp-nav-item ${activePage === 'quick-shoot' ? 'dp-nav-item--active' : ''}">
+                  <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                    <circle cx="12" cy="13" r="4"></circle>
+                  </svg>
+                  <span class="dp-nav-item__label">Quick Shoot</span>
+                </a>
                 <a href="/drafts.html" class="dp-nav-item ${activePage === 'drafts' ? 'dp-nav-item--active' : ''}">
                   <svg class="dp-nav-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>

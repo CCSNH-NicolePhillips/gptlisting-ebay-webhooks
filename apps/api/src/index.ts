@@ -1,14 +1,22 @@
 import express from 'express';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { existsSync } from 'fs';
 import { router } from './routes/index.js';
 import { netlifyCompatMiddleware } from './lib/netlify-compat.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Resolve public/ relative to repo root (4 levels up from apps/api/src/)
-const publicDir = join(__dirname, '../../../../public');
+// Resolve public/ relative to repo root. __dirname is dist/apps/api/src when
+// running the compiled build (`npm start`) but apps/api/src when running the
+// TS source directly via tsx (`npm run dev`) — one level shallower — so try
+// both instead of hardcoding a single "N levels up" that only fits one mode.
+const publicDirCandidates = [
+  join(__dirname, '../../../../public'),
+  join(__dirname, '../../../public'),
+];
+const publicDir = publicDirCandidates.find((p) => existsSync(p)) ?? publicDirCandidates[0];
 
 const app = express();
 app.use(express.json({ limit: '6mb' }));
