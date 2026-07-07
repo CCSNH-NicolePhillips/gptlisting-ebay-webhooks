@@ -336,6 +336,62 @@
       let backStagedUrl = null;
       let extractionToken = 0;
 
+      // Rich vision fields (variant/size/category/label text) captured during the
+      // auto-fill step, so the draft-creation call gets more than just brand+product —
+      // this is what feeds ingredients/aspects and shipping-weight estimation downstream.
+      let visionExtras = {};
+
+      // User's default promotion/Best Offer settings (same source quick-list.html
+      // reads), applied automatically since Quick Shoot has no settings UI of its own.
+      let defaultPromotionSettings = { enabled: false, rate: null };
+      let defaultBestOfferSettings = { enabled: false, autoDeclinePercent: 60, autoAcceptPercent: 90 };
+
+      async function loadPromotionSettings() {
+        try {
+          const settings = await fetchJSON('/api/settings');
+          defaultPromotionSettings = {
+            enabled: settings.autoPromoteEnabled || false,
+            rate: settings.defaultPromotionRate || null,
+          };
+          defaultBestOfferSettings = {
+            enabled: settings.bestOffer?.enabled || false,
+            autoDeclinePercent: settings.bestOffer?.autoDeclinePercent || 60,
+            autoAcceptPercent: settings.bestOffer?.autoAcceptPercent || 90,
+          };
+        } catch (err) {
+          console.warn('[Quick Shoot] Failed to load promotion/Best Offer settings, defaulting to off:', err);
+        }
+      }
+
+      function getPromotionSettings() {
+        return {
+          enabled: defaultPromotionSettings.enabled,
+          rate: defaultPromotionSettings.rate || 5, // Fallback to 5% if enabled but no rate configured
+        };
+      }
+
+      // Parse a size/weight string from the label (e.g. "15.22 FL OZ", "8 oz", "60 Capsules")
+      // into a structured {value, unit} so shipping weight can be estimated accurately
+      // instead of relying purely on GPT's guess.
+      function parseNetWeight(text) {
+        if (!text || typeof text !== 'string') return null;
+        const patterns = [
+          { re: /(\d+(?:\.\d+)?)\s*(?:fl\.?\s*oz\.?|fluid\s*ounces?)/i, unit: 'fl oz' },
+          { re: /(\d+(?:\.\d+)?)\s*oz(?:\.|ounces?)?(?!\s*fl)/i, unit: 'oz' },
+          { re: /(\d+(?:\.\d+)?)\s*(?:ml|milliliters?)/i, unit: 'ml' },
+          { re: /(\d+(?:\.\d+)?)\s*(?:l|liters?)\b/i, unit: 'l' },
+          { re: /(\d+(?:\.\d+)?)\s*(?:kg|kilograms?)/i, unit: 'kg' },
+          { re: /(\d+(?:\.\d+)?)\s*(?:g|grams?)\b/i, unit: 'g' },
+          { re: /(\d+(?:\.\d+)?)\s*(?:lb|lbs|pounds?)/i, unit: 'lb' },
+          { re: /(\d+)\s*(?:capsules?|caps?|tablets?|tabs?|softgels?|gummies?|gummy|count|ct)\b/i, unit: 'count' },
+        ];
+        for (const { re, unit } of patterns) {
+          const m = text.match(re);
+          if (m) return { value: parseFloat(m[1]), unit };
+        }
+        return null;
+      }
+
       async function fetchJSON(url, opts = {}) {
         const r = await exec(url, opts);
         if (!r) throw new Error('No response received from server');
@@ -544,6 +600,25 @@
             if (!$('qsBrand').value.trim() && group.brand) $('qsBrand').value = group.brand;
             if (!$('qsProduct').value.trim() && group.product) $('qsProduct').value = group.product;
             updateSubmitState();
+
+            // Pull per-image OCR text (ingredients, claims, etc. printed on the label)
+            // so it can be forwarded to draft creation — this is what lets the listing
+            // include real ingredients instead of just brand+product name.
+            const insights = result?.imageInsights || {};
+            const textLines = [frontStagedUrl, backStagedUrl]
+              .map((url) => insights[url]?.textExtracted)
+              .filter(Boolean)
+              .flatMap((block) => block.split('\n').map((line) => line.trim()).filter(Boolean))
+              .slice(0, 40);
+            const claims = Array.isArray(group.claims) ? group.claims : [];
+
+            visionExtras = {
+              variant: group.variant || null,
+              size: group.size || null,
+              categoryPath: group.categoryPath || null,
+              keyText: Array.from(new Set([...claims, ...textLines])),
+              netWeight: parseNetWeight(group.size),
+            };
           }
           statusEl.style.display = 'none';
         } catch (err) {
@@ -636,19 +711,52 @@
             product: $('qsProduct').value.trim(),
             heroDisplayUrl: frontStagedUrl,
             backDisplayUrl: backStagedUrl,
+            variant: visionExtras.variant || undefined,
+            size: visionExtras.size || undefined,
+            categoryPath: visionExtras.categoryPath || undefined,
+            keyText: visionExtras.keyText && visionExtras.keyText.length ? visionExtras.keyText : undefined,
+            netWeight: visionExtras.netWeight || null,
           };
 
-          const createRes = await fetchJSON('/api/smartdrafts/create-drafts', {
+          const promotionSettings = getPromotionSettings();
+
+          // Use the same background job pipeline quick-list.html uses (not the bare
+          // synchronous /create-drafts endpoint) — it's what actually fills in
+          // ingredients/aspects, shipping weight (with Amazon/title/GPT fallbacks),
+          // and promotion, none of which the synchronous path computes at all.
+          const startRes = await fetchJSON('/api/smartdrafts/create-drafts/start', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ products: [product] }),
+            body: JSON.stringify({ products: [product], promotion: promotionSettings }),
           });
+          if (!startRes.ok || !startRes.jobId) throw new Error(startRes.error || 'Failed to start draft creation');
 
-          if (createRes.errors && createRes.errors.length > 0) {
-            throw new Error(createRes.errors[0].error || 'Failed to create draft');
+          let job = null;
+          let attempts = 0;
+          while (attempts++ < 90) {
+            const delay = attempts <= 15 ? 2000 : attempts <= 30 ? 4000 : 8000;
+            await new Promise((resolve) => setTimeout(resolve, delay));
+
+            let statusRes;
+            try {
+              statusRes = await fetchJSON(`/api/smartdrafts/create-drafts/status?jobId=${encodeURIComponent(startRes.jobId)}`);
+            } catch (pollErr) {
+              console.warn('[Quick Shoot] Status poll error, will retry:', pollErr);
+              continue;
+            }
+            job = statusRes.job || null;
+            if (job?.status === 'completed') break;
+            if (job?.status === 'failed') throw new Error(job.error || 'Draft creation failed');
+            job = null;
           }
-          const draft = createRes.drafts && createRes.drafts[0];
-          if (!draft) throw new Error('No draft was created. Please try again.');
+          if (!job) throw new Error('Draft creation timed out. Please try again.');
+
+          const drafts = job.drafts || [];
+          const draft = drafts[0];
+          if (!draft) {
+            const errors = job.errors || [];
+            throw new Error(errors[0]?.error || 'No draft was created. Please try again.');
+          }
 
           const attentionReasons = draft.attentionReasons || [];
           const blockingReason = attentionReasons.find(r => r?.severity === 'error');
@@ -661,6 +769,8 @@
             groupId: draft.productId || 'product-1',
             brand: draft.brand || 'Unknown',
             product: draft.product || 'Product',
+            variant: product.variant,
+            size: product.size,
             images,
             title: draft.title,
             description: draft.description,
@@ -670,8 +780,10 @@
             quantity: 1,
             condition: draft.condition,
             category: draft.category,
-            categoryPath: draft.category?.title,
+            categoryPath: draft.category?.title || product.categoryPath,
             weight: draft.weight,
+            promotion: promotionSettings,
+            bestOffer: defaultBestOfferSettings,
           };
 
           const jobId = `quick-shoot-${Date.now()}`;
@@ -725,6 +837,7 @@
         backFile = null;
         frontStagedUrl = null;
         backStagedUrl = null;
+        visionExtras = {};
         extractionToken++;
         $('qsAutoFillStatus').style.display = 'none';
         $('qsBrand').value = '';
@@ -766,6 +879,7 @@
           activePage: 'quick-shoot',
         });
         wireForm();
+        loadPromotionSettings();
       });
     </script>
   </body>

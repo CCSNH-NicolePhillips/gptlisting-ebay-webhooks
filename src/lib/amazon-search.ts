@@ -984,6 +984,44 @@ export async function searchAmazonWithFallback(
     }
   }
   
+  // Step 3.5: TikTok Shop live search — for TikTok-viral products that have no pinned
+  // URL yet. Mirrors Step 1.5's pin-based lookup, but discovers the URL itself via a
+  // keyword search instead of requiring a human (or Step 2's auto-populate) to have
+  // registered it first.
+  try {
+    const { searchTikTokShop, pickBestTikTokShopMatch } = await import('./tiktok-shop-scraper.js');
+    const query = `${brand} ${conflictCheckName ?? productName}`.trim();
+    const searchResults = await searchTikTokShop(query);
+    const match = pickBestTikTokShopMatch(searchResults, brand, conflictCheckName ?? productName);
+    if (match && match.confidence !== 'low' && match.result.price !== null) {
+      const m = match.result;
+      console.log(`[amazon-search] ✅ TikTok Shop search match: "${m.title.slice(0, 60)}" $${m.price} (${match.confidence})`);
+
+      // Auto-pin for next time — fire-and-forget, non-blocking, unverified (auto-discovered,
+      // same trust tier as Rainforest's auto-populated ASINs in Step 2).
+      import('./brand-registry.js')
+        .then(({ saveTikTokShopPin }) => saveTikTokShopPin(brand, conflictCheckName ?? productName, m.url, false))
+        .catch(() => { /* non-fatal */ });
+
+      return {
+        price: m.price,
+        originalPrice: m.originalPrice,
+        url: m.url,
+        asin: null,
+        title: m.title,
+        brand: m.brand ?? brand,
+        isPrime: false,
+        rating: m.rating,
+        reviews: m.reviewCount,
+        allResults: [],
+        confidence: match.confidence,
+        reasoning: 'tiktok-shop-search',
+      };
+    }
+  } catch (err) {
+    console.warn('[amazon-search] TikTok Shop search failed (non-fatal):', err instanceof Error ? err.message : String(err));
+  }
+
   // Step 4: Google Shopping — catches products not on Amazon (brand-direct, iHerb, Ulta, etc.)
   console.log(`[amazon-search] Trying Google Shopping fallback for "${brand} ${productName}"`);
   const gsResult = await searchGoogleShopping(brand, conflictCheckName ?? productName);
