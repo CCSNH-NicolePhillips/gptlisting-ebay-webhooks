@@ -142,6 +142,9 @@ const LOT_BUNDLE_PATTERNS = [
   /\bcombo\b/i,           // "value combo", "skincare combo"
   /\bkit\b/i,             // "starter kit", "trial kit"
   /\b\d+[\s-]*piece\b/i,  // "2-piece set", "3-piece kit"
+  /\bshave\s+set\b/i,     // "Shave Set", "Beauty Luxury Shave Set" — bundle, not a single item
+  /\bgift\s+set\b/i,      // "Gift Set" — always multi-item
+  /\bcollection\b/i,      // "shaving collection", "skincare collection" — multi-item bundle
 ];
 
 /**
@@ -313,13 +316,21 @@ export async function searchAmazon(
         }
       }
 
-      // Brand in title → strong match
+      // Brand in title → strong match. The title itself names the brand, so this is
+      // the most trustworthy signal — product-content is still checked separately by
+      // the bundle-listing filter, but no additional word-overlap gate is needed here.
       const brandInTitle = matchBrandWords.some(bw => titleLower.includes(bw));
       if (brandInTitle) return true;
 
-      // Brand in API brand field → strong match
+      // Brand in API brand field but NOT in the title itself → same-brand confirmed,
+      // but the title alone can't be trusted to be the right PRODUCT (e.g. a different
+      // SKU/bundle from the same brand). Treat like 'weak' so the caller still requires
+      // product-name word overlap before accepting it.
       const brandInApiField = matchBrandWords.some(bw => resultBrandLower.includes(bw));
-      if (brandInApiField) return true;
+      if (brandInApiField) {
+        console.log(`[amazon-search] ⚠️  Brand "${searchBrand}" confirmed via API field only (not in title) — requiring product-name word match`);
+        return 'weak';
+      }
 
       // Brand not in title AND API brand field is empty → weak match
       // Many brands store their name in Amazon's brand field only (not in title)

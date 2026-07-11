@@ -1883,14 +1883,19 @@ async function createDraftForProduct(
     }
   }
   
-  // Last-resort fallback: extract weight from product title/name
+  // Last-resort fallback: extract weight from product title/name.
+  // Check product.size/variant FIRST — they hold the raw label string (e.g. "100ml")
+  // captured by vision separately from netWeight, so they catch cases where netWeight
+  // extraction failed but the size was still read correctly off the package.
   // This is better than defaulting to 16 oz for everything
   if (!finalWeight) {
-    const titleWeight = extractWeightFromTitle(product.product || '') 
+    const titleWeight = extractWeightFromTitle(product.size || '')
+      || extractWeightFromTitle(product.variant || '')
+      || extractWeightFromTitle(product.product || '')
       || extractWeightFromTitle(product.brand + ' ' + product.product || '')
       || extractWeightFromTitle(parsed.title || '');
     if (titleWeight) {
-      console.log(`[Draft] 📦 Extracted weight from title: ${titleWeight.value} ${titleWeight.unit}`);
+      console.log(`[Draft] 📦 Extracted weight from size/variant/title: ${titleWeight.value} ${titleWeight.unit}`);
       finalWeight = calculateShippingWeight(titleWeight, product.packageType);
       if (finalWeight) {
         console.log(`[Draft] ✓ Title weight converted to shipping weight: ${finalWeight.value} oz`);
@@ -2174,16 +2179,27 @@ async function createDraftForProduct(
     // Build retail sources log
     const _logAmazon = priceResult?.pricingEvidence.summary?.amazonPriceCents;
     const _logWalmart = priceResult?.pricingEvidence.summary?.walmartPriceCents;
+    // On the amazon_anchored path, the "Amazon" number can actually come from a TikTok Shop
+    // pin/search, Google Shopping, or a brand website — searchAmazonWithFallback tries all of
+    // those tiers and whichever one matches gets anchored on. matchSourceLabel (and the real
+    // matched title/url in topComps[0]) reveal which tier actually fired, instead of this log
+    // always saying "Amazon" regardless of true origin.
+    const _logMatchSourceLabel = priceResult?.pricingEvidence.summary?.matchSourceLabel;
+    const _logMatchComp = priceResult?.pricingEvidence.summary?.topComps?.find(c => c.source === 'amazon');
     if (_logAmazon || _logWalmart) {
       pricingSourceLogs.push({
-        source: 'Retail (Amazon/Walmart)',
+        source: _logMatchSourceLabel && _logMatchSourceLabel !== 'Amazon'
+          ? _logMatchSourceLabel
+          : 'Retail (Amazon/Walmart)',
         query: `${product.brand || ''} ${product.product}`.trim(),
         results: [
           ...(_logAmazon ? [{
-            title: 'Amazon',
+            title: _logMatchComp?.title || _logMatchSourceLabel || 'Amazon',
             price: _logAmazon / 100,
             shipping: 0,
             total: _logAmazon / 100,
+            url: _logMatchComp?.url || undefined,
+            seller: _logMatchSourceLabel || 'Amazon',
           }] : []),
           ...(_logWalmart ? [{
             title: 'Walmart',
@@ -2218,6 +2234,7 @@ async function createDraftForProduct(
         soldStrong: _logSmr?.soldStrong,
         fallbackUsed: _logEv?.fallbackUsed,
         compsSource: _logSmr?.compsSource,
+        matchSourceLabel: _logSmr?.matchSourceLabel,
         // Pass actual draft price so logs stay consistent when the pricing engine returned 0
         draftPriceCents: Math.round((draft.price || 0) * 100),
       },
@@ -2259,8 +2276,8 @@ async function createDraftForProduct(
         finalShipping: (priceResult?.finalShipCents || 0) / 100,
         freeShippingApplied: _logSmr?.freeShipApplied || false,
         calculations,
-        reasoning: _logSmr?.compsSource 
-          ? `Price based on ${_logSmr.compsSource} data. ${_logSmr.canCompete ? 'Competitive' : 'May need adjustment'}.`
+        reasoning: _logSmr?.compsSource
+          ? `Price based on ${_logSmr.matchSourceLabel || _logSmr.compsSource} data. ${_logSmr.canCompete ? 'Competitive' : 'May need adjustment'}.`
           : 'No market data available - using fallback pricing.',
         confidence,
         warnings: priceResult?.warnings || [],

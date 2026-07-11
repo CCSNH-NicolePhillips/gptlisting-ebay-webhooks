@@ -91,6 +91,15 @@ export interface PricingEvidenceSummary {
   freeShipApplied: boolean;
   /** Which data source drove the final price (e.g. 'ebay-browse', 'google-shopping'). */
   compsSource: string;
+  /**
+   * Human-readable label for exactly which fallback tier inside
+   * searchAmazonWithFallback produced the anchor price (e.g. "Amazon",
+   * "TikTok Shop (live search)", "Google Shopping"). Only set on the
+   * amazon-anchored path — undefined elsewhere. Derived from the raw
+   * `reasoning` string returned by searchAmazonWithFallback so the pipeline
+   * trace can show real provenance instead of always saying "Amazon".
+   */
+  matchSourceLabel?: string;
   /** Lowest eBay active delivered price seen, null if no active comps. */
   activeFloorDeliveredCents: number | null;
   /** Number of retail comps gathered (Amazon, Walmart, …). */
@@ -218,6 +227,28 @@ export function resolveActivePricingMode(): ActivePricingMode {
   // Use PRICING_MODE=delivered_v2 for the full eBay-sold comps engine.
   // Use PRICING_MODE=legacy for the old retail-discount formula.
   return 'amazon_anchored';
+}
+
+/**
+ * Maps the raw `reasoning` string from searchAmazonWithFallback to a
+ * human-readable source label for the pipeline trace. searchAmazonWithFallback
+ * tries several tiers in order (registered ASIN, TikTok Shop pin, Rainforest,
+ * Amazon keyword search, TikTok Shop live search, Google Shopping, brand
+ * website) and every one of them can end up anchoring the eBay price — this
+ * makes that provenance visible instead of the pipeline unconditionally
+ * labeling every result "Amazon".
+ */
+function classifyAmazonMatchSource(reasoning: string): string {
+  const r = reasoning.toLowerCase();
+  if (r.startsWith('price-override')) return 'Manual Override';
+  if (r.startsWith('registered-asin')) return 'Amazon (pinned ASIN)';
+  if (r.startsWith('tiktok-shop-pin')) return 'TikTok Shop (pinned)';
+  if (r.startsWith('tiktok-shop-search')) return 'TikTok Shop (live search)';
+  if (r.startsWith('rainforest')) return 'Amazon (Rainforest)';
+  if (r.startsWith('brand-only fallback')) return 'Amazon (brand-only match)';
+  if (r.startsWith('google-shopping')) return 'Google Shopping';
+  if (r.startsWith('brand-website')) return 'Brand Website';
+  return 'Amazon';
 }
 
 /**
@@ -365,7 +396,8 @@ export async function getPricingDecision(input: PricingInput): Promise<PricingDe
 
       const amazonPriceCents = Math.round(effectiveAmazonPrice * 100);
       const itemCents = Math.max(Math.round(amazonPriceCents * ratio), 199);
-      console.log(`[pricing] amazon_anchored: Amazon $${amazonResult.price.toFixed(2)} × ${ratio} = item $${(itemCents / 100).toFixed(2)} + ship $${(shippingCents / 100).toFixed(2)}`);
+      const matchSourceLabel = classifyAmazonMatchSource(amazonResult.reasoning);
+      console.log(`[pricing] amazon_anchored: ${matchSourceLabel} $${amazonResult.price.toFixed(2)} × ${ratio} = item $${(itemCents / 100).toFixed(2)} + ship $${(shippingCents / 100).toFixed(2)} (reasoning: ${amazonResult.reasoning})`);
       return {
         status: 'READY',
         finalItemCents: itemCents,
@@ -387,6 +419,7 @@ export async function getPricingDecision(input: PricingInput): Promise<PricingDe
             matchConfidence: amazonResult.confidence,
             freeShipApplied: false,
             compsSource: 'amazon-direct',
+            matchSourceLabel,
             activeFloorDeliveredCents: null,
             retailCompsCount: 1,
             amazonPriceCents,
@@ -403,7 +436,7 @@ export async function getPricingDecision(input: PricingInput): Promise<PricingDe
               shipCents: 0,
               url: amazonResult.url ?? null,
               title: amazonResult.title ?? '',
-              seller: 'Amazon',
+              seller: matchSourceLabel,
             }],
           },
         },

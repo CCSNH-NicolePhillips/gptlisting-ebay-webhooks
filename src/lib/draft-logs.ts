@@ -305,6 +305,8 @@ export function buildPricingCalculations(
     draftPriceCents?: number;
     /** Pricing source — 'amazon-direct' for amazon_anchored mode. */
     compsSource?: string;
+    /** Human-readable match source (e.g. "Amazon", "TikTok Shop (live search)", "Google Shopping"). */
+    matchSourceLabel?: string;
   },
   settings: {
     discountPercent?: number;
@@ -376,8 +378,11 @@ export function buildPricingCalculations(
       const ratioApplied = effectiveFinalItemCents > 0 && decision.amazonPriceCents > 0
         ? (effectiveFinalItemCents / decision.amazonPriceCents).toFixed(2)
         : '0.85';
-      formula = `Target = Amazon $${(decision.amazonPriceCents / 100).toFixed(2)} × ${ratioApplied}`;
-      notes = 'Price based on Amazon listing. Buyer pays item + shipping separately.';
+      const sourceLabel = decision.matchSourceLabel || 'Amazon';
+      formula = `Target = ${sourceLabel} $${(decision.amazonPriceCents / 100).toFixed(2)} × ${ratioApplied}`;
+      notes = sourceLabel === 'Amazon' || sourceLabel.startsWith('Amazon')
+        ? 'Price based on Amazon listing. Buyer pays item + shipping separately.'
+        : `Amazon had no confident match — price anchored to ${sourceLabel} instead. Buyer pays item + shipping separately.`;
     } else if (isSoldBased) {
       formula = `Target = Sold market data (${soldCountStr} recent sales, median ${soldMedianStr})`;
       notes = 'Price based on actual eBay sold data — what buyers are paying';
